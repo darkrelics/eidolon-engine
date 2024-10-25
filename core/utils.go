@@ -136,3 +136,31 @@ func loadNamesFromFile(filePath string) ([]string, error) {
 
 	return names, nil
 }
+
+func getLookTarget(character *Character, target string) string {
+	room := character.Room
+	if room == nil {
+		return "\n\rYou are floating in the void.\n\r"
+	}
+
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	// Check for items first
+	for _, item := range room.Items {
+		if item != nil && strings.Contains(strings.ToLower(item.Name), target) {
+			return fmt.Sprintf("\n\r%s\n\r%s\n\r",
+				ApplyColor("bright_white", item.Name),
+				item.Description)
+		}
+	}
+
+	// Check for characters
+	for _, c := range room.Characters {
+		if c != nil && strings.Contains(strings.ToLower(c.Name), target) {
+			return fmt.Sprintf("\n\rYou look at %s.\n\r", c.Name)
+		}
+	}
+
+	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+}

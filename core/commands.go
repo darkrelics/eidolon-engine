@@ -6,6 +6,23 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+)
+
+const (
+	msgNoExits     = "There are no visible exits.\n\r"
+	msgAlone       = "You are alone.\n\r"
+	msgAlsoHere    = "Also here: "
+	msgItems       = "Items in the room:\n\r"
+	msgNoDirection = "\n\rWhich direction do you want to go?\n\r"
+	msgCantEscape  = "\n\rYou can't escape!\n\r"
+	msgNoRoom      = "\n\rYou are not in any room to move from.\n\r"
+	msgInvalidDir  = "\n\rYou cannot go that way.\n\r"
+	msgPathNowhere = "\n\rThe path leads nowhere.\n\r"
+	whoHeader      = "\n\rOnline Characters\n\r"
+	whoEmpty       = "\n\rNo other players online.\n\r"
+	maxNameWidth   = 15 // Width allocated per name
+	nameSpacing    = 2  // Spaces between columns
 )
 
 type CommandHandler func(character *Character, tokens []string) bool
@@ -36,69 +53,169 @@ var CommandHandlers = map[string]CommandHandler{
 }
 
 func ValidateCommand(command string) (string, []string, error) {
+	// Early return for empty input
+	if len(command) == 0 {
+		return "", nil, errors.New("\n\rNo command entered.\n\r")
+	}
 
-	Logger.Debug("Received command", "command", command)
+	// Handle quoted strings and split into tokens
+	var tokens []string
+	var currentToken strings.Builder
+	inQuotes := false
 
-	trimmedCommand := strings.TrimSpace(command)
-	tokens := strings.Fields(trimmedCommand)
+	// Single pass tokenization
+	for i := 0; i < len(command); i++ {
+		switch command[i] {
+		case '"':
+			inQuotes = !inQuotes
+		case ' ', '\t':
+			if !inQuotes {
+				if currentToken.Len() > 0 {
+					tokens = append(tokens, currentToken.String())
+					currentToken.Reset()
+				}
+			} else {
+				currentToken.WriteByte(command[i])
+			}
+		default:
+			currentToken.WriteByte(command[i])
+		}
+	}
 
+	// Add final token if exists
+	if currentToken.Len() > 0 {
+		tokens = append(tokens, currentToken.String())
+	}
+
+	// Validate tokens
 	if len(tokens) == 0 {
 		return "", nil, errors.New("\n\rNo command entered.\n\r")
 	}
 
+	// Convert first token to lowercase for command lookup
 	verb := strings.ToLower(tokens[0])
+
+	// Validate command exists
 	if _, exists := CommandHandlers[verb]; !exists {
-		return "", tokens, fmt.Errorf(" command not understood")
+		return "", nil, fmt.Errorf("\n\rCommand '%s' not understood.\n\r", verb)
 	}
+
+	// Only log valid commands
+	Logger.Debug("Valid command received", "verb", verb, "args", tokens[1:])
 
 	return verb, tokens, nil
 }
 
 func ExecuteCommand(character *Character, verb string, tokens []string) bool {
-
-	Logger.Debug("Executing command", "verb", verb)
+	if character == nil {
+		Logger.Error("Attempted to execute command with nil character")
+		return false
+	}
 
 	handler, ok := CommandHandlers[verb]
 	if !ok {
-		character.Player.ToPlayer <- "\n\rCommand not yet implemented or recognized.\n\r"
+		// This should never happen due to ValidateCommand, but we'll handle it gracefully
+		Logger.Error("Command handler missing for validated command", "verb", verb)
+		character.Player.ToPlayer <- "\n\rInternal error processing command.\n\r"
 		return false
 	}
-	return handler(character, tokens)
+
+	// Track command execution time
+	start := time.Now()
+
+	// Execute the command
+	quit := handler(character, tokens)
+
+	// Only log if command took longer than expected
+	elapsed := time.Since(start)
+	if elapsed > 100*time.Millisecond {
+		Logger.Warn("Slow command execution",
+			"verb", verb,
+			"duration", elapsed,
+			"character", character.Name)
+	}
+
+	// True indicates the player is quitting
+	return quit
 }
 
 func ExecuteQuitCommand(character *Character, tokens []string) bool {
-	Logger.Info("Player is quitting", "playerName", character.Player.PlayerID)
+	if character == nil {
+		Logger.Error("Attempted to quit with nil character")
+		return true
+	}
 
-	// Send goodbye message
-	character.Player.ToPlayer <- "\n\rGoodbye!"
+	if character.Player == nil || character.Room == nil || character.Server == nil {
+		Logger.Error("Invalid character state during quit",
+			"hasPlayer", character.Player != nil,
+			"hasRoom", character.Room != nil,
+			"hasServer", character.Server != nil)
+		return true
+	}
 
-	// Remove character from the room
-	character.Room.Mutex.Lock()
-	delete(character.Room.Characters, character.ID)
-	character.Room.Mutex.Unlock()
+	playerID := character.Player.PlayerID
+	characterName := character.Name
+	currentRoom := character.Room
 
-	// Remove character from the server's active characters
-	character.Server.Mutex.Lock()
-	delete(character.Server.Characters, character.ID)
-	character.Server.Mutex.Unlock()
+	Logger.Info("Player initiating quit", "playerName", playerID)
 
-	// Notify room
-	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s has left.\n\r", character.Name))
+	// Send quit message to player before we start cleanup
+	character.Player.ToPlayer <- "\n\rSaving character state...\n\r"
 
-	// Save character state to database
-	character.Mutex.Lock()
+	// Save character state to database first
 	err := character.Server.Database.WriteCharacter(character)
 	if err != nil {
-		Logger.Error("Error saving character state on quit", "characterName", character.Name, "error", err)
+		Logger.Error("Failed to save character state on quit",
+			"characterName", characterName,
+			"error", err)
+		character.Player.ToPlayer <- "\n\rWarning: Failed to save character state.\n\r"
 	}
-	character.Mutex.Unlock()
 
-	Logger.Info("Player has successfully quit", "playerName", character.Player.PlayerID)
+	// Save player data
+	err = character.Server.Database.WritePlayer(character.Player)
+	if err != nil {
+		Logger.Error("Failed to save player data on quit",
+			"playerName", playerID,
+			"error", err)
+		character.Player.ToPlayer <- "\n\rWarning: Failed to save player data.\n\r"
+	}
 
-	return true // Indicate that the loop should be exited
+	// Lock order: server -> room
+	character.Server.Mutex.Lock()
+	defer character.Server.Mutex.Unlock()
+
+	currentRoom.Mutex.Lock()
+	defer currentRoom.Mutex.Unlock()
+
+	// Remove character from room and server
+	delete(currentRoom.Characters, character.ID)
+	delete(character.Server.Characters, character.ID)
+
+	// Notify room of departure (while locks are held)
+	for _, c := range currentRoom.Characters {
+		if c.Player != nil {
+			c.Player.ToPlayer <- fmt.Sprintf("\n\r%s has left.\n\r", characterName)
+			c.Player.ToPlayer <- c.Player.Prompt
+		}
+	}
+
+	// Final goodbye and cleanup
+	character.Player.ToPlayer <- "\n\rGoodbye!\n\r"
+	close(character.Player.FromPlayer) // Signal to input goroutine
+
+	Logger.Info("Player quit successful",
+		"playerName", playerID,
+		"characterName", characterName,
+		"savedState", err == nil)
+
+	return true
 }
 
 func ExecuteSayCommand(character *Character, tokens []string) bool {
+	if character == nil || character.Room == nil {
+		Logger.Error("Invalid character or room state for say command")
+		return false
+	}
 
 	Logger.Info("Player is saying something", "playerName", character.Player.PlayerID)
 
@@ -108,50 +225,150 @@ func ExecuteSayCommand(character *Character, tokens []string) bool {
 	}
 
 	message := strings.Join(tokens[1:], " ")
-	broadcastMessage := fmt.Sprintf("\n\r%s says %s\n\r", character.Name, message)
 
+	// Lock the room while we access its character list
+	character.Room.Mutex.Lock()
+	roomChars := make([]*Character, 0, len(character.Room.Characters))
 	for _, c := range character.Room.Characters {
 		if c != character {
-			// Send message to other characters in the room
-			c.Player.ToPlayer <- broadcastMessage
-			c.Player.ToPlayer <- c.Player.Prompt
+			roomChars = append(roomChars, c)
 		}
 	}
+	character.Room.Mutex.Unlock()
 
-	// Send only the broadcast message to the player who issued the command
-	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou say %s\n\r", message)
+	// Construct messages once
+	broadcastMessage := fmt.Sprintf("\n\r%s says %s\n\r", character.Name, message)
+	speakerMessage := fmt.Sprintf("\n\rYou say %s\n\r", message)
+
+	// Send to other characters without holding the lock
+	for _, c := range roomChars {
+		c.Player.ToPlayer <- broadcastMessage
+		c.Player.ToPlayer <- c.Player.Prompt
+	}
+
+	// Send to speaker
+	character.Player.ToPlayer <- speakerMessage
 
 	return false
 }
 
 func ExecuteLookCommand(character *Character, tokens []string) bool {
+	if character == nil {
+		Logger.Error("Attempted to look with nil character")
+		return false
+	}
 
-	Logger.Info("Player is looking around", "playerName", character.Player.PlayerID)
+	Logger.Info("Player is looking", "playerName", character.Player.PlayerID)
 
+	// Handle looking at specific targets if provided
+	if len(tokens) > 1 {
+		target := strings.ToLower(strings.Join(tokens[1:], " "))
+		desc := getLookTarget(character, target)
+		character.Player.ToPlayer <- desc
+		return false
+	}
+
+	// Look at room
 	room := character.Room
-	character.Player.ToPlayer <- RoomInfo(room, character)
+	if room == nil {
+		character.Player.ToPlayer <- "\n\rYou are floating in the void.\n\r"
+		return false
+	}
+
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	var roomInfo strings.Builder
+	roomInfo.Grow(1024) // Pre-allocate reasonable buffer
+
+	// Room Title and Description
+	roomInfo.WriteString("\n\r[")
+	roomInfo.WriteString(ApplyColor("bright_white", room.Title))
+	roomInfo.WriteString("]\n\r")
+	roomInfo.WriteString(room.Description)
+	roomInfo.WriteString("\n\r")
+
+	// Exits - collect while under lock
+	exits := make([]string, 0, len(room.Exits))
+	for direction, exit := range room.Exits {
+		if exit != nil && exit.Visible {
+			exits = append(exits, direction)
+		}
+	}
+
+	if len(exits) == 0 {
+		roomInfo.WriteString(msgNoExits)
+	} else {
+		sort.Strings(exits)
+		roomInfo.WriteString("Obvious exits: ")
+		roomInfo.WriteString(strings.Join(exits, ", "))
+		roomInfo.WriteString("\n\r")
+	}
+
+	// Characters - collect while under lock
+	chars := make([]string, 0, len(room.Characters))
+	for _, c := range room.Characters {
+		if c != nil && c != character {
+			chars = append(chars, c.Name)
+		}
+	}
+
+	if len(chars) == 0 {
+		roomInfo.WriteString(msgAlone)
+	} else {
+		roomInfo.WriteString(msgAlsoHere)
+		roomInfo.WriteString(strings.Join(chars, ", "))
+		roomInfo.WriteString("\n\r")
+	}
+
+	// Items - collect while under lock
+	items := make([]string, 0, len(room.Items))
+	for _, item := range room.Items {
+		if item != nil && item.CanPickUp {
+			items = append(items, item.Name)
+		}
+	}
+
+	if len(items) > 0 {
+		roomInfo.WriteString(msgItems)
+		for _, item := range items {
+			roomInfo.WriteString("- ")
+			roomInfo.WriteString(item)
+			roomInfo.WriteString("\n\r")
+		}
+	}
+
+	character.Player.ToPlayer <- roomInfo.String()
 	return false
 }
 
 func ExecuteGoCommand(character *Character, tokens []string) bool {
-
-	Logger.Info("Player is attempting to move", "playerName", character.Player.PlayerID)
-
-	if !character.CanEscape() {
-		character.Player.ToPlayer <- "\n\rYou can't escape!\n\r"
+	if character == nil {
+		Logger.Error("Attempted to move with nil character")
 		return false
 	}
 
-	// Ensure the correct number of arguments are provided
-
+	// Check arguments
 	if len(tokens) < 2 {
-		character.Player.ToPlayer <- "\n\rWhich direction do you want to go?\n\r"
+		character.Player.ToPlayer <- msgNoDirection
 		return false
 	}
 
-	direction := tokens[1]
-	character.Move(direction)
+	// Use the raw direction as provided - no normalization
+	direction := strings.ToLower(strings.Join(tokens[1:], " "))
 
+	// Check if character can move
+	if !character.CanEscape() {
+		character.Player.ToPlayer <- msgCantEscape
+		return false
+	}
+
+	if err := moveCharacter(character, direction); err != nil {
+		character.Player.ToPlayer <- err.Error()
+		return false
+	}
+
+	// Clear combat state after successful move
 	character.ExitCombat()
 
 	return false
@@ -191,48 +408,68 @@ func ExecuteChallengeCommand(character *Character, tokens []string) bool {
 }
 
 func ExecuteWhoCommand(character *Character, tokens []string) bool {
-	Logger.Info("Player is listing all characters online", "playerName", character.Player.PlayerID)
+	if character == nil || character.Server == nil {
+		Logger.Error("Invalid character or server state in who command")
+		return false
+	}
 
-	// Retrieve the server instance from the character
 	server := character.Server
+	server.Mutex.Lock()
 
-	characterNames := make([]string, 0, len(server.Characters))
+	// Early return if no one is online
+	if len(server.Characters) == 0 {
+		server.Mutex.Unlock()
+		character.Player.ToPlayer <- whoEmpty
+		return false
+	}
+
+	// Collect names while under lock
+	names := make([]string, 0, len(server.Characters))
 	for _, char := range server.Characters {
-		characterNames = append(characterNames, char.Name)
+		if char != nil && char.Player != nil {
+			names = append(names, char.Name)
+		}
 	}
+	server.Mutex.Unlock()
 
-	// Sort character names for consistent display
-	sort.Strings(characterNames)
+	// Sort names
+	sort.Strings(names)
 
-	// Calculate the number of columns and rows based on console dimensions
-	maxNameLength := 15
-	columnWidth := maxNameLength + 2 // Adding 2 for spacing between names
+	// Calculate column layout
+	columnWidth := maxNameWidth + nameSpacing
 	columns := character.Player.ConsoleWidth / columnWidth
-	if columns == 0 {
-		columns = 1 // Ensure at least one column if console width is too small
-	}
-	rows := len(characterNames) / columns
-	if len(characterNames)%columns != 0 {
-		rows++ // Add an extra row for any remainder
+	if columns < 1 {
+		columns = 1
 	}
 
-	// Prepare message builder to construct the output
-	var messageBuilder strings.Builder
-	messageBuilder.WriteString("\n\rOnline Characters:\n\r")
+	rows := len(names) / columns
+	if len(names)%columns != 0 {
+		rows++
+	}
 
-	// Loop through rows and columns to construct the output
+	// Build the output
+	var sb strings.Builder
+	sb.WriteString(whoHeader)
+
+	// Display names in columns
 	for row := 0; row < rows; row++ {
 		for col := 0; col < columns; col++ {
-			index := row + col*rows
-			if index < len(characterNames) {
-				messageBuilder.WriteString(fmt.Sprintf("%-15s  ", characterNames[index]))
+			index := row + (col * rows)
+			if index < len(names) {
+				name := ApplyColor("bright_white", names[index])
+				sb.WriteString(fmt.Sprintf("%-*s", maxNameWidth+nameSpacing, name))
 			}
 		}
-		messageBuilder.WriteString("\n\r") // New line at the end of each row
+		sb.WriteString("\n\r")
 	}
 
-	// Send the constructed message to the player
-	character.Player.ToPlayer <- messageBuilder.String()
+	sb.WriteString(fmt.Sprintf("Total Players Online: %d\n\r", len(names)))
+
+	character.Player.ToPlayer <- sb.String()
+
+	Logger.Info("Who list displayed",
+		"player", character.Name,
+		"online_count", len(names))
 
 	return false
 }

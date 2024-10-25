@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -286,54 +285,6 @@ func SendRoomMessage(r *Room, message string) {
 		character.Player.ToPlayer <- message
 		character.Player.ToPlayer <- character.Player.Prompt
 	}
-}
-
-// RoomInfo generates a description of the room, including exits, characters, and items.
-func RoomInfo(r *Room, character *Character) string {
-	if r == nil {
-		Logger.Error("Attempted to get room info for nil room", "character_name", character.Name)
-		return "\n\rError: You are not in a valid room.\n\r"
-	}
-	if character == nil {
-		Logger.Error("Attempted to get room info for nil character", "room_id", r.RoomID)
-		return "\n\rError: Invalid character.\n\r"
-	}
-
-	var roomInfo strings.Builder
-
-	// Room Title and Description
-	roomInfo.WriteString(ApplyColor("bright_white", fmt.Sprintf("\n\r[%s]\n\r", r.Title)) + fmt.Sprintf("%s\n\r", r.Description))
-
-	// Exits
-	visibleExits := getVisibleExits(r)
-	if len(visibleExits) == 0 {
-		roomInfo.WriteString("There are no visible exits.\n\r")
-	} else {
-		roomInfo.WriteString("Obvious exits: ")
-		roomInfo.WriteString(strings.Join(visibleExits, ", "))
-		roomInfo.WriteString("\n\r")
-	}
-
-	// Characters in the room
-	otherCharacters := getOtherCharacters(r, character)
-	if len(otherCharacters) > 0 {
-		roomInfo.WriteString("Also here: ")
-		roomInfo.WriteString(strings.Join(otherCharacters, ", "))
-		roomInfo.WriteString("\n\r")
-	} else {
-		roomInfo.WriteString("You are alone.\n\r")
-	}
-
-	// Items in the room
-	items := r.getVisibleItems()
-	if len(items) > 0 {
-		roomInfo.WriteString("Items in the room:\n\r")
-		for _, item := range items {
-			roomInfo.WriteString(fmt.Sprintf("- %s\n\r", item))
-		}
-	}
-
-	return roomInfo.String()
 }
 
 // getVisibleExits returns a sorted list of visible exit directions from the room.

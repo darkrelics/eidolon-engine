@@ -751,60 +751,84 @@ func getOtherCharacters(r *Room, currentCharacter *Character) []string {
 	return otherCharacters
 }
 
-// Move handles character movement from one room to another based on the direction.
-func (c *Character) Move(direction string) {
-	Logger.Info("Player is attempting to move", "player_name", c.Name, "direction", direction)
+func moveCharacter(character *Character, direction string) error {
+	character.Mutex.Lock()
+	defer character.Mutex.Unlock()
 
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
-
-	if c.Room == nil {
-		c.Player.ToPlayer <- "\n\rYou are not in any room to move from.\n\r"
-		Logger.Warn("Character has no current room", "character_name", c.Name)
-		c.Player.ToPlayer <- c.Player.Prompt
-		return
+	if character.Room == nil {
+		return fmt.Errorf(msgNoRoom)
 	}
 
-	selectedExit, exists := c.Room.Exits[direction]
-	if !exists {
-		c.Player.ToPlayer <- "\n\rYou cannot go that way.\n\r"
-		Logger.Warn("Invalid direction for movement", "character_name", c.Name, "direction", direction)
-		c.Player.ToPlayer <- c.Player.Prompt
-		return
+	// Lock current room to check exit
+	character.Room.Mutex.Lock()
+	selectedExit, exists := character.Room.Exits[direction]
+	if !exists || selectedExit == nil {
+		character.Room.Mutex.Unlock()
+		return fmt.Errorf(msgInvalidDir)
 	}
 
-	if selectedExit.TargetRoom == nil {
-		c.Player.ToPlayer <- "\n\rThe path leads nowhere.\n\r"
-		Logger.Warn("Target room is nil", "character_name", c.Name, "direction", direction)
-		c.Player.ToPlayer <- c.Player.Prompt
-		return
+	targetRoom := selectedExit.TargetRoom
+	if targetRoom == nil {
+		character.Room.Mutex.Unlock()
+		return fmt.Errorf(msgPathNowhere)
 	}
 
-	newRoom := selectedExit.TargetRoom
+	// Lock target room
+	targetRoom.Mutex.Lock()
 
-	// Safely remove the character from the old room
-	oldRoom := c.Room
-	oldRoom.Mutex.Lock()
-	delete(oldRoom.Characters, c.ID)
-	oldRoom.Mutex.Unlock()
-	SendRoomMessage(oldRoom, fmt.Sprintf("\n\r%s has left going %s.\n\r", c.Name, direction))
+	// Now we have all necessary locks to perform the move
+	// Remove from old room
+	oldRoom := character.Room
+	delete(oldRoom.Characters, character.ID)
+
+	// Prepare messages while we have locks
+	oldRoomMsg := fmt.Sprintf("\n\r%s has left going %s.\n\r", character.Name, direction)
+	newRoomMsg := fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name)
+
+	// Send message to old room while locked
+	for _, c := range oldRoom.Characters {
+		if c.Player != nil {
+			c.Player.ToPlayer <- oldRoomMsg
+			c.Player.ToPlayer <- c.Player.Prompt
+		}
+	}
 
 	// Update character's room
-	c.Room = newRoom
+	character.Room = targetRoom
 
-	// Safely add the character to the new room
-	newRoom.Mutex.Lock()
-	if newRoom.Characters == nil {
-		newRoom.Characters = make(map[uuid.UUID]*Character)
+	// Initialize character map if needed
+	if targetRoom.Characters == nil {
+		targetRoom.Characters = make(map[uuid.UUID]*Character)
 	}
-	newRoom.Characters[c.ID] = c
-	newRoom.Mutex.Unlock()
-	SendRoomMessage(newRoom, fmt.Sprintf("\n\r%s has arrived.\n\r", c.Name))
 
-	// Let the character look around the new room
-	ExecuteLookCommand(c, []string{})
+	// Add to new room
+	targetRoom.Characters[character.ID] = character
 
-	c.LastEdited = time.Now()
+	// Send message to new room while locked
+	for _, c := range targetRoom.Characters {
+		if c != character && c.Player != nil {
+			c.Player.ToPlayer <- newRoomMsg
+			c.Player.ToPlayer <- c.Player.Prompt
+		}
+	}
 
-	Logger.Info("Character moved successfully", "character_name", c.Name, "new_room_id", newRoom.RoomID)
+	// Update timestamps
+	character.LastEdited = time.Now()
+	oldRoom.LastEdited = time.Now()
+	targetRoom.LastEdited = time.Now()
+
+	// Release locks in reverse order
+	targetRoom.Mutex.Unlock()
+	oldRoom.Mutex.Unlock()
+
+	// Show the new room to the character
+	ExecuteLookCommand(character, []string{})
+
+	Logger.Info("Character moved successfully",
+		"character", character.Name,
+		"from", oldRoom.RoomID,
+		"to", targetRoom.RoomID,
+		"direction", direction)
+
+	return nil
 }
