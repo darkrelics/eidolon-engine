@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -516,4 +517,52 @@ func (r *Room) RemoveItem(item *Item) {
 	delete(r.Items, item.ID)
 
 	Logger.Info("Removed item from room", "itemName", item.Name, "itemID", item.ID, "roomID", r.RoomID)
+}
+
+func formatHandSlot(slotName string, item *Item) string {
+	if item == nil {
+		return fmt.Sprintf("  %-10s: %s\n\r", slotName, ApplyColor("bright_black", "empty"))
+	}
+
+	details := item.Name
+	if item.Container && len(item.Contents) > 0 {
+		details += fmt.Sprintf(" (%d items inside)", len(item.Contents))
+	} else if item.Stackable && item.Quantity > 1 {
+		details += fmt.Sprintf(" (x%d)", item.Quantity)
+	}
+
+	return fmt.Sprintf("  %-10s: %s\n\r", slotName, ApplyColor("green", details))
+}
+
+func formatWornItem(item *Item) string {
+	if item == nil {
+		return ""
+	}
+
+	details := fmt.Sprintf("  %s (worn on %s)",
+		ApplyColor("yellow", item.Name),
+		ApplyColor("cyan", strings.Join(item.WornOn, ", ")))
+
+	if item.Container && len(item.Contents) > 0 {
+		details += ApplyColor("bright_black", fmt.Sprintf(" [%d items inside]", len(item.Contents)))
+	}
+
+	return details + "\n\r"
+}
+
+func formatCarriedItem(item *Item) string {
+	if item == nil {
+		return ""
+	}
+
+	details := fmt.Sprintf("  %s", ApplyColor("white", item.Name))
+
+	if item.Stackable && item.Quantity > 1 {
+		details += ApplyColor("bright_black", fmt.Sprintf(" (x%d)", item.Quantity))
+	}
+	if item.Container && len(item.Contents) > 0 {
+		details += ApplyColor("bright_black", fmt.Sprintf(" [%d items inside]", len(item.Contents)))
+	}
+
+	return details + "\n\r"
 }

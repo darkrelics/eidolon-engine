@@ -571,34 +571,75 @@ func (c *Character) ListInventory() string {
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 
-	var held, worn []string
-	wornItems := make(map[string]bool) // To avoid duplicates in worn items list
+	var output strings.Builder
+	output.WriteString("\n\r")
+	output.WriteString(ApplyColor("bright_white", "=== Inventory ===\n\r"))
 
-	for slot, item := range c.Inventory {
-		if item.IsWorn {
-			if !wornItems[item.Name] {
-				worn = append(worn, fmt.Sprintf("%s (worn on %s)", item.Name, strings.Join(item.WornOn, ", ")))
-				wornItems[item.Name] = true
-			}
-		} else if slot == "left_hand" || slot == "right_hand" {
-			held = append(held, fmt.Sprintf("%s (in %s)", item.Name, slot))
-		} else {
-			held = append(held, item.Name)
+	// Hands section
+	output.WriteString(ApplyColor("white", "\nHands:\n\r"))
+	leftItem := c.Inventory["left_hand"]
+	rightItem := c.Inventory["right_hand"]
+
+	output.WriteString(formatHandSlot("Left Hand", leftItem))
+	output.WriteString(formatHandSlot("Right Hand", rightItem))
+
+	// Worn items section
+	var wornItems []*Item
+	wornMap := make(map[string]bool)
+
+	for _, item := range c.Inventory {
+		if item.IsWorn && !wornMap[item.Name] {
+			wornItems = append(wornItems, item)
+			wornMap[item.Name] = true
 		}
 	}
 
-	result := "\n\rInventory:\n\r"
-	if len(held) > 0 {
-		result += "Held items: " + strings.Join(held, ", ") + "\n\r"
-	}
-	if len(worn) > 0 {
-		result += "Worn items: " + strings.Join(worn, ", ") + "\n\r"
-	}
-	if len(held) == 0 && len(worn) == 0 {
-		result += "Your inventory is empty.\n\r"
+	if len(wornItems) > 0 {
+		output.WriteString(ApplyColor("white", "\nWorn Items:\n\r"))
+		sort.Slice(wornItems, func(i, j int) bool {
+			return wornItems[i].Name < wornItems[j].Name
+		})
+
+		for _, item := range wornItems {
+			output.WriteString(formatWornItem(item))
+		}
 	}
 
-	return result
+	// Carried items section (items not in hands or worn)
+	var carriedItems []*Item
+	carriedMap := make(map[string]*Item) // For stacking similar items
+
+	for slot, item := range c.Inventory {
+		if slot != "left_hand" && slot != "right_hand" && !item.IsWorn {
+			if item.Stackable {
+				if existing, found := carriedMap[item.Name]; found {
+					existing.Quantity += item.Quantity
+				} else {
+					carriedMap[item.Name] = item
+					carriedItems = append(carriedItems, item)
+				}
+			} else {
+				carriedItems = append(carriedItems, item)
+			}
+		}
+	}
+
+	if len(carriedItems) > 0 {
+		output.WriteString(ApplyColor("white", "\nCarried Items:\n\r"))
+		sort.Slice(carriedItems, func(i, j int) bool {
+			return carriedItems[i].Name < carriedItems[j].Name
+		})
+
+		for _, item := range carriedItems {
+			output.WriteString(formatCarriedItem(item))
+		}
+	}
+
+	if len(c.Inventory) == 0 {
+		output.WriteString("\n\rYour inventory is empty.\n\r")
+	}
+
+	return output.String()
 }
 
 // AddToInventory adds an item to the character's inventory.

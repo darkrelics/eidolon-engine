@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -475,26 +477,79 @@ func ExecuteWhoCommand(character *Character, tokens []string) bool {
 }
 
 func ExecutePasswordCommand(character *Character, tokens []string) bool {
+	player := character.Player
 
-	Logger.Info("Player is attempting to change their password", "playerName", character.Player.PlayerID)
+	// Disable echo to prevent password display
+	player.Echo = false
+	defer func() {
+		player.Echo = true
+	}()
 
-	if len(tokens) != 3 {
-		character.Player.ToPlayer <- "\n\rUsage: password <oldPassword> <newPassword>\n\r"
+	// Password policy message
+	policy := "\n\rPassword must contain:\n\r" +
+		"- At least 8 characters\n\r" +
+		"- At least one uppercase letter\n\r" +
+		"- At least one lowercase letter\n\r" +
+		"- At least one number\n\r" +
+		"- At least one special character\n\r"
+
+	player.ToPlayer <- "\n\rChanging password. " + policy
+
+	// Get current password
+	player.ToPlayer <- "\n\rEnter current password: "
+	currentPass, ok := <-player.FromPlayer
+	if !ok {
 		return false
 	}
 
-	oldPassword := tokens[1]
-	newPassword := tokens[2]
+	// Get new password
+	player.ToPlayer <- "\n\rEnter new password: "
+	newPass, ok := <-player.FromPlayer
+	if !ok {
+		return false
+	}
 
-	err := ChangePassword(character.Server, character.Player.PlayerID, oldPassword, newPassword)
+	// Validate password complexity
+	if !isValidPassword(newPass) {
+		player.ToPlayer <- "\n\rPassword does not meet requirements.\n\r"
+		return false
+	}
+
+	// Confirm new password
+	player.ToPlayer <- "\n\rConfirm new password: "
+	confirmPass, ok := <-player.FromPlayer
+	if !ok {
+		return false
+	}
+
+	// Check if passwords match
+	if newPass != confirmPass {
+		player.ToPlayer <- "\n\rPasswords do not match.\n\r"
+		return false
+	}
+
+	// Attempt to change password
+	err := ChangePassword(character.Server, player.PlayerID, currentPass, newPass)
 	if err != nil {
-		Logger.Error("Failed to change password for user", "playerName", character.Player.PlayerID, "error", err)
-		character.Player.ToPlayer <- "\n\rFailed to change password. Please try again.\n\r"
+		Logger.Error("Password change failed",
+			"playerName", player.PlayerID,
+			"errorType", err.Error())
+
+		switch {
+		case strings.Contains(err.Error(), "incorrect username or password"):
+			player.ToPlayer <- "\n\rCurrent password is incorrect.\n\r"
+		case strings.Contains(err.Error(), "password reset required"):
+			player.ToPlayer <- "\n\rPassword reset required. Please contact an administrator.\n\r"
+		case strings.Contains(err.Error(), "authentication failed"):
+			player.ToPlayer <- "\n\rAuthentication failed. Please try again later.\n\r"
+		default:
+			player.ToPlayer <- "\n\rFailed to change password. Please try again later.\n\r"
+		}
 		return false
 	}
 
-	character.Player.ToPlayer <- "\n\rPassword changed successfully.\n\r"
-	return false // Keep the command loop running
+	player.ToPlayer <- "\n\rPassword changed successfully.\n\r"
+	return false
 }
 
 func ExecuteShowCommand(character *Character, tokens []string) bool {
@@ -537,26 +592,39 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 	}
 
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
-	var itemToTake *Item
 
-	for _, item := range character.Room.Items {
-		if strings.Contains(strings.ToLower(item.Name), itemName) && item.CanPickUp {
+	// Lock room to check items
+	character.Room.Mutex.Lock()
+	var itemToTake *Item
+	var itemID uuid.UUID
+
+	for id, item := range character.Room.Items {
+		if item != nil && strings.Contains(strings.ToLower(item.Name), itemName) && item.CanPickUp {
 			itemToTake = item
+			itemID = id
 			break
 		}
 	}
 
+	// Early unlock if item not found
 	if itemToTake == nil {
+		character.Room.Mutex.Unlock()
 		character.Player.ToPlayer <- "\n\rYou can't find that item or it can't be picked up.\n\r"
 		return false
 	}
 
+	// Lock character to check inventory
+	character.Mutex.Lock()
+
+	// Check if character can carry the item
 	if !character.CanCarryItem(itemToTake) {
+		character.Room.Mutex.Unlock()
+		character.Mutex.Unlock()
 		character.Player.ToPlayer <- "\n\rYou can't carry any more items.\n\r"
 		return false
 	}
 
-	// Try to place the item in the right hand first, then the left hand if right is occupied
+	// Determine available hand slot
 	var handSlot string
 	if character.Inventory["right_hand"] == nil {
 		handSlot = "right_hand"
@@ -565,17 +633,39 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 	}
 
 	if handSlot == "" {
+		character.Room.Mutex.Unlock()
+		character.Mutex.Unlock()
 		character.Player.ToPlayer <- "\n\rYour hands are full. You need a free hand to pick up an item.\n\r"
 		return false
 	}
 
-	character.Room.RemoveItem(itemToTake)
-	character.Mutex.Lock()
+	// At this point we have both locks and can safely modify both structures
+	delete(character.Room.Items, itemID)
 	character.Inventory[handSlot] = itemToTake
+
+	// Update timestamps
+	itemToTake.LastEdited = time.Now()
+	character.LastEdited = time.Now()
+	character.Room.LastEdited = time.Now()
+
+	// Store message before releasing locks
+	roomMessage := fmt.Sprintf("\n\r%s picks up %s.\n\r", character.Name, itemToTake.Name)
+	playerMessage := fmt.Sprintf("\n\rYou take %s and hold it in your %s.\n\r",
+		itemToTake.Name, strings.Replace(handSlot, "_", " ", -1))
+
+	// Release locks
+	character.Room.Mutex.Unlock()
 	character.Mutex.Unlock()
 
-	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s picks up %s.\n\r", character.Name, itemToTake.Name))
-	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou take %s and hold it in your %s.\n\r", itemToTake.Name, strings.Replace(handSlot, "_", " ", -1))
+	// Send messages after releasing locks
+	SendRoomMessage(character.Room, roomMessage)
+	character.Player.ToPlayer <- playerMessage
+
+	Logger.Info("Item taken",
+		"character", character.Name,
+		"item", itemToTake.Name,
+		"slot", handSlot)
+
 	return false
 }
 
@@ -595,53 +685,137 @@ func ExecuteDropCommand(character *Character, tokens []string) bool {
 	}
 
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
-	var itemToDrop *Item
-	var handSlot string
 
-	// Check if the item is in a hand slot
+	// Lock character first to check inventory
+	character.Mutex.Lock()
+
+	// Find the item and its slot
+	var itemToDrop *Item
+	var itemSlot string
+	var isWorn bool
+
 	for slot, item := range character.Inventory {
-		if (slot == "left_hand" || slot == "right_hand") && strings.Contains(strings.ToLower(item.Name), itemName) {
+		if item != nil && strings.Contains(strings.ToLower(item.Name), itemName) {
 			itemToDrop = item
-			handSlot = slot
+			itemSlot = slot
+			isWorn = item.IsWorn
 			break
 		}
 	}
 
 	if itemToDrop == nil {
-		character.Player.ToPlayer <- "\n\rYou're not holding that item.\n\r"
+		character.Mutex.Unlock()
+		character.Player.ToPlayer <- "\n\rYou don't have that item.\n\r"
 		return false
 	}
-	character.Mutex.Lock()
-	delete(character.Inventory, handSlot)
-	character.Mutex.Unlock()
-	character.Room.Mutex.Lock()
-	character.Room.AddItem(itemToDrop)
-	character.Room.Mutex.Unlock()
 
-	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou drop %s.\n\r", itemToDrop.Name)
-	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s drops %s.\n\r", character.Name, itemToDrop.Name))
+	// Can't drop worn items
+	if isWorn {
+		character.Mutex.Unlock()
+		character.Player.ToPlayer <- "\n\rYou must remove that item before dropping it.\n\r"
+		return false
+	}
+
+	// Lock room after character
+	character.Room.Mutex.Lock()
+
+	// Handle stackable items
+	var quantity uint32 = 1
+	var dropMessage string
+
+	if itemToDrop.Stackable && itemToDrop.Quantity > 1 {
+		// Only drop one from the stack
+		itemToDrop.Quantity--
+
+		// Create a new item for the dropped portion
+		droppedItem := &Item{
+			ID:          uuid.New(),
+			PrototypeID: itemToDrop.PrototypeID,
+			Name:        itemToDrop.Name,
+			Description: itemToDrop.Description,
+			Mass:        itemToDrop.Mass,
+			Value:       itemToDrop.Value,
+			Stackable:   true,
+			MaxStack:    itemToDrop.MaxStack,
+			Quantity:    1,
+			CanPickUp:   itemToDrop.CanPickUp,
+			Metadata:    make(map[string]string),
+			LastEdited:  time.Now(),
+		}
+
+		character.Room.AddItem(droppedItem)
+		dropMessage = fmt.Sprintf("one %s", itemToDrop.Name)
+	} else {
+		// Drop the entire item
+		delete(character.Inventory, itemSlot)
+		character.Room.AddItem(itemToDrop)
+		dropMessage = itemToDrop.Name
+
+		// If it was in a hand slot, update the message
+		if itemSlot == "left_hand" || itemSlot == "right_hand" {
+			dropMessage = fmt.Sprintf("%s from your %s", itemToDrop.Name,
+				strings.Replace(itemSlot, "_", " ", -1))
+		}
+	}
+
+	// Update timestamps
+	character.LastEdited = time.Now()
+	character.Room.LastEdited = time.Now()
+	itemToDrop.LastEdited = time.Now()
+
+	// Store messages before releasing locks
+	playerMsg := fmt.Sprintf("\n\rYou drop %s.\n\r", dropMessage)
+	roomMsg := fmt.Sprintf("\n\r%s drops %s.\n\r", character.Name, dropMessage)
+
+	// Release locks in reverse order
+	character.Room.Mutex.Unlock()
+	character.Mutex.Unlock()
+
+	// Send messages after releasing locks
+	character.Player.ToPlayer <- playerMsg
+	SendRoomMessage(character.Room, roomMsg)
+
+	Logger.Info("Item dropped",
+		"character", character.Name,
+		"item", itemToDrop.Name,
+		"quantity", quantity,
+		"slot", itemSlot)
+
 	return false
 }
 
 func ExecuteWearCommand(character *Character, tokens []string) bool {
-
-	Logger.Info("Player is attempting to wear an item", "playerName", character.Player.PlayerID)
-
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- "\n\rUsage: wear <item name>\n\r"
 		return false
 	}
 
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
-	itemToWear := character.FindInInventory(itemName)
+
+	// Lock character for inventory operations
+	character.Mutex.Lock()
+	defer character.Mutex.Unlock()
+
+	// Find the item and its slot
+	var itemToWear *Item
+	var currentSlot string
+
+	for slot, item := range character.Inventory {
+		if item != nil && strings.Contains(strings.ToLower(item.Name), itemName) {
+			itemToWear = item
+			currentSlot = slot
+			break
+		}
+	}
 
 	if itemToWear == nil {
 		character.Player.ToPlayer <- "\n\rYou don't have that item.\n\r"
 		return false
 	}
 
-	if !itemToWear.Wearable {
-		character.Player.ToPlayer <- "\n\rYou can't wear that.\n\r"
+	// Validate item can be worn
+	if !itemToWear.Wearable || len(itemToWear.WornOn) == 0 {
+		character.Player.ToPlayer <- "\n\rThat item cannot be worn.\n\r"
 		return false
 	}
 
@@ -650,13 +824,87 @@ func ExecuteWearCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
-	if err := character.WearItem(itemToWear); err != nil {
-		character.Player.ToPlayer <- fmt.Sprintf("\n\r%s\n\r", err.Error())
+	// Verify item is in hand
+	if currentSlot != "left_hand" && currentSlot != "right_hand" {
+		character.Player.ToPlayer <- "\n\rYou must be holding the item to wear it.\n\r"
 		return false
 	}
 
-	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou wear %s.\n\r", itemToWear.Name)
+	// Check if wearing locations are valid and available
+	var blockedLocations []string
+	for _, location := range itemToWear.WornOn {
+		if !WearLocations[location] {
+			character.Player.ToPlayer <- fmt.Sprintf("\n\rInvalid wear location: %s\n\r", location)
+			return false
+		}
+		if existing := character.Inventory[location]; existing != nil {
+			blockedLocations = append(blockedLocations, fmt.Sprintf("%s (%s)", location, existing.Name))
+		}
+	}
+
+	if len(blockedLocations) > 0 {
+		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already wearing something on your %s.\n\r",
+			strings.Join(blockedLocations, ", "))
+		return false
+	}
+
+	// Handle stackable items
+	if itemToWear.Stackable && itemToWear.Quantity > 1 {
+		// Create a new item for the worn piece
+		wornItem := &Item{
+			ID:          uuid.New(),
+			PrototypeID: itemToWear.PrototypeID,
+			Name:        itemToWear.Name,
+			Description: itemToWear.Description,
+			Mass:        itemToWear.Mass,
+			Value:       itemToWear.Value,
+			Stackable:   true,
+			MaxStack:    itemToWear.MaxStack,
+			Quantity:    1,
+			Wearable:    true,
+			WornOn:      itemToWear.WornOn,
+			IsWorn:      true,
+			LastEdited:  time.Now(),
+		}
+
+		// Decrease the stack quantity
+		itemToWear.Quantity--
+		itemToWear.LastEdited = time.Now()
+
+		// Add worn item to wear locations
+		for _, location := range wornItem.WornOn {
+			character.Inventory[location] = wornItem
+		}
+	} else {
+		// Remove from hand slot
+		delete(character.Inventory, currentSlot)
+
+		// Add to wear locations
+		for _, location := range itemToWear.WornOn {
+			character.Inventory[location] = itemToWear
+		}
+		itemToWear.IsWorn = true
+		itemToWear.LastEdited = time.Now()
+	}
+
+	character.LastEdited = time.Now()
+
+	// Prepare messages
+	var itemDesc string
+	if len(itemToWear.WornOn) > 1 {
+		itemDesc = fmt.Sprintf("%s on your %s", itemToWear.Name, strings.Join(itemToWear.WornOn, " and "))
+	} else {
+		itemDesc = fmt.Sprintf("%s on your %s", itemToWear.Name, itemToWear.WornOn[0])
+	}
+
+	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou wear %s.\n\r", itemDesc)
 	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s wears %s.\n\r", character.Name, itemToWear.Name))
+
+	Logger.Info("Item worn",
+		"character", character.Name,
+		"item", itemToWear.Name,
+		"locations", itemToWear.WornOn)
+
 	return false
 }
 
@@ -667,12 +915,18 @@ func ExecuteRemoveCommand(character *Character, tokens []string) bool {
 	}
 
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
-	var itemToRemove *Item
 
-	for _, item := range character.Inventory {
+	character.Mutex.Lock()
+	defer character.Mutex.Unlock()
+
+	// Find the worn item and its locations
+	var itemToRemove *Item
+	wornLocations := make([]string, 0)
+
+	for location, item := range character.Inventory {
 		if item != nil && item.IsWorn && strings.Contains(strings.ToLower(item.Name), itemName) {
 			itemToRemove = item
-			break
+			wornLocations = append(wornLocations, location)
 		}
 	}
 
@@ -681,19 +935,96 @@ func ExecuteRemoveCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
-	err := character.RemoveWornItem(itemToRemove)
-	if err != nil {
-		character.Player.ToPlayer <- fmt.Sprintf("\n\r%s\n\r", err.Error())
+	// Find an available hand
+	var handSlot string
+	switch {
+	case character.Inventory["right_hand"] == nil:
+		handSlot = "right_hand"
+	case character.Inventory["left_hand"] == nil:
+		handSlot = "left_hand"
+	default:
+		character.Player.ToPlayer <- "\n\rYour hands are full. You need a free hand to remove that.\n\r"
 		return false
 	}
 
-	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou remove %s.\n\r", itemToRemove.Name)
-	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s removes %s.\n\r", character.Name, itemToRemove.Name))
+	// Handle stackable items
+	if itemToRemove.Stackable {
+		// Create a new item for the removed piece
+		removedItem := &Item{
+			ID:          uuid.New(),
+			PrototypeID: itemToRemove.PrototypeID,
+			Name:        itemToRemove.Name,
+			Description: itemToRemove.Description,
+			Mass:        itemToRemove.Mass,
+			Value:       itemToRemove.Value,
+			Stackable:   true,
+			MaxStack:    itemToRemove.MaxStack,
+			Quantity:    1,
+			Wearable:    true,
+			WornOn:      itemToRemove.WornOn,
+			IsWorn:      false,
+			LastEdited:  time.Now(),
+		}
+
+		// Check for similar items in inventory to stack with
+		var stackedWith *Item
+		for _, item := range character.Inventory {
+			if item != nil && !item.IsWorn && item.PrototypeID == removedItem.PrototypeID &&
+				item.Quantity < item.MaxStack {
+				stackedWith = item
+				break
+			}
+		}
+
+		if stackedWith != nil {
+			// Add to existing stack
+			stackedWith.Quantity++
+			stackedWith.LastEdited = time.Now()
+		} else {
+			// Place in hand
+			character.Inventory[handSlot] = removedItem
+		}
+
+	} else {
+		// Remove from worn locations
+		for _, location := range wornLocations {
+			delete(character.Inventory, location)
+		}
+
+		// Place in hand
+		character.Inventory[handSlot] = itemToRemove
+		itemToRemove.IsWorn = false
+	}
+
+	character.LastEdited = time.Now()
+	itemToRemove.LastEdited = time.Now()
+
+	// Prepare descriptive messages
+	var removeDesc string
+	if len(wornLocations) > 1 {
+		removeDesc = fmt.Sprintf("%s from your %s",
+			itemToRemove.Name,
+			strings.Join(wornLocations, " and "))
+	} else {
+		removeDesc = fmt.Sprintf("%s from your %s",
+			itemToRemove.Name,
+			wornLocations[0])
+	}
+
+	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou remove %s.\n\r", removeDesc)
+	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s removes %s.\n\r",
+		character.Name, itemToRemove.Name))
+
+	Logger.Info("Item removed",
+		"character", character.Name,
+		"item", itemToRemove.Name,
+		"from_locations", wornLocations,
+		"to_hand", handSlot)
+
 	return false
 }
 
 func ExecuteExamineCommand(character *Character, tokens []string) bool {
-
 	Logger.Info("Player is examining an item", "playerName", character.Player.PlayerID)
 
 	if len(tokens) < 2 {
@@ -885,7 +1216,7 @@ func ExecuteHelpCommand(character *Character, tokens []string) bool {
 		"\n\rassess - Assess your current combat situation" +
 		"\n\rface <character> - Face a character in the room" +
 		"\n\rwho - List all characters online" +
-		"\n\rpassword <oldPassword> <newPassword> - Change your password" +
+		"\n\rpassword - Change your password" +
 		"\n\rquit - Quit the game\n\r"
 
 	character.Player.ToPlayer <- helpMessage
