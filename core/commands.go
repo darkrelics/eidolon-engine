@@ -47,6 +47,8 @@ var CommandHandlers = map[string]CommandHandler{
 	"remove":    ExecuteRemoveCommand,
 	"examine":   ExecuteExamineCommand,
 	"assess":    ExecuteAssessCommand,
+	"face":      ExecuteFaceCommand,
+	"advance":   ExecuteAdvanceCommand,
 	"i":         ExecuteInventoryCommand, // Alias for inventory command
 	"inv":       ExecuteInventoryCommand, // Alias for inventory command
 	"\"":        ExecuteSayCommand,       // Allow for double quotes to be used as a shortcut for the say command
@@ -211,6 +213,33 @@ func ExecuteQuitCommand(character *Character, tokens []string) bool {
 		"savedState", err == nil)
 
 	return true
+}
+
+func ExecuteHelpCommand(character *Character, tokens []string) bool {
+
+	Logger.Info("Player is requesting help", "playerName", character.Player.PlayerID)
+
+	helpMessage := "\n\rAvailable Commands:" +
+		"\n\rhelp - Display available commands" +
+		"\n\rshow - Display character information" +
+		"\n\rsay <message> - Say something to all players" +
+		"\n\rlook - Look around the room" +
+		"\n\rgo <direction> - Move in a direction" +
+		"\n\rtake <item> - Take an item from the room" +
+		"\n\rdrop <item> - Drop a held item" +
+		"\n\rwear <item> - Wear an item from your inventory" +
+		"\n\rremove <item> - Remove a worn item" +
+		"\n\rexamine <item> - Get detailed information about an item" +
+		"\n\rinventory (or i) - Check your inventory" +
+		"\n\rassess - Assess your current combat situation" +
+		"\n\rface <character> - Face a character in the room" +
+		"\n\radvance <target> <range> - Advance towards a target. Range can be far, pole, or melee (default)" +
+		"\n\rwho - List all characters online" +
+		"\n\rpassword - Change your password" +
+		"\n\rquit - Quit the game\n\r"
+
+	character.Player.ToPlayer <- helpMessage
+	return false
 }
 
 func ExecuteSayCommand(character *Character, tokens []string) bool {
@@ -1119,10 +1148,17 @@ func ExecuteAssessCommand(character *Character, tokens []string) bool {
 	if len(character.CombatRange) == 0 {
 		assessment.WriteString("You are in combat, but not engaged with any specific opponents.\n\r")
 	} else {
+		// Track who we're advancing towards
+		var advanceTarget *Character
+		if character.Advancing && character.Facing != nil {
+			advanceTarget = character.Facing
+		}
+
+		// First assess our own situation with each combatant
 		for targetID, distance := range character.CombatRange {
 			targetCharacter := character.Server.Characters[targetID]
 			if targetCharacter == nil {
-				continue // Skip if the character is not found (should not happen in normal circumstances)
+				continue
 			}
 
 			var rangeDescription string
@@ -1137,19 +1173,31 @@ func ExecuteAssessCommand(character *Character, tokens []string) bool {
 				rangeDescription = "unknown"
 			}
 
-			facingInfo := ""
+			// Build status line
+			statusLine := fmt.Sprintf("%s is at %s range", targetCharacter.Name, rangeDescription)
+
+			// Add facing information
 			if targetCharacter.GetFacing() == character {
-				facingInfo = " and is facing you"
+				statusLine += " and is facing you"
 			}
 
-			assessment.WriteString(fmt.Sprintf("%s is at %s range%s.\n\r", targetCharacter.Name, rangeDescription, facingInfo))
+			// Add advance information
+			if targetCharacter == advanceTarget {
+				statusLine += fmt.Sprintf(" and you are advancing to %s", getRangeName(character.GetCombatRange(targetCharacter)))
+			}
+			if targetCharacter.Advancing && targetCharacter.Facing == character {
+				statusLine += " and they are advancing towards you"
+			}
+
+			assessment.WriteString(statusLine + ".\n\r")
 		}
 	}
 
+	// Add escape possibility
 	if character.CanEscape() {
 		assessment.WriteString("You can attempt to escape from combat.\n\r")
 	} else {
-		assessment.WriteString("You cannot escape from combat at this time.\n\r")
+		assessment.WriteString("You are engaged in combat!\n\r")
 	}
 
 	character.Player.ToPlayer <- assessment.String()
@@ -1197,28 +1245,99 @@ func ExecuteFaceCommand(character *Character, tokens []string) bool {
 	return false
 }
 
-func ExecuteHelpCommand(character *Character, tokens []string) bool {
+func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
+	if character == nil {
+		Logger.Error("Attempted to advance with nil character")
+		return false
+	}
 
-	Logger.Info("Player is requesting help", "playerName", character.Player.PlayerID)
+	// Check if already advancing
+	if character.Advancing {
+		character.Player.ToPlayer <- "\n\rYou are already advancing.\n\r"
+		return false
+	}
 
-	helpMessage := "\n\rAvailable Commands:" +
-		"\n\rhelp - Display available commands" +
-		"\n\rshow - Display character information" +
-		"\n\rsay <message> - Say something to all players" +
-		"\n\rlook - Look around the room" +
-		"\n\rgo <direction> - Move in a direction" +
-		"\n\rtake <item> - Take an item from the room" +
-		"\n\rdrop <item> - Drop a held item" +
-		"\n\rwear <item> - Wear an item from your inventory" +
-		"\n\rremove <item> - Remove a worn item" +
-		"\n\rexamine <item> - Get detailed information about an item" +
-		"\n\rinventory (or i) - Check your inventory" +
-		"\n\rassess - Assess your current combat situation" +
-		"\n\rface <character> - Face a character in the room" +
-		"\n\rwho - List all characters online" +
-		"\n\rpassword - Change your password" +
-		"\n\rquit - Quit the game\n\r"
+	// Check if already in melee with someone
+	for targetID, range_ := range character.CombatRange {
+		if range_ == 2 { // melee range
+			if target := character.Server.Characters[targetID]; target != nil {
+				character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already in melee combat with %s.\n\r", target.Name)
+				return false
+			}
+		}
+	}
 
-	character.Player.ToPlayer <- helpMessage
+	// Parse command arguments
+	var targetName string
+	var desiredRange int = 2 // Default to melee
+
+	// Process tokens
+	for i := 1; i < len(tokens); i++ {
+		arg := strings.ToLower(tokens[i])
+		switch arg {
+		case "far":
+			desiredRange = 0
+		case "pole":
+			desiredRange = 1
+		case "melee":
+			desiredRange = 2
+		default:
+			// If not a range specification, treat as target name
+			if targetName == "" {
+				targetName = strings.Join(tokens[i:], " ")
+				break
+			}
+		}
+	}
+
+	// If no target specified, use current facing if exists
+	var target *Character
+	if targetName == "" {
+		target = character.Facing
+	} else {
+		// Find target in room
+		for _, c := range character.Room.Characters {
+			if strings.EqualFold(c.Name, targetName) {
+				target = c
+				break
+			}
+		}
+	}
+
+	if target == nil {
+		character.Player.ToPlayer <- "\n\rAdvance towards whom?\n\r"
+		return false
+	}
+
+	// Set facing if not already set
+	if character.Facing != target {
+		character.SetFacing(target)
+	}
+
+	// Get current range
+	currentRange := character.GetCombatRange(target)
+
+	// If already at desired range
+	if currentRange == desiredRange {
+		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already at %s range with %s.\n\r",
+			getRangeName(desiredRange), target.Name)
+		return false
+	}
+
+	// If trying to increase range
+	if currentRange > desiredRange {
+		character.Player.ToPlayer <- "\n\rYou cannot advance to a longer range.\n\r"
+		return false
+	}
+
+	// Start the advance
+	character.Advancing = true
+	go performAdvance(character, target, desiredRange)
+
+	// Inform the character and room
+	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou begin advancing towards %s.\n\r", target.Name)
+	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s begins advancing towards %s.\n\r",
+		character.Name, target.Name))
+
 	return false
 }
