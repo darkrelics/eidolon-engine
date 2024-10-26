@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 )
 
 // DisplayArchetypes logs the loaded archetypes for debugging purposes.
@@ -26,8 +27,25 @@ func (s *Server) LoadArchetypes() error {
 	for _, archetype := range archetypes {
 		// Create a copy of the archetype to store in the map
 		archetypeCopy := archetype
+
+		// Convert attribute keys to lowercase
+		lowerAttributes := make(map[string]float64)
+		for key, value := range archetypeCopy.Attributes {
+			lowerAttributes[strings.ToLower(key)] = value
+		}
+		archetypeCopy.Attributes = lowerAttributes
+
+		// Convert ability keys to lowercase
+		lowerAbilities := make(map[string]float64)
+		for key, value := range archetypeCopy.Abilities {
+			lowerAbilities[strings.ToLower(key)] = value
+		}
+		archetypeCopy.Abilities = lowerAbilities
+
 		s.ArcheTypes[archetype.ArchetypeName] = &archetypeCopy
-		Logger.Debug("Loaded archetype", "name", archetype.ArchetypeName, "description", archetype.Description)
+		Logger.Debug("Loaded archetype",
+			"name", archetype.ArchetypeName,
+			"description", archetype.Description)
 	}
 
 	return nil
