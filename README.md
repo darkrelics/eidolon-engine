@@ -85,10 +85,10 @@ Key components:
 - [x] Improve the input filters
 - [x] Handle unplanned disconnections.
 - [x] Limit Auto Save to updated objects.
+- [ ] Improve the say command.
 - [ ] Add look at item command.
 - [ ] Implement an obscenity filter.
 - [ ] Validate graph of loaded rooms and exits.
-- [ ] Improve the say command.
 - [ ] Create administrative interface.
 - [ ] Force Password Resets when needed.
 - [ ] Add the ability to delete accounts.
