@@ -42,10 +42,21 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     super.initState();
     final userPoolId = const String.fromEnvironment('USER_POOL_ID');
     final clientId = const String.fromEnvironment('CLIENT_ID');
-    if (userPoolId.isEmpty || clientId.isEmpty) {
-      _message = 'Error: USER_POOL_ID or CLIENT_ID not set';
-    } else {
+    final clientSecret = const String.fromEnvironment('CLIENT_SECRET');
+    
+    if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
+      setState(() {
+        _message = 'Error: Missing required Cognito configuration';
+      });
+      return;
+    }
+    
+    try {
       userPool = CognitoUserPool(userPoolId, clientId);
+    } catch (e) {
+      setState(() {
+        _message = 'Error initializing Cognito: ${e.toString()}';
+      });
     }
   }
 
@@ -68,13 +79,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         final secretHash = calculateSecretHash(_emailController.text);
         final signUpResult = await userPool.signUp(
           _emailController.text,
-          'tempPassword123!', // This is a temporary password
+          'tempPassword123!',
           userAttributes: [
             AttributeArg(name: 'email', value: _emailController.text),
           ],
-          validationData: [
-            AttributeArg(name: 'SECRET_HASH', value: secretHash),
-          ],
+          signUpOptions: CognitoSignUpOptions(
+            secretHash: secretHash,
+          ),
         );
 
         setState(() {

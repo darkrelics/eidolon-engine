@@ -79,6 +79,7 @@ Resources:
         - ALLOW_REFRESH_TOKEN_AUTH
         - ALLOW_CUSTOM_AUTH
         - ALLOW_USER_SRP_AUTH
+        - ALLOW_SIGN_UP
       PreventUserExistenceErrors: ENABLED
       CallbackURLs:
         - !Ref CallbackURL
