@@ -7,12 +7,20 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	DefaultDistance = 30.0 // Default starting distance
+	MeleeRange      = 5.0  // Distance for melee combat
+	PoleRange       = 10.0 // Distance for pole weapons
+	FarRange        = 30.0 // Distance for far range
+	VeryFarRange    = 50.0 // Maximum combat distance
+)
+
 // EnterCombat initializes the CombatRange map when a character enters combat
 func (c *Character) EnterCombat() {
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 	if c.CombatRange == nil {
-		c.CombatRange = make(map[uuid.UUID]int)
+		c.CombatRange = make(map[uuid.UUID]float64)
 	}
 }
 
@@ -21,27 +29,28 @@ func (c *Character) ExitCombat() {
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 	c.CombatRange = nil
+	c.Advancing = false
 }
 
-// SetCombatRange sets the range to a target character, initializing the map if necessary
-func (c *Character) SetCombatRange(target *Character, CombatRange int) {
+// SetCombatRange sets the distance to a target character, initializing the map if necessary
+func (c *Character) SetCombatRange(target *Character, distance float64) {
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 	if c.CombatRange == nil {
-		c.CombatRange = make(map[uuid.UUID]int)
+		c.CombatRange = make(map[uuid.UUID]float64)
 	}
-	c.CombatRange[target.ID] = CombatRange
+	c.CombatRange[target.ID] = distance
 }
 
-// GetCombatRange gets the range to a target character, returning RangeFar if not in combat
-func (c *Character) GetCombatRange(target *Character) int {
+// GetCombatRange gets the distance to a target character, returning DefaultDistance if not in combat
+func (c *Character) GetCombatRange(target *Character) float64 {
 	if c.CombatRange == nil {
-		return 0 // RangeFar
+		return DefaultDistance
 	}
-	if CombatRange, exists := c.CombatRange[target.ID]; exists {
-		return CombatRange
+	if distance, exists := c.CombatRange[target.ID]; exists {
+		return distance
 	}
-	return 0 // RangeFar
+	return DefaultDistance
 }
 
 // IsInCombat checks if the character is currently in combat
@@ -62,11 +71,10 @@ func (c *Character) CanEscape() bool {
 
 	// Check if any character is at melee range
 	for _, distance := range c.CombatRange {
-		if distance == 2 { // RangeMelee
+		if distance <= MeleeRange {
 			return false
 		}
 	}
-	// No characters at melee range, can escape
 	return true
 }
 
@@ -89,102 +97,92 @@ func (c *Character) ClearFacing() {
 	c.Facing = nil
 }
 
-// Helper function to convert range int to string
-func getRangeName(r int) string {
-	switch r {
-	case 0:
-		return "far"
-	case 1:
-		return "pole"
-	case 2:
+// Helper function to get range description based on distance
+func getRangeDescription(distance float64) string {
+	switch {
+	case distance <= MeleeRange:
 		return "melee"
+	case distance <= PoleRange:
+		return "pole"
+	case distance <= FarRange:
+		return "far"
 	default:
-		return "unknown"
+		return "very far"
 	}
 }
 
-func performAdvance(character *Character, target *Character, desiredRange int) {
+func performAdvance(character *Character, target *Character, desiredDistance float64) {
+	// Clear advancing state when done
 	defer func() {
 		character.Mutex.Lock()
 		character.Advancing = false
 		character.Mutex.Unlock()
 	}()
 
-	// Get base times in seconds
-	farToPole := 8.0
-	poleToMelee := 2.0
+	// Get initial state under a single lock
+	character.Mutex.Lock()
+	agility, exists := character.Attributes["agility"]
+	characterName := character.Name
+	startingRoom := character.Room
+	currentDistance := character.GetCombatRange(target)
+	character.Mutex.Unlock()
 
-	// Calculate agility modifier (minimum of 1 to prevent division by zero)
-	agility := character.Attributes["agility"]
-	if agility < 1 {
-		agility = 1
+	if !exists || agility < 0.1 {
+		agility = 0.1
 	}
 
-	// Modify times based on agility
-	farToPole = farToPole / agility
-	poleToMelee = poleToMelee / agility
+	// Calculate movement rate based on agility
+	moveRate := 1.0 * agility // 1 unit per second per point of agility
+
+	// Calculate total movement time
+	distanceToMove := currentDistance - desiredDistance
+	if distanceToMove <= 0 {
+		character.Player.ToPlayer <- "\n\rYou are already at the desired distance.\n\r"
+		return
+	}
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 
 	for {
+		<-ticker.C // Wait for next tick
+
+		// Check combat state
 		character.Mutex.Lock()
-		if !character.Advancing {
-			// Advance was interrupted
+		target.Mutex.Lock()
+
+		if !character.Advancing ||
+			character.Room != startingRoom ||
+			target.Room != startingRoom {
 			character.Mutex.Unlock()
+			target.Mutex.Unlock()
+			character.Player.ToPlayer <- "\n\rAdvance interrupted.\n\r"
 			return
 		}
 
-		currentRange := character.GetCombatRange(target)
-
-		// Check if target is still valid
-		if target.Room != character.Room {
-			character.Player.ToPlayer <- fmt.Sprintf("\n\r%s is no longer in the room.\n\r", target.Name)
-			character.Mutex.Unlock()
-			return
+		currentDistance := character.GetCombatRange(target)
+		newDistance := currentDistance - moveRate
+		if newDistance < desiredDistance {
+			newDistance = desiredDistance
 		}
 
-		// If we've reached desired range, stop
-		if currentRange >= desiredRange {
-			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou have reached %s range with %s.\n\r",
-				getRangeName(currentRange), target.Name)
-			character.Mutex.Unlock()
-			return
-		}
+		// Update distances while we have both locks
+		character.SetCombatRange(target, newDistance)
+		target.SetCombatRange(character, newDistance)
 
-		// Determine next range and delay
-		nextRange := currentRange + 1
-		var delay float64
-		if currentRange == 0 { // far to pole
-			delay = farToPole
-		} else { // pole to melee
-			delay = poleToMelee
-		}
+		rangeDesc := getRangeDescription(newDistance)
 		character.Mutex.Unlock()
+		target.Mutex.Unlock()
 
-		// Wait for the calculated time
-		time.Sleep(time.Duration(delay * float64(time.Second)))
-
-		// Check again if we should continue
-		character.Mutex.Lock()
-		if !character.Advancing || target.Room != character.Room {
-			character.Mutex.Unlock()
-			return
-		}
-
-		// Update the range
-		character.SetCombatRange(target, nextRange)
-		target.SetCombatRange(character, nextRange)
-
-		// Notify both parties of the range change
-		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou advance to %s range with %s.\n\r",
-			getRangeName(nextRange), target.Name)
-		target.Player.ToPlayer <- fmt.Sprintf("\n\r%s advances to %s range with you.\n\r",
-			character.Name, getRangeName(nextRange))
+		// Send notifications after releasing locks
+		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou advance to %s range (%.1f units) with %s.\n\r",
+			rangeDesc, newDistance, target.Name)
+		target.Player.ToPlayer <- fmt.Sprintf("\n\r%s advances to %s range (%.1f units) with you.\n\r",
+			characterName, rangeDesc, newDistance)
 		target.Player.ToPlayer <- target.Player.Prompt
 
-		// If we've reached the desired range, we're done
-		if nextRange == desiredRange {
-			character.Mutex.Unlock()
+		if newDistance <= desiredDistance {
 			return
 		}
-		character.Mutex.Unlock()
 	}
 }

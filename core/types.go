@@ -161,8 +161,8 @@ type Character struct {
 	Server      *Server
 	Mutex       sync.Mutex
 	Facing      *Character
-	Advancing   bool              // true when character is advancing towards their facing target
-	CombatRange map[uuid.UUID]int // nil when not in combat
+	Advancing   bool                  // true when character is advancing towards their facing target
+	CombatRange map[uuid.UUID]float64 // Changed from int to float64 to store distances
 	LastEdited  time.Time
 	LastSaved   time.Time
 }
