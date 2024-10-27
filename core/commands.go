@@ -49,6 +49,7 @@ var CommandHandlers = map[string]CommandHandler{
 	"assess":    ExecuteAssessCommand,
 	"face":      ExecuteFaceCommand,
 	"advance":   ExecuteAdvanceCommand,
+	"retreat":   ExecuteRetreatCommand,
 	"i":         ExecuteInventoryCommand, // Alias for inventory command
 	"inv":       ExecuteInventoryCommand, // Alias for inventory command
 	"\"":        ExecuteSayCommand,       // Allow for double quotes to be used as a shortcut for the say command
@@ -234,6 +235,7 @@ func ExecuteHelpCommand(character *Character, tokens []string) bool {
 		"\n\rassess - Assess your current combat situation" +
 		"\n\rface <character> - Face a character in the room" +
 		"\n\radvance <target> <range> - Advance towards a target. Range can be far, pole, or melee (default)" +
+		"\n\rretreat - Retreat from the current combat" +
 		"\n\rwho - List all characters online" +
 		"\n\rpassword - Change your password" +
 		"\n\rquit - Quit the game\n\r"

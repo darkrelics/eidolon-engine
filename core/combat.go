@@ -134,8 +134,23 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 	// Calculate movement rate based on agility
 	moveRate := 1.0 * agility // 1 unit per second per point of agility
 
-	// Calculate total movement time
+	// Determine if this is a retreat (moving away) or advance (moving closer)
+	isRetreat := desiredDistance > currentDistance
+
+	// Apply 5% speed bonus for retreating
+	if isRetreat {
+		moveRate *= 1.05
+	}
+
+	// Calculate total movement needed
 	distanceToMove := currentDistance - desiredDistance
+	if isRetreat {
+		distanceToMove = desiredDistance - currentDistance
+		if desiredDistance > VeryFarRange {
+			desiredDistance = VeryFarRange // Cap at maximum range
+		}
+	}
+
 	if distanceToMove <= 0 {
 		character.Player.ToPlayer <- "\n\rYou are already at the desired distance.\n\r"
 		return
@@ -156,14 +171,26 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 			target.Room != startingRoom {
 			character.Mutex.Unlock()
 			target.Mutex.Unlock()
-			character.Player.ToPlayer <- "\n\rAdvance interrupted.\n\r"
+			character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
 			return
 		}
 
 		currentDistance := character.GetCombatRange(target)
-		newDistance := currentDistance - moveRate
-		if newDistance < desiredDistance {
-			newDistance = desiredDistance
+		var newDistance float64
+
+		if isRetreat {
+			newDistance = currentDistance + moveRate
+			if newDistance > desiredDistance {
+				newDistance = desiredDistance
+			}
+			if newDistance > VeryFarRange {
+				newDistance = VeryFarRange
+			}
+		} else {
+			newDistance = currentDistance - moveRate
+			if newDistance < desiredDistance {
+				newDistance = desiredDistance
+			}
 		}
 
 		// Update distances while we have both locks
@@ -175,13 +202,21 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 		target.Mutex.Unlock()
 
 		// Send notifications after releasing locks
-		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou advance to %s range (%.1f units) with %s.\n\r",
-			rangeDesc, newDistance, target.Name)
-		target.Player.ToPlayer <- fmt.Sprintf("\n\r%s advances to %s range (%.1f units) with you.\n\r",
-			characterName, rangeDesc, newDistance)
+		if isRetreat {
+			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou retreat to %s range (%.1f units) from %s.\n\r",
+				rangeDesc, newDistance, target.Name)
+			target.Player.ToPlayer <- fmt.Sprintf("\n\r%s retreats to %s range (%.1f units) from you.\n\r",
+				characterName, rangeDesc, newDistance)
+		} else {
+			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou advance to %s range (%.1f units) with %s.\n\r",
+				rangeDesc, newDistance, target.Name)
+			target.Player.ToPlayer <- fmt.Sprintf("\n\r%s advances to %s range (%.1f units) with you.\n\r",
+				characterName, rangeDesc, newDistance)
+		}
 		target.Player.ToPlayer <- target.Player.Prompt
 
-		if newDistance <= desiredDistance {
+		if (isRetreat && newDistance >= desiredDistance) ||
+			(!isRetreat && newDistance <= desiredDistance) {
 			return
 		}
 	}

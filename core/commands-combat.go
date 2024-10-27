@@ -204,3 +204,83 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 
 	return false
 }
+
+// ExecuteRetreatCommand handles the retreat command, allowing characters to move away from their target
+func ExecuteRetreatCommand(character *Character, tokens []string) bool {
+	if character == nil {
+		Logger.Error("Attempted to retreat with nil character")
+		return false
+	}
+
+	// Check if already advancing/retreating
+	if character.Advancing {
+		character.Player.ToPlayer <- "\n\rYou are already in motion.\n\r"
+		return false
+	}
+
+	// Parse command arguments
+	var targetName string
+	var desiredDistance float64 = FarRange // Default to far range for retreat
+
+	// Process tokens
+	for i := 1; i < len(tokens); i++ {
+		arg := strings.ToLower(tokens[i])
+		switch arg {
+		case "very", "far":
+			if arg == "very" && i+1 < len(tokens) && tokens[i+1] == "far" {
+				desiredDistance = VeryFarRange
+				i++ // Skip next token
+			} else {
+				desiredDistance = FarRange
+			}
+		case "pole":
+			desiredDistance = PoleRange
+		default:
+			// If not a range specification, treat as target name
+			if targetName == "" {
+				targetName = strings.Join(tokens[i:], " ")
+				break
+			}
+		}
+	}
+
+	// If no target specified, use current facing if exists
+	var target *Character
+	if targetName == "" {
+		target = character.Facing
+	} else {
+		// Find target in room
+		for _, c := range character.Room.Characters {
+			if strings.EqualFold(c.Name, targetName) {
+				target = c
+				break
+			}
+		}
+	}
+
+	if target == nil {
+		character.Player.ToPlayer <- "\n\rRetreat from whom?\n\r"
+		return false
+	}
+
+	// Get current distance
+	currentDistance := character.GetCombatRange(target)
+
+	// If already at or beyond desired distance
+	if currentDistance >= desiredDistance {
+		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already at %s range from %s.\n\r",
+			getRangeDescription(desiredDistance), target.Name)
+		return false
+	}
+
+	// Start the retreat with 5% speed bonus
+	character.Advancing = true // We reuse the advancing flag for any movement
+	go performAdvance(character, target, desiredDistance)
+
+	// Inform the character and room
+	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou begin retreating from %s.\n\r", target.Name)
+	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s begins retreating from %s.\n\r",
+		character.Name, target.Name))
+
+	return false
+}
