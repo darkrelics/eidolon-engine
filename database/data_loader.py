@@ -111,19 +111,24 @@ def store_archetypes(dynamodb, archetypes_data):
     try:
         with table.batch_writer() as batch:
             for name, archetype in archetypes_data.get("archetypes", {}).items():
+                # Convert attributes to lowercase
+                attributes = {k.lower(): v for k, v in archetype.get("Attributes", {}).items()}
+                # Convert abilities to lowercase
+                abilities = {k.lower(): v for k, v in archetype.get("Abilities", {}).items()}
+
                 archetype_item = {
                     "ArchetypeName": name,
                     "Description": archetype.get("Description", ""),
-                    "Attributes": archetype.get("Attributes", {}),
-                    "Abilities": archetype.get("Abilities", {}),
+                    "Attributes": attributes,
+                    "Abilities": abilities,
                     "StartRoom": archetype.get("StartRoom", 0),
                 }
                 batch.put_item(Item=convert_to_dynamodb_format(archetype_item))
         print("Archetype data stored in DynamoDB successfully")
-    except ClientError as e:
-        logging.error(f"An error occurred while storing archetypes: {e.response['Error']['Message']}")
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while storing archetypes: {str(e)}")
+    except ClientError as err:
+        logging.error(f"An error occurred while storing archetypes: {err.response['Error']['Message']}")
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while storing archetypes: {str(err)}")
 
 
 def store_item_prototypes(dynamodb, prototypes_data):
