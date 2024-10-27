@@ -115,7 +115,7 @@ def store_archetypes(dynamodb, archetypes_data):
                 attributes = {k.lower(): v for k, v in archetype.get("Attributes", {}).items()}
                 # Convert abilities to lowercase
                 abilities = {k.lower(): v for k, v in archetype.get("Abilities", {}).items()}
-                
+
                 archetype_item = {
                     "ArchetypeName": name,
                     "Description": archetype.get("Description", ""),
