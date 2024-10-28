@@ -211,9 +211,6 @@ func InputLoop(c *Character) {
 		}
 	}
 
-	// Cleanup code
-	close(c.Player.FromPlayer)
-
 	// Remove character from room and server
 	c.Room.Mutex.Lock()
 	delete(c.Room.Characters, c.ID)
