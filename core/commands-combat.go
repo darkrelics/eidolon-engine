@@ -9,7 +9,12 @@ func ExecuteAssessCommand(character *Character, tokens []string) bool {
 	Logger.Debug("Player is assessing combat situation", "playerName", character.Player.PlayerID)
 
 	if !character.IsInCombat() {
-		character.Player.ToPlayer <- "\n\rYou are not currently in combat.\n\r"
+		// Add facing info even when not in combat
+		if character.Facing != nil {
+			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are facing %s but not in combat.\n\r", character.Facing.Name)
+		} else {
+			character.Player.ToPlayer <- "\n\rYou are not currently in combat.\n\r"
+		}
 		return false
 	}
 
@@ -17,7 +22,12 @@ func ExecuteAssessCommand(character *Character, tokens []string) bool {
 	assessment.WriteString("\n\rCombat Assessment:\n\r")
 
 	if len(character.CombatRange) == 0 {
-		assessment.WriteString("You are in combat, but not engaged with any specific opponents.\n\r")
+		// Add facing info even with no range information
+		if character.Facing != nil {
+			assessment.WriteString(fmt.Sprintf("You are facing %s but not engaged with any opponents.\n\r", character.Facing.Name))
+		} else {
+			assessment.WriteString("You are in combat, but not engaged with any specific opponents.\n\r")
+		}
 	} else {
 		// Track who we're advancing towards
 		var advanceTarget *Character
@@ -41,6 +51,11 @@ func ExecuteAssessCommand(character *Character, tokens []string) bool {
 			// Add facing information
 			if targetCharacter.GetFacing() == character {
 				statusLine += " and is facing you"
+			}
+
+			// Note if this is who we're facing
+			if targetCharacter == character.Facing {
+				statusLine += " and you are facing them"
 			}
 
 			// Add advance information
