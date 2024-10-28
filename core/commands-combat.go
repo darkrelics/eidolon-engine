@@ -188,18 +188,14 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
-	// Get current distance
-	currentDistance := character.GetCombatRange(target)
-
-	// If already at desired distance
-	if currentDistance <= desiredDistance {
-		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already at %s range with %s.\n\r",
-			getRangeDescription(desiredDistance), target.Name)
+	// Check for self-targeting
+	if target == character {
+		character.Player.ToPlayer <- "\n\rYou cannot advance towards yourself.\n\r"
 		return false
 	}
 
-	// Start the advance
 	character.Advancing = true
+	// Launch performAdvance as non-blocking goroutine
 	go performAdvance(character, target, desiredDistance)
 
 	// Inform the character and room
@@ -209,7 +205,6 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 
 	return false
 }
-
 func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 	if character == nil {
 		Logger.Error("Attempted to retreat with nil character")
