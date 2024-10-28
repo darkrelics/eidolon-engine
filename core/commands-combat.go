@@ -106,25 +106,24 @@ func ExecuteFaceCommand(character *Character, tokens []string) bool {
 	// Set facing for the character executing the command
 	character.SetFacing(targetCharacter)
 
-	// Enter combat and set initial distance for both characters
+	// Initiating character enters combat and sets range
 	character.EnterCombat()
-	targetCharacter.EnterCombat()
-
 	character.SetCombatRange(targetCharacter, DefaultDistance)
+
+	// Target enters combat but doesn't change facing
+	targetCharacter.EnterCombat()
 	targetCharacter.SetCombatRange(character, DefaultDistance)
 
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are now facing %s at a distance of %.1f units.\n\r",
 		targetCharacter.Name, DefaultDistance)
 
-	// Notify the target character
+	// Notify the target character with range information
 	targetCharacter.Player.ToPlayer <- fmt.Sprintf("\n\r%s is now facing you at a distance of %.1f units.\n\r",
 		character.Name, DefaultDistance)
 	targetCharacter.Player.ToPlayer <- targetCharacter.Player.Prompt
 
 	return false
 }
-
-// In commands-combat.go
 
 func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 	if character == nil {
