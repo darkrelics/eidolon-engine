@@ -160,12 +160,13 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 	defer ticker.Stop()
 
 	for {
-		<-ticker.C // Wait for next tick
+		<-ticker.C
 
 		// Check combat state
 		character.Mutex.Lock()
 		target.Mutex.Lock()
 
+		// Check for end conditions
 		if !character.Advancing ||
 			character.Room != startingRoom ||
 			target.Room != startingRoom {
