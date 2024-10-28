@@ -67,6 +67,7 @@ func wrapText(text string, width int) string {
 	lines := strings.Split(text, "\n")
 
 	for i, line := range lines {
+		// Preserve empty lines
 		if len(line) == 0 {
 			if i < len(lines)-1 { // Only add newline if not the last line
 				result.WriteString("\r\n")
@@ -74,26 +75,41 @@ func wrapText(text string, width int) string {
 			continue
 		}
 
-		words := strings.Fields(line)
-		if len(words) == 0 {
+		// If the line is just whitespace, preserve it
+		if strings.TrimSpace(line) == "" {
+			result.WriteString(line)
+			if i < len(lines)-1 {
+				result.WriteString("\r\n")
+			}
 			continue
 		}
 
-		lineLen := 0
-		for _, word := range words {
-			wordLen := len(word)
-			if lineLen+wordLen+1 > width {
-				result.WriteString("\r\n")
-				lineLen = 0
-			} else if lineLen > 0 {
-				result.WriteString(" ")
-				lineLen++
+		// Process line with content
+		currentLine := line
+		for len(currentLine) > 0 {
+			if len(currentLine) <= width {
+				result.WriteString(currentLine)
+				break
 			}
-			result.WriteString(word)
-			lineLen += wordLen
+
+			// Find the last space within width
+			lastSpace := strings.LastIndex(currentLine[:width+1], " ")
+			if lastSpace == -1 {
+				// No space found, force break at width
+				result.WriteString(currentLine[:width])
+				currentLine = currentLine[width:]
+			} else {
+				// Break at last space
+				result.WriteString(currentLine[:lastSpace])
+				currentLine = currentLine[lastSpace+1:]
+			}
+
+			if len(currentLine) > 0 {
+				result.WriteString("\r\n")
+			}
 		}
 
-		// Only add newline if not the last line
+		// Add newline between original lines if not the last line
 		if i < len(lines)-1 {
 			result.WriteString("\r\n")
 		}

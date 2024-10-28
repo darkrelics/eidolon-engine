@@ -266,7 +266,7 @@ func SelectCharacter(player *Player, server *Server) (*Character, error) {
 
 		if input == "X" && len(player.CharacterList) > 0 {
 			// Handle character deletion
-			player.ToPlayer <- "Select a character to delete:\n\r"
+			player.ToPlayer <- "Select a character to delete: \n\r"
 			for i, name := range options {
 				player.ToPlayer <- fmt.Sprintf("%d: %s\n\r", i+1, name)
 			}
