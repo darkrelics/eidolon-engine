@@ -148,10 +148,8 @@ func PlayerInput(p *Player) {
 func PlayerOutput(p *Player) {
 	Logger.Debug("Player output goroutine started", "playerName", p.PlayerID)
 
-	defer func() {
-		close(p.FromPlayer)
-		Logger.Debug("Player output goroutine ended", "playerName", p.PlayerID)
-	}()
+	// Use a defer to cleanup but don't close FromPlayer here
+	defer Logger.Debug("Player output goroutine ended", "playerName", p.PlayerID)
 
 	for message := range p.ToPlayer {
 		wrappedMessage := wrapText(message, p.ConsoleWidth)
