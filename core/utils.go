@@ -66,9 +66,11 @@ func wrapText(text string, width int) string {
 	var result strings.Builder
 	lines := strings.Split(text, "\n")
 
-	for _, line := range lines {
+	for i, line := range lines {
 		if len(line) == 0 {
-			result.WriteString("\r\n")
+			if i < len(lines)-1 { // Only add newline if not the last line
+				result.WriteString("\r\n")
+			}
 			continue
 		}
 
@@ -90,7 +92,11 @@ func wrapText(text string, width int) string {
 			result.WriteString(word)
 			lineLen += wordLen
 		}
-		result.WriteString("\r\n")
+
+		// Only add newline if not the last line
+		if i < len(lines)-1 {
+			result.WriteString("\r\n")
+		}
 	}
 
 	return result.String()

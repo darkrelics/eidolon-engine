@@ -215,9 +215,8 @@ func Authenticate(username, password string, config core.Configuration) bool {
 	return true
 }
 
-// StartSSHServer starts the SSH server to accept incoming player connections.
-func StartSSHServer(server *core.Server) error {
-	core.Logger.Info("Starting SSH server", "port", server.Port)
+func configureSSH(server *core.Server) error {
+	core.Logger.Info("Configuring SSH server", "port", server.Port)
 
 	// Read the private key from disk
 	privateKeyPath := server.Config.Server.PrivateKeyPath
@@ -251,6 +250,33 @@ func StartSSHServer(server *core.Server) error {
 
 	// Add the host key to the SSH configuration
 	server.SSHConfig.AddHostKey(private)
+	return nil
+}
+
+func acceptConnections(server *core.Server) {
+	for {
+		conn, err := server.Listener.Accept()
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				core.Logger.Info("SSH server listener closed, stopping accept loop")
+				return
+			}
+			core.Logger.Error("Error accepting connection", "error", err)
+			continue
+		}
+
+		server.WaitGroup.Add(1)
+		go func() {
+			defer server.WaitGroup.Done()
+			handleConnection(server, conn)
+		}()
+	}
+}
+
+func StartSSHServer(server *core.Server) error {
+	if err := configureSSH(server); err != nil {
+		return fmt.Errorf("failed to configure SSH server: %v", err)
+	}
 
 	// Start listening on the configured port
 	address := fmt.Sprintf(":%d", server.Port)
@@ -263,27 +289,7 @@ func StartSSHServer(server *core.Server) error {
 	core.Logger.Info("SSH server listening", "port", server.Port)
 
 	// Start accepting connections in a separate goroutine
-	go func() {
-		for {
-			conn, err := server.Listener.Accept()
-			if err != nil {
-				if errors.Is(err, net.ErrClosed) {
-					// The listener has been closed, exit the goroutine
-					core.Logger.Info("SSH server listener closed, stopping accept loop")
-					return
-				}
-				core.Logger.Error("Error accepting connection", "error", err)
-				continue
-			}
-
-			// Increment the WaitGroup before starting the goroutine
-			server.WaitGroup.Add(1)
-			go func() {
-				defer server.WaitGroup.Done()
-				handleConnection(server, conn)
-			}()
-		}
-	}()
+	go acceptConnections(server)
 
 	return nil
 }
