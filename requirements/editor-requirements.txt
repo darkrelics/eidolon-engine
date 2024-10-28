@@ -1,6 +1,6 @@
 #Required 
 jupyter==1.1.1
-networkx==3.4.1
+networkx==3.4.2
 notebook==7.2.2
 numpy==2.1.2
 matplotlib==3.9.2
