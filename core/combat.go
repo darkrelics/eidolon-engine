@@ -112,46 +112,48 @@ func getRangeDescription(distance float64) string {
 }
 
 func performAdvance(character *Character, target *Character, desiredDistance float64) {
+	Logger.Debug("Starting performAdvance", "character", character.Name, "target", target.Name, "desiredDistance", desiredDistance)
+
 	// Clear advancing state when done
 	defer func() {
+		Logger.Debug("Clearing advancing state", "character", character.Name)
 		character.Mutex.Lock()
 		character.Advancing = false
 		character.Mutex.Unlock()
+		Logger.Debug("Advancing state cleared", "character", character.Name)
 	}()
 
 	// Get initial state under a single lock
+	Logger.Debug("Acquiring character lock for initial state", "character", character.Name)
 	character.Mutex.Lock()
 	agility, exists := character.Attributes["agility"]
 	characterName := character.Name
 	startingRoom := character.Room
 	currentDistance := character.GetCombatRange(target)
 	character.Mutex.Unlock()
+	Logger.Debug("Released initial state lock", "character", characterName)
 
 	if !exists || agility < 0.1 {
+		Logger.Debug("Adjusting minimum agility", "character", characterName, "defaultAgility", 0.1)
 		agility = 0.1
 	}
 
-	// Calculate movement rate based on agility
-	moveRate := 1.0 * agility // 1 unit per second per point of agility
-
-	// Determine if this is a retreat (moving away) or advance (moving closer)
+	moveRate := 1.0 * agility
 	isRetreat := desiredDistance > currentDistance
-
-	// Apply 5% speed bonus for retreating
 	if isRetreat {
 		moveRate *= 1.05
 	}
 
-	// Calculate total movement needed
 	distanceToMove := currentDistance - desiredDistance
 	if isRetreat {
 		distanceToMove = desiredDistance - currentDistance
 		if desiredDistance > VeryFarRange {
-			desiredDistance = VeryFarRange // Cap at maximum range
+			desiredDistance = VeryFarRange
 		}
 	}
 
 	if distanceToMove <= 0 {
+		Logger.Debug("No movement needed", "character", characterName)
 		character.Player.ToPlayer <- "\n\rYou are already at the desired distance.\n\r"
 		return
 	}
@@ -162,25 +164,35 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 	for {
 		<-ticker.C
 
-		// Check combat state
-		character.Mutex.Lock()
-		target.Mutex.Lock()
+		// Get states before acquiring locks
+		Logger.Debug("Pre-lock state check", "character", characterName)
 
-		// Check for end conditions
-		if !character.Advancing ||
-			character.Room != startingRoom ||
-			target.Room != startingRoom {
+		// First check character's state with minimal lock time
+		character.Mutex.Lock()
+		if !character.Advancing || character.Room != startingRoom {
 			character.Mutex.Unlock()
-			target.Mutex.Unlock()
+			Logger.Debug("Character state invalid, ending movement", "character", characterName)
+			character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
+			return
+		}
+		curDistance := character.GetCombatRange(target)
+		character.Mutex.Unlock()
+
+		// Then check target's state with minimal lock time
+		target.Mutex.Lock()
+		targetInRoom := target.Room == startingRoom
+		target.Mutex.Unlock()
+
+		if !targetInRoom {
+			Logger.Debug("Target left room, ending movement", "character", characterName)
 			character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
 			return
 		}
 
-		currentDistance := character.GetCombatRange(target)
+		// Calculate new distance before acquiring locks
 		var newDistance float64
-
 		if isRetreat {
-			newDistance = currentDistance + moveRate
+			newDistance = curDistance + moveRate
 			if newDistance > desiredDistance {
 				newDistance = desiredDistance
 			}
@@ -188,21 +200,28 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 				newDistance = VeryFarRange
 			}
 		} else {
-			newDistance = currentDistance - moveRate
+			newDistance = curDistance - moveRate
 			if newDistance < desiredDistance {
 				newDistance = desiredDistance
 			}
 		}
 
-		// Update distances while we have both locks
-		character.SetCombatRange(target, newDistance)
-		target.SetCombatRange(character, newDistance)
+		// Update distances with minimal lock time
+		Logger.Debug("Acquiring locks for distance update", "character", characterName, "currentDistance", curDistance, "newDistance", newDistance)
 
-		rangeDesc := getRangeDescription(newDistance)
+		character.Mutex.Lock()
+		character.SetCombatRange(target, newDistance)
 		character.Mutex.Unlock()
+
+		target.Mutex.Lock()
+		target.SetCombatRange(character, newDistance)
 		target.Mutex.Unlock()
 
-		// Send notifications after releasing locks
+		Logger.Debug("Released locks after distance update", "character", characterName, "newDistance", newDistance)
+
+		rangeDesc := getRangeDescription(newDistance)
+
+		// Send notifications after all locks are released
 		if isRetreat {
 			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou retreat to %s range (%.1f units) from %s.\n\r",
 				rangeDesc, newDistance, target.Name)
@@ -218,6 +237,9 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 
 		if (isRetreat && newDistance >= desiredDistance) ||
 			(!isRetreat && newDistance <= desiredDistance) {
+			Logger.Debug("Movement complete",
+				"character", characterName,
+				"finalDistance", newDistance)
 			return
 		}
 	}
