@@ -109,6 +109,8 @@ func ExecuteFaceCommand(character *Character, tokens []string) bool {
 	return false
 }
 
+// In commands-combat.go
+
 func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 	if character == nil {
 		Logger.Error("Attempted to advance with nil character")
@@ -131,56 +133,45 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 		}
 	}
 
-	// Parse command arguments
-	var targetName string
-	var desiredDistance float64 = MeleeRange // Default to melee range
+	// Default values
+	desiredDistance := MeleeRange
+	var target *Character
 
-	// Process tokens
-	for i := 1; i < len(tokens); i++ {
-		arg := strings.ToLower(tokens[i])
-		switch arg {
-		case "very", "far":
-			if arg == "very" && i+1 < len(tokens) && tokens[i+1] == "far" {
-				desiredDistance = VeryFarRange
-				i++ // Skip next token
-			} else {
-				desiredDistance = FarRange
-			}
+	if len(tokens) > 1 {
+		// Handle the last token as the target name unless it's a range specification
+		lastToken := strings.ToLower(tokens[len(tokens)-1])
+		switch lastToken {
+		case "far":
+			desiredDistance = FarRange
 		case "pole":
 			desiredDistance = PoleRange
 		case "melee":
 			desiredDistance = MeleeRange
 		default:
-			// If not a range specification, treat as target name
-			if targetName == "" {
-				targetName = strings.Join(tokens[i:], " ")
-				break
+			// If not a range specification, use it as target name
+			// Find target in room
+			for _, c := range character.Room.Characters {
+				if strings.EqualFold(c.Name, lastToken) {
+					target = c
+					break
+				}
 			}
+		}
+
+		// Check if second to last token is "very" for "very far"
+		if len(tokens) > 2 && strings.ToLower(tokens[len(tokens)-2]) == "very" && lastToken == "far" {
+			desiredDistance = VeryFarRange
 		}
 	}
 
-	// If no target specified, use current facing if exists
-	var target *Character
-	if targetName == "" {
+	// If no target specified, use current facing
+	if target == nil {
 		target = character.Facing
-	} else {
-		// Find target in room
-		for _, c := range character.Room.Characters {
-			if strings.EqualFold(c.Name, targetName) {
-				target = c
-				break
-			}
-		}
 	}
 
 	if target == nil {
 		character.Player.ToPlayer <- "\n\rAdvance towards whom?\n\r"
 		return false
-	}
-
-	// Set facing if not already set
-	if character.Facing != target {
-		character.SetFacing(target)
 	}
 
 	// Get current distance
@@ -205,7 +196,6 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 	return false
 }
 
-// ExecuteRetreatCommand handles the retreat command, allowing characters to move away from their target
 func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 	if character == nil {
 		Logger.Error("Attempted to retreat with nil character")
@@ -218,44 +208,38 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
-	// Parse command arguments
-	var targetName string
-	var desiredDistance float64 = FarRange // Default to far range for retreat
+	// Default values
+	desiredDistance := FarRange
+	var target *Character
 
-	// Process tokens
-	for i := 1; i < len(tokens); i++ {
-		arg := strings.ToLower(tokens[i])
-		switch arg {
-		case "very", "far":
-			if arg == "very" && i+1 < len(tokens) && tokens[i+1] == "far" {
-				desiredDistance = VeryFarRange
-				i++ // Skip next token
-			} else {
-				desiredDistance = FarRange
-			}
+	if len(tokens) > 1 {
+		// Handle the last token as the target name unless it's a range specification
+		lastToken := strings.ToLower(tokens[len(tokens)-1])
+		switch lastToken {
+		case "far":
+			desiredDistance = FarRange
 		case "pole":
 			desiredDistance = PoleRange
 		default:
-			// If not a range specification, treat as target name
-			if targetName == "" {
-				targetName = strings.Join(tokens[i:], " ")
-				break
+			// If not a range specification, use it as target name
+			// Find target in room
+			for _, c := range character.Room.Characters {
+				if strings.EqualFold(c.Name, lastToken) {
+					target = c
+					break
+				}
 			}
+		}
+
+		// Check if second to last token is "very" for "very far"
+		if len(tokens) > 2 && strings.ToLower(tokens[len(tokens)-2]) == "very" && lastToken == "far" {
+			desiredDistance = VeryFarRange
 		}
 	}
 
-	// If no target specified, use current facing if exists
-	var target *Character
-	if targetName == "" {
+	// If no target specified, use current facing
+	if target == nil {
 		target = character.Facing
-	} else {
-		// Find target in room
-		for _, c := range character.Room.Characters {
-			if strings.EqualFold(c.Name, targetName) {
-				target = c
-				break
-			}
-		}
 	}
 
 	if target == nil {
@@ -273,7 +257,7 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
-	// Start the retreat with 5% speed bonus
+	// Start the retreat
 	character.Advancing = true // We reuse the advancing flag for any movement
 	go performAdvance(character, target, desiredDistance)
 

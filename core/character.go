@@ -114,7 +114,6 @@ func (c *Character) ToData() *CharacterData {
 // CreateCharacter handles the character creation process for a player.
 // It prompts the player for a character name and archetype, and initializes the character.
 func (s *Server) CreateCharacter(player *Player) (*Character, error) {
-
 	Logger.Info("Player is creating a new character", "playerName", player.PlayerID)
 
 	player.ToPlayer <- "\n\rEnter your character name: "
@@ -138,6 +137,7 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 		return nil, fmt.Errorf("character name must be 15 characters or fewer")
 	}
 
+	// Check if name exists - do this before acquiring server lock
 	if s.CharacterBloomFilter.Test([]byte(charName)) {
 		player.ToPlayer <- "Character name already exists. Please choose another name.\n\r"
 		return nil, fmt.Errorf("character name already exists")
@@ -145,20 +145,23 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 
 	var selectedArchetype string
 
+	// Get archetypes list before acquiring server lock
+	s.Mutex.Lock()
+	archetypeCount := len(s.ArcheTypes)
+	archetypeOptions := make([]string, 0, archetypeCount)
+	for name, archetype := range s.ArcheTypes {
+		archetypeOptions = append(archetypeOptions, name+" - "+archetype.Description)
+	}
+	s.Mutex.Unlock()
+	sort.Strings(archetypeOptions)
+
 	// If archetypes are available, prompt the player to select one
-	if len(s.ArcheTypes) > 0 {
+	if archetypeCount > 0 {
 		for {
 			selectionMsg := "\n\rSelect a character archetype.\n\r"
-			archetypeOptions := make([]string, 0, len(s.ArcheTypes))
-			for name, archetype := range s.ArcheTypes {
-				archetypeOptions = append(archetypeOptions, name+" - "+archetype.Description)
-			}
-			sort.Strings(archetypeOptions)
-
 			for i, option := range archetypeOptions {
 				selectionMsg += fmt.Sprintf("%d: %s\n\r", i+1, option)
 			}
-
 			selectionMsg += "Enter the number of your choice: "
 			player.ToPlayer <- selectionMsg
 
@@ -181,23 +184,17 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 
 	Logger.Info("Creating character", "characterName", charName)
 
-	// Attempt to find the starting room
-	room, ok := s.Rooms[1] // This should be pulled ftom the Archtype
+	// Find starting room
+	room, ok := s.Rooms[1] // This should be pulled from the Archetype
 	if !ok {
 		Logger.Warn("Starting room not found, using default room", "startingRoomID", 1)
-
-		// Attempt to find default room (room ID 0)
 		room, ok = s.Rooms[0]
 		if !ok {
 			Logger.Error("No default room found", "defaultRoomID", 0)
-			Logger.Info("Available rooms", "rooms", s.Rooms)
 			player.ToPlayer <- "No starting or default room found. Please contact the administrator.\n\r"
 			return nil, fmt.Errorf("no starting or default room found")
 		}
 	}
-
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
 
 	// Create the new character
 	character, err := s.NewCharacter(charName, player, room, selectedArchetype)
@@ -214,25 +211,26 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 	player.CharacterList[charName] = character.ID
 	player.Mutex.Unlock()
 
-	Logger.Info("Added character to player's character list", "characterName", charName, "characterID", character.ID, "playerName", player.PlayerID)
+	Logger.Info("Added character to player's character list", "characterName", charName, "characterID", character.ID)
 
-	// Save the character to the database with error handling
-	err = s.Database.WriteCharacter(character)
-	if err != nil {
+	// Save character to database
+	if err := s.Database.WriteCharacter(character); err != nil {
 		Logger.Error("Error saving character to database", "characterName", charName, "error", err)
 		player.ToPlayer <- "Error saving character to database. Please try again later.\n\r"
 		return nil, fmt.Errorf("failed to save character to database: %w", err)
 	}
 
-	// Save the updated player data with error handling
-	err = s.Database.WritePlayer(player)
-	if err != nil {
+	// Save updated player data
+	if err := s.Database.WritePlayer(player); err != nil {
 		Logger.Error("Error saving player data", "playerName", player.PlayerID, "error", err)
 		player.ToPlayer <- "Error saving player data. Please try again later.\n\r"
 		return nil, fmt.Errorf("failed to save player data: %w", err)
 	}
 
-	Logger.Info("Successfully created and saved character for player", "characterName", charName, "characterID", character.ID, "playerName", player.PlayerID)
+	Logger.Info("Successfully created and saved character for player",
+		"characterName", charName,
+		"characterID", character.ID,
+		"playerName", player.PlayerID)
 
 	return character, nil
 }
