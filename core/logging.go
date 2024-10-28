@@ -100,7 +100,7 @@ func EnableXRay(cfg *Configuration) error {
 		return fmt.Errorf("failed to configure AWS X-Ray: %w", err)
 	}
 
-	Logger.Info("AWS X-Ray successfully configured")
+	Logger.Debug("AWS X-Ray successfully configured")
 
 	return nil
 }
@@ -254,7 +254,7 @@ func SendMetrics(s *Server, interval time.Duration) error {
 			if err != nil {
 				Logger.Error("Failed to send metrics to CloudWatch", "error", err)
 			} else {
-				Logger.Info("Sent metrics to CloudWatch", "playerCount", playerCount, "memoryUsageMB", memoryUsageMB)
+				Logger.Debug("Sent metrics to CloudWatch", "playerCount", playerCount, "memoryUsageMB", memoryUsageMB)
 			}
 
 		case <-s.Context.Done():

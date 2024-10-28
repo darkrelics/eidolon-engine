@@ -40,7 +40,7 @@ func DisplayUnseenMOTDs(server *Server, player *Player) {
 		return
 	}
 
-	Logger.Info("Displaying MOTDs for player", "playerName", player.PlayerID)
+	Logger.Debug("Displaying MOTDs for player", "playerName", player.PlayerID)
 
 	defaultMOTDID, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
 	welcomeDisplayed := false

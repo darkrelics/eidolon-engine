@@ -162,7 +162,7 @@ func ExecuteQuitCommand(character *Character, tokens []string) bool {
 	characterName := character.Name
 	currentRoom := character.Room
 
-	Logger.Info("Player initiating quit", "playerName", playerID)
+	Logger.Debug("Player initiating quit", "playerName", playerID)
 
 	// Send quit message to player before we start cleanup
 	character.Player.ToPlayer <- "\n\rSaving character state...\n\r"
@@ -208,17 +208,14 @@ func ExecuteQuitCommand(character *Character, tokens []string) bool {
 	character.Player.ToPlayer <- "\n\rGoodbye!\n\r"
 	close(character.Player.FromPlayer) // Signal to input goroutine
 
-	Logger.Info("Player quit successful",
-		"playerName", playerID,
-		"characterName", characterName,
-		"savedState", err == nil)
+	Logger.Info("Player quit successful", "playerName", playerID, "characterName", characterName, "savedState", err == nil)
 
 	return true
 }
 
 func ExecuteHelpCommand(character *Character, tokens []string) bool {
 
-	Logger.Info("Player is requesting help", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is requesting help", "playerName", character.Player.PlayerID)
 
 	helpMessage := "\n\rAvailable Commands:" +
 		"\n\rhelp - Display available commands" +
@@ -250,7 +247,7 @@ func ExecuteSayCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
-	Logger.Info("Player is saying something", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is saying something", "playerName", character.Player.PlayerID)
 
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- "\n\rWhat do you want to say?\n\r"
@@ -291,7 +288,7 @@ func ExecuteLookCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
-	Logger.Info("Player is looking", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is looking", "playerName", character.Player.PlayerID)
 
 	// Handle looking at specific targets if provided
 	if len(tokens) > 1 {
@@ -409,7 +406,7 @@ func ExecuteGoCommand(character *Character, tokens []string) bool {
 
 func ExecuteChallengeCommand(character *Character, tokens []string) bool {
 
-	Logger.Info("Player is attempting a challenge", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is attempting a challenge", "playerName", character.Player.PlayerID)
 
 	// Ensure the correct number of arguments are provided
 	if len(tokens) < 3 {
@@ -500,9 +497,7 @@ func ExecuteWhoCommand(character *Character, tokens []string) bool {
 
 	character.Player.ToPlayer <- sb.String()
 
-	Logger.Info("Who list displayed",
-		"player", character.Name,
-		"online_count", len(names))
+	Logger.Debug("Who list displayed", "player", character.Name, "online_count", len(names))
 
 	return false
 }
@@ -585,7 +580,7 @@ func ExecutePasswordCommand(character *Character, tokens []string) bool {
 
 func ExecuteShowCommand(character *Character, tokens []string) bool {
 
-	Logger.Info("Player is displaying character information", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is displaying character information", "playerName", character.Player.PlayerID)
 
 	player := character.Player
 	var output strings.Builder
@@ -692,17 +687,14 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 	SendRoomMessage(character.Room, roomMessage)
 	character.Player.ToPlayer <- playerMessage
 
-	Logger.Info("Item taken",
-		"character", character.Name,
-		"item", itemToTake.Name,
-		"slot", handSlot)
+	Logger.Debug("Item taken", "character", character.Name, "item", itemToTake.Name, "slot", handSlot)
 
 	return false
 }
 
 func ExecuteInventoryCommand(character *Character, tokens []string) bool {
 
-	Logger.Info("Player is checking their inventory", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is checking their inventory", "playerName", character.Player.PlayerID)
 
 	inventoryList := character.ListInventory()
 	character.Player.ToPlayer <- inventoryList
@@ -806,7 +798,7 @@ func ExecuteDropCommand(character *Character, tokens []string) bool {
 	character.Player.ToPlayer <- playerMsg
 	SendRoomMessage(character.Room, roomMsg)
 
-	Logger.Info("Item dropped",
+	Logger.Debug("Item dropped",
 		"character", character.Name,
 		"item", itemToDrop.Name,
 		"quantity", quantity,
@@ -931,7 +923,7 @@ func ExecuteWearCommand(character *Character, tokens []string) bool {
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou wear %s.\n\r", itemDesc)
 	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s wears %s.\n\r", character.Name, itemToWear.Name))
 
-	Logger.Info("Item worn",
+	Logger.Debug("Item worn",
 		"character", character.Name,
 		"item", itemToWear.Name,
 		"locations", itemToWear.WornOn)
@@ -1046,17 +1038,13 @@ func ExecuteRemoveCommand(character *Character, tokens []string) bool {
 	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s removes %s.\n\r",
 		character.Name, itemToRemove.Name))
 
-	Logger.Info("Item removed",
-		"character", character.Name,
-		"item", itemToRemove.Name,
-		"from_locations", wornLocations,
-		"to_hand", handSlot)
+	Logger.Debug("Item removed", "character", character.Name, "item", itemToRemove.Name, "from_locations", wornLocations, "to_hand", handSlot)
 
 	return false
 }
 
 func ExecuteExamineCommand(character *Character, tokens []string) bool {
-	Logger.Info("Player is examining an item", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is examining an item", "playerName", character.Player.PlayerID)
 
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- "\n\rUsage: examine <item name>\n\r"

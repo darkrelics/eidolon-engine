@@ -182,7 +182,7 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 		}
 	}
 
-	Logger.Info("Creating character", "characterName", charName)
+	Logger.Debug("Creating character", "characterName", charName)
 
 	// Find starting room
 	room, ok := s.Rooms[1] // This should be pulled from the Archetype
@@ -211,7 +211,7 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 	player.CharacterList[charName] = character.ID
 	player.Mutex.Unlock()
 
-	Logger.Info("Added character to player's character list", "characterName", charName, "characterID", character.ID)
+	Logger.Debug("Added character to player's character list", "characterName", charName, "characterID", character.ID)
 
 	// Save character to database
 	if err := s.Database.WriteCharacter(character); err != nil {
@@ -227,7 +227,7 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 		return nil, fmt.Errorf("failed to save player data: %w", err)
 	}
 
-	Logger.Info("Successfully created and saved character for player",
+	Logger.Debug("Successfully created and saved character for player",
 		"characterName", charName,
 		"characterID", character.ID,
 		"playerName", player.PlayerID)
@@ -290,7 +290,7 @@ func (kp *KeyPair) WriteCharacter(character *Character) error {
 		return fmt.Errorf("error writing character data: %w", err)
 	}
 
-	Logger.Info("Successfully wrote character to database", "characterName", character.Name, "characterID", character.ID)
+	Logger.Debug("Successfully wrote character to database", "characterName", character.Name, "characterID", character.ID)
 
 	character.LastSaved = time.Now()
 
@@ -330,12 +330,12 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, server *
 		}
 		character.Room.Characters[character.ID] = character
 		character.Room.Mutex.Unlock()
-		Logger.Info("Added character to room", "characterName", character.Name, "characterID", character.ID, "roomID", character.Room.RoomID)
+		Logger.Debug("Added character to room", "characterName", character.Name, "characterID", character.ID, "roomID", character.Room.RoomID)
 	} else {
 		Logger.Warn("Character loaded without a valid room", "characterName", character.Name, "characterID", character.ID)
 	}
 
-	Logger.Info("Loaded character", "characterName", character.Name, "characterID", character.ID)
+	Logger.Debug("Loaded character", "characterName", character.Name, "characterID", character.ID)
 
 	character.LastSaved = time.Now()
 
@@ -344,7 +344,7 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, server *
 
 // DeleteCharacter removes a character from the player's character list and the database.
 func (s *Server) DeleteCharacter(player *Player, characterName string) error {
-	Logger.Info("Attempting to delete character", "playerName", player.PlayerID, "characterName", characterName)
+	Logger.Debug("Attempting to delete character", "playerName", player.PlayerID, "characterName", characterName)
 
 	// Check if the character exists in the player's character list
 	characterID, exists := player.CharacterList[characterName]
@@ -458,7 +458,7 @@ func (server *Server) InitializeBloomFilter() error {
 		server.CharacterBloomFilter.AddString(word)
 	}
 
-	Logger.Info("Bloom filter initialized",
+	Logger.Debug("Bloom filter initialized",
 		"estimatedSize", totalItems,
 		"falsePositiveRate", fpRate,
 		"totalItemsAdded", totalItems,
@@ -473,7 +473,7 @@ func (server *Server) AddCharacterName(name string) {
 	defer server.Mutex.Unlock()
 
 	server.CharacterBloomFilter.AddString(strings.ToLower(name))
-	Logger.Info("Added character name to bloom filter", "characterName", name)
+	Logger.Debug("Added character name to bloom filter", "characterName", name)
 }
 
 // CharacterNameExists checks if a character name already exists using the bloom filter.
@@ -488,12 +488,12 @@ func (server *Server) CharacterNameExists(name string) bool {
 // SaveActiveCharacters saves all active characters to the database if they have been edited since the last save.
 func (s *Server) SaveActiveCharacters() error {
 
-	Logger.Info("Saving active characters...")
+	Logger.Debug("Saving active characters...")
 
 	for _, character := range s.Characters {
 		// Check if the character's LastEdited is before LastSaved
 		if !character.LastEdited.After(character.LastSaved) {
-			Logger.Info("Character not edited since last save, skipping", "characterName", character.Name)
+			Logger.Debug("Character not edited since last save, skipping", "characterName", character.Name)
 			continue // Skip writing this character
 		}
 
@@ -507,7 +507,7 @@ func (s *Server) SaveActiveCharacters() error {
 
 		// Update LastSaved after a successful write
 		character.LastSaved = time.Now()
-		Logger.Info("Character saved successfully", "characterName", character.Name)
+		Logger.Debug("Character saved successfully", "characterName", character.Name)
 		character.Mutex.Unlock()
 	}
 
@@ -555,7 +555,7 @@ func (c *Character) WearItem(item *Item) error {
 	item.IsWorn = true
 	delete(c.Inventory, handSlot) // Remove from hand slot
 
-	Logger.Info("Item worn", "characterName", c.Name, "itemName", item.Name, "wornOn", item.WornOn)
+	Logger.Debug("Item worn", "characterName", c.Name, "itemName", item.Name, "wornOn", item.WornOn)
 
 	c.LastEdited = time.Now()
 
@@ -666,7 +666,7 @@ func (c *Character) AddToInventory(item *Item) {
 
 	c.LastEdited = time.Now()
 
-	Logger.Info("Item added to inventory", "characterName", c.Name, "itemName", item.Name)
+	Logger.Debug("Item added to inventory", "characterName", c.Name, "itemName", item.Name)
 }
 
 // FindInInventory searches for an item in the character's inventory by name.
@@ -711,13 +711,13 @@ func (c *Character) RemoveFromInventory(item *Item) {
 
 	c.LastEdited = time.Now()
 
-	Logger.Info("Item removed from inventory", "characterName", c.Name, "itemName", item.Name)
+	Logger.Debug("Item removed from inventory", "characterName", c.Name, "itemName", item.Name)
 }
 
 // CanCarryItem checks if the character can carry the specified item.
 // This is a placeholder for future weight and capacity checks.
 func (c *Character) CanCarryItem(item *Item) bool {
-	Logger.Info("Character is checking if they can carry item", "characterName", c.Name, "itemName", item.Name)
+	Logger.Debug("Character is checking if they can carry item", "characterName", c.Name, "itemName", item.Name)
 
 	// Placeholder implementation; always returns true for now
 	return true
@@ -768,7 +768,7 @@ func (c *Character) RemoveWornItem(item *Item) error {
 
 	c.LastEdited = time.Now()
 
-	Logger.Info("Item removed from worn location and placed in hand", "characterName", c.Name, "itemName", item.Name, "handSlot", handSlot)
+	Logger.Debug("Item removed from worn location and placed in hand", "characterName", c.Name, "itemName", item.Name, "handSlot", handSlot)
 	return nil
 }
 
@@ -786,7 +786,7 @@ func getOtherCharacters(r *Room, currentCharacter *Character) []string {
 		}
 	}
 
-	Logger.Info("Found other characters in room", "count", len(otherCharacters), "room_id", r.RoomID)
+	Logger.Debug("Found other characters in room", "count", len(otherCharacters), "room_id", r.RoomID)
 	return otherCharacters
 }
 
@@ -863,7 +863,7 @@ func moveCharacter(character *Character, direction string) error {
 	// Show the new room to the character
 	ExecuteLookCommand(character, []string{})
 
-	Logger.Info("Character moved successfully",
+	Logger.Debug("Character moved successfully",
 		"character", character.Name,
 		"from", oldRoom.RoomID,
 		"to", targetRoom.RoomID,

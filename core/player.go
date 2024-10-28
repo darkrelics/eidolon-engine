@@ -39,7 +39,7 @@ func (k *KeyPair) WritePlayer(player *Player) error {
 		return fmt.Errorf("error storing player data: %w", err)
 	}
 
-	Logger.Info("Successfully wrote player data", "playerName", player.PlayerID, "characterCount", len(player.CharacterList), "seenMotDCount", len(player.SeenMotD))
+	Logger.Debug("Successfully wrote player data", "playerName", player.PlayerID, "characterCount", len(player.CharacterList), "seenMotDCount", len(player.SeenMotD))
 	return nil
 }
 
@@ -80,21 +80,21 @@ func (k *KeyPair) ReadPlayer(playerName string) (string, map[string]uuid.UUID, [
 		seenMotDs = append(seenMotDs, id)
 	}
 
-	Logger.Info("Successfully read player data", "playerName", pd.PlayerID, "characterCount", len(characterList), "seenMotDCount", len(seenMotDs))
+	Logger.Debug("Successfully read player data", "playerName", pd.PlayerID, "characterCount", len(characterList), "seenMotDCount", len(seenMotDs))
 	return pd.PlayerID, characterList, seenMotDs, nil
 }
 
 // PlayerInput handles the player's input in a separate goroutine.
 // It reads input from the player's SSH connection and sends it to the FromPlayer channel.
 func PlayerInput(p *Player) {
-	Logger.Info("Player input goroutine started", "playerName", p.PlayerID)
+	Logger.Debug("Player input goroutine started", "playerName", p.PlayerID)
 
 	var inputBuffer []rune
 	reader := bufio.NewReader(p.Connection)
 
 	defer func() {
 		close(p.FromPlayer)
-		Logger.Info("Player input goroutine ended", "playerName", p.PlayerID)
+		Logger.Debug("Player input goroutine ended", "playerName", p.PlayerID)
 	}()
 
 	for {
@@ -146,29 +146,29 @@ func PlayerInput(p *Player) {
 // PlayerOutput handles sending messages to the player in a separate goroutine.
 // It reads messages from the ToPlayer channel and writes them to the player's SSH connection.
 func PlayerOutput(p *Player) {
-	Logger.Info("Player output goroutine started", "playerName", p.PlayerID)
+	Logger.Debug("Player output goroutine started", "playerName", p.PlayerID)
 
 	defer func() {
 		close(p.FromPlayer)
-		Logger.Info("Player output goroutine ended", "playerName", p.PlayerID)
+		Logger.Debug("Player output goroutine ended", "playerName", p.PlayerID)
 	}()
 
 	for message := range p.ToPlayer {
 		wrappedMessage := wrapText(message, p.ConsoleWidth)
 		_, err := p.Connection.Write([]byte(wrappedMessage))
 		if err != nil {
-			Logger.Error("Failed to send message to player", "playerName", p.PlayerID, "error", err)
+			Logger.Warn("Failed to send message to player", "playerName", p.PlayerID, "error", err)
 			return
 		}
 	}
 
-	Logger.Info("Message channel closed for player", "playerName", p.PlayerID)
+	Logger.Debug("Message channel closed for player", "playerName", p.PlayerID)
 }
 
 // InputLoop is the main loop that handles player commands.
 // It reads commands from the player's input and executes them accordingly.
 func InputLoop(c *Character) {
-	Logger.Info("Starting input loop for character", "characterName", c.Name)
+	Logger.Debug("Starting input loop for character", "characterName", c.Name)
 
 	// Initially execute the look command with no additional tokens
 	ExecuteLookCommand(c, []string{})
@@ -193,7 +193,7 @@ func InputLoop(c *Character) {
 				} else {
 					// Execute the command
 					shouldQuit = ExecuteCommand(c, verb, tokens)
-					Logger.Info("Player issued command", "playerName", c.Player.PlayerID, "command", strings.Join(tokens, " "))
+					Logger.Debug("Player issued command", "playerName", c.Player.PlayerID, "command", strings.Join(tokens, " "))
 				}
 				lastCommand = ""
 				if !shouldQuit {
@@ -203,7 +203,7 @@ func InputLoop(c *Character) {
 
 		case inputLine, more := <-c.Player.FromPlayer:
 			if !more {
-				Logger.Info("Input channel closed for player", "playerName", c.Player.PlayerID)
+				Logger.Debug("Input channel closed for player", "playerName", c.Player.PlayerID)
 				shouldQuit = true
 				break
 			}
@@ -226,13 +226,13 @@ func InputLoop(c *Character) {
 		Logger.Error("Error saving character", "characterName", c.Name, "error", err)
 	}
 
-	Logger.Info("Input loop ended for character", "characterName", c.Name)
+	Logger.Debug("Input loop ended for character", "characterName", c.Name)
 }
 
 // SelectCharacter handles the character selection process for a player.
 // It presents the player with options to select or create a character.
 func SelectCharacter(player *Player, server *Server) (*Character, error) {
-	Logger.Info("Player is selecting a character", "playerName", player.PlayerID)
+	Logger.Debug("Player is selecting a character", "playerName", player.PlayerID)
 
 	var options []string
 
@@ -341,7 +341,7 @@ func SelectCharacter(player *Player, server *Server) (*Character, error) {
 			character.Room.Mutex.Unlock()
 		}
 
-		Logger.Info("Character selected and added to server", "characterName", character.Name, "characterID", character.ID)
+		Logger.Debug("Character selected and added to server", "characterName", character.Name, "characterID", character.ID)
 
 		return character, nil
 	}

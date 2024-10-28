@@ -180,7 +180,7 @@ func (s *Server) SaveActiveItems() error {
 		return fmt.Errorf("server is nil")
 	}
 
-	Logger.Info("Starting to save active items...")
+	Logger.Debug("Starting to save active items...")
 
 	// Collect all items from rooms and characters
 	itemsToSave := make(map[uuid.UUID]*Item)
@@ -240,7 +240,7 @@ func (s *Server) SaveActiveItems() error {
 
 		// Check if LastEdited is after LastSaved, skip if it is not
 		if !item.LastEdited.After(item.LastSaved) {
-			Logger.Info("Item not edited since last save, skipping", "itemName", item.Name, "itemID", item.ID)
+			Logger.Debug("Item not edited since last save, skipping", "itemName", item.Name, "itemID", item.ID)
 			continue
 		}
 
@@ -251,7 +251,7 @@ func (s *Server) SaveActiveItems() error {
 		} else {
 			// Update LastSaved after successful save
 			item.LastSaved = time.Now()
-			Logger.Info("Successfully saved item", "itemName", item.Name, "itemID", item.ID)
+			Logger.Debug("Successfully saved item", "itemName", item.Name, "itemID", item.ID)
 		}
 	}
 
@@ -319,7 +319,7 @@ func (s *Server) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 
 	newItem.LastSaved = time.Now()
 
-	Logger.Info("Created new item from prototype", "itemName", newItem.Name, "itemID", newItem.ID, "prototypeID", prototypeID)
+	Logger.Debug("Created new item from prototype", "itemName", newItem.Name, "itemID", newItem.ID, "prototypeID", prototypeID)
 	return newItem, nil
 }
 
@@ -386,7 +386,7 @@ func (r *Room) getVisibleItems() []string {
 		return []string{}
 	}
 
-	Logger.Info("Getting visible items in room", "room_id", r.RoomID)
+	Logger.Debug("Getting visible items in room", "room_id", r.RoomID)
 
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
@@ -437,7 +437,7 @@ func (r *Room) getVisibleItems() []string {
 
 			if item.CanPickUp {
 				visibleItems = append(visibleItems, item.Name)
-				Logger.Info("Found visible item", "item_name", item.Name, "item_id", itemID, "room_id", r.RoomID)
+				Logger.Debug("Found visible item", "item_name", item.Name, "item_id", itemID, "room_id", r.RoomID)
 			} else {
 				Logger.Debug("Item not visible (can't be picked up)", "item_name", item.Name, "item_id", itemID, "room_id", r.RoomID)
 			}
@@ -447,10 +447,7 @@ func (r *Room) getVisibleItems() []string {
 	}
 
 	Logger.Debug("All items in room", "items", allItems)
-	Logger.Info("Visible items in room",
-		"room_id", r.RoomID,
-		"total_items", len(allItems),
-		"visible_items", visibleItems)
+	Logger.Debug("Visible items in room", "room_id", r.RoomID, "total_items", len(allItems), "visible_items", visibleItems)
 
 	return visibleItems
 }
@@ -499,7 +496,7 @@ func (r *Room) AddItem(item *Item) {
 
 	r.Items[item.ID] = item
 
-	Logger.Info("Added item to room", "itemName", item.Name, "itemID", item.ID, "roomID", r.RoomID)
+	Logger.Debug("Added item to room", "itemName", item.Name, "itemID", item.ID, "roomID", r.RoomID)
 }
 
 // RemoveItem removes an item from the room's item list.
@@ -516,7 +513,7 @@ func (r *Room) RemoveItem(item *Item) {
 
 	delete(r.Items, item.ID)
 
-	Logger.Info("Removed item from room", "itemName", item.Name, "itemID", item.ID, "roomID", r.RoomID)
+	Logger.Debug("Removed item from room", "itemName", item.Name, "itemID", item.ID, "roomID", r.RoomID)
 }
 
 func formatHandSlot(slotName string, item *Item) string {

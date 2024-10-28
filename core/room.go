@@ -32,7 +32,7 @@ func (kp *KeyPair) StoreRooms(rooms map[int64]*Room) error {
 		room.Mutex.Unlock()
 
 	}
-	Logger.Info("Successfully stored all rooms")
+	Logger.Debug("Successfully stored all rooms")
 	return nil
 }
 
@@ -105,7 +105,7 @@ func (kp *KeyPair) LoadRooms() (map[int64]*Room, error) {
 		}
 	}
 
-	Logger.Info("Successfully loaded rooms from database", "count", len(rooms))
+	Logger.Debug("Successfully loaded rooms from database", "count", len(rooms))
 	return rooms, nil
 }
 
@@ -147,7 +147,7 @@ func (kp *KeyPair) LoadAllExits() (map[string]*Exit, error) {
 		}
 	}
 
-	Logger.Info("Loaded all exits", "total_exits", len(exits))
+	Logger.Debug("Loaded all exits", "total_exits", len(exits))
 	return exits, nil
 }
 
@@ -210,17 +210,17 @@ func (s *Server) SaveActiveRooms() error {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 
-	Logger.Info("Starting to save active rooms...")
+	Logger.Debug("Starting to save active rooms...")
 
 	for roomID, room := range s.Rooms {
 		if room == nil {
-			Logger.Warn("Skipping nil room", "room_id", roomID)
+			Logger.Debug("Skipping nil room", "room_id", roomID)
 			continue
 		}
 
 		// Check if LastEdited is after LastSaved, skip if it is not
 		if !room.LastEdited.After(room.LastSaved) {
-			Logger.Info("Room not edited since last save, skipping", "room_id", roomID)
+			Logger.Debug("Room not edited since last save, skipping", "room_id", roomID)
 			continue
 		}
 
@@ -231,7 +231,7 @@ func (s *Server) SaveActiveRooms() error {
 		} else {
 			// Update LastSaved after successful save
 			room.LastSaved = time.Now()
-			Logger.Info("Successfully saved room", "room_id", roomID)
+			Logger.Debug("Successfully saved room", "room_id", roomID)
 		}
 	}
 
@@ -253,7 +253,7 @@ func NewRoom(roomID int64, area string, title string, description string) *Room 
 		LastSaved:   time.Now(),
 		LastEdited:  time.Now(),
 	}
-	Logger.Info("Created room", "room_title", room.Title, "room_id", room.RoomID)
+	Logger.Debug("Created room", "room_title", room.Title, "room_id", room.RoomID)
 	return room
 }
 
@@ -271,12 +271,12 @@ func (r *Room) AddExit(exit *Exit) {
 
 	r.LastEdited = time.Now()
 
-	Logger.Info("Added exit to room", "room_id", r.RoomID, "direction", exit.Direction)
+	Logger.Debug("Added exit to room", "room_id", r.RoomID, "direction", exit.Direction)
 }
 
 // SendRoomMessage sends a message to all characters in the room.
 func SendRoomMessage(r *Room, message string) {
-	Logger.Info("Sending message to room", "room_id", r.RoomID, "message", message)
+	Logger.Debug("Sending message to room", "room_id", r.RoomID, "message", message)
 
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
@@ -289,10 +289,10 @@ func SendRoomMessage(r *Room, message string) {
 
 // getVisibleExits returns a sorted list of visible exit directions from the room.
 func getVisibleExits(r *Room) []string {
-	Logger.Info("Getting visible exits for room", "room_id", r.RoomID)
+	Logger.Debug("Getting visible exits for room", "room_id", r.RoomID)
 
 	if r.Exits == nil {
-		Logger.Info("Exits map is nil for room", "room_id", r.RoomID)
+		Logger.Debug("Exits map is nil for room", "room_id", r.RoomID)
 		return []string{}
 	}
 

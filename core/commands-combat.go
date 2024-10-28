@@ -6,7 +6,7 @@ import (
 )
 
 func ExecuteAssessCommand(character *Character, tokens []string) bool {
-	Logger.Info("Player is assessing combat situation", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is assessing combat situation", "playerName", character.Player.PlayerID)
 
 	if !character.IsInCombat() {
 		character.Player.ToPlayer <- "\n\rYou are not currently in combat.\n\r"

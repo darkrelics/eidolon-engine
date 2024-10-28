@@ -17,6 +17,89 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func main() {
+	// Parse command-line flags
+	configFile := flag.String("config", "config.yml", "Configuration file")
+	flag.Parse()
+
+	// Load configuration from the specified file
+	config, err := loadConfiguration(*configFile)
+	if err != nil {
+		fmt.Printf("Error loading configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize logging based on the loaded configuration
+	if err := core.InitializeLogging(&config); err != nil {
+		fmt.Printf("Error initializing logging: %v\n", err)
+		os.Exit(1)
+	}
+
+	core.Logger.Info("Configuration loaded", "config", config)
+
+	// Create a new server instance
+	server, err := NewServer(config)
+	if err != nil {
+		core.Logger.Error("Failed to create server", "error", err)
+		os.Exit(1)
+	}
+
+	// Create a context that we can cancel
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create a channel to listen for interrupt signals
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	// Start the SSH server to accept incoming connections in a goroutine
+	go func() {
+		if err := StartSSHServer(server); err != nil {
+			core.Logger.Error("Failed to start server", "error", err)
+			stop <- os.Interrupt // Trigger shutdown if server fails to start
+		}
+	}()
+
+	// Start sending metrics in a separate goroutine
+	metricsDone := make(chan struct{})
+	go func() {
+		defer close(metricsDone)
+		if err := core.SendMetrics(server, 1*time.Minute); err != nil {
+			core.Logger.Error("Error in SendMetrics", "error", err)
+		}
+	}()
+
+	// Start the auto-save routine in a separate goroutine
+	go core.AutoSave(server)
+
+	// Wait for interrupt signal
+	<-stop
+
+	core.Logger.Warn("Interrupt received, initiating graceful shutdown...")
+
+	// Cancel the context to signal all goroutines to stop
+	cancel()
+
+	// Create a timeout context for shutdown operations
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	// Perform graceful shutdown
+	if err := GracefulShutdown(shutdownCtx, server); err != nil {
+		core.Logger.Error("Error during shutdown", "error", err)
+	}
+
+	// Wait for metrics goroutine to finish
+	select {
+	case <-metricsDone:
+		core.Logger.Info("Metrics goroutine stopped")
+	case <-time.After(5 * time.Second):
+		core.Logger.Warn("Timed out waiting for metrics goroutine to stop")
+	}
+
+	core.Logger.Warn("Server shutdown complete")
+}
+
 // NewServer initializes a new server instance with the given configuration.
 // It sets up the database connection, loads game data, and prepares the server for incoming connections.
 func NewServer(config core.Configuration) (*core.Server, error) {
@@ -115,89 +198,6 @@ func loadConfiguration(configFile string) (core.Configuration, error) {
 	}
 
 	return config, nil
-}
-
-func main() {
-	// Parse command-line flags
-	configFile := flag.String("config", "config.yml", "Configuration file")
-	flag.Parse()
-
-	// Load configuration from the specified file
-	config, err := loadConfiguration(*configFile)
-	if err != nil {
-		fmt.Printf("Error loading configuration: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Initialize logging based on the loaded configuration
-	if err := core.InitializeLogging(&config); err != nil {
-		fmt.Printf("Error initializing logging: %v\n", err)
-		os.Exit(1)
-	}
-
-	core.Logger.Info("Configuration loaded", "config", config)
-
-	// Create a new server instance
-	server, err := NewServer(config)
-	if err != nil {
-		core.Logger.Error("Failed to create server", "error", err)
-		os.Exit(1)
-	}
-
-	// Create a context that we can cancel
-	_, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Create a channel to listen for interrupt signals
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	// Start the SSH server to accept incoming connections in a goroutine
-	go func() {
-		if err := StartSSHServer(server); err != nil {
-			core.Logger.Error("Failed to start server", "error", err)
-			stop <- os.Interrupt // Trigger shutdown if server fails to start
-		}
-	}()
-
-	// Start sending metrics in a separate goroutine
-	metricsDone := make(chan struct{})
-	go func() {
-		defer close(metricsDone)
-		if err := core.SendMetrics(server, 1*time.Minute); err != nil {
-			core.Logger.Error("Error in SendMetrics", "error", err)
-		}
-	}()
-
-	// Start the auto-save routine in a separate goroutine
-	go core.AutoSave(server)
-
-	// Wait for interrupt signal
-	<-stop
-
-	core.Logger.Info("Interrupt received, initiating graceful shutdown...")
-
-	// Cancel the context to signal all goroutines to stop
-	cancel()
-
-	// Create a timeout context for shutdown operations
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer shutdownCancel()
-
-	// Perform graceful shutdown
-	if err := GracefulShutdown(shutdownCtx, server); err != nil {
-		core.Logger.Error("Error during shutdown", "error", err)
-	}
-
-	// Wait for metrics goroutine to finish
-	select {
-	case <-metricsDone:
-		core.Logger.Info("Metrics goroutine stopped")
-	case <-time.After(5 * time.Second):
-		core.Logger.Warn("Timed out waiting for metrics goroutine to stop")
-	}
-
-	core.Logger.Info("Server shutdown complete")
 }
 
 // Authenticate checks the provided username and password against the authentication system.
