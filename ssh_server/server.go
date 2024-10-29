@@ -54,12 +54,7 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	// Start the SSH server to accept incoming connections in a goroutine
-	go func() {
-		if err := StartSSHServer(server); err != nil {
-			core.Logger.Error("Failed to start server", "error", err)
-			stop <- os.Interrupt // Trigger shutdown if server fails to start
-		}
-	}()
+	go StartSSHServer(server, stop)
 
 	// Start sending metrics in a separate goroutine
 	metricsDone := make(chan struct{})
@@ -269,8 +264,9 @@ func acceptConnections(server *core.Server) {
 	}
 }
 
-func StartSSHServer(server *core.Server) error {
+func StartSSHServer(server *core.Server, stop chan os.Signal) error {
 	if err := configureSSH(server); err != nil {
+		stop <- os.Interrupt
 		return fmt.Errorf("failed to configure SSH server: %v", err)
 	}
 
