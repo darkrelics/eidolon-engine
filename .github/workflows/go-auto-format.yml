@@ -1,10 +1,10 @@
 name: Go Format and Check
 
 on:
-  pull_request:
-    branches: "**"
   push:
     branches: [develop, qa, prod]
+  pull_request:
+    branches: "**"
 
 permissions:
   pull-requests: write

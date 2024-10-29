@@ -2,7 +2,7 @@ name: "CodeQL Analysis for Python and Go"
 
 on:
   push:
-    branches: ["develop", "qa", "prod"]
+    branches: [develop, qa, prod]
   pull_request:
     branches: "**"
 

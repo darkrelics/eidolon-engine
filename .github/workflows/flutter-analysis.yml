@@ -2,7 +2,7 @@ name: Dart Format and Analyze
 
 on:
   push:
-    branches: [develop]
+    branches: [develop, qa, prod]
   pull_request:
     branches: "**"
 
@@ -16,6 +16,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for all branches and tags
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -25,11 +27,10 @@ jobs:
 
       - name: Configure Git
         run: |
-          git fetch -q
+          git fetch --prune --unshallow
           git checkout ${{github.head_ref}} --progress
           git config --global user.name "Dark Relics Automatic"
           git config --global user.email "contact@darkrelics.net"
-          git pull
 
       - name: Install dependencies
         working-directory: registration
@@ -59,5 +60,6 @@ jobs:
       - name: Commit and push changes
         if: steps.git-check.outputs.changes == 'true'
         run: |
+          git pull --rebase origin ${{github.head_ref}}
           git commit -m "Apply Flutter Autoformatting" -vv
           git push -vv
