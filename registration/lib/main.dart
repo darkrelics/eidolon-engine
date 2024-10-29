@@ -76,16 +76,18 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   Future<void> _signUp() async {
     if (_formKey.currentState!.validate()) {
       try {
-        final secretHash = calculateSecretHash(_emailController.text);
         final signUpResult = await userPool.signUp(
           _emailController.text,
           'tempPassword123!',
           userAttributes: [
             AttributeArg(name: 'email', value: _emailController.text),
           ],
-          signUpOptions: CognitoSignUpOptions(
-            secretHash: secretHash,
-          ),
+          validationData: [
+            AttributeArg(
+              name: 'SECRET_HASH',
+              value: calculateSecretHash(_emailController.text),
+            ),
+          ],
         );
 
         setState(() {
