@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -89,13 +90,19 @@ func NewServer(config core.Configuration) (*core.Server, error) {
 
 	// Initialize the server struct with the provided configuration
 	server := &core.Server{
-		Port:        config.Server.Port,
-		PlayerIndex: &core.Index{},
 		Config:      config,
 		Context:     context.Background(),
+		Mutex:       sync.Mutex{},
+		WaitGroup:   sync.WaitGroup{},
 		StartTime:   time.Now(),
-		Rooms:       make(map[int64]*core.Room),
+		Port:        config.Server.Port,
+		PlayerCount: 0,
+		PlayerIndex: &core.Index{},
+		Players:     make(map[uint64]*core.Player),
 		Characters:  make(map[uuid.UUID]*core.Character),
+		Rooms:       make(map[int64]*core.Room),
+		Prototypes:  make(map[uuid.UUID]*core.Prototype),
+		Items:       make(map[uuid.UUID]*core.Item),
 	}
 
 	core.Logger.Info("Initializing database...")
