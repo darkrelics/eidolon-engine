@@ -130,7 +130,7 @@ func PlayerInput(p *Player) {
 		case '\x03': // Ctrl+C
 			Logger.Info("Player sent interrupt signal", "playerName", p.PlayerID)
 			p.PlayerError <- errors.New("player interrupt")
-			p.Connection.Close()
+			p.Cleanup()
 			return
 		default:
 			if len(inputBuffer) < 1024 { // Max input size
@@ -343,4 +343,64 @@ func SelectCharacter(player *Player, server *Server) (*Character, error) {
 
 		return character, nil
 	}
+}
+
+// Add method to handle cleanup
+func (p *Player) Cleanup() {
+	Logger.Debug("Starting player cleanup", "playerID", p.PlayerID)
+
+	// Cancel context first to stop any ongoing operations
+	p.Cancel()
+
+	// Close channels
+	close(p.ToPlayer)
+	close(p.FromPlayer)
+	close(p.PlayerError)
+
+	// Close connection
+	if p.Connection != nil {
+		p.Connection.Write([]byte("\n\rGoodbye!\n\r"))
+		p.Connection.Close()
+	}
+
+	// If player has an active character, save it
+	if p.Character != nil {
+		// Remove character from room
+		if p.Character.Room != nil {
+			p.Character.Room.Mutex.Lock()
+			delete(p.Character.Room.Characters, p.Character.ID)
+
+			// Notify other players in room
+			roomMsg := fmt.Sprintf("\n\r%s has left.\n\r", p.Character.Name)
+			for _, c := range p.Character.Room.Characters {
+				if c.Player != nil {
+					c.Player.ToPlayer <- roomMsg
+					c.Player.ToPlayer <- c.Player.Prompt
+				}
+			}
+			p.Character.Room.Mutex.Unlock()
+		}
+
+		// Save character state to database
+		if err := p.Server.Database.WriteCharacter(p.Character); err != nil {
+			Logger.Error("Failed to save character state during cleanup",
+				"characterName", p.Character.Name,
+				"error", err)
+		}
+
+		// Save player data
+		if err := p.Server.Database.WritePlayer(p); err != nil {
+			Logger.Error("Failed to save player data during cleanup",
+				"playerName", p.PlayerID,
+				"error", err)
+		}
+
+		p.Server.Mutex.Lock()
+		// Remove character from server's character list
+		delete(p.Server.Characters, p.Character.ID)
+		p.Server.Mutex.Unlock()
+
+	}
+
+	Logger.Info("Player cleanup completed", "playerID", p.PlayerID)
 }

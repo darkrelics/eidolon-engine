@@ -305,6 +305,8 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 			}
 		}
 
+		ctx, cancel := context.WithCancel(context.Background())
+
 		// Create the Player struct with data from the database or as a new player
 		player := &core.Player{
 			PlayerID:      playerName,
@@ -318,6 +320,9 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 			Server:        server,
 			CharacterList: characterList,
 			SeenMotD:      seenMotD,
+			LoginTime:     time.Now(),
+			CTX:           ctx,
+			Cancel:        cancel,
 		}
 
 		// Handle SSH requests (pty-req, shell, window-change)

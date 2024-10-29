@@ -150,65 +150,15 @@ func ExecuteQuitCommand(character *Character, tokens []string) bool {
 		return true
 	}
 
-	if character.Player == nil || character.Room == nil || character.Server == nil {
-		Logger.Error("Invalid character state during quit",
-			"hasPlayer", character.Player != nil,
-			"hasRoom", character.Room != nil,
-			"hasServer", character.Server != nil)
+	if character.Player == nil {
+		Logger.Error("Character has no associated player")
 		return true
 	}
 
-	playerID := character.Player.PlayerID
-	characterName := character.Name
-	currentRoom := character.Room
+	Logger.Info("Player initiating quit", "playerName", character.Player.PlayerID)
 
-	Logger.Debug("Player initiating quit", "playerName", playerID)
-
-	// Send quit message to player before we start cleanup
 	character.Player.ToPlayer <- "\n\rSaving character state...\n\r"
-
-	// Save character state to database first
-	err := character.Server.Database.WriteCharacter(character)
-	if err != nil {
-		Logger.Error("Failed to save character state on quit",
-			"characterName", characterName,
-			"error", err)
-		character.Player.ToPlayer <- "\n\rWarning: Failed to save character state.\n\r"
-	}
-
-	// Save player data
-	err = character.Server.Database.WritePlayer(character.Player)
-	if err != nil {
-		Logger.Error("Failed to save player data on quit",
-			"playerName", playerID,
-			"error", err)
-		character.Player.ToPlayer <- "\n\rWarning: Failed to save player data.\n\r"
-	}
-
-	// Lock order: server -> room
-	character.Server.Mutex.Lock()
-	defer character.Server.Mutex.Unlock()
-
-	currentRoom.Mutex.Lock()
-	defer currentRoom.Mutex.Unlock()
-
-	// Remove character from room and server
-	delete(currentRoom.Characters, character.ID)
-	delete(character.Server.Characters, character.ID)
-
-	// Notify room of departure (while locks are held)
-	for _, c := range currentRoom.Characters {
-		if c.Player != nil {
-			c.Player.ToPlayer <- fmt.Sprintf("\n\r%s has left.\n\r", characterName)
-			c.Player.ToPlayer <- c.Player.Prompt
-		}
-	}
-
-	// Final goodbye and cleanup
-	character.Player.ToPlayer <- "\n\rGoodbye!\n\r"
-	close(character.Player.FromPlayer) // Signal to input goroutine
-
-	Logger.Info("Player quit successful", "playerName", playerID, "characterName", characterName, "savedState", err == nil)
+	character.Player.Cleanup()
 
 	return true
 }
