@@ -35,28 +35,32 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   late final CognitoUserPool userPool;
 
-  @override
-  void initState() {
-    super.initState();
-    final userPoolId = const String.fromEnvironment('USER_POOL_ID');
-    final clientId = const String.fromEnvironment('CLIENT_ID');
-    final clientSecret = const String.fromEnvironment('CLIENT_SECRET');
-    
-    if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
-      setState(() {
-        _message = 'Error: Missing required Cognito configuration';
-      });
-      return;
-    }
-    
-    try {
-      userPool = CognitoUserPool(userPoolId, clientId);
-    } catch (e) {
-      setState(() {
-        _message = 'Error initializing Cognito: ${e.toString()}';
-      });
-    }
+@override
+void initState() {
+  super.initState();
+  final userPoolId = const String.fromEnvironment('USER_POOL_ID');
+  final clientId = const String.fromEnvironment('CLIENT_ID');
+  final clientSecret = const String.fromEnvironment('CLIENT_SECRET');
+  
+  if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
+    setState(() {
+      _message = 'Error: Missing required Cognito configuration';
+    });
+    return;
   }
+  
+  try {
+    userPool = CognitoUserPool(
+      userPoolId, 
+      clientId,
+      clientSecret: clientSecret,
+    );
+  } catch (e) {
+    setState(() {
+      _message = 'Error initializing Cognito: ${e.toString()}';
+    });
+  }
+}
 
 Future<void> _signUp() async {
   if (_formKey.currentState!.validate()) {
