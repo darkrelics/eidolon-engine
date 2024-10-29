@@ -2,6 +2,7 @@ package core
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -167,13 +168,25 @@ func PlayerOutput(p *Player) {
 // InputLoop is the main loop that handles player commands.
 // It reads commands from the player's input and executes them accordingly.
 func InputLoop(c *Character) {
+	if c == nil || c.Player == nil {
+		Logger.Error("Invalid character or player in input loop")
+		return
+	}
+
 	Logger.Debug("Starting input loop for character", "characterName", c.Name)
 
 	// Initially execute the look command with no additional tokens
 	ExecuteLookCommand(c, []string{})
 
-	// Send initial prompt to player
-	c.Player.ToPlayer <- c.Player.Prompt
+	// Send initial prompt with non-blocking write
+	select {
+	case c.Player.ToPlayer <- c.Player.Prompt:
+	case <-c.Player.CTX.Done(): // Fixed: Using CTX field directly
+		c.Player.Cleanup()
+		return
+	default:
+		Logger.Error("Unable to send initial prompt", "characterName", c.Name)
+	}
 
 	// Create a ticker that ticks once per second
 	commandTicker := time.NewTicker(time.Second)
@@ -182,36 +195,77 @@ func InputLoop(c *Character) {
 	var lastCommand string
 	shouldQuit := false
 
+	// Create command processing timeout
+	const commandTimeout = 5 * time.Second
+
 	for !shouldQuit {
 		select {
-		case <-commandTicker.C:
-			if lastCommand != "" {
-				verb, tokens, err := ValidateCommand(strings.TrimSpace(lastCommand))
-				if err != nil {
-					c.Player.ToPlayer <- err.Error() + "\n\r"
-				} else {
-					// Execute the command
-					shouldQuit = ExecuteCommand(c, verb, tokens)
-					Logger.Debug("Player issued command", "playerName", c.Player.PlayerID, "command", strings.Join(tokens, " "))
-				}
-				lastCommand = ""
-				if !shouldQuit {
-					c.Player.ToPlayer <- c.Player.Prompt
-				}
-			}
+		case <-c.Player.CTX.Done(): // Fixed: Using CTX field directly
+			Logger.Info("Player context cancelled", "characterName", c.Name)
+			shouldQuit = true
+			continue
 
 		case inputLine, more := <-c.Player.FromPlayer:
 			if !more {
 				Logger.Debug("Input channel closed for player", "playerName", c.Player.PlayerID)
 				shouldQuit = true
-				break
+				continue
 			}
-			lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
+			if lastCommand == "" { // Only accept new command if previous one is processed
+				lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
+			}
+
+		case <-commandTicker.C:
+			if lastCommand != "" {
+				// Create timeout context for command processing
+				cmdCtx, cancel := context.WithTimeout(c.Player.CTX, commandTimeout) // Fixed: Using CTX field directly
+
+				// Process command in separate goroutine
+				done := make(chan bool, 1)
+				go func() {
+					verb, tokens, err := ValidateCommand(strings.TrimSpace(lastCommand))
+					if err != nil {
+						select {
+						case c.Player.ToPlayer <- err.Error() + "\n\r":
+						case <-cmdCtx.Done():
+							return
+						}
+					} else {
+						// Execute the command
+						shouldQuit = ExecuteCommand(c, verb, tokens)
+						Logger.Debug("Player issued command",
+							"playerName", c.Player.PlayerID,
+							"command", strings.Join(tokens, " "))
+					}
+					done <- true
+				}()
+
+				// Wait for command completion or timeout
+				select {
+				case <-done:
+					if !shouldQuit {
+						// Non-blocking prompt send
+						select {
+						case c.Player.ToPlayer <- c.Player.Prompt:
+						case <-cmdCtx.Done():
+						default:
+							Logger.Warn("Unable to send prompt", "characterName", c.Name)
+						}
+					}
+				case <-cmdCtx.Done():
+					Logger.Warn("Command processing timed out",
+						"characterName", c.Name,
+						"command", lastCommand)
+				}
+
+				cancel()         // Cleanup timeout context
+				lastCommand = "" // Clear the command regardless of execution result
+			}
 		}
 	}
 
+	// Cleanup on exit
 	c.Player.Cleanup()
-
 	Logger.Debug("Input loop ended for character", "characterName", c.Name)
 }
 
