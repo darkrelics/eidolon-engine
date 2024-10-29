@@ -56,28 +56,25 @@ type KeyPair struct {
 }
 
 type Server struct {
+	Config               Configuration
+	Context              context.Context
+	Mutex                sync.Mutex
+	WaitGroup            sync.WaitGroup
+	StartTime            time.Time
+	Database             *KeyPair
 	Port                 uint16
 	Listener             net.Listener
 	SSHConfig            *ssh.ServerConfig
+	ArcheTypes           map[string]*Archetype
 	PlayerCount          uint64
-	Config               Configuration
-	StartTime            time.Time
-	Rooms                map[int64]*Room
-	Database             *KeyPair
 	PlayerIndex          *Index
+	Players              map[uint64]*Player
+	ActiveMotDs          []*MOTD
 	CharacterBloomFilter *bloom.BloomFilter
 	Characters           map[uuid.UUID]*Character
-	Balance              float64
-	AutoSave             uint16
-	ArcheTypes           map[string]*Archetype
-	Health               uint16
-	Essence              uint16
-	Items                map[uuid.UUID]*Item
+	Rooms                map[int64]*Room
 	Prototypes           map[uuid.UUID]*Prototype
-	Context              context.Context
-	Mutex                sync.Mutex
-	ActiveMotDs          []*MOTD
-	WaitGroup            sync.WaitGroup
+	Items                map[uuid.UUID]*Item
 }
 
 type Player struct {

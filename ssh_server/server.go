@@ -96,10 +96,6 @@ func NewServer(config core.Configuration) (*core.Server, error) {
 		StartTime:   time.Now(),
 		Rooms:       make(map[int64]*core.Room),
 		Characters:  make(map[uuid.UUID]*core.Character),
-		Balance:     config.Game.Balance,
-		AutoSave:    config.Game.AutoSave,
-		Health:      config.Game.StartingHealth,
-		Essence:     config.Game.StartingEssence,
 	}
 
 	core.Logger.Info("Initializing database...")

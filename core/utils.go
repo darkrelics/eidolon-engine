@@ -32,7 +32,7 @@ func AutoSave(server *Server) {
 
 	for {
 		// Sleep for the configured duration
-		time.Sleep(time.Duration(server.AutoSave) * time.Minute)
+		time.Sleep(time.Duration(server.Config.Game.AutoSave) * time.Minute)
 
 		Logger.Info("Starting auto-save process...")
 
