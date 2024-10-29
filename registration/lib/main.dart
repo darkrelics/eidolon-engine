@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
-import 'package:crypto/crypto.dart';
-import 'dart:convert';
 
 void main() {
   runApp(const MyApp());
@@ -60,54 +58,35 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     }
   }
 
-  String calculateSecretHash(String username) {
-    final clientSecret = const String.fromEnvironment('CLIENT_SECRET');
-    final clientId = const String.fromEnvironment('CLIENT_ID');
-    if (clientSecret.isEmpty) {
-      throw Exception('CLIENT_SECRET not set');
-    }
-    final key = utf8.encode(clientSecret);
-    final message = utf8.encode(username + clientId);
-    final hmac = Hmac(sha256, key);
-    final digest = hmac.convert(message);
-    return base64.encode(digest.bytes);
-  }
+Future<void> _signUp() async {
+  if (_formKey.currentState!.validate()) {
+    try {
+      final signUpResult = await userPool.signUp(
+        _emailController.text,
+        'tempPassword123!',
+        userAttributes: [
+          AttributeArg(name: 'email', value: _emailController.text),
+        ],
+      );
 
-  Future<void> _signUp() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        final signUpResult = await userPool.signUp(
-          _emailController.text,
-          'tempPassword123!',
-          userAttributes: [
-            AttributeArg(name: 'email', value: _emailController.text),
-          ],
-          validationData: [
-            AttributeArg(
-              name: 'SECRET_HASH',
-              value: calculateSecretHash(_emailController.text),
-            ),
-          ],
-        );
-
-        setState(() {
-          if (signUpResult.userConfirmed ?? false) {
-            _message = 'User registered successfully.';
-          } else {
-            _message = 'Verification email sent. Please check your inbox.';
-          }
-        });
-      } catch (e) {
-        setState(() {
-          if (e is CognitoClientException) {
-            _message = 'Cognito Error: ${e.code} - ${e.message}';
-          } else {
-            _message = 'An unexpected error occurred: ${e.toString()}';
-          }
-        });
-      }
+      setState(() {
+        if (signUpResult.userConfirmed ?? false) {
+          _message = 'User registered successfully.';
+        } else {
+          _message = 'Verification email sent. Please check your inbox.';
+        }
+      });
+    } catch (e) {
+      setState(() {
+        if (e is CognitoClientException) {
+          _message = 'Cognito Error: ${e.code} - ${e.message}';
+        } else {
+          _message = 'An unexpected error occurred: ${e.toString()}';
+        }
+      });
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {
