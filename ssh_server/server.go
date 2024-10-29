@@ -431,10 +431,10 @@ func GracefulShutdown(ctx context.Context, server *core.Server) error {
 	// Wait a moment for messages to be sent
 	time.Sleep(10 * time.Second)
 
-	// Use ExecuteQuitCommand for each character
+	// Log out all characters
 	for _, character := range server.Characters {
 		core.Logger.Info("Logging out character", "characterName", character.Name)
-		core.ExecuteQuitCommand(character, []string{"quit"})
+		character.Player.Cleanup()
 	}
 
 	// Perform final auto-save

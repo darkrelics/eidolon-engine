@@ -103,6 +103,7 @@ func PlayerInput(p *Player) {
 			if err == io.EOF {
 				Logger.Info("Player disconnected", "playerName", p.PlayerID)
 				p.PlayerError <- err
+				p.Cleanup()
 				return
 			} else {
 				Logger.Error("Error reading from player", "playerName", p.PlayerID, "error", err)
