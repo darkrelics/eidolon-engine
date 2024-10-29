@@ -324,6 +324,9 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, server *
 
 	// Ensure the character is added to the room's character list
 	if character.Room != nil {
+
+		SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name))
+
 		character.Room.Mutex.Lock()
 		if character.Room.Characters == nil {
 			character.Room.Characters = make(map[uuid.UUID]*Character)
