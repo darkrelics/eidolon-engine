@@ -173,19 +173,29 @@ func InputLoop(c *Character) {
 		return
 	}
 
+	// Add safety check for CTX
+	if c.Player.CTX == nil {
+		Logger.Error("Player context is nil", "characterName", c.Name)
+		return
+	}
+
 	Logger.Debug("Starting input loop for character", "characterName", c.Name)
 
 	// Initially execute the look command with no additional tokens
 	ExecuteLookCommand(c, []string{})
 
-	// Send initial prompt with non-blocking write
+	// Safety check before sending prompt
+	if c.Player.ToPlayer == nil {
+		Logger.Error("Player ToPlayer channel is nil", "characterName", c.Name)
+		return
+	}
+
+	// Send initial prompt - blocking write for initial prompt is acceptable
 	select {
 	case c.Player.ToPlayer <- c.Player.Prompt:
-	case <-c.Player.CTX.Done(): // Fixed: Using CTX field directly
+	case <-c.Player.CTX.Done():
 		c.Player.Cleanup()
 		return
-	default:
-		Logger.Error("Unable to send initial prompt", "characterName", c.Name)
 	}
 
 	// Create a ticker that ticks once per second
@@ -199,8 +209,14 @@ func InputLoop(c *Character) {
 	const commandTimeout = 5 * time.Second
 
 	for !shouldQuit {
+		// Additional safety check inside loop
+		if c.Player == nil || c.Player.CTX == nil {
+			Logger.Error("Player or context became nil during loop", "characterName", c.Name)
+			return
+		}
+
 		select {
-		case <-c.Player.CTX.Done(): // Fixed: Using CTX field directly
+		case <-c.Player.CTX.Done():
 			Logger.Info("Player context cancelled", "characterName", c.Name)
 			shouldQuit = true
 			continue
@@ -218,7 +234,7 @@ func InputLoop(c *Character) {
 		case <-commandTicker.C:
 			if lastCommand != "" {
 				// Create timeout context for command processing
-				cmdCtx, cancel := context.WithTimeout(c.Player.CTX, commandTimeout) // Fixed: Using CTX field directly
+				cmdCtx, cancel := context.WithTimeout(c.Player.CTX, commandTimeout)
 
 				// Process command in separate goroutine
 				done := make(chan bool, 1)

@@ -311,9 +311,9 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 		player := &core.Player{
 			PlayerID:      playerName,
 			Index:         playerIndex,
-			ToPlayer:      make(chan string),
-			FromPlayer:    make(chan string),
-			PlayerError:   make(chan error),
+			ToPlayer:      make(chan string, 10),
+			FromPlayer:    make(chan string, 10),
+			PlayerError:   make(chan error, 10),
 			Echo:          true,
 			Prompt:        "> ",
 			Connection:    channel,
