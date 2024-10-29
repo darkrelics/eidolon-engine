@@ -57,13 +57,7 @@ func main() {
 	go StartSSHServer(server, stop)
 
 	// Start sending metrics in a separate goroutine
-	metricsDone := make(chan struct{})
-	go func() {
-		defer close(metricsDone)
-		if err := core.SendMetrics(server, 1*time.Minute); err != nil {
-			core.Logger.Error("Error in SendMetrics", "error", err)
-		}
-	}()
+	go core.SendMetrics(server, 1*time.Minute)
 
 	// Start the auto-save routine in a separate goroutine
 	go core.AutoSave(server)
@@ -83,14 +77,6 @@ func main() {
 	// Perform graceful shutdown
 	if err := GracefulShutdown(shutdownCtx, server); err != nil {
 		core.Logger.Error("Error during shutdown", "error", err)
-	}
-
-	// Wait for metrics goroutine to finish
-	select {
-	case <-metricsDone:
-		core.Logger.Info("Metrics goroutine stopped")
-	case <-time.After(5 * time.Second):
-		core.Logger.Warn("Timed out waiting for metrics goroutine to stop")
 	}
 
 	core.Logger.Warn("Server shutdown complete")
@@ -191,21 +177,7 @@ func loadConfiguration(configFile string) (core.Configuration, error) {
 	return config, nil
 }
 
-// Authenticate checks the provided username and password against the authentication system.
-// Returns true if authentication is successful, false otherwise.
-func Authenticate(username, password string, config core.Configuration) bool {
-	core.Logger.Info("Authenticating user", "username", username)
-
-	response, err := core.SignInUser(username, password, config)
-	core.Logger.Debug("Authentication response", "response", response)
-
-	if err != nil {
-		core.Logger.Error("Authentication attempt failed for user", "username", username, "error", err)
-		return false
-	}
-	return true
-}
-
+// configureSSH configures the SSH server with the provided private key and authentication settings.
 func configureSSH(server *core.Server) error {
 	core.Logger.Info("Configuring SSH server", "port", server.Port)
 
@@ -244,6 +216,22 @@ func configureSSH(server *core.Server) error {
 	return nil
 }
 
+// Authenticate checks the provided username and password against the authentication system.
+// Returns true if authentication is successful, false otherwise.
+func Authenticate(username, password string, config core.Configuration) bool {
+	core.Logger.Info("Authenticating user", "username", username)
+
+	// I really want the USER UUID passed up.
+	response, err := core.SignInUser(username, password, config)
+	core.Logger.Debug("Authentication response", "response", response)
+
+	if err != nil {
+		core.Logger.Error("Authentication attempt failed for user", "username", username, "error", err)
+		return false
+	}
+	return true
+}
+
 func acceptConnections(server *core.Server) {
 	for {
 		conn, err := server.Listener.Accept()
@@ -257,36 +245,13 @@ func acceptConnections(server *core.Server) {
 		}
 
 		server.WaitGroup.Add(1)
-		go func() {
-			defer server.WaitGroup.Done()
-			handleConnection(server, conn)
-		}()
+		go handleConnection(server, conn)
 	}
-}
-
-func StartSSHServer(server *core.Server, stop chan os.Signal) error {
-	if err := configureSSH(server); err != nil {
-		stop <- os.Interrupt
-		return fmt.Errorf("failed to configure SSH server: %v", err)
-	}
-
-	// Start listening on the configured port
-	address := fmt.Sprintf(":%d", server.Port)
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		return fmt.Errorf("failed to listen on port %d: %v", server.Port, err)
-	}
-
-	server.Listener = listener
-	core.Logger.Info("SSH server listening", "port", server.Port)
-
-	// Start accepting connections in a separate goroutine
-	go acceptConnections(server)
-
-	return nil
 }
 
 func handleConnection(server *core.Server, conn net.Conn) {
+	defer server.WaitGroup.Done()
+
 	// Perform SSH handshake
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, server.SSHConfig)
 	if err != nil {
@@ -400,11 +365,27 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 	}
 }
 
-// parseDims parses terminal dimensions from the SSH payload.
-func parseDims(b []byte) (width, height int) {
-	width = int(b[0])<<24 | int(b[1])<<16 | int(b[2])<<8 | int(b[3])
-	height = int(b[4])<<24 | int(b[5])<<16 | int(b[6])<<8 | int(b[7])
-	return width, height
+// StartSSHServer starts the SSH server on the configured port and listens for incoming connections.
+func StartSSHServer(server *core.Server, stop chan os.Signal) error {
+	if err := configureSSH(server); err != nil {
+		stop <- os.Interrupt
+		return fmt.Errorf("failed to configure SSH server: %v", err)
+	}
+
+	// Start listening on the configured port
+	address := fmt.Sprintf(":%d", server.Port)
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return fmt.Errorf("failed to listen on port %d: %v", server.Port, err)
+	}
+
+	server.Listener = listener
+	core.Logger.Info("SSH server listening", "port", server.Port)
+
+	// Start accepting connections in a separate goroutine
+	go acceptConnections(server)
+
+	return nil
 }
 
 // HandleSSHRequests handles SSH requests from the client.
@@ -487,4 +468,11 @@ func GracefulShutdown(ctx context.Context, server *core.Server) error {
 
 	core.Logger.Info("Graceful shutdown completed")
 	return nil
+}
+
+// parseDims parses terminal dimensions from the SSH payload.
+func parseDims(b []byte) (width, height int) {
+	width = int(b[0])<<24 | int(b[1])<<16 | int(b[2])<<8 | int(b[3])
+	height = int(b[4])<<24 | int(b[5])<<16 | int(b[6])<<8 | int(b[7])
+	return width, height
 }

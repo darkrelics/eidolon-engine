@@ -222,7 +222,6 @@ func SendMetrics(s *Server, interval time.Duration) error {
 	}
 
 	client := cloudwatch.NewFromConfig(cfg)
-
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -235,7 +234,7 @@ func SendMetrics(s *Server, interval time.Duration) error {
 			playerCount := float64(len(s.Characters))
 			memoryUsageMB := float64(m.Alloc) / 1024 / 1024
 
-			_, err := client.PutMetricData(context.Background(), &cloudwatch.PutMetricDataInput{
+			_, err := client.PutMetricData(s.Context, &cloudwatch.PutMetricDataInput{
 				Namespace: aws.String(s.Config.Logging.MetricNamespace),
 				MetricData: []types.MetricDatum{
 					{
