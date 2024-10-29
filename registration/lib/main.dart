@@ -35,62 +35,62 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   late final CognitoUserPool userPool;
 
-@override
-void initState() {
-  super.initState();
-  final userPoolId = const String.fromEnvironment('USER_POOL_ID');
-  final clientId = const String.fromEnvironment('CLIENT_ID');
-  final clientSecret = const String.fromEnvironment('CLIENT_SECRET');
-  
-  if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
-    setState(() {
-      _message = 'Error: Missing required Cognito configuration';
-    });
-    return;
-  }
-  
-  try {
-    userPool = CognitoUserPool(
-      userPoolId, 
-      clientId,
-      clientSecret: clientSecret,
-    );
-  } catch (e) {
-    setState(() {
-      _message = 'Error initializing Cognito: ${e.toString()}';
-    });
-  }
-}
+  @override
+  void initState() {
+    super.initState();
+    final userPoolId = const String.fromEnvironment('USER_POOL_ID');
+    final clientId = const String.fromEnvironment('CLIENT_ID');
+    final clientSecret = const String.fromEnvironment('CLIENT_SECRET');
 
-Future<void> _signUp() async {
-  if (_formKey.currentState!.validate()) {
-    try {
-      final signUpResult = await userPool.signUp(
-        _emailController.text,
-        'tempPassword123!',
-        userAttributes: [
-          AttributeArg(name: 'email', value: _emailController.text),
-        ],
-      );
-
+    if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
       setState(() {
-        if (signUpResult.userConfirmed ?? false) {
-          _message = 'User registered successfully.';
-        } else {
-          _message = 'Verification email sent. Please check your inbox.';
-        }
+        _message = 'Error: Missing required Cognito configuration';
       });
+      return;
+    }
+
+    try {
+      userPool = CognitoUserPool(
+        userPoolId,
+        clientId,
+        clientSecret: clientSecret,
+      );
     } catch (e) {
       setState(() {
-        if (e is CognitoClientException) {
-          _message = 'Cognito Error: ${e.code} - ${e.message}';
-        } else {
-          _message = 'An unexpected error occurred: ${e.toString()}';
-        }
+        _message = 'Error initializing Cognito: ${e.toString()}';
       });
     }
   }
-}
+
+  Future<void> _signUp() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        final signUpResult = await userPool.signUp(
+          _emailController.text,
+          'tempPassword123!',
+          userAttributes: [
+            AttributeArg(name: 'email', value: _emailController.text),
+          ],
+        );
+
+        setState(() {
+          if (signUpResult.userConfirmed ?? false) {
+            _message = 'User registered successfully.';
+          } else {
+            _message = 'Verification email sent. Please check your inbox.';
+          }
+        });
+      } catch (e) {
+        setState(() {
+          if (e is CognitoClientException) {
+            _message = 'Cognito Error: ${e.code} - ${e.message}';
+          } else {
+            _message = 'An unexpected error occurred: ${e.toString()}';
+          }
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
