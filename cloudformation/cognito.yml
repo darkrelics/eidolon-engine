@@ -65,7 +65,7 @@ Resources:
       AutoVerifiedAttributes:
         - email
       EmailVerificationSubject: !Ref VerificationSubject
-      EmailVerificationMessage: "Please click the link below to verify your email address. {####}"
+      EmailVerificationMessage: !Sub "Please verify your email address by visiting this link: https://${UserPoolName}.auth.${AWS::Region}.amazoncognito.com/verify?code={####}"
 
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
