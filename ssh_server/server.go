@@ -311,7 +311,7 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 		player := &core.Player{
 			PlayerID:      playerName,
 			Index:         playerIndex,
-			ToPlayer:      make(chan string, 10),
+			ToPlayer:      make(chan string, 100),
 			FromPlayer:    make(chan string, 10),
 			PlayerError:   make(chan error, 10),
 			Echo:          true,
@@ -334,7 +334,11 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 
 		// Initialize player session
 		go func(p *core.Player) {
-			defer p.Connection.Close()
+			defer func() {
+				if p != nil && p.Connection != nil {
+					p.Connection.Close()
+				}
+			}()
 
 			core.Logger.Info("Player connected", "player_name", p.PlayerID)
 
@@ -351,18 +355,22 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 			// Enter the main input loop for the player
 			core.InputLoop(character)
 
-			// Close the player's output channel
-			close(player.ToPlayer)
-
 			// Save the player's character and data to the database
-			err = server.Database.WriteCharacter(character)
-			if err != nil {
-				core.Logger.Error("Error saving character", "character_id", character.ID, "error", err)
+			if character != nil {
+				err = server.Database.WriteCharacter(character)
+				if err != nil {
+					core.Logger.Error("Error saving character", "character_id", character.ID, "error", err)
+				}
 			}
 
-			err = server.Database.WritePlayer(player)
-			if err != nil {
-				core.Logger.Error("Error saving player data", "player_name", player.PlayerID, "error", err)
+			if p != nil {
+				err = server.Database.WritePlayer(p)
+				if err != nil {
+					core.Logger.Error("Error saving player data", "player_name", p.PlayerID, "error", err)
+				}
+
+				// Call Cleanup instead of manually closing channels
+				p.Cleanup()
 			}
 
 			core.Logger.Info("Player disconnected", "player_name", p.PlayerID)
