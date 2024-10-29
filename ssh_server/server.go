@@ -45,8 +45,9 @@ func main() {
 	}
 
 	// Create a context that we can cancel
-	_, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	server.Context = ctx
 
 	// Create a channel to listen for interrupt signals
 	stop := make(chan os.Signal, 1)
@@ -137,7 +138,6 @@ func NewServer(config core.Configuration) (*core.Server, error) {
 	err = server.InitializeBloomFilter()
 	if err != nil {
 		core.Logger.Error("Error initializing bloom filter", "error", err)
-		// If bloom filter is critical, consider exiting
 		return nil, fmt.Errorf("failed to initialize bloom filter: %v", err)
 	}
 
@@ -146,15 +146,11 @@ func NewServer(config core.Configuration) (*core.Server, error) {
 	err = server.LoadArchetypes()
 	if err != nil {
 		core.Logger.Error("Error loading archetypes from database", "error", err)
-		// If archetypes are critical, consider exiting
-		return nil, fmt.Errorf("failed to load archetypes: %v", err)
 	}
 
-	// Add a default room if none exist
-	if len(server.Rooms) == 0 {
-		core.Logger.Info("Adding default room...")
-		server.Rooms[0] = core.NewRoom(0, "The Void", "The Void", "You are in a void of nothingness. If you are here, something has gone terribly wrong.")
-	}
+	// Create Default Room
+	core.Logger.Info("Adding default room...")
+	server.Rooms[0] = core.NewRoom(0, "The Void", "The Void", "You are in a void of nothingness. If you are here, something has gone terribly wrong.")
 
 	// Load rooms from the database
 	core.Logger.Info("Loading rooms from database...")
