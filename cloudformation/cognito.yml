@@ -27,7 +27,7 @@ Parameters:
     Default: Your verification link
 
 Resources:
-CognitoUserPool:
+  CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Ref UserPoolName
