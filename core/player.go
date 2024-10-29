@@ -210,20 +210,7 @@ func InputLoop(c *Character) {
 		}
 	}
 
-	// Remove character from room and server
-	c.Room.Mutex.Lock()
-	delete(c.Room.Characters, c.ID)
-	c.Room.Mutex.Unlock()
-
-	c.Server.Mutex.Lock()
-	delete(c.Server.Characters, c.ID)
-	c.Server.Mutex.Unlock()
-
-	// Save character state to the database
-	err := c.Server.Database.WriteCharacter(c)
-	if err != nil {
-		Logger.Error("Error saving character", "characterName", c.Name, "error", err)
-	}
+	c.Player.Cleanup()
 
 	Logger.Debug("Input loop ended for character", "characterName", c.Name)
 }
@@ -346,37 +333,48 @@ func SelectCharacter(player *Player, server *Server) (*Character, error) {
 	}
 }
 
-// Add method to handle cleanup
 func (p *Player) Cleanup() {
+	// Use player mutex to protect cleanup state
+	p.Mutex.Lock()
+	defer p.Mutex.Unlock()
+
+	// Check if already cleaned up
+	if p.CTX == nil {
+		Logger.Debug("Cleanup already performed for player", "playerID", p.PlayerID)
+		return
+	}
+
 	Logger.Debug("Starting player cleanup", "playerID", p.PlayerID)
 
 	// Cancel context first to stop any ongoing operations
-	p.Cancel()
-
-	// Close channels
-	close(p.ToPlayer)
-	close(p.FromPlayer)
-	close(p.PlayerError)
-
-	// Close connection
-	if p.Connection != nil {
-		p.Connection.Write([]byte("\n\rGoodbye!\n\r"))
-		p.Connection.Close()
+	if p.Cancel != nil {
+		p.Cancel()
+		p.Cancel = nil
 	}
 
-	// If player has an active character, save it
+	// Save data before closing channels
 	if p.Character != nil {
 		// Remove character from room
 		if p.Character.Room != nil {
 			p.Character.Room.Mutex.Lock()
-			delete(p.Character.Room.Characters, p.Character.ID)
+			if _, exists := p.Character.Room.Characters[p.Character.ID]; exists {
+				delete(p.Character.Room.Characters, p.Character.ID)
 
-			// Notify other players in room
-			roomMsg := fmt.Sprintf("\n\r%s has left.\n\r", p.Character.Name)
-			for _, c := range p.Character.Room.Characters {
-				if c.Player != nil {
-					c.Player.ToPlayer <- roomMsg
-					c.Player.ToPlayer <- c.Player.Prompt
+				// Notify other players in room - safely
+				roomMsg := fmt.Sprintf("\n\r%s has left.\n\r", p.Character.Name)
+				for _, c := range p.Character.Room.Characters {
+					if c != nil && c.Player != nil && c.Player.ToPlayer != nil {
+						select {
+						case c.Player.ToPlayer <- roomMsg:
+						default:
+							// Channel is blocked or closed, skip
+						}
+						select {
+						case c.Player.ToPlayer <- c.Player.Prompt:
+						default:
+							// Channel is blocked or closed, skip
+						}
+					}
 				}
 			}
 			p.Character.Room.Mutex.Unlock()
@@ -396,12 +394,38 @@ func (p *Player) Cleanup() {
 				"error", err)
 		}
 
-		p.Server.Mutex.Lock()
 		// Remove character from server's character list
-		delete(p.Server.Characters, p.Character.ID)
-		p.Server.Mutex.Unlock()
-
+		if p.Server != nil {
+			p.Server.Mutex.Lock()
+			delete(p.Server.Characters, p.Character.ID)
+			p.Server.Mutex.Unlock()
+		}
 	}
+
+	// Safely close channels if they exist
+	if p.ToPlayer != nil {
+		close(p.ToPlayer)
+		p.ToPlayer = nil
+	}
+	if p.FromPlayer != nil {
+		close(p.FromPlayer)
+		p.FromPlayer = nil
+	}
+	if p.PlayerError != nil {
+		close(p.PlayerError)
+		p.PlayerError = nil
+	}
+
+	// Safely close connection
+	if p.Connection != nil {
+		// Best effort to send goodbye message
+		p.Connection.Write([]byte("\n\rGoodbye!\n\r"))
+		p.Connection.Close()
+		p.Connection = nil
+	}
+
+	// Clear context
+	p.CTX = nil
 
 	Logger.Info("Player cleanup completed", "playerID", p.PlayerID)
 }
