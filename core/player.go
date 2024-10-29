@@ -2,6 +2,7 @@ package core
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -39,7 +40,7 @@ func (k *KeyPair) WritePlayer(player *Player) error {
 		return fmt.Errorf("error storing player data: %w", err)
 	}
 
-	Logger.Info("Successfully wrote player data", "playerName", player.PlayerID, "characterCount", len(player.CharacterList), "seenMotDCount", len(player.SeenMotD))
+	Logger.Debug("Successfully wrote player data", "playerName", player.PlayerID, "characterCount", len(player.CharacterList), "seenMotDCount", len(player.SeenMotD))
 	return nil
 }
 
@@ -80,21 +81,21 @@ func (k *KeyPair) ReadPlayer(playerName string) (string, map[string]uuid.UUID, [
 		seenMotDs = append(seenMotDs, id)
 	}
 
-	Logger.Info("Successfully read player data", "playerName", pd.PlayerID, "characterCount", len(characterList), "seenMotDCount", len(seenMotDs))
+	Logger.Debug("Successfully read player data", "playerName", pd.PlayerID, "characterCount", len(characterList), "seenMotDCount", len(seenMotDs))
 	return pd.PlayerID, characterList, seenMotDs, nil
 }
 
 // PlayerInput handles the player's input in a separate goroutine.
 // It reads input from the player's SSH connection and sends it to the FromPlayer channel.
 func PlayerInput(p *Player) {
-	Logger.Info("Player input goroutine started", "playerName", p.PlayerID)
+	Logger.Debug("Player input goroutine started", "playerName", p.PlayerID)
 
 	var inputBuffer []rune
 	reader := bufio.NewReader(p.Connection)
 
 	defer func() {
 		close(p.FromPlayer)
-		Logger.Info("Player input goroutine ended", "playerName", p.PlayerID)
+		Logger.Debug("Player input goroutine ended", "playerName", p.PlayerID)
 	}()
 
 	for {
@@ -103,6 +104,7 @@ func PlayerInput(p *Player) {
 			if err == io.EOF {
 				Logger.Info("Player disconnected", "playerName", p.PlayerID)
 				p.PlayerError <- err
+				p.Cleanup()
 				return
 			} else {
 				Logger.Error("Error reading from player", "playerName", p.PlayerID, "error", err)
@@ -130,7 +132,7 @@ func PlayerInput(p *Player) {
 		case '\x03': // Ctrl+C
 			Logger.Info("Player sent interrupt signal", "playerName", p.PlayerID)
 			p.PlayerError <- errors.New("player interrupt")
-			p.Connection.Close()
+			p.Cleanup()
 			return
 		default:
 			if len(inputBuffer) < 1024 { // Max input size
@@ -146,35 +148,55 @@ func PlayerInput(p *Player) {
 // PlayerOutput handles sending messages to the player in a separate goroutine.
 // It reads messages from the ToPlayer channel and writes them to the player's SSH connection.
 func PlayerOutput(p *Player) {
-	Logger.Info("Player output goroutine started", "playerName", p.PlayerID)
+	Logger.Debug("Player output goroutine started", "playerName", p.PlayerID)
 
-	defer func() {
-		close(p.FromPlayer)
-		Logger.Info("Player output goroutine ended", "playerName", p.PlayerID)
-	}()
+	// Use a defer to cleanup but don't close FromPlayer here
+	defer Logger.Debug("Player output goroutine ended", "playerName", p.PlayerID)
 
 	for message := range p.ToPlayer {
 		wrappedMessage := wrapText(message, p.ConsoleWidth)
 		_, err := p.Connection.Write([]byte(wrappedMessage))
 		if err != nil {
-			Logger.Error("Failed to send message to player", "playerName", p.PlayerID, "error", err)
+			Logger.Warn("Failed to send message to player", "playerName", p.PlayerID, "error", err)
 			return
 		}
 	}
 
-	Logger.Info("Message channel closed for player", "playerName", p.PlayerID)
+	Logger.Debug("Message channel closed for player", "playerName", p.PlayerID)
 }
 
 // InputLoop is the main loop that handles player commands.
 // It reads commands from the player's input and executes them accordingly.
 func InputLoop(c *Character) {
-	Logger.Info("Starting input loop for character", "characterName", c.Name)
+	if c == nil || c.Player == nil {
+		Logger.Error("Invalid character or player in input loop")
+		return
+	}
+
+	// Add safety check for CTX
+	if c.Player.CTX == nil {
+		Logger.Error("Player context is nil", "characterName", c.Name)
+		return
+	}
+
+	Logger.Debug("Starting input loop for character", "characterName", c.Name)
 
 	// Initially execute the look command with no additional tokens
 	ExecuteLookCommand(c, []string{})
 
-	// Send initial prompt to player
-	c.Player.ToPlayer <- c.Player.Prompt
+	// Safety check before sending prompt
+	if c.Player.ToPlayer == nil {
+		Logger.Error("Player ToPlayer channel is nil", "characterName", c.Name)
+		return
+	}
+
+	// Send initial prompt - blocking write for initial prompt is acceptable
+	select {
+	case c.Player.ToPlayer <- c.Player.Prompt:
+	case <-c.Player.CTX.Done():
+		c.Player.Cleanup()
+		return
+	}
 
 	// Create a ticker that ticks once per second
 	commandTicker := time.NewTicker(time.Second)
@@ -183,59 +205,90 @@ func InputLoop(c *Character) {
 	var lastCommand string
 	shouldQuit := false
 
+	// Create command processing timeout
+	const commandTimeout = 5 * time.Second
+
 	for !shouldQuit {
+		// Additional safety check inside loop
+		if c.Player == nil || c.Player.CTX == nil {
+			Logger.Error("Player or context became nil during loop", "characterName", c.Name)
+			return
+		}
+
 		select {
-		case <-commandTicker.C:
-			if lastCommand != "" {
-				verb, tokens, err := ValidateCommand(strings.TrimSpace(lastCommand))
-				if err != nil {
-					c.Player.ToPlayer <- err.Error() + "\n\r"
-				} else {
-					// Execute the command
-					shouldQuit = ExecuteCommand(c, verb, tokens)
-					Logger.Info("Player issued command", "playerName", c.Player.PlayerID, "command", strings.Join(tokens, " "))
-				}
-				lastCommand = ""
-				if !shouldQuit {
-					c.Player.ToPlayer <- c.Player.Prompt
-				}
-			}
+		case <-c.Player.CTX.Done():
+			Logger.Info("Player context cancelled", "characterName", c.Name)
+			shouldQuit = true
+			continue
 
 		case inputLine, more := <-c.Player.FromPlayer:
 			if !more {
-				Logger.Info("Input channel closed for player", "playerName", c.Player.PlayerID)
+				Logger.Debug("Input channel closed for player", "playerName", c.Player.PlayerID)
 				shouldQuit = true
-				break
+				continue
 			}
-			lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
+			if lastCommand == "" { // Only accept new command if previous one is processed
+				lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
+			}
+
+		case <-commandTicker.C:
+			if lastCommand != "" {
+				// Create timeout context for command processing
+				cmdCtx, cancel := context.WithTimeout(c.Player.CTX, commandTimeout)
+
+				// Process command in separate goroutine
+				done := make(chan bool, 1)
+				go func() {
+					verb, tokens, err := ValidateCommand(strings.TrimSpace(lastCommand))
+					if err != nil {
+						select {
+						case c.Player.ToPlayer <- err.Error() + "\n\r":
+						case <-cmdCtx.Done():
+							return
+						}
+					} else {
+						// Execute the command
+						shouldQuit = ExecuteCommand(c, verb, tokens)
+						Logger.Debug("Player issued command",
+							"playerName", c.Player.PlayerID,
+							"command", strings.Join(tokens, " "))
+					}
+					done <- true
+				}()
+
+				// Wait for command completion or timeout
+				select {
+				case <-done:
+					if !shouldQuit {
+						// Non-blocking prompt send
+						select {
+						case c.Player.ToPlayer <- c.Player.Prompt:
+						case <-cmdCtx.Done():
+						default:
+							Logger.Warn("Unable to send prompt", "characterName", c.Name)
+						}
+					}
+				case <-cmdCtx.Done():
+					Logger.Warn("Command processing timed out",
+						"characterName", c.Name,
+						"command", lastCommand)
+				}
+
+				cancel()         // Cleanup timeout context
+				lastCommand = "" // Clear the command regardless of execution result
+			}
 		}
 	}
 
-	// Cleanup code
-	close(c.Player.FromPlayer)
-
-	// Remove character from room and server
-	c.Room.Mutex.Lock()
-	delete(c.Room.Characters, c.ID)
-	c.Room.Mutex.Unlock()
-
-	c.Server.Mutex.Lock()
-	delete(c.Server.Characters, c.ID)
-	c.Server.Mutex.Unlock()
-
-	// Save character state to the database
-	err := c.Server.Database.WriteCharacter(c)
-	if err != nil {
-		Logger.Error("Error saving character", "characterName", c.Name, "error", err)
-	}
-
-	Logger.Info("Input loop ended for character", "characterName", c.Name)
+	// Cleanup on exit
+	c.Player.Cleanup()
+	Logger.Debug("Input loop ended for character", "characterName", c.Name)
 }
 
 // SelectCharacter handles the character selection process for a player.
 // It presents the player with options to select or create a character.
 func SelectCharacter(player *Player, server *Server) (*Character, error) {
-	Logger.Info("Player is selecting a character", "playerName", player.PlayerID)
+	Logger.Debug("Player is selecting a character", "playerName", player.PlayerID)
 
 	var options []string
 
@@ -271,7 +324,7 @@ func SelectCharacter(player *Player, server *Server) (*Character, error) {
 
 		if input == "X" && len(player.CharacterList) > 0 {
 			// Handle character deletion
-			player.ToPlayer <- "Select a character to delete:\n\r"
+			player.ToPlayer <- "Select a character to delete: \n\r"
 			for i, name := range options {
 				player.ToPlayer <- fmt.Sprintf("%d: %s\n\r", i+1, name)
 			}
@@ -337,15 +390,110 @@ func SelectCharacter(player *Player, server *Server) (*Character, error) {
 		// Add character to the room and notify other players
 		if character.Room != nil {
 			// Notify the room that the character has entered
-			SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name))
-
 			character.Room.Mutex.Lock()
 			character.Room.Characters[character.ID] = character
 			character.Room.Mutex.Unlock()
 		}
 
-		Logger.Info("Character selected and added to server", "characterName", character.Name, "characterID", character.ID)
+		Logger.Debug("Character selected and added to server", "characterName", character.Name, "characterID", character.ID)
 
 		return character, nil
 	}
+}
+
+func (p *Player) Cleanup() {
+	// Use player mutex to protect cleanup state
+	p.Mutex.Lock()
+	defer p.Mutex.Unlock()
+
+	// Check if already cleaned up
+	if p.CTX == nil {
+		Logger.Debug("Cleanup already performed for player", "playerID", p.PlayerID)
+		return
+	}
+
+	Logger.Debug("Starting player cleanup", "playerID", p.PlayerID)
+
+	// Cancel context first to stop any ongoing operations
+	if p.Cancel != nil {
+		p.Cancel()
+		p.Cancel = nil
+	}
+
+	// Save data before closing channels
+	if p.Character != nil {
+		// Remove character from room
+		if p.Character.Room != nil {
+			p.Character.Room.Mutex.Lock()
+			if _, exists := p.Character.Room.Characters[p.Character.ID]; exists {
+				delete(p.Character.Room.Characters, p.Character.ID)
+
+				// Notify other players in room - safely
+				roomMsg := fmt.Sprintf("\n\r%s has left.\n\r", p.Character.Name)
+				for _, c := range p.Character.Room.Characters {
+					if c != nil && c.Player != nil && c.Player.ToPlayer != nil {
+						select {
+						case c.Player.ToPlayer <- roomMsg:
+						default:
+							// Channel is blocked or closed, skip
+						}
+						select {
+						case c.Player.ToPlayer <- c.Player.Prompt:
+						default:
+							// Channel is blocked or closed, skip
+						}
+					}
+				}
+			}
+			p.Character.Room.Mutex.Unlock()
+		}
+
+		// Save character state to database
+		if err := p.Server.Database.WriteCharacter(p.Character); err != nil {
+			Logger.Error("Failed to save character state during cleanup",
+				"characterName", p.Character.Name,
+				"error", err)
+		}
+
+		// Save player data
+		if err := p.Server.Database.WritePlayer(p); err != nil {
+			Logger.Error("Failed to save player data during cleanup",
+				"playerName", p.PlayerID,
+				"error", err)
+		}
+
+		// Remove character from server's character list
+		if p.Server != nil {
+			p.Server.Mutex.Lock()
+			delete(p.Server.Characters, p.Character.ID)
+			p.Server.Mutex.Unlock()
+		}
+	}
+
+	// Safely close channels if they exist
+	if p.ToPlayer != nil {
+		close(p.ToPlayer)
+		p.ToPlayer = nil
+	}
+	if p.FromPlayer != nil {
+		close(p.FromPlayer)
+		p.FromPlayer = nil
+	}
+	if p.PlayerError != nil {
+		close(p.PlayerError)
+		p.PlayerError = nil
+	}
+
+	// Safely close connection
+	if p.Connection != nil {
+		// Best effort to send goodbye message
+		p.Connection.Write([]byte("\n\rGoodbye!\n\r"))
+		p.Connection.Close()
+		p.Connection = nil
+	}
+
+	// Clear context
+	p.CTX = nil
+
+	Logger.Info("Player cleanup completed", "playerID", p.PlayerID)
 }

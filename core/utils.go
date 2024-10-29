@@ -40,23 +40,23 @@ func AutoSave(server *Server) {
 		if err := server.SaveActiveCharacters(); err != nil {
 			Logger.Error("Failed to save characters", "error", err)
 		} else {
-			Logger.Info("Active characters saved successfully")
+			Logger.Debug("Active characters saved successfully")
 		}
 
 		// Save active items
 		if err := server.SaveActiveItems(); err != nil {
 			Logger.Error("Failed to save items", "error", err)
 		} else {
-			Logger.Info("Active items saved successfully")
+			Logger.Debug("Active items saved successfully")
 		}
 
-		Logger.Info("Auto-save process completed")
+		Logger.Debug("Auto-save process completed")
 
 		// Save active rooms
 		if err := server.SaveActiveRooms(); err != nil {
 			Logger.Error("Failed to save rooms", "error", err)
 		} else {
-			Logger.Info("Active rooms saved successfully")
+			Logger.Debug("Active rooms saved successfully")
 		}
 
 	}
@@ -66,31 +66,53 @@ func wrapText(text string, width int) string {
 	var result strings.Builder
 	lines := strings.Split(text, "\n")
 
-	for _, line := range lines {
+	for i, line := range lines {
+		// Preserve empty lines
 		if len(line) == 0 {
-			result.WriteString("\r\n")
-			continue
-		}
-
-		words := strings.Fields(line)
-		if len(words) == 0 {
-			continue
-		}
-
-		lineLen := 0
-		for _, word := range words {
-			wordLen := len(word)
-			if lineLen+wordLen+1 > width {
+			if i < len(lines)-1 { // Only add newline if not the last line
 				result.WriteString("\r\n")
-				lineLen = 0
-			} else if lineLen > 0 {
-				result.WriteString(" ")
-				lineLen++
 			}
-			result.WriteString(word)
-			lineLen += wordLen
+			continue
 		}
-		result.WriteString("\r\n")
+
+		// If the line is just whitespace, preserve it
+		if strings.TrimSpace(line) == "" {
+			result.WriteString(line)
+			if i < len(lines)-1 {
+				result.WriteString("\r\n")
+			}
+			continue
+		}
+
+		// Process line with content
+		currentLine := line
+		for len(currentLine) > 0 {
+			if len(currentLine) <= width {
+				result.WriteString(currentLine)
+				break
+			}
+
+			// Find the last space within width
+			lastSpace := strings.LastIndex(currentLine[:width+1], " ")
+			if lastSpace == -1 {
+				// No space found, force break at width
+				result.WriteString(currentLine[:width])
+				currentLine = currentLine[width:]
+			} else {
+				// Break at last space
+				result.WriteString(currentLine[:lastSpace])
+				currentLine = currentLine[lastSpace+1:]
+			}
+
+			if len(currentLine) > 0 {
+				result.WriteString("\r\n")
+			}
+		}
+
+		// Add newline between original lines if not the last line
+		if i < len(lines)-1 {
+			result.WriteString("\r\n")
+		}
 	}
 
 	return result.String()

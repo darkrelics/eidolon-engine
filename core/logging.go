@@ -100,7 +100,7 @@ func EnableXRay(cfg *Configuration) error {
 		return fmt.Errorf("failed to configure AWS X-Ray: %w", err)
 	}
 
-	Logger.Info("AWS X-Ray successfully configured")
+	Logger.Debug("AWS X-Ray successfully configured")
 
 	return nil
 }
@@ -222,7 +222,6 @@ func SendMetrics(s *Server, interval time.Duration) error {
 	}
 
 	client := cloudwatch.NewFromConfig(cfg)
-
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -235,7 +234,7 @@ func SendMetrics(s *Server, interval time.Duration) error {
 			playerCount := float64(len(s.Characters))
 			memoryUsageMB := float64(m.Alloc) / 1024 / 1024
 
-			_, err := client.PutMetricData(context.Background(), &cloudwatch.PutMetricDataInput{
+			_, err := client.PutMetricData(s.Context, &cloudwatch.PutMetricDataInput{
 				Namespace: aws.String(s.Config.Logging.MetricNamespace),
 				MetricData: []types.MetricDatum{
 					{
@@ -254,7 +253,7 @@ func SendMetrics(s *Server, interval time.Duration) error {
 			if err != nil {
 				Logger.Error("Failed to send metrics to CloudWatch", "error", err)
 			} else {
-				Logger.Info("Sent metrics to CloudWatch", "playerCount", playerCount, "memoryUsageMB", memoryUsageMB)
+				Logger.Debug("Sent metrics to CloudWatch", "playerCount", playerCount, "memoryUsageMB", memoryUsageMB)
 			}
 
 		case <-s.Context.Done():

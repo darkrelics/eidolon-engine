@@ -6,10 +6,15 @@ import (
 )
 
 func ExecuteAssessCommand(character *Character, tokens []string) bool {
-	Logger.Info("Player is assessing combat situation", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is assessing combat situation", "playerName", character.Player.PlayerID)
 
 	if !character.IsInCombat() {
-		character.Player.ToPlayer <- "\n\rYou are not currently in combat.\n\r"
+		// Add facing info even when not in combat
+		if character.Facing != nil {
+			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are facing %s but not in combat.\n\r", character.Facing.Name)
+		} else {
+			character.Player.ToPlayer <- "\n\rYou are not currently in combat.\n\r"
+		}
 		return false
 	}
 
@@ -17,7 +22,12 @@ func ExecuteAssessCommand(character *Character, tokens []string) bool {
 	assessment.WriteString("\n\rCombat Assessment:\n\r")
 
 	if len(character.CombatRange) == 0 {
-		assessment.WriteString("You are in combat, but not engaged with any specific opponents.\n\r")
+		// Add facing info even with no range information
+		if character.Facing != nil {
+			assessment.WriteString(fmt.Sprintf("You are facing %s but not engaged with any opponents.\n\r", character.Facing.Name))
+		} else {
+			assessment.WriteString("You are in combat, but not engaged with any specific opponents.\n\r")
+		}
 	} else {
 		// Track who we're advancing towards
 		var advanceTarget *Character
@@ -41,6 +51,11 @@ func ExecuteAssessCommand(character *Character, tokens []string) bool {
 			// Add facing information
 			if targetCharacter.GetFacing() == character {
 				statusLine += " and is facing you"
+			}
+
+			// Note if this is who we're facing
+			if targetCharacter == character.Facing {
+				statusLine += " and you are facing them"
 			}
 
 			// Add advance information
@@ -91,17 +106,18 @@ func ExecuteFaceCommand(character *Character, tokens []string) bool {
 	// Set facing for the character executing the command
 	character.SetFacing(targetCharacter)
 
-	// Enter combat and set initial distance for both characters
+	// Initiating character enters combat and sets range
 	character.EnterCombat()
-	targetCharacter.EnterCombat()
-
 	character.SetCombatRange(targetCharacter, DefaultDistance)
+
+	// Target enters combat but doesn't change facing
+	targetCharacter.EnterCombat()
 	targetCharacter.SetCombatRange(character, DefaultDistance)
 
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are now facing %s at a distance of %.1f units.\n\r",
 		targetCharacter.Name, DefaultDistance)
 
-	// Notify the target character
+	// Notify the target character with range information
 	targetCharacter.Player.ToPlayer <- fmt.Sprintf("\n\r%s is now facing you at a distance of %.1f units.\n\r",
 		character.Name, DefaultDistance)
 	targetCharacter.Player.ToPlayer <- targetCharacter.Player.Prompt
@@ -131,46 +147,40 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 		}
 	}
 
-	// Parse command arguments
-	var targetName string
-	var desiredDistance float64 = MeleeRange // Default to melee range
+	// Default values
+	desiredDistance := MeleeRange
+	var target *Character
 
-	// Process tokens
-	for i := 1; i < len(tokens); i++ {
-		arg := strings.ToLower(tokens[i])
-		switch arg {
-		case "very", "far":
-			if arg == "very" && i+1 < len(tokens) && tokens[i+1] == "far" {
-				desiredDistance = VeryFarRange
-				i++ // Skip next token
-			} else {
-				desiredDistance = FarRange
-			}
+	if len(tokens) > 1 {
+		// Handle the last token as the target name unless it's a range specification
+		lastToken := strings.ToLower(tokens[len(tokens)-1])
+		switch lastToken {
+		case "far":
+			desiredDistance = FarRange
 		case "pole":
 			desiredDistance = PoleRange
 		case "melee":
 			desiredDistance = MeleeRange
 		default:
-			// If not a range specification, treat as target name
-			if targetName == "" {
-				targetName = strings.Join(tokens[i:], " ")
-				break
+			// If not a range specification, use it as target name
+			// Find target in room
+			for _, c := range character.Room.Characters {
+				if strings.EqualFold(c.Name, lastToken) {
+					target = c
+					break
+				}
 			}
+		}
+
+		// Check if second to last token is "very" for "very far"
+		if len(tokens) > 2 && strings.ToLower(tokens[len(tokens)-2]) == "very" && lastToken == "far" {
+			desiredDistance = VeryFarRange
 		}
 	}
 
-	// If no target specified, use current facing if exists
-	var target *Character
-	if targetName == "" {
+	// If no target specified, use current facing
+	if target == nil {
 		target = character.Facing
-	} else {
-		// Find target in room
-		for _, c := range character.Room.Characters {
-			if strings.EqualFold(c.Name, targetName) {
-				target = c
-				break
-			}
-		}
 	}
 
 	if target == nil {
@@ -178,23 +188,14 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
-	// Set facing if not already set
-	if character.Facing != target {
-		character.SetFacing(target)
-	}
-
-	// Get current distance
-	currentDistance := character.GetCombatRange(target)
-
-	// If already at desired distance
-	if currentDistance <= desiredDistance {
-		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already at %s range with %s.\n\r",
-			getRangeDescription(desiredDistance), target.Name)
+	// Check for self-targeting
+	if target == character {
+		character.Player.ToPlayer <- "\n\rYou cannot advance towards yourself.\n\r"
 		return false
 	}
 
-	// Start the advance
 	character.Advancing = true
+	// Launch performAdvance as non-blocking goroutine
 	go performAdvance(character, target, desiredDistance)
 
 	// Inform the character and room
@@ -204,8 +205,6 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 
 	return false
 }
-
-// ExecuteRetreatCommand handles the retreat command, allowing characters to move away from their target
 func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 	if character == nil {
 		Logger.Error("Attempted to retreat with nil character")
@@ -218,44 +217,38 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
-	// Parse command arguments
-	var targetName string
-	var desiredDistance float64 = FarRange // Default to far range for retreat
+	// Default values
+	desiredDistance := FarRange
+	var target *Character
 
-	// Process tokens
-	for i := 1; i < len(tokens); i++ {
-		arg := strings.ToLower(tokens[i])
-		switch arg {
-		case "very", "far":
-			if arg == "very" && i+1 < len(tokens) && tokens[i+1] == "far" {
-				desiredDistance = VeryFarRange
-				i++ // Skip next token
-			} else {
-				desiredDistance = FarRange
-			}
+	if len(tokens) > 1 {
+		// Handle the last token as the target name unless it's a range specification
+		lastToken := strings.ToLower(tokens[len(tokens)-1])
+		switch lastToken {
+		case "far":
+			desiredDistance = FarRange
 		case "pole":
 			desiredDistance = PoleRange
 		default:
-			// If not a range specification, treat as target name
-			if targetName == "" {
-				targetName = strings.Join(tokens[i:], " ")
-				break
+			// If not a range specification, use it as target name
+			// Find target in room
+			for _, c := range character.Room.Characters {
+				if strings.EqualFold(c.Name, lastToken) {
+					target = c
+					break
+				}
 			}
+		}
+
+		// Check if second to last token is "very" for "very far"
+		if len(tokens) > 2 && strings.ToLower(tokens[len(tokens)-2]) == "very" && lastToken == "far" {
+			desiredDistance = VeryFarRange
 		}
 	}
 
-	// If no target specified, use current facing if exists
-	var target *Character
-	if targetName == "" {
+	// If no target specified, use current facing
+	if target == nil {
 		target = character.Facing
-	} else {
-		// Find target in room
-		for _, c := range character.Room.Characters {
-			if strings.EqualFold(c.Name, targetName) {
-				target = c
-				break
-			}
-		}
 	}
 
 	if target == nil {
@@ -273,7 +266,7 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
-	// Start the retreat with 5% speed bonus
+	// Start the retreat
 	character.Advancing = true // We reuse the advancing flag for any movement
 	go performAdvance(character, target, desiredDistance)
 

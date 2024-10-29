@@ -81,8 +81,8 @@ type Server struct {
 }
 
 type Player struct {
-	PlayerID      string
 	Index         uint64
+	PlayerID      string
 	ToPlayer      chan string
 	FromPlayer    chan string
 	PlayerError   chan error
@@ -92,12 +92,13 @@ type Player struct {
 	Server        *Server
 	ConsoleWidth  int
 	ConsoleHeight int
+	SeenMotD      []uuid.UUID
 	CharacterList map[string]uuid.UUID
 	Character     *Character
 	LoginTime     time.Time
-	PasswordHash  string
 	Mutex         sync.Mutex
-	SeenMotD      []uuid.UUID
+	CTX           context.Context
+	Cancel        context.CancelFunc
 }
 
 type PlayerData struct {

@@ -150,21 +150,21 @@ func GetUserData(accessToken string, config Configuration) (*cognitoidentityprov
 }
 
 func ChangePassword(server *Server, username, oldPassword, newPassword string) error {
-	Logger.Info("Attempting to change password for user", "username", username)
+	Logger.Debug("Attempting to change password for user", "username", username)
 
 	// Step 1: Authenticate the user
-	Logger.Info("Step 1: Authenticating user", "username", username)
+	Logger.Debug("Step 1: Authenticating user", "username", username)
 	signInOutput, err := SignInUser(username, oldPassword, server.Config)
 	if err != nil {
 		Logger.Error("Authentication failed for user", "username", username, "error", err)
 		return fmt.Errorf("authentication failed: %v", err)
 	}
-	Logger.Info("Authentication successful for user", "username", username)
-	Logger.Info("SignInOutput for user", "username", username, "signInOutput", signInOutput)
+	Logger.Debug("Authentication successful for user", "username", username)
+	Logger.Debug("SignInOutput for user", "username", username, "signInOutput", signInOutput)
 
 	// Step 2: Handle NEW_PASSWORD_REQUIRED challenge if present
 	if signInOutput.ChallengeName != nil && *signInOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
-		Logger.Info("NEW_PASSWORD_REQUIRED challenge detected for user", "username", username)
+		Logger.Debug("NEW_PASSWORD_REQUIRED challenge detected for user", "username", username)
 
 		// Create a new AWS session
 		sess, err := session.NewSession(&aws.Config{
@@ -193,14 +193,14 @@ func ChangePassword(server *Server, username, oldPassword, newPassword string) e
 			Session: signInOutput.Session,
 		}
 
-		Logger.Info("Sending challenge response for user", "username", username)
+		Logger.Debug("Sending challenge response for user", "username", username)
 		challengeResponse, err := cognitoClient.RespondToAuthChallenge(challengeResponseInput)
 		if err != nil {
 			Logger.Error("Failed to respond to NEW_PASSWORD_REQUIRED challenge for user", "username", username, "error", err)
 			return fmt.Errorf("failed to set new password: %v", err)
 		}
 
-		Logger.Info("Successfully responded to NEW_PASSWORD_REQUIRED challenge for user", "username", username)
+		Logger.Debug("Successfully responded to NEW_PASSWORD_REQUIRED challenge for user", "username", username)
 		Logger.Debug("Challenge response", "challengeResponse", challengeResponse)
 
 		// Password has been changed successfully

@@ -62,7 +62,7 @@ func (s *Server) StoreArchetypes() error {
 			return fmt.Errorf("error storing archetype %s: %w", archetype.ArchetypeName, err)
 		}
 
-		Logger.Info("Stored archetype", "name", archetype.ArchetypeName)
+		Logger.Debug("Stored archetype", "name", archetype.ArchetypeName)
 	}
 
 	return nil

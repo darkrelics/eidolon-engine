@@ -53,7 +53,7 @@ func (k *KeyPair) Put(tableName string, item interface{}) error {
 			}
 			return fmt.Errorf("error putting item into table %s: %w", tableName, err)
 		}
-		Logger.Info("Successfully put item into table", "tableName", tableName)
+		Logger.Debug("Successfully put item into table", "tableName", tableName)
 		return nil
 	}
 
