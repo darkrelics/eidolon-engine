@@ -335,6 +335,11 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 			Cancel:        cancel,
 		}
 
+		// Add the player to the server's player list
+		server.Mutex.Lock()
+		server.Players[player.Index] = player
+		server.Mutex.Unlock()
+
 		// Handle SSH requests (pty-req, shell, window-change)
 		go HandleSSHRequests(player, requests)
 
