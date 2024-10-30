@@ -270,7 +270,51 @@ func handleConnection(server *core.Server, conn net.Conn) {
 	handleChannels(server, sshConn, chans)
 }
 
-// handleChannels handles the channels opened by the SSH client.
+// handlePlayerSession manages the player session, including character selection and input/output loops.
+func handlePlayerSession(server *core.Server, player *core.Player) {
+	defer func() {
+		if player != nil && player.Connection != nil {
+			player.Connection.Close()
+		}
+	}()
+
+	core.Logger.Info("Player connected", "player_name", player.PlayerID)
+
+	// Send welcome message
+	core.DisplayUnseenMOTDs(server, player)
+
+	// Character Selection Dialog
+	character, err := core.SelectCharacter(player, server)
+	if err != nil {
+		core.Logger.Error("Error during character selection", "error", err)
+		return
+	}
+
+	// Enter the main input loop for the player
+	core.InputLoop(character)
+
+	// Save the player's character and data to the database
+	if character != nil {
+		err = server.Database.WriteCharacter(character)
+		if err != nil {
+			core.Logger.Error("Error saving character", "character_id", character.ID, "error", err)
+		}
+	}
+
+	if player != nil {
+		err = server.Database.WritePlayer(player)
+		if err != nil {
+			core.Logger.Error("Error saving player data", "player_name", player.PlayerID, "error", err)
+		}
+
+		// Call Cleanup instead of manually closing channels
+		player.Cleanup()
+	}
+
+	core.Logger.Info("Player disconnected", "player_name", player.PlayerID)
+}
+
+// handleChannels handles incoming SSH channels and creates a new player session for each connection.
 func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
 	core.Logger.Info("New connection", "address", sshConn.RemoteAddr().String(), "user", sshConn.User())
 
@@ -282,13 +326,32 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 			continue
 		}
 
-		// Check if the player is already logged in.
+		// Check if the player is already logged in
+		server.Mutex.Lock()
 		for _, existingPlayer := range server.Players {
 			if existingPlayer.PlayerID == sshConn.User() {
+				// Create timeout context for cleanup
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+				// Signal disconnect to existing player
 				existingPlayer.ToPlayer <- "\n\rDisconnecting: Another session has logged in with your account.\n\r"
-				existingPlayer.Cleanup()
+
+				// Start cleanup in goroutine
+				go func() {
+					existingPlayer.Cleanup()
+					cancel() // Signal completion
+				}()
+
+				// Wait for cleanup or timeout
+				<-cleanupCtx.Done()
+				if cleanupCtx.Err() == context.DeadlineExceeded {
+					core.Logger.Warn("Cleanup timeout for player", "playerID", existingPlayer.PlayerID)
+				}
+
+				break
 			}
 		}
+		server.Mutex.Unlock()
 
 		playerName := sshConn.User()
 
@@ -348,48 +411,7 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 		go core.PlayerOutput(player)
 
 		// Initialize player session
-		go func(p *core.Player) {
-			defer func() {
-				if p != nil && p.Connection != nil {
-					p.Connection.Close()
-				}
-			}()
-
-			core.Logger.Info("Player connected", "player_name", p.PlayerID)
-
-			// Send welcome message
-			core.DisplayUnseenMOTDs(server, p)
-
-			// Character Selection Dialog
-			character, err := core.SelectCharacter(p, server)
-			if err != nil {
-				core.Logger.Error("Error during character selection", "error", err)
-				return
-			}
-
-			// Enter the main input loop for the player
-			core.InputLoop(character)
-
-			// Save the player's character and data to the database
-			if character != nil {
-				err = server.Database.WriteCharacter(character)
-				if err != nil {
-					core.Logger.Error("Error saving character", "character_id", character.ID, "error", err)
-				}
-			}
-
-			if p != nil {
-				err = server.Database.WritePlayer(p)
-				if err != nil {
-					core.Logger.Error("Error saving player data", "player_name", p.PlayerID, "error", err)
-				}
-
-				// Call Cleanup instead of manually closing channels
-				p.Cleanup()
-			}
-
-			core.Logger.Info("Player disconnected", "player_name", p.PlayerID)
-		}(player)
+		go handlePlayerSession(server, player)
 	}
 }
 
