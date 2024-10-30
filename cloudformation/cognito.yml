@@ -65,7 +65,18 @@ Resources:
       AutoVerifiedAttributes:
         - email
       EmailVerificationSubject: !Ref VerificationSubject
-      EmailVerificationMessage: !Sub "Please verify your email address by visiting this link: https://${UserPoolName}.auth.${AWS::Region}.amazoncognito.com/verify?code={####}"
+      EmailVerificationMessage: "Please verify your email by clicking this link: {##Click Here##}"
+      MfaConfiguration: "OFF"
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_LINK
+      UserPoolTags:
+        Environment: Production
+        Application: MUD
+      DeletionProtection: ACTIVE
 
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
