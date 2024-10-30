@@ -13,17 +13,17 @@ func DisplayArchetypes(s *Server) {
 }
 
 // LoadArchetypes retrieves all archetypes from the DynamoDB table and stores them in the Server's ArcheTypes map.
-func (s *Server) LoadArchetypes() error {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
+func LoadArchetypes(g *Game) error {
+	g.Mutex.Lock()
+	defer g.Mutex.Unlock()
 
 	var archetypes []Archetype
-	err := s.Database.Scan("archetypes", &archetypes)
+	err := g.Database.Scan("archetypes", &archetypes)
 	if err != nil {
 		return fmt.Errorf("error scanning archetypes table: %w", err)
 	}
 
-	s.ArcheTypes = make(map[string]*Archetype)
+	g.ArcheTypes = make(map[string]*Archetype)
 	for _, archetype := range archetypes {
 		// Create a copy of the archetype to store in the map
 		archetypeCopy := archetype
@@ -42,7 +42,7 @@ func (s *Server) LoadArchetypes() error {
 		}
 		archetypeCopy.Abilities = lowerAbilities
 
-		s.ArcheTypes[archetype.ArchetypeName] = &archetypeCopy
+		g.ArcheTypes[archetype.ArchetypeName] = &archetypeCopy
 		Logger.Debug("Loaded archetype",
 			"name", archetype.ArchetypeName,
 			"description", archetype.Description)

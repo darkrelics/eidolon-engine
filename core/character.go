@@ -407,9 +407,9 @@ func (kp *KeyPair) LoadCharacterNames() (map[string]bool, error) {
 
 // InitializeBloomFilter initializes the bloom filter with existing character names,
 // as well as names from ../data/names.txt and ../data/obscenity.txt.
-func (server *Server) InitializeBloomFilter() error {
+func InitializeBloomFilter(game *Game) error {
 	// Load character names from the database
-	characterNames, err := server.Database.LoadCharacterNames()
+	characterNames, err := game.Database.LoadCharacterNames()
 	if err != nil {
 		return fmt.Errorf("failed to load character names: %w", err)
 	}
@@ -444,21 +444,21 @@ func (server *Server) InitializeBloomFilter() error {
 	fpRate := FalsePositiveRate
 
 	// Initialize the bloom filter with the estimated number of items and false positive rate
-	server.CharacterBloomFilter = bloom.NewWithEstimates(uint(totalItems), fpRate)
+	game.CharacterBloomFilter = bloom.NewWithEstimates(uint(totalItems), fpRate)
 
 	// Add character names to the bloom filter
 	for name := range characterNames {
-		server.CharacterBloomFilter.AddString(strings.ToLower(name))
+		game.CharacterBloomFilter.AddString(strings.ToLower(name))
 	}
 
 	// Add names from names.txt to the bloom filter
 	for _, name := range namesFromFile {
-		server.CharacterBloomFilter.AddString(name)
+		game.CharacterBloomFilter.AddString(name)
 	}
 
 	// Add obscenities to the bloom filter
 	for _, word := range obscenities {
-		server.CharacterBloomFilter.AddString(word)
+		game.CharacterBloomFilter.AddString(word)
 	}
 
 	Logger.Debug("Bloom filter initialized",

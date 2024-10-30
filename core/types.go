@@ -56,20 +56,27 @@ type KeyPair struct {
 }
 
 type Server struct {
-	Config               Configuration
+	Config      Configuration
+	Context     context.Context
+	Mutex       sync.Mutex
+	WaitGroup   sync.WaitGroup
+	Database    *KeyPair
+	StartTime   time.Time
+	Port        uint16
+	Listener    net.Listener
+	SSHConfig   *ssh.ServerConfig
+	PlayerCount uint64
+	PlayerIndex *Index
+	Players     map[uint64]*Player
+	ActiveMotDs []*MOTD
+}
+
+type Game struct {
 	Context              context.Context
 	Mutex                sync.Mutex
 	WaitGroup            sync.WaitGroup
-	StartTime            time.Time
 	Database             *KeyPair
-	Port                 uint16
-	Listener             net.Listener
-	SSHConfig            *ssh.ServerConfig
 	ArcheTypes           map[string]*Archetype
-	PlayerCount          uint64
-	PlayerIndex          *Index
-	Players              map[uint64]*Player
-	ActiveMotDs          []*MOTD
 	CharacterBloomFilter *bloom.BloomFilter
 	Characters           map[uuid.UUID]*Character
 	Rooms                map[int64]*Room
