@@ -287,7 +287,7 @@ func InputLoop(c *Character) {
 
 // SelectCharacter handles the character selection process for a player.
 // It presents the player with options to select or create a character.
-func SelectCharacter(player *Player, server *Server) (*Character, error) {
+func SelectCharacter(game *Game, player *Player) (*Character, error) {
 	Logger.Debug("Player is selecting a character", "playerName", player.PlayerID)
 
 	var options []string
@@ -343,7 +343,7 @@ func SelectCharacter(player *Player, server *Server) (*Character, error) {
 			}
 
 			characterToDelete := options[deleteIndex-1]
-			err = server.DeleteCharacter(player, characterToDelete)
+			err = game.Database.DeleteCharacter(player, characterToDelete)
 			if err != nil {
 				Logger.Error("Failed to delete character", "characterName", characterToDelete, "error", err)
 				player.ToPlayer <- fmt.Sprintf("Failed to delete character: %v\n\r", err)
@@ -361,7 +361,7 @@ func SelectCharacter(player *Player, server *Server) (*Character, error) {
 
 		var character *Character
 		if choice == 0 {
-			character, err = server.CreateCharacter(player)
+			character, err = game.CreateCharacter(player)
 			if err != nil {
 				player.ToPlayer <- fmt.Sprintf("\n\rError creating character: %v\n\r", err)
 				continue
@@ -369,7 +369,7 @@ func SelectCharacter(player *Player, server *Server) (*Character, error) {
 		} else if choice <= len(options) {
 			characterName := options[choice-1]
 			characterID := player.CharacterList[characterName]
-			character, err = server.Database.LoadCharacter(characterID, player, server)
+			character, err = game.Database.LoadCharacter(characterID, player, game)
 			if err != nil {
 				Logger.Error("Error loading character for player", "characterName", characterName, "playerName", player.PlayerID, "error", err)
 				player.ToPlayer <- fmt.Sprintf("Error loading character: %v\n\r", err)
@@ -383,9 +383,9 @@ func SelectCharacter(player *Player, server *Server) (*Character, error) {
 		}
 
 		// Ensure the character is added to the server's character list
-		server.Mutex.Lock()
-		server.Characters[character.ID] = character
-		server.Mutex.Unlock()
+		game.Mutex.Lock()
+		game.Characters[character.ID] = character
+		game.Mutex.Unlock()
 
 		// Add character to the room and notify other players
 		if character.Room != nil {
@@ -434,10 +434,10 @@ func (p *Player) Cleanup() {
 	}
 
 	// Remove Player from server's player map immediately
-	if p.Server != nil {
-		p.Server.Mutex.Lock()
-		delete(p.Server.Players, p.Index)
-		p.Server.Mutex.Unlock()
+	if p.Game.Server != nil {
+		p.Game.Server.Mutex.Lock()
+		delete(p.Game.Server.Players, p.Index)
+		p.Game.Server.Mutex.Unlock()
 	}
 
 	Logger.Info("Player cleanup completed", "playerID", p.PlayerID)

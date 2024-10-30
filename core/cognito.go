@@ -149,12 +149,15 @@ func GetUserData(accessToken string, config Configuration) (*cognitoidentityprov
 	return userOutput, nil
 }
 
-func ChangePassword(server *Server, username, oldPassword, newPassword string) error {
+func ChangePassword(player *Player, oldPassword, newPassword string) error {
+
+	username := player.PlayerID
+
 	Logger.Debug("Attempting to change password for user", "username", username)
 
 	// Step 1: Authenticate the user
 	Logger.Debug("Step 1: Authenticating user", "username", username)
-	signInOutput, err := SignInUser(username, oldPassword, server.Config)
+	signInOutput, err := SignInUser(username, oldPassword, player.Game.Server.Config)
 	if err != nil {
 		Logger.Error("Authentication failed for user", "username", username, "error", err)
 		return fmt.Errorf("authentication failed: %v", err)
@@ -168,7 +171,7 @@ func ChangePassword(server *Server, username, oldPassword, newPassword string) e
 
 		// Create a new AWS session
 		sess, err := session.NewSession(&aws.Config{
-			Region: aws.String(server.Config.Aws.Region),
+			Region: aws.String(player.Game.Server.Config.Aws.Region),
 		})
 		if err != nil {
 			Logger.Error("Failed to create AWS session for user", "username", username, "error", err)
@@ -179,12 +182,12 @@ func ChangePassword(server *Server, username, oldPassword, newPassword string) e
 		cognitoClient := cognitoidentityprovider.New(sess)
 
 		// Calculate SECRET_HASH
-		secretHash := calculateSecretHash(server.Config.Cognito.ClientID, server.Config.Cognito.ClientSecret, username)
+		secretHash := calculateSecretHash(player.Game.Server.Config.Cognito.ClientID, player.Game.Server.Config.Cognito.ClientSecret, username)
 
 		// Respond to the NEW_PASSWORD_REQUIRED challenge
 		challengeResponseInput := &cognitoidentityprovider.RespondToAuthChallengeInput{
 			ChallengeName: aws.String(cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired),
-			ClientId:      aws.String(server.Config.Cognito.ClientID),
+			ClientId:      aws.String(player.Game.Server.Config.Cognito.ClientID),
 			ChallengeResponses: map[string]*string{
 				"USERNAME":     aws.String(username),
 				"NEW_PASSWORD": aws.String(newPassword),
@@ -217,7 +220,7 @@ func ChangePassword(server *Server, username, oldPassword, newPassword string) e
 
 	// Create a new AWS session
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(server.Config.Aws.Region),
+		Region: aws.String(player.Game.Server.Config.Aws.Region),
 	})
 	if err != nil {
 		Logger.Error("Failed to create AWS session for user", "username", username, "error", err)

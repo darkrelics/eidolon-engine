@@ -378,7 +378,7 @@ func ExecuteChallengeCommand(character *Character, tokens []string) bool {
 	}
 
 	// Calculate the outcome using the Challenge function
-	outcome := Challenge(attackerScore, defenderScore, character.Server.Config.Game.Balance)
+	outcome := Challenge(attackerScore, defenderScore, character.Game.Server.Config.Game.Balance)
 
 	// Provide feedback to the player based on the challenge outcome
 	feedbackMessage := fmt.Sprintf("\n\rChallenge outcome: %f\n\r", outcome)
@@ -388,17 +388,15 @@ func ExecuteChallengeCommand(character *Character, tokens []string) bool {
 }
 
 func ExecuteWhoCommand(character *Character, tokens []string) bool {
-	if character == nil || character.Server == nil {
+	if character == nil || character.Game == nil {
 		Logger.Error("Invalid character or server state in who command")
 		return false
 	}
 
-	server := character.Server
-	server.Mutex.Lock()
+	server := character.Game
 
 	// Early return if no one is online
 	if len(server.Characters) == 0 {
-		server.Mutex.Unlock()
 		character.Player.ToPlayer <- whoEmpty
 		return false
 	}
@@ -410,7 +408,6 @@ func ExecuteWhoCommand(character *Character, tokens []string) bool {
 			names = append(names, char.Name)
 		}
 	}
-	server.Mutex.Unlock()
 
 	// Sort names
 	sort.Strings(names)
@@ -505,7 +502,7 @@ func ExecutePasswordCommand(character *Character, tokens []string) bool {
 	}
 
 	// Attempt to change password
-	err := ChangePassword(character.Server, player.PlayerID, currentPass, newPass)
+	err := ChangePassword(player, currentPass, newPass)
 	if err != nil {
 		Logger.Error("Password change failed",
 			"playerName", player.PlayerID,

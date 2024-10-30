@@ -231,7 +231,7 @@ func SendMetrics(s *Server, interval time.Duration) error {
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
 
-			playerCount := float64(len(s.Characters))
+			playerCount := float64(s.PlayerCount)
 			memoryUsageMB := float64(m.Alloc) / 1024 / 1024
 
 			_, err := client.PutMetricData(s.Context, &cloudwatch.PutMetricDataInput{

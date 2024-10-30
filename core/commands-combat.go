@@ -37,7 +37,7 @@ func ExecuteAssessCommand(character *Character, tokens []string) bool {
 
 		// First assess our own situation with each combatant
 		for targetID, distance := range character.CombatRange {
-			targetCharacter := character.Server.Characters[targetID]
+			targetCharacter := character.Game.Characters[targetID]
 			if targetCharacter == nil {
 				continue
 			}
@@ -140,7 +140,7 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 	// Check if already in melee with someone
 	for targetID, distance := range character.CombatRange {
 		if distance <= MeleeRange {
-			if target := character.Server.Characters[targetID]; target != nil {
+			if target := character.Game.Characters[targetID]; target != nil {
 				character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already in melee combat with %s.\n\r", target.Name)
 				return false
 			}

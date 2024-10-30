@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const FalsePositiveRate = 0.01 // 1% false positive rate
+const FalsePositiveRate = 0.01 // 1% bloom filter false positive rate
 
 // WearLocations defines all possible locations where an item can be worn
 var WearLocations = map[string]bool{
@@ -35,23 +35,27 @@ var WearLocations = map[string]bool{
 }
 
 // NewCharacter creates a new character with the specified name and archetype.
-func (s *Server) NewCharacter(name string, player *Player, room *Room, archetypeName string) (*Character, error) {
+func (g *Game) NewCharacter(name string, player *Player, room *Room, archetypeName string) (*Character, error) {
+
 	// Check if the character name already exists
-	if s.CharacterBloomFilter.Test([]byte(name)) {
+	if g.CharacterBloomFilter.Test([]byte(name)) {
 		return nil, fmt.Errorf("character name '%s' already exists", name)
 	}
 
+	// Add character name to bloom filter
+	g.CharacterBloomFilter.Add([]byte(name))
+
 	character := &Character{
+		Game:        g,
 		ID:          uuid.New(),
 		Room:        room,
 		Name:        name,
 		Player:      player,
-		Health:      float64(s.Config.Game.StartingHealth),
-		Essence:     float64(s.Config.Game.StartingEssence),
+		Health:      float64(g.Server.Config.Game.StartingHealth),
+		Essence:     float64(g.Server.Config.Game.StartingEssence),
 		Attributes:  make(map[string]float64),
 		Abilities:   make(map[string]float64),
 		Inventory:   make(map[string]*Item),
-		Server:      s,
 		Mutex:       sync.Mutex{},
 		CombatRange: nil,
 		Facing:      nil,
@@ -59,15 +63,9 @@ func (s *Server) NewCharacter(name string, player *Player, room *Room, archetype
 		LastEdited:  time.Now(),
 	}
 
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-
-	// Add character name to bloom filter
-	s.CharacterBloomFilter.Add([]byte(name))
-
 	// Apply archetype attributes and abilities
 	if archetypeName != "" {
-		if archetype, ok := s.ArcheTypes[archetypeName]; ok {
+		if archetype, ok := g.ArcheTypes[archetypeName]; ok {
 			for attr, value := range archetype.Attributes {
 				character.Attributes[attr] = value
 			}
@@ -76,7 +74,7 @@ func (s *Server) NewCharacter(name string, player *Player, room *Room, archetype
 			}
 			// Set the start room if it's defined in the archetype
 			if archetype.StartRoom != 0 {
-				if startRoom, ok := s.Rooms[archetype.StartRoom]; ok {
+				if startRoom, ok := g.Rooms[archetype.StartRoom]; ok {
 					character.Room = startRoom
 				}
 			}
@@ -86,7 +84,9 @@ func (s *Server) NewCharacter(name string, player *Player, room *Room, archetype
 	}
 
 	// Add the character to the server's Characters map
-	s.Characters[character.ID] = character
+	g.Mutex.Lock()
+	g.Characters[character.ID] = character
+	g.Mutex.Unlock()
 
 	return character, nil
 }
@@ -113,7 +113,7 @@ func (c *Character) ToData() *CharacterData {
 
 // CreateCharacter handles the character creation process for a player.
 // It prompts the player for a character name and archetype, and initializes the character.
-func (s *Server) CreateCharacter(player *Player) (*Character, error) {
+func (g *Game) CreateCharacter(player *Player) (*Character, error) {
 	Logger.Info("Player is creating a new character", "playerName", player.PlayerID)
 
 	player.ToPlayer <- "\n\rEnter your character name: "
@@ -124,6 +124,7 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 		return nil, fmt.Errorf("failed to receive character name input")
 	}
 
+	// Consider title case for the character name
 	charName = strings.TrimSpace(charName)
 
 	// Validate character name
@@ -137,22 +138,22 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 		return nil, fmt.Errorf("character name must be 15 characters or fewer")
 	}
 
-	// Check if name exists - do this before acquiring server lock
-	if s.CharacterBloomFilter.Test([]byte(charName)) {
+	// Check if name exists
+	if g.CharacterBloomFilter.Test([]byte(charName)) {
 		player.ToPlayer <- "Character name already exists. Please choose another name.\n\r"
 		return nil, fmt.Errorf("character name already exists")
 	}
 
 	var selectedArchetype string
 
-	// Get archetypes list before acquiring server lock
-	s.Mutex.Lock()
-	archetypeCount := len(s.ArcheTypes)
+	// Get archetypes list
+
+	archetypeCount := len(g.ArcheTypes)
 	archetypeOptions := make([]string, 0, archetypeCount)
-	for name, archetype := range s.ArcheTypes {
+	for name, archetype := range g.ArcheTypes {
 		archetypeOptions = append(archetypeOptions, name+" - "+archetype.Description)
 	}
-	s.Mutex.Unlock()
+
 	sort.Strings(archetypeOptions)
 
 	// If archetypes are available, prompt the player to select one
@@ -185,10 +186,10 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 	Logger.Debug("Creating character", "characterName", charName)
 
 	// Find starting room
-	room, ok := s.Rooms[1] // This should be pulled from the Archetype
+	room, ok := g.Rooms[1] // This should be pulled from the Archetype
 	if !ok {
 		Logger.Warn("Starting room not found, using default room", "startingRoomID", 1)
-		room, ok = s.Rooms[0]
+		room, ok = g.Rooms[0]
 		if !ok {
 			Logger.Error("No default room found", "defaultRoomID", 0)
 			player.ToPlayer <- "No starting or default room found. Please contact the administrator.\n\r"
@@ -197,7 +198,7 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 	}
 
 	// Create the new character
-	character, err := s.NewCharacter(charName, player, room, selectedArchetype)
+	character, err := g.NewCharacter(charName, player, room, selectedArchetype)
 	if err != nil {
 		Logger.Error("Error creating character", "characterName", charName, "error", err)
 		player.ToPlayer <- "Error creating character. Please try again later.\n\r"
@@ -214,14 +215,14 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 	Logger.Debug("Added character to player's character list", "characterName", charName, "characterID", character.ID)
 
 	// Save character to database
-	if err := s.Database.WriteCharacter(character); err != nil {
+	if err := g.Database.WriteCharacter(character); err != nil {
 		Logger.Error("Error saving character to database", "characterName", charName, "error", err)
 		player.ToPlayer <- "Error saving character to database. Please try again later.\n\r"
 		return nil, fmt.Errorf("failed to save character to database: %w", err)
 	}
 
 	// Save updated player data
-	if err := s.Database.WritePlayer(player); err != nil {
+	if err := g.Database.WritePlayer(player); err != nil {
 		Logger.Error("Error saving player data", "playerName", player.PlayerID, "error", err)
 		player.ToPlayer <- "Error saving player data. Please try again later.\n\r"
 		return nil, fmt.Errorf("failed to save player data: %w", err)
@@ -236,7 +237,7 @@ func (s *Server) CreateCharacter(player *Player) (*Character, error) {
 }
 
 // FromData populates a Character object from a CharacterData struct retrieved from the database.
-func (c *Character) FromData(cd *CharacterData, server *Server) error {
+func (c *Character) FromData(cd *CharacterData, game *Game) error {
 	var err error
 	c.ID, err = uuid.Parse(cd.CharacterID)
 	if err != nil {
@@ -249,16 +250,15 @@ func (c *Character) FromData(cd *CharacterData, server *Server) error {
 	c.Health = cd.Health
 
 	// Retrieve the room; if not found, default to room ID 0
-	room, exists := server.Rooms[cd.RoomID]
+	room, exists := game.Rooms[cd.RoomID]
 	if !exists {
 		Logger.Warn("Room not found, defaulting to room ID 0", "roomID", cd.RoomID)
-		room, exists = server.Rooms[0]
+		room, exists = game.Rooms[0]
 		if !exists {
 			return fmt.Errorf("default room not found")
 		}
 	}
 	c.Room = room
-	c.Server = server
 
 	// Initialize inventory
 	c.Inventory = make(map[string]*Item)
@@ -268,7 +268,7 @@ func (c *Character) FromData(cd *CharacterData, server *Server) error {
 			Logger.Error("Error parsing item UUID", "itemID", itemIDStr, "error", err)
 			continue
 		}
-		item, err := server.Database.LoadItem(itemID.String())
+		item, err := game.Database.LoadItem(itemID.String())
 		if err != nil {
 			Logger.Error("Error loading item for character", "itemID", itemID, "characterName", c.Name, "error", err)
 			continue
@@ -298,7 +298,7 @@ func (kp *KeyPair) WriteCharacter(character *Character) error {
 }
 
 // LoadCharacter retrieves a character from the DynamoDB database and reconstructs the Character object.
-func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, server *Server) (*Character, error) {
+func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, game *Game) (*Character, error) {
 
 	key := map[string]*dynamodb.AttributeValue{
 		"CharacterID": {S: aws.String(characterID.String())},
@@ -312,12 +312,11 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, server *
 	}
 
 	character := &Character{
-		Server: server,
 		Player: player,
 		Mutex:  sync.Mutex{},
 	}
 
-	if err := character.FromData(&cd, server); err != nil {
+	if err := character.FromData(&cd, game); err != nil {
 		Logger.Error("Error reconstructing character from data", "characterID", characterID, "error", err)
 		return nil, fmt.Errorf("error loading character from data: %w", err)
 	}
@@ -346,7 +345,7 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, server *
 }
 
 // DeleteCharacter removes a character from the player's character list and the database.
-func (s *Server) DeleteCharacter(player *Player, characterName string) error {
+func (kp *KeyPair) DeleteCharacter(player *Player, characterName string) error {
 	Logger.Debug("Attempting to delete character", "playerName", player.PlayerID, "characterName", characterName)
 
 	// Check if the character exists in the player's character list
@@ -359,7 +358,7 @@ func (s *Server) DeleteCharacter(player *Player, characterName string) error {
 	delete(player.CharacterList, characterName)
 
 	// Update the player data in the database
-	err := s.Database.WritePlayer(player)
+	err := kp.WritePlayer(player)
 	if err != nil {
 		Logger.Error("Failed to update player data after character deletion", "playerName", player.PlayerID, "error", err)
 		return fmt.Errorf("failed to update player data: %w", err)
@@ -369,7 +368,7 @@ func (s *Server) DeleteCharacter(player *Player, characterName string) error {
 	key := map[string]*dynamodb.AttributeValue{
 		"CharacterID": {S: aws.String(characterID.String())},
 	}
-	err = s.Database.Delete("characters", key)
+	err = kp.Delete("characters", key)
 	if err != nil {
 		Logger.Error("Failed to delete character from database", "characterName", characterName, "characterID", characterID, "error", err)
 		return fmt.Errorf("failed to delete character from database: %w", err)
@@ -471,17 +470,16 @@ func InitializeBloomFilter(game *Game) error {
 }
 
 // AddCharacterName adds a character name to the bloom filter to prevent duplicates.
-func (server *Server) AddCharacterName(name string) {
-	server.Mutex.Lock()
-	defer server.Mutex.Unlock()
+func (game *Game) AddCharacterName(name string) {
 
-	server.CharacterBloomFilter.AddString(strings.ToLower(name))
+	game.CharacterBloomFilter.AddString(strings.ToLower(name))
 	Logger.Debug("Added character name to bloom filter", "characterName", name)
+
 }
 
 // CharacterNameExists checks if a character name already exists using the bloom filter.
-func (server *Server) CharacterNameExists(name string) bool {
-	exists := server.CharacterBloomFilter.TestString(strings.ToLower(name))
+func (game *Game) CharacterNameExists(name string) bool {
+	exists := game.CharacterBloomFilter.TestString(strings.ToLower(name))
 	if exists {
 		Logger.Info("Character name exists", "characterName", name)
 	}
@@ -489,11 +487,11 @@ func (server *Server) CharacterNameExists(name string) bool {
 }
 
 // SaveActiveCharacters saves all active characters to the database if they have been edited since the last save.
-func (s *Server) SaveActiveCharacters() error {
+func (g *Game) SaveActiveCharacters() error {
 
 	Logger.Debug("Saving active characters...")
 
-	for _, character := range s.Characters {
+	for _, character := range g.Characters {
 		// Check if the character's LastEdited is before LastSaved
 		if !character.LastEdited.After(character.LastSaved) {
 			Logger.Debug("Character not edited since last save, skipping", "characterName", character.Name)
@@ -502,7 +500,7 @@ func (s *Server) SaveActiveCharacters() error {
 
 		character.Mutex.Lock()
 		// Attempt to write the character to the database
-		err := s.Database.WriteCharacter(character)
+		err := g.Database.WriteCharacter(character)
 		if err != nil {
 			Logger.Error("Error saving character", "characterName", character.Name, "error", err)
 			continue // Continue saving other characters even if one fails

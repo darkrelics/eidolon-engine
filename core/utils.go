@@ -27,24 +27,24 @@ func Challenge(attacker, defender, balance float64) float64 {
 	return result
 }
 
-func AutoSave(server *Server) {
+func AutoSave(game *Game) {
 	Logger.Info("Starting auto-save routine...")
 
 	for {
 		// Sleep for the configured duration
-		time.Sleep(time.Duration(server.Config.Game.AutoSave) * time.Minute)
+		time.Sleep(time.Duration(game.Server.Config.Game.AutoSave) * time.Minute)
 
 		Logger.Info("Starting auto-save process...")
 
 		// Save active characters
-		if err := server.SaveActiveCharacters(); err != nil {
+		if err := game.SaveActiveCharacters(); err != nil {
 			Logger.Error("Failed to save characters", "error", err)
 		} else {
 			Logger.Debug("Active characters saved successfully")
 		}
 
 		// Save active items
-		if err := server.SaveActiveItems(); err != nil {
+		if err := game.SaveActiveItems(); err != nil {
 			Logger.Error("Failed to save items", "error", err)
 		} else {
 			Logger.Debug("Active items saved successfully")
@@ -53,7 +53,7 @@ func AutoSave(server *Server) {
 		Logger.Debug("Auto-save process completed")
 
 		// Save active rooms
-		if err := server.SaveActiveRooms(); err != nil {
+		if err := game.SaveActiveRooms(); err != nil {
 			Logger.Error("Failed to save rooms", "error", err)
 		} else {
 			Logger.Debug("Active rooms saved successfully")

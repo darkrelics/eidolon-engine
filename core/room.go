@@ -12,6 +12,24 @@ import (
 	"github.com/google/uuid"
 )
 
+// NewRoom creates a new Room instance with initialized fields.
+func NewRoom(roomID int64, area string, title string, description string) *Room {
+	room := &Room{
+		RoomID:      roomID,
+		Area:        area,
+		Title:       title,
+		Description: description,
+		Exits:       make(map[string]*Exit),
+		Characters:  make(map[uuid.UUID]*Character),
+		Items:       make(map[uuid.UUID]*Item),
+		Mutex:       sync.Mutex{},
+		LastSaved:   time.Now(),
+		LastEdited:  time.Now(),
+	}
+	Logger.Debug("Created room", "room_title", room.Title, "room_id", room.RoomID)
+	return room
+}
+
 // StoreRooms stores all rooms into the DynamoDB database.
 func (kp *KeyPair) StoreRooms(rooms map[int64]*Room) error {
 
@@ -202,17 +220,17 @@ func (kp *KeyPair) WriteRoom(room *Room) error {
 }
 
 // SaveActiveRooms saves all active rooms to the database if they have been edited since the last save.
-func (s *Server) SaveActiveRooms() error {
-	if s == nil {
+func (g *Game) SaveActiveRooms() error {
+	if g == nil {
 		return fmt.Errorf("server is nil")
 	}
 
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
+	g.Mutex.Lock()
+	defer g.Mutex.Unlock()
 
 	Logger.Debug("Starting to save active rooms...")
 
-	for roomID, room := range s.Rooms {
+	for roomID, room := range g.Rooms {
 		if room == nil {
 			Logger.Debug("Skipping nil room", "room_id", roomID)
 			continue
@@ -225,7 +243,7 @@ func (s *Server) SaveActiveRooms() error {
 		}
 
 		// Attempt to write the room to the database
-		if err := s.Database.WriteRoom(room); err != nil {
+		if err := g.Database.WriteRoom(room); err != nil {
 			Logger.Error("Error saving room", "room_id", roomID, "error", err)
 			// Continue saving other rooms even if one fails
 		} else {
@@ -237,24 +255,6 @@ func (s *Server) SaveActiveRooms() error {
 
 	Logger.Info("Finished saving active rooms")
 	return nil
-}
-
-// NewRoom creates a new Room instance with initialized fields.
-func NewRoom(roomID int64, area string, title string, description string) *Room {
-	room := &Room{
-		RoomID:      roomID,
-		Area:        area,
-		Title:       title,
-		Description: description,
-		Exits:       make(map[string]*Exit),
-		Characters:  make(map[uuid.UUID]*Character),
-		Items:       make(map[uuid.UUID]*Item),
-		Mutex:       sync.Mutex{},
-		LastSaved:   time.Now(),
-		LastEdited:  time.Now(),
-	}
-	Logger.Debug("Created room", "room_title", room.Title, "room_id", room.RoomID)
-	return room
 }
 
 // AddExit adds an exit to the room's exits map.

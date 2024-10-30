@@ -72,6 +72,7 @@ type Server struct {
 }
 
 type Game struct {
+	Server               *Server
 	Context              context.Context
 	Mutex                sync.Mutex
 	WaitGroup            sync.WaitGroup
@@ -85,6 +86,7 @@ type Game struct {
 }
 
 type Player struct {
+	Game          *Game
 	Index         uint64
 	PlayerID      string
 	ToPlayer      chan string
@@ -93,7 +95,6 @@ type Player struct {
 	Echo          bool
 	Prompt        string
 	Connection    ssh.Channel
-	Server        *Server
 	ConsoleWidth  int
 	ConsoleHeight int
 	SeenMotD      []uuid.UUID
@@ -154,6 +155,7 @@ type ExitData struct {
 }
 
 type Character struct {
+	Game        *Game
 	ID          uuid.UUID
 	Player      *Player
 	Name        string
@@ -163,7 +165,6 @@ type Character struct {
 	Health      float64
 	Room        *Room
 	Inventory   map[string]*Item
-	Server      *Server
 	Mutex       sync.Mutex
 	Facing      *Character
 	Advancing   bool                  // true when character is advancing towards their facing target
