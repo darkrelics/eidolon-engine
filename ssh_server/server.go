@@ -270,148 +270,156 @@ func handleConnection(server *core.Server, conn net.Conn) {
 	handleChannels(server, sshConn, chans)
 }
 
-// handlePlayerSession manages the player session, including character selection and input/output loops.
 func handlePlayerSession(server *core.Server, player *core.Player) {
+	// Ensure connection cleanup even on panic
 	defer func() {
+		if r := recover(); r != nil {
+			core.Logger.Error("Panic in player session",
+				"playerName", player.PlayerID,
+				"panic", r)
+		}
 		if player != nil && player.Connection != nil {
 			player.Connection.Close()
 		}
 	}()
 
-	core.Logger.Info("Player connected", "player_name", player.PlayerID)
+	core.Logger.Info("Starting player session",
+		"playerName", player.PlayerID,
+		"playerIndex", player.Index)
 
-	// Send welcome message
+	// Send welcome message and MOTDs
+	core.Logger.Debug("Displaying welcome messages",
+		"playerName", player.PlayerID)
 	core.DisplayUnseenMOTDs(server, player)
 
 	// Character Selection Dialog
+	core.Logger.Debug("Starting character selection",
+		"playerName", player.PlayerID)
 	character, err := core.SelectCharacter(player, server)
 	if err != nil {
-		core.Logger.Error("Error during character selection", "error", err)
+		core.Logger.Error("Character selection failed",
+			"playerName", player.PlayerID,
+			"error", err)
 		return
 	}
 
-	// Enter the main input loop for the player
-	core.InputLoop(character)
+	if character == nil {
+		core.Logger.Error("No character selected",
+			"playerName", player.PlayerID)
+		return
+	}
 
-	// Save the player's character and data to the database
+	core.Logger.Info("Character selected for player",
+		"playerName", player.PlayerID,
+		"characterName", character.Name,
+		"characterID", character.ID)
+
+	// Set the selected character in the player struct
+	player.Character = character
+
+	// Create a done channel to signal when the input loop is complete
+	done := make(chan struct{})
+
+	// Start the input loop in a goroutine
+	go func() {
+		defer close(done)
+		core.Logger.Debug("Starting input loop",
+			"playerName", player.PlayerID,
+			"characterName", character.Name)
+		core.InputLoop(character)
+	}()
+
+	// Wait for either context cancellation or input loop completion
+	select {
+	case <-player.CTX.Done():
+		core.Logger.Info("Player session context cancelled",
+			"playerName", player.PlayerID,
+			"characterName", character.Name)
+	case <-done:
+		core.Logger.Info("Player input loop completed normally",
+			"playerName", player.PlayerID,
+			"characterName", character.Name)
+	}
+
+	// Save character data
 	if character != nil {
+		core.Logger.Debug("Saving character data",
+			"playerName", player.PlayerID,
+			"characterName", character.Name)
 		err = server.Database.WriteCharacter(character)
 		if err != nil {
-			core.Logger.Error("Error saving character", "character_id", character.ID, "error", err)
+			core.Logger.Error("Failed to save character data",
+				"playerName", player.PlayerID,
+				"characterName", character.Name,
+				"error", err)
 		}
 	}
 
+	// Save player data
 	if player != nil {
+		core.Logger.Debug("Saving player data",
+			"playerName", player.PlayerID)
 		err = server.Database.WritePlayer(player)
 		if err != nil {
-			core.Logger.Error("Error saving player data", "player_name", player.PlayerID, "error", err)
+			core.Logger.Error("Failed to save player data",
+				"playerName", player.PlayerID,
+				"error", err)
 		}
 
-		// Call Cleanup instead of manually closing channels
+		core.Logger.Debug("Initiating player cleanup",
+			"playerName", player.PlayerID)
 		player.Cleanup()
 	}
 
-	core.Logger.Info("Player disconnected", "player_name", player.PlayerID)
+	core.Logger.Info("Player session ended",
+		"playerName", player.PlayerID)
 }
 
-// handleChannels handles incoming SSH channels and creates a new player session for each connection.
 func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
-	core.Logger.Info("New connection", "address", sshConn.RemoteAddr().String(), "user", sshConn.User())
+	playerName := sshConn.User()
+	core.Logger.Info("New connection", "address", sshConn.RemoteAddr().String(), "user", playerName)
 
 	for newChannel := range channels {
-		// Accept the channel
 		channel, requests, err := newChannel.Accept()
 		if err != nil {
 			core.Logger.Error("Could not accept channel", "error", err)
 			continue
 		}
 
-		// Check if the player is already logged in
+		// Check for existing player
 		server.Mutex.Lock()
-		for _, existingPlayer := range server.Players {
-			if existingPlayer.PlayerID == sshConn.User() {
-				// Create timeout context for cleanup
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-				// Signal disconnect to existing player
-				existingPlayer.ToPlayer <- "\n\rDisconnecting: Another session has logged in with your account.\n\r"
-
-				// Start cleanup in goroutine
-				go func() {
-					existingPlayer.Cleanup()
-					cancel() // Signal completion
-				}()
-
-				// Wait for cleanup or timeout
-				<-cleanupCtx.Done()
-				if cleanupCtx.Err() == context.DeadlineExceeded {
-					core.Logger.Warn("Cleanup timeout for player", "playerID", existingPlayer.PlayerID)
+		for _, player := range server.Players {
+			if player != nil && player.PlayerID == playerName {
+				if player.Cancel != nil {
+					player.Cancel()
 				}
-
-				break
 			}
 		}
 		server.Mutex.Unlock()
 
-		playerName := sshConn.User()
-
-		// Attempt to read the player from the database
-		_, characterList, seenMotD, err := server.Database.ReadPlayer(playerName)
-		if err != nil {
-			if err.Error() == "player not found" {
-				// Create a new player record if not found
-				core.Logger.Info("Creating new player record", "player_name", playerName)
-				characterList = make(map[string]uuid.UUID)
-				seenMotD = []uuid.UUID{} // Initialize an empty slice for new players
-				err = server.Database.WritePlayer(&core.Player{
-					PlayerID:      playerName,
-					CharacterList: characterList,
-					SeenMotD:      seenMotD,
-				})
-				if err != nil {
-					core.Logger.Error("Error creating player record", "error", err)
-					continue
-				}
-			} else {
-				core.Logger.Error("Error reading player from database", "error", err)
-				continue
-			}
-		}
-
+		// Simple player initialization
 		ctx, cancel := context.WithCancel(context.Background())
-
-		// Create the Player struct with data from the database or as a new player
 		player := &core.Player{
-			PlayerID:      playerName,
-			Index:         server.PlayerIndex.GetID(),
-			ToPlayer:      make(chan string, 100),
-			FromPlayer:    make(chan string, 10),
-			PlayerError:   make(chan error, 10),
-			Echo:          true,
-			Prompt:        "> ",
-			Connection:    channel,
-			Server:        server,
-			CharacterList: characterList,
-			SeenMotD:      seenMotD,
-			LoginTime:     time.Now(),
-			CTX:           ctx,
-			Cancel:        cancel,
+			PlayerID:   playerName,
+			Index:      server.PlayerIndex.GetID(),
+			ToPlayer:   make(chan string, 100),
+			FromPlayer: make(chan string, 10),
+			Connection: channel,
+			Server:     server,
+			CTX:        ctx,
+			Cancel:     cancel,
 		}
 
-		// Add the player to the server's player list
 		server.Mutex.Lock()
 		server.Players[player.Index] = player
 		server.Mutex.Unlock()
 
-		// Handle SSH requests (pty-req, shell, window-change)
 		go HandleSSHRequests(player, requests)
-
-		// Start the goroutine responsible for player I/O
 		go core.PlayerInput(player)
 		go core.PlayerOutput(player)
-
-		// Initialize player session
 		go handlePlayerSession(server, player)
+
+		core.Logger.Info("Player session started", "playerName", playerName)
 	}
 }
 

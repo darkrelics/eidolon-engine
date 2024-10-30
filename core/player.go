@@ -406,92 +406,20 @@ func (p *Player) Cleanup() {
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
 
-	// Check if already cleaned up
-	if p.CTX == nil {
-		Logger.Debug("Cleanup already performed for player", "playerID", p.PlayerID)
-		return
-	}
-
-	Logger.Debug("Starting player cleanup", "playerID", p.PlayerID)
-
-	// Cancel context first to stop any ongoing operations
+	// Cancel context immediately if it exists
 	if p.Cancel != nil {
 		p.Cancel()
 		p.Cancel = nil
+		p.CTX = nil
 	}
 
-	// Safely close connection
+	// Force close connection immediately if it exists
 	if p.Connection != nil {
-		// Best effort to send goodbye message
-		p.Connection.Write([]byte("\n\rGoodbye!\n\r"))
 		p.Connection.Close()
 		p.Connection = nil
 	}
 
-	// Save data before closing channels
-	if p.Character != nil {
-		// Remove character from room
-		if p.Character.Room != nil {
-			p.Character.Room.Mutex.Lock()
-			if _, exists := p.Character.Room.Characters[p.Character.ID]; exists {
-				delete(p.Character.Room.Characters, p.Character.ID)
-
-				// Notify other players in room - safely
-				roomMsg := fmt.Sprintf("\n\r%s has left.\n\r", p.Character.Name)
-				for _, c := range p.Character.Room.Characters {
-					if c != nil && c.Player != nil && c.Player.ToPlayer != nil {
-						select {
-						case c.Player.ToPlayer <- roomMsg:
-						default:
-							// Channel is blocked or closed, skip
-						}
-						select {
-						case c.Player.ToPlayer <- c.Player.Prompt:
-						default:
-							// Channel is blocked or closed, skip
-						}
-					}
-				}
-			}
-			p.Character.Room.Mutex.Unlock()
-
-		}
-
-		// Save character state to database
-		if err := p.Server.Database.WriteCharacter(p.Character); err != nil {
-			Logger.Error("Failed to save character state during cleanup",
-				"characterName", p.Character.Name,
-				"error", err)
-		}
-
-		// Remove character from server's character list
-		if p.Server != nil {
-			p.Server.Mutex.Lock()
-			delete(p.Server.Characters, p.Character.ID)
-			p.Server.Mutex.Unlock()
-		}
-
-		// Save player data
-		if err := p.Server.Database.WritePlayer(p); err != nil {
-			Logger.Error("Failed to save player data during cleanup",
-				"playerName", p.PlayerID,
-				"error", err)
-		}
-
-		// Clear character reference
-		p.Mutex.Lock()
-		p.Character = nil
-		p.Mutex.Unlock()
-
-		// Remove Player from server's player map
-		if p.Server != nil {
-			p.Server.Mutex.Lock()
-			delete(p.Server.Players, p.Index)
-			p.Server.Mutex.Unlock()
-		}
-	}
-
-	// Safely close channels if they exist
+	// Force close channels without waiting
 	if p.ToPlayer != nil {
 		close(p.ToPlayer)
 		p.ToPlayer = nil
@@ -505,8 +433,12 @@ func (p *Player) Cleanup() {
 		p.PlayerError = nil
 	}
 
-	// Clear context
-	p.CTX = nil
+	// Remove Player from server's player map immediately
+	if p.Server != nil {
+		p.Server.Mutex.Lock()
+		delete(p.Server.Players, p.Index)
+		p.Server.Mutex.Unlock()
+	}
 
 	Logger.Info("Player cleanup completed", "playerID", p.PlayerID)
 }
