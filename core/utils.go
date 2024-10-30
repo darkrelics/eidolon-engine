@@ -215,3 +215,10 @@ func isValidPassword(password string) bool {
 
 	return hasUpper && hasLower && hasNumber && hasSpecial
 }
+
+// parseDims parses terminal dimensions from the SSH payload.
+func ParseDims(b []byte) (width, height int) {
+	width = int(b[0])<<24 | int(b[1])<<16 | int(b[2])<<8 | int(b[3])
+	height = int(b[4])<<24 | int(b[5])<<16 | int(b[6])<<8 | int(b[7])
+	return width, height
+}
