@@ -420,6 +420,14 @@ func (p *Player) Cleanup() {
 		p.Cancel = nil
 	}
 
+	// Safely close connection
+	if p.Connection != nil {
+		// Best effort to send goodbye message
+		p.Connection.Write([]byte("\n\rGoodbye!\n\r"))
+		p.Connection.Close()
+		p.Connection = nil
+	}
+
 	// Save data before closing channels
 	if p.Character != nil {
 		// Remove character from room
@@ -446,6 +454,7 @@ func (p *Player) Cleanup() {
 				}
 			}
 			p.Character.Room.Mutex.Unlock()
+
 		}
 
 		// Save character state to database
@@ -455,6 +464,13 @@ func (p *Player) Cleanup() {
 				"error", err)
 		}
 
+		// Remove character from server's character list
+		if p.Server != nil {
+			p.Server.Mutex.Lock()
+			delete(p.Server.Characters, p.Character.ID)
+			p.Server.Mutex.Unlock()
+		}
+
 		// Save player data
 		if err := p.Server.Database.WritePlayer(p); err != nil {
 			Logger.Error("Failed to save player data during cleanup",
@@ -462,10 +478,15 @@ func (p *Player) Cleanup() {
 				"error", err)
 		}
 
-		// Remove character from server's character list
+		// Clear character reference
+		p.Mutex.Lock()
+		p.Character = nil
+		p.Mutex.Unlock()
+
+		// Remove Player from server's player map
 		if p.Server != nil {
 			p.Server.Mutex.Lock()
-			delete(p.Server.Characters, p.Character.ID)
+			delete(p.Server.Players, p.Index)
 			p.Server.Mutex.Unlock()
 		}
 	}
@@ -482,14 +503,6 @@ func (p *Player) Cleanup() {
 	if p.PlayerError != nil {
 		close(p.PlayerError)
 		p.PlayerError = nil
-	}
-
-	// Safely close connection
-	if p.Connection != nil {
-		// Best effort to send goodbye message
-		p.Connection.Write([]byte("\n\rGoodbye!\n\r"))
-		p.Connection.Close()
-		p.Connection = nil
 	}
 
 	// Clear context

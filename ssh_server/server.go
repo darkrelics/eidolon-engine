@@ -282,8 +282,15 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 			continue
 		}
 
+		// Check if the player is already logged in.
+		for _, existingPlayer := range server.Players {
+			if existingPlayer.PlayerID == sshConn.User() {
+				existingPlayer.ToPlayer <- "\n\rDisconnecting: Another session has logged in with your account.\n\r"
+				existingPlayer.Cleanup()
+			}
+		}
+
 		playerName := sshConn.User()
-		playerIndex := server.PlayerIndex.GetID()
 
 		// Attempt to read the player from the database
 		_, characterList, seenMotD, err := server.Database.ReadPlayer(playerName)
@@ -313,7 +320,7 @@ func handleChannels(server *core.Server, sshConn *ssh.ServerConn, channels <-cha
 		// Create the Player struct with data from the database or as a new player
 		player := &core.Player{
 			PlayerID:      playerName,
-			Index:         playerIndex,
+			Index:         server.PlayerIndex.GetID(),
 			ToPlayer:      make(chan string, 100),
 			FromPlayer:    make(chan string, 10),
 			PlayerError:   make(chan error, 10),
