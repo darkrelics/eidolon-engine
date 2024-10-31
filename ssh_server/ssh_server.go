@@ -12,7 +12,16 @@ import (
 
 // SSHServer starts the SSH server on the configured port and listens for incoming connections.
 func SSHServer(server *core.Server, game *core.Game, stop chan os.Signal) error {
-	if err := initializeServer(server, stop); err != nil {
+	if server == nil {
+		return fmt.Errorf("server instance is nil")
+	}
+
+	if err := initializeServer(server, nil); err != nil {
+		core.Logger.Error("Server initialization failed", "error", err)
+		// Only send interrupt if it's a non-recoverable error
+		if stop != nil {
+			stop <- os.Interrupt
+		}
 		return fmt.Errorf("server initialization failed: %w", err)
 	}
 
@@ -23,9 +32,19 @@ func SSHServer(server *core.Server, game *core.Game, stop chan os.Signal) error 
 }
 
 func initializeServer(server *core.Server, stop chan os.Signal) error {
+	if server == nil {
+		return fmt.Errorf("server instance is nil")
+	}
+
 	if err := configureSSH(server); err != nil {
-		stop <- os.Interrupt
+		if stop != nil {
+			stop <- os.Interrupt
+		}
 		return fmt.Errorf("SSH configuration failed: %w", err)
+	}
+
+	if server.Port == 0 {
+		return fmt.Errorf("server port is not configured")
 	}
 
 	address := fmt.Sprintf(":%d", server.Port)
@@ -42,13 +61,22 @@ func initializeServer(server *core.Server, stop chan os.Signal) error {
 
 // configureSSH configures the SSH server with the provided private key and authentication settings.
 func configureSSH(server *core.Server) error {
+	if server == nil {
+		return fmt.Errorf("server instance is nil")
+	}
+
+	if server.Config == nil {
+		return fmt.Errorf("server configuration is nil")
+	}
+
+	if server.Config.Server.PrivateKeyPath == "" {
+		return fmt.Errorf("private key path is not configured")
+	}
+
 	core.Logger.Info("Configuring SSH server", "port", server.Port)
 
 	// Read the private key from disk
 	privateKeyPath := server.Config.Server.PrivateKeyPath
-	if privateKeyPath == "" {
-		privateKeyPath = "./server.key" // Default path if not specified
-	}
 	privateBytes, err := os.ReadFile(privateKeyPath)
 	if err != nil {
 		return fmt.Errorf("failed to read private key from %s: %v", privateKeyPath, err)
@@ -81,7 +109,7 @@ func configureSSH(server *core.Server) error {
 
 // Authenticate checks the provided username and password against the authentication system.
 // Returns true if authentication is successful, false otherwise.
-func Authenticate(username, password string, config core.Configuration) bool {
+func Authenticate(username, password string, config *core.Configuration) bool {
 	core.Logger.Info("Authenticating user", "username", username)
 
 	response, err := core.SignInUser(username, password, config)
