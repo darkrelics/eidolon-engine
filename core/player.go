@@ -46,17 +46,22 @@ func (k *KeyPair) WritePlayer(player *Player) error {
 
 // ReadPlayer retrieves the player data from the DynamoDB database.
 func (k *KeyPair) ReadPlayer(playerName string) (string, map[string]uuid.UUID, []uuid.UUID, error) {
+	Logger.Debug("Reading player data from database", "playerName", playerName)
+
 	key := map[string]*dynamodb.AttributeValue{
 		"PlayerID": {S: aws.String(playerName)},
 	}
 
 	var pd PlayerData
-
-	// Read the player data from the DynamoDB table with proper error handling
 	err := k.Get("players", key, &pd)
 	if err != nil {
+		if strings.Contains(err.Error(), "item not found") {
+			// Return empty maps for new players instead of error
+			Logger.Info("First time player, creating new data", "playerName", playerName)
+			return playerName, make(map[string]uuid.UUID), make([]uuid.UUID, 0), nil
+		}
 		Logger.Error("Error reading player data", "playerName", playerName, "error", err)
-		return "", nil, nil, fmt.Errorf("player not found")
+		return "", nil, nil, fmt.Errorf("error reading player data: %w", err)
 	}
 
 	// Convert character IDs from strings to UUIDs
@@ -64,8 +69,8 @@ func (k *KeyPair) ReadPlayer(playerName string) (string, map[string]uuid.UUID, [
 	for name, idString := range pd.CharacterList {
 		id, err := uuid.Parse(idString)
 		if err != nil {
-			Logger.Error("Error parsing UUID for character", "characterName", name, "error", err)
-			continue // Skip invalid UUIDs
+			Logger.Error("Error parsing character UUID", "characterName", name, "uuid", idString, "error", err)
+			continue
 		}
 		characterList[name] = id
 	}
@@ -75,13 +80,17 @@ func (k *KeyPair) ReadPlayer(playerName string) (string, map[string]uuid.UUID, [
 	for _, idString := range pd.SeenMotDs {
 		id, err := uuid.Parse(idString)
 		if err != nil {
-			Logger.Error("Error parsing UUID for seen MOTD", "idString", idString, "error", err)
-			continue // Skip invalid UUIDs
+			Logger.Error("Error parsing MOTD UUID", "uuid", idString, "error", err)
+			continue
 		}
 		seenMotDs = append(seenMotDs, id)
 	}
 
-	Logger.Debug("Successfully read player data", "playerName", pd.PlayerID, "characterCount", len(characterList), "seenMotDCount", len(seenMotDs))
+	Logger.Debug("Successfully read player data",
+		"playerName", pd.PlayerID,
+		"characterCount", len(characterList),
+		"seenMotDCount", len(seenMotDs))
+
 	return pd.PlayerID, characterList, seenMotDs, nil
 }
 
@@ -97,6 +106,11 @@ func PlayerInput(p *Player) {
 		close(p.FromPlayer)
 		Logger.Debug("Player input goroutine ended", "playerName", p.PlayerID)
 	}()
+
+	// Send initial prompt
+	if p.Echo {
+		p.ToPlayer <- p.Prompt
+	}
 
 	for {
 		r, _, err := reader.ReadRune()
@@ -117,10 +131,13 @@ func PlayerInput(p *Player) {
 		case '\n', '\r':
 			if len(inputBuffer) > 0 {
 				p.FromPlayer <- string(inputBuffer)
+				// Echo the final newline
+				if p.Echo {
+					p.Connection.Write([]byte("\r\n"))
+					// Send prompt after command
+					p.ToPlayer <- p.Prompt
+				}
 				inputBuffer = inputBuffer[:0]
-			}
-			if p.Echo {
-				p.Connection.Write([]byte("\r\n"))
 			}
 		case '\b', 127: // Backspace and Delete
 			if len(inputBuffer) > 0 {
@@ -405,6 +422,31 @@ func (p *Player) Cleanup() {
 	// Use player mutex to protect cleanup state
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
+
+	// Save character data first if it exists
+	if p.Character != nil {
+		Logger.Debug("Saving character during cleanup", "characterName", p.Character.Name)
+		if err := p.Game.Database.WriteCharacter(p.Character); err != nil {
+			Logger.Error("Failed to save character during cleanup",
+				"characterName", p.Character.Name,
+				"error", err)
+		}
+
+		// If character is in a room, remove them
+		if p.Character.Room != nil {
+			p.Character.Room.Mutex.Lock()
+			delete(p.Character.Room.Characters, p.Character.ID)
+			p.Character.Room.Mutex.Unlock()
+		}
+	}
+
+	// Save player data
+	Logger.Debug("Saving player data during cleanup", "playerID", p.PlayerID)
+	if err := p.Game.Database.WritePlayer(p); err != nil {
+		Logger.Error("Failed to save player during cleanup",
+			"playerID", p.PlayerID,
+			"error", err)
+	}
 
 	// Cancel context immediately if it exists
 	if p.Cancel != nil {
