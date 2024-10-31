@@ -56,7 +56,7 @@ type KeyPair struct {
 }
 
 type Server struct {
-	Config      Configuration
+	Config      *Configuration
 	Context     context.Context
 	Mutex       sync.Mutex
 	WaitGroup   sync.WaitGroup
@@ -73,6 +73,7 @@ type Server struct {
 
 type Game struct {
 	Server               *Server
+	Config               *Configuration
 	Context              context.Context
 	Mutex                sync.Mutex
 	WaitGroup            sync.WaitGroup

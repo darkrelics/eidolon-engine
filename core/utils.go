@@ -30,7 +30,7 @@ func Challenge(attacker, defender, balance float64) float64 {
 // AutoSave periodically saves the game state in the background.
 func AutoSave(game *Game) {
 	// Configure the auto-save interval
-	interval := game.Server.Config.Game.AutoSave
+	interval := game.Config.Game.AutoSave
 	if interval == 0 {
 		interval = 5 // Default to 5 minutes
 		Logger.Warn("Auto-save interval not configured, defaulting to 5 minutes")

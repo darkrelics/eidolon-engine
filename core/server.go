@@ -14,6 +14,7 @@ func NewServer(config *Configuration) (*Server, error) {
 
 	// Initialize the server struct with the provided configuration
 	server := &Server{
+		Config:      config,
 		Context:     context.Background(),
 		Mutex:       sync.Mutex{},
 		WaitGroup:   sync.WaitGroup{},

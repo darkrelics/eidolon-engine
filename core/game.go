@@ -10,11 +10,11 @@ import (
 
 // NewGame initializes the game struct.
 func NewGame(config *Configuration) (*Game, error) {
-
 	Logger.Info("Initializing game...")
 
 	game := &Game{
 		Context:    context.Background(),
+		Config:     config, // Store config directly in Game struct
 		Mutex:      sync.Mutex{},
 		WaitGroup:  sync.WaitGroup{},
 		Characters: make(map[uuid.UUID]*Character),
