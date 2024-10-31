@@ -32,8 +32,8 @@ func handleChannels(server *core.Server, game *core.Game, sshConn *ssh.ServerCon
 		}
 
 		server.Mutex.Lock()
-		game.Server.Players[player.Index] = player
-		game.Server.Mutex.Unlock()
+		server.Players[player.Index] = player
+		server.Mutex.Unlock()
 
 		go HandleSSHRequests(player, requests)
 		go handlePlayerSession(server, game, player)
@@ -44,7 +44,6 @@ func handleChannels(server *core.Server, game *core.Game, sshConn *ssh.ServerCon
 
 // HandleSSHRequests handles SSH requests from the client.
 func HandleSSHRequests(player *core.Player, requests <-chan *ssh.Request) {
-	core.Logger.Debug("Handling SSH requests for player", "player_name", player.PlayerID)
 
 	for req := range requests {
 		switch req.Type {
@@ -63,6 +62,7 @@ func HandleSSHRequests(player *core.Player, requests <-chan *ssh.Request) {
 			player.ConsoleWidth, player.ConsoleHeight = w, h
 		default:
 			// Reject unsupported requests
+			core.Logger.Warn("Unsupported request", "request", req.Type, "player_name", player.PlayerID)
 			req.Reply(false, nil)
 		}
 	}

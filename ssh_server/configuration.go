@@ -14,12 +14,12 @@ func loadConfiguration(configFile string) (core.Configuration, error) {
 
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		return config, fmt.Errorf("error reading config file: %w", err)
+		return config, fmt.Errorf("error reading config file '%s': %w", configFile, err)
 	}
 
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
-		return config, fmt.Errorf("error unmarshalling config: %w", err)
+		return config, fmt.Errorf("error unmarshalling config from '%s': %w", configFile, err)
 	}
 
 	return config, nil

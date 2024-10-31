@@ -12,24 +12,30 @@ import (
 
 // SSHServer starts the SSH server on the configured port and listens for incoming connections.
 func SSHServer(server *core.Server, game *core.Game, stop chan os.Signal) error {
-
-	if err := configureSSH(server); err != nil {
-		stop <- os.Interrupt
-		return fmt.Errorf("failed to configure SSH server: %v", err)
+	if err := initializeServer(server, stop); err != nil {
+		return fmt.Errorf("server initialization failed: %w", err)
 	}
 
-	// Start listening on the configured port
+	// Start accepting connections in a separate goroutine
+	go acceptConnections(server, game)
+
+	return nil
+}
+
+func initializeServer(server *core.Server, stop chan os.Signal) error {
+	if err := configureSSH(server); err != nil {
+		stop <- os.Interrupt
+		return fmt.Errorf("SSH configuration failed: %w", err)
+	}
+
 	address := fmt.Sprintf(":%d", server.Port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		return fmt.Errorf("failed to listen on port %d: %v", server.Port, err)
+		return fmt.Errorf("failed to listen on port %d: %w", server.Port, err)
 	}
 
 	server.Listener = listener
 	core.Logger.Info("SSH server listening", "port", server.Port)
-
-	// Start accepting connections in a separate goroutine
-	go acceptConnections(server, game)
 
 	return nil
 }
@@ -78,14 +84,13 @@ func configureSSH(server *core.Server) error {
 func Authenticate(username, password string, config core.Configuration) bool {
 	core.Logger.Info("Authenticating user", "username", username)
 
-	// I really want the USER UUID passed up.
 	response, err := core.SignInUser(username, password, config)
-	core.Logger.Debug("Authentication response", "response", response)
-
 	if err != nil {
-		core.Logger.Error("Authentication attempt failed for user", "username", username, "error", err)
+		core.Logger.Error("Authentication failed", "username", username, "error", err, "response", response)
 		return false
 	}
+
+	core.Logger.Debug("Authentication successful", "username", username, "response", response)
 	return true
 }
 
@@ -107,7 +112,6 @@ func acceptConnections(server *core.Server, game *core.Game) {
 }
 
 func handleConnection(server *core.Server, game *core.Game, conn net.Conn) {
-
 	// Perform SSH handshake
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, server.SSHConfig)
 	if err != nil {
@@ -117,8 +121,17 @@ func handleConnection(server *core.Server, game *core.Game, conn net.Conn) {
 	defer sshConn.Close()
 
 	// Discard global requests
-	go ssh.DiscardRequests(reqs)
+	go discardRequests(reqs)
 
 	// Handle channels
 	handleChannels(server, game, sshConn, chans)
+}
+
+func discardRequests(reqs <-chan *ssh.Request) {
+	for req := range reqs {
+		if req == nil {
+			return
+		}
+		req.Reply(false, nil)
+	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -12,14 +13,11 @@ import (
 )
 
 func main() {
-
 	fmt.Println("Starting Server...")
 
-	// Parse command-line flags
 	configFile := flag.String("config", "config.yml", "Configuration file")
 	flag.Parse()
 
-	// Load configuration from the specified file
 	fmt.Println("Loading Configuration...")
 	config, err := loadConfiguration(*configFile)
 	if err != nil {
@@ -27,7 +25,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize logging based on the loaded configuration
 	fmt.Println("Initializing Logging...")
 	if err := core.InitializeLogging(&config); err != nil {
 		fmt.Printf("Error initializing logging: %v\n", err)
@@ -36,84 +33,94 @@ func main() {
 
 	core.Logger.Info("Configuration loaded", "config", config)
 
-	// Create a new server instance
-	server, err := core.NewServer(&config)
+	server, game, err := initializeSystem(&config)
 	if err != nil {
-		core.Logger.Error("Failed to create server", "error", err)
+		core.Logger.Error("System initialization failed", "error", err)
 		os.Exit(1)
 	}
 
-	// Create the game instance
-	game, err := core.NewGame(&config)
-	if err != nil {
-		core.Logger.Error("Failed to create game", "error", err)
-		os.Exit(1)
-	}
-
-	// Create a channel to listen for interrupt signals
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	// Start sending metrics in a separate goroutine
 	go core.SendMetrics(server, 1*time.Minute)
-
-	// Start the auto-save routine in a separate goroutine
 	go core.AutoSave(game)
-
-	// Start the SSH server to accept incoming connections in a goroutine
 	go SSHServer(server, game, stop)
 
-	// Wait for interrupt signal
 	<-stop
 
 	core.Logger.Info("Interrupt received, initiating graceful shutdown...")
-
-	// Perform graceful shutdown
-	if err := Shutdown(server, game); err != nil {
-		core.Logger.Error("Error during shutdown", "error", err)
-	}
-
+	Shutdown(server, game)
 	core.Logger.Info("Server shutdown complete")
 }
 
-func Shutdown(server *core.Server, game *core.Game) error {
+func initializeSystem(config *core.Configuration) (*core.Server, *core.Game, error) {
+	server, err := core.NewServer(config)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create server: %w", err)
+	}
+
+	game, err := core.NewGame(config)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create game: %w", err)
+	}
+
+	return server, game, nil
+}
+
+func Shutdown(server *core.Server, game *core.Game) {
+	const shutdownTimeout = 60 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
 	core.Logger.Info("Initiating graceful shutdown...")
 
-	// Notify all players of impending shutdown
-	for _, character := range game.Characters {
-		character.Player.ToPlayer <- "\n\rServer is shutting down. You will be logged out shortly.\n\r"
-		character.Player.ToPlayer <- character.Player.Prompt
-	}
+	shutdownDone := make(chan struct{})
+	go func() {
+		defer close(shutdownDone)
 
-	// Wait a moment for messages to be sent
-	time.Sleep(60 * time.Second)
+		// Notify all players
+		for _, character := range game.Characters {
+			select {
+			case character.Player.ToPlayer <- "\n\rServer is shutting down. You will be logged out shortly.\n\r":
+			case <-ctx.Done():
+				return
+			}
 
-	// Log out all characters
-	for _, character := range game.Characters {
-		core.Logger.Info("Logging out character", "characterName", character.Name)
-		character.Player.Cleanup()
-	}
-
-	// Perform final auto-save
-	core.Logger.Info("Performing final auto-save...")
-	if err := game.SaveActiveRooms(); err != nil {
-		core.Logger.Error("Error saving rooms during shutdown", "error", err)
-	}
-	if err := game.SaveActiveItems(); err != nil {
-		core.Logger.Error("Error saving items during shutdown", "error", err)
-	}
-
-	// Close the server listener
-	if server.Listener != nil {
-		core.Logger.Info("Closing server listener...")
-		if err := server.Listener.Close(); err != nil {
-			core.Logger.Error("Error closing server listener", "error", err)
+			select {
+			case character.Player.ToPlayer <- character.Player.Prompt:
+			case <-ctx.Done():
+				return
+			}
 		}
 
-		// Wait for ongoing connections to finish
-		time.Sleep(60 * time.Second)
-	}
+		// Log out characters
+		for _, character := range game.Characters {
+			core.Logger.Info("Logging out character", "characterName", character.Name)
+			character.Player.Cleanup()
+		}
 
-	core.Logger.Info("Graceful shutdown completed")
-	return nil
+		// Save game state
+		core.Logger.Info("Performing final auto-save...")
+		if err := game.SaveActiveRooms(); err != nil {
+			core.Logger.Error("Error saving rooms during shutdown", "error", err)
+		}
+		if err := game.SaveActiveItems(); err != nil {
+			core.Logger.Error("Error saving items during shutdown", "error", err)
+		}
+
+		// Close listener
+		if server.Listener != nil {
+			core.Logger.Info("Closing server listener...")
+			if err := server.Listener.Close(); err != nil {
+				core.Logger.Error("Error closing server listener", "error", err)
+			}
+		}
+	}()
+
+	select {
+	case <-shutdownDone:
+		core.Logger.Info("Graceful shutdown completed")
+	case <-ctx.Done():
+		core.Logger.Error("Shutdown timed out")
+	}
 }

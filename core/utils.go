@@ -27,56 +27,65 @@ func Challenge(attacker, defender, balance float64) float64 {
 	return result
 }
 
+// AutoSave periodically saves the game state in the background.
 func AutoSave(game *Game) {
-	Logger.Info("Starting auto-save routine...")
+	// Configure the auto-save interval
+	interval := game.Server.Config.Game.AutoSave
+	if interval == 0 {
+		interval = 5 // Default to 5 minutes
+		Logger.Warn("Auto-save interval not configured, defaulting to 5 minutes")
+	}
+
+	// Convert interval to duration
+	saveInterval := time.Duration(interval) * time.Minute
+
+	// Create a channel to signal the routine to stop
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	Logger.Info("Starting auto-save routine with interval", "interval", saveInterval)
 
 	for {
-		// Sleep for the configured duration
-		time.Sleep(time.Duration(game.Server.Config.Game.AutoSave) * time.Minute)
-
-		Logger.Info("Starting auto-save process...")
-
-		// Save active characters
-		if err := game.SaveActiveCharacters(); err != nil {
-			Logger.Error("Failed to save characters", "error", err)
-		} else {
-			Logger.Debug("Active characters saved successfully")
+		select {
+		case <-time.After(saveInterval):
+			err := performAutoSave(game)
+			if err != nil {
+				Logger.Error("Auto-save failed", "error", err)
+			} else {
+				Logger.Debug("Auto-save completed successfully")
+			}
+		case <-stopCh:
+			Logger.Info("Auto-save routine stopped")
+			return
 		}
-
-		// Save active items
-		if err := game.SaveActiveItems(); err != nil {
-			Logger.Error("Failed to save items", "error", err)
-		} else {
-			Logger.Debug("Active items saved successfully")
-		}
-
-		Logger.Debug("Auto-save process completed")
-
-		// Save active rooms
-		if err := game.SaveActiveRooms(); err != nil {
-			Logger.Error("Failed to save rooms", "error", err)
-		} else {
-			Logger.Debug("Active rooms saved successfully")
-		}
-
 	}
 }
 
+func performAutoSave(game *Game) error {
+	// Save active game state
+	if err := game.SaveActiveCharacters(); err != nil {
+		return fmt.Errorf("failed to save characters: %w", err)
+	}
+	if err := game.SaveActiveItems(); err != nil {
+		return fmt.Errorf("failed to save items: %w", err)
+	}
+	if err := game.SaveActiveRooms(); err != nil {
+		return fmt.Errorf("failed to save rooms: %w", err)
+	}
+	return nil
+}
+
+// wrapText wraps the given text to the specified width, preserving
+// empty lines and whitespace. It uses \r\n as the line break.
 func wrapText(text string, width int) string {
 	var result strings.Builder
+
+	// Split the text into lines
 	lines := strings.Split(text, "\n")
 
 	for i, line := range lines {
 		// Preserve empty lines
-		if len(line) == 0 {
-			if i < len(lines)-1 { // Only add newline if not the last line
-				result.WriteString("\r\n")
-			}
-			continue
-		}
-
-		// If the line is just whitespace, preserve it
-		if strings.TrimSpace(line) == "" {
+		if len(strings.TrimSpace(line)) == 0 {
 			result.WriteString(line)
 			if i < len(lines)-1 {
 				result.WriteString("\r\n")
@@ -84,29 +93,26 @@ func wrapText(text string, width int) string {
 			continue
 		}
 
-		// Process line with content
-		currentLine := line
-		for len(currentLine) > 0 {
-			if len(currentLine) <= width {
-				result.WriteString(currentLine)
+		// Wrap the line to the specified width
+		for len(line) > 0 {
+			if len(line) <= width {
+				result.WriteString(line)
 				break
 			}
 
-			// Find the last space within width
-			lastSpace := strings.LastIndex(currentLine[:width+1], " ")
+			// Find the last space within the width
+			lastSpace := strings.LastIndex(line[:width+1], " ")
 			if lastSpace == -1 {
 				// No space found, force break at width
-				result.WriteString(currentLine[:width])
-				currentLine = currentLine[width:]
+				result.WriteString(line[:width])
+				line = line[width:]
 			} else {
-				// Break at last space
-				result.WriteString(currentLine[:lastSpace])
-				currentLine = currentLine[lastSpace+1:]
+				// Break at the last space
+				result.WriteString(line[:lastSpace])
+				line = strings.TrimLeft(line[lastSpace+1:], " ")
 			}
 
-			if len(currentLine) > 0 {
-				result.WriteString("\r\n")
-			}
+			result.WriteString("\r\n")
 		}
 
 		// Add newline between original lines if not the last line
