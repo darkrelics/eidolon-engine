@@ -157,7 +157,7 @@ func ChangePassword(player *Player, oldPassword, newPassword string) error {
 
 	// Step 1: Authenticate the user
 	Logger.Debug("Step 1: Authenticating user", "username", username)
-	signInOutput, err := SignInUser(username, oldPassword, player.Game.Config)
+	signInOutput, err := SignInUser(username, oldPassword, player.Server.Config)
 	if err != nil {
 		Logger.Error("Authentication failed for user", "username", username, "error", err)
 		return fmt.Errorf("authentication failed: %v", err)
@@ -171,7 +171,7 @@ func ChangePassword(player *Player, oldPassword, newPassword string) error {
 
 		// Create a new AWS session
 		sess, err := session.NewSession(&aws.Config{
-			Region: aws.String(player.Game.Config.Aws.Region),
+			Region: aws.String(player.Server.Config.Aws.Region),
 		})
 		if err != nil {
 			Logger.Error("Failed to create AWS session for user", "username", username, "error", err)
@@ -182,12 +182,12 @@ func ChangePassword(player *Player, oldPassword, newPassword string) error {
 		cognitoClient := cognitoidentityprovider.New(sess)
 
 		// Calculate SECRET_HASH
-		secretHash := calculateSecretHash(player.Game.Config.Cognito.ClientID, player.Game.Config.Cognito.ClientSecret, username)
+		secretHash := calculateSecretHash(player.Server.Config.Cognito.ClientID, player.Server.Config.Cognito.ClientSecret, username)
 
 		// Respond to the NEW_PASSWORD_REQUIRED challenge
 		challengeResponseInput := &cognitoidentityprovider.RespondToAuthChallengeInput{
 			ChallengeName: aws.String(cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired),
-			ClientId:      aws.String(player.Game.Config.Cognito.ClientID),
+			ClientId:      aws.String(player.Server.Config.Cognito.ClientID),
 			ChallengeResponses: map[string]*string{
 				"USERNAME":     aws.String(username),
 				"NEW_PASSWORD": aws.String(newPassword),
@@ -220,7 +220,7 @@ func ChangePassword(player *Player, oldPassword, newPassword string) error {
 
 	// Create a new AWS session
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(player.Game.Config.Aws.Region),
+		Region: aws.String(player.Server.Config.Aws.Region),
 	})
 	if err != nil {
 		Logger.Error("Failed to create AWS session for user", "username", username, "error", err)

@@ -297,35 +297,36 @@ func InputLoop(c *Character) {
 	}
 
 	// Cleanup on exit
+
+	c.Cleanup()
+
 	c.Player.Cleanup()
 	Logger.Debug("Input loop ended for character", "characterName", c.Name)
 }
 
 func (p *Player) Cleanup() {
+
+	Logger.Info("Cleaning up player", "playerID", p.PlayerID)
+
+	// Check if Server exists within Game
+	if p.Server == nil {
+		Logger.Error("Server instance is nil within Game", "playerID", p.PlayerID)
+		return
+	}
+
+	// Check if Players map exists within Server
+	if p.Server.Players == nil {
+		Logger.Error("Players map is nil within Server", "playerID", p.PlayerID)
+		return
+	}
+
 	// Use player mutex to protect cleanup state
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
 
-	// Save character data first if it exists
-	if p.Character != nil {
-		Logger.Debug("Saving character during cleanup", "characterName", p.Character.Name)
-		if err := p.Game.Database.WriteCharacter(p.Character); err != nil {
-			Logger.Error("Failed to save character during cleanup",
-				"characterName", p.Character.Name,
-				"error", err)
-		}
-
-		// If character is in a room, remove them
-		if p.Character.Room != nil {
-			p.Character.Room.Mutex.Lock()
-			delete(p.Character.Room.Characters, p.Character.ID)
-			p.Character.Room.Mutex.Unlock()
-		}
-	}
-
 	// Save player data
 	Logger.Debug("Saving player data during cleanup", "playerID", p.PlayerID)
-	if err := p.Game.Database.WritePlayer(p); err != nil {
+	if err := p.Server.Database.WritePlayer(p); err != nil {
 		Logger.Error("Failed to save player during cleanup",
 			"playerID", p.PlayerID,
 			"error", err)
@@ -359,10 +360,20 @@ func (p *Player) Cleanup() {
 	}
 
 	// Remove Player from server's player map immediately
-	if p.Game.Server != nil {
-		p.Game.Server.Mutex.Lock()
-		delete(p.Game.Server.Players, p.Index)
-		p.Game.Server.Mutex.Unlock()
+	if p.Server != nil {
+		p.Server.Mutex.Lock()
+		delete(p.Server.Players, p.Index)
+		p.Server.Mutex.Unlock()
+	}
+
+	// Check if the player exists at the specified index and is not nil
+	if player, exists := p.Server.Players[p.Index]; !exists {
+		Logger.Debug("No player found at specified index in Players map", "playerID", p.PlayerID, "index", p.Index)
+		return
+	} else if player == nil {
+		Logger.Debug("Player entry is nil at specified index in Players map", "playerID", p.PlayerID, "index", p.Index)
+	} else {
+		Logger.Error("Failed to remove player from server", "playerID", p.PlayerID)
 	}
 
 	Logger.Info("Player cleanup completed", "playerID", p.PlayerID)

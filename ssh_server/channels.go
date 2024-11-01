@@ -5,12 +5,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/robinje/multi-user-dungeon/core"
 	"golang.org/x/crypto/ssh"
 )
 
 func handleChannels(server *core.Server, game *core.Game, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
+
+	core.Logger.Debug("Active Player Indeices:", "playerIndices", server.PlayerIndex)
+
 	playerName := sshConn.User()
+
 	core.Logger.Info("New connection", "address", sshConn.RemoteAddr().String(), "user", playerName)
 
 	for newChannel := range channels {
@@ -20,12 +25,47 @@ func handleChannels(server *core.Server, game *core.Game, sshConn *ssh.ServerCon
 			continue
 		}
 
+		for index := range server.Players {
+			if server.Players[index].PlayerID == playerName {
+				core.Logger.Warn("Player already connected", "playerName", playerName)
+				// Send a message to the player and close the connection
+				channel.Write([]byte("You are already connected. Goodbye.\n\r"))
+				sshConn.Close()
+				return
+			}
+		}
+
+		// Attempt to read the player from the database
+		_, characterList, seenMotD, err := server.Database.ReadPlayer(playerName)
+		if err != nil {
+			if err.Error() == "player not found" {
+				// Create a new player record if not found
+				core.Logger.Info("Creating new player record", "player_name", playerName)
+				characterList = make(map[string]uuid.UUID)
+				seenMotD = []uuid.UUID{} // Initialize an empty slice for new players
+				err = server.Database.WritePlayer(&core.Player{
+					PlayerID:      playerName,
+					CharacterList: characterList,
+					SeenMotD:      seenMotD,
+				})
+				if err != nil {
+					core.Logger.Error("Error creating player record", "error", err)
+					continue
+				}
+			} else {
+				core.Logger.Error("Error reading player from database", "error", err)
+				continue
+			}
+		}
+
 		// Simple player initialization
 		ctx, cancel := context.WithCancel(context.Background())
 		player := &core.Player{
-			Game:          game,
+			Server:        server,
 			Index:         server.PlayerIndex.GetID(),
 			PlayerID:      playerName,
+			CharacterList: characterList,
+			SeenMotD:      seenMotD,
 			ToPlayer:      make(chan string, 10),
 			FromPlayer:    make(chan string, 10),
 			Echo:          true,

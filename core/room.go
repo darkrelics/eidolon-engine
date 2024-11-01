@@ -278,10 +278,13 @@ func (r *Room) AddExit(exit *Exit) {
 func SendRoomMessage(r *Room, message string) {
 	Logger.Debug("Sending message to room", "room_id", r.RoomID, "message", message)
 
-	r.Mutex.Lock()
-	defer r.Mutex.Unlock()
-
 	for _, character := range r.Characters {
+
+		if character.Player == nil || character.Player.ToPlayer == nil {
+			Logger.Warn("Player or ToPlayer channel is nil", "playerID", character.Player.PlayerID, "room_id", r.RoomID)
+			continue
+		}
+
 		character.Player.ToPlayer <- message
 		character.Player.ToPlayer <- character.Player.Prompt
 	}

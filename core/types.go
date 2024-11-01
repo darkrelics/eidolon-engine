@@ -72,7 +72,6 @@ type Server struct {
 }
 
 type Game struct {
-	Server               *Server
 	Config               *Configuration
 	Context              context.Context
 	Mutex                sync.Mutex
@@ -87,7 +86,7 @@ type Game struct {
 }
 
 type Player struct {
-	Game          *Game
+	Server        *Server
 	Index         uint64
 	PlayerID      string
 	ToPlayer      chan string

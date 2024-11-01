@@ -5,6 +5,7 @@ go 1.22
 replace github.com/robinje/multi-user-dungeon/core => ../core
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/robinje/multi-user-dungeon/core v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.24.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -33,7 +34,6 @@ require (
 	github.com/bits-and-blooms/bitset v1.14.3 // indirect
 	github.com/bits-and-blooms/bloom/v3 v3.7.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.17.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
