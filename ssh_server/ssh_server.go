@@ -11,7 +11,7 @@ import (
 )
 
 // SSHServer starts the SSH server on the configured port and listens for incoming connections.
-func SSHServer(server *core.Server, game *core.Game, stop chan os.Signal) error {
+func sshServer(server *core.Server, game *core.Game, stop chan os.Signal) error {
 	if server == nil {
 		return fmt.Errorf("server instance is nil")
 	}

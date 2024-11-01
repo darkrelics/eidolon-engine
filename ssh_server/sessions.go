@@ -40,7 +40,10 @@ func handlePlayerSession(server *core.Server, game *core.Game, player *core.Play
 	core.Logger.Info("Character selected for player", "playerName", player.PlayerID, "characterName", character.Name, "characterID", character.ID)
 
 	// Set the selected character in the player struct
+	player.Mutex.Lock()
+	player.Prompt = "> "
 	player.Character = character
+	player.Mutex.Unlock()
 
 	// Create a done channel to signal when the input loop is complete
 	done := make(chan struct{})
@@ -60,26 +63,7 @@ func handlePlayerSession(server *core.Server, game *core.Game, player *core.Play
 		core.Logger.Info("Player input loop completed normally", "playerName", player.PlayerID, "characterName", character.Name)
 	}
 
-	// Save character data
-	if character != nil {
-		core.Logger.Debug("Saving character data", "playerName", player.PlayerID, "characterName", character.Name)
-		err = server.Database.WriteCharacter(character)
-		if err != nil {
-			core.Logger.Error("Failed to save character data", "playerName", player.PlayerID, "characterName", character.Name, "error", err)
-		}
-	}
-
-	// Save player data
-	if player != nil {
-		core.Logger.Debug("Saving player data", "playerName", player.PlayerID)
-		err = server.Database.WritePlayer(player)
-		if err != nil {
-			core.Logger.Error("Failed to save player data", "playerName", player.PlayerID, "error", err)
-		}
-
-		core.Logger.Debug("Initiating player cleanup", "playerName", player.PlayerID)
-		player.Cleanup()
-	}
+	player.Cleanup()
 
 	core.Logger.Info("Player session ended", "playerName", player.PlayerID)
 }

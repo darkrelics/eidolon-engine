@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	"github.com/robinje/multi-user-dungeon/core"
 	"golang.org/x/crypto/ssh"
@@ -21,29 +23,35 @@ func handleChannels(server *core.Server, game *core.Game, sshConn *ssh.ServerCon
 		// Simple player initialization
 		ctx, cancel := context.WithCancel(context.Background())
 		player := &core.Player{
-			PlayerID:   playerName,
-			Index:      server.PlayerIndex.GetID(),
-			ToPlayer:   make(chan string, 100),
-			FromPlayer: make(chan string, 10),
-			Connection: channel,
-			Game:       game,
-			CTX:        ctx,
-			Cancel:     cancel,
+			Game:          game,
+			Index:         server.PlayerIndex.GetID(),
+			PlayerID:      playerName,
+			ToPlayer:      make(chan string, 10),
+			FromPlayer:    make(chan string, 10),
+			Echo:          true,
+			Prompt:        "",
+			Connection:    channel,
+			ConsoleWidth:  80,
+			ConsoleHeight: 24,
+			LoginTime:     time.Now(),
+			Mutex:         sync.Mutex{},
+			CTX:           ctx,
+			Cancel:        cancel,
 		}
 
 		server.Mutex.Lock()
 		server.Players[player.Index] = player
 		server.Mutex.Unlock()
 
-		go HandleSSHRequests(player, requests)
+		go handleSSHRequests(player, requests)
 		go handlePlayerSession(server, game, player)
 
 		core.Logger.Info("Player session started", "playerName", playerName)
 	}
 }
 
-// HandleSSHRequests handles SSH requests from the client.
-func HandleSSHRequests(player *core.Player, requests <-chan *ssh.Request) {
+// handleSSHRequests handles SSH requests from the client.
+func handleSSHRequests(player *core.Player, requests <-chan *ssh.Request) {
 
 	for req := range requests {
 		switch req.Type {

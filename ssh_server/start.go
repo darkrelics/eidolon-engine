@@ -44,12 +44,12 @@ func main() {
 
 	go core.SendMetrics(server, 1*time.Minute)
 	go core.AutoSave(game)
-	go SSHServer(server, game, stop)
+	go sshServer(server, game, stop)
 
 	<-stop
 
 	core.Logger.Info("Interrupt received, initiating graceful shutdown...")
-	Shutdown(server, game)
+	shutdown(server, game)
 	core.Logger.Info("Server shutdown complete")
 }
 
@@ -67,7 +67,7 @@ func initializeSystem(config *core.Configuration) (*core.Server, *core.Game, err
 	return server, game, nil
 }
 
-func Shutdown(server *core.Server, game *core.Game) {
+func shutdown(server *core.Server, game *core.Game) {
 	const shutdownTimeout = 60 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
