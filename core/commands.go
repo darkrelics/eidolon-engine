@@ -158,6 +158,7 @@ func ExecuteQuitCommand(character *Character, tokens []string) bool {
 	Logger.Info("Player initiating quit", "playerName", character.Player.PlayerID)
 
 	character.Player.ToPlayer <- "\n\rSaving character state...\n\r"
+	character.Cleanup()
 	character.Player.Cleanup()
 
 	return true
@@ -631,7 +632,7 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 	character.Mutex.Unlock()
 
 	// Send messages after releasing locks
-	SendRoomMessage(character.Room, roomMessage)
+	SendRoomMessageExcept(character.Room, roomMessage, character)
 	character.Player.ToPlayer <- playerMessage
 
 	Logger.Debug("Item taken", "character", character.Name, "item", itemToTake.Name, "slot", handSlot)
@@ -743,7 +744,7 @@ func ExecuteDropCommand(character *Character, tokens []string) bool {
 
 	// Send messages after releasing locks
 	character.Player.ToPlayer <- playerMsg
-	SendRoomMessage(character.Room, roomMsg)
+	SendRoomMessageExcept(character.Room, roomMsg, character)
 
 	Logger.Debug("Item dropped",
 		"character", character.Name,
@@ -868,7 +869,7 @@ func ExecuteWearCommand(character *Character, tokens []string) bool {
 	}
 
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou wear %s.\n\r", itemDesc)
-	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s wears %s.\n\r", character.Name, itemToWear.Name))
+	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s wears %s.\n\r", character.Name, itemToWear.Name), character)
 
 	Logger.Debug("Item worn",
 		"character", character.Name,
@@ -982,8 +983,7 @@ func ExecuteRemoveCommand(character *Character, tokens []string) bool {
 	}
 
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou remove %s.\n\r", removeDesc)
-	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s removes %s.\n\r",
-		character.Name, itemToRemove.Name))
+	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s removes %s.\n\r", character.Name, itemToRemove.Name), character)
 
 	Logger.Debug("Item removed", "character", character.Name, "item", itemToRemove.Name, "from_locations", wornLocations, "to_hand", handSlot)
 

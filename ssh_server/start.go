@@ -96,6 +96,7 @@ func shutdown(server *core.Server, game *core.Game) {
 		// Log out characters
 		for _, character := range game.Characters {
 			core.Logger.Info("Logging out character", "characterName", character.Name)
+			character.Cleanup()
 			character.Player.Cleanup()
 		}
 

@@ -290,6 +290,25 @@ func SendRoomMessage(r *Room, message string) {
 	}
 }
 
+// SendRoomMessageExcept sends a message to all characters in the room except for the specified character.
+func SendRoomMessageExcept(r *Room, message string, character *Character) {
+	Logger.Debug("Sending message to room except for character", "room_id", r.RoomID, "message", message, "character_id", character.ID)
+
+	for _, c := range r.Characters {
+		if c == character {
+			continue
+		}
+
+		if c.Player == nil || c.Player.ToPlayer == nil {
+			Logger.Warn("Player or ToPlayer channel is nil", "playerID", c.Player.PlayerID, "room_id", r.RoomID)
+			continue
+		}
+
+		c.Player.ToPlayer <- message
+		c.Player.ToPlayer <- c.Player.Prompt
+	}
+}
+
 // getVisibleExits returns a sorted list of visible exit directions from the room.
 func getVisibleExits(r *Room) []string {
 	Logger.Debug("Getting visible exits for room", "room_id", r.RoomID)

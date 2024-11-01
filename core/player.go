@@ -117,6 +117,7 @@ func PlayerInput(p *Player) {
 			if err == io.EOF {
 				Logger.Info("Player disconnected", "playerName", p.PlayerID)
 				p.PlayerError <- err
+				p.Character.Cleanup()
 				p.Cleanup()
 				return
 			} else {
@@ -148,6 +149,7 @@ func PlayerInput(p *Player) {
 		case '\x03': // Ctrl+C
 			Logger.Info("Player sent interrupt signal", "playerName", p.PlayerID)
 			p.PlayerError <- errors.New("player interrupt")
+			p.Character.Cleanup()
 			p.Cleanup()
 			return
 		default:
@@ -299,7 +301,6 @@ func InputLoop(c *Character) {
 	// Cleanup on exit
 
 	c.Cleanup()
-
 	c.Player.Cleanup()
 	Logger.Debug("Input loop ended for character", "characterName", c.Name)
 }
@@ -308,7 +309,7 @@ func (p *Player) Cleanup() {
 
 	Logger.Info("Cleaning up player", "playerID", p.PlayerID)
 
-	// Check if Server exists within Game
+	// Check if Server exists
 	if p.Server == nil {
 		Logger.Error("Server instance is nil within Game", "playerID", p.PlayerID)
 		return
@@ -317,6 +318,12 @@ func (p *Player) Cleanup() {
 	// Check if Players map exists within Server
 	if p.Server.Players == nil {
 		Logger.Error("Players map is nil within Server", "playerID", p.PlayerID)
+		return
+	}
+
+	// Check if player exists at the specified index
+	if _, exists := p.Server.Players[p.Index]; !exists {
+		Logger.Debug("No player found at specified index in Players map", "playerID", p.PlayerID, "index", p.Index)
 		return
 	}
 
@@ -377,4 +384,6 @@ func (p *Player) Cleanup() {
 	}
 
 	Logger.Info("Player cleanup completed", "playerID", p.PlayerID)
+
+	// p = nil
 }

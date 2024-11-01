@@ -11,6 +11,7 @@ func handlePlayerSession(server *core.Server, game *core.Game, player *core.Play
 			core.Logger.Error("Panic in player session", "playerName", player.PlayerID, "panic", r)
 		}
 		if player != nil && player.Connection != nil {
+			player.Character.Cleanup()
 			player.Cleanup()
 		}
 	}()
@@ -63,6 +64,7 @@ func handlePlayerSession(server *core.Server, game *core.Game, player *core.Play
 		core.Logger.Info("Player input loop completed normally", "playerName", player.PlayerID, "characterName", character.Name)
 	}
 
+	character.Cleanup()
 	player.Cleanup()
 
 	core.Logger.Info("Player session ended", "playerName", player.PlayerID)

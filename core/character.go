@@ -87,6 +87,8 @@ func (g *Game) NewCharacter(name string, player *Player, room *Room, archetypeNa
 	g.Characters[character.ID] = character
 	g.Mutex.Unlock()
 
+	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
+
 	return character, nil
 }
 
@@ -186,8 +188,14 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, game *Ga
 	}
 
 	character := &Character{
-		Player: player,
-		Mutex:  sync.Mutex{},
+		Game:        game,
+		ID:          characterID,
+		Player:      player,
+		Mutex:       sync.Mutex{},
+		Facing:      nil,
+		Advancing:   false,
+		CombatRange: nil,
+		LastSaved:   time.Now(),
 	}
 
 	if err := character.FromData(&cd, game); err != nil {
@@ -198,7 +206,7 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, game *Ga
 	// Ensure the character is added to the room's character list
 	if character.Room != nil {
 
-		SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name))
+		SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
 
 		character.Room.Mutex.Lock()
 		if character.Room.Characters == nil {
@@ -751,6 +759,25 @@ func (c *Character) Cleanup() {
 
 	Logger.Debug("Cleaning up character", "characterName", c.Name, "characterID", c.ID)
 
+	// Check if the Game exists.
+
+	if c.Game == nil {
+		Logger.Error("Game is nil in character cleanup", "characterName", c.Name)
+		return
+	}
+
+	// Check if Character map exists in the Game.
+	if c.Game.Characters == nil {
+		Logger.Error("Game.Characters is nil in character cleanup", "characterName", c.Name)
+		return
+	}
+
+	// Check if Character exists in the Game's Character map.
+	if _, exists := c.Game.Characters[c.ID]; !exists {
+		Logger.Error("Character not found in Game's Characters map during cleanup", "characterName", c.Name)
+		return
+	}
+
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 
@@ -759,11 +786,20 @@ func (c *Character) Cleanup() {
 		Logger.Error("Error saving character data during cleanup", "characterName", c.Name, "error", err)
 	}
 
+	// Remove character from room
+
+	Logger.Debug("Characters in room before cleanup", "roomID", c.Room.RoomID, "characters", c.Room.Characters)
+
 	if c.Room != nil {
+
+		SendRoomMessageExcept(c.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.Name), c)
+
 		c.Room.Mutex.Lock()
 		delete(c.Room.Characters, c.ID)
 		c.Room.Mutex.Unlock()
 	}
+
+	Logger.Debug("Characters in room before cleanup", "roomID", c.Room.RoomID, "characters", c.Room.Characters)
 
 	// Remove character from server's character list
 	c.Game.Mutex.Lock()
@@ -771,5 +807,7 @@ func (c *Character) Cleanup() {
 	c.Game.Mutex.Unlock()
 
 	Logger.Debug("Character cleaned up", "characterName", c.Name, "characterID", c.ID)
+
+	// c = nil
 
 }

@@ -200,8 +200,7 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 
 	// Inform the character and room
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou begin advancing towards %s.\n\r", target.Name)
-	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s begins advancing towards %s.\n\r",
-		character.Name, target.Name))
+	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s begins advancing towards %s.\n\r", character.Name, target.Name), character)
 
 	return false
 }
@@ -272,8 +271,7 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 
 	// Inform the character and room
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou begin retreating from %s.\n\r", target.Name)
-	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s begins retreating from %s.\n\r",
-		character.Name, target.Name))
+	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s begins retreating from %s.\n\r", character.Name, target.Name), character)
 
 	return false
 }
