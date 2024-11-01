@@ -194,7 +194,10 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 		return false
 	}
 
+	character.Mutex.Lock()
 	character.Advancing = true
+	character.Mutex.Unlock()
+
 	// Launch performAdvance as non-blocking goroutine
 	go performAdvance(character, target, desiredDistance)
 
@@ -204,6 +207,7 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 
 	return false
 }
+
 func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 	if character == nil {
 		Logger.Error("Attempted to retreat with nil character")

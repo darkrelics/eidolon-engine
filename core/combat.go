@@ -221,19 +221,22 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 
 		rangeDesc := getRangeDescription(newDistance)
 
-		// Send notifications after all locks are released
+		// Send movement notifications using SendRoomMessageExcept
 		if isRetreat {
 			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou retreat to %s range (%.1f units) from %s.\n\r",
 				rangeDesc, newDistance, target.Name)
-			target.Player.ToPlayer <- fmt.Sprintf("\n\r%s retreats to %s range (%.1f units) from you.\n\r",
-				characterName, rangeDesc, newDistance)
+
+			roomMessage := fmt.Sprintf("\n\r%s retreats to %s range (%.1f units) from %s.\n\r",
+				characterName, rangeDesc, newDistance, target.Name)
+			SendRoomMessageExcept(startingRoom, roomMessage, character)
 		} else {
 			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou advance to %s range (%.1f units) with %s.\n\r",
 				rangeDesc, newDistance, target.Name)
-			target.Player.ToPlayer <- fmt.Sprintf("\n\r%s advances to %s range (%.1f units) with you.\n\r",
-				characterName, rangeDesc, newDistance)
+
+			roomMessage := fmt.Sprintf("\n\r%s advances to %s range (%.1f units) with %s.\n\r",
+				characterName, rangeDesc, newDistance, target.Name)
+			SendRoomMessageExcept(startingRoom, roomMessage, character)
 		}
-		target.Player.ToPlayer <- target.Player.Prompt
 
 		if (isRetreat && newDistance >= desiredDistance) ||
 			(!isRetreat && newDistance <= desiredDistance) {
