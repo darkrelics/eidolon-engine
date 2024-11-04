@@ -76,6 +76,7 @@ type Game struct {
 	Context              context.Context
 	Mutex                sync.Mutex
 	WaitGroup            sync.WaitGroup
+	Ticker               *time.Ticker
 	Database             *KeyPair
 	ArcheTypes           map[string]*Archetype
 	CharacterBloomFilter *bloom.BloomFilter
@@ -167,8 +168,8 @@ type Character struct {
 	Inventory   map[string]*Item
 	Mutex       sync.Mutex
 	Facing      *Character
-	Advancing   bool                  // true when character is advancing towards their facing target
-	CombatRange map[uuid.UUID]float64 // Changed from int to float64 to store distances
+	Advancing   bool // true when character is advancing towards their facing target
+	CombatRange map[uuid.UUID]float64
 	LastEdited  time.Time
 	LastSaved   time.Time
 }

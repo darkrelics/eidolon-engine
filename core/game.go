@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -21,6 +22,7 @@ func NewGame(config *Configuration) (*Game, error) {
 		Rooms:      make(map[int64]*Room),
 		Prototypes: make(map[uuid.UUID]*Prototype),
 		Items:      make(map[uuid.UUID]*Item),
+		Ticker:     time.NewTicker(time.Second),
 	}
 
 	var err error

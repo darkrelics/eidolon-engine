@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -158,11 +157,8 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 		return
 	}
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
 	for {
-		<-ticker.C
+		<-character.Game.Ticker.C
 
 		// Get states before acquiring locks
 		Logger.Debug("Pre-lock state check", "character", characterName)
