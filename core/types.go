@@ -56,31 +56,37 @@ type KeyPair struct {
 }
 
 type Server struct {
-	Port                 uint16
-	Listener             net.Listener
-	SSHConfig            *ssh.ServerConfig
-	PlayerCount          uint64
-	Config               Configuration
-	StartTime            time.Time
-	Rooms                map[int64]*Room
-	Database             *KeyPair
-	PlayerIndex          *Index
-	CharacterBloomFilter *bloom.BloomFilter
-	Characters           map[uuid.UUID]*Character
-	Balance              float64
-	AutoSave             uint16
-	ArcheTypes           map[string]*Archetype
-	Health               uint16
-	Essence              uint16
-	Items                map[uuid.UUID]*Item
-	Prototypes           map[uuid.UUID]*Prototype
+	Config      *Configuration
+	Context     context.Context
+	Mutex       sync.Mutex
+	WaitGroup   sync.WaitGroup
+	Database    *KeyPair
+	StartTime   time.Time
+	Port        uint16
+	Listener    net.Listener
+	SSHConfig   *ssh.ServerConfig
+	PlayerCount uint64
+	PlayerIndex *Index
+	Players     map[uint64]*Player
+	ActiveMotDs []*MOTD
+}
+
+type Game struct {
+	Config               *Configuration
 	Context              context.Context
 	Mutex                sync.Mutex
-	ActiveMotDs          []*MOTD
 	WaitGroup            sync.WaitGroup
+	Database             *KeyPair
+	ArcheTypes           map[string]*Archetype
+	CharacterBloomFilter *bloom.BloomFilter
+	Characters           map[uuid.UUID]*Character
+	Rooms                map[int64]*Room
+	Prototypes           map[uuid.UUID]*Prototype
+	Items                map[uuid.UUID]*Item
 }
 
 type Player struct {
+	Server        *Server
 	Index         uint64
 	PlayerID      string
 	ToPlayer      chan string
@@ -89,7 +95,6 @@ type Player struct {
 	Echo          bool
 	Prompt        string
 	Connection    ssh.Channel
-	Server        *Server
 	ConsoleWidth  int
 	ConsoleHeight int
 	SeenMotD      []uuid.UUID
@@ -150,6 +155,7 @@ type ExitData struct {
 }
 
 type Character struct {
+	Game        *Game
 	ID          uuid.UUID
 	Player      *Player
 	Name        string
@@ -159,7 +165,6 @@ type Character struct {
 	Health      float64
 	Room        *Room
 	Inventory   map[string]*Item
-	Server      *Server
 	Mutex       sync.Mutex
 	Facing      *Character
 	Advancing   bool                  // true when character is advancing towards their facing target

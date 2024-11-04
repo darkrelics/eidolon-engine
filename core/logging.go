@@ -216,9 +216,27 @@ func (h *MultiHandler) WithGroup(name string) slog.Handler {
 }
 
 func SendMetrics(s *Server, interval time.Duration) error {
+	if s == nil {
+		return fmt.Errorf("server instance is nil")
+	}
+
+	if s.Config == nil {
+		return fmt.Errorf("server configuration is nil")
+	}
+
+	// Check for empty region
+	if s.Config.Aws.Region == "" {
+		return fmt.Errorf("AWS region configuration is missing")
+	}
+
 	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(s.Config.Aws.Region))
 	if err != nil {
 		return fmt.Errorf("failed to load AWS SDK config: %w", err)
+	}
+
+	// Check for empty metric namespace
+	if s.Config.Logging.MetricNamespace == "" {
+		return fmt.Errorf("metric namespace configuration is missing")
 	}
 
 	client := cloudwatch.NewFromConfig(cfg)
@@ -228,10 +246,14 @@ func SendMetrics(s *Server, interval time.Duration) error {
 	for {
 		select {
 		case <-ticker.C:
+			if s.Context == nil {
+				return fmt.Errorf("server context is nil")
+			}
+
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
 
-			playerCount := float64(len(s.Characters))
+			playerCount := float64(s.PlayerCount)
 			memoryUsageMB := float64(m.Alloc) / 1024 / 1024
 
 			_, err := client.PutMetricData(s.Context, &cloudwatch.PutMetricDataInput{
