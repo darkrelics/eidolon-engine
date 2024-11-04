@@ -87,7 +87,7 @@ func (kp *KeyPair) LoadPrototypes() (map[uuid.UUID]*Prototype, error) {
 			Container:   prototypeData.Container,
 			CanPickUp:   prototypeData.CanPickUp,
 			Metadata:    prototypeData.Metadata,
-			Mutex:       sync.Mutex{},
+			Mutex:       sync.RWMutex{},
 			LastEdited:  time.Now(),
 			LastSaved:   time.Now(),
 		}
@@ -285,7 +285,7 @@ func (g *Game) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 		IsWorn:      false,
 		CanPickUp:   prototype.CanPickUp,
 		Metadata:    make(map[string]string),
-		Mutex:       sync.Mutex{},
+		Mutex:       sync.RWMutex{},
 		LastEdited:  time.Now(),
 	}
 
@@ -358,7 +358,7 @@ func (kp *KeyPair) itemFromData(itemData *ItemData) (*Item, error) {
 		IsWorn:      itemData.IsWorn,
 		CanPickUp:   itemData.CanPickUp,
 		Metadata:    itemData.Metadata,
-		Mutex:       sync.Mutex{},
+		Mutex:       sync.RWMutex{},
 		LastEdited:  time.Now(),
 		LastSaved:   time.Now(),
 	}

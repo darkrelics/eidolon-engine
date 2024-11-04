@@ -16,7 +16,7 @@ func NewServer(config *Configuration) (*Server, error) {
 	server := &Server{
 		Config:      config,
 		Context:     context.Background(),
-		Mutex:       sync.Mutex{},
+		Mutex:       sync.RWMutex{},
 		WaitGroup:   sync.WaitGroup{},
 		StartTime:   time.Now(),
 		Port:        config.Server.Port,

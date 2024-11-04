@@ -110,7 +110,7 @@ func NewCloudWatchHandler(client *cloudwatchlogs.Client, logGroup, logStream str
 		client:      client,
 		logGroup:    logGroup,
 		logStream:   logStream,
-		mutex:       sync.Mutex{},
+		mutex:       sync.RWMutex{},
 		initialized: false,
 	}
 }

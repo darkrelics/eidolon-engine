@@ -22,7 +22,7 @@ func NewRoom(roomID int64, area string, title string, description string) *Room 
 		Exits:       make(map[string]*Exit),
 		Characters:  make(map[uuid.UUID]*Character),
 		Items:       make(map[uuid.UUID]*Item),
-		Mutex:       sync.Mutex{},
+		Mutex:       sync.RWMutex{},
 		LastSaved:   time.Now(),
 		LastEdited:  time.Now(),
 	}
