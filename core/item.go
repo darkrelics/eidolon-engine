@@ -192,7 +192,7 @@ func (g *Game) SaveActiveItems() error {
 				Logger.Warn("Nil room found", "roomID", roomID)
 				continue
 			}
-			room.Mutex.Lock()
+			room.Mutex.RLock()
 			for _, item := range room.Items {
 				if item == nil {
 					Logger.Warn("Nil item found in room", "roomID", roomID)
@@ -200,7 +200,7 @@ func (g *Game) SaveActiveItems() error {
 				}
 				itemsToSave[item.ID] = item
 			}
-			room.Mutex.Unlock()
+			room.Mutex.RUnlock()
 		}
 	} else {
 		Logger.Warn("Server Rooms map is nil")
@@ -213,7 +213,7 @@ func (g *Game) SaveActiveItems() error {
 				Logger.Warn("Nil character found", "characterID", charID)
 				continue
 			}
-			character.Mutex.Lock()
+			character.Mutex.RLock()
 			for _, item := range character.Inventory {
 				if item == nil {
 					Logger.Warn("Nil item found in inventory", "characterID", charID)
@@ -221,7 +221,7 @@ func (g *Game) SaveActiveItems() error {
 				}
 				itemsToSave[item.ID] = item
 			}
-			character.Mutex.Unlock()
+			character.Mutex.RUnlock()
 		}
 	} else {
 		Logger.Warn("Server Characters map is nil")
@@ -388,8 +388,8 @@ func (r *Room) getVisibleItems() []string {
 
 	Logger.Debug("Getting visible items in room", "room_id", r.RoomID)
 
-	r.Mutex.Lock()
-	defer r.Mutex.Unlock()
+	r.Mutex.RLock()
+	defer r.Mutex.RUnlock()
 
 	// Log room details
 	Logger.Debug("Room object details",

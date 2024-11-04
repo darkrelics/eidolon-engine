@@ -449,8 +449,8 @@ func (c *Character) WearItem(item *Item) error {
 func (c *Character) ListInventory() string {
 	Logger.Debug("Character is listing inventory", "characterName", c.Name)
 
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
+	c.Mutex.RLock()
+	defer c.Mutex.RUnlock()
 
 	var output strings.Builder
 	output.WriteString("\n\r")
@@ -556,8 +556,8 @@ func (c *Character) AddToInventory(item *Item) {
 func (c *Character) FindInInventory(itemName string) *Item {
 	Logger.Debug("Character is searching inventory for item", "characterName", c.Name, "itemName", itemName)
 
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
+	c.Mutex.RLock()
+	defer c.Mutex.RUnlock()
 
 	lowercaseName := strings.ToLower(itemName)
 

@@ -225,8 +225,8 @@ func (g *Game) SaveActiveRooms() error {
 		return fmt.Errorf("server is nil")
 	}
 
-	g.Mutex.Lock()
-	defer g.Mutex.Unlock()
+	g.Mutex.RLock()
+	defer g.Mutex.RUnlock()
 
 	Logger.Debug("Starting to save active rooms...")
 
