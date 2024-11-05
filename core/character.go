@@ -674,15 +674,14 @@ func getOtherCharacters(r *Room, currentCharacter *Character) []string {
 }
 
 func moveCharacter(character *Character, direction string) error {
-	character.Mutex.Lock()
-	defer character.Mutex.Unlock()
-
+	// Check if the character is in a room
 	if character.Room == nil {
 		return fmt.Errorf(msgNoRoom)
 	}
 
 	// Lock current room to check exit
 	character.Room.Mutex.Lock()
+
 	selectedExit, exists := character.Room.Exits[direction]
 	if !exists || selectedExit == nil {
 		character.Room.Mutex.Unlock()
@@ -708,12 +707,7 @@ func moveCharacter(character *Character, direction string) error {
 	newRoomMsg := fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name)
 
 	// Send message to old room while locked
-	for _, c := range oldRoom.Characters {
-		if c.Player != nil {
-			c.Player.ToPlayer <- oldRoomMsg
-			c.Player.ToPlayer <- c.Player.Prompt
-		}
-	}
+	SendRoomMessageExcept(oldRoom, oldRoomMsg, character)
 
 	// Update character's room
 	character.Room = targetRoom
@@ -727,12 +721,7 @@ func moveCharacter(character *Character, direction string) error {
 	targetRoom.Characters[character.ID] = character
 
 	// Send message to new room while locked
-	for _, c := range targetRoom.Characters {
-		if c != character && c.Player != nil {
-			c.Player.ToPlayer <- newRoomMsg
-			c.Player.ToPlayer <- c.Player.Prompt
-		}
-	}
+	SendRoomMessageExcept(targetRoom, newRoomMsg, character)
 
 	// Update timestamps
 	character.LastEdited = time.Now()
@@ -741,16 +730,13 @@ func moveCharacter(character *Character, direction string) error {
 
 	// Release locks in reverse order
 	targetRoom.Mutex.Unlock()
-	oldRoom.Mutex.Unlock()
+	character.Room.Mutex.Unlock()
+	character.Mutex.Lock()
 
 	// Show the new room to the character
 	ExecuteLookCommand(character, []string{})
 
-	Logger.Debug("Character moved successfully",
-		"character", character.Name,
-		"from", oldRoom.RoomID,
-		"to", targetRoom.RoomID,
-		"direction", direction)
+	Logger.Debug("Character moved successfully", "character", character.Name, "from", oldRoom.RoomID, "to", targetRoom.RoomID, "direction", direction)
 
 	return nil
 }
