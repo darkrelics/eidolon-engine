@@ -216,10 +216,6 @@ func InputLoop(c *Character) {
 		return
 	}
 
-	// Create a ticker that ticks once per second
-	commandTicker := time.NewTicker(time.Second)
-	defer commandTicker.Stop()
-
 	var lastCommand string
 	shouldQuit := false
 
@@ -249,7 +245,7 @@ func InputLoop(c *Character) {
 				lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
 			}
 
-		case <-commandTicker.C:
+		case <-c.Game.Ticker.C:
 			if lastCommand != "" {
 				// Create timeout context for command processing
 				cmdCtx, cancel := context.WithTimeout(c.Player.CTX, commandTimeout)
