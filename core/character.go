@@ -55,7 +55,7 @@ func (g *Game) NewCharacter(name string, player *Player, room *Room, archetypeNa
 		Attributes:  make(map[string]float64),
 		Abilities:   make(map[string]float64),
 		Inventory:   make(map[string]*Item),
-		Mutex:       sync.Mutex{},
+		Mutex:       sync.RWMutex{},
 		CombatRange: nil,
 		Facing:      nil,
 		LastSaved:   time.Now(),
@@ -191,7 +191,7 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, game *Ga
 		Game:        game,
 		ID:          characterID,
 		Player:      player,
-		Mutex:       sync.Mutex{},
+		Mutex:       sync.RWMutex{},
 		Facing:      nil,
 		Advancing:   false,
 		CombatRange: nil,
@@ -449,8 +449,8 @@ func (c *Character) WearItem(item *Item) error {
 func (c *Character) ListInventory() string {
 	Logger.Debug("Character is listing inventory", "characterName", c.Name)
 
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
+	c.Mutex.RLock()
+	defer c.Mutex.RUnlock()
 
 	var output strings.Builder
 	output.WriteString("\n\r")
@@ -556,8 +556,8 @@ func (c *Character) AddToInventory(item *Item) {
 func (c *Character) FindInInventory(itemName string) *Item {
 	Logger.Debug("Character is searching inventory for item", "characterName", c.Name, "itemName", itemName)
 
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
+	c.Mutex.RLock()
+	defer c.Mutex.RUnlock()
 
 	lowercaseName := strings.ToLower(itemName)
 

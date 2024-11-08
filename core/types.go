@@ -17,7 +17,7 @@ import (
 // The Index struct is to be depricated in favor of UUIDs
 type Index struct {
 	IndexID uint64
-	mu      sync.Mutex
+	mu      sync.RWMutex
 }
 
 type Configuration struct {
@@ -51,14 +51,13 @@ type Configuration struct {
 }
 
 type KeyPair struct {
-	db    *dynamodb.DynamoDB
-	Mutex sync.Mutex
+	db *dynamodb.DynamoDB
 }
 
 type Server struct {
 	Config      *Configuration
 	Context     context.Context
-	Mutex       sync.Mutex
+	Mutex       sync.RWMutex
 	WaitGroup   sync.WaitGroup
 	Database    *KeyPair
 	StartTime   time.Time
@@ -74,7 +73,7 @@ type Server struct {
 type Game struct {
 	Config               *Configuration
 	Context              context.Context
-	Mutex                sync.Mutex
+	Mutex                sync.RWMutex
 	WaitGroup            sync.WaitGroup
 	Ticker               *time.Ticker
 	Database             *KeyPair
@@ -102,7 +101,7 @@ type Player struct {
 	CharacterList map[string]uuid.UUID
 	Character     *Character
 	LoginTime     time.Time
-	Mutex         sync.Mutex
+	Mutex         sync.RWMutex
 	CTX           context.Context
 	Cancel        context.CancelFunc
 }
@@ -122,7 +121,7 @@ type Room struct {
 	Exits       map[string]*Exit
 	Characters  map[uuid.UUID]*Character
 	Items       map[uuid.UUID]*Item
-	Mutex       sync.Mutex
+	Mutex       sync.RWMutex
 	LastEdited  time.Time
 	LastSaved   time.Time
 }
@@ -166,7 +165,7 @@ type Character struct {
 	Health      float64
 	Room        *Room
 	Inventory   map[string]*Item
-	Mutex       sync.Mutex
+	Mutex       sync.RWMutex
 	Facing      *Character
 	Advancing   bool // true when character is advancing towards their facing target
 	CombatRange map[uuid.UUID]float64
@@ -215,7 +214,7 @@ type Item struct {
 	IsWorn      bool
 	CanPickUp   bool
 	Metadata    map[string]string
-	Mutex       sync.Mutex
+	Mutex       sync.RWMutex
 	LastEdited  time.Time
 	LastSaved   time.Time
 }
@@ -260,7 +259,7 @@ type Prototype struct {
 	Contents    []uuid.UUID
 	CanPickUp   bool
 	Metadata    map[string]string
-	Mutex       sync.Mutex
+	Mutex       sync.RWMutex
 	LastEdited  time.Time
 	LastSaved   time.Time
 }
@@ -290,7 +289,7 @@ type CloudWatchHandler struct {
 	logGroup    string
 	logStream   string
 	attrs       []slog.Attr
-	mutex       sync.Mutex
+	mutex       sync.RWMutex
 	initialized bool
 }
 

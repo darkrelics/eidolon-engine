@@ -87,7 +87,7 @@ func (kp *KeyPair) LoadPrototypes() (map[uuid.UUID]*Prototype, error) {
 			Container:   prototypeData.Container,
 			CanPickUp:   prototypeData.CanPickUp,
 			Metadata:    prototypeData.Metadata,
-			Mutex:       sync.Mutex{},
+			Mutex:       sync.RWMutex{},
 			LastEdited:  time.Now(),
 			LastSaved:   time.Now(),
 		}
@@ -192,7 +192,7 @@ func (g *Game) SaveActiveItems() error {
 				Logger.Warn("Nil room found", "roomID", roomID)
 				continue
 			}
-			room.Mutex.Lock()
+			room.Mutex.RLock()
 			for _, item := range room.Items {
 				if item == nil {
 					Logger.Warn("Nil item found in room", "roomID", roomID)
@@ -200,7 +200,7 @@ func (g *Game) SaveActiveItems() error {
 				}
 				itemsToSave[item.ID] = item
 			}
-			room.Mutex.Unlock()
+			room.Mutex.RUnlock()
 		}
 	} else {
 		Logger.Warn("Server Rooms map is nil")
@@ -213,7 +213,7 @@ func (g *Game) SaveActiveItems() error {
 				Logger.Warn("Nil character found", "characterID", charID)
 				continue
 			}
-			character.Mutex.Lock()
+			character.Mutex.RLock()
 			for _, item := range character.Inventory {
 				if item == nil {
 					Logger.Warn("Nil item found in inventory", "characterID", charID)
@@ -221,7 +221,7 @@ func (g *Game) SaveActiveItems() error {
 				}
 				itemsToSave[item.ID] = item
 			}
-			character.Mutex.Unlock()
+			character.Mutex.RUnlock()
 		}
 	} else {
 		Logger.Warn("Server Characters map is nil")
@@ -285,7 +285,7 @@ func (g *Game) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 		IsWorn:      false,
 		CanPickUp:   prototype.CanPickUp,
 		Metadata:    make(map[string]string),
-		Mutex:       sync.Mutex{},
+		Mutex:       sync.RWMutex{},
 		LastEdited:  time.Now(),
 	}
 
@@ -358,7 +358,7 @@ func (kp *KeyPair) itemFromData(itemData *ItemData) (*Item, error) {
 		IsWorn:      itemData.IsWorn,
 		CanPickUp:   itemData.CanPickUp,
 		Metadata:    itemData.Metadata,
-		Mutex:       sync.Mutex{},
+		Mutex:       sync.RWMutex{},
 		LastEdited:  time.Now(),
 		LastSaved:   time.Now(),
 	}
@@ -388,8 +388,8 @@ func (r *Room) getVisibleItems() []string {
 
 	Logger.Debug("Getting visible items in room", "room_id", r.RoomID)
 
-	r.Mutex.Lock()
-	defer r.Mutex.Unlock()
+	r.Mutex.RLock()
+	defer r.Mutex.RUnlock()
 
 	// Log room details
 	Logger.Debug("Room object details",

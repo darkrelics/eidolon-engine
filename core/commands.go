@@ -568,7 +568,7 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
 
 	// Lock room to check items
-	character.Room.Mutex.Lock()
+	character.Room.Mutex.RLock()
 	var itemToTake *Item
 	var itemID uuid.UUID
 
@@ -582,18 +582,18 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 
 	// Early unlock if item not found
 	if itemToTake == nil {
-		character.Room.Mutex.Unlock()
+		character.Room.Mutex.RUnlock()
 		character.Player.ToPlayer <- "\n\rYou can't find that item or it can't be picked up.\n\r"
 		return false
 	}
 
 	// Lock character to check inventory
-	character.Mutex.Lock()
+	character.Mutex.RLock()
 
 	// Check if character can carry the item
 	if !character.CanCarryItem(itemToTake) {
-		character.Room.Mutex.Unlock()
-		character.Mutex.Unlock()
+		character.Room.Mutex.RUnlock()
+		character.Mutex.RUnlock()
 		character.Player.ToPlayer <- "\n\rYou can't carry any more items.\n\r"
 		return false
 	}
@@ -607,8 +607,8 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 	}
 
 	if handSlot == "" {
-		character.Room.Mutex.Unlock()
-		character.Mutex.Unlock()
+		character.Room.Mutex.RUnlock()
+		character.Mutex.RUnlock()
 		character.Player.ToPlayer <- "\n\rYour hands are full. You need a free hand to pick up an item.\n\r"
 		return false
 	}
@@ -628,8 +628,8 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 		itemToTake.Name, strings.Replace(handSlot, "_", " ", -1))
 
 	// Release locks
-	character.Room.Mutex.Unlock()
-	character.Mutex.Unlock()
+	character.Room.Mutex.RUnlock()
+	character.Mutex.RUnlock()
 
 	// Send messages after releasing locks
 	SendRoomMessageExcept(character.Room, roomMessage, character)

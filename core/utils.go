@@ -172,8 +172,8 @@ func getLookTarget(character *Character, target string) string {
 		return "\n\rYou are floating in the void.\n\r"
 	}
 
-	room.Mutex.Lock()
-	defer room.Mutex.Unlock()
+	room.Mutex.RLock()
+	defer room.Mutex.RUnlock()
 
 	// Check for items first
 	for _, item := range room.Items {
