@@ -26,7 +26,7 @@ func sshServer(server *core.Server, game *core.Game, stop chan os.Signal) error 
 	}
 
 	// Start accepting connections in a separate goroutine
-	go acceptConnections(server, game)
+	go acceptConnections(server, game, stop)
 
 	return nil
 }
@@ -122,24 +122,31 @@ func Authenticate(username, password string, config *core.Configuration) bool {
 	return true
 }
 
-func acceptConnections(server *core.Server, game *core.Game) {
+func acceptConnections(server *core.Server, game *core.Game, stop chan os.Signal) {
 	for {
-		conn, err := server.Listener.Accept()
-		if err != nil {
-			if errors.Is(err, net.ErrClosed) {
-				core.Logger.Info("SSH server listener closed, stopping accept loop")
-				return
+		select {
+		case <-stop:
+			core.Logger.Info("Received stop signal, exiting accept loop")
+			server.Listener.Close() // Close the listener to unblock Accept call if it's blocked
+			return
+		default:
+			conn, err := server.Listener.Accept()
+			if err != nil {
+				if errors.Is(err, net.ErrClosed) {
+					core.Logger.Info("SSH server listener closed, stopping accept loop")
+					return
+				}
+				core.Logger.Error("Error accepting connection", "error", err)
+				continue
 			}
-			core.Logger.Error("Error accepting connection", "error", err)
-			continue
-		}
 
-		server.WaitGroup.Add(1)
-		go handleConnection(server, game, conn)
+			server.WaitGroup.Add(1)
+			go handleConnection(server, game, conn, stop)
+		}
 	}
 }
 
-func handleConnection(server *core.Server, game *core.Game, conn net.Conn) {
+func handleConnection(server *core.Server, game *core.Game, conn net.Conn, stop chan os.Signal) {
 	// Perform SSH handshake
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, server.SSHConfig)
 	if err != nil {
@@ -152,7 +159,7 @@ func handleConnection(server *core.Server, game *core.Game, conn net.Conn) {
 	go discardRequests(reqs)
 
 	// Handle channels
-	handleChannels(server, game, sshConn, chans)
+	handleChannels(server, game, sshConn, chans, stop)
 }
 
 func discardRequests(reqs <-chan *ssh.Request) {

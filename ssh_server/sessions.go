@@ -1,10 +1,12 @@
 package main
 
 import (
+	"os"
+
 	"github.com/robinje/multi-user-dungeon/core"
 )
 
-func handlePlayerSession(server *core.Server, game *core.Game, player *core.Player) {
+func handlePlayerSession(server *core.Server, game *core.Game, player *core.Player, stop chan os.Signal) {
 	// Ensure connection cleanup even on panic
 	defer func() {
 		if r := recover(); r != nil {
@@ -62,6 +64,8 @@ func handlePlayerSession(server *core.Server, game *core.Game, player *core.Play
 		core.Logger.Info("Player session context cancelled", "playerName", player.PlayerID, "characterName", character.Name)
 	case <-done:
 		core.Logger.Info("Player input loop completed normally", "playerName", player.PlayerID, "characterName", character.Name)
+	case <-stop:
+		core.Logger.Info("Received stop signal, exiting player session", "playerName", player.PlayerID, "characterName", character.Name)
 	}
 
 	character.Cleanup()

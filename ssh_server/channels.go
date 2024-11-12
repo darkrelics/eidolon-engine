@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func handleChannels(server *core.Server, game *core.Game, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
+func handleChannels(server *core.Server, game *core.Game, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel, stop chan os.Signal) {
 
 	core.Logger.Debug("Active Player Indeices:", "playerIndices", server.PlayerIndex)
 
@@ -83,35 +84,45 @@ func handleChannels(server *core.Server, game *core.Game, sshConn *ssh.ServerCon
 		server.Players[player.Index] = player
 		server.Mutex.Unlock()
 
-		go handleSSHRequests(player, requests)
-		go handlePlayerSession(server, game, player)
+		go handleSSHRequests(player, requests, stop)
+		go handlePlayerSession(server, game, player, stop)
 
 		core.Logger.Info("Player session started", "playerName", playerName)
 	}
 }
 
 // handleSSHRequests handles SSH requests from the client.
-func handleSSHRequests(player *core.Player, requests <-chan *ssh.Request) {
+func handleSSHRequests(player *core.Player, requests <-chan *ssh.Request, stop chan os.Signal) {
+	for {
+		select {
+		case <-stop:
+			core.Logger.Info("Received stop signal, exiting handleSSHRequests loop")
+			return
+		case req, ok := <-requests:
+			if !ok {
+				core.Logger.Info("Request channel closed, exiting handleSSHRequests loop")
+				return
+			}
 
-	for req := range requests {
-		switch req.Type {
-		case "shell":
-			// Accept the shell request
-			req.Reply(true, nil)
-		case "pty-req":
-			// Parse terminal dimensions
-			termLen := req.Payload[3]
-			w, h := core.ParseDims(req.Payload[termLen+4:])
-			player.ConsoleWidth, player.ConsoleHeight = w, h
-			req.Reply(true, nil)
-		case "window-change":
-			// Update terminal dimensions
-			w, h := core.ParseDims(req.Payload)
-			player.ConsoleWidth, player.ConsoleHeight = w, h
-		default:
-			// Reject unsupported requests
-			core.Logger.Warn("Unsupported request", "request", req.Type, "player_name", player.PlayerID)
-			req.Reply(false, nil)
+			switch req.Type {
+			case "shell":
+				// Accept the shell request
+				req.Reply(true, nil)
+			case "pty-req":
+				// Parse terminal dimensions
+				termLen := req.Payload[3]
+				w, h := core.ParseDims(req.Payload[termLen+4:])
+				player.ConsoleWidth, player.ConsoleHeight = w, h
+				req.Reply(true, nil)
+			case "window-change":
+				// Update terminal dimensions
+				w, h := core.ParseDims(req.Payload)
+				player.ConsoleWidth, player.ConsoleHeight = w, h
+			default:
+				// Reject unsupported requests
+				core.Logger.Warn("Unsupported request", "request", req.Type, "player_name", player.PlayerID)
+				req.Reply(false, nil)
+			}
 		}
 	}
 }
