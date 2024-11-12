@@ -42,8 +42,8 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	go core.SendMetrics(server, 1*time.Minute)
-	go core.AutoSave(game)
+	go core.SendMetrics(server, stop, 1*time.Minute)
+	go core.AutoSave(game, stop)
 	go sshServer(server, game, stop)
 
 	<-stop
