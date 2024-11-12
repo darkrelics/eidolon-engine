@@ -76,7 +76,7 @@ func handleChannels(server *core.Server, game *core.Game, sshConn *ssh.ServerCon
 			ConsoleHeight: 24,
 			LoginTime:     time.Now(),
 			Mutex:         sync.RWMutex{},
-			CTX:           ctx,
+			Context:       ctx,
 			Cancel:        cancel,
 		}
 

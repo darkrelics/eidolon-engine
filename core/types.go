@@ -102,7 +102,7 @@ type Player struct {
 	Character     *Character
 	LoginTime     time.Time
 	Mutex         sync.RWMutex
-	CTX           context.Context
+	Context       context.Context
 	Cancel        context.CancelFunc
 }
 

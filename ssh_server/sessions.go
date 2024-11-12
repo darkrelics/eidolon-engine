@@ -60,7 +60,7 @@ func handlePlayerSession(server *core.Server, game *core.Game, player *core.Play
 
 	// Wait for either context cancellation or input loop completion
 	select {
-	case <-player.CTX.Done():
+	case <-player.Context.Done():
 		core.Logger.Info("Player session context cancelled", "playerName", player.PlayerID, "characterName", character.Name)
 	case <-done:
 		core.Logger.Info("Player input loop completed normally", "playerName", player.PlayerID, "characterName", character.Name)
