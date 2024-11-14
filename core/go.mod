@@ -1,6 +1,6 @@
 module github.com/robinje/multi-user-dungeon/core
 
-go 1.22
+go 1.23
 
 require (
 	github.com/aws/aws-sdk-go v1.54.15
