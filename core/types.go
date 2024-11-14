@@ -17,7 +17,7 @@ import (
 // The Index struct is to be depricated in favor of UUIDs
 type Index struct {
 	IndexID uint64
-	mu      sync.Mutex
+	mu      sync.RWMutex
 }
 
 type Configuration struct {
@@ -51,36 +51,42 @@ type Configuration struct {
 }
 
 type KeyPair struct {
-	db    *dynamodb.DynamoDB
-	Mutex sync.Mutex
+	db *dynamodb.DynamoDB
 }
 
 type Server struct {
-	Port                 uint16
-	Listener             net.Listener
-	SSHConfig            *ssh.ServerConfig
-	PlayerCount          uint64
-	Config               Configuration
-	StartTime            time.Time
-	Rooms                map[int64]*Room
+	Config      *Configuration
+	Context     context.Context
+	Mutex       sync.RWMutex
+	WaitGroup   sync.WaitGroup
+	Database    *KeyPair
+	StartTime   time.Time
+	Port        uint16
+	Listener    net.Listener
+	SSHConfig   *ssh.ServerConfig
+	PlayerCount uint64
+	PlayerIndex *Index
+	Players     map[uint64]*Player
+	ActiveMotDs []*MOTD
+}
+
+type Game struct {
+	Config               *Configuration
+	Context              context.Context
+	Mutex                sync.RWMutex
+	WaitGroup            sync.WaitGroup
+	Ticker               *time.Ticker
 	Database             *KeyPair
-	PlayerIndex          *Index
+	ArcheTypes           map[string]*Archetype
 	CharacterBloomFilter *bloom.BloomFilter
 	Characters           map[uuid.UUID]*Character
-	Balance              float64
-	AutoSave             uint16
-	ArcheTypes           map[string]*Archetype
-	Health               uint16
-	Essence              uint16
-	Items                map[uuid.UUID]*Item
+	Rooms                map[int64]*Room
 	Prototypes           map[uuid.UUID]*Prototype
-	Context              context.Context
-	Mutex                sync.Mutex
-	ActiveMotDs          []*MOTD
-	WaitGroup            sync.WaitGroup
+	Items                map[uuid.UUID]*Item
 }
 
 type Player struct {
+	Server        *Server
 	Index         uint64
 	PlayerID      string
 	ToPlayer      chan string
@@ -89,14 +95,13 @@ type Player struct {
 	Echo          bool
 	Prompt        string
 	Connection    ssh.Channel
-	Server        *Server
 	ConsoleWidth  int
 	ConsoleHeight int
 	SeenMotD      []uuid.UUID
 	CharacterList map[string]uuid.UUID
 	Character     *Character
 	LoginTime     time.Time
-	Mutex         sync.Mutex
+	Mutex         sync.RWMutex
 	CTX           context.Context
 	Cancel        context.CancelFunc
 }
@@ -116,7 +121,7 @@ type Room struct {
 	Exits       map[string]*Exit
 	Characters  map[uuid.UUID]*Character
 	Items       map[uuid.UUID]*Item
-	Mutex       sync.Mutex
+	Mutex       sync.RWMutex
 	LastEdited  time.Time
 	LastSaved   time.Time
 }
@@ -150,6 +155,7 @@ type ExitData struct {
 }
 
 type Character struct {
+	Game        *Game
 	ID          uuid.UUID
 	Player      *Player
 	Name        string
@@ -159,11 +165,10 @@ type Character struct {
 	Health      float64
 	Room        *Room
 	Inventory   map[string]*Item
-	Server      *Server
-	Mutex       sync.Mutex
+	Mutex       sync.RWMutex
 	Facing      *Character
-	Advancing   bool                  // true when character is advancing towards their facing target
-	CombatRange map[uuid.UUID]float64 // Changed from int to float64 to store distances
+	Advancing   bool // true when character is advancing towards their facing target
+	CombatRange map[uuid.UUID]float64
 	LastEdited  time.Time
 	LastSaved   time.Time
 }
@@ -209,7 +214,7 @@ type Item struct {
 	IsWorn      bool
 	CanPickUp   bool
 	Metadata    map[string]string
-	Mutex       sync.Mutex
+	Mutex       sync.RWMutex
 	LastEdited  time.Time
 	LastSaved   time.Time
 }
@@ -254,7 +259,7 @@ type Prototype struct {
 	Contents    []uuid.UUID
 	CanPickUp   bool
 	Metadata    map[string]string
-	Mutex       sync.Mutex
+	Mutex       sync.RWMutex
 	LastEdited  time.Time
 	LastSaved   time.Time
 }
@@ -284,7 +289,7 @@ type CloudWatchHandler struct {
 	logGroup    string
 	logStream   string
 	attrs       []slog.Attr
-	mutex       sync.Mutex
+	mutex       sync.RWMutex
 	initialized bool
 }
 

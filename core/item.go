@@ -87,7 +87,7 @@ func (kp *KeyPair) LoadPrototypes() (map[uuid.UUID]*Prototype, error) {
 			Container:   prototypeData.Container,
 			CanPickUp:   prototypeData.CanPickUp,
 			Metadata:    prototypeData.Metadata,
-			Mutex:       sync.Mutex{},
+			Mutex:       sync.RWMutex{},
 			LastEdited:  time.Now(),
 			LastSaved:   time.Now(),
 		}
@@ -175,8 +175,8 @@ func (k *KeyPair) WriteItem(obj *Item) error {
 }
 
 // SaveActiveItems saves all active items from rooms and characters to the database.
-func (s *Server) SaveActiveItems() error {
-	if s == nil {
+func (g *Game) SaveActiveItems() error {
+	if g == nil {
 		return fmt.Errorf("server is nil")
 	}
 
@@ -186,13 +186,13 @@ func (s *Server) SaveActiveItems() error {
 	itemsToSave := make(map[uuid.UUID]*Item)
 
 	// Items in rooms
-	if s.Rooms != nil {
-		for roomID, room := range s.Rooms {
+	if g.Rooms != nil {
+		for roomID, room := range g.Rooms {
 			if room == nil {
 				Logger.Warn("Nil room found", "roomID", roomID)
 				continue
 			}
-			room.Mutex.Lock()
+			room.Mutex.RLock()
 			for _, item := range room.Items {
 				if item == nil {
 					Logger.Warn("Nil item found in room", "roomID", roomID)
@@ -200,20 +200,20 @@ func (s *Server) SaveActiveItems() error {
 				}
 				itemsToSave[item.ID] = item
 			}
-			room.Mutex.Unlock()
+			room.Mutex.RUnlock()
 		}
 	} else {
 		Logger.Warn("Server Rooms map is nil")
 	}
 
 	// Items in character inventories
-	if s.Characters != nil {
-		for charID, character := range s.Characters {
+	if g.Characters != nil {
+		for charID, character := range g.Characters {
 			if character == nil {
 				Logger.Warn("Nil character found", "characterID", charID)
 				continue
 			}
-			character.Mutex.Lock()
+			character.Mutex.RLock()
 			for _, item := range character.Inventory {
 				if item == nil {
 					Logger.Warn("Nil item found in inventory", "characterID", charID)
@@ -221,14 +221,14 @@ func (s *Server) SaveActiveItems() error {
 				}
 				itemsToSave[item.ID] = item
 			}
-			character.Mutex.Unlock()
+			character.Mutex.RUnlock()
 		}
 	} else {
 		Logger.Warn("Server Characters map is nil")
 	}
 
 	// Save all collected items
-	if s.Database == nil {
+	if g.Database == nil {
 		return fmt.Errorf("server database is nil")
 	}
 
@@ -245,7 +245,7 @@ func (s *Server) SaveActiveItems() error {
 		}
 
 		// Attempt to write the item to the database
-		if err := s.Database.WriteItem(item); err != nil {
+		if err := g.Database.WriteItem(item); err != nil {
 			Logger.Error("Error saving item", "itemName", item.Name, "itemID", item.ID, "error", err)
 			// Continue saving other items even if one fails
 		} else {
@@ -259,8 +259,8 @@ func (s *Server) SaveActiveItems() error {
 	return nil
 }
 
-func (s *Server) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
-	prototype, exists := s.Prototypes[prototypeID]
+func (g *Game) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
+	prototype, exists := g.Prototypes[prototypeID]
 	if !exists {
 		Logger.Error("Prototype not found", "prototypeID", prototypeID)
 		return nil, fmt.Errorf("prototype with ID %s not found", prototypeID)
@@ -285,7 +285,7 @@ func (s *Server) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 		IsWorn:      false,
 		CanPickUp:   prototype.CanPickUp,
 		Metadata:    make(map[string]string),
-		Mutex:       sync.Mutex{},
+		Mutex:       sync.RWMutex{},
 		LastEdited:  time.Now(),
 	}
 
@@ -302,7 +302,7 @@ func (s *Server) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 	if newItem.Container {
 		newItem.Contents = make([]*Item, 0, len(prototype.Contents))
 		for _, contentProtoID := range prototype.Contents {
-			newContentItem, err := s.CreateItemFromPrototype(contentProtoID)
+			newContentItem, err := g.CreateItemFromPrototype(contentProtoID)
 			if err != nil {
 				Logger.Error("Error creating content item from prototype", "prototypeID", contentProtoID, "error", err)
 				continue // Skip this content item but continue with others
@@ -312,7 +312,7 @@ func (s *Server) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 	}
 
 	// Save the new item to the database
-	if err := s.Database.WriteItem(newItem); err != nil {
+	if err := g.Database.WriteItem(newItem); err != nil {
 		Logger.Error("Failed to write new item to database", "itemName", newItem.Name, "itemID", newItem.ID, "error", err)
 		return nil, fmt.Errorf("failed to write new item to database: %w", err)
 	}
@@ -358,7 +358,7 @@ func (kp *KeyPair) itemFromData(itemData *ItemData) (*Item, error) {
 		IsWorn:      itemData.IsWorn,
 		CanPickUp:   itemData.CanPickUp,
 		Metadata:    itemData.Metadata,
-		Mutex:       sync.Mutex{},
+		Mutex:       sync.RWMutex{},
 		LastEdited:  time.Now(),
 		LastSaved:   time.Now(),
 	}
@@ -388,8 +388,8 @@ func (r *Room) getVisibleItems() []string {
 
 	Logger.Debug("Getting visible items in room", "room_id", r.RoomID)
 
-	r.Mutex.Lock()
-	defer r.Mutex.Unlock()
+	r.Mutex.RLock()
+	defer r.Mutex.RUnlock()
 
 	// Log room details
 	Logger.Debug("Room object details",

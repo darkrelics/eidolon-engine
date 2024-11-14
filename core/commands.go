@@ -158,6 +158,7 @@ func ExecuteQuitCommand(character *Character, tokens []string) bool {
 	Logger.Info("Player initiating quit", "playerName", character.Player.PlayerID)
 
 	character.Player.ToPlayer <- "\n\rSaving character state...\n\r"
+	character.Cleanup()
 	character.Player.Cleanup()
 
 	return true
@@ -378,7 +379,7 @@ func ExecuteChallengeCommand(character *Character, tokens []string) bool {
 	}
 
 	// Calculate the outcome using the Challenge function
-	outcome := Challenge(attackerScore, defenderScore, character.Server.Balance)
+	outcome := Challenge(attackerScore, defenderScore, character.Game.Config.Game.Balance)
 
 	// Provide feedback to the player based on the challenge outcome
 	feedbackMessage := fmt.Sprintf("\n\rChallenge outcome: %f\n\r", outcome)
@@ -388,17 +389,15 @@ func ExecuteChallengeCommand(character *Character, tokens []string) bool {
 }
 
 func ExecuteWhoCommand(character *Character, tokens []string) bool {
-	if character == nil || character.Server == nil {
+	if character == nil || character.Game == nil {
 		Logger.Error("Invalid character or server state in who command")
 		return false
 	}
 
-	server := character.Server
-	server.Mutex.Lock()
+	server := character.Game
 
 	// Early return if no one is online
 	if len(server.Characters) == 0 {
-		server.Mutex.Unlock()
 		character.Player.ToPlayer <- whoEmpty
 		return false
 	}
@@ -410,7 +409,6 @@ func ExecuteWhoCommand(character *Character, tokens []string) bool {
 			names = append(names, char.Name)
 		}
 	}
-	server.Mutex.Unlock()
 
 	// Sort names
 	sort.Strings(names)
@@ -505,7 +503,7 @@ func ExecutePasswordCommand(character *Character, tokens []string) bool {
 	}
 
 	// Attempt to change password
-	err := ChangePassword(character.Server, player.PlayerID, currentPass, newPass)
+	err := ChangePassword(player, currentPass, newPass)
 	if err != nil {
 		Logger.Error("Password change failed",
 			"playerName", player.PlayerID,
@@ -570,7 +568,7 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
 
 	// Lock room to check items
-	character.Room.Mutex.Lock()
+	character.Room.Mutex.RLock()
 	var itemToTake *Item
 	var itemID uuid.UUID
 
@@ -584,18 +582,18 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 
 	// Early unlock if item not found
 	if itemToTake == nil {
-		character.Room.Mutex.Unlock()
+		character.Room.Mutex.RUnlock()
 		character.Player.ToPlayer <- "\n\rYou can't find that item or it can't be picked up.\n\r"
 		return false
 	}
 
 	// Lock character to check inventory
-	character.Mutex.Lock()
+	character.Mutex.RLock()
 
 	// Check if character can carry the item
 	if !character.CanCarryItem(itemToTake) {
-		character.Room.Mutex.Unlock()
-		character.Mutex.Unlock()
+		character.Room.Mutex.RUnlock()
+		character.Mutex.RUnlock()
 		character.Player.ToPlayer <- "\n\rYou can't carry any more items.\n\r"
 		return false
 	}
@@ -609,8 +607,8 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 	}
 
 	if handSlot == "" {
-		character.Room.Mutex.Unlock()
-		character.Mutex.Unlock()
+		character.Room.Mutex.RUnlock()
+		character.Mutex.RUnlock()
 		character.Player.ToPlayer <- "\n\rYour hands are full. You need a free hand to pick up an item.\n\r"
 		return false
 	}
@@ -630,11 +628,11 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 		itemToTake.Name, strings.Replace(handSlot, "_", " ", -1))
 
 	// Release locks
-	character.Room.Mutex.Unlock()
-	character.Mutex.Unlock()
+	character.Room.Mutex.RUnlock()
+	character.Mutex.RUnlock()
 
 	// Send messages after releasing locks
-	SendRoomMessage(character.Room, roomMessage)
+	SendRoomMessageExcept(character.Room, roomMessage, character)
 	character.Player.ToPlayer <- playerMessage
 
 	Logger.Debug("Item taken", "character", character.Name, "item", itemToTake.Name, "slot", handSlot)
@@ -746,7 +744,7 @@ func ExecuteDropCommand(character *Character, tokens []string) bool {
 
 	// Send messages after releasing locks
 	character.Player.ToPlayer <- playerMsg
-	SendRoomMessage(character.Room, roomMsg)
+	SendRoomMessageExcept(character.Room, roomMsg, character)
 
 	Logger.Debug("Item dropped",
 		"character", character.Name,
@@ -871,7 +869,7 @@ func ExecuteWearCommand(character *Character, tokens []string) bool {
 	}
 
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou wear %s.\n\r", itemDesc)
-	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s wears %s.\n\r", character.Name, itemToWear.Name))
+	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s wears %s.\n\r", character.Name, itemToWear.Name), character)
 
 	Logger.Debug("Item worn",
 		"character", character.Name,
@@ -985,8 +983,7 @@ func ExecuteRemoveCommand(character *Character, tokens []string) bool {
 	}
 
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou remove %s.\n\r", removeDesc)
-	SendRoomMessage(character.Room, fmt.Sprintf("\n\r%s removes %s.\n\r",
-		character.Name, itemToRemove.Name))
+	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s removes %s.\n\r", character.Name, itemToRemove.Name), character)
 
 	Logger.Debug("Item removed", "character", character.Name, "item", itemToRemove.Name, "from_locations", wornLocations, "to_hand", handSlot)
 

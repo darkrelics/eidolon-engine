@@ -6,24 +6,27 @@ import (
 )
 
 // DisplayArchetypes logs the loaded archetypes for debugging purposes.
-func DisplayArchetypes(s *Server) {
-	for key, archtype := range s.ArcheTypes {
+func DisplayArchetypes(g *Game) {
+	for key, archtype := range g.ArcheTypes {
 		Logger.Debug("Archetype", "name", key, "description", archtype.Description)
 	}
 }
 
 // LoadArchetypes retrieves all archetypes from the DynamoDB table and stores them in the Server's ArcheTypes map.
-func (s *Server) LoadArchetypes() error {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
+func LoadArchetypes(g *Game) error {
+	g.Mutex.Lock()
+	defer g.Mutex.Unlock()
 
 	var archetypes []Archetype
-	err := s.Database.Scan("archetypes", &archetypes)
+	err := g.Database.Scan("archetypes", &archetypes)
 	if err != nil {
 		return fmt.Errorf("error scanning archetypes table: %w", err)
 	}
 
-	s.ArcheTypes = make(map[string]*Archetype)
+	if g.ArcheTypes == nil {
+		g.ArcheTypes = make(map[string]*Archetype)
+	}
+
 	for _, archetype := range archetypes {
 		// Create a copy of the archetype to store in the map
 		archetypeCopy := archetype
@@ -42,22 +45,18 @@ func (s *Server) LoadArchetypes() error {
 		}
 		archetypeCopy.Abilities = lowerAbilities
 
-		s.ArcheTypes[archetype.ArchetypeName] = &archetypeCopy
-		Logger.Debug("Loaded archetype",
-			"name", archetype.ArchetypeName,
-			"description", archetype.Description)
+		g.ArcheTypes[archetype.ArchetypeName] = &archetypeCopy
+		Logger.Debug("Loaded archetype", "name", archetype.ArchetypeName, "description", archetype.Description)
 	}
 
 	return nil
 }
 
 // StoreArchetypes stores all archetypes from the Server's ArcheTypes map into the DynamoDB table.
-func (s *Server) StoreArchetypes() error {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
+func (g *Game) StoreArchetypes() error {
 
-	for _, archetype := range s.ArcheTypes {
-		err := s.Database.Put("archetypes", *archetype)
+	for _, archetype := range g.ArcheTypes {
+		err := g.Database.Put("archetypes", *archetype)
 		if err != nil {
 			return fmt.Errorf("error storing archetype %s: %w", archetype.ArchetypeName, err)
 		}
