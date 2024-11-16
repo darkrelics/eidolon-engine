@@ -192,7 +192,7 @@ func InputLoop(c *Character) {
 	}
 
 	// Add safety check for CTX
-	if c.Player.CTX == nil {
+	if c.Player.Context == nil {
 		Logger.Error("Player context is nil", "characterName", c.Name)
 		return
 	}
@@ -211,7 +211,7 @@ func InputLoop(c *Character) {
 	// Send initial prompt - blocking write for initial prompt is acceptable
 	select {
 	case c.Player.ToPlayer <- c.Player.Prompt:
-	case <-c.Player.CTX.Done():
+	case <-c.Player.Context.Done():
 		c.Player.Cleanup()
 		return
 	}
@@ -224,13 +224,13 @@ func InputLoop(c *Character) {
 
 	for !shouldQuit {
 		// Additional safety check inside loop
-		if c.Player == nil || c.Player.CTX == nil {
+		if c.Player == nil || c.Player.Context == nil {
 			Logger.Error("Player or context became nil during loop", "characterName", c.Name)
 			return
 		}
 
 		select {
-		case <-c.Player.CTX.Done():
+		case <-c.Player.Context.Done():
 			Logger.Info("Player context cancelled", "characterName", c.Name)
 			shouldQuit = true
 			continue
@@ -248,7 +248,7 @@ func InputLoop(c *Character) {
 		case <-c.Game.Ticker.C:
 			if lastCommand != "" {
 				// Create timeout context for command processing
-				cmdCtx, cancel := context.WithTimeout(c.Player.CTX, commandTimeout)
+				cmdCtx, cancel := context.WithTimeout(c.Player.Context, commandTimeout)
 
 				// Process command in separate goroutine
 				done := make(chan bool, 1)
@@ -339,7 +339,7 @@ func (p *Player) Cleanup() {
 	if p.Cancel != nil {
 		p.Cancel()
 		p.Cancel = nil
-		p.CTX = nil
+		p.Context = nil
 	}
 
 	// Force close connection immediately if it exists

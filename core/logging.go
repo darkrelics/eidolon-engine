@@ -215,7 +215,7 @@ func (h *MultiHandler) WithGroup(name string) slog.Handler {
 	return NewMultiHandler(newHandlers...)
 }
 
-func SendMetrics(s *Server, interval time.Duration) error {
+func SendMetrics(s *Server, stop chan os.Signal, interval time.Duration) error {
 	if s == nil {
 		return fmt.Errorf("server instance is nil")
 	}
@@ -280,6 +280,10 @@ func SendMetrics(s *Server, interval time.Duration) error {
 
 		case <-s.Context.Done():
 			Logger.Info("Stopping metrics collection due to context cancellation")
+			return nil
+
+		case <-stop:
+			Logger.Info("Stopping metrics collection due to stop signal")
 			return nil
 		}
 	}

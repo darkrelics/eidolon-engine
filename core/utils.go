@@ -28,7 +28,7 @@ func Challenge(attacker, defender, balance float64) float64 {
 }
 
 // AutoSave periodically saves the game state in the background.
-func AutoSave(game *Game) {
+func AutoSave(game *Game, stop chan os.Signal) {
 	// Configure the auto-save interval
 	interval := game.Config.Game.AutoSave
 	if interval == 0 {
@@ -56,6 +56,9 @@ func AutoSave(game *Game) {
 			}
 		case <-stopCh:
 			Logger.Info("Auto-save routine stopped")
+			return
+		case <-stop:
+			Logger.Info("Received signal to stop auto-save routine")
 			return
 		}
 	}
