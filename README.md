@@ -22,11 +22,11 @@ The current implementation includes an SSH server for secure authentication and 
 
 ## Project Overview
 
-The engine is primarily written in Go (version 1.22) with an SSH server for secure authentication and communication between the player and the server. Additionally, there are database utility scripts written in Python (version 3.12) and various deployment scripts.
+The engine is primarily written in Go (version 1.23) with an SSH server for secure authentication and communication between the player and the server. Additionally, there are database utility scripts written in Python (version 3.12) and various deployment scripts.
 
 Key components:
 
-- Go server (v1.22) for game logic and player interactions
+- Go server (v1.23) for game logic and player interactions
 - Python (v3.12) scripts for database management and deployment
 - AWS services for database (DynamoDB) and Identity Provider (Cognito)
 - CloudFormation templates for AWS resource management
@@ -204,7 +204,7 @@ OTHER:
 
 Deploying the server involves several steps:
 
-1. Ensure you have Go 1.22 and Python 3.12 installed.
+1. Ensure you have Go 1.23 and Python 3.12 installed.
 2. Clone the repository.
 3. Install the required Python packages:
    ```
