@@ -37,9 +37,8 @@ Resources:
       AdminCreateUserConfig:
         AllowAdminCreateUserOnly: false
         InviteMessageTemplate:
-          EmailMessage: "Your username is {username} and temporary password is {####}."
           EmailSubject: "Your temporary password"
-          SMSMessage: "Your username is {username} and temporary password is {####}."
+          EmailMessage: "Your username is {username} and temporary password is {####}."
         UnusedAccountValidityDays: 7
       Policies:
         PasswordPolicy:
