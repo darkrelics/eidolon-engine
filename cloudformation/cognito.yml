@@ -65,7 +65,7 @@ Resources:
       AutoVerifiedAttributes:
         - email
       EmailVerificationSubject: !Ref VerificationSubject
-      EmailVerificationMessage: "Please verify your email by clicking this link: {##Click Here##}"
+      EmailVerificationMessage: "Please verify your email by clicking this link: {####}"
       MfaConfiguration: "OFF"
       AccountRecoverySetting:
         RecoveryMechanisms:
