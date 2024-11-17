@@ -111,10 +111,11 @@ func ValidateCommand(command string) (string, []string, error) {
 	return verb, tokens, nil
 }
 
-func ExecuteCommand(character *Character, verb string, tokens []string) bool {
+func ExecuteCommand(character *Character, verb string, tokens []string) {
+
 	if character == nil {
 		Logger.Error("Attempted to execute command with nil character")
-		return false
+		return
 	}
 
 	handler, ok := CommandHandlers[verb]
@@ -122,26 +123,21 @@ func ExecuteCommand(character *Character, verb string, tokens []string) bool {
 		// This should never happen due to ValidateCommand, but we'll handle it gracefully
 		Logger.Error("Command handler missing for validated command", "verb", verb)
 		character.Player.ToPlayer <- "\n\rInternal error processing command.\n\r"
-		return false
+		character.End <- true
+		return
 	}
 
 	// Track command execution time
 	start := time.Now()
 
 	// Execute the command
-	quit := handler(character, tokens)
+	handler(character, tokens)
 
 	// Only log if command took longer than expected
 	elapsed := time.Since(start)
 	if elapsed > 100*time.Millisecond {
-		Logger.Warn("Slow command execution",
-			"verb", verb,
-			"duration", elapsed,
-			"character", character.Name)
+		Logger.Warn("Slow command execution", "verb", verb, "duration", elapsed, "character", character.Name)
 	}
-
-	// True indicates the player is quitting
-	return quit
 }
 
 func ExecuteQuitCommand(character *Character, tokens []string) bool {

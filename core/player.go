@@ -199,6 +199,13 @@ func InputLoop(c *Character) {
 
 	Logger.Debug("Starting input loop for character", "characterName", c.Name)
 
+	// Cleanup handling with defer
+	defer func() {
+		c.Cleanup()
+		c.Player.Cleanup()
+		Logger.Debug("Input loop ended for character", "characterName", c.Name)
+	}()
+
 	// Initially execute the look command with no additional tokens
 	ExecuteLookCommand(c, []string{})
 
@@ -212,17 +219,15 @@ func InputLoop(c *Character) {
 	select {
 	case c.Player.ToPlayer <- c.Player.Prompt:
 	case <-c.Player.Context.Done():
-		c.Player.Cleanup()
 		return
 	}
 
 	var lastCommand string
-	shouldQuit := false
 
 	// Create command processing timeout
 	const commandTimeout = 5 * time.Second
 
-	for !shouldQuit {
+	for {
 		// Additional safety check inside loop
 		if c.Player == nil || c.Player.Context == nil {
 			Logger.Error("Player or context became nil during loop", "characterName", c.Name)
@@ -232,19 +237,18 @@ func InputLoop(c *Character) {
 		select {
 		case <-c.Player.Context.Done():
 			Logger.Info("Player context cancelled", "characterName", c.Name)
-			shouldQuit = true
-			continue
+			c.End <- true
+			return // Changed from continue to return
 
 		case <-c.End:
 			Logger.Info("Character end channel closed", "characterName", c.Name)
-			shouldQuit = true
-			continue
+			return // Changed from continue to return
 
 		case inputLine, more := <-c.Player.FromPlayer:
 			if !more {
 				Logger.Debug("Input channel closed for player", "playerName", c.Player.PlayerID)
-				shouldQuit = true
-				continue
+				c.End <- true
+				return // Changed from continue to return
 			}
 			if lastCommand == "" { // Only accept new command if previous one is processed
 				lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
@@ -255,9 +259,19 @@ func InputLoop(c *Character) {
 				// Create timeout context for command processing
 				cmdCtx, cancel := context.WithTimeout(c.Player.Context, commandTimeout)
 
-				// Process command in separate goroutine
+				// Process command in separate goroutine with panic recovery
 				done := make(chan bool, 1)
 				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							Logger.Error("Panic in command processing",
+								"characterName", c.Name,
+								"command", lastCommand,
+								"panic", r)
+							done <- true
+						}
+					}()
+
 					verb, tokens, err := ValidateCommand(strings.TrimSpace(lastCommand))
 					if err != nil {
 						select {
@@ -267,7 +281,7 @@ func InputLoop(c *Character) {
 						}
 					} else {
 						// Execute the command
-						shouldQuit = ExecuteCommand(c, verb, tokens)
+						ExecuteCommand(c, verb, tokens)
 						Logger.Debug("Player issued command",
 							"playerName", c.Player.PlayerID,
 							"command", strings.Join(tokens, " "))
@@ -277,20 +291,19 @@ func InputLoop(c *Character) {
 
 				// Wait for command completion or timeout
 				select {
+				case <-c.End:
+					cancel()
+					return // Changed from continue to return
 				case <-done:
-					if !shouldQuit {
-						// Non-blocking prompt send
-						select {
-						case c.Player.ToPlayer <- c.Player.Prompt:
-						case <-cmdCtx.Done():
-						default:
-							Logger.Warn("Unable to send prompt", "characterName", c.Name)
-						}
+					// Non-blocking prompt send
+					select {
+					case c.Player.ToPlayer <- c.Player.Prompt:
+					case <-cmdCtx.Done():
+					default:
+						Logger.Warn("Unable to send prompt", "characterName", c.Name)
 					}
 				case <-cmdCtx.Done():
-					Logger.Warn("Command processing timed out",
-						"characterName", c.Name,
-						"command", lastCommand)
+					Logger.Warn("Command processing timed out", "characterName", c.Name, "command", lastCommand)
 				}
 
 				cancel()         // Cleanup timeout context
@@ -298,12 +311,6 @@ func InputLoop(c *Character) {
 			}
 		}
 	}
-
-	// Cleanup on exit
-
-	c.Cleanup()
-	c.Player.Cleanup()
-	Logger.Debug("Input loop ended for character", "characterName", c.Name)
 }
 
 func (p *Player) Cleanup() {

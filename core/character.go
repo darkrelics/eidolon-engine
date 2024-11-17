@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -656,28 +657,10 @@ func (c *Character) RemoveWornItem(item *Item) error {
 	return nil
 }
 
-// getOtherCharacters returns a list of character names in the room, excluding the current character.
-func getOtherCharacters(r *Room, currentCharacter *Character) []string {
-	if r == nil || r.Characters == nil {
-		Logger.Warn("Room or Characters map is nil in getOtherCharacters")
-		return []string{}
-	}
-
-	otherCharacters := make([]string, 0)
-	for _, c := range r.Characters {
-		if c != nil && c != currentCharacter {
-			otherCharacters = append(otherCharacters, c.Name)
-		}
-	}
-
-	Logger.Debug("Found other characters in room", "count", len(otherCharacters), "room_id", r.RoomID)
-	return otherCharacters
-}
-
 func moveCharacter(character *Character, direction string) error {
 	// Check if the character is in a room
 	if character.Room == nil {
-		return fmt.Errorf(msgNoRoom)
+		return errors.New(msgNoRoom)
 	}
 
 	// Lock current room to check exit
@@ -686,13 +669,13 @@ func moveCharacter(character *Character, direction string) error {
 	selectedExit, exists := character.Room.Exits[direction]
 	if !exists || selectedExit == nil {
 		character.Room.Mutex.Unlock()
-		return fmt.Errorf(msgInvalidDir)
+		return errors.New(msgInvalidDir)
 	}
 
 	targetRoom := selectedExit.TargetRoom
 	if targetRoom == nil {
 		character.Room.Mutex.Unlock()
-		return fmt.Errorf(msgPathNowhere)
+		return errors.New(msgPathNowhere)
 	}
 
 	// Lock target room

@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -307,25 +306,6 @@ func SendRoomMessageExcept(r *Room, message string, character *Character) {
 		c.Player.ToPlayer <- message
 		c.Player.ToPlayer <- c.Player.Prompt
 	}
-}
-
-// getVisibleExits returns a sorted list of visible exit directions from the room.
-func getVisibleExits(r *Room) []string {
-	Logger.Debug("Getting visible exits for room", "room_id", r.RoomID)
-
-	if r.Exits == nil {
-		Logger.Debug("Exits map is nil for room", "room_id", r.RoomID)
-		return []string{}
-	}
-
-	visibleExits := make([]string, 0, len(r.Exits))
-	for direction, exit := range r.Exits {
-		if exit.Visible {
-			visibleExits = append(visibleExits, direction)
-		}
-	}
-	sort.Strings(visibleExits)
-	return visibleExits
 }
 
 // ToData converts a Room to RoomData for database storage.
