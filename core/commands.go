@@ -27,7 +27,7 @@ const (
 	nameSpacing    = 2  // Spaces between columns
 )
 
-type CommandHandler func(character *Character, tokens []string) bool
+type CommandHandler func(character *Character, tokens []string)
 
 var CommandHandlers = map[string]CommandHandler{
 	"quit":      ExecuteQuitCommand,
@@ -123,32 +123,23 @@ func ExecuteCommand(character *Character, verb string, tokens []string) {
 		// This should never happen due to ValidateCommand, but we'll handle it gracefully
 		Logger.Error("Command handler missing for validated command", "verb", verb)
 		character.Player.ToPlayer <- "\n\rInternal error processing command.\n\r"
-		character.End <- true
 		return
 	}
 
-	// Track command execution time
-	start := time.Now()
-
 	// Execute the command
-	handler(character, tokens)
+	go handler(character, tokens)
 
-	// Only log if command took longer than expected
-	elapsed := time.Since(start)
-	if elapsed > 100*time.Millisecond {
-		Logger.Warn("Slow command execution", "verb", verb, "duration", elapsed, "character", character.Name)
-	}
 }
 
-func ExecuteQuitCommand(character *Character, tokens []string) bool {
+func ExecuteQuitCommand(character *Character, tokens []string) {
 	if character == nil {
 		Logger.Error("Attempted to quit with nil character")
-		return true
+		return
 	}
 
 	if character.Player == nil {
 		Logger.Error("Character has no associated player")
-		return true
+		return
 	}
 
 	Logger.Info("Player initiating quit", "playerName", character.Player.PlayerID)
@@ -161,10 +152,9 @@ func ExecuteQuitCommand(character *Character, tokens []string) bool {
 	character.Cleanup()
 	character.Player.Cleanup()
 
-	return true
 }
 
-func ExecuteHelpCommand(character *Character, tokens []string) bool {
+func ExecuteHelpCommand(character *Character, tokens []string) {
 
 	Logger.Debug("Player is requesting help", "playerName", character.Player.PlayerID)
 
@@ -189,20 +179,19 @@ func ExecuteHelpCommand(character *Character, tokens []string) bool {
 		"\n\rquit - Quit the game\n\r"
 
 	character.Player.ToPlayer <- helpMessage
-	return false
 }
 
-func ExecuteSayCommand(character *Character, tokens []string) bool {
+func ExecuteSayCommand(character *Character, tokens []string) {
 	if character == nil || character.Room == nil {
 		Logger.Error("Invalid character or room state for say command")
-		return false
+		return
 	}
 
 	Logger.Debug("Player is saying something", "playerName", character.Player.PlayerID)
 
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- "\n\rWhat do you want to say?\n\r"
-		return false
+		return
 	}
 
 	message := strings.Join(tokens[1:], " ")
@@ -230,13 +219,12 @@ func ExecuteSayCommand(character *Character, tokens []string) bool {
 	// Send to speaker
 	character.Player.ToPlayer <- speakerMessage
 
-	return false
 }
 
-func ExecuteLookCommand(character *Character, tokens []string) bool {
+func ExecuteLookCommand(character *Character, tokens []string) {
 	if character == nil {
 		Logger.Error("Attempted to look with nil character")
-		return false
+		return
 	}
 
 	Logger.Debug("Player is looking", "playerName", character.Player.PlayerID)
@@ -246,14 +234,14 @@ func ExecuteLookCommand(character *Character, tokens []string) bool {
 		target := strings.ToLower(strings.Join(tokens[1:], " "))
 		desc := getLookTarget(character, target)
 		character.Player.ToPlayer <- desc
-		return false
+		return
 	}
 
 	// Look at room
 	room := character.Room
 	if room == nil {
 		character.Player.ToPlayer <- "\n\rYou are floating in the void.\n\r"
-		return false
+		return
 	}
 
 	room.Mutex.Lock()
@@ -320,19 +308,18 @@ func ExecuteLookCommand(character *Character, tokens []string) bool {
 	}
 
 	character.Player.ToPlayer <- roomInfo.String()
-	return false
 }
 
-func ExecuteGoCommand(character *Character, tokens []string) bool {
+func ExecuteGoCommand(character *Character, tokens []string) {
 	if character == nil {
 		Logger.Error("Attempted to move with nil character")
-		return false
+		return
 	}
 
 	// Check arguments
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- msgNoDirection
-		return false
+		return
 	}
 
 	// Use the raw direction as provided - no normalization
@@ -341,41 +328,40 @@ func ExecuteGoCommand(character *Character, tokens []string) bool {
 	// Check if character can move
 	if !character.CanEscape() {
 		character.Player.ToPlayer <- msgCantEscape
-		return false
+		return
 	}
 
 	if err := moveCharacter(character, direction); err != nil {
 		character.Player.ToPlayer <- err.Error()
-		return false
+		return
 	}
 
 	// Clear combat state after successful move
 	character.ExitCombat()
 
-	return false
 }
 
-func ExecuteChallengeCommand(character *Character, tokens []string) bool {
+func ExecuteChallengeCommand(character *Character, tokens []string) {
 
 	Logger.Debug("Player is attempting a challenge", "playerName", character.Player.PlayerID)
 
 	// Ensure the correct number of arguments are provided
 	if len(tokens) < 3 {
 		character.Player.ToPlayer <- "\n\rUsage: challenge <attackerScore> <defenderScore>\n\r"
-		return false
+		return
 	}
 
 	// Parse attacker and defender scores from the command arguments
 	attackerScore, err := strconv.ParseFloat(tokens[1], 64)
 	if err != nil {
 		character.Player.ToPlayer <- "\n\rInvalid attacker score format. Please enter a valid number.\n\r"
-		return false
+		return
 	}
 
 	defenderScore, err := strconv.ParseFloat(tokens[2], 64)
 	if err != nil {
 		character.Player.ToPlayer <- "\n\rInvalid defender score format. Please enter a valid number.\n\r"
-		return false
+		return
 	}
 
 	// Calculate the outcome using the Challenge function
@@ -385,13 +371,12 @@ func ExecuteChallengeCommand(character *Character, tokens []string) bool {
 	feedbackMessage := fmt.Sprintf("\n\rChallenge outcome: %f\n\r", outcome)
 	character.Player.ToPlayer <- feedbackMessage
 
-	return false
 }
 
-func ExecuteWhoCommand(character *Character, tokens []string) bool {
+func ExecuteWhoCommand(character *Character, tokens []string) {
 	if character == nil || character.Game == nil {
 		Logger.Error("Invalid character or server state in who command")
-		return false
+		return
 	}
 
 	server := character.Game
@@ -399,7 +384,7 @@ func ExecuteWhoCommand(character *Character, tokens []string) bool {
 	// Early return if no one is online
 	if len(server.Characters) == 0 {
 		character.Player.ToPlayer <- whoEmpty
-		return false
+		return
 	}
 
 	// Collect names while under lock
@@ -447,10 +432,9 @@ func ExecuteWhoCommand(character *Character, tokens []string) bool {
 
 	Logger.Debug("Who list displayed", "player", character.Name, "online_count", len(names))
 
-	return false
 }
 
-func ExecutePasswordCommand(character *Character, tokens []string) bool {
+func ExecutePasswordCommand(character *Character, tokens []string) {
 	player := character.Player
 
 	// Disable echo to prevent password display
@@ -473,33 +457,33 @@ func ExecutePasswordCommand(character *Character, tokens []string) bool {
 	player.ToPlayer <- "\n\rEnter current password: "
 	currentPass, ok := <-player.FromPlayer
 	if !ok {
-		return false
+		return
 	}
 
 	// Get new password
 	player.ToPlayer <- "\n\rEnter new password: "
 	newPass, ok := <-player.FromPlayer
 	if !ok {
-		return false
+		return
 	}
 
 	// Validate password complexity
 	if !isValidPassword(newPass) {
 		player.ToPlayer <- "\n\rPassword does not meet requirements.\n\r"
-		return false
+		return
 	}
 
 	// Confirm new password
 	player.ToPlayer <- "\n\rConfirm new password: "
 	confirmPass, ok := <-player.FromPlayer
 	if !ok {
-		return false
+		return
 	}
 
 	// Check if passwords match
 	if newPass != confirmPass {
 		player.ToPlayer <- "\n\rPasswords do not match.\n\r"
-		return false
+		return
 	}
 
 	// Attempt to change password
@@ -519,14 +503,13 @@ func ExecutePasswordCommand(character *Character, tokens []string) bool {
 		default:
 			player.ToPlayer <- "\n\rFailed to change password. Please try again later.\n\r"
 		}
-		return false
+		return
 	}
 
 	player.ToPlayer <- "\n\rPassword changed successfully.\n\r"
-	return false
 }
 
-func ExecuteShowCommand(character *Character, tokens []string) bool {
+func ExecuteShowCommand(character *Character, tokens []string) {
 
 	Logger.Debug("Player is displaying character information", "playerName", character.Player.PlayerID)
 
@@ -556,13 +539,12 @@ func ExecuteShowCommand(character *Character, tokens []string) bool {
 	// Send the composed information to the player
 	player.ToPlayer <- output.String()
 
-	return false // Keep the command loop running
 }
 
-func ExecuteTakeCommand(character *Character, tokens []string) bool {
+func ExecuteTakeCommand(character *Character, tokens []string) {
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- "\n\rUsage: take <item name>\n\r"
-		return false
+		return
 	}
 
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
@@ -584,7 +566,7 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 	if itemToTake == nil {
 		character.Room.Mutex.RUnlock()
 		character.Player.ToPlayer <- "\n\rYou can't find that item or it can't be picked up.\n\r"
-		return false
+		return
 	}
 
 	// Lock character to check inventory
@@ -595,7 +577,7 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 		character.Room.Mutex.RUnlock()
 		character.Mutex.RUnlock()
 		character.Player.ToPlayer <- "\n\rYou can't carry any more items.\n\r"
-		return false
+		return
 	}
 
 	// Determine available hand slot
@@ -610,7 +592,7 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 		character.Room.Mutex.RUnlock()
 		character.Mutex.RUnlock()
 		character.Player.ToPlayer <- "\n\rYour hands are full. You need a free hand to pick up an item.\n\r"
-		return false
+		return
 	}
 
 	// At this point we have both locks and can safely modify both structures
@@ -637,22 +619,20 @@ func ExecuteTakeCommand(character *Character, tokens []string) bool {
 
 	Logger.Debug("Item taken", "character", character.Name, "item", itemToTake.Name, "slot", handSlot)
 
-	return false
 }
 
-func ExecuteInventoryCommand(character *Character, tokens []string) bool {
+func ExecuteInventoryCommand(character *Character, tokens []string) {
 
 	Logger.Debug("Player is checking their inventory", "playerName", character.Player.PlayerID)
 
 	inventoryList := character.ListInventory()
 	character.Player.ToPlayer <- inventoryList
-	return false
 }
 
-func ExecuteDropCommand(character *Character, tokens []string) bool {
+func ExecuteDropCommand(character *Character, tokens []string) {
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- "\n\rUsage: drop <item name>\n\r"
-		return false
+		return
 	}
 
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
@@ -677,14 +657,14 @@ func ExecuteDropCommand(character *Character, tokens []string) bool {
 	if itemToDrop == nil {
 		character.Mutex.Unlock()
 		character.Player.ToPlayer <- "\n\rYou don't have that item.\n\r"
-		return false
+		return
 	}
 
 	// Can't drop worn items
 	if isWorn {
 		character.Mutex.Unlock()
 		character.Player.ToPlayer <- "\n\rYou must remove that item before dropping it.\n\r"
-		return false
+		return
 	}
 
 	// Lock room after character
@@ -752,13 +732,12 @@ func ExecuteDropCommand(character *Character, tokens []string) bool {
 		"quantity", quantity,
 		"slot", itemSlot)
 
-	return false
 }
 
-func ExecuteWearCommand(character *Character, tokens []string) bool {
+func ExecuteWearCommand(character *Character, tokens []string) {
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- "\n\rUsage: wear <item name>\n\r"
-		return false
+		return
 	}
 
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
@@ -781,24 +760,24 @@ func ExecuteWearCommand(character *Character, tokens []string) bool {
 
 	if itemToWear == nil {
 		character.Player.ToPlayer <- "\n\rYou don't have that item.\n\r"
-		return false
+		return
 	}
 
 	// Validate item can be worn
 	if !itemToWear.Wearable || len(itemToWear.WornOn) == 0 {
 		character.Player.ToPlayer <- "\n\rThat item cannot be worn.\n\r"
-		return false
+		return
 	}
 
 	if itemToWear.IsWorn {
 		character.Player.ToPlayer <- "\n\rYou're already wearing that.\n\r"
-		return false
+		return
 	}
 
 	// Verify item is in hand
 	if currentSlot != "left_hand" && currentSlot != "right_hand" {
 		character.Player.ToPlayer <- "\n\rYou must be holding the item to wear it.\n\r"
-		return false
+		return
 	}
 
 	// Check if wearing locations are valid and available
@@ -806,7 +785,7 @@ func ExecuteWearCommand(character *Character, tokens []string) bool {
 	for _, location := range itemToWear.WornOn {
 		if !WearLocations[location] {
 			character.Player.ToPlayer <- fmt.Sprintf("\n\rInvalid wear location: %s\n\r", location)
-			return false
+			return
 		}
 		if existing := character.Inventory[location]; existing != nil {
 			blockedLocations = append(blockedLocations, fmt.Sprintf("%s (%s)", location, existing.Name))
@@ -816,7 +795,7 @@ func ExecuteWearCommand(character *Character, tokens []string) bool {
 	if len(blockedLocations) > 0 {
 		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already wearing something on your %s.\n\r",
 			strings.Join(blockedLocations, ", "))
-		return false
+		return
 	}
 
 	// Handle stackable items
@@ -876,13 +855,12 @@ func ExecuteWearCommand(character *Character, tokens []string) bool {
 		"item", itemToWear.Name,
 		"locations", itemToWear.WornOn)
 
-	return false
 }
 
-func ExecuteRemoveCommand(character *Character, tokens []string) bool {
+func ExecuteRemoveCommand(character *Character, tokens []string) {
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- "\n\rUsage: remove <item name>\n\r"
-		return false
+		return
 	}
 
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
@@ -903,7 +881,7 @@ func ExecuteRemoveCommand(character *Character, tokens []string) bool {
 
 	if itemToRemove == nil {
 		character.Player.ToPlayer <- "\n\rYou're not wearing that item.\n\r"
-		return false
+		return
 	}
 
 	// Find an available hand
@@ -915,7 +893,7 @@ func ExecuteRemoveCommand(character *Character, tokens []string) bool {
 		handSlot = "left_hand"
 	default:
 		character.Player.ToPlayer <- "\n\rYour hands are full. You need a free hand to remove that.\n\r"
-		return false
+		return
 	}
 
 	// Handle stackable items
@@ -987,15 +965,14 @@ func ExecuteRemoveCommand(character *Character, tokens []string) bool {
 
 	Logger.Debug("Item removed", "character", character.Name, "item", itemToRemove.Name, "from_locations", wornLocations, "to_hand", handSlot)
 
-	return false
 }
 
-func ExecuteExamineCommand(character *Character, tokens []string) bool {
+func ExecuteExamineCommand(character *Character, tokens []string) {
 	Logger.Debug("Player is examining an item", "playerName", character.Player.PlayerID)
 
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- "\n\rUsage: examine <item name>\n\r"
-		return false
+		return
 	}
 
 	itemName := strings.ToLower(strings.Join(tokens[1:], " "))
@@ -1015,7 +992,7 @@ func ExecuteExamineCommand(character *Character, tokens []string) bool {
 
 	if item == nil {
 		character.Player.ToPlayer <- "\n\rYou don't see that item here.\n\r"
-		return false
+		return
 	}
 
 	description := fmt.Sprintf("\n\rItem: %s (ID: %s)\n\r", item.Name, item.ID)
@@ -1068,5 +1045,4 @@ func ExecuteExamineCommand(character *Character, tokens []string) bool {
 	}
 
 	character.Player.ToPlayer <- description
-	return false
 }

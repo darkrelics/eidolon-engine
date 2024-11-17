@@ -255,6 +255,7 @@ func SendMetrics(s *Server, stop chan os.Signal, interval time.Duration) error {
 
 			playerCount := float64(s.PlayerCount)
 			memoryUsageMB := float64(m.Alloc) / 1024 / 1024
+			routineCount := float64(runtime.NumGoroutine())
 
 			_, err := client.PutMetricData(s.Context, &cloudwatch.PutMetricDataInput{
 				Namespace: aws.String(s.Config.Logging.MetricNamespace),
@@ -269,13 +270,18 @@ func SendMetrics(s *Server, stop chan os.Signal, interval time.Duration) error {
 						Unit:       types.StandardUnitMegabytes,
 						Value:      aws.Float64(memoryUsageMB),
 					},
+					{
+						MetricName: aws.String("RoutineCount"),
+						Unit:       types.StandardUnitCount,
+						Value:      aws.Float64(routineCount),
+					},
 				},
 			})
 
 			if err != nil {
 				Logger.Error("Failed to send metrics to CloudWatch", "error", err)
 			} else {
-				Logger.Debug("Sent metrics to CloudWatch", "playerCount", playerCount, "memoryUsageMB", memoryUsageMB)
+				Logger.Debug("Sent metrics to CloudWatch", "playerCount", playerCount, "memoryUsageMB", memoryUsageMB, "routineCount", routineCount)
 			}
 
 		case <-s.Context.Done():

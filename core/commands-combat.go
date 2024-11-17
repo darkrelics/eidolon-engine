@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func ExecuteAssessCommand(character *Character, tokens []string) bool {
+func ExecuteAssessCommand(character *Character, tokens []string) {
 	Logger.Debug("Player is assessing combat situation", "playerName", character.Player.PlayerID)
 
 	if !character.IsInCombat() {
@@ -15,7 +15,7 @@ func ExecuteAssessCommand(character *Character, tokens []string) bool {
 		} else {
 			character.Player.ToPlayer <- "\n\rYou are not currently in combat.\n\r"
 		}
-		return false
+		return
 	}
 
 	var assessment strings.Builder
@@ -78,13 +78,12 @@ func ExecuteAssessCommand(character *Character, tokens []string) bool {
 	}
 
 	character.Player.ToPlayer <- assessment.String()
-	return false
 }
 
-func ExecuteFaceCommand(character *Character, tokens []string) bool {
+func ExecuteFaceCommand(character *Character, tokens []string) {
 	if len(tokens) < 2 {
 		character.Player.ToPlayer <- "\n\rUsage: face <character name>\n\r"
-		return false
+		return
 	}
 
 	targetName := strings.Join(tokens[1:], " ")
@@ -100,7 +99,7 @@ func ExecuteFaceCommand(character *Character, tokens []string) bool {
 
 	if targetCharacter == nil {
 		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou don't see %s here.\n\r", targetName)
-		return false
+		return
 	}
 
 	// Set facing for the character executing the command
@@ -122,19 +121,18 @@ func ExecuteFaceCommand(character *Character, tokens []string) bool {
 		character.Name, DefaultDistance)
 	targetCharacter.Player.ToPlayer <- targetCharacter.Player.Prompt
 
-	return false
 }
 
-func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
+func ExecuteAdvanceCommand(character *Character, tokens []string) {
 	if character == nil {
 		Logger.Error("Attempted to advance with nil character")
-		return false
+		return
 	}
 
 	// Check if already advancing
 	if character.Advancing {
 		character.Player.ToPlayer <- "\n\rYou are already advancing.\n\r"
-		return false
+		return
 	}
 
 	// Check if already in melee with someone
@@ -142,7 +140,7 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 		if distance <= MeleeRange {
 			if target := character.Game.Characters[targetID]; target != nil {
 				character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already in melee combat with %s.\n\r", target.Name)
-				return false
+				return
 			}
 		}
 	}
@@ -185,13 +183,13 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 
 	if target == nil {
 		character.Player.ToPlayer <- "\n\rAdvance towards whom?\n\r"
-		return false
+		return
 	}
 
 	// Check for self-targeting
 	if target == character {
 		character.Player.ToPlayer <- "\n\rYou cannot advance towards yourself.\n\r"
-		return false
+		return
 	}
 
 	character.Mutex.Lock()
@@ -205,19 +203,18 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou begin advancing towards %s.\n\r", target.Name)
 	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s begins advancing towards %s.\n\r", character.Name, target.Name), character)
 
-	return false
 }
 
-func ExecuteRetreatCommand(character *Character, tokens []string) bool {
+func ExecuteRetreatCommand(character *Character, tokens []string) {
 	if character == nil {
 		Logger.Error("Attempted to retreat with nil character")
-		return false
+		return
 	}
 
 	// Check if already advancing/retreating
 	if character.Advancing {
 		character.Player.ToPlayer <- "\n\rYou are already in motion.\n\r"
-		return false
+		return
 	}
 
 	// Default values
@@ -256,7 +253,7 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 
 	if target == nil {
 		character.Player.ToPlayer <- "\n\rRetreat from whom?\n\r"
-		return false
+		return
 	}
 
 	// Get current distance
@@ -266,7 +263,7 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 	if currentDistance >= desiredDistance {
 		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already at %s range from %s.\n\r",
 			getRangeDescription(desiredDistance), target.Name)
-		return false
+		return
 	}
 
 	// Start the retreat
@@ -277,5 +274,4 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou begin retreating from %s.\n\r", target.Name)
 	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s begins retreating from %s.\n\r", character.Name, target.Name), character)
 
-	return false
 }
