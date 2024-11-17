@@ -171,6 +171,7 @@ type Character struct {
 	CombatRange map[uuid.UUID]float64
 	LastEdited  time.Time
 	LastSaved   time.Time
+	End         chan bool
 }
 
 // CharacterData for unmarshalling character.

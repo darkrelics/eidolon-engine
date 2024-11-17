@@ -54,7 +54,7 @@ func (c *Character) GetCombatRange(target *Character) float64 {
 
 // IsInCombat checks if the character is currently in combat
 func (c *Character) IsInCombat() bool {
-	return c.CombatRange != nil && len(c.CombatRange) > 0
+	return c.CombatRange != nil
 }
 
 // CanEscape checks if the character can escape from combat
@@ -158,88 +158,97 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 	}
 
 	for {
-		<-character.Game.Ticker.C
+		select {
+		case <-character.End:
+			Logger.Debug("Received end signal, stopping movement", "character", characterName)
+			character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
+			return
+		case <-target.End:
+			Logger.Debug("Received end signal, stopping movement", "character", characterName)
+			character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
+			return
+		case <-character.Game.Ticker.C:
+			// Get states before acquiring locks
+			Logger.Debug("Pre-lock state check", "character", characterName)
 
-		// Get states before acquiring locks
-		Logger.Debug("Pre-lock state check", "character", characterName)
-
-		// First check character's state with minimal lock time
-		character.Mutex.Lock()
-		if !character.Advancing || character.Room != startingRoom {
+			// First check character's state with minimal lock time
+			character.Mutex.Lock()
+			if !character.Advancing || character.Room != startingRoom {
+				character.Mutex.Unlock()
+				Logger.Debug("Character state invalid, ending movement", "character", characterName)
+				character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
+				return
+			}
+			curDistance := character.GetCombatRange(target)
 			character.Mutex.Unlock()
-			Logger.Debug("Character state invalid, ending movement", "character", characterName)
-			character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
-			return
-		}
-		curDistance := character.GetCombatRange(target)
-		character.Mutex.Unlock()
 
-		// Then check target's state with minimal lock time
-		target.Mutex.Lock()
-		targetInRoom := target.Room == startingRoom
-		target.Mutex.Unlock()
+			// Then check target's state with minimal lock time
+			target.Mutex.Lock()
+			targetInRoom := target.Room == startingRoom
+			target.Mutex.Unlock()
 
-		if !targetInRoom {
-			Logger.Debug("Target left room, ending movement", "character", characterName)
-			character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
-			return
-		}
-
-		// Calculate new distance before acquiring locks
-		var newDistance float64
-		if isRetreat {
-			newDistance = curDistance + moveRate
-			if newDistance > desiredDistance {
-				newDistance = desiredDistance
+			if !targetInRoom {
+				Logger.Debug("Target left room, ending movement", "character", characterName)
+				character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
+				return
 			}
-			if newDistance > VeryFarRange {
-				newDistance = VeryFarRange
+
+			// Calculate new distance before acquiring locks
+			var newDistance float64
+			if isRetreat {
+				newDistance = curDistance + moveRate
+				if newDistance > desiredDistance {
+					newDistance = desiredDistance
+				}
+				if newDistance > VeryFarRange {
+					newDistance = VeryFarRange
+				}
+			} else {
+				newDistance = curDistance - moveRate
+				if newDistance < desiredDistance {
+					newDistance = desiredDistance
+				}
 			}
-		} else {
-			newDistance = curDistance - moveRate
-			if newDistance < desiredDistance {
-				newDistance = desiredDistance
+
+			// Update distances with minimal lock time
+			Logger.Debug("Acquiring locks for distance update", "character", characterName, "currentDistance", curDistance, "newDistance", newDistance)
+
+			character.Mutex.Lock()
+			character.SetCombatRange(target, newDistance)
+			character.Mutex.Unlock()
+
+			target.Mutex.Lock()
+			target.SetCombatRange(character, newDistance)
+			target.Mutex.Unlock()
+
+			Logger.Debug("Released locks after distance update", "character", characterName, "newDistance", newDistance)
+
+			rangeDesc := getRangeDescription(newDistance)
+
+			// Send movement notifications using SendRoomMessageExcept
+			if isRetreat {
+				character.Player.ToPlayer <- fmt.Sprintf("\n\rYou retreat to %s range (%.1f units) from %s.\n\r",
+					rangeDesc, newDistance, target.Name)
+
+				roomMessage := fmt.Sprintf("\n\r%s retreats to %s range (%.1f units) from %s.\n\r",
+					characterName, rangeDesc, newDistance, target.Name)
+				SendRoomMessageExcept(startingRoom, roomMessage, character)
+			} else {
+				character.Player.ToPlayer <- fmt.Sprintf("\n\rYou advance to %s range (%.1f units) with %s.\n\r",
+					rangeDesc, newDistance, target.Name)
+
+				roomMessage := fmt.Sprintf("\n\r%s advances to %s range (%.1f units) with %s.\n\r",
+					characterName, rangeDesc, newDistance, target.Name)
+				SendRoomMessageExcept(startingRoom, roomMessage, character)
 			}
-		}
 
-		// Update distances with minimal lock time
-		Logger.Debug("Acquiring locks for distance update", "character", characterName, "currentDistance", curDistance, "newDistance", newDistance)
-
-		character.Mutex.Lock()
-		character.SetCombatRange(target, newDistance)
-		character.Mutex.Unlock()
-
-		target.Mutex.Lock()
-		target.SetCombatRange(character, newDistance)
-		target.Mutex.Unlock()
-
-		Logger.Debug("Released locks after distance update", "character", characterName, "newDistance", newDistance)
-
-		rangeDesc := getRangeDescription(newDistance)
-
-		// Send movement notifications using SendRoomMessageExcept
-		if isRetreat {
-			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou retreat to %s range (%.1f units) from %s.\n\r",
-				rangeDesc, newDistance, target.Name)
-
-			roomMessage := fmt.Sprintf("\n\r%s retreats to %s range (%.1f units) from %s.\n\r",
-				characterName, rangeDesc, newDistance, target.Name)
-			SendRoomMessageExcept(startingRoom, roomMessage, character)
-		} else {
-			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou advance to %s range (%.1f units) with %s.\n\r",
-				rangeDesc, newDistance, target.Name)
-
-			roomMessage := fmt.Sprintf("\n\r%s advances to %s range (%.1f units) with %s.\n\r",
-				characterName, rangeDesc, newDistance, target.Name)
-			SendRoomMessageExcept(startingRoom, roomMessage, character)
-		}
-
-		if (isRetreat && newDistance >= desiredDistance) ||
-			(!isRetreat && newDistance <= desiredDistance) {
-			Logger.Debug("Movement complete",
-				"character", characterName,
-				"finalDistance", newDistance)
-			return
+			if (isRetreat && newDistance >= desiredDistance) ||
+				(!isRetreat && newDistance <= desiredDistance) {
+				Logger.Debug("Movement complete",
+					"character", characterName,
+					"finalDistance", newDistance)
+				return
+			}
 		}
 	}
 }

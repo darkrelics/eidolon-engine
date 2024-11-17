@@ -235,6 +235,11 @@ func InputLoop(c *Character) {
 			shouldQuit = true
 			continue
 
+		case <-c.End:
+			Logger.Info("Character end channel closed", "characterName", c.Name)
+			shouldQuit = true
+			continue
+
 		case inputLine, more := <-c.Player.FromPlayer:
 			if !more {
 				Logger.Debug("Input channel closed for player", "playerName", c.Player.PlayerID)

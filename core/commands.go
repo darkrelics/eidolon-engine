@@ -157,6 +157,10 @@ func ExecuteQuitCommand(character *Character, tokens []string) bool {
 
 	Logger.Info("Player initiating quit", "playerName", character.Player.PlayerID)
 
+	character.End <- true
+
+	// Notify the player and save character state
+
 	character.Player.ToPlayer <- "\n\rSaving character state...\n\r"
 	character.Cleanup()
 	character.Player.Cleanup()

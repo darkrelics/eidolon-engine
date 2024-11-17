@@ -60,6 +60,7 @@ func (g *Game) NewCharacter(name string, player *Player, room *Room, archetypeNa
 		Facing:      nil,
 		LastSaved:   time.Now(),
 		LastEdited:  time.Now(),
+		End:         make(chan bool),
 	}
 
 	// Apply archetype attributes and abilities
@@ -778,7 +779,7 @@ func (c *Character) Cleanup() {
 
 	if c.Room != nil {
 
-		SendRoomMessageExcept(c.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.Name), c)
+		SendRoomMessageExcept(c.Room, fmt.Sprintf("\n\r%s has left the room.\n\r", c.Name), c)
 
 		c.Room.Mutex.Lock()
 		delete(c.Room.Characters, c.ID)
