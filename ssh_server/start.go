@@ -81,12 +81,12 @@ func main() {
 }
 
 func initializeSystem(ctx context.Context, config *core.Configuration) (*core.Server, *core.Game, error) {
-	server, err := core.NewServer(config)
+	server, err := core.NewServer(ctx, config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create server: %w", err)
 	}
 
-	game, err := core.NewGame(config)
+	game, err := core.NewGame(ctx, config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create game: %w", err)
 	}

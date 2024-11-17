@@ -10,11 +10,11 @@ import (
 )
 
 // NewGame initializes the game struct.
-func NewGame(config *Configuration) (*Game, error) {
+func NewGame(ctx context.Context, config *Configuration) (*Game, error) {
 	Logger.Info("Initializing game...")
 
 	game := &Game{
-		Context:    context.Background(),
+		Context:    ctx,
 		Config:     config, // Store config directly in Game struct
 		Mutex:      sync.RWMutex{},
 		WaitGroup:  sync.WaitGroup{},
