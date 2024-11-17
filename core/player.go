@@ -317,50 +317,41 @@ func (p *Player) Cleanup() {
 
 	Logger.Info("Cleaning up player", "playerID", p.PlayerID)
 
-	// Check if Server exists
+	// Check if Server and Players map exist
 	if p.Server == nil {
-		Logger.Error("Server instance is nil within Game", "playerID", p.PlayerID)
+		Logger.Error("Server instance is nil during cleanup", "playerID", p.PlayerID)
 		return
 	}
 
-	// Check if Players map exists within Server
 	if p.Server.Players == nil {
-		Logger.Error("Players map is nil within Server", "playerID", p.PlayerID)
+		Logger.Error("Players map is nil in Server during cleanup", "playerID", p.PlayerID)
 		return
 	}
 
-	// Check if player exists at the specified index
-	if _, exists := p.Server.Players[p.Index]; !exists {
-		Logger.Debug("No player found at specified index in Players map", "playerID", p.PlayerID, "index", p.Index)
-		return
-	}
-
-	// Use player mutex to protect cleanup state
+	// Lock Player for thread-safe cleanup
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
 
 	// Save player data
-	Logger.Debug("Saving player data during cleanup", "playerID", p.PlayerID)
 	if err := p.Server.Database.WritePlayer(p); err != nil {
-		Logger.Error("Failed to save player during cleanup",
-			"playerID", p.PlayerID,
-			"error", err)
+		Logger.Error("Failed to save player data during cleanup",
+			"playerID", p.PlayerID, "error", err)
 	}
 
-	// Cancel context immediately if it exists
+	// Cancel context if applicable
 	if p.Cancel != nil {
 		p.Cancel()
 		p.Cancel = nil
 		p.Context = nil
 	}
 
-	// Force close connection immediately if it exists
+	// Close connection if applicable
 	if p.Connection != nil {
 		p.Connection.Close()
 		p.Connection = nil
 	}
 
-	// Force close channels without waiting
+	// Close channels safely
 	if p.ToPlayer != nil {
 		close(p.ToPlayer)
 		p.ToPlayer = nil
@@ -374,24 +365,10 @@ func (p *Player) Cleanup() {
 		p.PlayerError = nil
 	}
 
-	// Remove Player from server's player map immediately
-	if p.Server != nil {
-		p.Server.Mutex.Lock()
-		delete(p.Server.Players, p.Index)
-		p.Server.Mutex.Unlock()
-	}
-
-	// Check if the player exists at the specified index and is not nil
-	if player, exists := p.Server.Players[p.Index]; !exists {
-		Logger.Debug("No player found at specified index in Players map", "playerID", p.PlayerID, "index", p.Index)
-		return
-	} else if player == nil {
-		Logger.Debug("Player entry is nil at specified index in Players map", "playerID", p.PlayerID, "index", p.Index)
-	} else {
-		Logger.Error("Failed to remove player from server", "playerID", p.PlayerID)
-	}
+	// Remove player from server's player map
+	p.Server.Mutex.Lock()
+	delete(p.Server.Players, p.Index)
+	p.Server.Mutex.Unlock()
 
 	Logger.Info("Player cleanup completed", "playerID", p.PlayerID)
-
-	// p = nil
 }

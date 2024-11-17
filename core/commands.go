@@ -126,12 +126,28 @@ func ExecuteCommand(character *Character, verb string, tokens []string) {
 		return
 	}
 
-	// Execute the command
-	go handler(character, tokens)
+	go func() {
+
+		Logger.Debug("Executing command", "verb", verb, "character", character.Name)
+
+		start := time.Now()
+
+		// Execute the command
+		handler(character, tokens)
+
+		elapsed := time.Since(start)
+		if elapsed > 100*time.Millisecond {
+			Logger.Warn("Slow command execution", "verb", verb, "duration", elapsed, "character", character.Name)
+		}
+
+		Logger.Debug("Command execution complete", "verb", verb, "character", character.Name)
+
+	}()
 
 }
 
 func ExecuteQuitCommand(character *Character, tokens []string) {
+
 	if character == nil {
 		Logger.Error("Attempted to quit with nil character")
 		return
@@ -139,17 +155,27 @@ func ExecuteQuitCommand(character *Character, tokens []string) {
 
 	if character.Player == nil {
 		Logger.Error("Character has no associated player")
+		// Perform character-only cleanup if applicable
+		character.Cleanup()
 		return
 	}
 
 	Logger.Info("Player initiating quit", "playerName", character.Player.PlayerID)
 
+	// Notify the player
+	select {
+	case character.Player.ToPlayer <- "\n\rSaving character state...\n\r":
+	default:
+		Logger.Warn("Failed to notify player: ToPlayer channel is full or closed", "playerName", character.Player.PlayerID)
+	}
+
+	// Signal the end of character's lifecycle
 	character.End <- true
 
-	// Notify the player and save character state
-
-	character.Player.ToPlayer <- "\n\rSaving character state...\n\r"
+	// Perform cleanup operations
 	character.Cleanup()
+
+	// Signal the end of character's lifecycle
 	character.Player.Cleanup()
 
 }

@@ -730,7 +730,6 @@ func (c *Character) Cleanup() {
 	Logger.Debug("Cleaning up character", "characterName", c.Name, "characterID", c.ID)
 
 	// Check if the Game exists.
-
 	if c.Game == nil {
 		Logger.Error("Game is nil in character cleanup", "characterName", c.Name)
 		return
@@ -748,38 +747,35 @@ func (c *Character) Cleanup() {
 		return
 	}
 
-	c.End <- true
+	// Signal end of character's lifecycle
+	defer func() { c.End <- true }()
 
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 
+	// Save character data to the database
 	err := c.Game.Database.WriteCharacter(c)
 	if err != nil {
-		Logger.Error("Error saving character data during cleanup", "characterName", c.Name, "error", err)
+		Logger.Error("Error saving character data during cleanup",
+			"characterName", c.Name, "characterID", c.ID, "error", err)
 	}
 
-	// Remove character from room
-
-	Logger.Debug("Characters in room before cleanup", "roomID", c.Room.RoomID, "characters", c.Room.Characters)
-
 	if c.Room != nil {
-
+		// Notify the room of character departure
 		SendRoomMessageExcept(c.Room, fmt.Sprintf("\n\r%s has left the room.\n\r", c.Name), c)
 
+		// Remove character from the room's character list
 		c.Room.Mutex.Lock()
 		delete(c.Room.Characters, c.ID)
 		c.Room.Mutex.Unlock()
-	}
 
-	Logger.Debug("Characters in room before cleanup", "roomID", c.Room.RoomID, "characters", c.Room.Characters)
+		Logger.Debug("Characters in room after cleanup", "roomID", c.Room.RoomID, "characters", c.Room.Characters)
+	}
 
 	// Remove character from server's character list
 	c.Game.Mutex.Lock()
 	delete(c.Game.Characters, c.ID)
 	c.Game.Mutex.Unlock()
 
-	Logger.Debug("Character cleaned up", "characterName", c.Name, "characterID", c.ID)
-
-	// c = nil
-
+	Logger.Debug("Character cleaned up successfully", "characterName", c.Name, "characterID", c.ID)
 }
