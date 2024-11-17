@@ -1,35 +1,59 @@
 package main
 
 import (
-	"os"
+	"context"
+	"runtime/debug"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/robinje/multi-user-dungeon/core"
 )
 
-func handlePlayerSession(server *core.Server, game *core.Game, player *core.Player, stop chan os.Signal) {
+// handlePlayerSession manages a player's game session
+func handlePlayerSession(ctx context.Context, server *core.Server, game *core.Game, player *core.Player) {
 	// Ensure connection cleanup even on panic
 	defer func() {
 		if r := recover(); r != nil {
-			core.Logger.Error("Panic in player session", "playerName", player.PlayerID, "panic", r)
+			stack := debug.Stack()
+			core.Logger.Error("Panic in player session", "playerName", player.PlayerID, "panic", r, "stack", string(stack))
 		}
 		if player != nil && player.Connection != nil {
-			player.Character.Cleanup()
+			if player.Character != nil {
+				player.Character.Cleanup()
+			}
 			player.Cleanup()
 		}
 	}()
 
-	go core.PlayerInput(player)
-	go core.PlayerOutput(player)
+	// Create session-specific context
+	sessionCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	core.Logger.Info("Starting player session", "playerName", player.PlayerID, "playerIndex", player.Index)
+	// Start I/O handlers
+	ioGroup, ioCtx := errgroup.WithContext(sessionCtx)
+	ioGroup.Go(func() error {
+		core.PlayerInput(ioCtx, player)
+		return nil
+	})
+	ioGroup.Go(func() error {
+		core.PlayerOutput(ioCtx, player)
+		return nil
+	})
 
-	// Send welcome message and MOTDs
+	core.Logger.Info("Starting player session",
+		"playerName", player.PlayerID,
+		"playerIndex", player.Index)
+
+	// Display welcome messages and MOTDs
 	core.Logger.Debug("Displaying welcome messages", "playerName", player.PlayerID)
-	core.DisplayUnseenMOTDs(server, player)
+	if err := core.DisplayUnseenMOTDs(server, player); err != nil {
+		core.Logger.Error("Failed to display MOTDs", "playerName", player.PlayerID, "error", err)
+		return
+	}
 
-	// Character Selection Dialog
+	// Character Selection
 	core.Logger.Debug("Starting character selection", "playerName", player.PlayerID)
-	character, err := core.SelectCharacter(game, player)
+	character, err := core.SelectCharacter(sessionCtx, game, player)
 	if err != nil {
 		core.Logger.Error("Character selection failed", "playerName", player.PlayerID, "error", err)
 		return
@@ -42,33 +66,51 @@ func handlePlayerSession(server *core.Server, game *core.Game, player *core.Play
 
 	core.Logger.Info("Character selected for player", "playerName", player.PlayerID, "characterName", character.Name, "characterID", character.ID)
 
-	// Set the selected character in the player struct
+	// Update player with selected character
 	player.Mutex.Lock()
 	player.Prompt = "> "
 	player.Character = character
 	player.Mutex.Unlock()
 
-	// Create a done channel to signal when the input loop is complete
-	done := make(chan struct{})
+	// Create a channel for input loop completion
+	inputDone := make(chan struct{})
 
-	// Start the input loop in a goroutine
+	// Start the input loop
 	go func() {
-		defer close(done)
+		defer close(inputDone)
 		core.Logger.Debug("Starting input loop", "playerName", player.PlayerID, "characterName", character.Name)
-		core.InputLoop(character)
+		core.InputLoop(sessionCtx, character)
 	}()
 
-	// Wait for either context cancellation or input loop completion
+	// Wait for session end conditions
 	select {
-	case <-player.Context.Done():
-		core.Logger.Info("Player session context cancelled", "playerName", player.PlayerID, "characterName", character.Name)
-	case <-done:
-		core.Logger.Info("Player input loop completed normally", "playerName", player.PlayerID, "characterName", character.Name)
-	case <-stop:
-		core.Logger.Info("Received stop signal, exiting player session", "playerName", player.PlayerID, "characterName", character.Name)
+	case <-sessionCtx.Done():
+		core.Logger.Info("Session context cancelled",
+			"playerName", player.PlayerID,
+			"characterName", character.Name)
+
+	case <-ctx.Done():
+		core.Logger.Info("Parent context cancelled",
+			"playerName", player.PlayerID,
+			"characterName", character.Name)
+
+	case <-inputDone:
+		core.Logger.Info("Input loop completed normally",
+			"playerName", player.PlayerID,
+			"characterName", character.Name)
 	}
 
-	character.Cleanup()
+	// Cleanup
+	cancel() // Ensure all child goroutines are cancelled
+	if err := ioGroup.Wait(); err != nil {
+		core.Logger.Error("Error in I/O handlers",
+			"playerName", player.PlayerID,
+			"error", err)
+	}
+
+	if character != nil {
+		character.Cleanup()
+	}
 	player.Cleanup()
 
 	core.Logger.Info("Player session ended", "playerName", player.PlayerID)

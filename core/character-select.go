@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -11,7 +12,7 @@ import (
 
 // SelectCharacter handles the character selection process for a player.
 // It presents the player with options to select or create a character.
-func SelectCharacter(game *Game, player *Player) (*Character, error) {
+func SelectCharacter(ctx context.Context, game *Game, player *Player) (*Character, error) {
 	Logger.Debug("Player is selecting a character", "playerName", player.PlayerID)
 
 	var options []string

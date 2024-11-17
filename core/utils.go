@@ -2,6 +2,7 @@ package core
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"math"
 	"math/rand"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func Challenge(attacker, defender, balance float64) float64 {
@@ -27,8 +30,73 @@ func Challenge(attacker, defender, balance float64) float64 {
 	return result
 }
 
-// AutoSave periodically saves the game state in the background.
-func AutoSave(game *Game, stop chan os.Signal) {
+// performAutoSave executes the save operations with proper error handling
+func (g *Game) performAutoSave(ctx context.Context) error {
+	// Create a context with timeout for the save operation
+	saveCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Create error group for concurrent saves
+	group, ctx := errgroup.WithContext(saveCtx)
+
+	// Save characters concurrently
+	group.Go(func() error {
+		if err := g.SaveActiveCharacters(); err != nil {
+			return fmt.Errorf("failed to save characters: %w", err)
+		}
+		return nil
+	})
+
+	// Save items concurrently
+	group.Go(func() error {
+		if err := g.SaveActiveItems(); err != nil {
+			return fmt.Errorf("failed to save items: %w", err)
+		}
+		return nil
+	})
+
+	// Save rooms concurrently
+	group.Go(func() error {
+		if err := g.SaveActiveRooms(); err != nil {
+			return fmt.Errorf("failed to save rooms: %w", err)
+		}
+		return nil
+	})
+
+	// Wait for all save operations to complete
+	if err := group.Wait(); err != nil {
+		return fmt.Errorf("auto-save operation failed: %w", err)
+	}
+
+	return nil
+}
+
+// runSaveOperation executes a single save operation with metrics
+func (g *Game) runSaveOperation(ctx context.Context) {
+	start := time.Now()
+
+	err := g.performAutoSave(ctx)
+	duration := time.Since(start)
+
+	if err != nil {
+		Logger.Error("Auto-save failed",
+			"error", err,
+			"duration", duration)
+	} else {
+		Logger.Debug("Auto-save completed successfully",
+			"duration", duration)
+	}
+}
+
+// AutoSave runs the main auto-save loop
+func AutoSave(ctx context.Context, game *Game) error {
+	if game == nil {
+		return fmt.Errorf("game instance is nil")
+	}
+	if game.Config == nil {
+		return fmt.Errorf("game configuration is nil")
+	}
+
 	// Configure the auto-save interval
 	interval := game.Config.Game.AutoSave
 	if interval == 0 {
@@ -36,46 +104,29 @@ func AutoSave(game *Game, stop chan os.Signal) {
 		Logger.Warn("Auto-save interval not configured, defaulting to 5 minutes")
 	}
 
-	// Convert interval to duration
 	saveInterval := time.Duration(interval) * time.Minute
+	Logger.Info("Starting auto-save routine", "interval", saveInterval)
 
-	// Create a channel to signal the routine to stop
-	stopCh := make(chan struct{})
-	defer close(stopCh)
+	// Create ticker for periodic saves
+	ticker := time.NewTicker(saveInterval)
+	defer ticker.Stop()
 
-	Logger.Info("Starting auto-save routine with interval", "interval", saveInterval)
+	// Perform initial save
+	game.runSaveOperation(ctx)
 
+	// Main auto-save loop
 	for {
 		select {
-		case <-time.After(saveInterval):
-			err := performAutoSave(game)
-			if err != nil {
-				Logger.Error("Auto-save failed", "error", err)
-			} else {
-				Logger.Debug("Auto-save completed successfully")
-			}
-		case <-stopCh:
-			Logger.Info("Auto-save routine stopped")
-			return
-		case <-stop:
-			Logger.Info("Received signal to stop auto-save routine")
-			return
+		case <-ctx.Done():
+			Logger.Info("Auto-save routine stopping due to context cancellation")
+			// Perform final save before shutting down
+			game.runSaveOperation(context.Background())
+			return ctx.Err()
+
+		case <-ticker.C:
+			game.runSaveOperation(ctx)
 		}
 	}
-}
-
-func performAutoSave(game *Game) error {
-	// Save active game state
-	if err := game.SaveActiveCharacters(); err != nil {
-		return fmt.Errorf("failed to save characters: %w", err)
-	}
-	if err := game.SaveActiveItems(); err != nil {
-		return fmt.Errorf("failed to save items: %w", err)
-	}
-	if err := game.SaveActiveRooms(); err != nil {
-		return fmt.Errorf("failed to save rooms: %w", err)
-	}
-	return nil
 }
 
 // wrapText wraps the given text to the specified width, preserving

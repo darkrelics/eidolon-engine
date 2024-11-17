@@ -9,23 +9,26 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/robinje/multi-user-dungeon/core"
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	fmt.Println("Starting Server...")
 
 	configFile := flag.String("config", "config.yml", "Configuration file")
 	flag.Parse()
 
-	fmt.Println("Loading Configuration...")
 	config, err := loadConfiguration(*configFile)
 	if err != nil {
 		fmt.Printf("Error loading configuration: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("Initializing Logging...")
 	if err := core.InitializeLogging(&config); err != nil {
 		fmt.Printf("Error initializing logging: %v\n", err)
 		os.Exit(1)
@@ -42,13 +45,37 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	go core.SendMetrics(server, stop, 1*time.Minute)
-	go core.AutoSave(game, stop)
-	go sshServer(server, game, stop)
+	// Use errgroup for goroutine management
+	g, ctx := errgroup.WithContext(ctx)
 
-	<-stop
+	g.Go(func() error {
+		return core.SendMetrics(ctx, server, 1*time.Minute)
+	})
 
-	core.Logger.Info("Interrupt received, initiating graceful shutdown...")
+	g.Go(func() error {
+		return core.AutoSave(ctx, game)
+	})
+
+	g.Go(func() error {
+		return sshServer(ctx, server, game)
+	})
+
+	// Handle shutdown signal
+	g.Go(func() error {
+		select {
+		case <-stop:
+			core.Logger.Info("Interrupt received, initiating graceful shutdown...")
+			cancel()
+		case <-ctx.Done():
+		}
+		return nil
+	})
+
+	// Wait for all goroutines to complete or for an error
+	if err := g.Wait(); err != nil {
+		core.Logger.Error("Error during operation", "error", err)
+	}
+
 	shutdown(server, game)
 	core.Logger.Info("Server shutdown complete")
 }
