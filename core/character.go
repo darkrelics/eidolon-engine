@@ -765,6 +765,8 @@ func (c *Character) Cleanup() {
 		return
 	}
 
+	c.End <- true
+
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 
