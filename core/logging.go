@@ -215,82 +215,110 @@ func (h *MultiHandler) WithGroup(name string) slog.Handler {
 	return NewMultiHandler(newHandlers...)
 }
 
-func SendMetrics(s *Server, stop chan os.Signal, interval time.Duration) error {
+// NewMetricsCollector creates and initializes a new MetricsCollector
+func NewMetricsCollector(s *Server, interval time.Duration) (*MetricsCollector, error) {
 	if s == nil {
-		return fmt.Errorf("server instance is nil")
+		return nil, fmt.Errorf("server instance is nil")
 	}
-
 	if s.Config == nil {
-		return fmt.Errorf("server configuration is nil")
+		return nil, fmt.Errorf("server configuration is nil")
 	}
-
-	// Check for empty region
 	if s.Config.Aws.Region == "" {
-		return fmt.Errorf("AWS region configuration is missing")
+		return nil, fmt.Errorf("AWS region configuration is missing")
 	}
-
-	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(s.Config.Aws.Region))
-	if err != nil {
-		return fmt.Errorf("failed to load AWS SDK config: %w", err)
-	}
-
-	// Check for empty metric namespace
 	if s.Config.Logging.MetricNamespace == "" {
-		return fmt.Errorf("metric namespace configuration is missing")
+		return nil, fmt.Errorf("metric namespace configuration is missing")
 	}
 
-	client := cloudwatch.NewFromConfig(cfg)
+	cfg, err := config.LoadDefaultConfig(context.Background(),
+		config.WithRegion(s.Config.Aws.Region))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AWS SDK config: %w", err)
+	}
+
+	return &MetricsCollector{
+		client:    cloudwatch.NewFromConfig(cfg),
+		server:    s,
+		interval:  interval,
+		namespace: s.Config.Logging.MetricNamespace,
+	}, nil
+}
+
+// collectMetrics gathers the current metrics
+func (mc *MetricsCollector) collectMetrics() []types.MetricDatum {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	return []types.MetricDatum{
+		{
+			MetricName: aws.String("PlayerCount"),
+			Unit:       types.StandardUnitCount,
+			Value:      aws.Float64(float64(mc.server.PlayerCount)),
+		},
+		{
+			MetricName: aws.String("MemoryUsage"),
+			Unit:       types.StandardUnitMegabytes,
+			Value:      aws.Float64(float64(m.Alloc) / 1024 / 1024),
+		},
+		{
+			MetricName: aws.String("RoutineCount"),
+			Unit:       types.StandardUnitCount,
+			Value:      aws.Float64(float64(runtime.NumGoroutine())),
+		},
+	}
+}
+
+// sendMetrics sends the collected metrics to CloudWatch
+func (mc *MetricsCollector) sendMetrics(ctx context.Context) error {
+	metrics := mc.collectMetrics()
+
+	_, err := mc.client.PutMetricData(ctx, &cloudwatch.PutMetricDataInput{
+		Namespace:  aws.String(mc.namespace),
+		MetricData: metrics,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to send metrics to CloudWatch: %w", err)
+	}
+
+	// Log metric values for debugging
+	Logger.Debug("Sent metrics to CloudWatch",
+		"playerCount", *metrics[0].Value,
+		"memoryUsageMB", *metrics[1].Value,
+		"routineCount", *metrics[2].Value,
+		"heapObjects", *metrics[3].Value,
+		"gcPauseTimeMs", *metrics[4].Value,
+	)
+
+	return nil
+}
+
+// SendMetrics runs the metrics collection loop
+func SendMetrics(ctx context.Context, s *Server, interval time.Duration) error {
+	collector, err := NewMetricsCollector(s, interval)
+	if err != nil {
+		return fmt.Errorf("failed to initialize metrics collector: %w", err)
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// Send initial metrics
+	if err := collector.sendMetrics(ctx); err != nil {
+		Logger.Error("Failed to send initial metrics", "error", err)
+	}
+
 	for {
 		select {
-		case <-ticker.C:
-			if s.Context == nil {
-				return fmt.Errorf("server context is nil")
-			}
-
-			var m runtime.MemStats
-			runtime.ReadMemStats(&m)
-
-			playerCount := float64(s.PlayerCount)
-			memoryUsageMB := float64(m.Alloc) / 1024 / 1024
-			routineCount := float64(runtime.NumGoroutine())
-
-			_, err := client.PutMetricData(s.Context, &cloudwatch.PutMetricDataInput{
-				Namespace: aws.String(s.Config.Logging.MetricNamespace),
-				MetricData: []types.MetricDatum{
-					{
-						MetricName: aws.String("PlayerCount"),
-						Unit:       types.StandardUnitCount,
-						Value:      aws.Float64(playerCount),
-					},
-					{
-						MetricName: aws.String("MemoryUsage"),
-						Unit:       types.StandardUnitMegabytes,
-						Value:      aws.Float64(memoryUsageMB),
-					},
-					{
-						MetricName: aws.String("RoutineCount"),
-						Unit:       types.StandardUnitCount,
-						Value:      aws.Float64(routineCount),
-					},
-				},
-			})
-
-			if err != nil {
-				Logger.Error("Failed to send metrics to CloudWatch", "error", err)
-			} else {
-				Logger.Debug("Sent metrics to CloudWatch", "playerCount", playerCount, "memoryUsageMB", memoryUsageMB, "routineCount", routineCount)
-			}
-
-		case <-s.Context.Done():
+		case <-ctx.Done():
 			Logger.Info("Stopping metrics collection due to context cancellation")
-			return nil
+			return ctx.Err()
 
-		case <-stop:
-			Logger.Info("Stopping metrics collection due to stop signal")
-			return nil
+		case <-ticker.C:
+			if err := collector.sendMetrics(ctx); err != nil {
+				Logger.Error("Failed to send metrics", "error", err)
+				// Continue running despite errors
+			}
 		}
 	}
 }

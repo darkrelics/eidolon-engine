@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/bits-and-blooms/bloom/v3"
@@ -310,4 +311,12 @@ type MOTDData struct {
 	Active    bool   `json:"active" dynamodbav:"Active"`
 	Message   string `json:"message" dynamodbav:"Message"`
 	CreatedAt string `json:"createdAt" dynamodbav:"CreatedAt"`
+}
+
+// MetricsCollector handles the collection and sending of metrics
+type MetricsCollector struct {
+	client    *cloudwatch.Client
+	server    *Server
+	interval  time.Duration
+	namespace string
 }
