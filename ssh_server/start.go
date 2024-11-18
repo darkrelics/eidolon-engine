@@ -86,7 +86,7 @@ func initializeSystem(ctx context.Context, config *core.Configuration) (*core.Se
 		return nil, nil, fmt.Errorf("failed to create server: %w", err)
 	}
 
-	game, err := core.NewGame(ctx, config)
+	game, err := core.NewGame(config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create game: %w", err)
 	}
