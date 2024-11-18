@@ -282,13 +282,8 @@ func (mc *MetricsCollector) sendMetrics(ctx context.Context) error {
 	}
 
 	// Log metric values for debugging
-	Logger.Debug("Sent metrics to CloudWatch",
-		"playerCount", *metrics[0].Value,
-		"memoryUsageMB", *metrics[1].Value,
-		"routineCount", *metrics[2].Value,
-		"heapObjects", *metrics[3].Value,
-		"gcPauseTimeMs", *metrics[4].Value,
-	)
+
+	Logger.Debug("Sent metrics to CloudWatch", "playerCount", *metrics[0].Value, "memoryUsageMB", *metrics[1].Value, "routineCount", *metrics[2].Value)
 
 	return nil
 }

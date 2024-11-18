@@ -95,7 +95,7 @@ func (k *KeyPair) ReadPlayer(playerName string) (string, map[string]uuid.UUID, [
 
 // PlayerInput handles the player's input in a separate goroutine.
 // It reads input from the player's SSH connection and sends it to the FromPlayer channel.
-func PlayerInput(p *Player) {
+func PlayerInput(ctx context.Context, p *Player) {
 	Logger.Debug("Player input goroutine started", "playerName", p.PlayerID)
 
 	var inputBuffer []rune
@@ -165,7 +165,7 @@ func PlayerInput(p *Player) {
 
 // PlayerOutput handles sending messages to the player in a separate goroutine.
 // It reads messages from the ToPlayer channel and writes them to the player's SSH connection.
-func PlayerOutput(p *Player) {
+func PlayerOutput(ctx context.Context, p *Player) {
 	Logger.Debug("Player output goroutine started", "playerName", p.PlayerID)
 
 	// Use a defer to cleanup but don't close FromPlayer here
@@ -185,7 +185,7 @@ func PlayerOutput(p *Player) {
 
 // InputLoop is the main loop that handles player commands.
 // It reads commands from the player's input and executes them accordingly.
-func InputLoop(c *Character) {
+func InputLoop(ctx context.Context, c *Character) {
 	if c == nil || c.Player == nil {
 		Logger.Error("Invalid character or player in input loop")
 		return
@@ -371,4 +371,29 @@ func (p *Player) Cleanup() {
 	p.Server.Mutex.Unlock()
 
 	Logger.Info("Player cleanup completed", "playerID", p.PlayerID)
+}
+
+// InitializePlayerData loads or creates player data from the database
+func InitializePlayerData(server *Server, playerName string) (map[string]uuid.UUID, []uuid.UUID, error) {
+	_, characterList, seenMotD, err := server.Database.ReadPlayer(playerName)
+	if err != nil {
+		if err.Error() == "player not found" {
+			// Create new player record
+			Logger.Info("Creating new player record", "player_name", playerName)
+			characterList = make(map[string]uuid.UUID)
+			seenMotD = []uuid.UUID{}
+
+			err = server.Database.WritePlayer(&Player{
+				PlayerID:      playerName,
+				CharacterList: characterList,
+				SeenMotD:      seenMotD,
+			})
+			if err != nil {
+				return nil, nil, fmt.Errorf("error creating player record: %w", err)
+			}
+			return characterList, seenMotD, nil
+		}
+		return nil, nil, fmt.Errorf("error reading player from database: %w", err)
+	}
+	return characterList, seenMotD, nil
 }
