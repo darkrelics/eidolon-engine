@@ -12,8 +12,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/robinje/multi-user-dungeon/core"
-
-	"golang.org/x/sync/errgroup"
 )
 
 func main() {
