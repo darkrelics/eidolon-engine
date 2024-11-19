@@ -11,11 +11,11 @@ import (
 
 // NewServer initializes a new server instance with the given configuration.
 // It sets up the database connection, loads game data, and prepares the server for incoming connections.
-func NewServer(ctx context.Context, config *Configuration) (*core.Server, error) {
+func NewServer(ctx context.Context, config *Configuration) (*Server, error) {
 	core.Logger.Info("Initializing server...")
 
 	// Initialize the server struct with the provided configuration
-	server := &core.Server{
+	server := &Server{
 		Context:             ctx,
 		Mutex:               sync.RWMutex{},
 		WaitGroup:           sync.WaitGroup{},

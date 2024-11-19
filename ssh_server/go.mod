@@ -5,6 +5,7 @@ go 1.23
 replace github.com/robinje/multi-user-dungeon/core => ../core
 
 require (
+	github.com/aws/aws-sdk-go v1.54.15
 	github.com/robinje/multi-user-dungeon/core v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.24.0
 	golang.org/x/sync v0.7.0
@@ -13,7 +14,6 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect
-	github.com/aws/aws-sdk-go v1.54.15 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.30.4 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.4 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.27.31 // indirect

@@ -82,7 +82,7 @@ func main() {
 
 // TODO: Break up for Game and Server Initialization
 
-func initializeSystem(ctx context.Context, config *Configuration) (*core.Server, *core.Game, error) {
+func initializeSystem(ctx context.Context, config *Configuration) (*Server, *core.Game, error) {
 	server, err := NewServer(ctx, config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create server: %w", err)
@@ -102,7 +102,7 @@ func initializeSystem(ctx context.Context, config *Configuration) (*core.Server,
 	}
 }
 
-func shutdown(server *core.Server, game *core.Game) {
+func shutdown(server *Server, game *core.Game) {
 	const shutdownTimeout = 60 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()

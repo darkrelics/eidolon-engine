@@ -10,7 +10,7 @@ import (
 )
 
 // handlePlayerSession manages a player's game session
-func handlePlayerSession(ctx context.Context, server *core.Server, game *core.Game, player *core.Player) {
+func handlePlayerSession(ctx context.Context, server *Server, game *core.Game, player *core.Player) {
 	// Ensure connection cleanup even on panic
 	defer func() {
 		if r := recover(); r != nil {

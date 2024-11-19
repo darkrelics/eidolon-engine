@@ -14,7 +14,7 @@ import (
 )
 
 // sshServer starts the SSH server on the configured port and listens for incoming connections.
-func sshServer(ctx context.Context, server *core.Server, game *core.Game) error {
+func sshServer(ctx context.Context, server *Server, game *core.Game) error {
 	if server == nil {
 		return fmt.Errorf("server instance is nil")
 	}
@@ -49,7 +49,7 @@ func sshServer(ctx context.Context, server *core.Server, game *core.Game) error 
 	}
 }
 
-func initializeServer(ctx context.Context, server *core.Server) error {
+func initializeServer(ctx context.Context, server *Server) error {
 	if server == nil {
 		return fmt.Errorf("server instance is nil")
 	}
@@ -81,7 +81,7 @@ func initializeServer(ctx context.Context, server *core.Server) error {
 }
 
 // configureSSH configures the SSH server with the provided private key and authentication settings.
-func configureSSH(ctx context.Context, server *core.Server) error {
+func configureSSH(ctx context.Context, server *Server) error {
 	if server == nil {
 		return fmt.Errorf("server instance is nil")
 	}
@@ -136,10 +136,10 @@ func configureSSH(ctx context.Context, server *core.Server) error {
 
 // Authenticate checks the provided username and password against the authentication system.
 // Returns true if authentication is successful, false otherwise.
-func Authenticate(username, password string, server *core.Server) bool {
+func Authenticate(username, password string, server *Server) bool {
 	core.Logger.Info("Authenticating user", "username", username)
 
-	response, err := core.SignInUser(username, password, server)
+	response, err := SignInUser(username, password, server)
 	if err != nil {
 		core.Logger.Error("Authentication failed", "username", username, "error", err, "response", response)
 		return false
@@ -150,7 +150,7 @@ func Authenticate(username, password string, server *core.Server) bool {
 }
 
 // acceptConnections handles incoming connections to the SSH server
-func acceptConnections(ctx context.Context, server *core.Server, game *core.Game) error {
+func acceptConnections(ctx context.Context, server *Server, game *core.Game) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -191,7 +191,7 @@ func acceptConnections(ctx context.Context, server *core.Server, game *core.Game
 }
 
 // handleConnection processes an individual SSH connection
-func handleConnection(ctx context.Context, server *core.Server, game *core.Game, conn net.Conn) {
+func handleConnection(ctx context.Context, server *Server, game *core.Game, conn net.Conn) {
 	defer server.WaitGroup.Done()
 	defer conn.Close()
 
