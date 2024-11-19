@@ -93,12 +93,9 @@ func AutoSave(ctx context.Context, game *Game) error {
 	if game == nil {
 		return fmt.Errorf("game instance is nil")
 	}
-	if game.Config == nil {
-		return fmt.Errorf("game configuration is nil")
-	}
 
 	// Configure the auto-save interval
-	interval := game.Config.Game.AutoSave
+	interval := game.AutoSave
 	if interval == 0 {
 		interval = 5 // Default to 5 minutes
 		Logger.Warn("Auto-save interval not configured, defaulting to 5 minutes")

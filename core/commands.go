@@ -391,7 +391,7 @@ func ExecuteChallengeCommand(character *Character, tokens []string) {
 	}
 
 	// Calculate the outcome using the Challenge function
-	outcome := Challenge(attackerScore, defenderScore, character.Game.Config.Game.Balance)
+	outcome := Challenge(attackerScore, defenderScore, character.Game.Balance)
 
 	// Provide feedback to the player based on the challenge outcome
 	feedbackMessage := fmt.Sprintf("\n\rChallenge outcome: %f\n\r", outcome)

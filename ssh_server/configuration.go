@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/robinje/multi-user-dungeon/core"
 	"gopkg.in/yaml.v3"
 )
 
 // loadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
-func loadConfiguration(configFile string) (core.Configuration, error) {
-	var config core.Configuration
+func loadConfiguration(configFile string) (Configuration, error) {
+	var config Configuration
 
 	data, err := os.ReadFile(configFile)
 	if err != nil {

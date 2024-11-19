@@ -21,42 +21,11 @@ type Index struct {
 	mu      sync.RWMutex
 }
 
-type Configuration struct {
-	Server struct {
-		Port           uint16 `yaml:"Port"`
-		PrivateKeyPath string `yaml:"PrivateKeyPath"`
-	} `yaml:"Server"`
-	Aws struct {
-		Region string `yaml:"Region"`
-	} `yaml:"Aws"`
-	Cognito struct {
-		UserPoolID     string `yaml:"UserPoolId"`
-		ClientSecret   string `yaml:"UserPoolClientSecret"`
-		ClientID       string `yaml:"UserPoolClientId"`
-		UserPoolDomain string `yaml:"UserPoolDomain"`
-		UserPoolArn    string `yaml:"UserPoolArn"`
-	} `yaml:"Cognito"`
-	Game struct {
-		Balance         float64 `yaml:"Balance"`
-		AutoSave        uint16  `yaml:"AutoSave"`
-		StartingEssence uint16  `yaml:"StartingEssence"`
-		StartingHealth  uint16  `yaml:"StartingHealth"`
-	} `yaml:"Game"`
-	Logging struct {
-		ApplicationName string `yaml:"ApplicationName"`
-		LogLevel        int    `yaml:"LogLevel"`
-		LogGroup        string `yaml:"LogGroup"`
-		LogStream       string `yaml:"LogStream"`
-		MetricNamespace string `yaml:"MetricNamespace"`
-	} `yaml:"Logging"`
-}
-
 type KeyPair struct {
 	db *dynamodb.DynamoDB
 }
 
 type Server struct {
-	Config      *Configuration
 	Context     context.Context
 	Mutex       sync.RWMutex
 	WaitGroup   sync.WaitGroup
@@ -69,10 +38,19 @@ type Server struct {
 	PlayerIndex *Index
 	Players     map[uint64]*Player
 	ActiveMotDs []*MOTD
+
+	CognitoClientID     string
+	CognitoClientSecret string
+	Region              string
+	LogLevel            int
+	ApplicationName     string
+	LogGroup            string
+	LogStream           string
+	MetricNamespace     string
+	PrivateKeyPath      string
 }
 
 type Game struct {
-	Config               *Configuration
 	Context              context.Context
 	Mutex                sync.RWMutex
 	WaitGroup            sync.WaitGroup
@@ -84,6 +62,11 @@ type Game struct {
 	Rooms                map[int64]*Room
 	Prototypes           map[uuid.UUID]*Prototype
 	Items                map[uuid.UUID]*Item
+
+	StartingHealth  uint16
+	StartingEssence uint16
+	Balance         float64
+	AutoSave        uint16
 }
 
 type Player struct {

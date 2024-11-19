@@ -39,14 +39,14 @@ func handleCognitoError(err error, email string) error {
 }
 
 // SignInUser attempts to sign in a user with the provided credentials
-func SignInUser(email, password string, config *Configuration) (*cognitoidentityprovider.InitiateAuthOutput, error) {
-	sess, err := session.NewSession(&aws.Config{Region: aws.String(config.Aws.Region)})
+func SignInUser(email, password string, server *Server) (*cognitoidentityprovider.InitiateAuthOutput, error) {
+	sess, err := session.NewSession(&aws.Config{Region: aws.String(server.Region)})
 	if err != nil {
 		return nil, fmt.Errorf("create AWS session: %w", err)
 	}
 
 	cognitoClient := cognitoidentityprovider.New(sess)
-	secretHash := calculateSecretHash(config.Cognito.ClientID, config.Cognito.ClientSecret, email)
+	secretHash := calculateSecretHash(server.CognitoClientID, server.CognitoClientSecret, email)
 
 	authInput := &cognitoidentityprovider.InitiateAuthInput{
 		AuthFlow: aws.String(cognitoidentityprovider.AuthFlowTypeUserPasswordAuth),
@@ -55,7 +55,7 @@ func SignInUser(email, password string, config *Configuration) (*cognitoidentity
 			"PASSWORD":    aws.String(password),
 			"SECRET_HASH": aws.String(secretHash),
 		},
-		ClientId: aws.String(config.Cognito.ClientID),
+		ClientId: aws.String(server.CognitoClientID),
 	}
 
 	authOutput, err := cognitoClient.InitiateAuth(authInput)
@@ -75,18 +75,18 @@ func SignInUser(email, password string, config *Configuration) (*cognitoidentity
 	return authOutput, nil
 }
 
-func SignUpUser(email, password string, config Configuration) (*cognitoidentityprovider.SignUpOutput, error) {
-	sess, err := session.NewSession(&aws.Config{Region: aws.String(config.Aws.Region)})
+func SignUpUser(email, password string, server *Server) (*cognitoidentityprovider.SignUpOutput, error) {
+	sess, err := session.NewSession(&aws.Config{Region: aws.String(server.Region)})
 	if err != nil {
 		Logger.Error("Error creating AWS session for sign-up", "error", err)
 		return nil, fmt.Errorf("an internal error occurred while creating AWS session")
 	}
 
 	cognitoClient := cognitoidentityprovider.New(sess)
-	secretHash := calculateSecretHash(config.Cognito.ClientID, config.Cognito.ClientSecret, email)
+	secretHash := calculateSecretHash(server.CognitoClientID, server.CognitoClientSecret, email)
 
 	signUpInput := &cognitoidentityprovider.SignUpInput{
-		ClientId:   aws.String(config.Cognito.ClientID),
+		ClientId:   aws.String(server.CognitoClientID),
 		Username:   aws.String(email),
 		Password:   aws.String(password),
 		SecretHash: aws.String(secretHash),
@@ -104,18 +104,18 @@ func SignUpUser(email, password string, config Configuration) (*cognitoidentityp
 	return signUpOutput, nil
 }
 
-func ConfirmUser(email, confirmationCode string, config Configuration) (*cognitoidentityprovider.ConfirmSignUpOutput, error) {
-	sess, err := session.NewSession(&aws.Config{Region: aws.String(config.Aws.Region)})
+func ConfirmUser(email, confirmationCode string, server *Server) (*cognitoidentityprovider.ConfirmSignUpOutput, error) {
+	sess, err := session.NewSession(&aws.Config{Region: aws.String(server.Region)})
 	if err != nil {
 		Logger.Error("Error creating AWS session for user confirmation", "error", err)
 		return nil, fmt.Errorf("an internal error occurred while creating AWS session")
 	}
 
 	cognitoClient := cognitoidentityprovider.New(sess)
-	secretHash := calculateSecretHash(config.Cognito.ClientID, config.Cognito.ClientSecret, email)
+	secretHash := calculateSecretHash(server.CognitoClientID, server.CognitoClientSecret, email)
 
 	confirmSignUpInput := &cognitoidentityprovider.ConfirmSignUpInput{
-		ClientId:         aws.String(config.Cognito.ClientID),
+		ClientId:         aws.String(server.CognitoClientID),
 		Username:         aws.String(email),
 		ConfirmationCode: aws.String(confirmationCode),
 		SecretHash:       aws.String(secretHash),
@@ -130,8 +130,8 @@ func ConfirmUser(email, confirmationCode string, config Configuration) (*cognito
 	return confirmSignUpOutput, nil
 }
 
-func GetUserData(accessToken string, config Configuration) (*cognitoidentityprovider.GetUserOutput, error) {
-	sess, err := session.NewSession(&aws.Config{Region: aws.String(config.Aws.Region)})
+func GetUserData(accessToken string, server *Server) (*cognitoidentityprovider.GetUserOutput, error) {
+	sess, err := session.NewSession(&aws.Config{Region: aws.String(server.Region)})
 	if err != nil {
 		Logger.Error("Error creating AWS session for getting user data", "error", err)
 		return nil, fmt.Errorf("an internal error occurred while creating AWS session")
@@ -157,7 +157,7 @@ func ChangePassword(player *Player, oldPassword, newPassword string) error {
 
 	// Step 1: Authenticate the user
 	Logger.Debug("Step 1: Authenticating user", "username", username)
-	signInOutput, err := SignInUser(username, oldPassword, player.Server.Config)
+	signInOutput, err := SignInUser(username, oldPassword, player.Server)
 	if err != nil {
 		Logger.Error("Authentication failed for user", "username", username, "error", err)
 		return fmt.Errorf("authentication failed: %v", err)
@@ -171,7 +171,7 @@ func ChangePassword(player *Player, oldPassword, newPassword string) error {
 
 		// Create a new AWS session
 		sess, err := session.NewSession(&aws.Config{
-			Region: aws.String(player.Server.Config.Aws.Region),
+			Region: aws.String(player.Server.Region),
 		})
 		if err != nil {
 			Logger.Error("Failed to create AWS session for user", "username", username, "error", err)
@@ -182,12 +182,12 @@ func ChangePassword(player *Player, oldPassword, newPassword string) error {
 		cognitoClient := cognitoidentityprovider.New(sess)
 
 		// Calculate SECRET_HASH
-		secretHash := calculateSecretHash(player.Server.Config.Cognito.ClientID, player.Server.Config.Cognito.ClientSecret, username)
+		secretHash := calculateSecretHash(player.Server.CognitoClientID, player.Server.CognitoClientSecret, username)
 
 		// Respond to the NEW_PASSWORD_REQUIRED challenge
 		challengeResponseInput := &cognitoidentityprovider.RespondToAuthChallengeInput{
 			ChallengeName: aws.String(cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired),
-			ClientId:      aws.String(player.Server.Config.Cognito.ClientID),
+			ClientId:      aws.String(player.Server.CognitoClientID),
 			ChallengeResponses: map[string]*string{
 				"USERNAME":     aws.String(username),
 				"NEW_PASSWORD": aws.String(newPassword),
@@ -220,7 +220,7 @@ func ChangePassword(player *Player, oldPassword, newPassword string) error {
 
 	// Create a new AWS session
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(player.Server.Config.Aws.Region),
+		Region: aws.String(player.Server.Region),
 	})
 	if err != nil {
 		Logger.Error("Failed to create AWS session for user", "username", username, "error", err)

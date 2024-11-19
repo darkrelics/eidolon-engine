@@ -15,7 +15,6 @@ func NewGame(config *Configuration) (*Game, error) {
 
 	game := &Game{
 		Context:    context.Background(),
-		Config:     config, // Store config directly in Game struct
 		Mutex:      sync.RWMutex{},
 		WaitGroup:  sync.WaitGroup{},
 		Characters: make(map[uuid.UUID]*Character),

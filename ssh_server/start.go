@@ -29,16 +29,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := core.InitializeLogging(&config); err != nil {
-		fmt.Printf("Error initializing logging: %v\n", err)
-		os.Exit(1)
-	}
-
 	core.Logger.Info("Configuration loaded", "config", config)
 
 	server, game, err := initializeSystem(ctx, &config)
 	if err != nil {
 		core.Logger.Error("System initialization failed", "error", err)
+		os.Exit(1)
+	}
+
+	if err := core.InitializeLogging(server); err != nil {
+		fmt.Printf("Error initializing logging: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -80,8 +80,10 @@ func main() {
 	core.Logger.Info("Server shutdown complete")
 }
 
-func initializeSystem(ctx context.Context, config *core.Configuration) (*core.Server, *core.Game, error) {
-	server, err := core.NewServer(ctx, config)
+// TODO: Break up for Game and Server Initialization
+
+func initializeSystem(ctx context.Context, config *Configuration) (*core.Server, *core.Game, error) {
+	server, err := NewServer(ctx, config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create server: %w", err)
 	}

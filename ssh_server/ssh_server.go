@@ -86,18 +86,14 @@ func configureSSH(ctx context.Context, server *core.Server) error {
 		return fmt.Errorf("server instance is nil")
 	}
 
-	if server.Config == nil {
-		return fmt.Errorf("server configuration is nil")
-	}
-
-	if server.Config.Server.PrivateKeyPath == "" {
+	if server.PrivateKeyPath == "" {
 		return fmt.Errorf("private key path is not configured")
 	}
 
 	core.Logger.Info("Configuring SSH server", "port", server.Port)
 
 	// Read the private key from disk
-	privateKeyPath := server.Config.Server.PrivateKeyPath
+	privateKeyPath := server.PrivateKeyPath
 	privateBytes, err := os.ReadFile(privateKeyPath)
 	if err != nil {
 		return fmt.Errorf("failed to read private key from %s: %w", privateKeyPath, err)
@@ -121,7 +117,7 @@ func configureSSH(ctx context.Context, server *core.Server) error {
 					return nil, fmt.Errorf("authentication cancelled: %w", ctx.Err())
 				default:
 					// Authenticate the player
-					authenticated := Authenticate(conn.User(), string(password), server.Config)
+					authenticated := Authenticate(conn.User(), string(password), server)
 					if authenticated {
 						core.Logger.Info("Player authenticated", "player_name", conn.User())
 						return nil, nil
@@ -140,10 +136,10 @@ func configureSSH(ctx context.Context, server *core.Server) error {
 
 // Authenticate checks the provided username and password against the authentication system.
 // Returns true if authentication is successful, false otherwise.
-func Authenticate(username, password string, config *core.Configuration) bool {
+func Authenticate(username, password string, server *core.Server) bool {
 	core.Logger.Info("Authenticating user", "username", username)
 
-	response, err := core.SignInUser(username, password, config)
+	response, err := core.SignInUser(username, password, server)
 	if err != nil {
 		core.Logger.Error("Authentication failed", "username", username, "error", err, "response", response)
 		return false

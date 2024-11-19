@@ -24,10 +24,10 @@ var (
 	Logger *slog.Logger
 )
 
-func InitializeLogging(cfg *Configuration) error {
+func InitializeLogging(server *Server) error {
 	// Determine the log level
 	var level slog.Level
-	switch cfg.Logging.LogLevel {
+	switch server.LogLevel {
 	case 10:
 		level = slog.LevelDebug
 	case 20:
@@ -41,7 +41,7 @@ func InitializeLogging(cfg *Configuration) error {
 	}
 
 	// Initialize AWS SDK configuration
-	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(cfg.Aws.Region))
+	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(server.Region))
 	if err != nil {
 		return fmt.Errorf("unable to load SDK config: %w", err)
 	}
@@ -50,12 +50,12 @@ func InitializeLogging(cfg *Configuration) error {
 	client := cloudwatchlogs.NewFromConfig(awsCfg)
 
 	// Create CloudWatch handler
-	cwHandler := NewCloudWatchHandler(client, cfg.Logging.LogGroup, cfg.Logging.LogStream)
+	cwHandler := NewCloudWatchHandler(client, server.LogGroup, server.LogStream)
 
 	// Create a multi-writer handler that writes to both CloudWatch and stdout
 	multiHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}).WithAttrs([]slog.Attr{
-		slog.String("application", cfg.Logging.ApplicationName),
-		slog.String("region", cfg.Aws.Region),
+		slog.String("application", server.ApplicationName),
+		slog.String("region", server.Region),
 	})
 
 	// Initialize the Logger with both handlers
@@ -73,10 +73,10 @@ func GetEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func EnableXRay(cfg *Configuration) error {
+func EnableXRay(server *Server) error {
 	// Determine the log level
 	var xrayLogLevel string
-	switch cfg.Logging.LogLevel {
+	switch server.LogLevel {
 	case 10:
 		xrayLogLevel = "debug"
 	case 20:
@@ -220,18 +220,15 @@ func NewMetricsCollector(s *Server, interval time.Duration) (*MetricsCollector, 
 	if s == nil {
 		return nil, fmt.Errorf("server instance is nil")
 	}
-	if s.Config == nil {
-		return nil, fmt.Errorf("server configuration is nil")
-	}
-	if s.Config.Aws.Region == "" {
+	if s.Region == "" {
 		return nil, fmt.Errorf("AWS region configuration is missing")
 	}
-	if s.Config.Logging.MetricNamespace == "" {
+	if s.MetricNamespace == "" {
 		return nil, fmt.Errorf("metric namespace configuration is missing")
 	}
 
 	cfg, err := config.LoadDefaultConfig(context.Background(),
-		config.WithRegion(s.Config.Aws.Region))
+		config.WithRegion(s.Region))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS SDK config: %w", err)
 	}
@@ -240,7 +237,7 @@ func NewMetricsCollector(s *Server, interval time.Duration) (*MetricsCollector, 
 		client:    cloudwatch.NewFromConfig(cfg),
 		server:    s,
 		interval:  interval,
-		namespace: s.Config.Logging.MetricNamespace,
+		namespace: s.MetricNamespace,
 	}, nil
 }
 
