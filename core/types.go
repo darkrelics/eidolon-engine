@@ -44,7 +44,6 @@ type Game struct {
 }
 
 type Player struct {
-	Server        *Server
 	Index         uint64
 	PlayerID      string
 	ToPlayer      chan string
