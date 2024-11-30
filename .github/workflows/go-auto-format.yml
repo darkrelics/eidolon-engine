@@ -35,7 +35,7 @@ jobs:
 
       - name: Format and check code
         run: |
-          for dir in core ssh_server; do
+          for dir in character core game interface_ssh multi-user-dungeon player server; do
             cd ./$dir
             echo "Processing $dir directory"
             go fmt ./...
