@@ -6,7 +6,7 @@ replace github.com/robinje/multi-user-dungeon/core => ../core
 
 require (
 	github.com/robinje/multi-user-dungeon/core v0.0.0-00010101000000-000000000000
-	golang.org/x/crypto v0.24.0
+	golang.org/x/crypto v0.29.0
 )
 
 require (
@@ -39,9 +39,9 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.50.0 // indirect
 	golang.org/x/net v0.23.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/sys v0.21.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/sync v0.9.0 // indirect
+	golang.org/x/sys v0.27.0 // indirect
+	golang.org/x/text v0.20.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 	google.golang.org/grpc v1.59.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
