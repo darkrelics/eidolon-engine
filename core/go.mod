@@ -2,6 +2,20 @@ module github.com/robinje/multi-user-dungeon/core
 
 go 1.23
 
+replace github.com/robinje/multi-user-dungeon/character => ../character
+
+replace github.com/robinje/multi-user-dungeon/core => ../core
+
+replace github.com/robinje/multi-user-dungeon/game => ../game
+
+replace github.com/robinje/multi-user-dungeon/interface_ssh => ../interface_ssh
+
+replace github.com/robinje/multi-user-dungeon/multi-user-dungeon => ../multi-user-dungeon
+
+replace github.com/robinje/multi-user-dungeon/player => ../player
+
+replace github.com/robinje/multi-user-dungeon/server => ../server
+
 require (
 	github.com/aws/aws-sdk-go v1.54.15
 	github.com/aws/aws-sdk-go-v2 v1.30.4
@@ -13,6 +27,7 @@ require (
 	github.com/google/uuid v1.6.0
 	golang.org/x/crypto v0.24.0
 	golang.org/x/sync v0.7.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

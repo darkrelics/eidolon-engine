@@ -10,15 +10,19 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/yaml.v3"
 
 	"github.com/robinje/multi-user-dungeon/core"
 )
 
 func main() {
+
+	// Create the global context.
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	fmt.Println("Starting Server...")
+	fmt.Println("Loading configuration...")
 
 	configFile := flag.String("config", "config.yml", "Configuration file")
 	flag.Parse()
@@ -78,6 +82,23 @@ func main() {
 
 	shutdown(server, game)
 	core.Logger.Info("Server shutdown complete")
+}
+
+// loadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
+func loadConfiguration(configFile string) (core.Configuration, error) {
+	var config core.Configuration
+
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return config, fmt.Errorf("error reading config file '%s': %w", configFile, err)
+	}
+
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return config, fmt.Errorf("error unmarshalling config from '%s': %w", configFile, err)
+	}
+
+	return config, nil
 }
 
 // TODO: Break up for Game and Server Initialization

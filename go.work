@@ -1,6 +1,11 @@
 go 1.23
 
 use (
+    .
+    ./character
     ./core
-    ./ssh_server
+    ./game
+    ./interface_ssh
+    ./player
+    ./server
 )

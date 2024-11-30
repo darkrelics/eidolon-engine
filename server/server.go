@@ -11,7 +11,7 @@ import (
 
 // NewServer initializes a new server instance with the given configuration.
 // It sets up the database connection, loads game data, and prepares the server for incoming connections.
-func NewServer(ctx context.Context, config *Configuration) (*Server, error) {
+func NewServer(ctx context.Context, config *main.Configuration) (*Server, error) {
 	core.Logger.Info("Initializing server...")
 
 	// Initialize the server struct with the provided configuration
