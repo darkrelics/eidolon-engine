@@ -33,7 +33,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := core.InitializeLogging(MetricsConfig); err != nil {
+	CloudWatch, err := core.InitializeLogging(MetricsConfig)
+	if err != nil {
 		fmt.Printf("Error initializing logging: %v\n", err)
 		os.Exit(1)
 	}
@@ -53,7 +54,7 @@ func main() {
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return core.SendMetrics(ctx, server, 1*time.Minute)
+		return CloudWatch.SendMetrics(ctx, server, 1*time.Minute)
 	})
 
 	g.Go(func() error {
