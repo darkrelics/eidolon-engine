@@ -24,24 +24,24 @@ var (
 	Logger *slog.Logger
 )
 
-func InitializeLogging(server *Server) error {
+func InitializeLogging(MetricsConfig map[string]string) error {
 	// Determine the log level
 	var level slog.Level
-	switch server.LogLevel {
-	case 10:
+	switch MetricsConfig["LogLevel"] {
+	case "10":
 		level = slog.LevelDebug
-	case 20:
+	case "20":
 		level = slog.LevelInfo
-	case 30:
+	case "30":
 		level = slog.LevelWarn
-	case 40:
+	case "40":
 		level = slog.LevelError
 	default:
 		level = slog.LevelInfo
 	}
 
 	// Initialize AWS SDK configuration
-	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(server.Region))
+	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(MetricsConfig["Region"]))
 	if err != nil {
 		return fmt.Errorf("unable to load SDK config: %w", err)
 	}
@@ -50,12 +50,12 @@ func InitializeLogging(server *Server) error {
 	client := cloudwatchlogs.NewFromConfig(awsCfg)
 
 	// Create CloudWatch handler
-	cwHandler := NewCloudWatchHandler(client, server.LogGroup, server.LogStream)
+	cwHandler := NewCloudWatchHandler(client, MetricsConfig["LogGroup"], MetricsConfig["LogStream"])
 
 	// Create a multi-writer handler that writes to both CloudWatch and stdout
 	multiHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}).WithAttrs([]slog.Attr{
-		slog.String("application", server.ApplicationName),
-		slog.String("region", server.Region),
+		slog.String("application", MetricsConfig["ApplicationName"]),
+		slog.String("region", MetricsConfig["Region"]),
 	})
 
 	// Initialize the Logger with both handlers
@@ -73,17 +73,17 @@ func GetEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func EnableXRay(server *Server) error {
+func EnableXRay(MetricsConfig map[string]string) error {
 	// Determine the log level
 	var xrayLogLevel string
-	switch server.LogLevel {
-	case 10:
+	switch MetricsConfig["LogLevel"] {
+	case "10":
 		xrayLogLevel = "debug"
-	case 20:
+	case "20":
 		xrayLogLevel = "info"
-	case 30:
+	case "30":
 		xrayLogLevel = "warn"
-	case 40:
+	case "40":
 		xrayLogLevel = "error"
 	default:
 		xrayLogLevel = "info"
@@ -216,28 +216,27 @@ func (h *MultiHandler) WithGroup(name string) slog.Handler {
 }
 
 // NewMetricsCollector creates and initializes a new MetricsCollector
-func NewMetricsCollector(s *Server, interval time.Duration) (*MetricsCollector, error) {
-	if s == nil {
+func NewMetricsCollector(MetricsConfig map[string]string, interval time.Duration) (*MetricsCollector, error) {
+	if MetricsConfig == nil {
 		return nil, fmt.Errorf("server instance is nil")
 	}
-	if s.Region == "" {
+	if MetricsConfig["Region"] == "" {
 		return nil, fmt.Errorf("AWS region configuration is missing")
 	}
-	if s.MetricNamespace == "" {
+	if MetricsConfig["MetricNamespace"] == "" {
 		return nil, fmt.Errorf("metric namespace configuration is missing")
 	}
 
 	cfg, err := config.LoadDefaultConfig(context.Background(),
-		config.WithRegion(s.Region))
+		config.WithRegion(MetricsConfig["Region"]))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS SDK config: %w", err)
 	}
 
 	return &MetricsCollector{
 		client:    cloudwatch.NewFromConfig(cfg),
-		server:    s,
 		interval:  interval,
-		namespace: s.MetricNamespace,
+		namespace: MetricsConfig["MetricNamespace"],
 	}, nil
 }
 
@@ -247,11 +246,11 @@ func (mc *MetricsCollector) collectMetrics() []types.MetricDatum {
 	runtime.ReadMemStats(&m)
 
 	return []types.MetricDatum{
-		{
-			MetricName: aws.String("PlayerCount"),
-			Unit:       types.StandardUnitCount,
-			Value:      aws.Float64(float64(mc.server.PlayerCount)),
-		},
+		// {
+		// 	MetricName: aws.String("PlayerCount"),
+		// 	Unit:       types.StandardUnitCount,
+		// 	Value:      aws.Float64(float64(mc.server.PlayerCount)),
+		// },
 		{
 			MetricName: aws.String("MemoryUsage"),
 			Unit:       types.StandardUnitMegabytes,
@@ -286,17 +285,13 @@ func (mc *MetricsCollector) sendMetrics(ctx context.Context) error {
 }
 
 // SendMetrics runs the metrics collection loop
-func SendMetrics(ctx context.Context, s *Server, interval time.Duration) error {
-	collector, err := NewMetricsCollector(s, interval)
-	if err != nil {
-		return fmt.Errorf("failed to initialize metrics collector: %w", err)
-	}
+func (mc *MetricsCollector) SendMetrics(ctx context.Context, interval time.Duration) error {
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	// Send initial metrics
-	if err := collector.sendMetrics(ctx); err != nil {
+	if err := mc.sendMetrics(ctx); err != nil {
 		Logger.Error("Failed to send initial metrics", "error", err)
 	}
 
@@ -307,7 +302,7 @@ func SendMetrics(ctx context.Context, s *Server, interval time.Duration) error {
 			return ctx.Err()
 
 		case <-ticker.C:
-			if err := collector.sendMetrics(ctx); err != nil {
+			if err := mc.sendMetrics(ctx); err != nil {
 				Logger.Error("Failed to send metrics", "error", err)
 				// Continue running despite errors
 			}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -16,6 +17,10 @@ import (
 )
 
 func main() {
+
+	ServerConfig := make(map[string]string)
+	GameConfig := make(map[string]string)
+	MetricsConfig := make(map[string]string)
 
 	// Create the global context.
 
@@ -33,16 +38,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	MetricsConfig["Region"] = config.Aws.Region
+	MetricsConfig["MetricNamespace"] = config.Logging.MetricNamespace
+	MetricsConfig["LogLevel"] = strconv.Itoa(config.Logging.LogLevel)
+	MetricsConfig["LogGroup"] = config.Logging.LogGroup
+	MetricsConfig["LogStream"] = config.Logging.LogStream
+	MetricsConfig["ApplicationName"] = config.Logging.ApplicationName
+
+	if err := core.InitializeLogging(MetricsConfig); err != nil {
+		fmt.Printf("Error initializing logging: %v\n", err)
+		os.Exit(1)
+	}
+
 	core.Logger.Info("Configuration loaded", "config", config)
 
 	server, game, err := initializeSystem(ctx, &config)
 	if err != nil {
 		core.Logger.Error("System initialization failed", "error", err)
-		os.Exit(1)
-	}
-
-	if err := core.InitializeLogging(server); err != nil {
-		fmt.Printf("Error initializing logging: %v\n", err)
 		os.Exit(1)
 	}
 

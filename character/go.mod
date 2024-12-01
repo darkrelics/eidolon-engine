@@ -1,13 +1,15 @@
-module github.com/robinje/multi-user-dungeon/character
+module character
 
 go 1.23
 
-replace github.com/robinje/multi-user-dungeon/character => ../character
 replace github.com/robinje/multi-user-dungeon/core => ../core
+
 replace github.com/robinje/multi-user-dungeon/game => ../game
+
 replace github.com/robinje/multi-user-dungeon/interface_ssh => ../interface_ssh
-replace github.com/robinje/multi-user-dungeon/multi-user-dungeon => ../multi-user-dungeon
+
 replace github.com/robinje/multi-user-dungeon/player => ../player
+
 replace github.com/robinje/multi-user-dungeon/server => ../server
 
 require (

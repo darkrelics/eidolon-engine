@@ -1,25 +1,22 @@
-module github.com/robinje/multi-user-dungeon/server
+module server
 
 go 1.23
 
 replace github.com/robinje/multi-user-dungeon/character => ../character
-replace github.com/robinje/multi-user-dungeon/core => ../core
-replace github.com/robinje/multi-user-dungeon/game => ../game
-replace github.com/robinje/multi-user-dungeon/interface_ssh => ../interface_ssh
-replace github.com/robinje/multi-user-dungeon/multi-user-dungeon => ../multi-user-dungeon
-replace github.com/robinje/multi-user-dungeon/player => ../player
-replace github.com/robinje/multi-user-dungeon/server => ../server
 
-require (
-	github.com/aws/aws-sdk-go v1.54.15
-	github.com/robinje/multi-user-dungeon/core v0.0.0-00010101000000-000000000000
-	golang.org/x/crypto v0.24.0
-	golang.org/x/sync v0.7.0
-	gopkg.in/yaml.v3 v3.0.1
-)
+replace github.com/robinje/multi-user-dungeon/core => ../core
+
+replace github.com/robinje/multi-user-dungeon/game => ../game
+
+replace github.com/robinje/multi-user-dungeon/interface_ssh => ../interface_ssh
+
+replace github.com/robinje/multi-user-dungeon/player => ../player
+
+require github.com/robinje/multi-user-dungeon/core v0.0.0-00010101000000-000000000000
 
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect
+	github.com/aws/aws-sdk-go v1.54.15 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.30.4 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.4 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.27.31 // indirect
@@ -46,6 +43,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.50.0 // indirect
+	golang.org/x/crypto v0.24.0 // indirect
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.16.0 // indirect

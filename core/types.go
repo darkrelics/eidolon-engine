@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"log/slog"
+	"net"
 	"sync"
 	"time"
 
@@ -302,7 +303,56 @@ type MOTDData struct {
 // MetricsCollector handles the collection and sending of metrics
 type MetricsCollector struct {
 	client    *cloudwatch.Client
-	server    *Server
 	interval  time.Duration
 	namespace string
+}
+
+type Server struct {
+	Context     context.Context
+	Mutex       sync.RWMutex
+	WaitGroup   sync.WaitGroup
+	Database    *KeyPair
+	StartTime   time.Time
+	Port        uint16
+	Listener    net.Listener
+	SSHConfig   *ssh.ServerConfig
+	PlayerCount uint64
+	PlayerIndex *Index
+	Players     map[uint64]*Player
+	ActiveMotDs []*MOTD
+
+	CognitoClientID     string
+	CognitoClientSecret string
+	Region              string
+	LogLevel            int
+	ApplicationName     string
+	LogGroup            string
+	LogStream           string
+	MetricNamespace     string
+	PrivateKeyPath      string
+}
+
+type SSH_Config struct {
+	Context     context.Context
+	Mutex       sync.RWMutex
+	WaitGroup   sync.WaitGroup
+	Database    *KeyPair
+	StartTime   time.Time
+	Port        uint16
+	Listener    net.Listener
+	SSHConfig   *ssh.ServerConfig
+	PlayerCount uint64
+	PlayerIndex *Index
+	Players     map[uint64]*Player
+	ActiveMotDs []*MOTD
+
+	CognitoClientID     string
+	CognitoClientSecret string
+	Region              string
+	LogLevel            int
+	ApplicationName     string
+	LogGroup            string
+	LogStream           string
+	MetricNamespace     string
+	PrivateKeyPath      string
 }
