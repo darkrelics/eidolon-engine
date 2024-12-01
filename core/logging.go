@@ -24,45 +24,56 @@ var (
 	Logger *slog.Logger
 )
 
-func InitializeLogging(MetricsConfig map[string]string) error {
+func InitializeLogging(configuration *Configuration) (*CloudWatchHandler, error) {
 	// Determine the log level
 	var level slog.Level
-	switch MetricsConfig["LogLevel"] {
-	case "10":
+	switch configuration.Logging.LogLevel {
+	case 10:
 		level = slog.LevelDebug
-	case "20":
+	case 20:
 		level = slog.LevelInfo
-	case "30":
+	case 30:
 		level = slog.LevelWarn
-	case "40":
+	case 40:
 		level = slog.LevelError
 	default:
 		level = slog.LevelInfo
 	}
 
 	// Initialize AWS SDK configuration
-	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(MetricsConfig["Region"]))
+	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(configuration.Aws.Region))
 	if err != nil {
-		return fmt.Errorf("unable to load SDK config: %w", err)
+		return nil, fmt.Errorf("unable to load SDK config: %w", err)
 	}
 
 	// Create CloudWatch Logs client
 	client := cloudwatchlogs.NewFromConfig(awsCfg)
 
 	// Create CloudWatch handler
-	cwHandler := NewCloudWatchHandler(client, MetricsConfig["LogGroup"], MetricsConfig["LogStream"])
+	cwHandler := NewCloudWatchHandler(client, configuration.Logging.LogLevel, configuration.Logging.LogGroup, configuration.Logging.LogStream)
 
 	// Create a multi-writer handler that writes to both CloudWatch and stdout
 	multiHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}).WithAttrs([]slog.Attr{
-		slog.String("application", MetricsConfig["ApplicationName"]),
-		slog.String("region", MetricsConfig["Region"]),
+		slog.String("application", configuration.Logging.ApplicationName),
+		slog.String("region", configuration.Aws.Region),
 	})
 
 	// Initialize the Logger with both handlers
 	Logger = slog.New(NewMultiHandler(multiHandler, cwHandler))
 	slog.SetDefault(Logger)
 
-	return nil
+	return cwHandler, nil
+}
+
+func NewCloudWatchHandler(client *cloudwatchlogs.Client, level int, logGroup, logStream string) *CloudWatchHandler {
+	return &CloudWatchHandler{
+		client:      client,
+		logLevel:    level,
+		logGroup:    logGroup,
+		logStream:   logStream,
+		mutex:       sync.RWMutex{},
+		initialized: false,
+	}
 }
 
 // GetEnv retrieves environment variables or returns a default value if not set
@@ -73,17 +84,17 @@ func GetEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func EnableXRay(MetricsConfig map[string]string) error {
+func (h *CloudWatchHandler) EnableXRay(MetricsConfig map[string]string) error {
 	// Determine the log level
 	var xrayLogLevel string
-	switch MetricsConfig["LogLevel"] {
-	case "10":
+	switch h.logLevel {
+	case 10:
 		xrayLogLevel = "debug"
-	case "20":
+	case 20:
 		xrayLogLevel = "info"
-	case "30":
+	case 30:
 		xrayLogLevel = "warn"
-	case "40":
+	case 40:
 		xrayLogLevel = "error"
 	default:
 		xrayLogLevel = "info"
@@ -103,16 +114,6 @@ func EnableXRay(MetricsConfig map[string]string) error {
 	Logger.Debug("AWS X-Ray successfully configured")
 
 	return nil
-}
-
-func NewCloudWatchHandler(client *cloudwatchlogs.Client, logGroup, logStream string) *CloudWatchHandler {
-	return &CloudWatchHandler{
-		client:      client,
-		logGroup:    logGroup,
-		logStream:   logStream,
-		mutex:       sync.RWMutex{},
-		initialized: false,
-	}
 }
 
 func (h *CloudWatchHandler) Enabled(ctx context.Context, level slog.Level) bool {

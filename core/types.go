@@ -45,6 +45,20 @@ type Configuration struct {
 	} `yaml:"Logging"`
 }
 
+type CloudWatchHandler struct {
+	client      *cloudwatchlogs.Client
+	logLevel    int
+	logGroup    string
+	logStream   string
+	attrs       []slog.Attr
+	mutex       sync.RWMutex
+	initialized bool
+}
+
+type MultiHandler struct {
+	handlers []slog.Handler
+}
+
 // The Index struct is to be depricated in favor of UUIDs
 type Index struct {
 	IndexID uint64
@@ -271,19 +285,6 @@ type PrototypeData struct {
 	Contents    []string          `json:"contents" dynamodbav:"contents"`
 	CanPickUp   bool              `json:"can_pick_up" dynamodbav:"can_pick_up"`
 	Metadata    map[string]string `json:"metadata" dynamodbav:"metadata"`
-}
-
-type CloudWatchHandler struct {
-	client      *cloudwatchlogs.Client
-	logGroup    string
-	logStream   string
-	attrs       []slog.Attr
-	mutex       sync.RWMutex
-	initialized bool
-}
-
-type MultiHandler struct {
-	handlers []slog.Handler
 }
 
 type MOTD struct {
