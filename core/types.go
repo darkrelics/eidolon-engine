@@ -46,17 +46,19 @@ type Configuration struct {
 }
 
 type CloudWatchHandler struct {
-	client      *cloudwatchlogs.Client
+	// Logging fields
+	logsClient  *cloudwatchlogs.Client
 	logLevel    int
 	logGroup    string
 	logStream   string
 	attrs       []slog.Attr
 	mutex       sync.RWMutex
+	handlers    []slog.Handler
 	initialized bool
-}
 
-type MultiHandler struct {
-	handlers []slog.Handler
+	// Metrics fields
+	metricsClient *cloudwatch.Client
+	namespace     string
 }
 
 // The Index struct is to be depricated in favor of UUIDs
@@ -299,13 +301,6 @@ type MOTDData struct {
 	Active    bool   `json:"active" dynamodbav:"Active"`
 	Message   string `json:"message" dynamodbav:"Message"`
 	CreatedAt string `json:"createdAt" dynamodbav:"CreatedAt"`
-}
-
-// MetricsCollector handles the collection and sending of metrics
-type MetricsCollector struct {
-	client    *cloudwatch.Client
-	interval  time.Duration
-	namespace string
 }
 
 type Server struct {
