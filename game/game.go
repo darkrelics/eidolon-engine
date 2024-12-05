@@ -2,6 +2,7 @@ package game
 
 import (
 	"context"
+	"core"
 	"fmt"
 	"sync"
 	"time"
@@ -10,7 +11,7 @@ import (
 )
 
 // NewGame initializes the game struct.
-func NewGame(config *Configuration) (*Game, error) {
+func NewGame(config *core.Configuration) (*Game, error) {
 	Logger.Info("Initializing game...")
 
 	game := &Game{
