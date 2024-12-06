@@ -100,20 +100,20 @@ func main() {
 }
 
 // loadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
-func loadConfiguration(configFile string) (core.Configuration, error) {
+func loadConfiguration(configFile string) (*core.Configuration, error) {
 	var config core.Configuration
 
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		return config, fmt.Errorf("error reading config file '%s': %w", configFile, err)
+		return nil, fmt.Errorf("error reading config file '%s': %w", configFile, err)
 	}
 
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
-		return config, fmt.Errorf("error unmarshalling config from '%s': %w", configFile, err)
+		return nil, fmt.Errorf("error unmarshalling config from '%s': %w", configFile, err)
 	}
 
-	return config, nil
+	return &config, nil
 }
 
 // TODO: Break up for Game and Server Initialization
