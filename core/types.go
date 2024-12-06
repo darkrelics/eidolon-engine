@@ -47,14 +47,15 @@ type Configuration struct {
 
 type CloudWatchHandler struct {
 	// Logging fields
-	logsClient  *cloudwatchlogs.Client
-	logLevel    int
-	logGroup    string
-	logStream   string
-	attrs       []slog.Attr
-	mutex       sync.RWMutex
-	handlers    []slog.Handler
-	initialized bool
+	logsClient        *cloudwatchlogs.Client
+	logLevel          int
+	logGroup          string
+	logStream         string
+	lastSequenceToken string
+	attrs             []slog.Attr
+	mutex             sync.RWMutex
+	handlers          []slog.Handler
+	initialized       bool
 
 	// Metrics fields
 	metricsClient *cloudwatch.Client

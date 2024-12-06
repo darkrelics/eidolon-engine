@@ -44,6 +44,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	err = CloudWatch.EnableXRay()
+	if err != nil {
+		fmt.Printf("Error enabling X-Ray: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Start metrics collection in a goroutine
 	go func() {
 		if err := CloudWatch.SendMetrics(ctx, 1*time.Minute); err != nil {

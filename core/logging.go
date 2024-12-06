@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,15 +24,16 @@ var Logger *slog.Logger
 
 func NewCloudWatchHandler(logsClient *cloudwatchlogs.Client, metricsClient *cloudwatch.Client, level int, logGroup, logStream, namespace string, handlers []slog.Handler) *CloudWatchHandler {
 	return &CloudWatchHandler{
-		logsClient:    logsClient,
-		metricsClient: metricsClient,
-		logLevel:      level,
-		logGroup:      logGroup,
-		logStream:     logStream,
-		namespace:     namespace,
-		handlers:      handlers,
-		mutex:         sync.RWMutex{},
-		initialized:   false,
+		logsClient:        logsClient,
+		metricsClient:     metricsClient,
+		logLevel:          level,
+		logGroup:          logGroup,
+		logStream:         logStream,
+		lastSequenceToken: "",
+		namespace:         namespace,
+		handlers:          handlers,
+		mutex:             sync.RWMutex{},
+		initialized:       false,
 	}
 }
 
@@ -162,15 +164,61 @@ func (h *CloudWatchHandler) formatMessage(r slog.Record) string {
 
 func (h *CloudWatchHandler) putLogsWithRetry(ctx context.Context, input *cloudwatchlogs.PutLogEventsInput) error {
 	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		if _, err := h.logsClient.PutLogEvents(ctx, input); err == nil {
-			return nil
-		} else if i == maxRetries-1 {
-			return err
-		}
-		time.Sleep(time.Second * time.Duration(i+1))
+	baseDelay := time.Second
+
+	// Try sequence token first from last known state
+	var sequenceToken *string
+	if h.lastSequenceToken != "" {
+		sequenceToken = &h.lastSequenceToken
 	}
-	return nil
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if sequenceToken != nil {
+			input.SequenceToken = sequenceToken
+		}
+
+		output, err := h.logsClient.PutLogEvents(ctx, input)
+		if err == nil {
+			// Store latest sequence token for next call
+			if output.NextSequenceToken != nil {
+				h.lastSequenceToken = *output.NextSequenceToken
+			}
+			return nil
+		}
+
+		// Handle specific AWS errors
+		if strings.Contains(err.Error(), "InvalidSequenceTokenException") {
+			// Extract expected sequence token from error message
+			// AWS error message format: "The given sequenceToken is invalid. The next expected sequenceToken is: xxxxxxxx"
+			if parts := strings.Split(err.Error(), "sequenceToken is: "); len(parts) == 2 {
+				token := strings.TrimSpace(parts[1])
+				sequenceToken = &token
+				continue
+			}
+		}
+		if strings.Contains(err.Error(), "ResourceNotFoundException") {
+			// Log stream doesn't exist, try to create it
+			if err := h.initializeLogStream(ctx); err != nil {
+				return fmt.Errorf("failed to create log stream: %w", err)
+			}
+			continue
+		}
+
+		// For other errors, apply backoff if we have retries left
+		if attempt < maxRetries-1 {
+			delay := time.Duration(attempt+1) * baseDelay
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				continue
+			}
+		}
+
+		return fmt.Errorf("failed to put logs after %d attempts: %w", attempt+1, err)
+	}
+
+	return fmt.Errorf("max retries exceeded")
 }
 
 func (h *CloudWatchHandler) WithAttrs(attrs []slog.Attr) slog.Handler {

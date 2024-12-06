@@ -99,6 +99,8 @@ Key components:
 - [ ] Add rate limiting to the server.
 - [ ] Expand error handling.
 - [ ] Add Session Timeout.
+- [ ] Add log rotation for by Cloudwatch Stream.
+- [ ] Add batching for Clpudwatch log writes.
 
 ## Commands
 
