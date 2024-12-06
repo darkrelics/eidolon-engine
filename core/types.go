@@ -304,19 +304,18 @@ type MOTDData struct {
 }
 
 type Server struct {
-	Context     context.Context
-	Mutex       sync.RWMutex
-	WaitGroup   sync.WaitGroup
-	Database    *KeyPair
-	StartTime   time.Time
-	Port        uint16
-	Listener    net.Listener
-	SSHConfig   *ssh.ServerConfig
-	PlayerCount uint64
-	PlayerIndex *Index
-	Players     map[uint64]*Player
-	ActiveMotDs []*MOTD
-
+	Context             context.Context
+	Mutex               sync.RWMutex
+	WaitGroup           sync.WaitGroup
+	Database            *KeyPair
+	StartTime           time.Time
+	Port                uint16
+	Listener            net.Listener
+	SSHConfig           *ssh.ServerConfig
+	PlayerCount         uint64
+	PlayerIndex         *Index
+	Players             map[uint64]*Player
+	ActiveMotDs         []*MOTD
 	CognitoClientID     string
 	CognitoClientSecret string
 	Region              string

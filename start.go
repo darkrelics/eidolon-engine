@@ -33,11 +33,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	CloudWatch, err := core.InitializeLogging(MetricsConfig)
+	CloudWatch, err := core.InitializeLogging(config)
 	if err != nil {
 		fmt.Printf("Error initializing logging: %v\n", err)
 		os.Exit(1)
 	}
+
+	if CloudWatch == nil {
+		fmt.Printf("CloudWatch handler not initialized")
+		os.Exit(1)
+	}
+
+	// Start metrics collection in a goroutine
+	go func() {
+		if err := CloudWatch.SendMetrics(ctx, 1*time.Minute); err != nil {
+			core.Logger.Error("Metrics collection failed", "error", err)
+		}
+	}()
 
 	core.Logger.Info("Configuration loaded", "config", config)
 
@@ -52,10 +64,6 @@ func main() {
 
 	// Use errgroup for goroutine management
 	g, ctx := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		return CloudWatch.SendMetrics(ctx, server, 1*time.Minute)
-	})
 
 	g.Go(func() error {
 		return core.AutoSave(ctx, game)

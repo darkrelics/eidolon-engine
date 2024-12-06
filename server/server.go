@@ -48,7 +48,7 @@ func NewServer(ctx context.Context, config *core.Configuration) (*core.Server, e
 
 	// Load active MOTDs from the database
 	fmt.Println("Loading active MOTDs from database...")
-	activeMOTDs, err := server.Database.GetAllMOTDs()
+	activeMOTDs, err := GetAllMOTDs(server.Database)
 	if err != nil {
 		fmt.Println("Failed to load active MOTDs", "error", err)
 		// Proceeding without MOTDs if failed to load

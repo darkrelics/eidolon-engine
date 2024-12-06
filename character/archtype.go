@@ -53,3 +53,18 @@ func LoadArchetypes(g *core.Game) error {
 
 	return nil
 }
+
+// StoreArchetypes stores all archetypes from the Server's ArcheTypes map into the DynamoDB table.
+func StoreArchetypes(g *core.Game) error {
+
+	for _, archetype := range g.ArcheTypes {
+		err := g.Database.Put("archetypes", *archetype)
+		if err != nil {
+			return fmt.Errorf("error storing archetype %s: %w", archetype.ArchetypeName, err)
+		}
+
+		core.Logger.Debug("Stored archetype", "name", archetype.ArchetypeName)
+	}
+
+	return nil
+}

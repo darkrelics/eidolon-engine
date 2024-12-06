@@ -249,6 +249,11 @@ func (h *CloudWatchHandler) sendMetrics(ctx context.Context) error {
 }
 
 func (h *CloudWatchHandler) SendMetrics(ctx context.Context, interval time.Duration) error {
+
+	if interval < time.Second {
+		return fmt.Errorf("interval must be at least 1 second")
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
