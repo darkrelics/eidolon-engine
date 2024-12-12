@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 
 	"github.com/robinje/multi-user-dungeon/core"
+	"github.com/robinje/multi-user-dungeon/server"
 )
 
 func main() {
@@ -32,6 +32,10 @@ func main() {
 		fmt.Printf("Error loading configuration: %v\n", err)
 		os.Exit(1)
 	}
+
+	fmt.Println("Configuration loaded.")
+
+	fmt.Println("Initializing logger...")
 
 	CloudWatch, err := core.InitializeLogging(config)
 	if err != nil {
@@ -57,46 +61,28 @@ func main() {
 		}
 	}()
 
-	core.Logger.Info("Configuration loaded", "config", config)
+	fmt.Println("Logger initialized.")
 
-	server, game, err := initializeSystem(ctx, &config)
+	fmt.Println("Initializing server...")
+
+	Server, err := server.NewServer(ctx, config)
+
 	if err != nil {
-		core.Logger.Error("System initialization failed", "error", err)
+		fmt.Printf("Error initializing server: %v\n", err)
 		os.Exit(1)
 	}
+
+	go func() {
+		if err := server.RunServer(Server); err != nil {
+			core.Logger.Error("Server error", "error", err)
+		}
+	}()
+
+	fmt.Println("Server initialized.")
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	// Use errgroup for goroutine management
-	g, ctx := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		return core.AutoSave(ctx, game)
-	})
-
-	g.Go(func() error {
-		return sshServer(ctx, server, game)
-	})
-
-	// Handle shutdown signal
-	g.Go(func() error {
-		select {
-		case <-stop:
-			core.Logger.Info("Interrupt received, initiating graceful shutdown...")
-			cancel()
-		case <-ctx.Done():
-		}
-		return nil
-	})
-
-	// Wait for all goroutines to complete or for an error
-	if err := g.Wait(); err != nil {
-		core.Logger.Error("Error during operation", "error", err)
-	}
-
-	shutdown(server, game)
-	core.Logger.Info("Server shutdown complete")
 }
 
 // loadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
@@ -116,93 +102,11 @@ func loadConfiguration(configFile string) (*core.Configuration, error) {
 	return &config, nil
 }
 
-// TODO: Break up for Game and Server Initialization
-
-func initializeSystem(ctx context.Context, config *Configuration) (*Server, *core.Game, error) {
-	server, err := NewServer(ctx, config)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create server: %w", err)
-	}
-
-	game, err := core.NewGame(config)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create game: %w", err)
-	}
-
-	// Return early if context is cancelled
-	select {
-	case <-ctx.Done():
-		return nil, nil, fmt.Errorf("initialization cancelled: %w", ctx.Err())
-	default:
-		return server, game, nil
-	}
-}
-
-func shutdown(server *Server, game *core.Game) {
+func shutdown(server *core.Server, game *core.Game) {
 	const shutdownTimeout = 60 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	_, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	core.Logger.Info("Initiating graceful shutdown...")
 
-	g, ctx := errgroup.WithContext(ctx)
-
-	// Notify all players and cleanup characters
-	g.Go(func() error {
-		for _, character := range game.Characters {
-			select {
-			case character.Player.ToPlayer <- "\n\rServer is shutting down. You will be logged out shortly.\n\r":
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-
-			select {
-			case character.Player.ToPlayer <- character.Player.Prompt:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-
-			core.Logger.Info("Logging out character", "characterName", character.Name)
-			character.Cleanup()
-			character.Player.Cleanup()
-		}
-		return nil
-	})
-
-	// Save game state
-	g.Go(func() error {
-		core.Logger.Info("Performing final auto-save...")
-		if err := game.SaveActiveRooms(); err != nil {
-			core.Logger.Error("Error saving rooms during shutdown", "error", err)
-			return fmt.Errorf("failed to save rooms: %w", err)
-		}
-		if err := game.SaveActiveItems(); err != nil {
-			core.Logger.Error("Error saving items during shutdown", "error", err)
-			return fmt.Errorf("failed to save items: %w", err)
-		}
-		return nil
-	})
-
-	// Close server listener
-	g.Go(func() error {
-		if server.Listener != nil {
-			core.Logger.Info("Closing server listener...")
-			if err := server.Listener.Close(); err != nil {
-				core.Logger.Error("Error closing server listener", "error", err)
-				return fmt.Errorf("failed to close listener: %w", err)
-			}
-		}
-		return nil
-	})
-
-	// Wait for all shutdown operations to complete
-	if err := g.Wait(); err != nil {
-		if err == context.DeadlineExceeded {
-			core.Logger.Error("Shutdown timed out")
-		} else {
-			core.Logger.Error("Error during shutdown", "error", err)
-		}
-	} else {
-		core.Logger.Info("Graceful shutdown completed")
-	}
 }

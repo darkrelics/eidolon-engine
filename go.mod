@@ -16,7 +16,7 @@ replace github.com/robinje/multi-user-dungeon/server => ./server
 
 require (
 	github.com/robinje/multi-user-dungeon/core v0.0.0-00010101000000-000000000000
-	golang.org/x/sync v0.9.0
+	github.com/robinje/multi-user-dungeon/server v0.0.0-00010101000000-000000000000
 	gopkg.in/yaml.v3 v3.0.1
 )
 
