@@ -76,6 +76,7 @@ func main() {
 	go func() {
 		if err := server.RunServer(Server); err != nil {
 			core.Logger.Error("Server error", "error", err)
+			ctx.Done()
 		}
 	}()
 
@@ -84,6 +85,13 @@ func main() {
 	fmt.Println("Initializing game...")
 
 	Game, err := game.NewGame(ctx, config)
+
+	go func() {
+		if err := game.RunGame(Game); err != nil {
+			core.Logger.Error("Game error", "error", err)
+			ctx.Done()
+		}
+	}()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
