@@ -9,38 +9,40 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/google/uuid"
+
+	"github.com/robinje/multi-user-dungeon/core"
 )
 
 // NewRoom creates a new Room instance with initialized fields.
-func NewRoom(roomID int64, area string, title string, description string) *Room {
-	room := &Room{
+func NewRoom(roomID int64, area string, title string, description string) *core.Room {
+	room := &core.Room{
 		RoomID:      roomID,
 		Area:        area,
 		Title:       title,
 		Description: description,
-		Exits:       make(map[string]*Exit),
-		Characters:  make(map[uuid.UUID]*Character),
-		Items:       make(map[uuid.UUID]*Item),
+		Exits:       make(map[string]*core.Exit),
+		Characters:  make(map[uuid.UUID]*core.Character),
+		Items:       make(map[uuid.UUID]*core.Item),
 		Mutex:       sync.RWMutex{},
 		LastSaved:   time.Now(),
 		LastEdited:  time.Now(),
 	}
-	Logger.Debug("Created room", "room_title", room.Title, "room_id", room.RoomID)
+	core.Logger.Debug("Created room", "room_title", room.Title, "room_id", room.RoomID)
 	return room
 }
 
 // StoreRooms stores all rooms into the DynamoDB database.
-func (kp *KeyPair) StoreRooms(rooms map[int64]*Room) error {
+func StoreRooms(rooms map[int64]*core.Room, kp *core.KeyPair) error {
 
 	for _, room := range rooms {
 		room.Mutex.Lock()
 
 		// Cleanup nil items before saving
-		room.CleanupNilItems()
+		CleanupNilItems(room)
 
-		err := kp.WriteRoom(room)
+		err := WriteRoom(room, kp)
 		if err != nil {
-			Logger.Error("Error storing room", "room_id", room.RoomID, "error", err)
+			core.Logger.Error("Error storing room", "room_id", room.RoomID, "error", err)
 			return fmt.Errorf("error storing room %d: %w", room.RoomID, err)
 		}
 
@@ -49,18 +51,18 @@ func (kp *KeyPair) StoreRooms(rooms map[int64]*Room) error {
 		room.Mutex.Unlock()
 
 	}
-	Logger.Debug("Successfully stored all rooms")
+	core.Logger.Debug("Successfully stored all rooms")
 	return nil
 }
 
 // LoadRooms retrieves all rooms from the DynamoDB database and returns them as a map of Room instances.
-func (kp *KeyPair) LoadRooms() (map[int64]*Room, error) {
-	rooms := make(map[int64]*Room)
+func LoadRooms(kp *core.KeyPair) (map[int64]*core.Room, error) {
+	rooms := make(map[int64]*core.Room)
 
-	var roomsData []RoomData
+	var roomsData []core.RoomData
 	err := kp.Scan("rooms", &roomsData)
 	if err != nil {
-		Logger.Error("Error scanning rooms", "error", err)
+		core.Logger.Error("Error scanning rooms", "error", err)
 		return nil, fmt.Errorf("error scanning rooms: %w", err)
 	}
 
@@ -71,16 +73,16 @@ func (kp *KeyPair) LoadRooms() (map[int64]*Room, error) {
 	}
 
 	// Load all exits
-	allExits, err := kp.LoadAllExits()
+	allExits, err := LoadAllExits(kp)
 	if err != nil {
-		Logger.Error("Error loading exits", "error", err)
+		core.Logger.Error("Error loading exits", "error", err)
 		return nil, fmt.Errorf("error loading exits: %w", err)
 	}
 
 	// Load all items
-	allItems, err := kp.LoadAllItems()
+	allItems, err := LoadAllItems(kp)
 	if err != nil {
-		Logger.Error("Error loading items", "error", err)
+		core.Logger.Error("Error loading items", "error", err)
 		return nil, fmt.Errorf("error loading items: %w", err)
 	}
 
@@ -88,12 +90,12 @@ func (kp *KeyPair) LoadRooms() (map[int64]*Room, error) {
 	for _, room := range rooms {
 		roomData, exists := findRoomData(roomsData, room.RoomID)
 		if !exists {
-			Logger.Warn("Room data not found", "room_id", room.RoomID)
+			core.Logger.Warn("Room data not found", "room_id", room.RoomID)
 			continue
 		}
 
 		// Add exits to the room
-		room.Exits = make(map[string]*Exit)
+		room.Exits = make(map[string]*core.Exit)
 		for _, exitID := range roomData.ExitIDs {
 			if exit, exists := allExits[exitID]; exists {
 				room.Exits[exit.Direction] = exit
@@ -101,86 +103,86 @@ func (kp *KeyPair) LoadRooms() (map[int64]*Room, error) {
 				if targetRoom, exists := rooms[exit.TargetRoom.RoomID]; exists {
 					exit.TargetRoom = targetRoom
 				} else {
-					Logger.Warn("Target room not found for exit", "room_id", room.RoomID, "direction", exit.Direction, "target_room_id", exit.TargetRoom.RoomID)
+					core.Logger.Warn("Target room not found for exit", "room_id", room.RoomID, "direction", exit.Direction, "target_room_id", exit.TargetRoom.RoomID)
 				}
 			}
 		}
 
 		// Add items to the room
-		room.Items = make(map[uuid.UUID]*Item)
+		room.Items = make(map[uuid.UUID]*core.Item)
 		for _, itemID := range roomData.ItemIDs {
 			itemUUID, err := uuid.Parse(itemID)
 			if err != nil {
-				Logger.Error("Invalid item UUID", "item_id", itemID, "error", err)
+				core.Logger.Error("Invalid item UUID", "item_id", itemID, "error", err)
 				continue
 			}
 			if item, exists := allItems[itemID]; exists {
 				room.Items[itemUUID] = item
 			} else {
-				Logger.Warn("Item not found for room", "room_id", room.RoomID, "item_id", itemID)
+				core.Logger.Warn("Item not found for room", "room_id", room.RoomID, "item_id", itemID)
 			}
 		}
 	}
 
-	Logger.Debug("Successfully loaded rooms from database", "count", len(rooms))
+	core.Logger.Debug("Successfully loaded rooms from database", "count", len(rooms))
 	return rooms, nil
 }
 
 // Helper function to find room data by ID
-func findRoomData(roomsData []RoomData, roomID int64) (RoomData, bool) {
+func findRoomData(roomsData []core.RoomData, roomID int64) (core.RoomData, bool) {
 	for _, data := range roomsData {
 		if data.RoomID == roomID {
 			return data, true
 		}
 	}
-	return RoomData{}, false
+	return core.RoomData{}, false
 }
 
 // LoadAllExits loads all exits for all rooms.
-func (kp *KeyPair) LoadAllExits() (map[string]*Exit, error) {
-	var exitsData []ExitData
+func LoadAllExits(kp *core.KeyPair) (map[string]*core.Exit, error) {
+	var exitsData []core.ExitData
 
 	err := kp.Scan("exits", &exitsData)
 	if err != nil {
-		Logger.Error("Error scanning exits", "error", err)
+		core.Logger.Error("Error scanning exits", "error", err)
 		return nil, fmt.Errorf("error scanning exits: %w", err)
 	}
 
-	exits := make(map[string]*Exit)
+	exits := make(map[string]*core.Exit)
 	for _, exitData := range exitsData {
 		exitID, err := uuid.Parse(exitData.ExitID)
 		if err != nil {
-			Logger.Error("Invalid exit UUID", "exit_id", exitData.ExitID, "error", err)
+			core.Logger.Error("Invalid exit UUID", "exit_id", exitData.ExitID, "error", err)
 			continue
 		}
 
-		exits[exitData.ExitID] = &Exit{
+		exits[exitData.ExitID] = &core.Exit{
 			ExitID:     exitID,
 			Direction:  exitData.Direction,
-			TargetRoom: &Room{RoomID: exitData.TargetRoom}, // Temporary Room object, will be resolved later
+			TargetRoom: &core.Room{RoomID: exitData.TargetRoom}, // Temporary Room object, will be resolved later
 			Visible:    exitData.Visible,
 			LastSaved:  time.Now(),
 			LastEdited: time.Now(),
 		}
 	}
 
-	Logger.Debug("Loaded all exits", "total_exits", len(exits))
+	core.Logger.Debug("Loaded all exits", "total_exits", len(exits))
 	return exits, nil
 }
 
 // DisplayRooms logs information about all rooms, useful for debugging.
-func DisplayRooms(rooms map[int64]*Room) {
-	Logger.Info("Displaying rooms")
+func DisplayRooms(rooms map[int64]*core.Room) {
+	core.Logger.Info("Displaying rooms")
 	for _, room := range rooms {
-		Logger.Info("Room", "room_id", room.RoomID, "title", room.Title)
+		core.Logger.Info("Room", "room_id", room.RoomID, "title", room.Title)
 		for _, exit := range room.Exits {
-			Logger.Info("  Exit", "direction", exit.Direction, "target_room", exit.TargetRoom)
+			core.Logger.Info("  Exit", "direction", exit.Direction, "target_room", exit.TargetRoom)
 		}
 	}
 }
 
 // WriteRoom stores a single room into the DynamoDB database.
-func (kp *KeyPair) WriteRoom(room *Room) error {
+func WriteRoom(room *core.Room, kp *core.KeyPair) error {
 	if room == nil {
 		return fmt.Errorf("cannot write nil room")
 	}
@@ -190,7 +192,7 @@ func (kp *KeyPair) WriteRoom(room *Room) error {
 
 	// Write exits separately
 	for _, exit := range room.Exits {
-		exitData := ExitData{
+		exitData := core.ExitData{
 			ExitID:     exit.ExitID.String(),
 			Direction:  exit.Direction,
 			TargetRoom: exit.TargetRoom.RoomID,
@@ -198,28 +200,28 @@ func (kp *KeyPair) WriteRoom(room *Room) error {
 		}
 		err := kp.Put("exits", exitData)
 		if err != nil {
-			Logger.Error("Error writing exit data", "room_id", room.RoomID, "direction", exit.Direction, "error", err)
+			core.Logger.Error("Error writing exit data", "room_id", room.RoomID, "direction", exit.Direction, "error", err)
 			return fmt.Errorf("error writing exit data: %w", err)
 		}
 
 		exit.LastSaved = time.Now()
 	}
 
-	roomData := room.ToData()
+	roomData := ToData(room)
 	err := kp.Put("rooms", roomData)
 	if err != nil {
-		Logger.Error("Error writing room data", "room_id", room.RoomID, "error", err)
+		core.Logger.Error("Error writing room data", "room_id", room.RoomID, "error", err)
 		return fmt.Errorf("error writing room data: %w", err)
 	}
 
 	room.LastSaved = time.Now()
 
-	Logger.Info("Successfully wrote room and exits to database", "room_id", room.RoomID)
+	core.Logger.Info("Successfully wrote room and exits to database", "room_id", room.RoomID)
 	return nil
 }
 
 // SaveActiveRooms saves all active rooms to the database if they have been edited since the last save.
-func (g *Game) SaveActiveRooms() error {
+func SaveActiveRooms(g *core.Game) error {
 	if g == nil {
 		return fmt.Errorf("server is nil")
 	}
@@ -227,42 +229,42 @@ func (g *Game) SaveActiveRooms() error {
 	g.Mutex.RLock()
 	defer g.Mutex.RUnlock()
 
-	Logger.Debug("Starting to save active rooms...")
+	core.Logger.Debug("Starting to save active rooms...")
 
 	for roomID, room := range g.Rooms {
 		if room == nil {
-			Logger.Debug("Skipping nil room", "room_id", roomID)
+			core.Logger.Debug("Skipping nil room", "room_id", roomID)
 			continue
 		}
 
 		// Check if LastEdited is after LastSaved, skip if it is not
 		if !room.LastEdited.After(room.LastSaved) {
-			Logger.Debug("Room not edited since last save, skipping", "room_id", roomID)
+			core.Logger.Debug("Room not edited since last save, skipping", "room_id", roomID)
 			continue
 		}
 
 		// Attempt to write the room to the database
-		if err := g.Database.WriteRoom(room); err != nil {
-			Logger.Error("Error saving room", "room_id", roomID, "error", err)
+		if err := WriteRoom(room, g.Database); err != nil {
+			core.Logger.Error("Error saving room", "room_id", roomID, "error", err)
 			// Continue saving other rooms even if one fails
 		} else {
 			// Update LastSaved after successful save
 			room.LastSaved = time.Now()
-			Logger.Debug("Successfully saved room", "room_id", roomID)
+			core.Logger.Debug("Successfully saved room", "room_id", roomID)
 		}
 	}
 
-	Logger.Info("Finished saving active rooms")
+	core.Logger.Info("Finished saving active rooms")
 	return nil
 }
 
 // AddExit adds an exit to the room's exits map.
-func (r *Room) AddExit(exit *Exit) {
+func AddExit(exit *core.Exit, r *core.Room) {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 
 	if exit == nil {
-		Logger.Warn("Attempted to add nil exit to room", "room_id", r.RoomID)
+		core.Logger.Warn("Attempted to add nil exit to room", "room_id", r.RoomID)
 		return
 	}
 
@@ -270,17 +272,17 @@ func (r *Room) AddExit(exit *Exit) {
 
 	r.LastEdited = time.Now()
 
-	Logger.Debug("Added exit to room", "room_id", r.RoomID, "direction", exit.Direction)
+	core.Logger.Debug("Added exit to room", "room_id", r.RoomID, "direction", exit.Direction)
 }
 
 // SendRoomMessage sends a message to all characters in the room.
-func SendRoomMessage(r *Room, message string) {
-	Logger.Debug("Sending message to room", "room_id", r.RoomID, "message", message)
+func SendRoomMessage(r *core.Room, message string) {
+	core.Logger.Debug("Sending message to room", "room_id", r.RoomID, "message", message)
 
 	for _, character := range r.Characters {
 
 		if character.Player == nil || character.Player.ToPlayer == nil {
-			Logger.Warn("Player or ToPlayer channel is nil", "playerID", character.Player.PlayerID, "room_id", r.RoomID)
+			core.Logger.Warn("Player or ToPlayer channel is nil", "playerID", character.Player.PlayerID, "room_id", r.RoomID)
 			continue
 		}
 
@@ -290,8 +292,8 @@ func SendRoomMessage(r *Room, message string) {
 }
 
 // SendRoomMessageExcept sends a message to all characters in the room except for the specified character.
-func SendRoomMessageExcept(r *Room, message string, character *Character) {
-	Logger.Debug("Sending message to room except for character", "room_id", r.RoomID, "message", message, "character_id", character.ID)
+func SendRoomMessageExcept(r *core.Room, message string, character *core.Character) {
+	core.Logger.Debug("Sending message to room except for character", "room_id", r.RoomID, "message", message, "character_id", character.ID)
 
 	for _, c := range r.Characters {
 		if c == character {
@@ -299,7 +301,7 @@ func SendRoomMessageExcept(r *Room, message string, character *Character) {
 		}
 
 		if c.Player == nil || c.Player.ToPlayer == nil {
-			Logger.Warn("Player or ToPlayer channel is nil", "playerID", c.Player.PlayerID, "room_id", r.RoomID)
+			core.Logger.Warn("Player or ToPlayer channel is nil", "playerID", c.Player.PlayerID, "room_id", r.RoomID)
 			continue
 		}
 
@@ -309,7 +311,7 @@ func SendRoomMessageExcept(r *Room, message string, character *Character) {
 }
 
 // ToData converts a Room to RoomData for database storage.
-func (r *Room) ToData() *RoomData {
+func ToData(r *core.Room) *core.RoomData {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 
@@ -323,7 +325,7 @@ func (r *Room) ToData() *RoomData {
 		itemIDs = append(itemIDs, itemID.String())
 	}
 
-	return &RoomData{
+	return &core.RoomData{
 		RoomID:      r.RoomID,
 		Area:        r.Area,
 		Title:       r.Title,
@@ -334,7 +336,7 @@ func (r *Room) ToData() *RoomData {
 }
 
 // FromData populates a Room from RoomData.
-func (r *Room) FromData(data *RoomData, exits map[string]*Exit, items map[string]*Item) {
+func FromData(data *core.RoomData, exits map[string]*core.Exit, items map[string]*core.Item, r *core.Room) {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 
@@ -343,14 +345,14 @@ func (r *Room) FromData(data *RoomData, exits map[string]*Exit, items map[string
 	r.Title = data.Title
 	r.Description = data.Description
 
-	r.Exits = make(map[string]*Exit)
+	r.Exits = make(map[string]*core.Exit)
 	for _, direction := range data.ExitIDs {
 		if exit, ok := exits[direction]; ok {
 			r.Exits[direction] = exit
 		}
 	}
 
-	r.Items = make(map[uuid.UUID]*Item)
+	r.Items = make(map[uuid.UUID]*core.Item)
 	for _, itemIDStr := range data.ItemIDs {
 		if itemID, err := uuid.Parse(itemIDStr); err == nil {
 			if item, ok := items[itemIDStr]; ok {
@@ -361,10 +363,10 @@ func (r *Room) FromData(data *RoomData, exits map[string]*Exit, items map[string
 }
 
 // LoadItemsForRoom loads all items for a specific room
-func (kp *KeyPair) LoadItemsForRoom(roomID int64) (map[uuid.UUID]*Item, error) {
-	items := make(map[uuid.UUID]*Item)
+func LoadItemsForRoom(roomID int64, kp *core.KeyPair) (map[uuid.UUID]*core.Item, error) {
+	items := make(map[uuid.UUID]*core.Item)
 
-	var itemsData []ItemData
+	var itemsData []core.ItemData
 	// Assume we have a way to query items by room ID
 	err := kp.Query("items", "RoomID = :roomID", map[string]*dynamodb.AttributeValue{
 		":roomID": {N: aws.String(strconv.FormatInt(roomID, 10))},
@@ -375,9 +377,9 @@ func (kp *KeyPair) LoadItemsForRoom(roomID int64) (map[uuid.UUID]*Item, error) {
 	}
 
 	for _, itemData := range itemsData {
-		item, err := kp.itemFromData(&itemData)
+		item, err := itemFromData(&itemData, kp)
 		if err != nil {
-			Logger.Error("Error creating item from data", "item_id", itemData.ItemID, "error", err)
+			core.Logger.Error("Error creating item from data", "item_id", itemData.ItemID, "error", err)
 			continue
 		}
 		items[item.ID] = item
@@ -387,14 +389,14 @@ func (kp *KeyPair) LoadItemsForRoom(roomID int64) (map[uuid.UUID]*Item, error) {
 }
 
 // CleanupNilItems removes any nil items from the room's item list.
-func (r *Room) CleanupNilItems() {
+func CleanupNilItems(r *core.Room) {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 
 	for id, item := range r.Items {
 		if item == nil {
 			delete(r.Items, id)
-			Logger.Info("Removed nil item from room", "itemID", id, "roomID", r.RoomID)
+			core.Logger.Info("Removed nil item from room", "itemID", id, "roomID", r.RoomID)
 		}
 	}
 

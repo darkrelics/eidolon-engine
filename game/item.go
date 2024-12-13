@@ -9,19 +9,21 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/google/uuid"
+
+	"github.com/robinje/multi-user-dungeon/core"
 )
 
 // DisplayPrototypes logs the details of each prototype for debugging purposes.
-func DisplayPrototypes(prototypes map[uuid.UUID]*Prototype) {
+func DisplayPrototypes(prototypes map[uuid.UUID]*core.Prototype) {
 	for _, prototype := range prototypes {
-		Logger.Debug("Prototype", "id", prototype.ID, "name", prototype.Name, "description", prototype.Description)
+		core.Logger.Debug("Prototype", "id", prototype.ID, "name", prototype.Name, "description", prototype.Description)
 	}
 }
 
 // StorePrototypes stores item prototypes into the DynamoDB table.
-func (kp *KeyPair) StorePrototypes(prototypes map[uuid.UUID]*Prototype) error {
+func StorePrototypes(prototypes map[uuid.UUID]*core.Prototype, kp *core.KeyPair) error {
 	for _, prototype := range prototypes {
-		prototypeData := PrototypeData{
+		prototypeData := core.PrototypeData{
 			PrototypeID: prototype.ID.String(),
 			Name:        prototype.Name,
 			Description: prototype.Description,
@@ -42,35 +44,35 @@ func (kp *KeyPair) StorePrototypes(prototypes map[uuid.UUID]*Prototype) error {
 
 		err := kp.Put("prototypes", prototypeData)
 		if err != nil {
-			Logger.Error("Error storing prototype", "name", prototype.Name, "error", err)
+			core.Logger.Error("Error storing prototype", "name", prototype.Name, "error", err)
 			return fmt.Errorf("error storing prototype %s: %w", prototype.Name, err)
 		}
 
 		prototype.LastSaved = time.Now()
 
-		Logger.Info("Stored prototype", "name", prototype.Name, "prototypeID", prototype.ID)
+		core.Logger.Info("Stored prototype", "name", prototype.Name, "prototypeID", prototype.ID)
 	}
 
 	return nil
 }
 
 // LoadPrototypes retrieves all item prototypes from the DynamoDB table.
-func (kp *KeyPair) LoadPrototypes() (map[uuid.UUID]*Prototype, error) {
-	var prototypeDataList []PrototypeData
+func LoadPrototypes(kp *core.KeyPair) (map[uuid.UUID]*core.Prototype, error) {
+	var prototypeDataList []core.PrototypeData
 	err := kp.Scan("prototypes", &prototypeDataList)
 	if err != nil {
-		Logger.Error("Error scanning prototypes table", "error", err)
+		core.Logger.Error("Error scanning prototypes table", "error", err)
 		return nil, fmt.Errorf("error scanning prototypes: %w", err)
 	}
 
-	prototypes := make(map[uuid.UUID]*Prototype)
+	prototypes := make(map[uuid.UUID]*core.Prototype)
 	for _, prototypeData := range prototypeDataList {
 		id, err := uuid.Parse(prototypeData.PrototypeID)
 		if err != nil {
-			Logger.Error("Error parsing prototype UUID", "id", prototypeData.PrototypeID, "error", err)
+			core.Logger.Error("Error parsing prototype UUID", "id", prototypeData.PrototypeID, "error", err)
 			continue
 		}
-		prototype := &Prototype{
+		prototype := &core.Prototype{
 			ID:          id,
 			Name:        prototypeData.Name,
 			Description: prototypeData.Description,
@@ -92,14 +94,14 @@ func (kp *KeyPair) LoadPrototypes() (map[uuid.UUID]*Prototype, error) {
 			LastSaved:   time.Now(),
 		}
 		prototypes[id] = prototype
-		Logger.Debug("Loaded prototype from database", "id", id, "name", prototype.Name)
+		core.Logger.Debug("Loaded prototype from database", "id", id, "name", prototype.Name)
 	}
 
 	return prototypes, nil
 }
 
 // LoadItem retrieves an item from the DynamoDB table.
-func (k *KeyPair) LoadItem(id string) (*Item, error) {
+func LoadItem(id string, k *core.KeyPair) (*core.Item, error) {
 	if id == "" {
 		return nil, fmt.Errorf("empty item ID provided")
 	}
@@ -110,23 +112,23 @@ func (k *KeyPair) LoadItem(id string) (*Item, error) {
 		},
 	}
 
-	var itemData ItemData
+	var itemData core.ItemData
 	err := k.Get("items", key, &itemData)
 	if err != nil {
-		Logger.Error("Error loading item data", "itemID", id, "error", err)
+		core.Logger.Error("Error loading item data", "itemID", id, "error", err)
 		return nil, fmt.Errorf("error loading item data: %w", err)
 	}
 
-	return k.itemFromData(&itemData)
+	return itemFromData(&itemData, k)
 }
 
 // WriteItem stores an item into the DynamoDB table, handling nested contents if it's a container.
-func (k *KeyPair) WriteItem(obj *Item) error {
+func WriteItem(obj *core.Item, k *core.KeyPair) error {
 	// Recursively write contained items if the item is a container
 	if obj.Container {
 		for _, contentItem := range obj.Contents {
-			if err := k.WriteItem(contentItem); err != nil {
-				Logger.Error("Error writing content item", "contentItemID", contentItem.ID, "parentItemID", obj.ID, "error", err)
+			if err := WriteItem(contentItem, k); err != nil {
+				core.Logger.Error("Error writing content item", "contentItemID", contentItem.ID, "parentItemID", obj.ID, "error", err)
 				return fmt.Errorf("error writing content item %s: %w", contentItem.ID, err)
 			}
 		}
@@ -139,7 +141,7 @@ func (k *KeyPair) WriteItem(obj *Item) error {
 	}
 
 	// Create the ItemData struct to store in DynamoDB
-	itemData := ItemData{
+	itemData := core.ItemData{
 		ItemID:      obj.ID.String(),
 		PrototypeID: obj.PrototypeID.String(),
 		Name:        obj.Name,
@@ -164,38 +166,38 @@ func (k *KeyPair) WriteItem(obj *Item) error {
 	// Write the item data to the DynamoDB table
 	err := k.Put("items", itemData)
 	if err != nil {
-		Logger.Error("Error writing item data", "itemName", obj.Name, "itemID", obj.ID, "error", err)
+		core.Logger.Error("Error writing item data", "itemName", obj.Name, "itemID", obj.ID, "error", err)
 		return fmt.Errorf("error writing item data: %w", err)
 	}
 
 	obj.LastSaved = time.Now()
 
-	Logger.Info("Successfully wrote item", "itemName", obj.Name, "itemID", obj.ID)
+	core.Logger.Info("Successfully wrote item", "itemName", obj.Name, "itemID", obj.ID)
 	return nil
 }
 
 // SaveActiveItems saves all active items from rooms and characters to the database.
-func (g *Game) SaveActiveItems() error {
+func SaveActiveItems(g *core.Game) error {
 	if g == nil {
 		return fmt.Errorf("server is nil")
 	}
 
-	Logger.Debug("Starting to save active items...")
+	core.Logger.Debug("Starting to save active items...")
 
 	// Collect all items from rooms and characters
-	itemsToSave := make(map[uuid.UUID]*Item)
+	itemsToSave := make(map[uuid.UUID]*core.Item)
 
 	// Items in rooms
 	if g.Rooms != nil {
 		for roomID, room := range g.Rooms {
 			if room == nil {
-				Logger.Warn("Nil room found", "roomID", roomID)
+				core.Logger.Warn("Nil room found", "roomID", roomID)
 				continue
 			}
 			room.Mutex.RLock()
 			for _, item := range room.Items {
 				if item == nil {
-					Logger.Warn("Nil item found in room", "roomID", roomID)
+					core.Logger.Warn("Nil item found in room", "roomID", roomID)
 					continue
 				}
 				itemsToSave[item.ID] = item
@@ -203,20 +205,20 @@ func (g *Game) SaveActiveItems() error {
 			room.Mutex.RUnlock()
 		}
 	} else {
-		Logger.Warn("Server Rooms map is nil")
+		core.Logger.Warn("Server Rooms map is nil")
 	}
 
 	// Items in character inventories
 	if g.Characters != nil {
 		for charID, character := range g.Characters {
 			if character == nil {
-				Logger.Warn("Nil character found", "characterID", charID)
+				core.Logger.Warn("Nil character found", "characterID", charID)
 				continue
 			}
 			character.Mutex.RLock()
 			for _, item := range character.Inventory {
 				if item == nil {
-					Logger.Warn("Nil item found in inventory", "characterID", charID)
+					core.Logger.Warn("Nil item found in inventory", "characterID", charID)
 					continue
 				}
 				itemsToSave[item.ID] = item
@@ -224,7 +226,7 @@ func (g *Game) SaveActiveItems() error {
 			character.Mutex.RUnlock()
 		}
 	} else {
-		Logger.Warn("Server Characters map is nil")
+		core.Logger.Warn("Server Characters map is nil")
 	}
 
 	// Save all collected items
@@ -234,39 +236,39 @@ func (g *Game) SaveActiveItems() error {
 
 	for _, item := range itemsToSave {
 		if item == nil {
-			Logger.Warn("Attempting to save a nil item, skipping")
+			core.Logger.Warn("Attempting to save a nil item, skipping")
 			continue
 		}
 
 		// Check if LastEdited is after LastSaved, skip if it is not
 		if !item.LastEdited.After(item.LastSaved) {
-			Logger.Debug("Item not edited since last save, skipping", "itemName", item.Name, "itemID", item.ID)
+			core.Logger.Debug("Item not edited since last save, skipping", "itemName", item.Name, "itemID", item.ID)
 			continue
 		}
 
 		// Attempt to write the item to the database
-		if err := g.Database.WriteItem(item); err != nil {
-			Logger.Error("Error saving item", "itemName", item.Name, "itemID", item.ID, "error", err)
+		if err := WriteItem(item, g.Database); err != nil {
+			core.Logger.Error("Error saving item", "itemName", item.Name, "itemID", item.ID, "error", err)
 			// Continue saving other items even if one fails
 		} else {
 			// Update LastSaved after successful save
 			item.LastSaved = time.Now()
-			Logger.Debug("Successfully saved item", "itemName", item.Name, "itemID", item.ID)
+			core.Logger.Debug("Successfully saved item", "itemName", item.Name, "itemID", item.ID)
 		}
 	}
 
-	Logger.Info("Finished saving active items")
+	core.Logger.Info("Finished saving active items")
 	return nil
 }
 
-func (g *Game) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
+func CreateItemFromPrototype(prototypeID uuid.UUID, g *core.Game) (*core.Item, error) {
 	prototype, exists := g.Prototypes[prototypeID]
 	if !exists {
-		Logger.Error("Prototype not found", "prototypeID", prototypeID)
+		core.Logger.Error("Prototype not found", "prototypeID", prototypeID)
 		return nil, fmt.Errorf("prototype with ID %s not found", prototypeID)
 	}
 
-	newItem := &Item{
+	newItem := &core.Item{
 		ID:          uuid.New(),
 		PrototypeID: prototypeID,
 		Name:        prototype.Name,
@@ -300,11 +302,11 @@ func (g *Game) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 
 	// Recursively create contents if the item is a container
 	if newItem.Container {
-		newItem.Contents = make([]*Item, 0, len(prototype.Contents))
+		newItem.Contents = make([]*core.Item, 0, len(prototype.Contents))
 		for _, contentProtoID := range prototype.Contents {
-			newContentItem, err := g.CreateItemFromPrototype(contentProtoID)
+			newContentItem, err := CreateItemFromPrototype(contentProtoID, g)
 			if err != nil {
-				Logger.Error("Error creating content item from prototype", "prototypeID", contentProtoID, "error", err)
+				core.Logger.Error("Error creating content item from prototype", "prototypeID", contentProtoID, "error", err)
 				continue // Skip this content item but continue with others
 			}
 			newItem.Contents = append(newItem.Contents, newContentItem)
@@ -312,19 +314,19 @@ func (g *Game) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 	}
 
 	// Save the new item to the database
-	if err := g.Database.WriteItem(newItem); err != nil {
-		Logger.Error("Failed to write new item to database", "itemName", newItem.Name, "itemID", newItem.ID, "error", err)
+	if err := WriteItem(newItem, g.Database); err != nil {
+		core.Logger.Error("Failed to write new item to database", "itemName", newItem.Name, "itemID", newItem.ID, "error", err)
 		return nil, fmt.Errorf("failed to write new item to database: %w", err)
 	}
 
 	newItem.LastSaved = time.Now()
 
-	Logger.Debug("Created new item from prototype", "itemName", newItem.Name, "itemID", newItem.ID, "prototypeID", prototypeID)
+	core.Logger.Debug("Created new item from prototype", "itemName", newItem.Name, "itemID", newItem.ID, "prototypeID", prototypeID)
 	return newItem, nil
 }
 
 // itemFromData creates an Item from ItemData
-func (kp *KeyPair) itemFromData(itemData *ItemData) (*Item, error) {
+func itemFromData(itemData *core.ItemData, kp *core.KeyPair) (*core.Item, error) {
 	if itemData == nil {
 		return nil, fmt.Errorf("itemData is nil")
 	}
@@ -339,7 +341,7 @@ func (kp *KeyPair) itemFromData(itemData *ItemData) (*Item, error) {
 		return nil, fmt.Errorf("error parsing prototype UUID: %w", err)
 	}
 
-	item := &Item{
+	item := &core.Item{
 		ID:          itemID,
 		PrototypeID: prototypeID,
 		Name:        itemData.Name,
@@ -365,11 +367,11 @@ func (kp *KeyPair) itemFromData(itemData *ItemData) (*Item, error) {
 
 	// Handle Contents if the item is a container
 	if item.Container {
-		item.Contents = make([]*Item, 0, len(itemData.Contents))
+		item.Contents = make([]*core.Item, 0, len(itemData.Contents))
 		for _, contentID := range itemData.Contents {
-			contentItem, err := kp.LoadItem(contentID)
+			contentItem, err := LoadItem(contentID, kp)
 			if err != nil {
-				Logger.Error("Error loading content item", "contentID", contentID, "parentItemID", item.ID, "error", err)
+				core.Logger.Error("Error loading content item", "contentID", contentID, "parentItemID", item.ID, "error", err)
 				continue // Skip this content item but continue with others
 			}
 			item.Contents = append(item.Contents, contentItem)
@@ -380,23 +382,23 @@ func (kp *KeyPair) itemFromData(itemData *ItemData) (*Item, error) {
 }
 
 // LoadAllItems loads all items for all rooms.
-func (kp *KeyPair) LoadAllItems() (map[string]*Item, error) {
-	var itemsData []ItemData
+func LoadAllItems(kp *core.KeyPair) (map[string]*core.Item, error) {
+	var itemsData []core.ItemData
 	err := kp.Scan("items", &itemsData)
 	if err != nil {
-		Logger.Error("Error scanning items", "error", err)
+		core.Logger.Error("Error scanning items", "error", err)
 		return nil, fmt.Errorf("error scanning items: %w", err)
 	}
 
-	items := make(map[string]*Item)
+	items := make(map[string]*core.Item)
 	for _, itemData := range itemsData {
 		if itemData.ItemID == "" {
-			Logger.Warn("Skipping item with empty ID")
+			core.Logger.Warn("Skipping item with empty ID")
 			continue
 		}
-		item, err := kp.itemFromData(&itemData)
+		item, err := itemFromData(&itemData, kp)
 		if err != nil {
-			Logger.Error("Error creating item from data", "item_id", itemData.ItemID, "error", err)
+			core.Logger.Error("Error creating item from data", "item_id", itemData.ItemID, "error", err)
 			continue
 		}
 		items[itemData.ItemID] = item
@@ -406,33 +408,33 @@ func (kp *KeyPair) LoadAllItems() (map[string]*Item, error) {
 }
 
 // AddItem adds an item to the room's item list.
-func (r *Room) AddItem(item *Item) {
+func AddItem(item *core.Item, r *core.Room) {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 
 	if item == nil {
-		Logger.Warn("Attempted to add nil item to room", "roomID", r.RoomID)
+		core.Logger.Warn("Attempted to add nil item to room", "roomID", r.RoomID)
 		return
 	}
 
 	if r.Items == nil {
-		r.Items = make(map[uuid.UUID]*Item)
+		r.Items = make(map[uuid.UUID]*core.Item)
 	}
 
 	item.LastEdited = time.Now()
 
 	r.Items[item.ID] = item
 
-	Logger.Debug("Added item to room", "itemName", item.Name, "itemID", item.ID, "roomID", r.RoomID)
+	core.Logger.Debug("Added item to room", "itemName", item.Name, "itemID", item.ID, "roomID", r.RoomID)
 }
 
 // RemoveItem removes an item from the room's item list.
-func (r *Room) RemoveItem(item *Item) {
+func RemoveItem(item *core.Item, r *core.Room) {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 
 	if item == nil {
-		Logger.Warn("Attempted to remove nil item from room", "roomID", r.RoomID)
+		core.Logger.Warn("Attempted to remove nil item from room", "roomID", r.RoomID)
 		return
 	}
 
@@ -440,12 +442,12 @@ func (r *Room) RemoveItem(item *Item) {
 
 	delete(r.Items, item.ID)
 
-	Logger.Debug("Removed item from room", "itemName", item.Name, "itemID", item.ID, "roomID", r.RoomID)
+	core.Logger.Debug("Removed item from room", "itemName", item.Name, "itemID", item.ID, "roomID", r.RoomID)
 }
 
-func formatHandSlot(slotName string, item *Item) string {
+func formatHandSlot(slotName string, item *core.Item) string {
 	if item == nil {
-		return fmt.Sprintf("  %-10s: %s\n\r", slotName, ApplyColor("bright_black", "empty"))
+		return fmt.Sprintf("  %-10s: %s\n\r", slotName, core.ApplyColor("bright_black", "empty"))
 	}
 
 	details := item.Name
@@ -455,37 +457,37 @@ func formatHandSlot(slotName string, item *Item) string {
 		details += fmt.Sprintf(" (x%d)", item.Quantity)
 	}
 
-	return fmt.Sprintf("  %-10s: %s\n\r", slotName, ApplyColor("green", details))
+	return fmt.Sprintf("  %-10s: %s\n\r", slotName, core.ApplyColor("green", details))
 }
 
-func formatWornItem(item *Item) string {
+func formatWornItem(item *core.Item) string {
 	if item == nil {
 		return ""
 	}
 
 	details := fmt.Sprintf("  %s (worn on %s)",
-		ApplyColor("yellow", item.Name),
-		ApplyColor("cyan", strings.Join(item.WornOn, ", ")))
+		core.ApplyColor("yellow", item.Name),
+		core.ApplyColor("cyan", strings.Join(item.WornOn, ", ")))
 
 	if item.Container && len(item.Contents) > 0 {
-		details += ApplyColor("bright_black", fmt.Sprintf(" [%d items inside]", len(item.Contents)))
+		details += core.ApplyColor("bright_black", fmt.Sprintf(" [%d items inside]", len(item.Contents)))
 	}
 
 	return details + "\n\r"
 }
 
-func formatCarriedItem(item *Item) string {
+func formatCarriedItem(item *core.Item) string {
 	if item == nil {
 		return ""
 	}
 
-	details := fmt.Sprintf("  %s", ApplyColor("white", item.Name))
+	details := fmt.Sprintf("  %s", core.ApplyColor("white", item.Name))
 
 	if item.Stackable && item.Quantity > 1 {
-		details += ApplyColor("bright_black", fmt.Sprintf(" (x%d)", item.Quantity))
+		details += core.ApplyColor("bright_black", fmt.Sprintf(" (x%d)", item.Quantity))
 	}
 	if item.Container && len(item.Contents) > 0 {
-		details += ApplyColor("bright_black", fmt.Sprintf(" [%d items inside]", len(item.Contents)))
+		details += core.ApplyColor("bright_black", fmt.Sprintf(" [%d items inside]", len(item.Contents)))
 	}
 
 	return details + "\n\r"

@@ -73,9 +73,13 @@ type KeyPair struct {
 }
 
 type Game struct {
+	Config               *Configuration
+	GlobalContext        context.Context
 	Context              context.Context
+	Cancel               context.CancelFunc
 	Mutex                sync.RWMutex
-	WaitGroup            sync.WaitGroup
+	StartTime            time.Time
+	CharacterCount       uint64
 	Ticker               *time.Ticker
 	Database             *KeyPair
 	ArcheTypes           map[string]*Archetype
