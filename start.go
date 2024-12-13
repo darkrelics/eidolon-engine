@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/robinje/multi-user-dungeon/core"
+	"github.com/robinje/multi-user-dungeon/game"
 	"github.com/robinje/multi-user-dungeon/server"
 )
 
@@ -79,6 +80,10 @@ func main() {
 	}()
 
 	fmt.Println("Server initialized.")
+
+	fmt.Println("Initializing game...")
+
+	Game, err := game.NewGame(ctx, config)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

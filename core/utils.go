@@ -1,9 +1,7 @@
 package core
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 	"strings"
 	"unicode"
 )
@@ -72,31 +70,6 @@ func (i *Index) SetID(id uint64) {
 	if id > i.IndexID {
 		i.IndexID = id
 	}
-}
-
-// loadNamesFromFile reads a file line by line and returns a slice of names.
-func loadNamesFromFile(filePath string) ([]string, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open %s: %w", filePath, err)
-	}
-	defer file.Close()
-
-	var names []string
-	scanner := bufio.NewScanner(file)
-	lineNumber := 1
-	for scanner.Scan() {
-		name := strings.TrimSpace(scanner.Text())
-		if name != "" {
-			names = append(names, strings.ToLower(name))
-		}
-		lineNumber++
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
-	}
-
-	return names, nil
 }
 
 func getLookTarget(character *Character, target string) string {

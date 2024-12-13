@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 )
 
-func GetAllMOTDs(k *core.KeyPair) ([]*MOTD, error) {
+func GetAllMOTDs(k *KeyPair) ([]*MOTD, error) {
 	input := &dynamodb.ScanInput{
 		TableName:        aws.String("motd"),
 		FilterExpression: aws.String("active = :active"),

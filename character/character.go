@@ -10,11 +10,10 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/google/uuid"
-)
 
-const FalsePositiveRate = 0.01 // 1% bloom filter false positive rate
+	"github.com/robinje/multi-user-dungeon/core"
+)
 
 // WearLocations defines all possible locations where an item can be worn
 var WearLocations = map[string]bool{
@@ -95,13 +94,13 @@ func (g *Game) NewCharacter(name string, player *Player, room *Room, archetypeNa
 }
 
 // ToData converts a Character object into a CharacterData struct for database storage.
-func (c *Character) ToData() *CharacterData {
+func ToData(c *core.Character) *core.CharacterData {
 	inventoryIDs := make(map[string]string)
 	for name, item := range c.Inventory {
 		inventoryIDs[name] = item.ID.String()
 	}
 
-	return &CharacterData{
+	return &core.CharacterData{
 		CharacterID:   c.ID.String(),
 		PlayerID:      c.Player.PlayerID,
 		CharacterName: c.Name,
@@ -158,17 +157,17 @@ func (c *Character) FromData(cd *CharacterData, game *Game) error {
 }
 
 // WriteCharacter saves the character to the DynamoDB database.
-func (kp *KeyPair) WriteCharacter(character *Character) error {
+func WriteCharacter(character *core.Character, kp *core.KeyPair) error {
 
-	characterData := character.ToData()
+	characterData := ToData(character)
 
 	err := kp.Put("characters", characterData)
 	if err != nil {
-		Logger.Error("Error writing character data", "characterName", character.Name, "error", err)
+		core.Logger.Error("Error writing character data", "characterName", character.Name, "error", err)
 		return fmt.Errorf("error writing character data: %w", err)
 	}
 
-	Logger.Debug("Successfully wrote character to database", "characterName", character.Name, "characterID", character.ID)
+	core.Logger.Debug("Successfully wrote character to database", "characterName", character.Name, "characterID", character.ID)
 
 	character.LastSaved = time.Now()
 
@@ -262,97 +261,6 @@ func (kp *KeyPair) DeleteCharacter(player *Player, characterName string) error {
 	return nil
 }
 
-// LoadCharacterNames loads all character names from the database to initialize the bloom filter.
-func (kp *KeyPair) LoadCharacterNames() (map[string]bool, error) {
-	names := make(map[string]bool)
-
-	var characters []struct {
-		CharacterName string `dynamodbav:"Name"`
-	}
-
-	err := kp.Scan("characters", &characters)
-	if err != nil {
-		Logger.Error("Error scanning characters table", "error", err)
-		return nil, fmt.Errorf("error scanning characters: %w", err)
-	}
-
-	for _, character := range characters {
-		names[strings.ToLower(character.CharacterName)] = true
-	}
-
-	if len(names) == 0 {
-		Logger.Warn("No characters found in the database")
-		return names, nil // Return empty map without error
-	}
-
-	return names, nil
-}
-
-// InitializeBloomFilter initializes the bloom filter with existing character names,
-// as well as names from ../data/names.txt and ../data/obscenity.txt.
-func InitializeBloomFilter(game *Game) error {
-	// Load character names from the database
-	characterNames, err := game.Database.LoadCharacterNames()
-	if err != nil {
-		return fmt.Errorf("failed to load character names: %w", err)
-	}
-
-	// Load additional names from names.txt
-	namesFilePath := "../data/names.txt"
-	namesFromFile, err := loadNamesFromFile(namesFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to load names from %s: %w", namesFilePath, err)
-	}
-
-	// Load obscenity words from obscenity.txt
-	obscenityFilePath := "../data/obscenity.txt"
-	obscenities, err := loadNamesFromFile(obscenityFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to load obscenities from %s: %w", obscenityFilePath, err)
-	}
-
-	// Calculate total number of items to add to the bloom filter
-	totalItems := len(characterNames)
-	for range characterNames { // Assuming characterNames is a map; adjust if it's a slice
-		// Counting items in characterNames
-	}
-	totalItems += len(namesFromFile)
-	totalItems += len(obscenities)
-
-	// Ensure a minimum size
-	if totalItems < 100 {
-		totalItems = 100
-	}
-
-	fpRate := FalsePositiveRate
-
-	// Initialize the bloom filter with the estimated number of items and false positive rate
-	game.CharacterBloomFilter = bloom.NewWithEstimates(uint(totalItems), fpRate)
-
-	// Add character names to the bloom filter
-	for name := range characterNames {
-		game.CharacterBloomFilter.AddString(strings.ToLower(name))
-	}
-
-	// Add names from names.txt to the bloom filter
-	for _, name := range namesFromFile {
-		game.CharacterBloomFilter.AddString(name)
-	}
-
-	// Add obscenities to the bloom filter
-	for _, word := range obscenities {
-		game.CharacterBloomFilter.AddString(word)
-	}
-
-	Logger.Debug("Bloom filter initialized",
-		"estimatedSize", totalItems,
-		"falsePositiveRate", fpRate,
-		"totalItemsAdded", totalItems,
-	)
-
-	return nil
-}
-
 // AddCharacterName adds a character name to the bloom filter to prevent duplicates.
 func (game *Game) AddCharacterName(name string) {
 
@@ -368,36 +276,6 @@ func (game *Game) CharacterNameExists(name string) bool {
 		Logger.Info("Character name exists", "characterName", name)
 	}
 	return exists
-}
-
-// SaveActiveCharacters saves all active characters to the database if they have been edited since the last save.
-func (g *Game) SaveActiveCharacters() error {
-
-	Logger.Debug("Saving active characters...")
-
-	for _, character := range g.Characters {
-		// Check if the character's LastEdited is before LastSaved
-		if !character.LastEdited.After(character.LastSaved) {
-			Logger.Debug("Character not edited since last save, skipping", "characterName", character.Name)
-			continue // Skip writing this character
-		}
-
-		character.Mutex.Lock()
-		// Attempt to write the character to the database
-		err := g.Database.WriteCharacter(character)
-		if err != nil {
-			Logger.Error("Error saving character", "characterName", character.Name, "error", err)
-			continue // Continue saving other characters even if one fails
-		}
-
-		// Update LastSaved after a successful write
-		character.LastSaved = time.Now()
-		Logger.Debug("Character saved successfully", "characterName", character.Name)
-		character.Mutex.Unlock()
-	}
-
-	Logger.Info("Active characters saved successfully.")
-	return nil
 }
 
 // WearItem allows a character to wear an item from their inventory.
