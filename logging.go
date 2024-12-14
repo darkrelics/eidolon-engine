@@ -20,6 +20,23 @@ import (
 	"github.com/aws/aws-xray-sdk-go/xray"
 )
 
+type CloudWatchHandler struct {
+	// Logging fields
+	logsClient        *cloudwatchlogs.Client
+	logLevel          int
+	logGroup          string
+	logStream         string
+	lastSequenceToken string
+	attrs             []slog.Attr
+	mutex             sync.RWMutex
+	handlers          []slog.Handler
+	initialized       bool
+
+	// Metrics fields
+	metricsClient *cloudwatch.Client
+	namespace     string
+}
+
 var Logger *slog.Logger
 
 func NewCloudWatchHandler(logsClient *cloudwatchlogs.Client, metricsClient *cloudwatch.Client, level int, logGroup, logStream, namespace string, handlers []slog.Handler) *CloudWatchHandler {

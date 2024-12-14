@@ -8,8 +8,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -88,7 +86,7 @@ func main() {
 	}
 
 	go func() {
-		if err := RunGame(Game); err != nil {
+		if err := Game.Run(); err != nil {
 			Logger.Error("Game error", "error", err)
 			ctx.Done()
 		}
@@ -103,23 +101,6 @@ func main() {
 
 }
 
-// loadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
-func loadConfiguration(configFile string) (*Configuration, error) {
-	var config Configuration
-
-	data, err := os.ReadFile(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file '%s': %w", configFile, err)
-	}
-
-	err = yaml.Unmarshal(data, &config)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling config from '%s': %w", configFile, err)
-	}
-
-	return &config, nil
-}
-
 func shutdown(server *Server, game *Game) {
 	const shutdownTimeout = 60 * time.Second
 	_, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -127,8 +108,8 @@ func shutdown(server *Server, game *Game) {
 
 	Logger.Info("Initiating graceful shutdown...")
 
-	server.Context.Done()
+	game.Stop()
 
-	game.Context.Done()
+	server.Context.Done()
 
 }
