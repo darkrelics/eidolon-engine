@@ -2,49 +2,15 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/bits-and-blooms/bloom/v3"
+
 	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
 )
-
-type Configuration struct {
-	SSH struct {
-		Enabled        bool   `yaml:"Enabled"`
-		Port           uint16 `yaml:"Port"`
-		PrivateKeyPath string `yaml:"PrivateKeyPath"`
-	} `yaml:"SSH"`
-	Aws struct {
-		Region string `yaml:"Region"`
-	} `yaml:"Aws"`
-	Cognito struct {
-		UserPoolID     string `yaml:"UserPoolId"`
-		ClientSecret   string `yaml:"UserPoolClientSecret"`
-		ClientID       string `yaml:"UserPoolClientId"`
-		UserPoolDomain string `yaml:"UserPoolDomain"`
-		UserPoolArn    string `yaml:"UserPoolArn"`
-	} `yaml:"Cognito"`
-	Game struct {
-		Balance         float64 `yaml:"Balance"`
-		AutoSave        uint16  `yaml:"AutoSave"`
-		StartingEssence uint16  `yaml:"StartingEssence"`
-		StartingHealth  uint16  `yaml:"StartingHealth"`
-	} `yaml:"Game"`
-	Logging struct {
-		ApplicationName string `yaml:"ApplicationName"`
-		LogLevel        int    `yaml:"LogLevel"`
-		LogGroup        string `yaml:"LogGroup"`
-		LogStream       string `yaml:"LogStream"`
-		MetricNamespace string `yaml:"MetricNamespace"`
-	} `yaml:"Logging"`
-}
 
 type Interface_SSH struct {
 	Config         *Configuration
@@ -62,54 +28,10 @@ type Interface_SSH struct {
 	SSHConfig      *ssh.ServerConfig
 }
 
-type CloudWatchHandler struct {
-	// Logging fields
-	logsClient        *cloudwatchlogs.Client
-	logLevel          int
-	logGroup          string
-	logStream         string
-	lastSequenceToken string
-	attrs             []slog.Attr
-	mutex             sync.RWMutex
-	handlers          []slog.Handler
-	initialized       bool
-
-	// Metrics fields
-	metricsClient *cloudwatch.Client
-	namespace     string
-}
-
 // The Index struct is to be depricated in favor of UUIDs
-type Index struct {
-	IndexID uint64
-	mu      sync.RWMutex
-}
 
 type KeyPair struct {
 	db *dynamodb.DynamoDB
-}
-
-type Game struct {
-	Config               *Configuration
-	GlobalContext        context.Context
-	Context              context.Context
-	Cancel               context.CancelFunc
-	Mutex                sync.RWMutex
-	StartTime            time.Time
-	CharacterCount       uint64
-	Ticker               *time.Ticker
-	Database             *KeyPair
-	ArcheTypes           map[string]*Archetype
-	CharacterBloomFilter *bloom.BloomFilter
-	Characters           map[uuid.UUID]*Character
-	Rooms                map[int64]*Room
-	Prototypes           map[uuid.UUID]*Prototype
-	Items                map[uuid.UUID]*Item
-
-	StartingHealth  uint16
-	StartingEssence uint16
-	Balance         float64
-	AutoSave        uint16
 }
 
 type Player struct {
@@ -136,48 +58,6 @@ type PlayerData struct {
 	PlayerID      string            `json:"PlayerID" dynamodbav:"PlayerID"`
 	CharacterList map[string]string `json:"characterList" dynamodbav:"CharacterList"`
 	SeenMotDs     []string          `json:"seenMotD" dynamodbav:"SeenMotD"`
-}
-
-// Room represents the in-memory structure for a room
-type Room struct {
-	RoomID      int64
-	Area        string
-	Title       string
-	Description string
-	Exits       map[string]*Exit
-	Characters  map[uuid.UUID]*Character
-	Items       map[uuid.UUID]*Item
-	Mutex       sync.RWMutex
-	LastEdited  time.Time
-	LastSaved   time.Time
-}
-
-// RoomData represents the structure for storing room data in DynamoDB
-type RoomData struct {
-	RoomID      int64    `json:"roomID" dynamodbav:"RoomID"`
-	Area        string   `json:"area" dynamodbav:"Area"`
-	Title       string   `json:"title" dynamodbav:"Title"`
-	Description string   `json:"description" dynamodbav:"Description"`
-	ExitIDs     []string `json:"exitID" dynamodbav:"ExitID"`
-	ItemIDs     []string `json:"itemID" dynamodbav:"ItemID"`
-}
-
-// Exit represents the in-memory structure for an exit
-type Exit struct {
-	ExitID     uuid.UUID
-	Direction  string
-	TargetRoom *Room
-	Visible    bool
-	LastEdited time.Time
-	LastSaved  time.Time
-}
-
-// ExitData represents the structure for storing exit data in DynamoDB
-type ExitData struct {
-	ExitID     string `json:"ExitID" dynamodbav:"ExitID"`
-	Direction  string `json:"Direction" dynamodbav:"Direction"`
-	TargetRoom int64  `json:"TargetRoom" dynamodbav:"TargetRoom"`
-	Visible    bool   `json:"Visible" dynamodbav:"Visible"`
 }
 
 type Character struct {
@@ -323,42 +203,4 @@ type MOTDData struct {
 	Active    bool   `json:"active" dynamodbav:"Active"`
 	Message   string `json:"message" dynamodbav:"Message"`
 	CreatedAt string `json:"createdAt" dynamodbav:"CreatedAt"`
-}
-
-type Server struct {
-	Config        *Configuration
-	GlobalContext context.Context
-	Context       context.Context
-	Cancel        context.CancelFunc
-	Mutex         sync.RWMutex
-	Database      *KeyPair
-	StartTime     time.Time
-	PlayerCount   uint64
-	PlayerIndex   *Index
-	Players       map[uint64]*Player
-}
-
-type SSH_Config struct {
-	Context     context.Context
-	Mutex       sync.RWMutex
-	WaitGroup   sync.WaitGroup
-	Database    *KeyPair
-	StartTime   time.Time
-	Port        uint16
-	Listener    net.Listener
-	SSHConfig   *ssh.ServerConfig
-	PlayerCount uint64
-	PlayerIndex *Index
-	Players     map[uint64]*Player
-	ActiveMotDs []*MOTD
-
-	CognitoClientID     string
-	CognitoClientSecret string
-	Region              string
-	LogLevel            int
-	ApplicationName     string
-	LogGroup            string
-	LogStream           string
-	MetricNamespace     string
-	PrivateKeyPath      string
 }

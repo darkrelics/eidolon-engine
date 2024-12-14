@@ -7,6 +7,19 @@ import (
 	"time"
 )
 
+type Server struct {
+	Config        *Configuration
+	GlobalContext context.Context
+	Context       context.Context
+	Cancel        context.CancelFunc
+	Mutex         sync.RWMutex
+	Database      *KeyPair
+	StartTime     time.Time
+	PlayerCount   uint64
+	PlayerIndex   *Index
+	Players       map[uint64]*Player
+}
+
 // NewServer initializes a new server instance with the given configuration.
 // It sets up the database connection, loads game data, and prepares the server for incoming connections.
 func NewServer(GlobalContext context.Context, config *Configuration) (*Server, error) {

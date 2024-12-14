@@ -11,6 +11,48 @@ import (
 	"github.com/google/uuid"
 )
 
+// Room represents the in-memory structure for a room
+type Room struct {
+	RoomID      int64
+	Area        string
+	Title       string
+	Description string
+	Exits       map[string]*Exit
+	Characters  map[uuid.UUID]*Character
+	Items       map[uuid.UUID]*Item
+	Mutex       sync.RWMutex
+	LastEdited  time.Time
+	LastSaved   time.Time
+}
+
+// RoomData represents the structure for storing room data in DynamoDB
+type RoomData struct {
+	RoomID      int64    `json:"roomID" dynamodbav:"RoomID"`
+	Area        string   `json:"area" dynamodbav:"Area"`
+	Title       string   `json:"title" dynamodbav:"Title"`
+	Description string   `json:"description" dynamodbav:"Description"`
+	ExitIDs     []string `json:"exitID" dynamodbav:"ExitID"`
+	ItemIDs     []string `json:"itemID" dynamodbav:"ItemID"`
+}
+
+// Exit represents the in-memory structure for an exit
+type Exit struct {
+	ExitID     uuid.UUID
+	Direction  string
+	TargetRoom *Room
+	Visible    bool
+	LastEdited time.Time
+	LastSaved  time.Time
+}
+
+// ExitData represents the structure for storing exit data in DynamoDB
+type ExitData struct {
+	ExitID     string `json:"ExitID" dynamodbav:"ExitID"`
+	Direction  string `json:"Direction" dynamodbav:"Direction"`
+	TargetRoom int64  `json:"TargetRoom" dynamodbav:"TargetRoom"`
+	Visible    bool   `json:"Visible" dynamodbav:"Visible"`
+}
+
 // NewRoom creates a new Room instance with initialized fields.
 func NewRoom(roomID int64, area string, title string, description string) *Room {
 	room := &Room{
@@ -30,13 +72,13 @@ func NewRoom(roomID int64, area string, title string, description string) *Room 
 }
 
 // StoreRooms stores all rooms into the DynamoDB database.
-func StoreRooms(rooms map[int64]*Room, kp *KeyPair) error {
+func (kp *KeyPair) StoreRooms(rooms map[int64]*Room) error {
 
 	for _, room := range rooms {
 		room.Mutex.Lock()
 
 		// Cleanup nil items before saving
-		CleanupNilItems(room)
+		room.CleanupNilItems()
 
 		err := WriteRoom(room, kp)
 		if err != nil {
@@ -54,7 +96,7 @@ func StoreRooms(rooms map[int64]*Room, kp *KeyPair) error {
 }
 
 // LoadRooms retrieves all rooms from the DynamoDB database and returns them as a map of Room instances.
-func LoadRooms(kp *KeyPair) (map[int64]*Room, error) {
+func (kp *KeyPair) LoadRooms() (map[int64]*Room, error) {
 	rooms := make(map[int64]*Room)
 
 	var roomsData []RoomData
@@ -71,7 +113,7 @@ func LoadRooms(kp *KeyPair) (map[int64]*Room, error) {
 	}
 
 	// Load all exits
-	allExits, err := LoadAllExits(kp)
+	allExits, err := kp.LoadAllExits()
 	if err != nil {
 		Logger.Error("Error loading exits", "error", err)
 		return nil, fmt.Errorf("error loading exits: %w", err)
@@ -137,7 +179,7 @@ func findRoomData(roomsData []RoomData, roomID int64) (RoomData, bool) {
 }
 
 // LoadAllExits loads all exits for all rooms.
-func LoadAllExits(kp *KeyPair) (map[string]*Exit, error) {
+func (kp *KeyPair) LoadAllExits() (map[string]*Exit, error) {
 	var exitsData []ExitData
 
 	err := kp.Scan("exits", &exitsData)
@@ -361,7 +403,7 @@ func FromData(data *RoomData, exits map[string]*Exit, items map[string]*Item, r 
 }
 
 // LoadItemsForRoom loads all items for a specific room
-func LoadItemsForRoom(roomID int64, kp *KeyPair) (map[uuid.UUID]*Item, error) {
+func (kp *KeyPair) LoadItemsForRoom(roomID int64) (map[uuid.UUID]*Item, error) {
 	items := make(map[uuid.UUID]*Item)
 
 	var itemsData []ItemData
@@ -387,7 +429,7 @@ func LoadItemsForRoom(roomID int64, kp *KeyPair) (map[uuid.UUID]*Item, error) {
 }
 
 // CleanupNilItems removes any nil items from the room's item list.
-func CleanupNilItems(r *Room) {
+func (r *Room) CleanupNilItems() {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 

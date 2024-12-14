@@ -1,16 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"math"
 	"math/rand"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/robinje/multi-user-dungeon/character"
 )
 
@@ -133,96 +130,6 @@ func AutoSave(ctx context.Context, game *Game) error {
 			runSaveOperation(ctx, game)
 		}
 	}
-}
-
-// InitializeBloomFilter initializes the bloom filter with existing character names,
-// as well as names from ../data/names.txt and ../data/obscenity.txt.
-func InitializeBloomFilter(game *Game) error {
-	// Load character names from the database
-	characterNames, err := LoadCharacterNames(game.Database)
-	if err != nil {
-		return fmt.Errorf("failed to load character names: %w", err)
-	}
-
-	// Load additional names from names.txt
-	namesFilePath := "../data/names.txt"
-	namesFromFile, err := loadNamesFromFile(namesFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to load names from %s: %w", namesFilePath, err)
-	}
-
-	// Load obscenity words from obscenity.txt
-	obscenityFilePath := "../data/obscenity.txt"
-	obscenities, err := loadNamesFromFile(obscenityFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to load obscenities from %s: %w", obscenityFilePath, err)
-	}
-
-	// Calculate total number of items to add to the bloom filter
-	totalItems := len(characterNames)
-	for range characterNames { // Assuming characterNames is a map; adjust if it's a slice
-		// Counting items in characterNames
-	}
-	totalItems += len(namesFromFile)
-	totalItems += len(obscenities)
-
-	// Ensure a minimum size
-	if totalItems < 100 {
-		totalItems = 100
-	}
-
-	fpRate := FalsePositiveRate
-
-	// Initialize the bloom filter with the estimated number of items and false positive rate
-	game.CharacterBloomFilter = bloom.NewWithEstimates(uint(totalItems), fpRate)
-
-	// Add character names to the bloom filter
-	for name := range characterNames {
-		game.CharacterBloomFilter.AddString(strings.ToLower(name))
-	}
-
-	// Add names from names.txt to the bloom filter
-	for _, name := range namesFromFile {
-		game.CharacterBloomFilter.AddString(name)
-	}
-
-	// Add obscenities to the bloom filter
-	for _, word := range obscenities {
-		game.CharacterBloomFilter.AddString(word)
-	}
-
-	Logger.Debug("Bloom filter initialized",
-		"estimatedSize", totalItems,
-		"falsePositiveRate", fpRate,
-		"totalItemsAdded", totalItems,
-	)
-
-	return nil
-}
-
-// loadNamesFromFile reads a file line by line and returns a slice of names.
-func loadNamesFromFile(filePath string) ([]string, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open %s: %w", filePath, err)
-	}
-	defer file.Close()
-
-	var names []string
-	scanner := bufio.NewScanner(file)
-	lineNumber := 1
-	for scanner.Scan() {
-		name := strings.TrimSpace(scanner.Text())
-		if name != "" {
-			names = append(names, strings.ToLower(name))
-		}
-		lineNumber++
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
-	}
-
-	return names, nil
 }
 
 // LoadCharacterNames loads all character names from the database to initialize the bloom filter.
