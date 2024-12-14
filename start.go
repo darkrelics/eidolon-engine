@@ -70,7 +70,7 @@ func main() {
 	}
 
 	go func() {
-		if err := RunServer(Server); err != nil {
+		if err := Server.Run(); err != nil {
 			Logger.Error("Server error", "error", err)
 			ctx.Done()
 		}

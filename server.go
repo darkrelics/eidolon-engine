@@ -40,7 +40,7 @@ func NewServer(GlobalContext context.Context, config *Configuration) (*Server, e
 	return server, nil
 }
 
-func RunServer(server *Server) error {
+func (server *Server) Run() error {
 	Logger.Info("Starting server...")
 
 	for {
