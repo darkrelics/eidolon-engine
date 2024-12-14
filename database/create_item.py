@@ -6,7 +6,7 @@ import uuid
 from decimal import Decimal
 
 import boto3
-from botocore.exceptions import ClientError
+from botoexceptions import ClientError
 
 REGION = "us-east-1"  # Replace with your AWS region
 

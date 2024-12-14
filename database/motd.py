@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 
 import boto3
-from botocore.exceptions import ClientError
+from botoexceptions import ClientError
 
 
 def add_or_update_motd(message: str, active: bool = True) -> dict:

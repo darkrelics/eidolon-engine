@@ -1,35 +1,34 @@
-package interface_ssh
+package main
 
 import (
 	"context"
 	"sync"
 	"time"
 
-	"github.com/robinje/multi-user-dungeon/core"
 	"golang.org/x/crypto/ssh"
 )
 
 // handleChannels processes SSH channels for a connection
-func handleChannels(ctx context.Context, server *core.Server, game *core.Game, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
-	core.Logger.Debug("Active Player Indices:", "playerIndices", server.PlayerIndex)
+func handleChannels(ctx context.Context, server *Server, game *Game, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
+	Logger.Debug("Active Player Indices:", "playerIndices", server.PlayerIndex)
 	playerName := sshConn.User()
-	core.Logger.Info("New connection", "address", sshConn.RemoteAddr().String(), "user", playerName)
+	Logger.Info("New connection", "address", sshConn.RemoteAddr().String(), "user", playerName)
 
 	for {
 		select {
 		case <-ctx.Done():
-			core.Logger.Info("Closing connection due to context cancellation", "player", playerName)
+			Logger.Info("Closing connection due to context cancellation", "player", playerName)
 			return
 
 		case newChannel, ok := <-channels:
 			if !ok {
-				core.Logger.Info("Channel closed", "player", playerName)
+				Logger.Info("Channel closed", "player", playerName)
 				return
 			}
 
 			channel, requests, err := newChannel.Accept()
 			if err != nil {
-				core.Logger.Error("Could not accept channel", "error", err)
+				Logger.Error("Could not accept channel", "error", err)
 				continue
 			}
 
@@ -38,7 +37,7 @@ func handleChannels(ctx context.Context, server *core.Server, game *core.Game, s
 			for index := range server.Players {
 				if server.Players[index].PlayerID == playerName {
 					server.Mutex.RUnlock()
-					core.Logger.Warn("Player already connected", "playerName", playerName)
+					Logger.Warn("Player already connected", "playerName", playerName)
 					channel.Write([]byte("You are already connected. Goodbye.\n\r"))
 					sshConn.Close()
 					return
@@ -47,15 +46,15 @@ func handleChannels(ctx context.Context, server *core.Server, game *core.Game, s
 			server.Mutex.RUnlock()
 
 			// Initialize or load player data
-			characterList, seenMotD, err := core.InitializePlayerData(server, playerName)
+			characterList, seenMotD, err := InitializePlayerData(server, playerName)
 			if err != nil {
-				core.Logger.Error("Failed to initialize player data", "error", err, "player", playerName)
+				Logger.Error("Failed to initialize player data", "error", err, "player", playerName)
 				continue
 			}
 
 			// Create player context as child of connection context
 			playerCtx, playerCancel := context.WithCancel(ctx)
-			player := &core.Player{
+			player := &Player{
 				Server:        server,
 				Index:         server.PlayerIndex.GetID(),
 				PlayerID:      playerName,
@@ -82,7 +81,7 @@ func handleChannels(ctx context.Context, server *core.Server, game *core.Game, s
 			go handleSSHRequests(playerCtx, player, requests)
 			go handlePlayerSession(playerCtx, server, game, player)
 
-			core.Logger.Info("Player session started",
+			Logger.Info("Player session started",
 				"playerName", playerName,
 				"index", player.Index)
 		}
@@ -90,17 +89,17 @@ func handleChannels(ctx context.Context, server *core.Server, game *core.Game, s
 }
 
 // handleSSHRequests handles SSH requests from the client.
-func handleSSHRequests(ctx context.Context, player *core.Player, requests <-chan *ssh.Request) {
+func handleSSHRequests(ctx context.Context, player *Player, requests <-chan *ssh.Request) {
 	for {
 		select {
 		case <-ctx.Done():
-			core.Logger.Info("Context cancelled, exiting handleSSHRequests loop",
+			Logger.Info("Context cancelled, exiting handleSSHRequests loop",
 				"player", player.PlayerID)
 			return
 
 		case req, ok := <-requests:
 			if !ok {
-				core.Logger.Info("Request channel closed, exiting handleSSHRequests loop",
+				Logger.Info("Request channel closed, exiting handleSSHRequests loop",
 					"player", player.PlayerID)
 				return
 			}
@@ -113,35 +112,35 @@ func handleSSHRequests(ctx context.Context, player *core.Player, requests <-chan
 }
 
 // handleRequest processes individual SSH requests
-func handleRequest(req *ssh.Request, player *core.Player) {
+func handleRequest(req *ssh.Request, player *Player) {
 	switch req.Type {
 	case "shell":
-		core.Logger.Debug("Accepting shell request",
+		Logger.Debug("Accepting shell request",
 			"player", player.PlayerID)
 		req.Reply(true, nil)
 
 	case "pty-req":
 		termLen := req.Payload[3]
-		w, h := core.ParseDims(req.Payload[termLen+4:])
+		w, h := ParseDims(req.Payload[termLen+4:])
 		player.ConsoleWidth = w
 		player.ConsoleHeight = h
-		core.Logger.Debug("Terminal size set",
+		Logger.Debug("Terminal size set",
 			"player", player.PlayerID,
 			"width", w,
 			"height", h)
 		req.Reply(true, nil)
 
 	case "window-change":
-		w, h := core.ParseDims(req.Payload)
+		w, h := ParseDims(req.Payload)
 		player.ConsoleWidth = w
 		player.ConsoleHeight = h
-		core.Logger.Debug("Window size changed",
+		Logger.Debug("Window size changed",
 			"player", player.PlayerID,
 			"width", w,
 			"height", h)
 
 	default:
-		core.Logger.Warn("Unsupported request",
+		Logger.Warn("Unsupported request",
 			"type", req.Type,
 			"player", player.PlayerID)
 		req.Reply(false, nil)

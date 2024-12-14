@@ -1,21 +1,19 @@
-package server
+package main
 
 import (
 	"context"
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/robinje/multi-user-dungeon/core"
 )
 
 // NewServer initializes a new server instance with the given configuration.
 // It sets up the database connection, loads game data, and prepares the server for incoming connections.
-func NewServer(GlobalContext context.Context, config *core.Configuration) (*core.Server, error) {
-	core.Logger.Info("Initializing server...")
+func NewServer(GlobalContext context.Context, config *Configuration) (*Server, error) {
+	Logger.Info("Initializing server...")
 
 	// Initialize the server struct with the provided configuration
-	server := &core.Server{
+	server := &Server{
 		Config:        config,
 		GlobalContext: GlobalContext,
 		Context:       context.Background(),
@@ -23,13 +21,13 @@ func NewServer(GlobalContext context.Context, config *core.Configuration) (*core
 		Mutex:         sync.RWMutex{},
 		StartTime:     time.Now(),
 		PlayerCount:   0,
-		PlayerIndex:   &core.Index{},
-		Players:       make(map[uint64]*core.Player),
+		PlayerIndex:   &Index{},
+		Players:       make(map[uint64]*Player),
 	}
 
 	fmt.Println("Initializing database...")
 
-	database, err := core.NewKeyPair(config.Aws.Region)
+	database, err := NewKeyPair(config.Aws.Region)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %v", err)
 	}
@@ -42,16 +40,16 @@ func NewServer(GlobalContext context.Context, config *core.Configuration) (*core
 	return server, nil
 }
 
-func RunServer(server *core.Server) error {
-	core.Logger.Info("Starting server...")
+func RunServer(server *Server) error {
+	Logger.Info("Starting server...")
 
 	for {
 		select {
 		case <-server.GlobalContext.Done():
-			core.Logger.Info("System shutting down...")
+			Logger.Info("System shutting down...")
 			return nil
 		case <-server.Context.Done():
-			core.Logger.Info("Server shutting down...")
+			Logger.Info("Server shutting down...")
 			return nil
 		}
 	}

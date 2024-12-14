@@ -8,7 +8,7 @@ import logging
 from decimal import Decimal
 
 import boto3
-from botocore.exceptions import ClientError
+from botoexceptions import ClientError
 
 
 def load_json(file_path):

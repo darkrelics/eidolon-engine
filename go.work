@@ -2,10 +2,4 @@ go 1.23
 
 use (
     .
-    ./character
-    ./core
-    ./game
-    ./interface_ssh
-    ./player
-    ./server
 )

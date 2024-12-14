@@ -10,10 +10,6 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/robinje/multi-user-dungeon/core"
-	"github.com/robinje/multi-user-dungeon/game"
-	"github.com/robinje/multi-user-dungeon/server"
 )
 
 func main() {
@@ -38,7 +34,7 @@ func main() {
 
 	fmt.Println("Initializing logger...")
 
-	CloudWatch, err := core.InitializeLogging(config)
+	CloudWatch, err := InitializeLogging(config)
 	if err != nil {
 		fmt.Printf("Error initializing logging: %v\n", err)
 		os.Exit(1)
@@ -58,7 +54,7 @@ func main() {
 	// Start metrics collection in a goroutine
 	go func() {
 		if err := CloudWatch.SendMetrics(ctx, 1*time.Minute); err != nil {
-			core.Logger.Error("Metrics collection failed", "error", err)
+			Logger.Error("Metrics collection failed", "error", err)
 		}
 	}()
 
@@ -66,7 +62,7 @@ func main() {
 
 	fmt.Println("Initializing server...")
 
-	Server, err := server.NewServer(ctx, config)
+	Server, err := NewServer(ctx, config)
 
 	if err != nil {
 		fmt.Printf("Error initializing server: %v\n", err)
@@ -74,8 +70,8 @@ func main() {
 	}
 
 	go func() {
-		if err := server.RunServer(Server); err != nil {
-			core.Logger.Error("Server error", "error", err)
+		if err := RunServer(Server); err != nil {
+			Logger.Error("Server error", "error", err)
 			ctx.Done()
 		}
 	}()
@@ -84,11 +80,11 @@ func main() {
 
 	fmt.Println("Initializing game...")
 
-	Game, err := game.NewGame(ctx, config)
+	Game, err := NewGame(ctx, config)
 
 	go func() {
-		if err := game.RunGame(Game); err != nil {
-			core.Logger.Error("Game error", "error", err)
+		if err := RunGame(Game); err != nil {
+			Logger.Error("Game error", "error", err)
 			ctx.Done()
 		}
 	}()
@@ -99,8 +95,8 @@ func main() {
 }
 
 // loadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
-func loadConfiguration(configFile string) (*core.Configuration, error) {
-	var config core.Configuration
+func loadConfiguration(configFile string) (*Configuration, error) {
+	var config Configuration
 
 	data, err := os.ReadFile(configFile)
 	if err != nil {
@@ -115,11 +111,11 @@ func loadConfiguration(configFile string) (*core.Configuration, error) {
 	return &config, nil
 }
 
-func shutdown(server *core.Server, game *core.Game) {
+func shutdown(server *Server, game *Game) {
 	const shutdownTimeout = 60 * time.Second
 	_, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	core.Logger.Info("Initiating graceful shutdown...")
+	Logger.Info("Initiating graceful shutdown...")
 
 }

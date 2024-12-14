@@ -17,6 +17,7 @@ Logging:
   LogGroup: /mud
   LogStream: application
   MetricNamespace: MUD/Application
-Server:
+SSH:
+  Enabled: true
   PrivateKeyPath: ./server.key
   Port: 9050

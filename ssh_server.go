@@ -1,4 +1,4 @@
-package interface_ssh
+package main
 
 import (
 	"context"
@@ -7,14 +7,34 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/robinje/multi-user-dungeon/core"
 	"golang.org/x/crypto/ssh"
 )
 
+func NewSSHInterface(GlobalContext *context.Context, ServerContext *context.Context, config *Configuration) (Interface_SSH, error) {
+
+	// Create a new SSH Interface
+	ssh_interface := &Interface_SSH{
+		Config:         config,
+		GlobalContext:  *GlobalContext,
+		ServerContext:  *ServerContext,
+		Context:        context.Background(),
+		Cancel:         nil,
+		Mutex:          sync.RWMutex{},
+		StartTime:      time.Now(),
+		Port:           config.SSH.Port,
+		PrivateKeyPath: config.SSH.PrivateKeyPath,
+		Connections:    0,
+	}
+
+	return *ssh_interface, nil
+
+}
+
 // sshServer starts the SSH server on the configured port and listens for incoming connections.
-func sshServer(ctx context.Context, server *Server, game *core.Game) error {
+func sshServer(ctx context.Context, server *Server, game *Game) error {
 	if server == nil {
 		return fmt.Errorf("server instance is nil")
 	}
@@ -23,7 +43,7 @@ func sshServer(ctx context.Context, server *Server, game *core.Game) error {
 	}
 
 	if err := initializeServer(ctx, server); err != nil {
-		core.Logger.Error("Server initialization failed", "error", err)
+		Logger.Error("Server initialization failed", "error", err)
 		return fmt.Errorf("server initialization failed: %w", err)
 	}
 
@@ -31,7 +51,7 @@ func sshServer(ctx context.Context, server *Server, game *core.Game) error {
 	errChan := make(chan error, 1)
 	go func() {
 		if err := acceptConnections(ctx, server, game); err != nil {
-			core.Logger.Error("Connection acceptance failed", "error", err)
+			Logger.Error("Connection acceptance failed", "error", err)
 			errChan <- err
 		}
 	}()
@@ -39,7 +59,7 @@ func sshServer(ctx context.Context, server *Server, game *core.Game) error {
 	// Monitor for context cancellation or connection errors
 	select {
 	case <-ctx.Done():
-		core.Logger.Info("SSH server stopping due to context cancellation")
+		Logger.Info("SSH server stopping due to context cancellation")
 		return fmt.Errorf("ssh server stopped: %w", ctx.Err())
 	case err := <-errChan:
 		if err != nil {
@@ -75,7 +95,7 @@ func initializeServer(ctx context.Context, server *Server) error {
 		return fmt.Errorf("server initialization cancelled: %w", ctx.Err())
 	default:
 		server.Listener = listener
-		core.Logger.Info("SSH server listening", "port", server.Port)
+		Logger.Info("SSH server listening", "port", server.Port)
 		return nil
 	}
 }
@@ -90,7 +110,7 @@ func configureSSH(ctx context.Context, server *Server) error {
 		return fmt.Errorf("private key path is not configured")
 	}
 
-	core.Logger.Info("Configuring SSH server", "port", server.Port)
+	Logger.Info("Configuring SSH server", "port", server.Port)
 
 	// Read the private key from disk
 	privateKeyPath := server.PrivateKeyPath
@@ -119,10 +139,10 @@ func configureSSH(ctx context.Context, server *Server) error {
 					// Authenticate the player
 					authenticated := Authenticate(conn.User(), string(password), server)
 					if authenticated {
-						core.Logger.Info("Player authenticated", "player_name", conn.User())
+						Logger.Info("Player authenticated", "player_name", conn.User())
 						return nil, nil
 					}
-					core.Logger.Warn("Player failed authentication", "player_name", conn.User())
+					Logger.Warn("Player failed authentication", "player_name", conn.User())
 					return nil, fmt.Errorf("password rejected for %q", conn.User())
 				}
 			},
@@ -137,24 +157,24 @@ func configureSSH(ctx context.Context, server *Server) error {
 // Authenticate checks the provided username and password against the authentication system.
 // Returns true if authentication is successful, false otherwise.
 func Authenticate(username, password string, server *Server) bool {
-	core.Logger.Info("Authenticating user", "username", username)
+	Logger.Info("Authenticating user", "username", username)
 
 	response, err := SignInUser(username, password, server)
 	if err != nil {
-		core.Logger.Error("Authentication failed", "username", username, "error", err, "response", response)
+		Logger.Error("Authentication failed", "username", username, "error", err, "response", response)
 		return false
 	}
 
-	core.Logger.Debug("Authentication successful", "username", username, "response", response)
+	Logger.Debug("Authentication successful", "username", username, "response", response)
 	return true
 }
 
 // acceptConnections handles incoming connections to the SSH server
-func acceptConnections(ctx context.Context, server *Server, game *core.Game) error {
+func acceptConnections(ctx context.Context, server *Server, game *Game) error {
 	for {
 		select {
 		case <-ctx.Done():
-			core.Logger.Info("Context cancelled, stopping accept loop")
+			Logger.Info("Context cancelled, stopping accept loop")
 			server.Listener.Close()
 			return ctx.Err()
 
@@ -162,7 +182,7 @@ func acceptConnections(ctx context.Context, server *Server, game *core.Game) err
 			conn, err := server.Listener.Accept()
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
-					core.Logger.Info("SSH server listener closed, stopping accept loop")
+					Logger.Info("SSH server listener closed, stopping accept loop")
 					return nil
 				}
 
@@ -171,7 +191,7 @@ func acceptConnections(ctx context.Context, server *Server, game *core.Game) err
 				case *net.OpError:
 					// If it's a timeout or temporary error condition, retry
 					if e.Timeout() || strings.Contains(e.Error(), "connection reset by peer") {
-						core.Logger.Warn("Temporary network error", "error", err)
+						Logger.Warn("Temporary network error", "error", err)
 						time.Sleep(100 * time.Millisecond)
 						continue
 					}
@@ -191,7 +211,7 @@ func acceptConnections(ctx context.Context, server *Server, game *core.Game) err
 }
 
 // handleConnection processes an individual SSH connection
-func handleConnection(ctx context.Context, server *Server, game *core.Game, conn net.Conn) {
+func handleConnection(ctx context.Context, server *Server, game *Game, conn net.Conn) {
 	defer server.WaitGroup.Done()
 	defer conn.Close()
 
@@ -203,7 +223,7 @@ func handleConnection(ctx context.Context, server *Server, game *core.Game, conn
 
 	// Set initial handshake timeout
 	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
-		core.Logger.Error("Failed to set handshake deadline",
+		Logger.Error("Failed to set handshake deadline",
 			"error", err,
 			"remoteAddr", remoteAddr)
 		return
@@ -212,7 +232,7 @@ func handleConnection(ctx context.Context, server *Server, game *core.Game, conn
 	// Perform SSH handshake
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, server.SSHConfig)
 	if err != nil {
-		core.Logger.Error("Failed to perform SSH handshake",
+		Logger.Error("Failed to perform SSH handshake",
 			"error", err,
 			"remoteAddr", remoteAddr)
 		return
@@ -221,14 +241,14 @@ func handleConnection(ctx context.Context, server *Server, game *core.Game, conn
 
 	// Reset deadline after successful handshake
 	if err := conn.SetDeadline(time.Time{}); err != nil {
-		core.Logger.Error("Failed to reset connection deadline",
+		Logger.Error("Failed to reset connection deadline",
 			"error", err,
 			"remoteAddr", remoteAddr,
 			"user", sshConn.User())
 		return
 	}
 
-	core.Logger.Info("New SSH connection established",
+	Logger.Info("New SSH connection established",
 		"user", sshConn.User(),
 		"remoteAddr", remoteAddr,
 		"clientVersion", string(sshConn.ClientVersion()))
@@ -242,7 +262,7 @@ func handleConnection(ctx context.Context, server *Server, game *core.Game, conn
 
 func discardRequests(reqs <-chan *ssh.Request) {
 	for req := range reqs {
-		core.Logger.Debug("Discarding SSH request", "type", req.Type, "wantReply", req.WantReply)
+		Logger.Debug("Discarding SSH request", "type", req.Type, "wantReply", req.WantReply)
 		if req.WantReply {
 			req.Reply(false, nil)
 		}

@@ -1,4 +1,4 @@
-package core
+package main
 
 import (
 	"context"
@@ -16,10 +16,11 @@ import (
 )
 
 type Configuration struct {
-	Server struct {
+	SSH struct {
+		Enabled        bool   `yaml:"Enabled"`
 		Port           uint16 `yaml:"Port"`
 		PrivateKeyPath string `yaml:"PrivateKeyPath"`
-	} `yaml:"Server"`
+	} `yaml:"SSH"`
 	Aws struct {
 		Region string `yaml:"Region"`
 	} `yaml:"Aws"`
@@ -43,6 +44,19 @@ type Configuration struct {
 		LogStream       string `yaml:"LogStream"`
 		MetricNamespace string `yaml:"MetricNamespace"`
 	} `yaml:"Logging"`
+}
+
+type Interface_SSH struct {
+	Config         *Configuration
+	GlobalContext  context.Context
+	ServerContext  context.Context
+	Context        context.Context
+	Cancel         context.CancelFunc
+	Mutex          sync.RWMutex
+	StartTime      time.Time
+	Port           uint16
+	PrivateKeyPath string
+	Connections    uint64
 }
 
 type CloudWatchHandler struct {

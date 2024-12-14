@@ -6,7 +6,7 @@ import traceback
 
 import boto3
 import yaml
-from botocore.exceptions import ClientError
+from botoexceptions import ClientError
 
 # Constants for stack names
 COGNITO_STACK_NAME = "MUD-Cognito-Stack"
