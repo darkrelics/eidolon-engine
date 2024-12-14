@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/robinje/multi-user-dungeon/core"
+	"github.com/robinje/multi-user-dungeon/game"
+	"github.com/robinje/multi-user-dungeon/player"
 )
 
 // WearLocations defines all possible locations where an item can be worn
@@ -88,7 +90,7 @@ func NewCharacter(name string, player *core.Player, room *core.Room, archetypeNa
 	g.Characters[character.ID] = character
 	g.Mutex.Unlock()
 
-	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
+	game.SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
 
 	return character, nil
 }
@@ -114,7 +116,7 @@ func ToData(c *core.Character) *core.CharacterData {
 }
 
 // FromData populates a Character object from a CharacterData struct retrieved from the database.
-func (c *core.Character) FromData(cd *core.CharacterData, game *core.Game) error {
+func FromData(cd *core.CharacterData, Game *core.Game, c *core.Character) error {
 	var err error
 	c.ID, err = uuid.Parse(cd.CharacterID)
 	if err != nil {
@@ -127,10 +129,10 @@ func (c *core.Character) FromData(cd *core.CharacterData, game *core.Game) error
 	c.Health = cd.Health
 
 	// Retrieve the room; if not found, default to room ID 0
-	room, exists := game.Rooms[cd.RoomID]
+	room, exists := Game.Rooms[cd.RoomID]
 	if !exists {
 		core.Logger.Warn("Room not found, defaulting to room ID 0", "roomID", cd.RoomID)
-		room, exists = game.Rooms[0]
+		room, exists = Game.Rooms[0]
 		if !exists {
 			return fmt.Errorf("default room not found")
 		}
@@ -145,7 +147,7 @@ func (c *core.Character) FromData(cd *core.CharacterData, game *core.Game) error
 			core.Logger.Error("Error parsing item UUID", "itemID", itemIDStr, "error", err)
 			continue
 		}
-		item, err := game.Database.LoadItem(itemID.String())
+		item, err := game.LoadItem(itemID.String(), Game.Database)
 		if err != nil {
 			core.Logger.Error("Error loading item for character", "itemID", itemID, "characterName", c.Name, "error", err)
 			continue
@@ -175,21 +177,21 @@ func WriteCharacter(character *core.Character, kp *core.KeyPair) error {
 }
 
 // LoadCharacter retrieves a character from the DynamoDB database and reconstructs the Character object.
-func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *core.Player, game *core.Game) (*core.Character, error) {
+func LoadCharacter(characterID uuid.UUID, player *core.Player, Game *core.Game, kp *core.KeyPair) (*core.Character, error) {
 
 	key := map[string]*dynamodb.AttributeValue{
 		"CharacterID": {S: aws.String(characterID.String())},
 	}
 
-	var cd CharacterData
+	var cd core.CharacterData
 	err := kp.Get("characters", key, &cd)
 	if err != nil {
 		core.Logger.Error("Error loading character data", "characterID", characterID, "error", err)
 		return nil, fmt.Errorf("error loading character data: %w", err)
 	}
 
-	character := &Character{
-		Game:        game,
+	character := &core.Character{
+		Game:        Game,
 		ID:          characterID,
 		Player:      player,
 		Mutex:       sync.RWMutex{},
@@ -199,7 +201,7 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *core.Player, gam
 		LastSaved:   time.Now(),
 	}
 
-	if err := character.FromData(&cd, game); err != nil {
+	if err := FromData(&cd, Game, character); err != nil {
 		core.Logger.Error("Error reconstructing character from data", "characterID", characterID, "error", err)
 		return nil, fmt.Errorf("error loading character from data: %w", err)
 	}
@@ -207,7 +209,7 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *core.Player, gam
 	// Ensure the character is added to the room's character list
 	if character.Room != nil {
 
-		SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
+		game.SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
 
 		character.Room.Mutex.Lock()
 		if character.Room.Characters == nil {
@@ -228,22 +230,22 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *core.Player, gam
 }
 
 // DeleteCharacter removes a character from the player's character list and the database.
-func (kp *KeyPair) DeleteCharacter(player *core.Player, characterName string) error {
-	core.Logger.Debug("Attempting to delete character", "playerName", player.PlayerID, "characterName", characterName)
+func DeleteCharacter(Player *core.Player, characterName string, kp *core.KeyPair) error {
+	core.Logger.Debug("Attempting to delete character", "playerName", Player.PlayerID, "characterName", characterName)
 
 	// Check if the character exists in the player's character list
-	characterID, exists := player.CharacterList[characterName]
+	characterID, exists := Player.CharacterList[characterName]
 	if !exists {
-		return fmt.Errorf("character %s not found for player %s", characterName, player.PlayerID)
+		return fmt.Errorf("character %s not found for player %s", characterName, Player.PlayerID)
 	}
 
 	// Remove the character from the player's character list
-	delete(player.CharacterList, characterName)
+	delete(Player.CharacterList, characterName)
 
 	// Update the player data in the database
-	err := kp.WritePlayer(player)
+	err := player.WritePlayer(Player, kp)
 	if err != nil {
-		core.Logger.Error("Failed to update player data after character deletion", "playerName", player.PlayerID, "error", err)
+		core.Logger.Error("Failed to update player data after character deletion", "playerName", Player.PlayerID, "error", err)
 		return fmt.Errorf("failed to update player data: %w", err)
 	}
 
@@ -257,12 +259,12 @@ func (kp *KeyPair) DeleteCharacter(player *core.Player, characterName string) er
 		return fmt.Errorf("failed to delete character from database: %w", err)
 	}
 
-	core.Logger.Info("Successfully deleted character", "playerName", player.PlayerID, "characterName", characterName, "characterID", characterID)
+	core.Logger.Info("Successfully deleted character", "playerName", Player.PlayerID, "characterName", characterName, "characterID", characterID)
 	return nil
 }
 
 // AddCharacterName adds a character name to the bloom filter to prevent duplicates.
-func (game *core.Game) AddCharacterName(name string) {
+func AddCharacterName(name string, game *core.Game) {
 
 	game.CharacterBloomFilter.AddString(strings.ToLower(name))
 	core.Logger.Debug("Added character name to bloom filter", "characterName", name)
@@ -270,7 +272,7 @@ func (game *core.Game) AddCharacterName(name string) {
 }
 
 // CharacterNameExists checks if a character name already exists using the bloom filter.
-func (game *core.Game) CharacterNameExists(name string) bool {
+func CharacterNameExists(name string, game *core.Game) bool {
 	exists := game.CharacterBloomFilter.TestString(strings.ToLower(name))
 	if exists {
 		core.Logger.Info("Character name exists", "characterName", name)
@@ -279,7 +281,7 @@ func (game *core.Game) CharacterNameExists(name string) bool {
 }
 
 // WearItem allows a character to wear an item from their inventory.
-func (c *core.Character) WearItem(item *core.Item) error {
+func WearItem(item *core.Item, c *core.Character) error {
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 
@@ -326,7 +328,7 @@ func (c *core.Character) WearItem(item *core.Item) error {
 }
 
 // ListInventory lists the items in a character's inventory.
-func (c *core.Character) ListInventory() string {
+func ListInventory(c *core.Character) string {
 	core.Logger.Debug("Character is listing inventory", "characterName", c.Name)
 
 	c.Mutex.RLock()
@@ -334,10 +336,10 @@ func (c *core.Character) ListInventory() string {
 
 	var output strings.Builder
 	output.WriteString("\n\r")
-	output.WriteString(ApplyColor("bright_white", "=== Inventory ===\n\r"))
+	output.WriteString(core.ApplyColor("bright_white", "=== Inventory ===\n\r"))
 
 	// Hands section
-	output.WriteString(ApplyColor("white", "\nHands:\n\r"))
+	output.WriteString(core.ApplyColor("white", "\nHands:\n\r"))
 	leftItem := c.Inventory["left_hand"]
 	rightItem := c.Inventory["right_hand"]
 
@@ -356,7 +358,7 @@ func (c *core.Character) ListInventory() string {
 	}
 
 	if len(wornItems) > 0 {
-		output.WriteString(ApplyColor("white", "\nWorn Items:\n\r"))
+		output.WriteString(core.ApplyColor("white", "\nWorn Items:\n\r"))
 		sort.Slice(wornItems, func(i, j int) bool {
 			return wornItems[i].Name < wornItems[j].Name
 		})
@@ -386,7 +388,7 @@ func (c *core.Character) ListInventory() string {
 	}
 
 	if len(carriedItems) > 0 {
-		output.WriteString(ApplyColor("white", "\nCarried Items:\n\r"))
+		output.WriteString(core.ApplyColor("white", "\nCarried Items:\n\r"))
 		sort.Slice(carriedItems, func(i, j int) bool {
 			return carriedItems[i].Name < carriedItems[j].Name
 		})
@@ -404,7 +406,7 @@ func (c *core.Character) ListInventory() string {
 }
 
 // AddToInventory adds an item to the character's inventory.
-func (c *core.Character) AddToInventory(item *core.Item) {
+func AddToInventory(item *core.Item, c *core.Character) {
 	core.Logger.Debug("Character is adding item to inventory", "characterName", c.Name, "itemName", item.Name)
 
 	c.Mutex.Lock()
@@ -433,7 +435,7 @@ func (c *core.Character) AddToInventory(item *core.Item) {
 }
 
 // FindInInventory searches for an item in the character's inventory by name.
-func (c *core.Character) FindInInventory(itemName string) *core.Item {
+func FindInInventory(itemName string, c *core.Character) *core.Item {
 	core.Logger.Debug("Character is searching inventory for item", "characterName", c.Name, "itemName", itemName)
 
 	c.Mutex.RLock()
@@ -451,7 +453,7 @@ func (c *core.Character) FindInInventory(itemName string) *core.Item {
 }
 
 // RemoveFromInventory removes an item from the character's inventory.
-func (c *core.Character) RemoveFromInventory(item *core.Item) {
+func RemoveFromInventory(item *core.Item, c *core.Character) {
 	core.Logger.Debug("Character is removing item from inventory", "characterName", c.Name, "itemName", item.Name)
 
 	c.Mutex.Lock()
@@ -479,7 +481,7 @@ func (c *core.Character) RemoveFromInventory(item *core.Item) {
 
 // CanCarryItem checks if the character can carry the specified item.
 // This is a placeholder for future weight and capacity checks.
-func (c *core.Character) CanCarryItem(item *core.Item) bool {
+func CanCarryItem(item *core.Item, c *core.Character) bool {
 	core.Logger.Debug("Character is checking if they can carry item", "characterName", c.Name, "itemName", item.Name)
 
 	// Placeholder implementation; always returns true for now
@@ -487,7 +489,7 @@ func (c *core.Character) CanCarryItem(item *core.Item) bool {
 }
 
 // RemoveWornItem allows a character to remove a worn item.
-func (c *core.Character) RemoveWornItem(item *core.Item) error {
+func RemoveWornItem(item *core.Item, c *core.Character) error {
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 
@@ -569,7 +571,7 @@ func moveCharacter(character *core.Character, direction string) error {
 	newRoomMsg := fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name)
 
 	// Send message to old room while locked
-	SendRoomMessageExcept(oldRoom, oldRoomMsg, character)
+	game.SendRoomMessageExcept(oldRoom, oldRoomMsg, character)
 
 	// Update character's room
 	character.Room = targetRoom
@@ -583,7 +585,7 @@ func moveCharacter(character *core.Character, direction string) error {
 	targetRoom.Characters[character.ID] = character
 
 	// Send message to new room while locked
-	SendRoomMessageExcept(targetRoom, newRoomMsg, character)
+	game.SendRoomMessageExcept(targetRoom, newRoomMsg, character)
 
 	// Update timestamps
 	character.LastEdited = time.Now()
@@ -603,7 +605,7 @@ func moveCharacter(character *core.Character, direction string) error {
 	return nil
 }
 
-func (c *core.Character) Cleanup() {
+func Cleanup(c *core.Character) {
 
 	core.Logger.Debug("Cleaning up character", "characterName", c.Name, "characterID", c.ID)
 
@@ -632,7 +634,7 @@ func (c *core.Character) Cleanup() {
 	defer c.Mutex.Unlock()
 
 	// Save character data to the database
-	err := c.Game.Database.WriteCharacter(c)
+	err := WriteCharacter(c, c.Game.Database)
 	if err != nil {
 		core.Logger.Error("Error saving character data during cleanup",
 			"characterName", c.Name, "characterID", c.ID, "error", err)
@@ -640,7 +642,7 @@ func (c *core.Character) Cleanup() {
 
 	if c.Room != nil {
 		// Notify the room of character departure
-		SendRoomMessageExcept(c.Room, fmt.Sprintf("\n\r%s has left the room.\n\r", c.Name), c)
+		game.SendRoomMessageExcept(c.Room, fmt.Sprintf("\n\r%s has left the room.\n\r", c.Name), c)
 
 		// Remove character from the room's character list
 		c.Room.Mutex.Lock()
