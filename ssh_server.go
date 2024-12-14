@@ -13,7 +13,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func NewSSHInterface(GlobalContext *context.Context, ServerContext *context.Context, config *Configuration) (Interface_SSH, error) {
+func NewSSHInterface(GlobalContext *context.Context, ServerContext *context.Context, config *Configuration) (*Interface_SSH, error) {
 
 	// Create a new SSH Interface
 	ssh_interface := &Interface_SSH{
@@ -29,20 +29,20 @@ func NewSSHInterface(GlobalContext *context.Context, ServerContext *context.Cont
 		Connections:    0,
 	}
 
-	return *ssh_interface, nil
+	return ssh_interface, nil
 
 }
 
 // sshServer starts the SSH server on the configured port and listens for incoming connections.
-func sshServer(ctx context.Context, server *Server, game *Game) error {
-	if server == nil {
+func sshServer(ctx context.Context, ssh_interface *Interface_SSH, game *Game) error {
+	if ssh_interface == nil {
 		return fmt.Errorf("server instance is nil")
 	}
 	if game == nil {
 		return fmt.Errorf("game instance is nil")
 	}
 
-	if err := initializeServer(ctx, server); err != nil {
+	if err := initializeServer(ctx, ssh_interface); err != nil {
 		Logger.Error("Server initialization failed", "error", err)
 		return fmt.Errorf("server initialization failed: %w", err)
 	}
@@ -50,7 +50,7 @@ func sshServer(ctx context.Context, server *Server, game *Game) error {
 	// Start accepting connections
 	errChan := make(chan error, 1)
 	go func() {
-		if err := acceptConnections(ctx, server, game); err != nil {
+		if err := acceptConnections(ctx, ssh_interface); err != nil {
 			Logger.Error("Connection acceptance failed", "error", err)
 			errChan <- err
 		}
@@ -69,23 +69,23 @@ func sshServer(ctx context.Context, server *Server, game *Game) error {
 	}
 }
 
-func initializeServer(ctx context.Context, server *Server) error {
-	if server == nil {
+func initializeServer(ctx context.Context, ssh_interface *Interface_SSH) error {
+	if ssh_interface == nil {
 		return fmt.Errorf("server instance is nil")
 	}
 
-	if err := configureSSH(ctx, server); err != nil {
+	if err := configureSSH(ctx, ssh_interface); err != nil {
 		return fmt.Errorf("SSH configuration failed: %w", err)
 	}
 
-	if server.Port == 0 {
+	if ssh_interface.Port == 0 {
 		return fmt.Errorf("server port is not configured")
 	}
 
-	address := fmt.Sprintf(":%d", server.Port)
+	address := fmt.Sprintf(":%d", ssh_interface.Port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		return fmt.Errorf("failed to listen on port %d: %w", server.Port, err)
+		return fmt.Errorf("failed to listen on port %d: %w", ssh_interface.Port, err)
 	}
 
 	// Check if context was cancelled during initialization
@@ -94,26 +94,26 @@ func initializeServer(ctx context.Context, server *Server) error {
 		listener.Close()
 		return fmt.Errorf("server initialization cancelled: %w", ctx.Err())
 	default:
-		server.Listener = listener
-		Logger.Info("SSH server listening", "port", server.Port)
+		ssh_interface.Listener = listener
+		Logger.Info("SSH server listening", "port", ssh_interface.Port)
 		return nil
 	}
 }
 
 // configureSSH configures the SSH server with the provided private key and authentication settings.
-func configureSSH(ctx context.Context, server *Server) error {
-	if server == nil {
+func configureSSH(ctx context.Context, ssh_interface *Interface_SSH) error {
+	if ssh_interface == nil {
 		return fmt.Errorf("server instance is nil")
 	}
 
-	if server.PrivateKeyPath == "" {
+	if ssh_interface.PrivateKeyPath == "" {
 		return fmt.Errorf("private key path is not configured")
 	}
 
-	Logger.Info("Configuring SSH server", "port", server.Port)
+	Logger.Info("Configuring SSH server", "port", ssh_interface.Port)
 
 	// Read the private key from disk
-	privateKeyPath := server.PrivateKeyPath
+	privateKeyPath := ssh_interface.PrivateKeyPath
 	privateBytes, err := os.ReadFile(privateKeyPath)
 	if err != nil {
 		return fmt.Errorf("failed to read private key from %s: %w", privateKeyPath, err)
@@ -130,14 +130,14 @@ func configureSSH(ctx context.Context, server *Server) error {
 		}
 
 		// Configure SSH server settings
-		server.SSHConfig = &ssh.ServerConfig{
+		ssh_interface.SSHConfig = &ssh.ServerConfig{
 			PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 				select {
 				case <-ctx.Done():
 					return nil, fmt.Errorf("authentication cancelled: %w", ctx.Err())
 				default:
 					// Authenticate the player
-					authenticated := Authenticate(conn.User(), string(password), server)
+					authenticated := Authenticate(conn.User(), string(password), ssh_interface)
 					if authenticated {
 						Logger.Info("Player authenticated", "player_name", conn.User())
 						return nil, nil
@@ -149,37 +149,37 @@ func configureSSH(ctx context.Context, server *Server) error {
 		}
 
 		// Add the host key to the SSH configuration
-		server.SSHConfig.AddHostKey(private)
+		ssh_interface.SSHConfig.AddHostKey(private)
 		return nil
 	}
 }
 
 // Authenticate checks the provided username and password against the authentication system.
 // Returns true if authentication is successful, false otherwise.
-func Authenticate(username, password string, server *Server) bool {
+func Authenticate(username, password string, ssh_interface *Interface_SSH) bool {
 	Logger.Info("Authenticating user", "username", username)
 
-	response, err := SignInUser(username, password, server)
-	if err != nil {
-		Logger.Error("Authentication failed", "username", username, "error", err, "response", response)
-		return false
-	}
+	// response, err := SignInUser(username, password, ssh_interface)
+	// if err != nil {
+	// 	Logger.Error("Authentication failed", "username", username, "error", err, "response", response)
+	// 	return false
+	// }
 
-	Logger.Debug("Authentication successful", "username", username, "response", response)
+	// Logger.Debug("Authentication successful", "username", username, "response", response)
 	return true
 }
 
 // acceptConnections handles incoming connections to the SSH server
-func acceptConnections(ctx context.Context, server *Server, game *Game) error {
+func acceptConnections(ctx context.Context, ssh_interface *Interface_SSH) error {
 	for {
 		select {
 		case <-ctx.Done():
 			Logger.Info("Context cancelled, stopping accept loop")
-			server.Listener.Close()
+			ssh_interface.Listener.Close()
 			return ctx.Err()
 
 		default:
-			conn, err := server.Listener.Accept()
+			_, err := ssh_interface.Listener.Accept()
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
 					Logger.Info("SSH server listener closed, stopping accept loop")
@@ -201,18 +201,12 @@ func acceptConnections(ctx context.Context, server *Server, game *Game) error {
 				return fmt.Errorf("error accepting connection: %w", err)
 			}
 
-			server.WaitGroup.Add(1)
-			go func() {
-				defer server.WaitGroup.Done()
-				handleConnection(ctx, server, game, conn)
-			}()
 		}
 	}
 }
 
 // handleConnection processes an individual SSH connection
-func handleConnection(ctx context.Context, server *Server, game *Game, conn net.Conn) {
-	defer server.WaitGroup.Done()
+func handleConnection(ctx context.Context, ssh_interface *Interface_SSH, game *Game, conn net.Conn) {
 	defer conn.Close()
 
 	// Create connection-specific context that can be cancelled independently
@@ -230,7 +224,7 @@ func handleConnection(ctx context.Context, server *Server, game *Game, conn net.
 	}
 
 	// Perform SSH handshake
-	sshConn, chans, reqs, err := ssh.NewServerConn(conn, server.SSHConfig)
+	sshConn, chans, reqs, err := ssh.NewServerConn(conn, ssh_interface.SSHConfig)
 	if err != nil {
 		Logger.Error("Failed to perform SSH handshake",
 			"error", err,
@@ -257,7 +251,7 @@ func handleConnection(ctx context.Context, server *Server, game *Game, conn net.
 	go discardRequests(reqs)
 
 	// Handle channels with connection-specific context
-	handleChannels(connCtx, server, game, sshConn, chans)
+	handleChannels(connCtx, ssh_interface, game, sshConn, chans)
 }
 
 func discardRequests(reqs <-chan *ssh.Request) {

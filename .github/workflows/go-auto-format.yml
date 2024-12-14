@@ -35,15 +35,14 @@ jobs:
 
       - name: Format and check code
         run: |
-          for dir in character core game interface_ssh multi-user-dungeon player server; do
-            cd ./$dir
-            echo "Processing $dir directory"
-            go fmt ./...
-            go mod tidy
-            go vet ./...
-            govulncheck ./...
-            cd ..
-          done
+          echo "Processing directory"
+          go fmt ./...
+          go mod tidy
+          go mod verify
+          go vet ./...
+          govulncheck ./...
+          cd ..
+
 
       - name: Check for changes
         id: git-check

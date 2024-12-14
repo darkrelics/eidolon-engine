@@ -394,11 +394,11 @@ func SaveActiveCharacters(g *Game) error {
 
 		c.Mutex.Lock()
 		// Attempt to write the character to the database
-		err := WriteCharacter(c, g.Database)
-		if err != nil {
-			Logger.Error("Error saving character", "characterName", c.Name, "error", err)
-			continue // Continue saving other characters even if one fails
-		}
+		// err := WriteCharacter(c, g.Database)
+		// if err != nil {
+		// 	Logger.Error("Error saving character", "characterName", c.Name, "error", err)
+		// 	continue // Continue saving other characters even if one fails
+		// }
 
 		// Update LastSaved after a successful write
 		c.LastSaved = time.Now()

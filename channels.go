@@ -9,8 +9,8 @@ import (
 )
 
 // handleChannels processes SSH channels for a connection
-func handleChannels(ctx context.Context, server *Server, game *Game, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
-	Logger.Debug("Active Player Indices:", "playerIndices", server.PlayerIndex)
+func handleChannels(ctx context.Context, ssh_interface *Interface_SSH, game *Game, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
+	// Logger.Debug("Active Player Indices:", "playerIndices", server.PlayerIndex)
 	playerName := sshConn.User()
 	Logger.Info("New connection", "address", sshConn.RemoteAddr().String(), "user", playerName)
 
@@ -32,21 +32,21 @@ func handleChannels(ctx context.Context, server *Server, game *Game, sshConn *ss
 				continue
 			}
 
-			// Check for existing connection
-			server.Mutex.RLock()
-			for index := range server.Players {
-				if server.Players[index].PlayerID == playerName {
-					server.Mutex.RUnlock()
-					Logger.Warn("Player already connected", "playerName", playerName)
-					channel.Write([]byte("You are already connected. Goodbye.\n\r"))
-					sshConn.Close()
-					return
-				}
-			}
-			server.Mutex.RUnlock()
+			// // Check for existing connection
+			// server.Mutex.RLock()
+			// for index := range server.Players {
+			// 	if server.Players[index].PlayerID == playerName {
+			// 		server.Mutex.RUnlock()
+			// 		Logger.Warn("Player already connected", "playerName", playerName)
+			// 		channel.Write([]byte("You are already connected. Goodbye.\n\r"))
+			// 		sshConn.Close()
+			// 		return
+			// 	}
+			// }
+			// server.Mutex.RUnlock()
 
 			// Initialize or load player data
-			characterList, seenMotD, err := InitializePlayerData(server, playerName)
+			// characterList, seenMotD, err := InitializePlayerData(ssh_interface, playerName)
 			if err != nil {
 				Logger.Error("Failed to initialize player data", "error", err, "player", playerName)
 				continue
@@ -55,11 +55,11 @@ func handleChannels(ctx context.Context, server *Server, game *Game, sshConn *ss
 			// Create player context as child of connection context
 			playerCtx, playerCancel := context.WithCancel(ctx)
 			player := &Player{
-				Server:        server,
-				Index:         server.PlayerIndex.GetID(),
-				PlayerID:      playerName,
-				CharacterList: characterList,
-				SeenMotD:      seenMotD,
+				// Server:        server,
+				// Index:         server.PlayerIndex.GetID(),
+				PlayerID: playerName,
+				// CharacterList: characterList,
+				// SeenMotD:      seenMotD,
 				ToPlayer:      make(chan string, 10),
 				FromPlayer:    make(chan string, 10),
 				Echo:          true,
@@ -73,13 +73,13 @@ func handleChannels(ctx context.Context, server *Server, game *Game, sshConn *ss
 				Cancel:        playerCancel,
 			}
 
-			server.Mutex.Lock()
-			server.Players[player.Index] = player
-			server.Mutex.Unlock()
+			// server.Mutex.Lock()
+			// server.Players[player.Index] = player
+			// server.Mutex.Unlock()
 
 			// Start player handlers with context
 			go handleSSHRequests(playerCtx, player, requests)
-			go handlePlayerSession(playerCtx, server, game, player)
+			// go handlePlayerSession(playerCtx, server, game, player)
 
 			Logger.Info("Player session started",
 				"playerName", playerName,

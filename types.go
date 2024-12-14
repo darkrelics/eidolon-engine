@@ -56,7 +56,10 @@ type Interface_SSH struct {
 	StartTime      time.Time
 	Port           uint16
 	PrivateKeyPath string
+	Listener       net.Listener
 	Connections    uint64
+	Database       *KeyPair
+	SSHConfig      *ssh.ServerConfig
 }
 
 type CloudWatchHandler struct {
