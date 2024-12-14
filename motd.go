@@ -2,11 +2,27 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/google/uuid"
 )
+
+type MOTD struct {
+	MotdID    uuid.UUID
+	Active    bool
+	Message   string
+	CreatedAt time.Time
+}
+
+type MOTDData struct {
+	MotdID    string `json:"MotdID" dynamodbav:"MotdID"`
+	Active    bool   `json:"active" dynamodbav:"Active"`
+	Message   string `json:"message" dynamodbav:"Message"`
+	CreatedAt string `json:"createdAt" dynamodbav:"CreatedAt"`
+}
 
 func GetAllMOTDs(k *KeyPair) ([]*MOTD, error) {
 	input := &dynamodb.ScanInput{
