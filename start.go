@@ -82,6 +82,11 @@ func main() {
 
 	Game, err := NewGame(ctx, config)
 
+	if err != nil {
+		fmt.Printf("Error initializing game: %v\n", err)
+		os.Exit(1)
+	}
+
 	go func() {
 		if err := RunGame(Game); err != nil {
 			Logger.Error("Game error", "error", err)
@@ -91,6 +96,10 @@ func main() {
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	<-stop
+
+	shutdown(Server, Game)
 
 }
 
@@ -117,5 +126,9 @@ func shutdown(server *Server, game *Game) {
 	defer cancel()
 
 	Logger.Info("Initiating graceful shutdown...")
+
+	server.Context.Done()
+
+	game.Context.Done()
 
 }
