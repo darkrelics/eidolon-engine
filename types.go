@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"net"
 	"sync"
 	"time"
 
@@ -11,22 +10,6 @@ import (
 
 	"golang.org/x/crypto/ssh"
 )
-
-type Interface_SSH struct {
-	Config         *Configuration
-	GlobalContext  context.Context
-	ServerContext  context.Context
-	Context        context.Context
-	Cancel         context.CancelFunc
-	Mutex          sync.RWMutex
-	StartTime      time.Time
-	Port           uint16
-	PrivateKeyPath string
-	Listener       net.Listener
-	Connections    uint64
-	Database       *KeyPair
-	SSHConfig      *ssh.ServerConfig
-}
 
 // The Index struct is to be depricated in favor of UUIDs
 

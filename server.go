@@ -97,3 +97,18 @@ func (s *Server) incrementPlayerCount() uint64 {
 func (s *Server) decrementPlayerCount() uint64 {
 	return s.playerCount.Add(^uint64(0))
 }
+
+func (s *Server) AddPlayer(player *Player) error {
+	if player == nil {
+		return fmt.Errorf("player cannot be nil")
+	}
+
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+
+	playerID := s.incrementPlayerCount()
+	s.Players[playerID] = player
+
+	Logger.Info("Player added", "id", playerID, "name", player.PlayerID)
+	return nil
+}
