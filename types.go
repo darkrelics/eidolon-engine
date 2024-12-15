@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-
 	"github.com/google/uuid"
+
 	"golang.org/x/crypto/ssh"
 )
 
