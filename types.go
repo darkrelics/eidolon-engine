@@ -49,6 +49,7 @@ type Player struct {
 	CharacterList map[string]uuid.UUID
 	Character     *Character
 	LoginTime     time.Time
+	Server        *Server
 	Mutex         sync.RWMutex
 	Context       context.Context
 	Cancel        context.CancelFunc
@@ -74,7 +75,7 @@ type Character struct {
 	Mutex       sync.RWMutex
 	Facing      *Character
 	Advancing   bool // true when character is advancing towards their facing target
-	CombatRange map[uuid.UUID]float64
+	CombatRange map[*uuid.UUID]float64
 	LastEdited  time.Time
 	LastSaved   time.Time
 	End         chan bool
@@ -117,7 +118,7 @@ type Item struct {
 	Overrides   map[string]string
 	TraitMods   map[string]int8
 	Container   bool
-	Contents    []*Item
+	Contents    []*uuid.UUID
 	IsWorn      bool
 	CanPickUp   bool
 	Metadata    map[string]string
