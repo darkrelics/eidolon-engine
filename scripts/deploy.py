@@ -6,7 +6,7 @@ import traceback
 
 import boto3
 import yaml
-from botoexceptions import ClientError
+from botocore.exceptions import ClientError
 
 # Constants for stack names
 COGNITO_STACK_NAME = "MUD-Cognito-Stack"
@@ -21,7 +21,7 @@ CODEBUILD_TEMPLATE_PATH = "../cloudformation/codebuild.yml"
 CLOUDWATCH_TEMPLATE_PATH = "../cloudformation/cloudwatch.yml"
 
 # Configuration file path
-CONFIG_PATH = "../ssh_server/config.yml"
+CONFIG_PATH = "../config.yml"
 
 
 def validate_s3_bucket(bucket_name, region="us-east-1") -> bool:
