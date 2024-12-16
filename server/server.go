@@ -58,6 +58,13 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 func (s *Server) Run() error {
 	Logger.Info("Starting server...")
 
+	sshInterface, err := NewSSHInterface(s.GlobalContext, s)
+	if err != nil {
+		return fmt.Errorf("ssh interface init error: %w", err)
+	}
+
+	go sshInterface.RunServer(s)
+
 	for {
 		select {
 		case <-s.GlobalContext.Done():
@@ -69,11 +76,14 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) Stop(ctx context.Context) error {
+
 	var stopErr error
+
 	s.shutdownOnce.Do(func() {
 		s.Cancel()
 		stopErr = s.shutdown("manual stop")
 	})
+
 	return stopErr
 }
 
@@ -82,7 +92,10 @@ func (s *Server) shutdown(reason string) error {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 
-	// Cleanup logic here
+	for _, player := range s.Players {
+		player.Cleanup()
+	}
+
 	return nil
 }
 

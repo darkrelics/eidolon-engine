@@ -70,7 +70,7 @@ func NewSSHInterface(globalCtx context.Context, server *Server) (*Interface_SSH,
 	return sshInterface, nil
 }
 
-func (ssh_interface *Interface_SSH) RunServer(game *Game) {
+func (ssh_interface *Interface_SSH) RunServer(server *Server) {
 	for {
 		select {
 		case <-ssh_interface.GlobalContext.Done():
@@ -91,7 +91,7 @@ func (ssh_interface *Interface_SSH) RunServer(game *Game) {
 				Logger.Error("Connection accept failed", "error", err)
 				continue
 			}
-			go handleConnection(ssh_interface.Context, ssh_interface, game, conn)
+			go handleConnection(ssh_interface.Context, ssh_interface, server, conn)
 		}
 	}
 }
@@ -235,44 +235,70 @@ func acceptConnections(ctx context.Context, ssh_interface *Interface_SSH) error 
 }
 
 // handleConnection processes an individual SSH connection
-func handleConnection(ctx context.Context, ssh_interface *Interface_SSH, game *Game, conn net.Conn) {
-	defer conn.Close()
-
+func handleConnection(ctx context.Context, ssh_interface *Interface_SSH, server *Server, conn net.Conn) {
 	remoteAddr := conn.RemoteAddr().String()
+	Logger.Info("New SSH connection", "remoteAddr", remoteAddr)
+
+	// Set initial handshake deadline
 	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
 		Logger.Error("Failed to set handshake deadline", "error", err, "remoteAddr", remoteAddr)
+		conn.Close()
 		return
 	}
 
+	// Perform SSH handshake
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, ssh_interface.SSHConfig)
 	if err != nil {
 		Logger.Error("SSH handshake failed", "error", err, "remoteAddr", remoteAddr)
+		conn.Close()
 		return
 	}
-	defer sshConn.Close()
 
+	// Clear deadline after handshake
 	if err := conn.SetDeadline(time.Time{}); err != nil {
-		Logger.Error("Failed to reset deadline", "error", err, "remoteAddr", remoteAddr)
+		Logger.Error("Failed to clear deadline", "error", err, "remoteAddr", remoteAddr)
+		sshConn.Close()
 		return
 	}
 
-	Logger.Info("SSH connection established", "user", sshConn.User(), "remoteAddr", remoteAddr)
+	// Create session context
+	sessionCtx, sessionCancel := context.WithCancel(ctx)
+	defer sessionCancel()
 
-	go discardRequests(reqs)
-	handleChannels(ctx, ssh_interface, game, sshConn, chans)
+	// Start request handler
+	go discardRequests(sessionCtx, reqs)
+
+	// Start channel handler
+	go func() {
+		handleChannels(sessionCtx, ssh_interface, server, sshConn, chans)
+		sessionCancel()
+	}()
+
+	// Wait for session end
+	<-sessionCtx.Done()
+	sshConn.Close()
+	Logger.Info("SSH connection closed", "user", sshConn.User(), "remoteAddr", remoteAddr)
 }
 
-func discardRequests(reqs <-chan *ssh.Request) {
-	for req := range reqs {
-		Logger.Debug("Discarding SSH request", "type", req.Type, "wantReply", req.WantReply)
-		if req.WantReply {
-			req.Reply(false, nil)
+func discardRequests(ctx context.Context, reqs <-chan *ssh.Request) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case req, ok := <-reqs:
+			if !ok {
+				return
+			}
+			Logger.Debug("Discarding SSH request", "type", req.Type, "wantReply", req.WantReply)
+			if req.WantReply {
+				req.Reply(false, nil)
+			}
 		}
 	}
 }
 
 // handleChannels processes SSH channels for a connection
-func handleChannels(ctx context.Context, ssh_interface *Interface_SSH, game *Game, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
+func handleChannels(ctx context.Context, ssh_interface *Interface_SSH, server *Server, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
 	playerName := sshConn.User()
 
 	for {
@@ -295,7 +321,7 @@ func handleChannels(ctx context.Context, ssh_interface *Interface_SSH, game *Gam
 
 			playerCtx, playerCancel := context.WithCancel(ctx)
 			player := &Player{
-				Server:        ssh_interface.Server,
+				Server:        server,
 				PlayerID:      playerName,
 				ToPlayer:      make(chan string, 10),
 				FromPlayer:    make(chan string, 10),
