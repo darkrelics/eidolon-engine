@@ -61,17 +61,20 @@ func main() {
 }
 
 func (app *application) initialize(ctx context.Context, config *Configuration) error {
-	server, err := NewServer(ctx, config)
-	if err != nil {
-		return fmt.Errorf("server init error: %w", err)
-	}
-	app.server = server
 
 	game, err := NewGame(ctx, config)
 	if err != nil {
 		return fmt.Errorf("game init error: %w", err)
 	}
 	app.game = game
+
+	server, err := NewServer(ctx, config)
+	if err != nil {
+		return fmt.Errorf("server init error: %w", err)
+	}
+	app.server = server
+
+	server.Game = game
 
 	return nil
 }

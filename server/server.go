@@ -18,6 +18,7 @@ type Server struct {
 	Context       context.Context
 	Cancel        context.CancelFunc
 	Mutex         sync.RWMutex
+	Game          *Game
 	Database      *KeyPair
 	StartTime     time.Time
 	playerCount   atomic.Uint64
@@ -46,6 +47,7 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 		GlobalContext: globalCtx,
 		Context:       ctx,
 		Cancel:        cancel,
+		Game:          nil,
 		StartTime:     time.Now(),
 		Database:      database,
 		Players:       make(map[uint64]*Player),

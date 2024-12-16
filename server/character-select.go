@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func SelectCharacter(ctx context.Context, game *Game, player *Player) (*Character, error) {
+func SelectCharacter(ctx context.Context, player *Player) (*Character, error) {
 	Logger.Debug("Player is selecting a character", "playerName", player.PlayerID)
 
 	for {
@@ -24,7 +24,7 @@ func SelectCharacter(ctx context.Context, game *Game, player *Player) (*Characte
 			return nil, fmt.Errorf("failed to receive input: %w", err)
 		}
 
-		if character, shouldContinue := handleCharacterSelection(ctx, input, options, game, player); !shouldContinue {
+		if character, shouldContinue := handleCharacterSelection(ctx, input, options, player); !shouldContinue {
 			return character, nil
 		}
 	}
@@ -99,9 +99,9 @@ func receiveInput(ctx context.Context, player *Player) (string, error) {
 	}
 }
 
-func handleCharacterSelection(ctx context.Context, input string, options []string, game *Game, player *Player) (*Character, bool) {
+func handleCharacterSelection(ctx context.Context, input string, options []string, player *Player) (*Character, bool) {
 	if input == "X" && len(options) > 0 {
-		if err := handleCharacterDeletion(ctx, options, game, player); err != nil {
+		if err := handleCharacterDeletion(ctx, options, player); err != nil {
 			player.ToPlayer <- fmt.Sprintf("Error deleting character: %v\n\r", err)
 		}
 		return nil, true
@@ -113,7 +113,7 @@ func handleCharacterSelection(ctx context.Context, input string, options []strin
 		return nil, true
 	}
 
-	character, err := loadOrCreateCharacter(ctx, choice, options, game, player)
+	character, err := loadOrCreateCharacter(ctx, choice, options, player)
 	if err != nil {
 		player.ToPlayer <- fmt.Sprintf("Error: %v\n\r", err)
 		return nil, true
@@ -127,7 +127,7 @@ func handleCharacterSelection(ctx context.Context, input string, options []strin
 	return character, false
 }
 
-func loadOrCreateCharacter(ctx context.Context, choice int, options []string, game *Game, player *Player) (*Character, error) {
+func loadOrCreateCharacter(ctx context.Context, choice int, options []string, player *Player) (*Character, error) {
 	game.Mutex.Lock()
 	defer game.Mutex.Unlock()
 
@@ -140,7 +140,7 @@ func loadOrCreateCharacter(ctx context.Context, choice int, options []string, ga
 		player.Mutex.RLock()
 		characterID := player.CharacterList[options[choice-1]]
 		player.Mutex.RUnlock()
-		character, err = game.Database.LoadCharacter(characterID, player, game)
+		character, err = player.Server.Database.LoadCharacter(characterID, player, game)
 	}
 
 	if err != nil {
@@ -296,7 +296,7 @@ func createAndSaveCharacter(name string, player *Player, room *Room, archetype s
 	return character, nil
 }
 
-func handleCharacterDeletion(ctx context.Context, options []string, game *Game, player *Player) error {
+func handleCharacterDeletion(ctx context.Context, options []string, player *Player) error {
 	if err := sendDeletionOptions(ctx, options, player); err != nil {
 		return err
 	}
@@ -312,7 +312,7 @@ func handleCharacterDeletion(ctx context.Context, options []string, game *Game, 
 	}
 
 	characterToDelete := options[deleteIndex-1]
-	if err := game.Database.DeleteCharacter(player, characterToDelete); err != nil {
+	if err := player.Server.Database.DeleteCharacter(player, characterToDelete); err != nil {
 		return err
 	}
 

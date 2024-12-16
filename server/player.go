@@ -37,12 +37,119 @@ type Player struct {
 	Mutex         sync.RWMutex
 	Context       context.Context
 	Cancel        context.CancelFunc
+	shutdownOnce  sync.Once
 }
 
 type PlayerData struct {
 	PlayerID      string            `json:"PlayerID" dynamodbav:"PlayerID"`
 	CharacterList map[string]string `json:"characterList" dynamodbav:"CharacterList"`
 	SeenMotDs     []string          `json:"seenMotD" dynamodbav:"SeenMotD"`
+}
+
+func NewPlayer(server *Server, playerName string) (*Player, error) {
+	ctx, cancel := context.WithCancel(server.Context)
+
+	player := &Player{
+		PlayerID:      playerName,
+		CharacterList: make(map[string]uuid.UUID),
+		SeenMotD:      make([]uuid.UUID, 0),
+		Server:        server,
+		Context:       ctx,
+		Cancel:        cancel,
+		ToPlayer:      make(chan string, 10),
+		FromPlayer:    make(chan string, 10),
+		PlayerError:   make(chan error, 1),
+		Echo:          true,
+		LoginTime:     time.Now(),
+	}
+
+	if err := server.Database.WritePlayer(player); err != nil {
+		cancel()
+		return nil, fmt.Errorf("error creating player: %w", err)
+	}
+
+	return player, nil
+}
+
+func (p *Player) Run() error {
+	Logger.Info("Starting player session", "playerName", p.PlayerID)
+
+	ioGroup, ioCtx := errgroup.WithContext(p.Context)
+
+	ioGroup.Go(func() error {
+		PlayerInput(ioCtx, p)
+		return nil
+	})
+
+	ioGroup.Go(func() error {
+		PlayerOutput(ioCtx, p)
+		return nil
+	})
+
+	if err := DisplayUnseenMOTDs(p.Server, p); err != nil {
+		return fmt.Errorf("failed to display MOTDs: %w", err)
+	}
+
+	character, err := SelectCharacter(p.Context, p)
+	if err != nil {
+		return fmt.Errorf("character selection failed: %w", err)
+	}
+
+	if character == nil {
+		return fmt.Errorf("no character selected")
+	}
+
+	p.Mutex.Lock()
+	p.Prompt = "> "
+	p.Character = character
+	p.Mutex.Unlock()
+
+	inputDone := make(chan struct{})
+	go func() {
+		defer close(inputDone)
+		InputLoop(p.Context, character)
+	}()
+
+	select {
+	case <-p.Context.Done():
+		return p.shutdown("context cancelled")
+	case <-inputDone:
+		return p.shutdown("input loop ended")
+	}
+}
+
+func (p *Player) Stop() error {
+	var stopErr error
+	p.shutdownOnce.Do(func() {
+		p.Cancel()
+		stopErr = p.shutdown("manual stop")
+	})
+	return stopErr
+}
+
+func (p *Player) shutdown(reason string) error {
+	Logger.Info("player shutdown", "playerName", p.PlayerID, "reason", reason)
+
+	p.Mutex.Lock()
+	defer p.Mutex.Unlock()
+
+	if err := p.Server.Database.WritePlayer(p); err != nil {
+		Logger.Error("Failed to save player data", "playerID", p.PlayerID, "error", err)
+	}
+
+	if p.Connection != nil {
+		p.Connection.Close()
+	}
+
+	close(p.ToPlayer)
+	close(p.FromPlayer)
+	close(p.PlayerError)
+
+	p.Server.Mutex.Lock()
+	delete(p.Server.Players, p.Index)
+	p.Server.Mutex.Unlock()
+
+	return nil
 }
 
 func (k *KeyPair) WritePlayer(player *Player) error {
@@ -370,35 +477,6 @@ func (p *Player) Cleanup() {
 	Logger.Info("Cleanup complete", "playerID", p.PlayerID)
 }
 
-func NewPlayer(server *Server, playerName string) (*Player, error) {
-	characterList := make(map[string]uuid.UUID)
-	seenMotD := make([]uuid.UUID, 0)
-
-	ctx, cancel := context.WithCancel(server.Context)
-
-	player := &Player{
-		PlayerID:      playerName,
-		CharacterList: characterList,
-		SeenMotD:      seenMotD,
-		Server:        server,
-		Context:       ctx,
-		Cancel:        cancel,
-		ToPlayer:      make(chan string, 10),
-		FromPlayer:    make(chan string, 10),
-		PlayerError:   make(chan error, 1),
-		Echo:          true,
-		LoginTime:     time.Now(),
-	}
-
-	err := server.Database.WritePlayer(player)
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("error creating player: %w", err)
-	}
-
-	return player, nil
-}
-
 func InitializePlayerData(server *Server, playerName string) (*Player, error) {
 	_, charList, motd, err := server.Database.ReadPlayer(playerName)
 	if err != nil {
@@ -472,7 +550,7 @@ func handlePlayerSession(ctx context.Context, server *Server, game *Game, player
 
 	// Character Selection
 	Logger.Debug("Starting character selection", "playerName", player.PlayerID)
-	character, err := SelectCharacter(sessionCtx, game, player)
+	character, err := SelectCharacter(sessionCtx, player)
 	if err != nil {
 		Logger.Error("Character selection failed", "playerName", player.PlayerID, "error", err)
 		return
