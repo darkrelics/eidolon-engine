@@ -4,7 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
 )
 
 type Server struct {
@@ -15,56 +20,95 @@ type Server struct {
 	Mutex         sync.RWMutex
 	Database      *KeyPair
 	StartTime     time.Time
-	PlayerCount   uint64
-	PlayerIndex   *Index
+	playerCount   atomic.Uint64
 	Players       map[uint64]*Player
+	shutdownOnce  sync.Once
+	cognito       *cognitoidentityprovider.CognitoIdentityProvider
 }
 
-// NewServer initializes a new server instance with the given configuration.
-// It sets up the database connection, loads game data, and prepares the server for incoming connections.
-func NewServer(GlobalContext context.Context, config *Configuration) (*Server, error) {
-	Logger.Info("Initializing server...")
-
-	// Initialize the server struct with the provided configuration
-	server := &Server{
-		Config:        config,
-		GlobalContext: GlobalContext,
-		Context:       context.Background(),
-		Cancel:        nil,
-		Mutex:         sync.RWMutex{},
-		StartTime:     time.Now(),
-		PlayerCount:   0,
-		PlayerIndex:   &Index{},
-		Players:       make(map[uint64]*Player),
-	}
-
-	fmt.Println("Initializing database...")
+func NewServer(globalCtx context.Context, config *Configuration) (*Server, error) {
+	ctx, cancel := context.WithCancel(globalCtx)
 
 	database, err := NewKeyPair(config.Aws.Region)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %v", err)
+		cancel()
+		return nil, fmt.Errorf("database init error: %w", err)
 	}
 
-	server.Database = database
+	sess, err := session.NewSession(&aws.Config{Region: aws.String(config.Aws.Region)})
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("AWS session init error: %w", err)
+	}
 
-	// Initialize the player index
-	server.PlayerIndex.IndexID = 1
+	server := &Server{
+		Config:        config,
+		GlobalContext: globalCtx,
+		Context:       ctx,
+		Cancel:        cancel,
+		StartTime:     time.Now(),
+		Database:      database,
+		Players:       make(map[uint64]*Player),
+		cognito:       cognitoidentityprovider.New(sess),
+	}
 
 	return server, nil
 }
 
-func (server *Server) Run() error {
+func (s *Server) Run() error {
 	Logger.Info("Starting server...")
 
 	for {
 		select {
-		case <-server.GlobalContext.Done():
-			Logger.Info("System shutting down...")
-			return nil
-		case <-server.Context.Done():
-			Logger.Info("Server shutting down...")
-			return nil
+		case <-s.GlobalContext.Done():
+			return s.shutdown("global shutdown")
+		case <-s.Context.Done():
+			return s.shutdown("server shutdown")
 		}
 	}
+}
 
+func (s *Server) Stop(ctx context.Context) error {
+	var stopErr error
+	s.shutdownOnce.Do(func() {
+		s.Cancel()
+		stopErr = s.shutdown("manual stop")
+	})
+	return stopErr
+}
+
+func (s *Server) shutdown(reason string) error {
+	Logger.Info("server shutdown", "reason", reason)
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+
+	// Cleanup logic here
+	return nil
+}
+
+func (s *Server) GetPlayerCount() uint64 {
+	return s.playerCount.Load()
+}
+
+func (s *Server) incrementPlayerCount() uint64 {
+	return s.playerCount.Add(1)
+}
+
+func (s *Server) decrementPlayerCount() uint64 {
+	return s.playerCount.Add(^uint64(0))
+}
+
+func (s *Server) AddPlayer(player *Player) error {
+	if player == nil {
+		return fmt.Errorf("player cannot be nil")
+	}
+
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+
+	playerID := s.incrementPlayerCount()
+	s.Players[playerID] = player
+
+	Logger.Info("Player added", "id", playerID, "name", player.PlayerID)
+	return nil
 }

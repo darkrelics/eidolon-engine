@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bits-and-blooms/bloom/v3"
@@ -20,8 +21,8 @@ type Game struct {
 	Cancel               context.CancelFunc
 	Mutex                sync.RWMutex
 	StartTime            time.Time
-	CharacterCount       uint64
-	Ticker               *time.Ticker
+	characterCount       atomic.Uint64
+	ticker               *time.Ticker
 	Database             *KeyPair
 	ArcheTypes           map[string]*Archetype
 	CharacterBloomFilter *bloom.BloomFilter
@@ -32,66 +33,47 @@ type Game struct {
 	StartingHealth       uint16
 	StartingEssence      uint16
 	Balance              float64
-	AutoSaveInterval     uint16 // in minutes
+	AutoSaveInterval     uint16
+	shutdownOnce         sync.Once
 }
 
-const FalsePositiveRate = 0.01 // 1% bloom filter false positive rate
-
-// NewGame initializes the game struct.
-func NewGame(GlobalContext context.Context, config *Configuration) (*Game, error) {
+func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 	Logger.Info("Initializing game...")
 
+	ctx, cancel := context.WithCancel(globalCtx)
+
 	game := &Game{
-		Config:         config,
-		GlobalContext:  GlobalContext,
-		Context:        context.Background(),
-		Cancel:         nil,
-		Mutex:          sync.RWMutex{},
-		StartTime:      time.Now(),
-		CharacterCount: 0,
-		Characters:     make(map[uuid.UUID]*Character),
-		Rooms:          make(map[int64]*Room),
-		Prototypes:     make(map[uuid.UUID]*Prototype),
-		Items:          make(map[uuid.UUID]*Item),
-		Ticker:         time.NewTicker(time.Second),
+		Config:        config,
+		GlobalContext: globalCtx,
+		Context:       ctx,
+		Cancel:        cancel,
+		StartTime:     time.Now(),
+		Characters:    make(map[uuid.UUID]*Character),
+		Rooms:         make(map[int64]*Room),
+		Prototypes:    make(map[uuid.UUID]*Prototype),
+		Items:         make(map[uuid.UUID]*Item),
 	}
 
-	var err error
 	database, err := NewKeyPair(config.Aws.Region)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %v", err)
+		return nil, fmt.Errorf("database init error: %w", err)
 	}
-
 	game.Database = database
 
-	// Initialize the bloom filter for character names
-	Logger.Info("Initializing bloom filter...")
-	err = game.InitializeBloomFilter()
-	if err != nil {
-		Logger.Error("Error initializing bloom filter", "error", err)
-		return nil, fmt.Errorf("failed to initialize bloom filter: %v", err)
+	if err := game.initBloomFilter(); err != nil {
+		return nil, fmt.Errorf("bloom filter init error: %w", err)
 	}
 
-	// Load archetypes from the database
-	Logger.Info("Loading archetypes from database...")
-	err = LoadArchetypes(game)
-	if err != nil {
-		Logger.Error("Error loading archetypes from database", "error", err)
+	if err := LoadArchetypes(game); err != nil {
+		Logger.Error("archetype loading failed", "error", err)
 	}
 
-	// Create Default Room
-	Logger.Info("Adding default room...")
-	game.Rooms[0] = NewRoom(0, "The Void", "The Void", "You are in a void of nothingness. If you are here, something has gone terribly wrong.")
+	game.Rooms[0] = NewRoom(0, "The Void", "The Void", "Default void room.")
 
-	// Load rooms from the database
-	Logger.Info("Loading rooms from database...")
-	loadedRooms, err := game.Database.LoadRooms()
-	if err != nil {
-		Logger.Error("Error loading rooms from database", "error", err)
-		// Proceeding with default room(s) if rooms failed to load
+	if rooms, err := game.Database.LoadRooms(); err != nil {
+		Logger.Error("room loading failed", "error", err)
 	} else {
-		// Merge loaded rooms with existing rooms, preserving the default room
-		for id, room := range loadedRooms {
+		for id, room := range rooms {
 			game.Rooms[id] = room
 		}
 	}
@@ -99,246 +81,183 @@ func NewGame(GlobalContext context.Context, config *Configuration) (*Game, error
 	return game, nil
 }
 
-// RunGame starts the game loop.
-func (game *Game) Run() error {
+func (g *Game) Run() error {
 	Logger.Info("Starting game...")
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 
 	for {
 		select {
-		case <-game.GlobalContext.Done():
-			Logger.Info("System shutting down...")
-			return nil
-		case <-game.Context.Done():
-			Logger.Info("Game shutting down...")
-			return nil
+		case <-g.GlobalContext.Done():
+			return g.shutdown("global shutdown")
+		case <-g.Context.Done():
+			return g.shutdown("game shutdown")
+		case <-ticker.C:
+			g.tick()
 		}
 	}
 }
 
-func (game *Game) Stop() {
-	Logger.Info("Stopping game...")
-	game.Cancel()
+func (g *Game) Stop() error {
+	var stopErr error
+	g.shutdownOnce.Do(func() {
+		g.Cancel()
+		stopErr = g.shutdown("manual stop")
+	})
+	return stopErr
 }
 
-// InitializeBloomFilter initializes the bloom filter with existing character names,
-// as well as names from ./data/names.txt and ./data/obscenity.txt.
-func (game *Game) InitializeBloomFilter() error {
-	// Load character names from the database
-	characterNames, err := LoadCharacterNames(game.Database)
+func (g *Game) initBloomFilter() error {
+	names, err := LoadCharacterNames(g.Database)
 	if err != nil {
-		return fmt.Errorf("failed to load character names: %w", err)
+		return fmt.Errorf("character names load error: %w", err)
 	}
 
-	// Load additional names from names.txt
-	namesFilePath := "./data/names.txt"
-	namesFromFile, err := loadNamesFromFile(namesFilePath)
+	namesFromFile, err := loadNamesFromFile("./data/names.txt")
 	if err != nil {
-		return fmt.Errorf("failed to load names from %s: %w", namesFilePath, err)
+		return fmt.Errorf("names file load error: %w", err)
 	}
 
-	// Load obscenity words from obscenity.txt
-	obscenityFilePath := "./data/obscenity.txt"
-	obscenities, err := loadNamesFromFile(obscenityFilePath)
+	obscenities, err := loadNamesFromFile("./data/obscenity.txt")
 	if err != nil {
-		return fmt.Errorf("failed to load obscenities from %s: %w", obscenityFilePath, err)
+		return fmt.Errorf("obscenity file load error: %w", err)
 	}
 
-	// Calculate total number of items to add to the bloom filter
-	totalItems := len(characterNames)
-	for range characterNames { // Assuming characterNames is a map; adjust if it's a slice
-		// Counting items in characterNames
-	}
-	totalItems += len(namesFromFile)
-	totalItems += len(obscenities)
-
-	// Ensure a minimum size
+	totalItems := len(names) + len(namesFromFile) + len(obscenities)
 	if totalItems < 100 {
 		totalItems = 100
 	}
 
-	fpRate := FalsePositiveRate
+	g.CharacterBloomFilter = bloom.NewWithEstimates(uint(totalItems), 0.01)
 
-	// Initialize the bloom filter with the estimated number of items and false positive rate
-	game.CharacterBloomFilter = bloom.NewWithEstimates(uint(totalItems), fpRate)
-
-	// Add character names to the bloom filter
-	for name := range characterNames {
-		game.CharacterBloomFilter.AddString(strings.ToLower(name))
+	for name := range names {
+		g.CharacterBloomFilter.AddString(strings.ToLower(name))
 	}
-
-	// Add names from names.txt to the bloom filter
-	for _, name := range namesFromFile {
-		game.CharacterBloomFilter.AddString(name)
+	for _, name := range append(namesFromFile, obscenities...) {
+		g.CharacterBloomFilter.AddString(strings.ToLower(name))
 	}
-
-	// Add obscenities to the bloom filter
-	for _, word := range obscenities {
-		game.CharacterBloomFilter.AddString(word)
-	}
-
-	Logger.Debug("Bloom filter initialized",
-		"estimatedSize", totalItems,
-		"falsePositiveRate", fpRate,
-		"totalItemsAdded", totalItems,
-	)
 
 	return nil
 }
 
-// loadNamesFromFile reads a file line by line and returns a slice of names.
-func loadNamesFromFile(filePath string) ([]string, error) {
-	file, err := os.Open(filePath)
+func (g *Game) AutoSave(ctx context.Context) error {
+	if g.AutoSaveInterval == 0 {
+		return nil
+	}
+
+	ticker := time.NewTicker(time.Duration(g.AutoSaveInterval) * time.Minute)
+	defer ticker.Stop()
+
+	if err := g.saveAll(ctx); err != nil {
+		Logger.Error("initial save failed", "error", err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return g.saveAll(context.Background())
+		case <-ticker.C:
+			if err := g.saveAll(ctx); err != nil {
+				Logger.Error("auto-save failed", "error", err)
+			}
+		}
+	}
+}
+
+func (g *Game) saveAll(ctx context.Context) error {
+	saveCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, 3)
+
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		if err := g.SaveActiveCharacters(); err != nil {
+			errChan <- fmt.Errorf("character save error: %w", err)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if err := SaveActiveItems(g); err != nil {
+			errChan <- fmt.Errorf("item save error: %w", err)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if err := SaveActiveRooms(g); err != nil {
+			errChan <- fmt.Errorf("room save error: %w", err)
+		}
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-saveCtx.Done():
+		return fmt.Errorf("save timeout: %w", saveCtx.Err())
+	case err := <-errChan:
+		return err
+	case <-done:
+		return nil
+	}
+}
+
+func (g *Game) SaveActiveCharacters() error {
+	g.Mutex.RLock()
+	defer g.Mutex.RUnlock()
+
+	for _, c := range g.Characters {
+		if !c.LastEdited.After(c.LastSaved) {
+			continue
+		}
+
+		c.Mutex.Lock()
+		c.LastSaved = time.Now()
+		c.Mutex.Unlock()
+	}
+
+	return nil
+}
+
+func (g *Game) tick() {
+	g.Mutex.RLock()
+	defer g.Mutex.RUnlock()
+	// Game tick logic here
+}
+
+func (g *Game) shutdown(reason string) error {
+	Logger.Info("game shutdown", "reason", reason)
+	if err := g.saveAll(context.Background()); err != nil {
+		return fmt.Errorf("shutdown save failed: %w", err)
+	}
+	return nil
+}
+
+func loadNamesFromFile(path string) ([]string, error) {
+	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open %s: %w", filePath, err)
+		return nil, fmt.Errorf("file open error: %w", err)
 	}
 	defer file.Close()
 
 	var names []string
 	scanner := bufio.NewScanner(file)
-	lineNumber := 1
 	for scanner.Scan() {
-		name := strings.TrimSpace(scanner.Text())
-		if name != "" {
+		if name := strings.TrimSpace(scanner.Text()); name != "" {
 			names = append(names, strings.ToLower(name))
 		}
-		lineNumber++
 	}
+
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
+		return nil, fmt.Errorf("file read error: %w", err)
 	}
 
 	return names, nil
-}
-
-// AutoSave runs the main auto-save loop
-func (game *Game) AutoSave(ctx context.Context) error {
-	if game == nil {
-		return fmt.Errorf("game instance is nil")
-	}
-
-	// Configure the auto-save interval
-	interval := game.AutoSaveInterval
-	if interval == 0 {
-		Logger.Warn("Auto-save interval not configured")
-		return nil
-	}
-
-	saveInterval := time.Duration(interval) * time.Minute
-	Logger.Info("Starting auto-save routine", "interval", saveInterval)
-
-	// Create ticker for periodic saves
-	ticker := time.NewTicker(saveInterval)
-	defer ticker.Stop()
-
-	// Perform initial save
-	runSaveOperation(ctx, game)
-
-	// Main auto-save loop
-	for {
-		select {
-		case <-ctx.Done():
-			Logger.Info("Auto-save routine stopping due to context cancellation")
-			// Perform final save before shutting down
-			runSaveOperation(context.Background(), game)
-			return ctx.Err()
-
-		case <-ticker.C:
-			runSaveOperation(ctx, game)
-		}
-	}
-}
-
-func (g *Game) performAutoSave(ctx context.Context) error {
-	// Create a context with timeout for the save operation
-	saveCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	// Create error channel to collect errors from goroutines
-	errChan := make(chan error, 3)
-
-	// Launch save operations concurrently
-	go func() {
-		if err := g.SaveActiveCharacters(); err != nil {
-			errChan <- fmt.Errorf("failed to save characters: %w", err)
-			return
-		}
-		errChan <- nil
-	}()
-
-	go func() {
-		if err := SaveActiveItems(g); err != nil {
-			errChan <- fmt.Errorf("failed to save items: %w", err)
-			return
-		}
-		errChan <- nil
-	}()
-
-	go func() {
-		if err := SaveActiveRooms(g); err != nil {
-			errChan <- fmt.Errorf("failed to save rooms: %w", err)
-			return
-		}
-		errChan <- nil
-	}()
-
-	// Wait for all operations to complete or context cancellation
-	for i := 0; i < 3; i++ {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				return fmt.Errorf("auto-save operation failed: %w", err)
-			}
-		case <-saveCtx.Done():
-			return fmt.Errorf("auto-save operation timed out: %w", saveCtx.Err())
-		}
-	}
-
-	return nil
-}
-
-// SaveActiveCharacters saves all active characters to the database if they have been edited since the last save.
-func (g *Game) SaveActiveCharacters() error {
-
-	Logger.Debug("Saving active characters...")
-
-	for _, c := range g.Characters {
-		// Check if the character's LastEdited is before LastSaved
-		if !c.LastEdited.After(c.LastSaved) {
-			Logger.Debug("Character not edited since last save, skipping", "characterName", c.Name)
-			continue // Skip writing this character
-		}
-
-		c.Mutex.Lock()
-		// Attempt to write the character to the database
-		// err := WriteCharacter(c, g.Database)
-		// if err != nil {
-		// 	Logger.Error("Error saving character", "characterName", c.Name, "error", err)
-		// 	continue // Continue saving other characters even if one fails
-		// }
-
-		// Update LastSaved after a successful write
-		c.LastSaved = time.Now()
-		Logger.Debug("Character saved successfully", "characterName", c.Name)
-		c.Mutex.Unlock()
-	}
-
-	Logger.Info("Active characters saved successfully.")
-	return nil
-}
-
-// runSaveOperation executes a single save operation with metrics
-func runSaveOperation(ctx context.Context, g *Game) {
-	start := time.Now()
-
-	err := g.performAutoSave(ctx)
-	duration := time.Since(start)
-
-	if err != nil {
-		Logger.Error("Auto-save failed",
-			"error", err,
-			"duration", duration)
-	} else {
-		Logger.Debug("Auto-save completed successfully",
-			"duration", duration)
-	}
 }

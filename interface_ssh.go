@@ -13,59 +13,86 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func NewSSHInterface(GlobalContext *context.Context, ServerContext *context.Context, config *Configuration) (*Interface_SSH, error) {
-
-	// Create a new SSH Interface
-	ssh_interface := &Interface_SSH{
-		Config:         config,
-		GlobalContext:  *GlobalContext,
-		ServerContext:  *ServerContext,
-		Context:        context.Background(),
-		Cancel:         nil,
-		Mutex:          sync.RWMutex{},
-		StartTime:      time.Now(),
-		Port:           config.SSH.Port,
-		PrivateKeyPath: config.SSH.PrivateKeyPath,
-		Connections:    0,
-	}
-
-	return ssh_interface, nil
-
+type Interface_SSH struct {
+	Config         *Configuration
+	Server         *Server
+	GlobalContext  context.Context
+	ServerContext  context.Context
+	Context        context.Context
+	Cancel         context.CancelFunc
+	Mutex          sync.RWMutex
+	StartTime      time.Time
+	Port           uint16
+	PrivateKeyPath string
+	Listener       net.Listener
+	Connections    uint64
+	Database       *KeyPair
+	SSHConfig      *ssh.ServerConfig
 }
 
-// sshServer starts the SSH server on the configured port and listens for incoming connections.
-func sshServer(ctx context.Context, ssh_interface *Interface_SSH, game *Game) error {
-	if ssh_interface == nil {
-		return fmt.Errorf("server instance is nil")
-	}
-	if game == nil {
-		return fmt.Errorf("game instance is nil")
+func NewSSHInterface(globalCtx context.Context, server *Server) (*Interface_SSH, error) {
+	if !server.Config.SSH.Enabled {
+		return nil, fmt.Errorf("ssh interface is disabled in configuration")
 	}
 
-	if err := initializeServer(ctx, ssh_interface); err != nil {
-		Logger.Error("Server initialization failed", "error", err)
-		return fmt.Errorf("server initialization failed: %w", err)
+	ctx, cancel := context.WithCancel(server.Context)
+
+	sshInterface := &Interface_SSH{
+		Config:         server.Config,
+		Server:         server,
+		GlobalContext:  globalCtx,
+		ServerContext:  server.Context,
+		Context:        ctx,
+		Cancel:         cancel,
+		Port:           server.Config.SSH.Port,
+		PrivateKeyPath: server.Config.SSH.PrivateKeyPath,
+		Mutex:          sync.RWMutex{},
+		StartTime:      time.Now(),
+		Database:       server.Database,
 	}
 
-	// Start accepting connections
-	errChan := make(chan error, 1)
+	if err := configureSSH(ctx, sshInterface); err != nil {
+		cancel()
+		return nil, fmt.Errorf("ssh configuration failed: %w", err)
+	}
+
+	if err := initializeServer(ctx, sshInterface); err != nil {
+		cancel()
+		return nil, fmt.Errorf("server initialization failed: %w", err)
+	}
+
+	// Monitor server context for shutdown
 	go func() {
-		if err := acceptConnections(ctx, ssh_interface); err != nil {
-			Logger.Error("Connection acceptance failed", "error", err)
-			errChan <- err
-		}
+		<-server.Context.Done()
+		sshInterface.Cancel()
 	}()
 
-	// Monitor for context cancellation or connection errors
-	select {
-	case <-ctx.Done():
-		Logger.Info("SSH server stopping due to context cancellation")
-		return fmt.Errorf("ssh server stopped: %w", ctx.Err())
-	case err := <-errChan:
-		if err != nil {
-			return fmt.Errorf("ssh server failed: %w", err)
+	return sshInterface, nil
+}
+
+func (ssh_interface *Interface_SSH) RunServer(game *Game) {
+	for {
+		select {
+		case <-ssh_interface.GlobalContext.Done():
+			Logger.Info("SSH interface stopping - global shutdown")
+			return
+		case <-ssh_interface.ServerContext.Done():
+			Logger.Info("SSH interface stopping - server shutdown")
+			return
+		case <-ssh_interface.Context.Done():
+			Logger.Info("SSH interface stopping - interface shutdown")
+			return
+		default:
+			conn, err := ssh_interface.Listener.Accept()
+			if err != nil {
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
+				Logger.Error("Connection accept failed", "error", err)
+				continue
+			}
+			go handleConnection(ssh_interface.Context, ssh_interface, game, conn)
 		}
-		return nil
 	}
 }
 
@@ -157,15 +184,17 @@ func configureSSH(ctx context.Context, ssh_interface *Interface_SSH) error {
 // Authenticate checks the provided username and password against the authentication system.
 // Returns true if authentication is successful, false otherwise.
 func Authenticate(username, password string, ssh_interface *Interface_SSH) bool {
-	Logger.Info("Authenticating user", "username", username)
+	authOutput, err := ssh_interface.Server.SignInUser(username, password)
+	if err != nil {
+		Logger.Error("Authentication failed", "username", username, "error", err)
+		return false
+	}
 
-	// response, err := SignInUser(username, password, ssh_interface)
-	// if err != nil {
-	// 	Logger.Error("Authentication failed", "username", username, "error", err, "response", response)
-	// 	return false
-	// }
+	if authOutput.AuthenticationResult == nil {
+		Logger.Error("No authentication result", "username", username)
+		return false
+	}
 
-	// Logger.Debug("Authentication successful", "username", username, "response", response)
 	return true
 }
 
@@ -209,49 +238,28 @@ func acceptConnections(ctx context.Context, ssh_interface *Interface_SSH) error 
 func handleConnection(ctx context.Context, ssh_interface *Interface_SSH, game *Game, conn net.Conn) {
 	defer conn.Close()
 
-	// Create connection-specific context that can be cancelled independently
-	connCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	remoteAddr := conn.RemoteAddr().String()
-
-	// Set initial handshake timeout
 	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
-		Logger.Error("Failed to set handshake deadline",
-			"error", err,
-			"remoteAddr", remoteAddr)
+		Logger.Error("Failed to set handshake deadline", "error", err, "remoteAddr", remoteAddr)
 		return
 	}
 
-	// Perform SSH handshake
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, ssh_interface.SSHConfig)
 	if err != nil {
-		Logger.Error("Failed to perform SSH handshake",
-			"error", err,
-			"remoteAddr", remoteAddr)
+		Logger.Error("SSH handshake failed", "error", err, "remoteAddr", remoteAddr)
 		return
 	}
 	defer sshConn.Close()
 
-	// Reset deadline after successful handshake
 	if err := conn.SetDeadline(time.Time{}); err != nil {
-		Logger.Error("Failed to reset connection deadline",
-			"error", err,
-			"remoteAddr", remoteAddr,
-			"user", sshConn.User())
+		Logger.Error("Failed to reset deadline", "error", err, "remoteAddr", remoteAddr)
 		return
 	}
 
-	Logger.Info("New SSH connection established",
-		"user", sshConn.User(),
-		"remoteAddr", remoteAddr,
-		"clientVersion", string(sshConn.ClientVersion()))
+	Logger.Info("SSH connection established", "user", sshConn.User(), "remoteAddr", remoteAddr)
 
-	// Handle global requests in a separate goroutine
 	go discardRequests(reqs)
-
-	// Handle channels with connection-specific context
-	handleChannels(connCtx, ssh_interface, game, sshConn, chans)
+	handleChannels(ctx, ssh_interface, game, sshConn, chans)
 }
 
 func discardRequests(reqs <-chan *ssh.Request) {
@@ -260,5 +268,112 @@ func discardRequests(reqs <-chan *ssh.Request) {
 		if req.WantReply {
 			req.Reply(false, nil)
 		}
+	}
+}
+
+// handleChannels processes SSH channels for a connection
+func handleChannels(ctx context.Context, ssh_interface *Interface_SSH, game *Game, sshConn *ssh.ServerConn, channels <-chan ssh.NewChannel) {
+	playerName := sshConn.User()
+
+	for {
+		select {
+		case <-ctx.Done():
+			Logger.Info("Connection closing", "player", playerName)
+			return
+
+		case newChannel, ok := <-channels:
+			if !ok {
+				Logger.Info("Channel closed", "player", playerName)
+				return
+			}
+
+			channel, requests, err := newChannel.Accept()
+			if err != nil {
+				Logger.Error("Channel accept failed", "error", err)
+				continue
+			}
+
+			playerCtx, playerCancel := context.WithCancel(ctx)
+			player := &Player{
+				Server:        ssh_interface.Server,
+				PlayerID:      playerName,
+				ToPlayer:      make(chan string, 10),
+				FromPlayer:    make(chan string, 10),
+				Echo:          true,
+				Connection:    channel,
+				ConsoleWidth:  80,
+				ConsoleHeight: 24,
+				LoginTime:     time.Now(),
+				Mutex:         sync.RWMutex{},
+				Context:       playerCtx,
+				Cancel:        playerCancel,
+			}
+
+			go handleSSHRequests(playerCtx, player, requests)
+			if err := ssh_interface.Server.AddPlayer(player); err != nil {
+				Logger.Error("Failed to add player", "error", err)
+				playerCancel()
+				continue
+			}
+		}
+	}
+}
+
+// handleSSHRequests handles SSH requests from the client.
+func handleSSHRequests(ctx context.Context, player *Player, requests <-chan *ssh.Request) {
+	for {
+		select {
+		case <-ctx.Done():
+			Logger.Info("Context cancelled, exiting handleSSHRequests loop",
+				"player", player.PlayerID)
+			return
+
+		case req, ok := <-requests:
+			if !ok {
+				Logger.Info("Request channel closed, exiting handleSSHRequests loop",
+					"player", player.PlayerID)
+				return
+			}
+
+			player.Mutex.Lock()
+			handleRequest(req, player)
+			player.Mutex.Unlock()
+		}
+	}
+}
+
+// handleRequest processes individual SSH requests
+func handleRequest(req *ssh.Request, player *Player) {
+	switch req.Type {
+	case "shell":
+		Logger.Debug("Accepting shell request",
+			"player", player.PlayerID)
+		req.Reply(true, nil)
+
+	case "pty-req":
+		termLen := req.Payload[3]
+		w, h := ParseDims(req.Payload[termLen+4:])
+		player.ConsoleWidth = w
+		player.ConsoleHeight = h
+		Logger.Debug("Terminal size set",
+			"player", player.PlayerID,
+			"width", w,
+			"height", h)
+		req.Reply(true, nil)
+
+	case "window-change":
+		w, h := ParseDims(req.Payload)
+		player.ConsoleWidth = w
+		player.ConsoleHeight = h
+		Logger.Debug("Window size changed",
+			"player", player.PlayerID,
+			"width", w,
+			"height", h)
+
+	default:
+		Logger.Warn("Unsupported request",
+			"type", req.Type,
+			"player", player.PlayerID)
+		req.Reply(false, nil)
 	}
 }

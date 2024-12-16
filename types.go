@@ -2,31 +2,14 @@ package main
 
 import (
 	"context"
-	"net"
 	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-
 	"github.com/google/uuid"
+
 	"golang.org/x/crypto/ssh"
 )
-
-type Interface_SSH struct {
-	Config         *Configuration
-	GlobalContext  context.Context
-	ServerContext  context.Context
-	Context        context.Context
-	Cancel         context.CancelFunc
-	Mutex          sync.RWMutex
-	StartTime      time.Time
-	Port           uint16
-	PrivateKeyPath string
-	Listener       net.Listener
-	Connections    uint64
-	Database       *KeyPair
-	SSHConfig      *ssh.ServerConfig
-}
 
 // The Index struct is to be depricated in favor of UUIDs
 
@@ -49,6 +32,7 @@ type Player struct {
 	CharacterList map[string]uuid.UUID
 	Character     *Character
 	LoginTime     time.Time
+	Server        *Server
 	Mutex         sync.RWMutex
 	Context       context.Context
 	Cancel        context.CancelFunc
@@ -74,7 +58,7 @@ type Character struct {
 	Mutex       sync.RWMutex
 	Facing      *Character
 	Advancing   bool // true when character is advancing towards their facing target
-	CombatRange map[uuid.UUID]float64
+	CombatRange map[*uuid.UUID]float64
 	LastEdited  time.Time
 	LastSaved   time.Time
 	End         chan bool
@@ -117,7 +101,7 @@ type Item struct {
 	Overrides   map[string]string
 	TraitMods   map[string]int8
 	Container   bool
-	Contents    []*Item
+	Contents    []*uuid.UUID
 	IsWorn      bool
 	CanPickUp   bool
 	Metadata    map[string]string
