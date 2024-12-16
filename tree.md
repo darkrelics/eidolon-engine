@@ -1,15 +1,7 @@
 .
 │   .gitignore
-│   config.template.yml
-│   config.yml
-│   go.mod
-│   go.sum
-│   go.work
-│   go.work.sum
 │   LICENSE
 │   README.md
-│   Schema.md
-│   start.go
 │   tree.md
 │
 ├───.github
@@ -24,35 +16,14 @@
 │           pip-conflicts.yml
 │           python-auto-format.yml
 │
-│
 ├───buildspec
 │       registration.yml
-│
-├───character
-│       archtype.go
-│       character.go
-│       combat.go
-│       commands-combat.go
-│       commands.go
-│       go.mod
-│       go.sum
 │
 ├───cloudformation
 │       cloudwatch.yml
 │       codebuild.yml
 │       cognito.yml
 │       dynamo.yml
-│
-├───core
-│       colors.go
-│       configuration.go
-│       database.go
-│       go.mod
-│       go.sum
-│       logging.go
-│       motd.go
-│       types.go
-│       utils.go
 │
 ├───data
 │       names.txt
@@ -68,36 +39,11 @@
 │       create_item.py
 │       data_loader.py
 │       motd.py
+│       Schema.md
 │       viewer.py
 │
 ├───editor
 │       RoomEditor.ipynb
-│
-├───game
-│       game.go
-│       go.mod
-│       go.sum
-│       item.go
-│       room.go
-│       utils.go
-│
-├───interface_ssh
-│       channels.go
-│       go.mod
-│       go.sum
-│       go.work
-│       go.work.sum
-│       server.key
-│       ssh_server.go
-│
-├───player
-│       character-select.go
-│       cognito.go
-│       go.mod
-│       go.sum
-│       go.work
-│       player.go
-│       sessions.go
 │
 ├───registration
 │   │   .gitignore
@@ -115,7 +61,7 @@
 │       │   favicon.png
 │       │   index.html
 │       │   manifest.json
-│       │
+│       │   
 │       └───icons
 │               Icon-192.png
 │               Icon-512.png
@@ -131,9 +77,32 @@
 │       list_processor.py
 │
 └───server
+        archtype.go
+        character-select.go
+        character.go
+        cognito.go
+        colors.go
+        combat.go
+        commands-combat.go
+        commands.go
+        config.template.yml
+        config.yml
+        configuration.go
+        database.go
+        DESIGN.md
+        game.go
         go.mod
         go.sum
         go.work
         go.work.sum
+        interface_ssh.go
+        item.go
+        logging.go
         motd.go
+        player.go
+        room.go
         server.go
+        server.key
+        start.go
+        types.go
+        utils.go
