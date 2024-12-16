@@ -1,4 +1,4 @@
-package character
+package main
 
 import (
 	"errors"
@@ -86,13 +86,13 @@ func NewCharacter(name string, player *Player, room *Room, archetypeName string,
 	g.Characters[character.ID] = character
 	g.Mutex.Unlock()
 
-	game.SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
+	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
 
 	return character, nil
 }
 
 // ToData converts a Character object into a CharacterData struct for database storage.
-func ToData(c *Character) *CharacterData {
+func (c *Character) ToData() *CharacterData {
 	inventoryIDs := make(map[string]string)
 	for name, item := range c.Inventory {
 		inventoryIDs[name] = item.ID.String()
@@ -112,7 +112,7 @@ func ToData(c *Character) *CharacterData {
 }
 
 // FromData populates a Character object from a CharacterData struct retrieved from the database.
-func FromData(cd *CharacterData, Game *Game, c *Character) error {
+func (c *Character) FromData(cd *CharacterData, Game *Game) error {
 	var err error
 	c.ID, err = uuid.Parse(cd.CharacterID)
 	if err != nil {
@@ -143,7 +143,7 @@ func FromData(cd *CharacterData, Game *Game, c *Character) error {
 			Logger.Error("Error parsing item UUID", "itemID", itemIDStr, "error", err)
 			continue
 		}
-		item, err := game.LoadItem(itemID.String(), Game.Database)
+		item, err := LoadItem(itemID.String(), Game.Database)
 		if err != nil {
 			Logger.Error("Error loading item for character", "itemID", itemID, "characterName", c.Name, "error", err)
 			continue
@@ -157,7 +157,7 @@ func FromData(cd *CharacterData, Game *Game, c *Character) error {
 // WriteCharacter saves the character to the DynamoDB database.
 func WriteCharacter(character *Character, kp *KeyPair) error {
 
-	characterData := ToData(character)
+	characterData := character.ToData()
 
 	err := kp.Put("characters", characterData)
 	if err != nil {
@@ -173,7 +173,7 @@ func WriteCharacter(character *Character, kp *KeyPair) error {
 }
 
 // LoadCharacter retrieves a character from the DynamoDB database and reconstructs the Character object.
-func LoadCharacter(characterID uuid.UUID, player *Player, Game *Game, kp *KeyPair) (*Character, error) {
+func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, Game *Game) (*Character, error) {
 
 	key := map[string]*dynamodb.AttributeValue{
 		"CharacterID": {S: aws.String(characterID.String())},
@@ -197,7 +197,7 @@ func LoadCharacter(characterID uuid.UUID, player *Player, Game *Game, kp *KeyPai
 		LastSaved:   time.Now(),
 	}
 
-	if err := FromData(&cd, Game, character); err != nil {
+	if err := character.FromData(&cd, Game); err != nil {
 		Logger.Error("Error reconstructing character from data", "characterID", characterID, "error", err)
 		return nil, fmt.Errorf("error loading character from data: %w", err)
 	}
@@ -205,7 +205,7 @@ func LoadCharacter(characterID uuid.UUID, player *Player, Game *Game, kp *KeyPai
 	// Ensure the character is added to the room's character list
 	if character.Room != nil {
 
-		game.SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
+		SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
 
 		character.Room.Mutex.Lock()
 		if character.Room.Characters == nil {
@@ -226,7 +226,7 @@ func LoadCharacter(characterID uuid.UUID, player *Player, Game *Game, kp *KeyPai
 }
 
 // DeleteCharacter removes a character from the player's character list and the database.
-func DeleteCharacter(Player *Player, characterName string, kp *KeyPair) error {
+func (kp *KeyPair) DeleteCharacter(Player *Player, characterName string) error {
 	Logger.Debug("Attempting to delete character", "playerName", Player.PlayerID, "characterName", characterName)
 
 	// Check if the character exists in the player's character list
@@ -239,7 +239,7 @@ func DeleteCharacter(Player *Player, characterName string, kp *KeyPair) error {
 	delete(Player.CharacterList, characterName)
 
 	// Update the player data in the database
-	err := player.WritePlayer(Player, kp)
+	err := kp.WritePlayer(Player)
 	if err != nil {
 		Logger.Error("Failed to update player data after character deletion", "playerName", Player.PlayerID, "error", err)
 		return fmt.Errorf("failed to update player data: %w", err)
@@ -567,7 +567,7 @@ func moveCharacter(character *Character, direction string) error {
 	newRoomMsg := fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name)
 
 	// Send message to old room while locked
-	game.SendRoomMessageExcept(oldRoom, oldRoomMsg, character)
+	SendRoomMessageExcept(oldRoom, oldRoomMsg, character)
 
 	// Update character's room
 	character.Room = targetRoom
@@ -581,7 +581,7 @@ func moveCharacter(character *Character, direction string) error {
 	targetRoom.Characters[character.ID] = character
 
 	// Send message to new room while locked
-	game.SendRoomMessageExcept(targetRoom, newRoomMsg, character)
+	SendRoomMessageExcept(targetRoom, newRoomMsg, character)
 
 	// Update timestamps
 	character.LastEdited = time.Now()
@@ -638,7 +638,7 @@ func Cleanup(c *Character) {
 
 	if c.Room != nil {
 		// Notify the room of character departure
-		game.SendRoomMessageExcept(c.Room, fmt.Sprintf("\n\r%s has left the room.\n\r", c.Name), c)
+		SendRoomMessageExcept(c.Room, fmt.Sprintf("\n\r%s has left the room.\n\r", c.Name), c)
 
 		// Remove character from the room's character list
 		c.Room.Mutex.Lock()

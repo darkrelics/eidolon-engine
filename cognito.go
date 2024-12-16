@@ -37,11 +37,12 @@ func (s *Server) SignInUser(email, password string) (*cognitoidentityprovider.In
 		return nil, handleCognitoError(err, email)
 	}
 
-	if authOutput.ChallengeName != nil && *authOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
-		return authOutput, nil
-	}
-
 	if authOutput.AuthenticationResult == nil {
+		// Check for challenges only if no auth result
+		if authOutput.ChallengeName != nil &&
+			*authOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
+			return authOutput, nil
+		}
 		return nil, fmt.Errorf("unexpected authentication result for user %s", email)
 	}
 
@@ -129,17 +130,25 @@ func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string)
 func handleCognitoError(err error, email string) error {
 	if awsErr, ok := err.(awserr.Error); ok {
 		switch awsErr.Code() {
+		case cognitoidentityprovider.ErrCodeUserNotFoundException:
+			Logger.Error("User not found", "email", email)
+			return fmt.Errorf("incorrect username or password")
+
 		case cognitoidentityprovider.ErrCodeNotAuthorizedException:
-			Logger.Error("Unauthorized access", "email", email, "error", awsErr)
+			Logger.Error("Unauthorized access", "email", email)
 			return fmt.Errorf("incorrect username or password")
 
 		case cognitoidentityprovider.ErrCodeUserNotConfirmedException:
-			Logger.Error("Unconfirmed user", "email", email, "error", awsErr)
+			Logger.Error("Unconfirmed user", "email", email)
 			return fmt.Errorf("user is not confirmed")
 
 		case cognitoidentityprovider.ErrCodePasswordResetRequiredException:
-			Logger.Error("Password reset required", "email", email, "error", awsErr)
+			Logger.Error("Password reset required", "email", email)
 			return fmt.Errorf("password reset required")
+
+		case cognitoidentityprovider.ErrCodeInvalidParameterException:
+			Logger.Error("Invalid parameters", "email", email)
+			return fmt.Errorf("invalid authentication parameters")
 
 		default:
 			Logger.Error("Authentication failed", "email", email, "error", awsErr)

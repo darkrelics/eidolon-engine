@@ -1,4 +1,4 @@
-package player
+package main
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/robinje/multi-user-dungeon/character"
 )
 
 // SelectCharacter handles the character selection process for a player.
@@ -69,7 +68,7 @@ func SelectCharacter(ctx context.Context, game *Game, player *Player) (*Characte
 			}
 
 			characterToDelete := options[deleteIndex-1]
-			err = character.DeleteCharacter(player, characterToDelete, game.Database)
+			err = game.Database.DeleteCharacter(player, characterToDelete)
 			if err != nil {
 				Logger.Error("Failed to delete character", "characterName", characterToDelete, "error", err)
 				player.ToPlayer <- fmt.Sprintf("Failed to delete character: %v\n\r", err)
@@ -95,7 +94,7 @@ func SelectCharacter(ctx context.Context, game *Game, player *Player) (*Characte
 		} else if choice <= len(options) {
 			characterName := options[choice-1]
 			characterID := player.CharacterList[characterName]
-			character, err = character.LoadCharacter(characterID, player, game, game.Database)
+			character, err = game.Database.LoadCharacter(characterID, player, game)
 			if err != nil {
 				Logger.Error("Error loading character for player", "characterName", characterName, "playerName", player.PlayerID, "error", err)
 				player.ToPlayer <- fmt.Sprintf("Error loading character: %v\n\r", err)
@@ -238,7 +237,7 @@ func CreateCharacter(player *Player, g *Game) (*Character, error) {
 	}
 
 	// Save updated player data
-	if err := WritePlayer(player, g.Database); err != nil {
+	if err := g.Database.WritePlayer(player); err != nil {
 		Logger.Error("Error saving player data", "playerName", player.PlayerID, "error", err)
 		player.ToPlayer <- "Error saving player data. Please try again later.\n\r"
 		return nil, fmt.Errorf("failed to save player data: %w", err)

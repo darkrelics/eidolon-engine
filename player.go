@@ -1,4 +1,4 @@
-package player
+package main
 
 import (
 	"bufio"
@@ -117,7 +117,7 @@ func PlayerInput(ctx context.Context, p *Player) {
 			if err == io.EOF {
 				Logger.Info("Player disconnected", "playerName", p.PlayerID)
 				p.PlayerError <- err
-				p.Character.Cleanup()
+				// p.Character.Cleanup()
 				p.Cleanup()
 				return
 			} else {
@@ -149,7 +149,7 @@ func PlayerInput(ctx context.Context, p *Player) {
 		case '\x03': // Ctrl+C
 			Logger.Info("Player sent interrupt signal", "playerName", p.PlayerID)
 			p.PlayerError <- errors.New("player interrupt")
-			p.Character.Cleanup()
+			// p.Character.Cleanup()
 			p.Cleanup()
 			return
 		default:
@@ -201,7 +201,7 @@ func InputLoop(ctx context.Context, c *Character) {
 
 	// Cleanup handling with defer
 	defer func() {
-		c.Cleanup()
+		// c.Cleanup()
 		c.Player.Cleanup()
 		Logger.Debug("Input loop ended for character", "characterName", c.Name)
 	}()
@@ -254,7 +254,7 @@ func InputLoop(ctx context.Context, c *Character) {
 				lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
 			}
 
-		case <-c.Game.Ticker.C:
+		case <-c.Game.ticker.C:
 			if lastCommand != "" {
 				// Create timeout context for command processing
 				cmdCtx, cancel := context.WithTimeout(c.Player.Context, commandTimeout)
