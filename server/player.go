@@ -527,9 +527,6 @@ func handlePlayerSession(ctx context.Context, server *Server, game *Game, player
 			"error", err)
 	}
 
-	if character != nil {
-		character.Cleanup()
-	}
 	player.Cleanup()
 
 	Logger.Info("Player session ended", "playerName", player.PlayerID)
