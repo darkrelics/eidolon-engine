@@ -438,7 +438,7 @@ func handlePlayerSession(ctx context.Context, server *Server, game *Game, player
 		}
 		if player != nil && player.Connection != nil {
 			if player.Character != nil {
-				player.Character.Cleanup()
+				//player.Character.Cleanup()
 			}
 			player.Cleanup()
 		}
