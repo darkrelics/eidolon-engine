@@ -36,6 +36,7 @@ jobs:
       - name: Format and check code
         run: |
           echo "Processing directory"
+          cd server
           go fmt ./...
           go mod tidy
           go mod verify

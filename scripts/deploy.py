@@ -21,7 +21,7 @@ CODEBUILD_TEMPLATE_PATH = "../cloudformation/codebuild.yml"
 CLOUDWATCH_TEMPLATE_PATH = "../cloudformation/cloudwatch.yml"
 
 # Configuration file path
-CONFIG_PATH = "../config.yml"
+CONFIG_PATH = "../server/config.yml"
 
 
 def validate_s3_bucket(bucket_name, region="us-east-1") -> bool:
