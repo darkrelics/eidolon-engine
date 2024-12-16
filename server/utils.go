@@ -9,6 +9,8 @@ import (
 	"unicode"
 )
 
+// The Index struct is to be depricated in favor of UUIDs
+
 type Index struct {
 	IndexID uint64
 	mu      sync.RWMutex

@@ -1,80 +1,15 @@
 package main
 
 import (
-	"context"
 	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/google/uuid"
-
-	"golang.org/x/crypto/ssh"
 )
-
-// The Index struct is to be depricated in favor of UUIDs
 
 type KeyPair struct {
 	db *dynamodb.DynamoDB
-}
-
-type Player struct {
-	Index         uint64
-	PlayerID      string
-	ToPlayer      chan string
-	FromPlayer    chan string
-	PlayerError   chan error
-	Echo          bool
-	Prompt        string
-	Connection    ssh.Channel
-	ConsoleWidth  int
-	ConsoleHeight int
-	SeenMotD      []uuid.UUID
-	CharacterList map[string]uuid.UUID
-	Character     *Character
-	LoginTime     time.Time
-	Server        *Server
-	Mutex         sync.RWMutex
-	Context       context.Context
-	Cancel        context.CancelFunc
-}
-
-type PlayerData struct {
-	PlayerID      string            `json:"PlayerID" dynamodbav:"PlayerID"`
-	CharacterList map[string]string `json:"characterList" dynamodbav:"CharacterList"`
-	SeenMotDs     []string          `json:"seenMotD" dynamodbav:"SeenMotD"`
-}
-
-type Character struct {
-	Game        *Game
-	ID          uuid.UUID
-	Player      *Player
-	Name        string
-	Attributes  map[string]float64
-	Abilities   map[string]float64
-	Essence     float64
-	Health      float64
-	Room        *Room
-	Inventory   map[string]*Item
-	Mutex       sync.RWMutex
-	Facing      *Character
-	Advancing   bool // true when character is advancing towards their facing target
-	CombatRange map[*uuid.UUID]float64
-	LastEdited  time.Time
-	LastSaved   time.Time
-	End         chan bool
-}
-
-// CharacterData for unmarshalling character.
-type CharacterData struct {
-	CharacterID   string             `json:"CharacterID" dynamodbav:"CharacterID"`
-	PlayerID      string             `json:"PlayerID" dynamodbav:"PlayerID"`
-	CharacterName string             `json:"Name" dynamodbav:"Name"`
-	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
-	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"Abilities"`
-	Essence       float64            `json:"Essence" dynamodbav:"Essence"`
-	Health        float64            `json:"Health" dynamodbav:"Health"`
-	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
-	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
 }
 
 type Archetype struct {

@@ -1,4 +1,4 @@
-module github.com/robinje/multi-user-dungeon
+module github.com/robinje/multi-user-dungeon/server
 
 go 1.23
 
