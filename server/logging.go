@@ -8,7 +8,6 @@ import (
 	"os"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -23,8 +22,9 @@ import (
 var Logger *slog.Logger
 
 type logState struct {
-	sequenceToken atomic.Pointer[string]
-	initialized   atomic.Bool
+	sequenceToken *string
+	initialized   bool
+	mutex         sync.Mutex
 }
 
 type CloudWatchHandler struct {
@@ -151,15 +151,19 @@ func (h *CloudWatchHandler) putLogsWithRetry(ctx context.Context, input *cloudwa
 	var backoff = time.Second
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		if token := h.state.sequenceToken.Load(); token != nil {
-			input.SequenceToken = token
+		h.state.mutex.Lock()
+		if h.state.sequenceToken != nil {
+			input.SequenceToken = aws.String(*h.state.sequenceToken)
 		}
+		h.state.mutex.Unlock()
 
 		output, err := h.logsClient.PutLogEvents(ctx, input)
 		if err == nil {
+			h.state.mutex.Lock()
 			if output.NextSequenceToken != nil {
-				h.state.sequenceToken.Store(output.NextSequenceToken)
+				h.state.sequenceToken = output.NextSequenceToken
 			}
+			h.state.mutex.Unlock()
 			return nil
 		}
 
@@ -187,22 +191,25 @@ func (h *CloudWatchHandler) putLogsWithRetry(ctx context.Context, input *cloudwa
 }
 
 func (h *CloudWatchHandler) ensureInitialized(ctx context.Context) error {
-	if h.state.initialized.Load() {
+	// Check if initialization has already occurred without locking
+	if h.state.initialized {
 		return nil
 	}
 
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	if h.state.initialized.Load() {
+	// Recheck the initialized flag after acquiring the lock to
+	// handle the case of multiple goroutines attempting initialization concurrently
+	if h.state.initialized {
 		return nil
 	}
 
 	if err := h.createLogStreamIfNotExists(ctx); err != nil {
 		return err
 	}
+	h.state.initialized = true
 
-	h.state.initialized.Store(true)
 	return nil
 }
 
