@@ -77,7 +77,7 @@ func (s *Server) Run() error {
 	}
 }
 
-func (s *Server) Stop(ctx context.Context) error {
+func (s *Server) Stop() error {
 
 	var stopErr error
 
