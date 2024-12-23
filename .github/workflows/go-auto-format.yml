@@ -37,6 +37,7 @@ jobs:
         run: |
           echo "Processing directory"
           cd server
+          go mod download
           go fmt ./...
           go mod tidy
           go mod verify
