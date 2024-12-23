@@ -122,7 +122,7 @@ func ExecuteCommand(character *Character, verb string, tokens []string) {
 	if !ok {
 		// This should never happen due to ValidateCommand, but we'll handle it gracefully
 		Logger.Error("Command handler missing for validated command", "verb", verb)
-		character.Player.ToPlayer <- "\n\rInternal error processing command.\n\r"
+		character.Player.toPlayer <- "\n\rInternal error processing command.\n\r"
 		return
 	}
 
@@ -160,13 +160,13 @@ func ExecuteQuitCommand(character *Character, tokens []string) {
 		return
 	}
 
-	Logger.Info("Player initiating quit", "playerName", character.Player.PlayerID)
+	Logger.Info("Player initiating quit", "playerName", character.Player.playerID)
 
 	// Notify the player
 	select {
-	case character.Player.ToPlayer <- "\n\rSaving character state...\n\r":
+	case character.Player.toPlayer <- "\n\rSaving character state...\n\r":
 	default:
-		Logger.Warn("Failed to notify player: ToPlayer channel is full or closed", "playerName", character.Player.PlayerID)
+		Logger.Warn("Failed to notify player: ToPlayer channel is full or closed", "playerName", character.Player.playerID)
 	}
 
 	// Signal the end of character's lifecycle
@@ -182,7 +182,7 @@ func ExecuteQuitCommand(character *Character, tokens []string) {
 
 func ExecuteHelpCommand(character *Character, tokens []string) {
 
-	Logger.Debug("Player is requesting help", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is requesting help", "playerName", character.Player.playerID)
 
 	helpMessage := "\n\rAvailable Commands:" +
 		"\n\rhelp - Display available commands" +
@@ -204,7 +204,7 @@ func ExecuteHelpCommand(character *Character, tokens []string) {
 		"\n\rpassword - Change your password" +
 		"\n\rquit - Quit the game\n\r"
 
-	character.Player.ToPlayer <- helpMessage
+	character.Player.toPlayer <- helpMessage
 }
 
 func ExecuteSayCommand(character *Character, tokens []string) {
@@ -213,10 +213,10 @@ func ExecuteSayCommand(character *Character, tokens []string) {
 		return
 	}
 
-	Logger.Debug("Player is saying something", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is saying something", "playerName", character.Player.playerID)
 
 	if len(tokens) < 2 {
-		character.Player.ToPlayer <- "\n\rWhat do you want to say?\n\r"
+		character.Player.toPlayer <- "\n\rWhat do you want to say?\n\r"
 		return
 	}
 
@@ -238,12 +238,12 @@ func ExecuteSayCommand(character *Character, tokens []string) {
 
 	// Send to other characters without holding the lock
 	for _, c := range roomChars {
-		c.Player.ToPlayer <- broadcastMessage
-		c.Player.ToPlayer <- c.Player.Prompt
+		c.Player.toPlayer <- broadcastMessage
+		c.Player.toPlayer <- c.Player.prompt
 	}
 
 	// Send to speaker
-	character.Player.ToPlayer <- speakerMessage
+	character.Player.toPlayer <- speakerMessage
 
 }
 
@@ -253,20 +253,20 @@ func ExecuteLookCommand(character *Character, tokens []string) {
 		return
 	}
 
-	Logger.Debug("Player is looking", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is looking", "playerName", character.Player.playerID)
 
 	// Handle looking at specific targets if provided
 	if len(tokens) > 1 {
 		target := strings.ToLower(strings.Join(tokens[1:], " "))
 		desc := getLookTarget(character, target)
-		character.Player.ToPlayer <- desc
+		character.Player.toPlayer <- desc
 		return
 	}
 
 	// Look at room
 	room := character.Room
 	if room == nil {
-		character.Player.ToPlayer <- "\n\rYou are floating in the void.\n\r"
+		character.Player.toPlayer <- "\n\rYou are floating in the void.\n\r"
 		return
 	}
 
@@ -333,7 +333,7 @@ func ExecuteLookCommand(character *Character, tokens []string) {
 		}
 	}
 
-	character.Player.ToPlayer <- roomInfo.String()
+	character.Player.toPlayer <- roomInfo.String()
 }
 
 func ExecuteGoCommand(character *Character, tokens []string) {
@@ -344,7 +344,7 @@ func ExecuteGoCommand(character *Character, tokens []string) {
 
 	// Check arguments
 	if len(tokens) < 2 {
-		character.Player.ToPlayer <- msgNoDirection
+		character.Player.toPlayer <- msgNoDirection
 		return
 	}
 
@@ -353,12 +353,12 @@ func ExecuteGoCommand(character *Character, tokens []string) {
 
 	// Check if character can move
 	if !character.CanEscape() {
-		character.Player.ToPlayer <- msgCantEscape
+		character.Player.toPlayer <- msgCantEscape
 		return
 	}
 
 	if err := moveCharacter(character, direction); err != nil {
-		character.Player.ToPlayer <- err.Error()
+		character.Player.toPlayer <- err.Error()
 		return
 	}
 
@@ -369,24 +369,24 @@ func ExecuteGoCommand(character *Character, tokens []string) {
 
 func ExecuteChallengeCommand(character *Character, tokens []string) {
 
-	Logger.Debug("Player is attempting a challenge", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is attempting a challenge", "playerName", character.Player.playerID)
 
 	// Ensure the correct number of arguments are provided
 	if len(tokens) < 3 {
-		character.Player.ToPlayer <- "\n\rUsage: challenge <attackerScore> <defenderScore>\n\r"
+		character.Player.toPlayer <- "\n\rUsage: challenge <attackerScore> <defenderScore>\n\r"
 		return
 	}
 
 	// Parse attacker and defender scores from the command arguments
 	attackerScore, err := strconv.ParseFloat(tokens[1], 64)
 	if err != nil {
-		character.Player.ToPlayer <- "\n\rInvalid attacker score format. Please enter a valid number.\n\r"
+		character.Player.toPlayer <- "\n\rInvalid attacker score format. Please enter a valid number.\n\r"
 		return
 	}
 
 	defenderScore, err := strconv.ParseFloat(tokens[2], 64)
 	if err != nil {
-		character.Player.ToPlayer <- "\n\rInvalid defender score format. Please enter a valid number.\n\r"
+		character.Player.toPlayer <- "\n\rInvalid defender score format. Please enter a valid number.\n\r"
 		return
 	}
 
@@ -395,7 +395,7 @@ func ExecuteChallengeCommand(character *Character, tokens []string) {
 
 	// Provide feedback to the player based on the challenge outcome
 	feedbackMessage := fmt.Sprintf("\n\rChallenge outcome: %f\n\r", outcome)
-	character.Player.ToPlayer <- feedbackMessage
+	character.Player.toPlayer <- feedbackMessage
 
 }
 
@@ -409,7 +409,7 @@ func ExecuteWhoCommand(character *Character, tokens []string) {
 
 	// Early return if no one is online
 	if len(server.Characters) == 0 {
-		character.Player.ToPlayer <- whoEmpty
+		character.Player.toPlayer <- whoEmpty
 		return
 	}
 
@@ -426,7 +426,7 @@ func ExecuteWhoCommand(character *Character, tokens []string) {
 
 	// Calculate column layout
 	columnWidth := maxNameWidth + nameSpacing
-	columns := character.Player.ConsoleWidth / columnWidth
+	columns := character.Player.consoleWidth / columnWidth
 	if columns < 1 {
 		columns = 1
 	}
@@ -454,7 +454,7 @@ func ExecuteWhoCommand(character *Character, tokens []string) {
 
 	sb.WriteString(fmt.Sprintf("Total Players Online: %d\n\r", len(names)))
 
-	character.Player.ToPlayer <- sb.String()
+	character.Player.toPlayer <- sb.String()
 
 	Logger.Debug("Who list displayed", "player", character.Name, "online_count", len(names))
 
@@ -464,9 +464,9 @@ func ExecutePasswordCommand(character *Character, tokens []string) {
 	player := character.Player
 
 	// Disable echo to prevent password display
-	player.Echo = false
+	player.echo = false
 	defer func() {
-		player.Echo = true
+		player.echo = true
 	}()
 
 	// Password policy message
@@ -477,67 +477,67 @@ func ExecutePasswordCommand(character *Character, tokens []string) {
 		"- At least one number\n\r" +
 		"- At least one special character\n\r"
 
-	player.ToPlayer <- "\n\rChanging password. " + policy
+	player.toPlayer <- "\n\rChanging password. " + policy
 
 	// Get current password
-	player.ToPlayer <- "\n\rEnter current password: "
-	currentPass, ok := <-player.FromPlayer
+	player.toPlayer <- "\n\rEnter current password: "
+	currentPass, ok := <-player.fromPlayer
 	if !ok {
 		return
 	}
 
 	// Get new password
-	player.ToPlayer <- "\n\rEnter new password: "
-	newPass, ok := <-player.FromPlayer
+	player.toPlayer <- "\n\rEnter new password: "
+	newPass, ok := <-player.fromPlayer
 	if !ok {
 		return
 	}
 
 	// Validate password complexity
 	if !isValidPassword(newPass) {
-		player.ToPlayer <- "\n\rPassword does not meet requirements.\n\r"
+		player.toPlayer <- "\n\rPassword does not meet requirements.\n\r"
 		return
 	}
 
 	// Confirm new password
-	player.ToPlayer <- "\n\rConfirm new password: "
-	confirmPass, ok := <-player.FromPlayer
+	player.toPlayer <- "\n\rConfirm new password: "
+	confirmPass, ok := <-player.fromPlayer
 	if !ok {
 		return
 	}
 
 	// Check if passwords match
 	if newPass != confirmPass {
-		player.ToPlayer <- "\n\rPasswords do not match.\n\r"
+		player.toPlayer <- "\n\rPasswords do not match.\n\r"
 		return
 	}
 
 	// Attempt to change password
-	err := ChangePassword(player, currentPass, newPass)
+	err := player.server.ChangePassword(player, currentPass, newPass)
 	if err != nil {
 		Logger.Error("Password change failed",
-			"playerName", player.PlayerID,
+			"playerName", player.playerID,
 			"errorType", err.Error())
 
 		switch {
 		case strings.Contains(err.Error(), "incorrect username or password"):
-			player.ToPlayer <- "\n\rCurrent password is incorrect.\n\r"
+			player.toPlayer <- "\n\rCurrent password is incorrect.\n\r"
 		case strings.Contains(err.Error(), "password reset required"):
-			player.ToPlayer <- "\n\rPassword reset required. Please contact an administrator.\n\r"
+			player.toPlayer <- "\n\rPassword reset required. Please contact an administrator.\n\r"
 		case strings.Contains(err.Error(), "authentication failed"):
-			player.ToPlayer <- "\n\rAuthentication failed. Please try again later.\n\r"
+			player.toPlayer <- "\n\rAuthentication failed. Please try again later.\n\r"
 		default:
-			player.ToPlayer <- "\n\rFailed to change password. Please try again later.\n\r"
+			player.toPlayer <- "\n\rFailed to change password. Please try again later.\n\r"
 		}
 		return
 	}
 
-	player.ToPlayer <- "\n\rPassword changed successfully.\n\r"
+	player.toPlayer <- "\n\rPassword changed successfully.\n\r"
 }
 
 func ExecuteShowCommand(character *Character, tokens []string) {
 
-	Logger.Debug("Player is displaying character information", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is displaying character information", "playerName", character.Player.playerID)
 
 	player := character.Player
 	var output strings.Builder
@@ -563,13 +563,13 @@ func ExecuteShowCommand(character *Character, tokens []string) {
 	}
 
 	// Send the composed information to the player
-	player.ToPlayer <- output.String()
+	player.toPlayer <- output.String()
 
 }
 
 func ExecuteTakeCommand(character *Character, tokens []string) {
 	if len(tokens) < 2 {
-		character.Player.ToPlayer <- "\n\rUsage: take <item name>\n\r"
+		character.Player.toPlayer <- "\n\rUsage: take <item name>\n\r"
 		return
 	}
 
@@ -591,7 +591,7 @@ func ExecuteTakeCommand(character *Character, tokens []string) {
 	// Early unlock if item not found
 	if itemToTake == nil {
 		character.Room.Mutex.RUnlock()
-		character.Player.ToPlayer <- "\n\rYou can't find that item or it can't be picked up.\n\r"
+		character.Player.toPlayer <- "\n\rYou can't find that item or it can't be picked up.\n\r"
 		return
 	}
 
@@ -602,7 +602,7 @@ func ExecuteTakeCommand(character *Character, tokens []string) {
 	if !character.CanCarryItem(itemToTake) {
 		character.Room.Mutex.RUnlock()
 		character.Mutex.RUnlock()
-		character.Player.ToPlayer <- "\n\rYou can't carry any more items.\n\r"
+		character.Player.toPlayer <- "\n\rYou can't carry any more items.\n\r"
 		return
 	}
 
@@ -617,7 +617,7 @@ func ExecuteTakeCommand(character *Character, tokens []string) {
 	if handSlot == "" {
 		character.Room.Mutex.RUnlock()
 		character.Mutex.RUnlock()
-		character.Player.ToPlayer <- "\n\rYour hands are full. You need a free hand to pick up an item.\n\r"
+		character.Player.toPlayer <- "\n\rYour hands are full. You need a free hand to pick up an item.\n\r"
 		return
 	}
 
@@ -641,7 +641,7 @@ func ExecuteTakeCommand(character *Character, tokens []string) {
 
 	// Send messages after releasing locks
 	SendRoomMessageExcept(character.Room, roomMessage, character)
-	character.Player.ToPlayer <- playerMessage
+	character.Player.toPlayer <- playerMessage
 
 	Logger.Debug("Item taken", "character", character.Name, "item", itemToTake.Name, "slot", handSlot)
 
@@ -649,15 +649,15 @@ func ExecuteTakeCommand(character *Character, tokens []string) {
 
 func ExecuteInventoryCommand(character *Character, tokens []string) {
 
-	Logger.Debug("Player is checking their inventory", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is checking their inventory", "playerName", character.Player.playerID)
 
 	inventoryList := character.ListInventory()
-	character.Player.ToPlayer <- inventoryList
+	character.Player.toPlayer <- inventoryList
 }
 
 func ExecuteDropCommand(character *Character, tokens []string) {
 	if len(tokens) < 2 {
-		character.Player.ToPlayer <- "\n\rUsage: drop <item name>\n\r"
+		character.Player.toPlayer <- "\n\rUsage: drop <item name>\n\r"
 		return
 	}
 
@@ -682,14 +682,14 @@ func ExecuteDropCommand(character *Character, tokens []string) {
 
 	if itemToDrop == nil {
 		character.Mutex.Unlock()
-		character.Player.ToPlayer <- "\n\rYou don't have that item.\n\r"
+		character.Player.toPlayer <- "\n\rYou don't have that item.\n\r"
 		return
 	}
 
 	// Can't drop worn items
 	if isWorn {
 		character.Mutex.Unlock()
-		character.Player.ToPlayer <- "\n\rYou must remove that item before dropping it.\n\r"
+		character.Player.toPlayer <- "\n\rYou must remove that item before dropping it.\n\r"
 		return
 	}
 
@@ -749,7 +749,7 @@ func ExecuteDropCommand(character *Character, tokens []string) {
 	character.Mutex.Unlock()
 
 	// Send messages after releasing locks
-	character.Player.ToPlayer <- playerMsg
+	character.Player.toPlayer <- playerMsg
 	SendRoomMessageExcept(character.Room, roomMsg, character)
 
 	Logger.Debug("Item dropped",
@@ -762,7 +762,7 @@ func ExecuteDropCommand(character *Character, tokens []string) {
 
 func ExecuteWearCommand(character *Character, tokens []string) {
 	if len(tokens) < 2 {
-		character.Player.ToPlayer <- "\n\rUsage: wear <item name>\n\r"
+		character.Player.toPlayer <- "\n\rUsage: wear <item name>\n\r"
 		return
 	}
 
@@ -785,24 +785,24 @@ func ExecuteWearCommand(character *Character, tokens []string) {
 	}
 
 	if itemToWear == nil {
-		character.Player.ToPlayer <- "\n\rYou don't have that item.\n\r"
+		character.Player.toPlayer <- "\n\rYou don't have that item.\n\r"
 		return
 	}
 
 	// Validate item can be worn
 	if !itemToWear.Wearable || len(itemToWear.WornOn) == 0 {
-		character.Player.ToPlayer <- "\n\rThat item cannot be worn.\n\r"
+		character.Player.toPlayer <- "\n\rThat item cannot be worn.\n\r"
 		return
 	}
 
 	if itemToWear.IsWorn {
-		character.Player.ToPlayer <- "\n\rYou're already wearing that.\n\r"
+		character.Player.toPlayer <- "\n\rYou're already wearing that.\n\r"
 		return
 	}
 
 	// Verify item is in hand
 	if currentSlot != "left_hand" && currentSlot != "right_hand" {
-		character.Player.ToPlayer <- "\n\rYou must be holding the item to wear it.\n\r"
+		character.Player.toPlayer <- "\n\rYou must be holding the item to wear it.\n\r"
 		return
 	}
 
@@ -810,7 +810,7 @@ func ExecuteWearCommand(character *Character, tokens []string) {
 	var blockedLocations []string
 	for _, location := range itemToWear.WornOn {
 		if !WearLocations[location] {
-			character.Player.ToPlayer <- fmt.Sprintf("\n\rInvalid wear location: %s\n\r", location)
+			character.Player.toPlayer <- fmt.Sprintf("\n\rInvalid wear location: %s\n\r", location)
 			return
 		}
 		if existing := character.Inventory[location]; existing != nil {
@@ -819,7 +819,7 @@ func ExecuteWearCommand(character *Character, tokens []string) {
 	}
 
 	if len(blockedLocations) > 0 {
-		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already wearing something on your %s.\n\r",
+		character.Player.toPlayer <- fmt.Sprintf("\n\rYou are already wearing something on your %s.\n\r",
 			strings.Join(blockedLocations, ", "))
 		return
 	}
@@ -873,7 +873,7 @@ func ExecuteWearCommand(character *Character, tokens []string) {
 		itemDesc = fmt.Sprintf("%s on your %s", itemToWear.Name, itemToWear.WornOn[0])
 	}
 
-	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou wear %s.\n\r", itemDesc)
+	character.Player.toPlayer <- fmt.Sprintf("\n\rYou wear %s.\n\r", itemDesc)
 	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s wears %s.\n\r", character.Name, itemToWear.Name), character)
 
 	Logger.Debug("Item worn",
@@ -885,7 +885,7 @@ func ExecuteWearCommand(character *Character, tokens []string) {
 
 func ExecuteRemoveCommand(character *Character, tokens []string) {
 	if len(tokens) < 2 {
-		character.Player.ToPlayer <- "\n\rUsage: remove <item name>\n\r"
+		character.Player.toPlayer <- "\n\rUsage: remove <item name>\n\r"
 		return
 	}
 
@@ -906,7 +906,7 @@ func ExecuteRemoveCommand(character *Character, tokens []string) {
 	}
 
 	if itemToRemove == nil {
-		character.Player.ToPlayer <- "\n\rYou're not wearing that item.\n\r"
+		character.Player.toPlayer <- "\n\rYou're not wearing that item.\n\r"
 		return
 	}
 
@@ -918,7 +918,7 @@ func ExecuteRemoveCommand(character *Character, tokens []string) {
 	case character.Inventory["left_hand"] == nil:
 		handSlot = "left_hand"
 	default:
-		character.Player.ToPlayer <- "\n\rYour hands are full. You need a free hand to remove that.\n\r"
+		character.Player.toPlayer <- "\n\rYour hands are full. You need a free hand to remove that.\n\r"
 		return
 	}
 
@@ -986,7 +986,7 @@ func ExecuteRemoveCommand(character *Character, tokens []string) {
 			wornLocations[0])
 	}
 
-	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou remove %s.\n\r", removeDesc)
+	character.Player.toPlayer <- fmt.Sprintf("\n\rYou remove %s.\n\r", removeDesc)
 	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s removes %s.\n\r", character.Name, itemToRemove.Name), character)
 
 	Logger.Debug("Item removed", "character", character.Name, "item", itemToRemove.Name, "from_locations", wornLocations, "to_hand", handSlot)
@@ -994,10 +994,10 @@ func ExecuteRemoveCommand(character *Character, tokens []string) {
 }
 
 func ExecuteExamineCommand(character *Character, tokens []string) {
-	Logger.Debug("Player is examining an item", "playerName", character.Player.PlayerID)
+	Logger.Debug("Player is examining an item", "playerName", character.Player.playerID)
 
 	if len(tokens) < 2 {
-		character.Player.ToPlayer <- "\n\rUsage: examine <item name>\n\r"
+		character.Player.toPlayer <- "\n\rUsage: examine <item name>\n\r"
 		return
 	}
 
@@ -1017,7 +1017,7 @@ func ExecuteExamineCommand(character *Character, tokens []string) {
 	}
 
 	if item == nil {
-		character.Player.ToPlayer <- "\n\rYou don't see that item here.\n\r"
+		character.Player.toPlayer <- "\n\rYou don't see that item here.\n\r"
 		return
 	}
 
@@ -1070,5 +1070,5 @@ func ExecuteExamineCommand(character *Character, tokens []string) {
 		}
 	}
 
-	character.Player.ToPlayer <- description
+	character.Player.toPlayer <- description
 }

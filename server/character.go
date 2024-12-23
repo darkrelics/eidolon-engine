@@ -265,16 +265,16 @@ func (kp *KeyPair) DeleteCharacter(Player *Player, characterName string) error {
 	// Check if the character exists in the player's character list
 	characterID, exists := Player.characterList[characterName]
 	if !exists {
-		return fmt.Errorf("character %s not found for player %s", characterName, Player.PlayerID)
+		return fmt.Errorf("character %s not found for player %s", characterName, Player.playerID)
 	}
 
 	// Remove the character from the player's character list
-	delete(Player.CharacterList, characterName)
+	delete(Player.characterList, characterName)
 
 	// Update the player data in the database
 	err := kp.WritePlayer(Player)
 	if err != nil {
-		Logger.Error("Failed to update player data after character deletion", "playerName", Player.PlayerID, "error", err)
+		Logger.Error("Failed to update player data after character deletion", "playerName", Player.playerID, "error", err)
 		return fmt.Errorf("failed to update player data: %w", err)
 	}
 
@@ -288,7 +288,7 @@ func (kp *KeyPair) DeleteCharacter(Player *Player, characterName string) error {
 		return fmt.Errorf("failed to delete character from database: %w", err)
 	}
 
-	Logger.Info("Successfully deleted character", "playerName", Player.PlayerID, "characterName", characterName, "characterID", characterID)
+	Logger.Info("Successfully deleted character", "playerName", Player.playerID, "characterName", characterName, "characterID", characterID)
 	return nil
 }
 
@@ -634,7 +634,7 @@ func moveCharacter(character *Character, direction string) error {
 	return nil
 }
 
-func Cleanup(c *Character) {
+func (c *Character) Cleanup() {
 
 	Logger.Debug("Cleaning up character", "characterName", c.Name, "characterID", c.ID)
 

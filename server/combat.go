@@ -153,7 +153,7 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 
 	if distanceToMove <= 0 {
 		Logger.Debug("No movement needed", "character", characterName)
-		character.Player.ToPlayer <- "\n\rYou are already at the desired distance.\n\r"
+		character.Player.toPlayer <- "\n\rYou are already at the desired distance.\n\r"
 		return
 	}
 
@@ -161,13 +161,13 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 		select {
 		case <-character.End:
 			Logger.Debug("Received end signal, stopping movement", "character", characterName)
-			character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
+			character.Player.toPlayer <- "\n\rMovement interrupted.\n\r"
 			return
 		case <-target.End:
 			Logger.Debug("Received end signal, stopping movement", "character", characterName)
-			character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
+			character.Player.toPlayer <- "\n\rMovement interrupted.\n\r"
 			return
-		case <-character.Game.Ticker.C:
+		case <-character.Game.ticker.C:
 			// Get states before acquiring locks
 			Logger.Debug("Pre-lock state check", "character", characterName)
 
@@ -176,7 +176,7 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 			if !character.Advancing || character.Room != startingRoom {
 				character.Mutex.Unlock()
 				Logger.Debug("Character state invalid, ending movement", "character", characterName)
-				character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
+				character.Player.toPlayer <- "\n\rMovement interrupted.\n\r"
 				return
 			}
 			curDistance := character.GetCombatRange(target)
@@ -189,7 +189,7 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 
 			if !targetInRoom {
 				Logger.Debug("Target left room, ending movement", "character", characterName)
-				character.Player.ToPlayer <- "\n\rMovement interrupted.\n\r"
+				character.Player.toPlayer <- "\n\rMovement interrupted.\n\r"
 				return
 			}
 
@@ -227,14 +227,14 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 
 			// Send movement notifications using SendRoomMessageExcept
 			if isRetreat {
-				character.Player.ToPlayer <- fmt.Sprintf("\n\rYou retreat to %s range (%.1f units) from %s.\n\r",
+				character.Player.toPlayer <- fmt.Sprintf("\n\rYou retreat to %s range (%.1f units) from %s.\n\r",
 					rangeDesc, newDistance, target.Name)
 
 				roomMessage := fmt.Sprintf("\n\r%s retreats to %s range (%.1f units) from %s.\n\r",
 					characterName, rangeDesc, newDistance, target.Name)
 				SendRoomMessageExcept(startingRoom, roomMessage, character)
 			} else {
-				character.Player.ToPlayer <- fmt.Sprintf("\n\rYou advance to %s range (%.1f units) with %s.\n\r",
+				character.Player.toPlayer <- fmt.Sprintf("\n\rYou advance to %s range (%.1f units) with %s.\n\r",
 					rangeDesc, newDistance, target.Name)
 
 				roomMessage := fmt.Sprintf("\n\r%s advances to %s range (%.1f units) with %s.\n\r",

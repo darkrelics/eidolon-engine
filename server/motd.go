@@ -99,7 +99,7 @@ func DisplayUnseenMOTDs(player *Player) error {
 	}
 
 	// Save the updated player data
-	err := player.WritePlayer(player)
+	err := player.WritePlayer()
 	if err != nil {
 		Logger.Error("Error saving player data after displaying MOTDs", "playerName", player.playerID, "error", err)
 		return fmt.Errorf("error saving player data after displaying MOTDs: %w", err)

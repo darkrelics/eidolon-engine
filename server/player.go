@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/sync/errgroup"
@@ -26,6 +29,7 @@ type Player struct {
 	consoleWidth  int
 	consoleHeight int
 	characterList map[string]uuid.UUID
+	seenMotD      []uuid.UUID
 	character     *Character
 	login         time.Time
 	server        *Server
@@ -33,6 +37,12 @@ type Player struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	shutdownOnce  sync.Once
+}
+
+type PlayerData struct {
+	PlayerID      string            `json:"PlayerID" dynamodbav:"PlayerID"`
+	CharacterList map[string]string `json:"characterList" dynamodbav:"CharacterList"`
+	SeenMotDs     []string          `json:"seenMotD" dynamodbav:"SeenMotD"`
 }
 
 func NewPlayer(server *Server, playerName string, conn ssh.Channel) (*Player, error) {
@@ -255,7 +265,7 @@ func (p *Player) processInput(r rune, buffer *[]rune) bool {
 }
 
 func (p *Player) loadData() error {
-	_, charList, motd, err := p.server.database.ReadPlayer(p.playerID)
+	_, charList, motd, err := p.ReadPlayer(p.playerID)
 	if err != nil {
 		if err.Error() == "player not found" {
 			return nil
@@ -272,9 +282,93 @@ func (p *Player) loadData() error {
 }
 
 func (p *Player) saveData() error {
-	if err := p.server.database.WritePlayer(p); err != nil {
+	if err := p.WritePlayer(); err != nil {
 		Logger.Error("failed to save player data", "playerID", p.playerID, "error", err)
 		return fmt.Errorf("database write: %w", err)
 	}
 	return nil
+}
+
+// WritePlayer stores the player data into the DynamoDB database.
+func (p *Player) WritePlayer() error {
+
+	k := p.server.database
+
+	pd := PlayerData{
+		PlayerID:      p.playerID,
+		CharacterList: make(map[string]string),
+		SeenMotDs:     make([]string, len(p.seenMotD)),
+	}
+
+	// Convert UUIDs to strings for CharacterList
+	for charName, charID := range p.characterList {
+		pd.CharacterList[charName] = charID.String()
+	}
+
+	// Convert UUIDs to strings for SeenMotDs
+	for i, motdID := range p.seenMotD {
+		pd.SeenMotDs[i] = motdID.String()
+	}
+
+	// Write the player data to the DynamoDB table with proper error handling
+	err := k.Put("players", pd)
+	if err != nil {
+		Logger.Error("Error storing player data", "playerName", p.playerID, "error", err)
+		return fmt.Errorf("error storing player data: %w", err)
+	}
+
+	Logger.Debug("Successfully wrote player data", "playerName", p.playerID, "characterCount", len(p.characterList), "seenMotDCount", len(p.seenMotD))
+	return nil
+}
+
+// ReadPlayer retrieves the player data from the DynamoDB database.
+func (p *Player) ReadPlayer(playerName string) (string, map[string]uuid.UUID, []uuid.UUID, error) {
+	Logger.Debug("Reading player data from database", "playerName", playerName)
+
+	k := p.server.database
+
+	key := map[string]*dynamodb.AttributeValue{
+		"PlayerID": {S: aws.String(playerName)},
+	}
+
+	var pd PlayerData
+	err := k.Get("players", key, &pd)
+	if err != nil {
+		if strings.Contains(err.Error(), "item not found") {
+			// Return empty maps for new players instead of error
+			Logger.Info("First time player, creating new data", "playerName", playerName)
+			return playerName, make(map[string]uuid.UUID), make([]uuid.UUID, 0), nil
+		}
+		Logger.Error("Error reading player data", "playerName", playerName, "error", err)
+		return "", nil, nil, fmt.Errorf("error reading player data: %w", err)
+	}
+
+	// Convert character IDs from strings to UUIDs
+	characterList := make(map[string]uuid.UUID)
+	for name, idString := range pd.CharacterList {
+		id, err := uuid.Parse(idString)
+		if err != nil {
+			Logger.Error("Error parsing character UUID", "characterName", name, "uuid", idString, "error", err)
+			continue
+		}
+		characterList[name] = id
+	}
+
+	// Convert SeenMotDs from strings to UUIDs
+	seenMotDs := make([]uuid.UUID, 0, len(pd.SeenMotDs))
+	for _, idString := range pd.SeenMotDs {
+		id, err := uuid.Parse(idString)
+		if err != nil {
+			Logger.Error("Error parsing MOTD UUID", "uuid", idString, "error", err)
+			continue
+		}
+		seenMotDs = append(seenMotDs, id)
+	}
+
+	Logger.Debug("Successfully read player data",
+		"playerName", pd.PlayerID,
+		"characterCount", len(characterList),
+		"seenMotDCount", len(seenMotDs))
+
+	return pd.PlayerID, characterList, seenMotDs, nil
 }

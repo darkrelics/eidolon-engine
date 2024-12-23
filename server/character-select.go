@@ -288,14 +288,14 @@ func createAndSaveCharacter(name string, player *Player, room *Room, archetype s
 	if player.characterList == nil {
 		player.characterList = make(map[string]uuid.UUID)
 	}
-	player.CharacterList[name] = character.ID
-	player.Mutex.Unlock()
+	player.characterList[name] = character.ID
+	player.mutex.Unlock()
 
 	if err := WriteCharacter(character, g.Database); err != nil {
 		return nil, fmt.Errorf("failed to save character to database: %w", err)
 	}
 
-	if err := g.Database.WritePlayer(player); err != nil {
+	if err := player.WritePlayer(); err != nil {
 		return nil, fmt.Errorf("failed to save player data: %w", err)
 	}
 
@@ -318,11 +318,11 @@ func handleCharacterDeletion(ctx context.Context, options []string, player *Play
 	}
 
 	characterToDelete := options[deleteIndex-1]
-	if err := player.Server.Database.DeleteCharacter(player, characterToDelete); err != nil {
+	if err := player.server.database.DeleteCharacter(player, characterToDelete); err != nil {
 		return err
 	}
 
-	player.ToPlayer <- fmt.Sprintf("\n\rCharacter '%s' has been deleted.\n\r", characterToDelete)
+	player.toPlayer <- fmt.Sprintf("\n\rCharacter '%s' has been deleted.\n\r", characterToDelete)
 	return nil
 }
 
@@ -330,11 +330,11 @@ func sendDeletionOptions(ctx context.Context, options []string, player *Player) 
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case player.ToPlayer <- "Select a character to delete: \n\r":
+	case player.toPlayer <- "Select a character to delete: \n\r":
 		for i, name := range options {
-			player.ToPlayer <- fmt.Sprintf("%d: %s\n\r", i+1, name)
+			player.toPlayer <- fmt.Sprintf("%d: %s\n\r", i+1, name)
 		}
-		player.ToPlayer <- "Enter the number of the character to delete: "
+		player.toPlayer <- "Enter the number of the character to delete: "
 		return nil
 	}
 }
