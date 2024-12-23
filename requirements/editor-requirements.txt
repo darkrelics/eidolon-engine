@@ -8,7 +8,7 @@ pyyaml==6.0.2
 voila==0.5.8
 
 #Dependancies
-anyio==4.6.2.post1
+anyio==4.7.0
 argon2-cffi==23.1.0
 argon2-cffi-bindings==21.2.0
 arrow==1.3.0
@@ -87,7 +87,7 @@ referencing==0.35.1
 requests==2.32.3
 rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
-rpds-py==0.21.0
+rpds-py==0.22.3
 send2trash==1.8.3
 setuptools==75.5.0
 six==1.16.0
