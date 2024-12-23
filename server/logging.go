@@ -16,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	cwlogtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
-	"github.com/aws/aws-xray-sdk-go/xray"
 )
 
 var Logger *slog.Logger
@@ -28,6 +27,7 @@ type logState struct {
 }
 
 type CloudWatchHandler struct {
+	ctx           context.Context
 	logsClient    *cloudwatchlogs.Client
 	metricsClient *cloudwatch.Client
 	logLevel      int
@@ -38,25 +38,14 @@ type CloudWatchHandler struct {
 	handlers      []slog.Handler
 	state         *logState
 	mutex         sync.RWMutex
+	interval      time.Duration
 }
 
-func NewCloudWatchHandler(logsClient *cloudwatchlogs.Client, metricsClient *cloudwatch.Client, level int, logGroup, logStream, namespace string, handlers []slog.Handler) *CloudWatchHandler {
-	return &CloudWatchHandler{
-		logsClient:    logsClient,
-		metricsClient: metricsClient,
-		logLevel:      level,
-		logGroup:      logGroup,
-		logStream:     logStream,
-		namespace:     namespace,
-		handlers:      handlers,
-		state:         &logState{},
-	}
-}
+func NewLogHandler(globalCtx context.Context, configuration *Configuration) (*CloudWatchHandler, error) {
 
-func InitializeLogging(configuration *Configuration) (*CloudWatchHandler, error) {
 	level := parseLogLevel(configuration.Logging.LogLevel)
 
-	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(configuration.Aws.Region))
+	awsCfg, err := config.LoadDefaultConfig(globalCtx, config.WithRegion(configuration.Aws.Region))
 	if err != nil {
 		return nil, fmt.Errorf("unable to load SDK config: %w", err)
 	}
@@ -69,21 +58,46 @@ func InitializeLogging(configuration *Configuration) (*CloudWatchHandler, error)
 		slog.String("region", configuration.Aws.Region),
 	})
 
-	handler := NewCloudWatchHandler(
-		logsClient,
-		metricsClient,
-		configuration.Logging.LogLevel,
-		configuration.Logging.LogGroup,
-		configuration.Logging.LogStream,
-		configuration.Logging.MetricNamespace,
-		[]slog.Handler{stdoutHandler},
-	)
+	handler := &CloudWatchHandler{
+		ctx:           globalCtx,
+		logsClient:    logsClient,
+		metricsClient: metricsClient,
+		logLevel:      configuration.Logging.LogLevel,
+		logGroup:      configuration.Logging.LogGroup,
+		logStream:     configuration.Logging.LogStream,
+		namespace:     configuration.Logging.MetricNamespace,
+		handlers:      []slog.Handler{stdoutHandler},
+		state:         &logState{},
+		interval:      time.Minute, // Paramterize this
+	}
 
 	// Set the global logger
 	Logger = slog.New(handler)
 	slog.SetDefault(Logger)
 
 	return handler, nil
+}
+
+func (h *CloudWatchHandler) Run() error {
+
+	if h.interval < time.Second {
+		return fmt.Errorf("interval must be at least 1 second")
+	}
+
+	ticker := time.NewTicker(h.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-h.ctx.Done():
+			return h.ctx.Err()
+		case <-ticker.C:
+			if err := h.collectAndSendMetrics(h.ctx); err != nil {
+				Logger.Error("Failed to send metrics", "error", err)
+			}
+		}
+	}
+
 }
 
 func parseLogLevel(level int) slog.Level {
@@ -98,29 +112,6 @@ func parseLogLevel(level int) slog.Level {
 		return slog.LevelError
 	default:
 		return slog.LevelInfo
-	}
-}
-
-func (h *CloudWatchHandler) EnableXRay() error {
-	xrayLevel := h.getXRayLogLevel()
-	if err := xray.Configure(xray.Config{LogLevel: xrayLevel}); err != nil {
-		return fmt.Errorf("failed to configure AWS X-Ray: %w", err)
-	}
-	return nil
-}
-
-func (h *CloudWatchHandler) getXRayLogLevel() string {
-	switch h.logLevel {
-	case 10:
-		return "debug"
-	case 20:
-		return "info"
-	case 30:
-		return "warn"
-	case 40:
-		return "error"
-	default:
-		return "info"
 	}
 }
 
