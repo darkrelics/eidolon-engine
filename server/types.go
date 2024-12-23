@@ -4,13 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/google/uuid"
 )
-
-type KeyPair struct {
-	db *dynamodb.DynamoDB
-}
 
 type Archetype struct {
 	ArchetypeName string             `json:"ArchetypeName" dynamodbav:"ArchetypeName"`

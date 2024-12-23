@@ -36,6 +36,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	if server != nil {
+		cloudWatch.mutex.Lock()
+		cloudWatch.server = server
+		cloudWatch.mutex.Unlock()
+	}
+
 	go runMetrics(ctx, cloudWatch, errChan)
 	go runGame(ctx, game, errChan)
 	go runServer(ctx, server, errChan)
@@ -57,7 +63,7 @@ func initialize(ctx context.Context, config *Configuration) (*Game, *Server, err
 		return nil, nil, fmt.Errorf("server init error: %w", err)
 	}
 
-	server.Game = game
+	server.game = game
 	return game, server, nil
 }
 

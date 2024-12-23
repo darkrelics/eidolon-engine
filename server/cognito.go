@@ -12,8 +12,8 @@ import (
 )
 
 func (s *Server) calculateSecretHash(email string) string {
-	message := []byte(email + s.Config.Cognito.ClientID)
-	key := []byte(s.Config.Cognito.ClientSecret)
+	message := []byte(email + s.config.Cognito.ClientID)
+	key := []byte(s.config.Cognito.ClientSecret)
 	hash := hmac.New(sha256.New, key)
 	hash.Write(message)
 	return base64.StdEncoding.EncodeToString(hash.Sum(nil))
@@ -29,7 +29,7 @@ func (s *Server) SignInUser(email, password string) (*cognitoidentityprovider.In
 			"PASSWORD":    aws.String(password),
 			"SECRET_HASH": aws.String(secretHash),
 		},
-		ClientId: aws.String(s.Config.Cognito.ClientID),
+		ClientId: aws.String(s.config.Cognito.ClientID),
 	}
 
 	authOutput, err := s.cognito.InitiateAuth(authInput)
@@ -53,7 +53,7 @@ func (s *Server) SignUpUser(email, password string) (*cognitoidentityprovider.Si
 	secretHash := s.calculateSecretHash(email)
 
 	signUpInput := &cognitoidentityprovider.SignUpInput{
-		ClientId:   aws.String(s.Config.Cognito.ClientID),
+		ClientId:   aws.String(s.config.Cognito.ClientID),
 		Username:   aws.String(email),
 		Password:   aws.String(password),
 		SecretHash: aws.String(secretHash),
@@ -75,7 +75,7 @@ func (s *Server) ConfirmUser(email, confirmationCode string) (*cognitoidentitypr
 	secretHash := s.calculateSecretHash(email)
 
 	confirmSignUpInput := &cognitoidentityprovider.ConfirmSignUpInput{
-		ClientId:         aws.String(s.Config.Cognito.ClientID),
+		ClientId:         aws.String(s.config.Cognito.ClientID),
 		Username:         aws.String(email),
 		ConfirmationCode: aws.String(confirmationCode),
 		SecretHash:       aws.String(secretHash),
@@ -101,7 +101,7 @@ func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string)
 		secretHash := s.calculateSecretHash(player.PlayerID)
 		challengeInput := &cognitoidentityprovider.RespondToAuthChallengeInput{
 			ChallengeName: aws.String(cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired),
-			ClientId:      aws.String(s.Config.Cognito.ClientID),
+			ClientId:      aws.String(s.config.Cognito.ClientID),
 			ChallengeResponses: map[string]*string{
 				"USERNAME":     aws.String(player.PlayerID),
 				"NEW_PASSWORD": aws.String(newPassword),

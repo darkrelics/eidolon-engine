@@ -33,6 +33,7 @@ type CloudWatchHandler struct {
 	mutex         sync.RWMutex
 	initialized   bool
 	interval      time.Duration
+	server        *Server
 }
 
 func NewLogHandler(ctx context.Context, cfg *Configuration) (*CloudWatchHandler, error) {
@@ -175,26 +176,42 @@ func (h *CloudWatchHandler) initLogStream(ctx context.Context) error {
 }
 
 func (h *CloudWatchHandler) sendMetrics() error {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
+	metrics := h.collectMetrics()
 
 	_, err := h.metricsClient.PutMetricData(h.ctx, &cloudwatch.PutMetricDataInput{
-		Namespace: aws.String(h.namespace),
-		MetricData: []types.MetricDatum{
-			{
-				MetricName: aws.String("MemoryUsage"),
-				Unit:       types.StandardUnitMegabytes,
-				Value:      aws.Float64(float64(m.Alloc) / 1024 / 1024),
-			},
-			{
-				MetricName: aws.String("RoutineCount"),
-				Unit:       types.StandardUnitCount,
-				Value:      aws.Float64(float64(runtime.NumGoroutine())),
-			},
-		},
+		Namespace:  aws.String(h.namespace),
+		MetricData: metrics,
 	})
 
 	return err
+}
+
+func (h *CloudWatchHandler) collectMetrics() []types.MetricDatum {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	metrics := []types.MetricDatum{
+		{
+			MetricName: aws.String("MemoryUsage"),
+			Unit:       types.StandardUnitMegabytes,
+			Value:      aws.Float64(float64(m.Alloc) / 1024 / 1024),
+		},
+		{
+			MetricName: aws.String("RoutineCount"),
+			Unit:       types.StandardUnitCount,
+			Value:      aws.Float64(float64(runtime.NumGoroutine())),
+		},
+	}
+
+	if h.server != nil {
+		metrics = append(metrics, types.MetricDatum{
+			MetricName: aws.String("PlayerCount"),
+			Unit:       types.StandardUnitCount,
+			Value:      aws.Float64(float64(h.server.PlayerCount())),
+		})
+	}
+
+	return metrics
 }
 
 func (h *CloudWatchHandler) handleDownstream(ctx context.Context, r slog.Record) error {

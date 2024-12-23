@@ -13,22 +13,23 @@ import (
 )
 
 type Server struct {
-	Config        *Configuration
-	GlobalContext context.Context
-	Context       context.Context
-	Cancel        context.CancelFunc
-	Mutex         sync.RWMutex
-	Game          *Game
-	Database      *KeyPair
-	StartTime     time.Time
+	config        *Configuration
+	globalContext context.Context
+	context       context.Context
+	cancel        context.CancelFunc
+	mutex         sync.RWMutex
+	game          *Game
+	database      *KeyPair
+	start         time.Time
 	playerCount   atomic.Uint64
-	Players       map[uint64]*Player
+	players       map[uint64]*Player
 	shutdownOnce  sync.Once
 	cognito       *cognitoidentityprovider.CognitoIdentityProvider
+	index         *Index
 }
 
 func NewServer(globalCtx context.Context, config *Configuration) (*Server, error) {
-	ctx, cancel := context.WithCancel(globalCtx)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	database, err := NewKeyPair(config.Aws.Region)
 	if err != nil {
@@ -42,16 +43,22 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 		return nil, fmt.Errorf("AWS session init error: %w", err)
 	}
 
+	index := &Index{
+		IndexID: 0,
+		mu:      sync.RWMutex{},
+	}
+
 	server := &Server{
-		Config:        config,
-		GlobalContext: globalCtx,
-		Context:       ctx,
-		Cancel:        cancel,
-		Game:          nil,
-		StartTime:     time.Now(),
-		Database:      database,
-		Players:       make(map[uint64]*Player),
+		config:        config,
+		globalContext: globalCtx,
+		context:       ctx,
+		cancel:        cancel,
+		game:          nil,
+		start:         time.Now(),
+		database:      database,
+		players:       make(map[uint64]*Player),
 		cognito:       cognitoidentityprovider.New(sess),
+		index:         index,
 	}
 
 	return server, nil
@@ -60,18 +67,19 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 func (s *Server) Run() error {
 	Logger.Info("Starting server...")
 
-	sshInterface, err := NewSSHInterface(s.GlobalContext, s)
+	sshInterface, err := NewSSHInterface(s)
 	if err != nil {
 		return fmt.Errorf("ssh interface init error: %w", err)
 	}
 
+	// Start the Interfaces
 	go sshInterface.RunServer(s)
 
 	for {
 		select {
-		case <-s.GlobalContext.Done():
+		case <-s.globalContext.Done():
 			return s.shutdown("global shutdown")
-		case <-s.Context.Done():
+		case <-s.context.Done():
 			return s.shutdown("server shutdown")
 		}
 	}
@@ -82,7 +90,7 @@ func (s *Server) Stop() error {
 	var stopErr error
 
 	s.shutdownOnce.Do(func() {
-		s.Cancel()
+		s.cancel()
 		stopErr = s.shutdown("manual stop")
 	})
 
@@ -91,39 +99,47 @@ func (s *Server) Stop() error {
 
 func (s *Server) shutdown(reason string) error {
 	Logger.Info("server shutdown", "reason", reason)
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-	for _, player := range s.Players {
+	for _, player := range s.players {
 		player.Cleanup()
 	}
 
 	return nil
 }
 
-func (s *Server) GetPlayerCount() uint64 {
-	return s.playerCount.Load()
-}
-
-func (s *Server) incrementPlayerCount() uint64 {
-	return s.playerCount.Add(1)
-}
-
-func (s *Server) decrementPlayerCount() uint64 {
-	return s.playerCount.Add(^uint64(0))
-}
-
-func (s *Server) AddPlayer(player *Player) error {
+func (s *Server) AddPlayer(player *Player) (uint64, error) {
 	if player == nil {
-		return fmt.Errorf("player cannot be nil")
+		return 0, fmt.Errorf("player cannot be nil")
 	}
 
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
+	id := s.index.GetID()
 
-	playerID := s.incrementPlayerCount()
-	s.Players[playerID] = player
+	s.mutex.Lock()
+	s.players[id] = player
+	s.mutex.Unlock()
 
-	Logger.Info("Player added", "id", playerID, "name", player.PlayerID)
-	return nil
+	s.playerCount.Add(1)
+	Logger.Info("player added", "id", id, "name", player.PlayerID)
+
+	return id, nil
+}
+
+func (s *Server) RemovePlayer(id uint64) *Player {
+	s.mutex.Lock()
+	player := s.players[id]
+	delete(s.players, id)
+	s.mutex.Unlock()
+
+	if player != nil {
+		s.playerCount.Add(^uint64(0))
+		Logger.Info("player removed", "id", id, "name", player.PlayerID)
+	}
+
+	return player
+}
+
+func (s *Server) PlayerCount() uint64 {
+	return s.playerCount.Load()
 }

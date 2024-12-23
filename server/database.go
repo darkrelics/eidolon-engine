@@ -11,6 +11,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 )
 
+type KeyPair struct {
+	db *dynamodb.DynamoDB
+}
+
 // NewKeyPair initializes a new DynamoDB client.
 func NewKeyPair(region string) (*KeyPair, error) {
 	Logger.Info("Initializing DynamoDB client", "region", region)

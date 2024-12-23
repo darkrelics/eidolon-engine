@@ -29,16 +29,16 @@ type Interface_SSH struct {
 	SSHConfig      *ssh.ServerConfig
 }
 
-func NewSSHInterface(globalCtx context.Context, server *Server) (*Interface_SSH, error) {
-	if !server.Config.SSH.Enabled {
+func NewSSHInterface(server *Server) (*Interface_SSH, error) {
+	if !server.config.SSH.Enabled {
 		return nil, fmt.Errorf("ssh interface is disabled in configuration")
 	}
 
-	if server.Config.SSH.PrivateKeyPath == "" {
+	if server.config.SSH.PrivateKeyPath == "" {
 		return nil, fmt.Errorf("ssh private key path not configured")
 	}
 
-	privateBytes, err := os.ReadFile(server.Config.SSH.PrivateKeyPath)
+	privateBytes, err := os.ReadFile(server.config.SSH.PrivateKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key: %w", err)
 	}
@@ -48,19 +48,19 @@ func NewSSHInterface(globalCtx context.Context, server *Server) (*Interface_SSH,
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(server.Context)
+	ctx, cancel := context.WithCancel(server.context)
 
 	sshInterface := &Interface_SSH{
-		Config:         server.Config,
+		Config:         server.config,
 		Server:         server,
-		GlobalContext:  globalCtx,
-		ServerContext:  server.Context,
+		GlobalContext:  server.globalContext,
+		ServerContext:  server.context,
 		Context:        ctx,
 		Cancel:         cancel,
-		Port:           server.Config.SSH.Port,
-		PrivateKeyPath: server.Config.SSH.PrivateKeyPath,
+		Port:           server.config.SSH.Port,
+		PrivateKeyPath: server.config.SSH.PrivateKeyPath,
 		StartTime:      time.Now(),
-		Database:       server.Database,
+		Database:       server.database,
 	}
 
 	sshConfig := &ssh.ServerConfig{
@@ -77,14 +77,14 @@ func NewSSHInterface(globalCtx context.Context, server *Server) (*Interface_SSH,
 	sshConfig.AddHostKey(private)
 	sshInterface.SSHConfig = sshConfig
 
-	address := fmt.Sprintf(":%d", server.Config.SSH.Port)
+	address := fmt.Sprintf(":%d", server.config.SSH.Port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		return nil, fmt.Errorf("failed to listen on port %d: %w", server.Config.SSH.Port, err)
+		return nil, fmt.Errorf("failed to listen on port %d: %w", server.config.SSH.Port, err)
 	}
 	sshInterface.Listener = listener
 
-	go monitorServerContext(server.Context, sshInterface)
+	go monitorServerContext(server.context, sshInterface)
 
 	return sshInterface, nil
 }
