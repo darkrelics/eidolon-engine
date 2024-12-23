@@ -26,6 +26,7 @@ type Server struct {
 	shutdownOnce  sync.Once
 	cognito       *cognitoidentityprovider.CognitoIdentityProvider
 	index         *Index
+	activeMotDs   []*MOTD
 }
 
 func NewServer(globalCtx context.Context, config *Configuration) (*Server, error) {
@@ -73,7 +74,7 @@ func (s *Server) Run() error {
 	}
 
 	// Start the Interfaces
-	go sshInterface.RunServer(s)
+	go sshInterface.Run()
 
 	for {
 		select {
@@ -88,6 +89,10 @@ func (s *Server) Run() error {
 func (s *Server) Stop() error {
 
 	var stopErr error
+
+	// Modify system to specifically stop the interfaces.
+
+	// Modify system to specifically replace the players.
 
 	s.shutdownOnce.Do(func() {
 		s.cancel()
@@ -121,7 +126,7 @@ func (s *Server) AddPlayer(player *Player) (uint64, error) {
 	s.mutex.Unlock()
 
 	s.playerCount.Add(1)
-	Logger.Info("player added", "id", id, "name", player.PlayerID)
+	Logger.Info("player added", "id", id, "name", player.playerID)
 
 	return id, nil
 }
@@ -134,7 +139,7 @@ func (s *Server) RemovePlayer(id uint64) *Player {
 
 	if player != nil {
 		s.playerCount.Add(^uint64(0))
-		Logger.Info("player removed", "id", id, "name", player.PlayerID)
+		Logger.Info("player removed", "id", id, "name", player.playerID)
 	}
 
 	return player

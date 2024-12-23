@@ -321,13 +321,13 @@ func SendRoomMessage(r *Room, message string) {
 
 	for _, character := range r.Characters {
 
-		if character.Player == nil || character.Player.ToPlayer == nil {
-			Logger.Warn("Player or ToPlayer channel is nil", "playerID", character.Player.PlayerID, "room_id", r.RoomID)
+		if character.Player == nil || character.Player.toPlayer == nil {
+			Logger.Warn("Player or ToPlayer channel is nil", "playerID", character.Player.playerID, "room_id", r.RoomID)
 			continue
 		}
 
-		character.Player.ToPlayer <- message
-		character.Player.ToPlayer <- character.Player.Prompt
+		character.Player.toPlayer <- message
+		character.Player.toPlayer <- character.Player.prompt
 	}
 }
 
@@ -340,13 +340,13 @@ func SendRoomMessageExcept(r *Room, message string, character *Character) {
 			continue
 		}
 
-		if c.Player == nil || c.Player.ToPlayer == nil {
-			Logger.Warn("Player or ToPlayer channel is nil", "playerID", c.Player.PlayerID, "room_id", r.RoomID)
+		if c.Player == nil || c.Player.toPlayer == nil {
+			Logger.Warn("Player or ToPlayer channel is nil", "playerID", c.Player.playerID, "room_id", r.RoomID)
 			continue
 		}
 
-		c.Player.ToPlayer <- message
-		c.Player.ToPlayer <- c.Player.Prompt
+		c.Player.toPlayer <- message
+		c.Player.toPlayer <- c.Player.prompt
 	}
 }
 

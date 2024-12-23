@@ -45,7 +45,7 @@ type Character struct {
 	Mutex       sync.RWMutex
 	Facing      *Character
 	Advancing   bool // true when character is advancing towards their facing target
-	CombatRange map[*uuid.UUID]float64
+	CombatRange map[uuid.UUID]float64
 	LastEdited  time.Time
 	LastSaved   time.Time
 	End         chan bool
@@ -133,7 +133,7 @@ func (c *Character) ToData() *CharacterData {
 
 	return &CharacterData{
 		CharacterID:   c.ID.String(),
-		PlayerID:      c.Player.PlayerID,
+		PlayerID:      c.Player.playerID,
 		CharacterName: c.Name,
 		Attributes:    c.Attributes,
 		Abilities:     c.Abilities,
@@ -260,10 +260,10 @@ func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, Game *Ga
 
 // DeleteCharacter removes a character from the player's character list and the database.
 func (kp *KeyPair) DeleteCharacter(Player *Player, characterName string) error {
-	Logger.Debug("Attempting to delete character", "playerName", Player.PlayerID, "characterName", characterName)
+	Logger.Debug("Attempting to delete character", "playerName", Player.playerID, "characterName", characterName)
 
 	// Check if the character exists in the player's character list
-	characterID, exists := Player.CharacterList[characterName]
+	characterID, exists := Player.characterList[characterName]
 	if !exists {
 		return fmt.Errorf("character %s not found for player %s", characterName, Player.PlayerID)
 	}

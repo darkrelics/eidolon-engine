@@ -11,7 +11,7 @@ import (
 )
 
 func SelectCharacter(ctx context.Context, player *Player) (*Character, error) {
-	Logger.Debug("Player is selecting a character", "playerName", player.PlayerID)
+	Logger.Debug("Player is selecting a character", "playerName", player.playerID)
 
 	for {
 		options := buildCharacterOptions(player)
@@ -31,7 +31,7 @@ func SelectCharacter(ctx context.Context, player *Player) (*Character, error) {
 }
 
 func CreateCharacter(player *Player, g *Game) (*Character, error) {
-	Logger.Info("Player is creating a new character", "playerName", player.PlayerID)
+	Logger.Info("Player is creating a new character", "playerName", player.playerID)
 
 	charName, err := getValidCharacterName(player, g)
 	if err != nil {
@@ -57,11 +57,11 @@ func CreateCharacter(player *Player, g *Game) (*Character, error) {
 }
 
 func buildCharacterOptions(player *Player) []string {
-	player.Mutex.RLock()
-	defer player.Mutex.RUnlock()
+	player.mutex.RLock()
+	defer player.mutex.RUnlock()
 
-	options := make([]string, 0, len(player.CharacterList))
-	for name := range player.CharacterList {
+	options := make([]string, 0, len(player.characterList))
+	for name := range player.characterList {
 		options = append(options, name)
 	}
 	sort.Strings(options)
@@ -72,17 +72,17 @@ func sendOptions(ctx context.Context, player *Player, options []string) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case player.ToPlayer <- "Select a character:\n\r":
-		player.ToPlayer <- "0: Create a new character\n\r"
+	case player.toPlayer <- "Select a character:\n\r":
+		player.toPlayer <- "0: Create a new character\n\r"
 		for i, name := range options {
-			player.ToPlayer <- fmt.Sprintf("%d: %s\n\r", i+1, name)
+			player.toPlayer <- fmt.Sprintf("%d: %s\n\r", i+1, name)
 		}
 		if len(options) > 0 {
-			player.ToPlayer <- "X: Delete a character\n\r"
+			player.toPlayer <- "X: Delete a character\n\r"
 		} else {
-			player.ToPlayer <- "No existing characters found.\n\r"
+			player.toPlayer <- "No existing characters found.\n\r"
 		}
-		player.ToPlayer <- "Enter the number of your choice or 'X' to delete: "
+		player.toPlayer <- "Enter the number of your choice or 'X' to delete: "
 		return nil
 	}
 }
@@ -91,7 +91,7 @@ func receiveInput(ctx context.Context, player *Player) (string, error) {
 	select {
 	case <-ctx.Done():
 		return "", ctx.Err()
-	case input, ok := <-player.FromPlayer:
+	case input, ok := <-player.fromPlayer:
 		if !ok {
 			return "", fmt.Errorf("player input channel closed")
 		}
@@ -100,27 +100,30 @@ func receiveInput(ctx context.Context, player *Player) (string, error) {
 }
 
 func handleCharacterSelection(ctx context.Context, input string, options []string, player *Player) (*Character, bool) {
+
+	game := player.server.game
+
 	if input == "X" && len(options) > 0 {
 		if err := handleCharacterDeletion(ctx, options, player); err != nil {
-			player.ToPlayer <- fmt.Sprintf("Error deleting character: %v\n\r", err)
+			player.toPlayer <- fmt.Sprintf("Error deleting character: %v\n\r", err)
 		}
 		return nil, true
 	}
 
 	choice, err := strconv.Atoi(input)
 	if err != nil || choice < 0 || choice > len(options) {
-		player.ToPlayer <- "Invalid choice. Please select a valid option.\n\r"
+		player.toPlayer <- "Invalid choice. Please select a valid option.\n\r"
 		return nil, true
 	}
 
 	character, err := loadOrCreateCharacter(ctx, choice, options, player)
 	if err != nil {
-		player.ToPlayer <- fmt.Sprintf("Error: %v\n\r", err)
+		player.toPlayer <- fmt.Sprintf("Error: %v\n\r", err)
 		return nil, true
 	}
 
 	if err := addCharacterToRoom(character, game); err != nil {
-		player.ToPlayer <- fmt.Sprintf("Error adding character to room: %v\n\r", err)
+		player.toPlayer <- fmt.Sprintf("Error adding character to room: %v\n\r", err)
 		return nil, true
 	}
 
@@ -128,6 +131,9 @@ func handleCharacterSelection(ctx context.Context, input string, options []strin
 }
 
 func loadOrCreateCharacter(ctx context.Context, choice int, options []string, player *Player) (*Character, error) {
+
+	game := player.server.game
+
 	game.Mutex.Lock()
 	defer game.Mutex.Unlock()
 
@@ -137,10 +143,10 @@ func loadOrCreateCharacter(ctx context.Context, choice int, options []string, pl
 	if choice == 0 {
 		character, err = CreateCharacter(player, game)
 	} else if choice <= len(options) {
-		player.Mutex.RLock()
-		characterID := player.CharacterList[options[choice-1]]
-		player.Mutex.RUnlock()
-		character, err = player.Server.Database.LoadCharacter(characterID, player, game)
+		player.mutex.RLock()
+		characterID := player.characterList[options[choice-1]]
+		player.mutex.RUnlock()
+		character, err = player.server.database.LoadCharacter(characterID, player, game)
 	}
 
 	if err != nil {
@@ -168,12 +174,12 @@ func addCharacterToRoom(character *Character, game *Game) error {
 
 func getValidCharacterName(player *Player, g *Game) (string, error) {
 	select {
-	case player.ToPlayer <- "\n\rEnter your character name: ":
+	case player.toPlayer <- "\n\rEnter your character name: ":
 	default:
 		return "", fmt.Errorf("player output channel blocked")
 	}
 
-	charName, ok := <-player.FromPlayer
+	charName, ok := <-player.fromPlayer
 	if !ok {
 		return "", fmt.Errorf("player input channel closed")
 	}
@@ -234,12 +240,12 @@ func promptArchetypeSelection(player *Player, options []string) (int, error) {
 	msg += "Enter the number of your choice: "
 
 	select {
-	case player.ToPlayer <- msg:
+	case player.toPlayer <- msg:
 	default:
 		return 0, fmt.Errorf("player output channel blocked")
 	}
 
-	selection, ok := <-player.FromPlayer
+	selection, ok := <-player.fromPlayer
 	if !ok {
 		return 0, fmt.Errorf("player input channel closed")
 	}
@@ -278,9 +284,9 @@ func createAndSaveCharacter(name string, player *Player, room *Room, archetype s
 		return nil, fmt.Errorf("failed to create character: %w", err)
 	}
 
-	player.Mutex.Lock()
-	if player.CharacterList == nil {
-		player.CharacterList = make(map[string]uuid.UUID)
+	player.mutex.Lock()
+	if player.characterList == nil {
+		player.characterList = make(map[string]uuid.UUID)
 	}
 	player.CharacterList[name] = character.ID
 	player.Mutex.Unlock()

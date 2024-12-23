@@ -92,18 +92,18 @@ func (s *Server) GetUserData(accessToken string) (*cognitoidentityprovider.GetUs
 }
 
 func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string) error {
-	signInOutput, err := s.SignInUser(player.PlayerID, oldPassword)
+	signInOutput, err := s.SignInUser(player.playerID, oldPassword)
 	if err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
 
 	if signInOutput.ChallengeName != nil && *signInOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
-		secretHash := s.calculateSecretHash(player.PlayerID)
+		secretHash := s.calculateSecretHash(player.playerID)
 		challengeInput := &cognitoidentityprovider.RespondToAuthChallengeInput{
 			ChallengeName: aws.String(cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired),
 			ClientId:      aws.String(s.config.Cognito.ClientID),
 			ChallengeResponses: map[string]*string{
-				"USERNAME":     aws.String(player.PlayerID),
+				"USERNAME":     aws.String(player.playerID),
 				"NEW_PASSWORD": aws.String(newPassword),
 				"SECRET_HASH":  aws.String(secretHash),
 			},
@@ -157,4 +157,27 @@ func handleCognitoError(err error, email string) error {
 	}
 	Logger.Error("Unexpected auth error", "email", email, "error", err)
 	return fmt.Errorf("unexpected error during authentication for user %s: %w", email, err)
+}
+
+func Authenticate(username, password string, ssh_interface *Interface_SSH) bool {
+	authOutput, err := ssh_interface.server.cognito.InitiateAuth(&cognitoidentityprovider.InitiateAuthInput{
+		AuthFlow: aws.String("USER_PASSWORD_AUTH"),
+		AuthParameters: map[string]*string{
+			"USERNAME": aws.String(username),
+			"PASSWORD": aws.String(password),
+		},
+		ClientId: aws.String(ssh_interface.config.Cognito.ClientID),
+	})
+
+	if err != nil {
+		Logger.Error("authentication failed", "username", username, "error", err)
+		return false
+	}
+
+	if authOutput.AuthenticationResult == nil {
+		Logger.Error("no authentication result", "username", username)
+		return false
+	}
+
+	return true
 }

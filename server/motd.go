@@ -49,21 +49,21 @@ func GetAllMOTDs(k *KeyPair) ([]*MOTD, error) {
 	return motds, nil
 }
 
-func DisplayUnseenMOTDs(server *Server, player *Player) error {
-	if server == nil || player == nil {
+func DisplayUnseenMOTDs(player *Player) error {
+	if player.server == nil || player == nil {
 		Logger.Error("Invalid server or player object")
 		return fmt.Errorf("invalid server or player object")
 	}
 
-	Logger.Debug("Displaying MOTDs for player", "playerName", player.PlayerID)
+	Logger.Debug("Displaying MOTDs for player", "playerName", player.playerID)
 
 	defaultMOTDID, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
 	welcomeDisplayed := false
 
 	// First, look for and display the welcome message
-	for _, motd := range server.ActiveMotDs {
+	for _, motd := range player.server.activeMotDs {
 		if motd != nil && motd.MotdID == defaultMOTDID {
-			player.ToPlayer <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
+			player.toPlayer <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
 			welcomeDisplayed = true
 			break
 		}
@@ -71,18 +71,18 @@ func DisplayUnseenMOTDs(server *Server, player *Player) error {
 
 	// If no welcome message was found, display a generic one
 	if !welcomeDisplayed {
-		player.ToPlayer <- "\n\rWelcome to the game!\n\r"
+		player.toPlayer <- "\n\rWelcome to the game!\n\r"
 	}
 
 	// Then display other unseen MOTDs
-	for _, motd := range server.ActiveMotDs {
+	for _, motd := range player.server.activeMotDs {
 		if motd == nil || motd.MotdID == defaultMOTDID {
 			continue
 		}
 
 		// Check if the player has already seen this MOTD
 		seenMOTD := false
-		for _, seenID := range player.SeenMotD {
+		for _, seenID := range player.seenMotD {
 			if seenID == motd.MotdID {
 				seenMOTD = true
 				break
@@ -91,17 +91,17 @@ func DisplayUnseenMOTDs(server *Server, player *Player) error {
 
 		if !seenMOTD {
 			// Display the MOTD to the player
-			player.ToPlayer <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
+			player.toPlayer <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
 
 			// Mark the MOTD as seen
-			player.SeenMotD = append(player.SeenMotD, motd.MotdID)
+			player.seenMotD = append(player.seenMotD, motd.MotdID)
 		}
 	}
 
 	// Save the updated player data
-	err := server.Database.WritePlayer(player)
+	err := player.WritePlayer(player)
 	if err != nil {
-		Logger.Error("Error saving player data after displaying MOTDs", "playerName", player.PlayerID, "error", err)
+		Logger.Error("Error saving player data after displaying MOTDs", "playerName", player.playerID, "error", err)
 		return fmt.Errorf("error saving player data after displaying MOTDs: %w", err)
 	}
 
