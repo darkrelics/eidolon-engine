@@ -156,7 +156,7 @@ func ExecuteQuitCommand(character *Character, tokens []string) {
 	if character.Player == nil {
 		Logger.Error("Character has no associated player")
 		// Perform character-only cleanup if applicable
-		character.Cleanup()
+		character.Stop()
 		return
 	}
 
@@ -173,10 +173,7 @@ func ExecuteQuitCommand(character *Character, tokens []string) {
 	character.End <- true
 
 	// Perform cleanup operations
-	character.Cleanup()
-
-	// Signal the end of character's lifecycle
-	character.Player.Cleanup()
+	character.Stop()
 
 }
 

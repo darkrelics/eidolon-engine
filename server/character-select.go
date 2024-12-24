@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,49 +12,110 @@ import (
 )
 
 func SelectCharacter(ctx context.Context, player *Player) (*Character, error) {
-	Logger.Debug("Player is selecting a character", "playerName", player.playerID)
+	options := buildCharacterOptions(player)
 
 	for {
-		options := buildCharacterOptions(player)
 		if err := sendOptions(ctx, player, options); err != nil {
-			return nil, fmt.Errorf("failed to send options: %w", err)
+			return nil, err
 		}
 
 		input, err := receiveInput(ctx, player)
 		if err != nil {
-			return nil, fmt.Errorf("failed to receive input: %w", err)
+			return nil, err
 		}
 
-		if character, shouldContinue := handleCharacterSelection(ctx, input, options, player); !shouldContinue {
-			return character, nil
+		if input == "X" && len(options) > 0 {
+			if err := handleCharacterDeletion(ctx, options, player); err != nil {
+				player.toPlayer <- fmt.Sprintf("Error deleting character: %v\n\r", err)
+				continue
+			}
+			options = buildCharacterOptions(player)
+			continue
+		}
+
+		choice, err := strconv.Atoi(input)
+		if err != nil || choice < 0 || choice > len(options) {
+			player.toPlayer <- "Invalid choice. Please select a valid option.\n\r"
+			continue
+		}
+
+		if choice == 0 {
+			return createNewCharacter(player)
+		}
+
+		if choice <= len(options) {
+			player.mutex.RLock()
+			characterID := player.characterList[options[choice-1]]
+			player.mutex.RUnlock()
+			return LoadCharacter(characterID, player, player.server.game)
 		}
 	}
 }
 
-func CreateCharacter(player *Player, g *Game) (*Character, error) {
-	Logger.Info("Player is creating a new character", "playerName", player.playerID)
-
-	charName, err := getValidCharacterName(player, g)
+func createNewCharacter(player *Player) (*Character, error) {
+	name, err := getValidCharacterName(player)
 	if err != nil {
 		return nil, err
 	}
 
-	selectedArchetype, err := selectArchetype(player, g)
+	archetype, err := selectArchetype(player)
 	if err != nil {
 		return nil, err
 	}
 
-	room, err := getStartingRoom(g, selectedArchetype)
+	room, err := getStartingRoom(player.server.game, archetype)
 	if err != nil {
 		return nil, err
 	}
 
-	character, err := createAndSaveCharacter(charName, player, room, selectedArchetype, g)
+	character, err := CreateCharacter(name, player, room, archetype, player.server.game)
 	if err != nil {
+		return nil, err
+	}
+
+	err = WriteCharacter(character, player.server.database)
+	if err != nil {
+		return nil, err
+	}
+
+	player.mutex.Lock()
+	if player.characterList == nil {
+		player.characterList = make(map[string]uuid.UUID)
+	}
+	player.characterList[name] = character.ID
+	player.mutex.Unlock()
+
+	if err := player.WritePlayer(); err != nil {
 		return nil, err
 	}
 
 	return character, nil
+}
+
+func getValidCharacterName(player *Player) (string, error) {
+	player.toPlayer <- "\n\rEnter your character name: "
+	name, ok := <-player.fromPlayer
+	if !ok {
+		return "", fmt.Errorf("player input channel closed")
+	}
+
+	name = strings.TrimSpace(name)
+
+	// Name validation rules
+	if len(name) < 2 {
+		return "", fmt.Errorf("character mame must be at least 3 characters")
+	}
+	if len(name) > 15 {
+		return "", fmt.Errorf("character name must be 15 characters or fewer")
+	}
+	if !regexp.MustCompile(`^[a-zA-Z]+$`).MatchString(name) {
+		return "", fmt.Errorf("character name must contain only letters")
+	}
+	if player.server.game.CharacterBloomFilter.Test([]byte(name)) {
+		return "", fmt.Errorf("character name already exists")
+	}
+
+	return name, nil
 }
 
 func buildCharacterOptions(player *Player) []string {
@@ -131,34 +193,63 @@ func handleCharacterSelection(ctx context.Context, input string, options []strin
 }
 
 func loadOrCreateCharacter(ctx context.Context, choice int, options []string, player *Player) (*Character, error) {
-
 	game := player.server.game
 
-	game.Mutex.Lock()
-	defer game.Mutex.Unlock()
-
-	var character *Character
-	var err error
-
 	if choice == 0 {
-		character, err = CreateCharacter(player, game)
-	} else if choice <= len(options) {
+		// Get character name
+		name, err := getValidCharacterName(player)
+		if err != nil {
+			return nil, fmt.Errorf("character name error: %w", err)
+		}
+
+		// Get archetype
+		archetype, err := selectArchetype(player)
+		if err != nil {
+			return nil, fmt.Errorf("archetype selection error: %w", err)
+		}
+
+		// Get starting room
+		room, err := getStartingRoom(game, archetype)
+		if err != nil {
+			return nil, fmt.Errorf("starting room error: %w", err)
+		}
+
+		// Create character
+		character, err := CreateCharacter(name, player, room, archetype, game)
+		if err != nil {
+			return nil, fmt.Errorf("character creation error: %w", err)
+		}
+
+		// Save character to database
+		if err := WriteCharacter(character, player.server.database); err != nil {
+			return nil, fmt.Errorf("character save error: %w", err)
+		}
+
+		// Update player's character list
+		player.mutex.Lock()
+		if player.characterList == nil {
+			player.characterList = make(map[string]uuid.UUID)
+		}
+		player.characterList[name] = character.ID
+		player.mutex.Unlock()
+
+		// Save updated player data
+		if err := player.WritePlayer(); err != nil {
+			return nil, fmt.Errorf("player save error: %w", err)
+		}
+
+		return character, nil
+	}
+
+	// Load existing character
+	if choice <= len(options) {
 		player.mutex.RLock()
 		characterID := player.characterList[options[choice-1]]
 		player.mutex.RUnlock()
-		character, err = player.server.database.LoadCharacter(characterID, player, game)
+		return LoadCharacter(characterID, player, game)
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
-	if character == nil {
-		return nil, fmt.Errorf("failed to create or load character")
-	}
-
-	game.Characters[character.ID] = character
-	return character, nil
+	return nil, fmt.Errorf("invalid choice")
 }
 
 func addCharacterToRoom(character *Character, game *Game) error {
@@ -170,27 +261,6 @@ func addCharacterToRoom(character *Character, game *Game) error {
 	defer character.Room.Mutex.Unlock()
 	character.Room.Characters[character.ID] = character
 	return nil
-}
-
-func getValidCharacterName(player *Player, g *Game) (string, error) {
-	select {
-	case player.toPlayer <- "\n\rEnter your character name: ":
-	default:
-		return "", fmt.Errorf("player output channel blocked")
-	}
-
-	charName, ok := <-player.fromPlayer
-	if !ok {
-		return "", fmt.Errorf("player input channel closed")
-	}
-
-	charName = strings.TrimSpace(charName)
-
-	if err := validateCharacterName(charName, g); err != nil {
-		return "", err
-	}
-
-	return charName, nil
 }
 
 func validateCharacterName(name string, g *Game) error {
@@ -209,18 +279,30 @@ func validateCharacterName(name string, g *Game) error {
 	return nil
 }
 
-func selectArchetype(player *Player, g *Game) (string, error) {
-	archetypeOptions := buildArchetypeOptions(g)
-	if len(archetypeOptions) == 0 {
+func selectArchetype(player *Player) (string, error) {
+	options := buildArchetypeOptions(player.server.game)
+	if len(options) == 0 {
 		return "", fmt.Errorf("no archetypes available")
 	}
 
-	selection, err := promptArchetypeSelection(player, archetypeOptions)
-	if err != nil {
-		return "", err
+	msg := "\n\rSelect a character archetype.\n\r"
+	for i, option := range options {
+		msg += fmt.Sprintf("%d: %s\n\r", i+1, option)
+	}
+	msg += "Enter the number of your choice: "
+
+	player.toPlayer <- msg
+	selection, ok := <-player.fromPlayer
+	if !ok {
+		return "", fmt.Errorf("player input channel closed")
 	}
 
-	return strings.Split(archetypeOptions[selection-1], " - ")[0], nil
+	num, err := strconv.Atoi(strings.TrimSpace(selection))
+	if err != nil || num < 1 || num > len(options) {
+		return "", fmt.Errorf("invalid archetype selection")
+	}
+
+	return strings.Split(options[num-1], " - ")[0], nil
 }
 
 func buildArchetypeOptions(g *Game) []string {
@@ -230,6 +312,26 @@ func buildArchetypeOptions(g *Game) []string {
 	}
 	sort.Strings(options)
 	return options
+}
+
+func getStartingRoom(g *Game, archetype string) (*Room, error) {
+	g.Mutex.RLock()
+	defer g.Mutex.RUnlock()
+
+	startRoomID := int64(1)
+	if arch, ok := g.ArcheTypes[archetype]; ok {
+		startRoomID = arch.StartRoom
+	}
+
+	room, ok := g.Rooms[startRoomID]
+	if !ok {
+		room, ok = g.Rooms[0]
+		if !ok {
+			return nil, fmt.Errorf("no starting or default room found")
+		}
+	}
+
+	return room, nil
 }
 
 func promptArchetypeSelection(player *Player, options []string) (int, error) {
@@ -256,50 +358,6 @@ func promptArchetypeSelection(player *Player, options []string) (int, error) {
 	}
 
 	return num, nil
-}
-
-func getStartingRoom(g *Game, archetype string) (*Room, error) {
-	g.Mutex.RLock()
-	defer g.Mutex.RUnlock()
-
-	startRoomID := int64(1)
-	if arch, ok := g.ArcheTypes[archetype]; ok {
-		startRoomID = arch.StartRoom
-	}
-
-	room, ok := g.Rooms[startRoomID]
-	if !ok {
-		room, ok = g.Rooms[0]
-		if !ok {
-			return nil, fmt.Errorf("no starting or default room found")
-		}
-	}
-
-	return room, nil
-}
-
-func createAndSaveCharacter(name string, player *Player, room *Room, archetype string, g *Game) (*Character, error) {
-	character, err := NewCharacter(name, player, room, archetype, g)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create character: %w", err)
-	}
-
-	player.mutex.Lock()
-	if player.characterList == nil {
-		player.characterList = make(map[string]uuid.UUID)
-	}
-	player.characterList[name] = character.ID
-	player.mutex.Unlock()
-
-	if err := WriteCharacter(character, g.Database); err != nil {
-		return nil, fmt.Errorf("failed to save character to database: %w", err)
-	}
-
-	if err := player.WritePlayer(); err != nil {
-		return nil, fmt.Errorf("failed to save player data: %w", err)
-	}
-
-	return character, nil
 }
 
 func handleCharacterDeletion(ctx context.Context, options []string, player *Player) error {

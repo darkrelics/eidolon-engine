@@ -45,10 +45,13 @@ type Character struct {
 	Inventory   map[string]*Item
 	Mutex       sync.RWMutex
 	Facing      *Character
-	Advancing   bool // true when character is advancing towards their facing target
+	Advancing   bool
 	CombatRange map[uuid.UUID]float64
 	LastEdited  time.Time
 	LastSaved   time.Time
+	inputChan   chan string
+	outputChan  chan string
+	prompt      string
 	End         chan bool
 }
 
@@ -65,48 +68,128 @@ type CharacterData struct {
 	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
 }
 
-// NewCharacter creates a new character with the specified name and archetype.
-func NewCharacter(name string, player *Player, room *Room, archetypeName string, g *Game) (*Character, error) {
-
-	// Check if the character name already exists
-	if g.CharacterBloomFilter.Test([]byte(name)) {
-		return nil, fmt.Errorf("character name '%s' already exists", name)
-	}
-
-	// Add character name to bloom filter
-	g.CharacterBloomFilter.Add([]byte(name))
-
-	character := &Character{
-		Game:        g,
-		ID:          uuid.New(),
-		Room:        room,
-		Name:        name,
-		Player:      player,
-		Health:      float64(g.StartingHealth),
-		Essence:     float64(g.StartingEssence),
+func NewCharacter() *Character {
+	return &Character{
 		Attributes:  make(map[string]float64),
 		Abilities:   make(map[string]float64),
 		Inventory:   make(map[string]*Item),
-		Mutex:       sync.RWMutex{},
-		CombatRange: nil,
-		Facing:      nil,
-		LastSaved:   time.Now(),
-		LastEdited:  time.Now(),
+		CombatRange: make(map[uuid.UUID]float64),
+		inputChan:   make(chan string, 10),
+		outputChan:  make(chan string, 10),
 		End:         make(chan bool),
+		Mutex:       sync.RWMutex{},
+		prompt:      "\n\r> ",
+	}
+}
+
+func (c *Character) Run() error {
+	if c == nil || c.Player == nil {
+		return fmt.Errorf("invalid character or player")
 	}
 
-	// Apply archetype attributes and abilities
+	if c.Player.ctx == nil {
+		return fmt.Errorf("player context is nil")
+	}
+
+	Logger.Debug("Starting character run", "characterName", c.Name)
+
+	if err := c.initializeCharacter(); err != nil {
+		return fmt.Errorf("character initialization failed: %w", err)
+	}
+
+	return c.InputLoop()
+}
+
+func (c *Character) initializeCharacter() error {
+	// Execute initial look command
+	ExecuteLookCommand(c, []string{})
+
+	// Send initial prompt
+	select {
+	case c.outputChan <- c.prompt:
+		return nil
+	case <-c.Player.ctx.Done():
+		return fmt.Errorf("context cancelled before prompt")
+	}
+}
+
+func (c *Character) Stop() error {
+	Logger.Debug("Stopping character", "characterName", c.Name, "characterID", c.ID)
+
+	if c.Game == nil {
+		return fmt.Errorf("game is nil")
+	}
+
+	select {
+	case c.End <- true:
+	default:
+		// Channel already closed or full
+	}
+
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+
+	if err := c.cleanupRoom(); err != nil {
+		return err
+	}
+
+	if err := WriteCharacter(c, c.Game.Database); err != nil {
+		Logger.Error("Error saving character data",
+			"characterName", c.Name,
+			"characterID", c.ID,
+			"error", err)
+		return fmt.Errorf("failed to save character: %w", err)
+	}
+
+	c.Game.Mutex.Lock()
+	delete(c.Game.Characters, c.ID)
+	c.Game.Mutex.Unlock()
+
+	Logger.Debug("Character stopped successfully",
+		"characterName", c.Name,
+		"characterID", c.ID)
+	return nil
+}
+
+func (c *Character) cleanupRoom() error {
+	if c.Room != nil {
+		SendRoomMessageExcept(c.Room,
+			fmt.Sprintf("\n\r%s has left the room.\n\r", c.Name), c)
+
+		c.Room.Mutex.Lock()
+		delete(c.Room.Characters, c.ID)
+		c.Room.Mutex.Unlock()
+	}
+	return nil
+}
+
+func CreateCharacter(name string, player *Player, room *Room, archetypeName string, game *Game) (*Character, error) {
+	// Validate character name
+	if game.CharacterBloomFilter.Test([]byte(name)) {
+		return nil, fmt.Errorf("character name '%s' already exists", name)
+	}
+
+	character := NewCharacter()
+	character.ID = uuid.New()
+	character.Name = name
+	character.Player = player
+	character.Room = room
+	character.Game = game
+	character.Health = float64(game.StartingHealth)
+	character.Essence = float64(game.StartingEssence)
+	character.LastEdited = time.Now()
+	character.LastSaved = time.Now()
+
 	if archetypeName != "" {
-		if archetype, ok := g.ArcheTypes[archetypeName]; ok {
+		if archetype, ok := game.ArcheTypes[archetypeName]; ok {
 			for attr, value := range archetype.Attributes {
 				character.Attributes[attr] = value
 			}
 			for ability, value := range archetype.Abilities {
 				character.Abilities[ability] = value
 			}
-			// Set the start room if it's defined in the archetype
 			if archetype.StartRoom != 0 {
-				if startRoom, ok := g.Rooms[archetype.StartRoom]; ok {
+				if startRoom, ok := game.Rooms[archetype.StartRoom]; ok {
 					character.Room = startRoom
 				}
 			}
@@ -115,12 +198,59 @@ func NewCharacter(name string, player *Player, room *Room, archetypeName string,
 		}
 	}
 
-	// Add the character to the server's Characters map
-	g.Mutex.Lock()
-	g.Characters[character.ID] = character
-	g.Mutex.Unlock()
+	// Save character to database
+	if err := WriteCharacter(character, game.Database); err != nil {
+		return nil, fmt.Errorf("failed to save character: %w", err)
+	}
+
+	// Update player's character list
+	player.mutex.Lock()
+	if player.characterList == nil {
+		player.characterList = make(map[string]uuid.UUID)
+	}
+	player.characterList[name] = character.ID
+	player.mutex.Unlock()
+
+	// Save updated player data
+	if err := player.WritePlayer(); err != nil {
+		return nil, fmt.Errorf("failed to save player data: %w", err)
+	}
+
+	game.Mutex.Lock()
+	game.Characters[character.ID] = character
+	game.Mutex.Unlock()
+
+	game.CharacterBloomFilter.Add([]byte(name))
+	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
+
+	return character, nil
+}
+
+func LoadCharacter(characterID uuid.UUID, player *Player, game *Game) (*Character, error) {
+	character := NewCharacter()
+	character.ID = characterID
+	character.Player = player
+	character.Game = game
+
+	cd := &CharacterData{}
+	key := map[string]*dynamodb.AttributeValue{
+		"CharacterID": {S: aws.String(characterID.String())},
+	}
+
+	if err := game.Database.Get("characters", key, cd); err != nil {
+		return nil, fmt.Errorf("error loading character data: %w", err)
+	}
+
+	if err := character.FromData(cd, game); err != nil {
+		return nil, fmt.Errorf("error reconstructing character: %w", err)
+	}
+
+	game.Mutex.Lock()
+	game.Characters[character.ID] = character
+	game.Mutex.Unlock()
 
 	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
+	character.LastSaved = time.Now()
 
 	return character, nil
 }
@@ -204,59 +334,6 @@ func WriteCharacter(character *Character, kp *KeyPair) error {
 	character.LastSaved = time.Now()
 
 	return nil
-}
-
-// LoadCharacter retrieves a character from the DynamoDB database and reconstructs the Character object.
-func (kp *KeyPair) LoadCharacter(characterID uuid.UUID, player *Player, Game *Game) (*Character, error) {
-
-	key := map[string]*dynamodb.AttributeValue{
-		"CharacterID": {S: aws.String(characterID.String())},
-	}
-
-	var cd CharacterData
-	err := kp.Get("characters", key, &cd)
-	if err != nil {
-		Logger.Error("Error loading character data", "characterID", characterID, "error", err)
-		return nil, fmt.Errorf("error loading character data: %w", err)
-	}
-
-	character := &Character{
-		Game:        Game,
-		ID:          characterID,
-		Player:      player,
-		Mutex:       sync.RWMutex{},
-		Facing:      nil,
-		Advancing:   false,
-		CombatRange: nil,
-		LastSaved:   time.Now(),
-	}
-
-	if err := character.FromData(&cd, Game); err != nil {
-		Logger.Error("Error reconstructing character from data", "characterID", characterID, "error", err)
-		return nil, fmt.Errorf("error loading character from data: %w", err)
-	}
-
-	// Ensure the character is added to the room's character list
-	if character.Room != nil {
-
-		SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s has arrived.\n\r", character.Name), character)
-
-		character.Room.Mutex.Lock()
-		if character.Room.Characters == nil {
-			character.Room.Characters = make(map[uuid.UUID]*Character)
-		}
-		character.Room.Characters[character.ID] = character
-		character.Room.Mutex.Unlock()
-		Logger.Debug("Added character to room", "characterName", character.Name, "characterID", character.ID, "roomID", character.Room.RoomID)
-	} else {
-		Logger.Warn("Character loaded without a valid room", "characterName", character.Name, "characterID", character.ID)
-	}
-
-	Logger.Debug("Loaded character", "characterName", character.Name, "characterID", character.ID)
-
-	character.LastSaved = time.Now()
-
-	return character, nil
 }
 
 // DeleteCharacter removes a character from the player's character list and the database.
@@ -635,175 +712,59 @@ func moveCharacter(character *Character, direction string) error {
 	return nil
 }
 
-func (c *Character) Cleanup() {
-
-	Logger.Debug("Cleaning up character", "characterName", c.Name, "characterID", c.ID)
-
-	// Check if the Game exists.
-	if c.Game == nil {
-		Logger.Error("Game is nil in character cleanup", "characterName", c.Name)
-		return
-	}
-
-	// Check if Character map exists in the Game.
-	if c.Game.Characters == nil {
-		Logger.Error("Game.Characters is nil in character cleanup", "characterName", c.Name)
-		return
-	}
-
-	// Check if Character exists in the Game's Character map.
-	if _, exists := c.Game.Characters[c.ID]; !exists {
-		Logger.Error("Character not found in Game's Characters map during cleanup", "characterName", c.Name)
-		return
-	}
-
-	// Signal end of character's lifecycle
-	defer func() { c.End <- true }()
-
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
-
-	// Save character data to the database
-	err := WriteCharacter(c, c.Game.Database)
-	if err != nil {
-		Logger.Error("Error saving character data during cleanup",
-			"characterName", c.Name, "characterID", c.ID, "error", err)
-	}
-
-	if c.Room != nil {
-		// Notify the room of character departure
-		SendRoomMessageExcept(c.Room, fmt.Sprintf("\n\r%s has left the room.\n\r", c.Name), c)
-
-		// Remove character from the room's character list
-		c.Room.Mutex.Lock()
-		delete(c.Room.Characters, c.ID)
-		c.Room.Mutex.Unlock()
-
-		Logger.Debug("Characters in room after cleanup", "roomID", c.Room.RoomID, "characters", c.Room.Characters)
-	}
-
-	// Remove character from server's character list
-	c.Game.Mutex.Lock()
-	delete(c.Game.Characters, c.ID)
-	c.Game.Mutex.Unlock()
-
-	Logger.Debug("Character cleaned up successfully", "characterName", c.Name, "characterID", c.ID)
-}
-
 // InputLoop is the main loop that handles player commands.
 // It reads commands from the player's input and executes them accordingly.
-func (c *Character) InputLoop() {
-	if c == nil || c.Player == nil {
-		Logger.Error("Invalid character or player in input loop")
-		return
-	}
-
-	// Add safety check for CTX
-	if c.Player.ctx == nil {
-		Logger.Error("Player context is nil", "characterName", c.Name)
-		return
-	}
-
-	Logger.Debug("Starting input loop for character", "characterName", c.Name)
-
-	// Initially execute the look command with no additional tokens
-	ExecuteLookCommand(c, []string{})
-
-	// Safety check before sending prompt
-	if c.Player.toPlayer == nil {
-		Logger.Error("Player ToPlayer channel is nil", "characterName", c.Name)
-		return
-	}
-
-	// Send initial prompt - blocking write for initial prompt is acceptable
-	select {
-	case c.Player.toPlayer <- c.Player.prompt:
-	case <-c.Player.ctx.Done():
-		c.Player.Cleanup()
-		return
-	}
-
+func (c *Character) InputLoop() error {
 	var lastCommand string
 	shouldQuit := false
-
-	// Create command processing timeout
 	const commandTimeout = 5 * time.Second
 
 	for !shouldQuit {
-		// Additional safety check inside loop
-		if c.Player == nil || c.Player.ctx == nil {
-			Logger.Error("Player or context became nil during loop", "characterName", c.Name)
-			return
-		}
-
 		select {
 		case <-c.Player.ctx.Done():
-			Logger.Info("Player context cancelled", "characterName", c.Name)
-			shouldQuit = true
-			continue
+			return fmt.Errorf("player context cancelled")
 
-		case inputLine, more := <-c.Player.fromPlayer:
-			if !more {
-				Logger.Debug("Input channel closed for player", "playerName", c.Player.playerID)
-				shouldQuit = true
-				continue
+		case inputLine, ok := <-c.inputChan:
+			if !ok {
+				return fmt.Errorf("input channel closed")
 			}
-			if lastCommand == "" { // Only accept new command if previous one is processed
+			if lastCommand == "" {
 				lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
 			}
 
 		case <-c.Game.ticker.C:
 			if lastCommand != "" {
-				// Create timeout context for command processing
 				cmdCtx, cancel := context.WithTimeout(c.Player.ctx, commandTimeout)
+				defer cancel()
 
-				// Process command in separate goroutine
-				done := make(chan bool, 1)
-				go func() {
-					verb, tokens, err := ValidateCommand(strings.TrimSpace(lastCommand))
-					if err != nil {
-						select {
-						case c.Player.toPlayer <- err.Error() + "\n\r":
-						case <-cmdCtx.Done():
-							return
-						}
-					} else {
-						// Execute the command
-						shouldQuit = ExecuteCommand(c, verb, tokens)
-						Logger.Debug("Player issued command",
-							"playerName", c.Player.playerID,
-							"command", strings.Join(tokens, " "))
+				verb, tokens, err := ValidateCommand(strings.TrimSpace(lastCommand))
+				if err != nil {
+					select {
+					case c.outputChan <- err.Error() + "\n\r":
+					case <-cmdCtx.Done():
+						return fmt.Errorf("command context cancelled")
 					}
-					done <- true
-				}()
-
-				// Wait for command completion or timeout
-				select {
-				case <-done:
-					if !shouldQuit {
-						// Non-blocking prompt send
-						select {
-						case c.Player.toPlayer <- c.Player.prompt:
-						case <-cmdCtx.Done():
-						default:
-							Logger.Warn("Unable to send prompt", "characterName", c.Name)
-						}
-					}
-				case <-cmdCtx.Done():
-					Logger.Warn("Command processing timed out",
-						"characterName", c.Name,
-						"command", lastCommand)
+				} else {
+					shouldQuit = ExecuteCommand(c, verb, tokens)
+					Logger.Debug("Command executed",
+						"character", c.Name,
+						"command", strings.Join(tokens, " "))
 				}
 
-				cancel()         // Cleanup timeout context
-				lastCommand = "" // Clear the command regardless of execution result
+				if !shouldQuit {
+					select {
+					case c.outputChan <- c.prompt:
+					case <-cmdCtx.Done():
+						return fmt.Errorf("prompt context cancelled")
+					default:
+						Logger.Warn("Unable to send prompt", "characterName", c.Name)
+					}
+				}
+
+				lastCommand = ""
 			}
 		}
 	}
 
-	// Cleanup on exit
-
-	c.Cleanup()
-	c.Player.Cleanup()
-	Logger.Debug("Input loop ended for character", "characterName", c.Name)
+	return nil
 }
