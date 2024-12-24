@@ -82,16 +82,14 @@ func NewPlayer(server *Server, playerName string, conn ssh.Channel) (*Player, er
 
 func (p *Player) Run(requests <-chan *ssh.Request) {
 	Logger.Info("starting player session", "player", p.playerID)
-	defer p.Cleanup()
+	defer p.Stop()
 
 	group, ctx := errgroup.WithContext(p.ctx)
 
-	// Handle SSH requests
 	group.Go(func() error {
 		return p.handleRequests(ctx, requests)
 	})
 
-	// Start I/O routines
 	group.Go(func() error {
 		return p.handleInput(ctx)
 	})
@@ -100,9 +98,18 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 		return p.handleOutput(ctx)
 	})
 
-	// Start game session
 	group.Go(func() error {
-		return p.runGameSession(ctx)
+		if err := DisplayUnseenMOTDs(p); err != nil {
+			return fmt.Errorf("motd display: %w", err)
+		}
+
+		character, err := SelectCharacter(ctx, p)
+		if err != nil {
+			return fmt.Errorf("character selection: %w", err)
+		}
+
+		p.character = character
+		return character.Run()
 	})
 
 	if err := group.Wait(); err != nil {
@@ -110,22 +117,36 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 	}
 }
 
-func (p *Player) runGameSession(ctx context.Context) error {
-	if err := DisplayUnseenMOTDs(p); err != nil {
-		return fmt.Errorf("motd display: %w", err)
-	}
+func (p *Player) Stop() error {
+	var stopErr error
+	p.shutdownOnce.Do(func() {
+		p.cancel()
 
-	character, err := SelectCharacter(ctx, p)
-	if err != nil {
-		return fmt.Errorf("character selection: %w", err)
-	}
+		if p.character != nil {
+			if err := p.character.Stop(); err != nil {
+				Logger.Error("character stop error", "playerID", p.playerID, "error", err)
+				stopErr = err
+				return
+			}
+		}
 
-	p.mutex.Lock()
-	p.prompt = "> "
-	p.character = character
-	p.mutex.Unlock()
+		p.saveData()
 
-	return character.InputLoop()
+		if p.connection != nil {
+			p.connection.Close()
+		}
+
+		close(p.toPlayer)
+		close(p.fromPlayer)
+		close(p.playerError)
+
+		if p.server != nil {
+			_ = p.server.RemovePlayer(p.index)
+		}
+
+		Logger.Info("player stopped", "playerID", p.playerID)
+	})
+	return stopErr
 }
 
 func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request) error {
@@ -180,27 +201,6 @@ func (p *Player) handleOutput(ctx context.Context) error {
 			}
 		}
 	}
-}
-
-func (p *Player) Cleanup() {
-	p.shutdownOnce.Do(func() {
-		p.cancel()
-		p.saveData()
-
-		if p.connection != nil {
-			p.connection.Close()
-		}
-
-		close(p.toPlayer)
-		close(p.fromPlayer)
-		close(p.playerError)
-
-		if p.server != nil {
-			_ = p.server.RemovePlayer(p.index)
-		}
-
-		Logger.Info("player cleanup complete", "playerID", p.playerID)
-	})
 }
 
 func (p *Player) processRequest(req *ssh.Request) {

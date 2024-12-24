@@ -108,7 +108,7 @@ func (s *Server) shutdown(reason string) error {
 	defer s.mutex.Unlock()
 
 	for _, player := range s.players {
-		player.Cleanup()
+		player.Stop()
 	}
 
 	return nil
