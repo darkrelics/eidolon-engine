@@ -84,25 +84,51 @@ Resources:
       UserPoolId: !Ref CognitoUserPool
       ClientName: !Ref AppClientName
       GenerateSecret: true
-      AllowedOAuthFlows:
-        - code
-      AllowedOAuthScopes:
-        - openid
-        - email
-        - profile
+      ExplicitAuthFlows:
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      PreventUserExistenceErrors: ENABLED
       CallbackURLs:
         - !Ref CallbackURL
       LogoutURLs:
         - !Ref SignOutURL
-      PreventUserExistenceErrors: ENABLED
-      SupportedIdentityProviders:
-        - COGNITO
 
   CognitoUserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
       UserPoolId: !Ref CognitoUserPool
       Domain: !Ref UserPoolName
+
+  CognitoReadOnlyPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: "Policy providing read-only access to Cognito user objects"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - cognito-idp:ListUsers
+              - cognito-idp:DescribeUserPool
+            Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPool}"
+
+  CognitoReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cognito-idp.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref CognitoReadOnlyPolicy
+      Description: "Role with read-only access to Cognito user objects"
 
 Outputs:
   UserPoolId:
