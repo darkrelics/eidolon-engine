@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -272,7 +273,7 @@ func (kp *KeyPair) DeleteCharacter(Player *Player, characterName string) error {
 	delete(Player.characterList, characterName)
 
 	// Update the player data in the database
-	err := kp.WritePlayer(Player)
+	err := Player.WritePlayer()
 	if err != nil {
 		Logger.Error("Failed to update player data after character deletion", "playerName", Player.playerID, "error", err)
 		return fmt.Errorf("failed to update player data: %w", err)
@@ -687,4 +688,122 @@ func (c *Character) Cleanup() {
 	c.Game.Mutex.Unlock()
 
 	Logger.Debug("Character cleaned up successfully", "characterName", c.Name, "characterID", c.ID)
+}
+
+// InputLoop is the main loop that handles player commands.
+// It reads commands from the player's input and executes them accordingly.
+func (c *Character) InputLoop() {
+	if c == nil || c.Player == nil {
+		Logger.Error("Invalid character or player in input loop")
+		return
+	}
+
+	// Add safety check for CTX
+	if c.Player.ctx == nil {
+		Logger.Error("Player context is nil", "characterName", c.Name)
+		return
+	}
+
+	Logger.Debug("Starting input loop for character", "characterName", c.Name)
+
+	// Initially execute the look command with no additional tokens
+	ExecuteLookCommand(c, []string{})
+
+	// Safety check before sending prompt
+	if c.Player.toPlayer == nil {
+		Logger.Error("Player ToPlayer channel is nil", "characterName", c.Name)
+		return
+	}
+
+	// Send initial prompt - blocking write for initial prompt is acceptable
+	select {
+	case c.Player.toPlayer <- c.Player.prompt:
+	case <-c.Player.ctx.Done():
+		c.Player.Cleanup()
+		return
+	}
+
+	var lastCommand string
+	shouldQuit := false
+
+	// Create command processing timeout
+	const commandTimeout = 5 * time.Second
+
+	for !shouldQuit {
+		// Additional safety check inside loop
+		if c.Player == nil || c.Player.ctx == nil {
+			Logger.Error("Player or context became nil during loop", "characterName", c.Name)
+			return
+		}
+
+		select {
+		case <-c.Player.ctx.Done():
+			Logger.Info("Player context cancelled", "characterName", c.Name)
+			shouldQuit = true
+			continue
+
+		case inputLine, more := <-c.Player.fromPlayer:
+			if !more {
+				Logger.Debug("Input channel closed for player", "playerName", c.Player.playerID)
+				shouldQuit = true
+				continue
+			}
+			if lastCommand == "" { // Only accept new command if previous one is processed
+				lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
+			}
+
+		case <-c.Game.ticker.C:
+			if lastCommand != "" {
+				// Create timeout context for command processing
+				cmdCtx, cancel := context.WithTimeout(c.Player.ctx, commandTimeout)
+
+				// Process command in separate goroutine
+				done := make(chan bool, 1)
+				go func() {
+					verb, tokens, err := ValidateCommand(strings.TrimSpace(lastCommand))
+					if err != nil {
+						select {
+						case c.Player.toPlayer <- err.Error() + "\n\r":
+						case <-cmdCtx.Done():
+							return
+						}
+					} else {
+						// Execute the command
+						shouldQuit = ExecuteCommand(c, verb, tokens)
+						Logger.Debug("Player issued command",
+							"playerName", c.Player.playerID,
+							"command", strings.Join(tokens, " "))
+					}
+					done <- true
+				}()
+
+				// Wait for command completion or timeout
+				select {
+				case <-done:
+					if !shouldQuit {
+						// Non-blocking prompt send
+						select {
+						case c.Player.toPlayer <- c.Player.prompt:
+						case <-cmdCtx.Done():
+						default:
+							Logger.Warn("Unable to send prompt", "characterName", c.Name)
+						}
+					}
+				case <-cmdCtx.Done():
+					Logger.Warn("Command processing timed out",
+						"characterName", c.Name,
+						"command", lastCommand)
+				}
+
+				cancel()         // Cleanup timeout context
+				lastCommand = "" // Clear the command regardless of execution result
+			}
+		}
+	}
+
+	// Cleanup on exit
+
+	c.Cleanup()
+	c.Player.Cleanup()
+	Logger.Debug("Input loop ended for character", "characterName", c.Name)
 }

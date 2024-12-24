@@ -125,7 +125,7 @@ func (p *Player) runGameSession(ctx context.Context) error {
 	p.character = character
 	p.mutex.Unlock()
 
-	return InputLoop(ctx, character)
+	return character.InputLoop()
 }
 
 func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request) error {
