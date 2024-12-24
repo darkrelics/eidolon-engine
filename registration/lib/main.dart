@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const AuthScreen(), // Changed to AuthScreen
+      home: const AuthScreen(),
     );
   }
 }
@@ -35,24 +35,31 @@ class AuthState extends ChangeNotifier {
   bool _isVerificationMode = false;
   bool _isSignUpMode = true;
   CognitoUser? _currentUser;
+  late final CognitoUserPool userPool;
 
+  // Getters for controllers
+  TextEditingController get emailController => _emailController;
+  TextEditingController get verificationCodeController => _verificationCodeController;
+  TextEditingController get passwordController => _passwordController;
 
+  // Public getters for state
   CognitoUser? get currentUser => _currentUser;
   bool get isVerificationMode => _isVerificationMode;
   bool get isSignUpMode => _isSignUpMode;
   String get message => _message;
   bool get isLoading => _isLoading;
-    
-    late final CognitoUserPool userPool;
-    
-    AuthState(){
+
+  AuthState() {
+    _initializeCognito();
+  }
+
+  void _initializeCognito() {
     final userPoolId = const String.fromEnvironment('USER_POOL_ID');
     final clientId = const String.fromEnvironment('CLIENT_ID');
     final clientSecret = const String.fromEnvironment('CLIENT_SECRET');
 
     if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
-      _message = 'Error: Missing required Cognito configuration';
-      notifyListeners();
+      _updateMessage('Error: Missing required Cognito configuration');
       return;
     }
 
@@ -63,92 +70,114 @@ class AuthState extends ChangeNotifier {
         clientSecret: clientSecret,
       );
     } catch (e) {
-       _message = 'Error initializing Cognito: ${e.toString()}';
-        notifyListeners();
+      _updateMessage('Error initializing Cognito: ${e.toString()}');
     }
   }
-  
-  Future<void> signUp() async {
-    _isLoading = true;
-    notifyListeners();
 
+  void _updateMessage(String message) {
+    _message = message;
+    notifyListeners();
+  }
+
+  void _setLoading(bool loading) {
+    _isLoading = loading;
+    notifyListeners();
+  }
+
+  Future<void> signUp() async {
+    if (!_validateInputs()) return;
+
+    _setLoading(true);
     try {
       final signUpResult = await userPool.signUp(
         _emailController.text,
-         _passwordController.text,
+        _passwordController.text,
         userAttributes: [
           AttributeArg(name: 'email', value: _emailController.text),
         ],
       );
-        _isLoading = false;
-        if (signUpResult.userConfirmed ?? false) {
-          _message = 'User registered successfully. You can now log in.';
-          _isSignUpMode = false;
-        } else {
-         _message = 'Verification code sent. Please check your email and enter it below.';
-          _isVerificationMode = true;
-        }
-      notifyListeners();
+
+      if (signUpResult.userConfirmed ?? false) {
+        _updateMessage('User registered successfully. You can now log in.');
+        _isSignUpMode = false;
+      } else {
+        _updateMessage('Verification code sent. Please check your email and enter it below.');
+        _isVerificationMode = true;
+      }
     } on CognitoClientException catch (e) {
-         _isLoading = false;
-        _message = 'Cognito Error: ${e.code} - ${e.message}';
-      notifyListeners();
+      _updateMessage('Cognito Error: ${e.code} - ${e.message}');
     } catch (e) {
-        _isLoading = false;
-        _message = 'An unexpected error occurred: ${e.toString()}';
-        notifyListeners();
+      _updateMessage('An unexpected error occurred: ${e.toString()}');
+    } finally {
+      _setLoading(false);
     }
   }
 
   Future<void> confirmRegistration() async {
-    _isLoading = true;
-    notifyListeners();
+    if (_verificationCodeController.text.isEmpty) {
+      _updateMessage('Please enter the verification code');
+      return;
+    }
+
+    _setLoading(true);
     try {
       final user = CognitoUser(_emailController.text, userPool);
       await user.confirmRegistration(_verificationCodeController.text);
-      _isLoading = false;
-      _message = 'Email confirmed successfully. You can now log in.';
-        _isVerificationMode = false;
-      notifyListeners();
+      _updateMessage('Email confirmed successfully. You can now log in.');
+      _isVerificationMode = false;
     } on CognitoClientException catch (e) {
-       _isLoading = false;
-      _message = 'Cognito Error: ${e.code} - ${e.message}';
-      notifyListeners();
-    }
-      catch (e) {
-          _isLoading = false;
-        _message = 'An unexpected error occurred: ${e.toString()}';
-      notifyListeners();
+      _updateMessage('Cognito Error: ${e.code} - ${e.message}');
+    } catch (e) {
+      _updateMessage('An unexpected error occurred: ${e.toString()}');
+    } finally {
+      _setLoading(false);
     }
   }
-  
+
   Future<void> signIn() async {
-     _isLoading = true;
-     notifyListeners();
+    if (!_validateInputs()) return;
+
+    _setLoading(true);
     try {
       final user = CognitoUser(_emailController.text, userPool);
-      final authDetails = AuthenticationDetails(username: _emailController.text, password: _passwordController.text);
+      final authDetails = AuthenticationDetails(
+        username: _emailController.text,
+        password: _passwordController.text,
+      );
+      
       await user.authenticateUser(authDetails);
-      _isLoading = false;
-      _message = 'Login Successful!';
+      _currentUser = user;
+      _updateMessage('Login Successful!');
       _isSignUpMode = false;
-        _currentUser = user;
-        notifyListeners();
     } on CognitoClientException catch (e) {
-        _isLoading = false;
-       _message = 'Cognito Error: ${e.code} - ${e.message}';
-        notifyListeners();
+      _updateMessage('Cognito Error: ${e.code} - ${e.message}');
     } catch (e) {
-        _isLoading = false;
-        _message = 'An unexpected error occurred: ${e.toString()}';
-      notifyListeners();
+      _updateMessage('An unexpected error occurred: ${e.toString()}');
+    } finally {
+      _setLoading(false);
     }
   }
-  
-  void toggleAuthMode(){
-      _message = '';
-      _isSignUpMode = !_isSignUpMode;
-      notifyListeners();
+
+  bool _validateInputs() {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      _updateMessage('Please fill in all fields');
+      return false;
+    }
+    return true;
+  }
+
+  void toggleAuthMode() {
+    _message = '';
+    _isSignUpMode = !_isSignUpMode;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _verificationCodeController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
 
@@ -164,86 +193,107 @@ class AuthScreen extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
-          child: Consumer<AuthState>(builder: (context, authState, child) => Column(
-            children: <Widget>[
-               if(authState.isSignUpMode) ...[
-                    TextFormField(
-                        controller: authState._emailController,
-                         decoration: const InputDecoration(labelText: 'Email'),
-                          validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                   return 'Please enter your email';
-                                  }
-                                   return null;
-                          },
-                     ),
-                      TextFormField(
-                          controller: authState._passwordController,
-                          obscureText: true,
-                            decoration: const InputDecoration(labelText: 'Password'),
-                             validator: (value) {
-                               if (value == null || value.isEmpty) {
-                                 return 'Please enter your password';
-                               }
-                                  return null;
-                             },
-                           ),
-                       const SizedBox(height: 20),
-                           ElevatedButton(
-                            onPressed: authState.isLoading ? null : () => authState.signUp(),
-                            child: const Text('Sign Up'),
-                        ),
-                        const SizedBox(height: 20),
-                         TextButton(onPressed: () => authState.toggleAuthMode(), child: const Text("Already have an account? Sign in")),
-                ] else if (!authState.isVerificationMode) ...[
-                   TextFormField(
-                        controller: authState._emailController,
-                         decoration: const InputDecoration(labelText: 'Email'),
-                          validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                   return 'Please enter your email';
-                                  }
-                                   return null;
-                          },
-                     ),
-                      TextFormField(
-                          controller: authState._passwordController,
-                          obscureText: true,
-                            decoration: const InputDecoration(labelText: 'Password'),
-                             validator: (value) {
-                               if (value == null || value.isEmpty) {
-                                 return 'Please enter your password';
-                               }
-                                  return null;
-                             },
-                           ),
-                      const SizedBox(height: 20),
-                      ElevatedButton(
-                        onPressed: authState.isLoading ? null : () => authState.signIn(),
-                         child: const Text('Sign In'),
-                        ),
-                       const SizedBox(height: 20),
-                        TextButton(onPressed: () => authState.toggleAuthMode(), child: const Text("Need an Account? Sign up")),
-                 ] else ...[
-                 TextFormField(
-                  controller: authState._verificationCodeController,
-                   decoration: const InputDecoration(labelText: 'Verification Code'),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                       return 'Please enter verification code';
-                    }
-                    return null;
+          child: Consumer<AuthState>(
+            builder: (context, authState, child) => Column(
+              children: <Widget>[
+                if (authState.isSignUpMode) ...[
+                  TextFormField(
+                    controller: authState.emailController,
+                    decoration: const InputDecoration(labelText: 'Email'),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      return null;
                     },
-                   ),
-                 const SizedBox(height: 20),
-                   ElevatedButton(
+                  ),
+                  TextFormField(
+                    controller: authState.passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: 'Password'),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: authState.isLoading ? null : () => authState.signUp(),
+                    child: const Text('Sign Up'),
+                  ),
+                  const SizedBox(height: 20),
+                  TextButton(
+                    onPressed: () => authState.toggleAuthMode(),
+                    child: const Text("Already have an account? Sign in"),
+                  ),
+                ] else if (!authState.isVerificationMode) ...[
+                  TextFormField(
+                    controller: authState.emailController,
+                    decoration: const InputDecoration(labelText: 'Email'),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      return null;
+                    },
+                  ),
+                  TextFormField(
+                    controller: authState.passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: 'Password'),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: authState.isLoading ? null : () => authState.signIn(),
+                    child: const Text('Sign In'),
+                  ),
+                  const SizedBox(height: 20),
+                  TextButton(
+                    onPressed: () => authState.toggleAuthMode(),
+                    child: const Text("Need an Account? Sign up"),
+                  ),
+                ] else ...[
+                  TextFormField(
+                    controller: authState.verificationCodeController,
+                    decoration: const InputDecoration(labelText: 'Verification Code'),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter verification code';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
                     onPressed: authState.isLoading ? null : () => authState.confirmRegistration(),
-                     child: const Text('Verify'),
-                    ),
+                    child: const Text('Verify'),
+                  ),
                 ],
-             const SizedBox(height: 20),
-             if (authState.isLoading) const CircularProgressIndicator() else Text(authState.message),
-            ],
+                const SizedBox(height: 20),
+                if (authState.isLoading)
+                  const CircularProgressIndicator()
+                else if (authState.message.isNotEmpty)
+                  Text(
+                    authState.message,
+                    style: TextStyle(
+                      color: authState.message.toLowerCase().contains('error')
+                          ? Colors.red
+                          : Colors.green,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+              ],
+            ),
           ),
         ),
       ),
