@@ -39,7 +39,8 @@ class AuthState extends ChangeNotifier {
 
   // Getters for controllers
   TextEditingController get emailController => _emailController;
-  TextEditingController get verificationCodeController => _verificationCodeController;
+  TextEditingController get verificationCodeController =>
+      _verificationCodeController;
   TextEditingController get passwordController => _passwordController;
 
   // Public getters for state
@@ -101,7 +102,8 @@ class AuthState extends ChangeNotifier {
         _updateMessage('User registered successfully. You can now log in.');
         _isSignUpMode = false;
       } else {
-        _updateMessage('Verification code sent. Please check your email and enter it below.');
+        _updateMessage(
+            'Verification code sent. Please check your email and enter it below.');
         _isVerificationMode = true;
       }
     } on CognitoClientException catch (e) {
@@ -144,7 +146,7 @@ class AuthState extends ChangeNotifier {
         username: _emailController.text,
         password: _passwordController.text,
       );
-      
+
       await user.authenticateUser(authDetails);
       _currentUser = user;
       _updateMessage('Login Successful!');
@@ -188,7 +190,8 @@ class AuthScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.watch<AuthState>().isSignUpMode ? 'Sign Up' : 'Sign In'),
+        title: Text(
+            context.watch<AuthState>().isSignUpMode ? 'Sign Up' : 'Sign In'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -221,7 +224,8 @@ class AuthScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton(
-                    onPressed: authState.isLoading ? null : () => authState.signUp(),
+                    onPressed:
+                        authState.isLoading ? null : () => authState.signUp(),
                     child: const Text('Sign Up'),
                   ),
                   const SizedBox(height: 20),
@@ -254,7 +258,8 @@ class AuthScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton(
-                    onPressed: authState.isLoading ? null : () => authState.signIn(),
+                    onPressed:
+                        authState.isLoading ? null : () => authState.signIn(),
                     child: const Text('Sign In'),
                   ),
                   const SizedBox(height: 20),
@@ -265,7 +270,8 @@ class AuthScreen extends StatelessWidget {
                 ] else ...[
                   TextFormField(
                     controller: authState.verificationCodeController,
-                    decoration: const InputDecoration(labelText: 'Verification Code'),
+                    decoration:
+                        const InputDecoration(labelText: 'Verification Code'),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter verification code';
@@ -275,7 +281,9 @@ class AuthScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton(
-                    onPressed: authState.isLoading ? null : () => authState.confirmRegistration(),
+                    onPressed: authState.isLoading
+                        ? null
+                        : () => authState.confirmRegistration(),
                     child: const Text('Verify'),
                   ),
                 ],
