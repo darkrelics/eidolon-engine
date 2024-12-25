@@ -116,9 +116,16 @@ func (c *Character) initializeCharacter() error {
 func (c *Character) Stop() error {
 	Logger.Debug("Stopping character", "characterName", c.Name, "characterID", c.ID)
 
+	if c == nil {
+		return fmt.Errorf("character is nil")
+	}
+
 	if c.Game == nil {
 		return fmt.Errorf("game is nil")
 	}
+
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
 
 	select {
 	case c.End <- true:
@@ -148,6 +155,9 @@ func (c *Character) Stop() error {
 	Logger.Debug("Character stopped successfully",
 		"characterName", c.Name,
 		"characterID", c.ID)
+
+	Logger.Debug("Character stopped successfully", "Name", c.Name, "ID", c.ID)
+
 	return nil
 }
 
