@@ -6,71 +6,32 @@ import (
 )
 
 func ExecuteAssessCommand(character *Character, tokens []string) {
-	Logger.Debug("Player is assessing combat situation", "playerName", character.Player.playerID)
-
-	if !character.IsInCombat() {
-		// Add facing info even when not in combat
-		if character.Facing != nil {
-			character.Player.toPlayer <- fmt.Sprintf("\n\rYou are facing %s but not in combat.\n\r", character.Facing.Name)
-		} else {
-			character.Player.toPlayer <- "\n\rYou are not currently in combat.\n\r"
-		}
-		return
-	}
-
 	var assessment strings.Builder
 	assessment.WriteString("\n\rCombat Assessment:\n\r")
 
-	if len(character.CombatRange) == 0 {
-		// Add facing info even with no range information
+	if !character.IsInCombat() {
 		if character.Facing != nil {
-			assessment.WriteString(fmt.Sprintf("You are facing %s but not engaged with any opponents.\n\r", character.Facing.Name))
+			assessment.WriteString(fmt.Sprintf("You are facing %s but not in combat.\n\r", character.Facing.Name))
 		} else {
-			assessment.WriteString("You are in combat, but not engaged with any specific opponents.\n\r")
+			assessment.WriteString("You are not currently in combat.\n\r")
 		}
-	} else {
-		// Track who we're advancing towards
+		character.Player.toPlayer <- assessment.String()
+		return
+	}
+
+	if len(character.CombatRange) > 0 {
 		var advanceTarget *Character
 		if character.Advancing && character.Facing != nil {
 			advanceTarget = character.Facing
 		}
 
-		// First assess our own situation with each combatant
 		for targetID, distance := range character.CombatRange {
-			targetCharacter := character.Game.Characters[targetID]
-			if targetCharacter == nil {
-				continue
+			if targetCharacter := character.Game.Characters[targetID]; targetCharacter != nil {
+				assessment.WriteString(formatCombatStatus(character, targetCharacter, distance, advanceTarget))
 			}
-
-			// Build status line with precise distance
-			statusLine := fmt.Sprintf("%s is at %s range (%.1f units)",
-				targetCharacter.Name,
-				getRangeDescription(distance),
-				distance)
-
-			// Add facing information
-			if targetCharacter.GetFacing() == character {
-				statusLine += " and is facing you"
-			}
-
-			// Note if this is who we're facing
-			if targetCharacter == character.Facing {
-				statusLine += " and you are facing them"
-			}
-
-			// Add advance information
-			if targetCharacter == advanceTarget {
-				statusLine += " and you are advancing"
-			}
-			if targetCharacter.Advancing && targetCharacter.Facing == character {
-				statusLine += " and they are advancing towards you"
-			}
-
-			assessment.WriteString(statusLine + ".\n\r")
 		}
 	}
 
-	// Add escape possibility
 	if character.CanEscape() {
 		assessment.WriteString("You can attempt to escape from combat.\n\r")
 	} else {
@@ -78,6 +39,28 @@ func ExecuteAssessCommand(character *Character, tokens []string) {
 	}
 
 	character.Player.toPlayer <- assessment.String()
+}
+
+func formatCombatStatus(character, target *Character, distance float64, advanceTarget *Character) string {
+	var status strings.Builder
+	status.WriteString(fmt.Sprintf("%s is at %s range (%.1f units)",
+		target.Name, getRangeDescription(distance), distance))
+
+	if target.GetFacing() == character {
+		status.WriteString(" and is facing you")
+	}
+	if target == character.Facing {
+		status.WriteString(" and you are facing them")
+	}
+	if target == advanceTarget {
+		status.WriteString(" and you are advancing")
+	}
+	if target.Advancing && target.Facing == character {
+		status.WriteString(" and they are advancing towards you")
+	}
+	status.WriteString(".\n\r")
+
+	return status.String()
 }
 
 func ExecuteFaceCommand(character *Character, tokens []string) {
