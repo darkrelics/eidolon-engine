@@ -194,36 +194,30 @@ func loadOrCreateCharacter(choice int, options []string, player *Player) (*Chara
 	game := player.server.game
 
 	if choice == 0 {
-		// Get character name
 		name, err := getValidCharacterName(player)
 		if err != nil {
-			return nil, fmt.Errorf("character name error: %w", err)
+			return nil, fmt.Errorf("name validation: %w", err)
 		}
 
-		// Get archetype
 		archetype, err := selectArchetype(player)
 		if err != nil {
-			return nil, fmt.Errorf("archetype selection error: %w", err)
+			return nil, fmt.Errorf("archetype selection: %w", err)
 		}
 
-		// Get starting room
 		room, err := getStartingRoom(game, archetype)
 		if err != nil {
-			return nil, fmt.Errorf("starting room error: %w", err)
+			return nil, fmt.Errorf("starting room: %w", err)
 		}
 
-		// Create character
 		character, err := CreateCharacter(name, player, room, archetype, game)
 		if err != nil {
-			return nil, fmt.Errorf("character creation error: %w", err)
+			return nil, fmt.Errorf("character creation: %w", err)
 		}
 
-		// Save character to database
 		if err := WriteCharacter(character, player.server.database); err != nil {
-			return nil, fmt.Errorf("character save error: %w", err)
+			return nil, fmt.Errorf("character save: %w", err)
 		}
 
-		// Update player's character list
 		player.mutex.Lock()
 		if player.characterList == nil {
 			player.characterList = make(map[string]uuid.UUID)
@@ -231,15 +225,13 @@ func loadOrCreateCharacter(choice int, options []string, player *Player) (*Chara
 		player.characterList[name] = character.ID
 		player.mutex.Unlock()
 
-		// Save updated player data
 		if err := player.WritePlayer(); err != nil {
-			return nil, fmt.Errorf("player save error: %w", err)
+			return nil, fmt.Errorf("player save: %w", err)
 		}
 
 		return character, nil
 	}
 
-	// Load existing character
 	if choice <= len(options) {
 		player.mutex.RLock()
 		characterID := player.characterList[options[choice-1]]
