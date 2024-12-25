@@ -12,7 +12,9 @@ import (
 )
 
 type KeyPair struct {
-	db *dynamodb.DynamoDB
+	db          *dynamodb.DynamoDB
+	maxRetries  int
+	baseBackoff time.Duration
 }
 
 // NewKeyPair initializes a new DynamoDB client.
@@ -29,7 +31,9 @@ func NewKeyPair(region string) (*KeyPair, error) {
 	svc := dynamodb.New(sess)
 
 	return &KeyPair{
-		db: svc,
+		db:          svc,
+		maxRetries:  3,
+		baseBackoff: time.Second,
 	}, nil
 }
 
