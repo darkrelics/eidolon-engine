@@ -2,7 +2,7 @@
 Multi User Dungeon Deployment Script
 """
 
-import traceback
+import os
 
 import boto3
 import yaml
@@ -20,8 +20,23 @@ DYNAMO_TEMPLATE_PATH = "../cloudformation/dynamo.yml"
 CODEBUILD_TEMPLATE_PATH = "../cloudformation/codebuild.yml"
 CLOUDWATCH_TEMPLATE_PATH = "../cloudformation/cloudwatch.yml"
 
-# Configuration file path
-CONFIG_PATH = "../ssh_server/config.yml"
+# Configuration file paths
+CONFIG_PATH = "../server/config.yml"
+CONFIG_TEMPLATE_PATH = "../server/config.template.yml"
+
+
+def load_config() -> dict:
+    if not os.path.exists(CONFIG_PATH):
+        if not os.path.exists(CONFIG_TEMPLATE_PATH):
+            raise FileNotFoundError(f"Neither {CONFIG_PATH} nor {CONFIG_TEMPLATE_PATH} exist")
+        with open(CONFIG_TEMPLATE_PATH, "r", encoding="utf-8") as template_file:
+            config = yaml.safe_load(template_file)
+        with open(CONFIG_PATH, "w", encoding="utf-8") as config_file:
+            yaml.dump(config, config_file, default_flow_style=False)
+        return config
+
+    with open(CONFIG_PATH, "r", encoding="utf-8") as file:
+        return yaml.safe_load(file) or {}
 
 
 def validate_s3_bucket(bucket_name, region="us-east-1") -> bool:
@@ -91,15 +106,18 @@ def wait_for_stack_completion(client, stack_name) -> None:
 
 
 def get_stack_outputs(client, stack_name) -> dict:
-    stack = client.describe_stacks(StackName=stack_name)
-    outputs = stack["Stacks"][0]["Outputs"]
-    return {output["OutputKey"]: output["OutputValue"] for output in outputs}
+    try:
+        stack = client.describe_stacks(StackName=stack_name)
+        outputs = stack["Stacks"][0]["Outputs"]
+        return {output["OutputKey"]: output["OutputValue"] for output in outputs}
+    except ClientError as e:
+        print(f"Error getting stack outputs for {stack_name}: {e}")
+        return {}
 
 
 def update_configuration_file(config_updates) -> None:
     try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as file:
-            config = yaml.safe_load(file) or {}
+        config = load_config()
 
         # Ensure top-level keys exist
         for key in ["Server", "Aws", "Cognito", "Game", "Logging"]:
@@ -149,8 +167,8 @@ def update_configuration_file(config_updates) -> None:
             yaml.dump(config, file, default_flow_style=False)
 
         print("Configuration file updated successfully.")
-    except Exception as err:
-        print(f"An error occurred while updating configuration file: {err}")
+    except (IOError, yaml.YAMLError) as e:
+        print(f"Error updating configuration file: {e}")
         print("Current config_updates:", config_updates)
         print("Current config:", config)
 
@@ -192,7 +210,6 @@ def gather_all_parameters() -> dict:
 
 def main() -> None:
     cloudformation_client = boto3.client("cloudformation")
-
     try:
         # Gather all parameters upfront
         all_parameters: dict = gather_all_parameters()
@@ -236,6 +253,15 @@ def main() -> None:
 
         codebuild_outputs: dict = get_stack_outputs(cloudformation_client, CODEBUILD_STACK_NAME)
 
+        # Start the 'RegistrationApplicationBuild' CodeBuild job
+        codebuild_client = boto3.client("codebuild")
+        try:
+            print("Starting RegistrationApplicationBuild CodeBuild job...")
+            build_response = codebuild_client.start_build(projectName="RegistrationApplicationBuild")
+            print(f"Build started successfully: {build_response['build']['id']}")
+        except ClientError as build_err:
+            print(f"Failed to start RegistrationApplicationBuild CodeBuild job: {build_err}")
+
         # Deploy CloudWatch stack
         cloudwatch_template: str = load_template(CLOUDWATCH_TEMPLATE_PATH)
         if not deploy_stack(cloudformation_client, CLOUDWATCH_STACK_NAME, cloudwatch_template, all_parameters["cloudwatch"]):
@@ -256,7 +282,6 @@ def main() -> None:
         print("Deployment completed successfully.")
     except Exception as e:
         print(f"An unexpected error occurred during deployment: {e}")
-        traceback.print_exc()
 
 
 if __name__ == "__main__":
