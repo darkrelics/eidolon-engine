@@ -435,7 +435,7 @@ func WearItem(item *Item, c *Character) error {
 }
 
 // ListInventory lists the items in a character's inventory.
-func ListInventory(c *Character) string {
+func (c *Character) ListInventory() string {
 	Logger.Debug("Character is listing inventory", "characterName", c.Name)
 
 	c.Mutex.RLock()
@@ -542,7 +542,7 @@ func AddToInventory(item *Item, c *Character) {
 }
 
 // FindInInventory searches for an item in the character's inventory by name.
-func FindInInventory(itemName string, c *Character) *Item {
+func (c *Character) FindInInventory(itemName string) *Item {
 	Logger.Debug("Character is searching inventory for item", "characterName", c.Name, "itemName", itemName)
 
 	c.Mutex.RLock()
@@ -588,7 +588,7 @@ func RemoveFromInventory(item *Item, c *Character) {
 
 // CanCarryItem checks if the character can carry the specified item.
 // This is a placeholder for future weight and capacity checks.
-func CanCarryItem(item *Item, c *Character) bool {
+func (c *Character) CanCarryItem(item *Item) bool {
 	Logger.Debug("Character is checking if they can carry item", "characterName", c.Name, "itemName", item.Name)
 
 	// Placeholder implementation; always returns true for now

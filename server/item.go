@@ -406,7 +406,7 @@ func LoadAllItems(kp *KeyPair) (map[string]*Item, error) {
 }
 
 // AddItem adds an item to the room's item list.
-func AddItem(item *Item, r *Room) {
+func (r *Room) AddItem(item *Item) {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 
