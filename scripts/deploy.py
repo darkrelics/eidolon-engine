@@ -3,6 +3,7 @@ Multi User Dungeon Deployment Script
 """
 
 import os
+
 import boto3
 import yaml
 from botocore.exceptions import ClientError
@@ -33,7 +34,7 @@ def load_config() -> dict:
         with open(CONFIG_PATH, "w", encoding="utf-8") as config_file:
             yaml.dump(config, config_file, default_flow_style=False)
         return config
-    
+
     with open(CONFIG_PATH, "r", encoding="utf-8") as file:
         return yaml.safe_load(file) or {}
 
