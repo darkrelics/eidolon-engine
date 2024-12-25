@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -47,10 +48,39 @@ func loadConfiguration(configFile string) (*Configuration, error) {
 		return nil, fmt.Errorf("error reading config file '%s': %w", configFile, err)
 	}
 
+	// Add validation before unmarshaling
+	if err := validateConfigData(data); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling config from '%s': %w", configFile, err)
 	}
 
 	return &config, nil
+}
+
+func validateConfigData(data []byte) error {
+	// Verify required fields exist
+	var rawConfig map[string]interface{}
+	if err := yaml.Unmarshal(data, &rawConfig); err != nil {
+		return err
+	}
+
+	required := []string{"Aws.Region", "Game.Balance", "Game.AutoSave"}
+	for _, field := range required {
+		parts := strings.Split(field, ".")
+		value := rawConfig
+		for _, part := range parts {
+			if v, ok := value[part].(map[string]interface{}); ok {
+				value = v
+				continue
+			}
+			if _, ok := value[part]; !ok {
+				return fmt.Errorf("missing required field: %s", field)
+			}
+		}
+	}
+	return nil
 }
