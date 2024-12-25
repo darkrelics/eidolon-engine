@@ -130,20 +130,17 @@ func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string)
 func handleCognitoError(err error, email string) error {
 	if awsErr, ok := err.(awserr.Error); ok {
 		switch awsErr.Code() {
-		case cognitoidentityprovider.ErrCodeUserNotFoundException:
-			Logger.Error("User not found", "email", email)
-			return fmt.Errorf("incorrect username or password")
-
-		case cognitoidentityprovider.ErrCodeNotAuthorizedException:
-			Logger.Error("Unauthorized access", "email", email)
+		case cognitoidentityprovider.ErrCodeUserNotFoundException,
+			cognitoidentityprovider.ErrCodeNotAuthorizedException:
+			Logger.Error("Auth failed", "email", email)
 			return fmt.Errorf("incorrect username or password")
 
 		case cognitoidentityprovider.ErrCodeUserNotConfirmedException:
-			Logger.Error("Unconfirmed user", "email", email)
-			return fmt.Errorf("user is not confirmed")
+			Logger.Error("User unconfirmed", "email", email)
+			return fmt.Errorf("account not confirmed")
 
 		case cognitoidentityprovider.ErrCodePasswordResetRequiredException:
-			Logger.Error("Password reset required", "email", email)
+			Logger.Error("Password reset needed", "email", email)
 			return fmt.Errorf("password reset required")
 
 		case cognitoidentityprovider.ErrCodeInvalidParameterException:
@@ -151,12 +148,13 @@ func handleCognitoError(err error, email string) error {
 			return fmt.Errorf("invalid authentication parameters")
 
 		default:
-			Logger.Error("Authentication failed", "email", email, "error", awsErr)
-			return fmt.Errorf("authentication failed for user %s: %w", email, awsErr)
+			Logger.Error("Unknown auth error", "email", email, "code", awsErr.Code())
+			return fmt.Errorf("authentication failed")
 		}
 	}
-	Logger.Error("Unexpected auth error", "email", email, "error", err)
-	return fmt.Errorf("unexpected error during authentication for user %s: %w", email, err)
+
+	Logger.Error("Non-AWS auth error", "email", email)
+	return fmt.Errorf("authentication failed")
 }
 
 func Authenticate(username, password string, ssh_interface *Interface_SSH) bool {
