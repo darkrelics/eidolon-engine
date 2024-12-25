@@ -1,4 +1,4 @@
-package core
+package main
 
 import (
 	"fmt"
@@ -10,6 +10,12 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 )
+
+type KeyPair struct {
+	db          *dynamodb.DynamoDB
+	maxRetries  int
+	baseBackoff time.Duration
+}
 
 // NewKeyPair initializes a new DynamoDB client.
 func NewKeyPair(region string) (*KeyPair, error) {
@@ -25,7 +31,9 @@ func NewKeyPair(region string) (*KeyPair, error) {
 	svc := dynamodb.New(sess)
 
 	return &KeyPair{
-		db: svc,
+		db:          svc,
+		maxRetries:  3,
+		baseBackoff: time.Second,
 	}, nil
 }
 

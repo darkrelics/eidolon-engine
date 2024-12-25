@@ -1,4 +1,4 @@
-package core
+package main
 
 import (
 	"fmt"
@@ -11,6 +11,96 @@ import (
 	"github.com/google/uuid"
 )
 
+type Item struct {
+	ID          uuid.UUID
+	PrototypeID uuid.UUID
+	Name        string
+	Description string
+	Mass        float64
+	Value       uint64
+	Stackable   bool
+	MaxStack    uint32
+	Quantity    uint32
+	Wearable    bool
+	WornOn      []string
+	Verbs       map[string]string
+	Overrides   map[string]string
+	TraitMods   map[string]int8
+	Container   bool
+	Contents    []*Item
+	IsWorn      bool
+	CanPickUp   bool
+	Metadata    map[string]string
+	Mutex       sync.RWMutex
+	LastEdited  time.Time
+	LastSaved   time.Time
+}
+
+type ItemData struct {
+	ItemID      string            `json:"itemId" dynamodbav:"ItemID"`
+	PrototypeID string            `json:"prototypeID" dynamodbav:"PrototypeID"`
+	Name        string            `json:"name" dynamodbav:"Name"`
+	Description string            `json:"description" dynamodbav:"Description"`
+	Mass        float64           `json:"mass" dynamodbav:"Mass"`
+	Value       uint64            `json:"value" dynamodbav:"Value"`
+	Stackable   bool              `json:"stackable" dynamodbav:"Stackable"`
+	MaxStack    uint32            `json:"max_stack" dynamodbav:"MaxStack"`
+	Quantity    uint32            `json:"quantity" dynamodbav:"Quantity"`
+	Wearable    bool              `json:"wearable" dynamodbav:"Wearable"`
+	WornOn      []string          `json:"worn_on" dynamodbav:"WornOn"`
+	Verbs       map[string]string `json:"verbs" dynamodbav:"Verbs"`
+	Overrides   map[string]string `json:"overrides" dynamodbav:"Overrides"`
+	TraitMods   map[string]int8   `json:"trait_mods" dynamodbav:"TraitMods"`
+	Container   bool              `json:"container" dynamodbav:"Container"`
+	Contents    []string          `json:"contents" dynamodbav:"Contents"`
+	IsWorn      bool              `json:"is_worn" dynamodbav:"IsWorn"`
+	CanPickUp   bool              `json:"can_pick_up" dynamodbav:"CanPickUp"`
+	Metadata    map[string]string `json:"metadata" dynamodbav:"Metadata"`
+}
+
+type Prototype struct {
+	ID          uuid.UUID
+	Name        string
+	Description string
+	Mass        float64
+	Value       uint64
+	Stackable   bool
+	MaxStack    uint32
+	Quantity    uint32
+	Wearable    bool
+	WornOn      []string
+	Verbs       map[string]string
+	Overrides   map[string]string
+	TraitMods   map[string]int8
+	Container   bool
+	Contents    []uuid.UUID
+	CanPickUp   bool
+	Metadata    map[string]string
+	Mutex       sync.RWMutex
+	LastEdited  time.Time
+	LastSaved   time.Time
+}
+
+type PrototypeData struct {
+	PrototypeID string            `json:"id" dynamodbav:"prototypeID"`
+	Name        string            `json:"name" dynamodbav:"name"`
+	Description string            `json:"description" dynamodbav:"description"`
+	Mass        float64           `json:"mass" dynamodbav:"mass"`
+	Value       uint64            `json:"value" dynamodbav:"value"`
+	Stackable   bool              `json:"stackable" dynamodbav:"stackable"`
+	MaxStack    uint32            `json:"max_stack" dynamodbav:"max_stack"`
+	Quantity    uint32            `json:"quantity" dynamodbav:"quantity"`
+	Wearable    bool              `json:"wearable" dynamodbav:"wearable"`
+	WornOn      []string          `json:"worn_on" dynamodbav:"worn_on"`
+	Verbs       map[string]string `json:"verbs" dynamodbav:"verbs"`
+	Overrides   map[string]string `json:"overrides" dynamodbav:"overrides"`
+	TraitMods   map[string]int8   `json:"trait_mods" dynamodbav:"trait_mods"`
+	Container   bool              `json:"container" dynamodbav:"container"`
+	Contents    []string          `json:"contents" dynamodbav:"contents"`
+	CanPickUp   bool              `json:"can_pick_up" dynamodbav:"can_pick_up"`
+	Metadata    map[string]string `json:"metadata" dynamodbav:"metadata"`
+}
+
 // DisplayPrototypes logs the details of each prototype for debugging purposes.
 func DisplayPrototypes(prototypes map[uuid.UUID]*Prototype) {
 	for _, prototype := range prototypes {
@@ -19,7 +109,7 @@ func DisplayPrototypes(prototypes map[uuid.UUID]*Prototype) {
 }
 
 // StorePrototypes stores item prototypes into the DynamoDB table.
-func (kp *KeyPair) StorePrototypes(prototypes map[uuid.UUID]*Prototype) error {
+func StorePrototypes(prototypes map[uuid.UUID]*Prototype, kp *KeyPair) error {
 	for _, prototype := range prototypes {
 		prototypeData := PrototypeData{
 			PrototypeID: prototype.ID.String(),
@@ -55,7 +145,7 @@ func (kp *KeyPair) StorePrototypes(prototypes map[uuid.UUID]*Prototype) error {
 }
 
 // LoadPrototypes retrieves all item prototypes from the DynamoDB table.
-func (kp *KeyPair) LoadPrototypes() (map[uuid.UUID]*Prototype, error) {
+func LoadPrototypes(kp *KeyPair) (map[uuid.UUID]*Prototype, error) {
 	var prototypeDataList []PrototypeData
 	err := kp.Scan("prototypes", &prototypeDataList)
 	if err != nil {
@@ -99,7 +189,7 @@ func (kp *KeyPair) LoadPrototypes() (map[uuid.UUID]*Prototype, error) {
 }
 
 // LoadItem retrieves an item from the DynamoDB table.
-func (k *KeyPair) LoadItem(id string) (*Item, error) {
+func LoadItem(id string, k *KeyPair) (*Item, error) {
 	if id == "" {
 		return nil, fmt.Errorf("empty item ID provided")
 	}
@@ -117,15 +207,15 @@ func (k *KeyPair) LoadItem(id string) (*Item, error) {
 		return nil, fmt.Errorf("error loading item data: %w", err)
 	}
 
-	return k.itemFromData(&itemData)
+	return itemFromData(&itemData, k)
 }
 
 // WriteItem stores an item into the DynamoDB table, handling nested contents if it's a container.
-func (k *KeyPair) WriteItem(obj *Item) error {
+func WriteItem(obj *Item, k *KeyPair) error {
 	// Recursively write contained items if the item is a container
 	if obj.Container {
 		for _, contentItem := range obj.Contents {
-			if err := k.WriteItem(contentItem); err != nil {
+			if err := WriteItem(contentItem, k); err != nil {
 				Logger.Error("Error writing content item", "contentItemID", contentItem.ID, "parentItemID", obj.ID, "error", err)
 				return fmt.Errorf("error writing content item %s: %w", contentItem.ID, err)
 			}
@@ -175,7 +265,7 @@ func (k *KeyPair) WriteItem(obj *Item) error {
 }
 
 // SaveActiveItems saves all active items from rooms and characters to the database.
-func (g *Game) SaveActiveItems() error {
+func SaveActiveItems(g *Game) error {
 	if g == nil {
 		return fmt.Errorf("server is nil")
 	}
@@ -245,7 +335,7 @@ func (g *Game) SaveActiveItems() error {
 		}
 
 		// Attempt to write the item to the database
-		if err := g.Database.WriteItem(item); err != nil {
+		if err := WriteItem(item, g.Database); err != nil {
 			Logger.Error("Error saving item", "itemName", item.Name, "itemID", item.ID, "error", err)
 			// Continue saving other items even if one fails
 		} else {
@@ -259,7 +349,7 @@ func (g *Game) SaveActiveItems() error {
 	return nil
 }
 
-func (g *Game) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
+func CreateItemFromPrototype(prototypeID uuid.UUID, g *Game) (*Item, error) {
 	prototype, exists := g.Prototypes[prototypeID]
 	if !exists {
 		Logger.Error("Prototype not found", "prototypeID", prototypeID)
@@ -302,7 +392,7 @@ func (g *Game) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 	if newItem.Container {
 		newItem.Contents = make([]*Item, 0, len(prototype.Contents))
 		for _, contentProtoID := range prototype.Contents {
-			newContentItem, err := g.CreateItemFromPrototype(contentProtoID)
+			newContentItem, err := CreateItemFromPrototype(contentProtoID, g)
 			if err != nil {
 				Logger.Error("Error creating content item from prototype", "prototypeID", contentProtoID, "error", err)
 				continue // Skip this content item but continue with others
@@ -312,7 +402,7 @@ func (g *Game) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 	}
 
 	// Save the new item to the database
-	if err := g.Database.WriteItem(newItem); err != nil {
+	if err := WriteItem(newItem, g.Database); err != nil {
 		Logger.Error("Failed to write new item to database", "itemName", newItem.Name, "itemID", newItem.ID, "error", err)
 		return nil, fmt.Errorf("failed to write new item to database: %w", err)
 	}
@@ -324,7 +414,7 @@ func (g *Game) CreateItemFromPrototype(prototypeID uuid.UUID) (*Item, error) {
 }
 
 // itemFromData creates an Item from ItemData
-func (kp *KeyPair) itemFromData(itemData *ItemData) (*Item, error) {
+func itemFromData(itemData *ItemData, kp *KeyPair) (*Item, error) {
 	if itemData == nil {
 		return nil, fmt.Errorf("itemData is nil")
 	}
@@ -367,7 +457,7 @@ func (kp *KeyPair) itemFromData(itemData *ItemData) (*Item, error) {
 	if item.Container {
 		item.Contents = make([]*Item, 0, len(itemData.Contents))
 		for _, contentID := range itemData.Contents {
-			contentItem, err := kp.LoadItem(contentID)
+			contentItem, err := LoadItem(contentID, kp)
 			if err != nil {
 				Logger.Error("Error loading content item", "contentID", contentID, "parentItemID", item.ID, "error", err)
 				continue // Skip this content item but continue with others
@@ -379,81 +469,8 @@ func (kp *KeyPair) itemFromData(itemData *ItemData) (*Item, error) {
 	return item, nil
 }
 
-// getVisibleItems returns a list of item names in the room.
-func (r *Room) getVisibleItems() []string {
-	if r == nil {
-		Logger.Error("Room is nil in getVisibleItems")
-		return []string{}
-	}
-
-	Logger.Debug("Getting visible items in room", "room_id", r.RoomID)
-
-	r.Mutex.RLock()
-	defer r.Mutex.RUnlock()
-
-	// Log room details
-	Logger.Debug("Room object details",
-		"room_id", r.RoomID,
-		"area", r.Area,
-		"title", r.Title,
-		"description", r.Description)
-
-	// Log exits
-	exitList := make([]string, 0, len(r.Exits))
-	if r.Exits != nil {
-		for direction, exit := range r.Exits {
-			if exit != nil && exit.TargetRoom != nil {
-				exitList = append(exitList, fmt.Sprintf("%s -> Room %d", direction, exit.TargetRoom.RoomID))
-			} else if exit != nil {
-				exitList = append(exitList, fmt.Sprintf("%s -> Invalid Target Room", direction))
-			}
-		}
-	}
-	Logger.Debug("Room exits", "exits", exitList)
-
-	// Log characters
-	characterList := make([]string, 0, len(r.Characters))
-	if r.Characters != nil {
-		for _, character := range r.Characters {
-			if character != nil {
-				characterList = append(characterList, fmt.Sprintf("%s (ID: %s)", character.Name, character.ID))
-			}
-		}
-	}
-	Logger.Debug("Characters in room", "characters", characterList)
-
-	// Log and process items
-	allItems := make([]string, 0)
-	visibleItems := make([]string, 0)
-	if r.Items != nil {
-		for itemID, item := range r.Items {
-			if item == nil {
-				Logger.Warn("Nil item found with ID in room", "item_id", itemID, "room_id", r.RoomID)
-				continue
-			}
-
-			itemInfo := fmt.Sprintf("%s (ID: %s, CanPickUp: %v)", item.Name, itemID, item.CanPickUp)
-			allItems = append(allItems, itemInfo)
-
-			if item.CanPickUp {
-				visibleItems = append(visibleItems, item.Name)
-				Logger.Debug("Found visible item", "item_name", item.Name, "item_id", itemID, "room_id", r.RoomID)
-			} else {
-				Logger.Debug("Item not visible (can't be picked up)", "item_name", item.Name, "item_id", itemID, "room_id", r.RoomID)
-			}
-		}
-	} else {
-		Logger.Warn("Items map is nil for room", "room_id", r.RoomID)
-	}
-
-	Logger.Debug("All items in room", "items", allItems)
-	Logger.Debug("Visible items in room", "room_id", r.RoomID, "total_items", len(allItems), "visible_items", visibleItems)
-
-	return visibleItems
-}
-
 // LoadAllItems loads all items for all rooms.
-func (kp *KeyPair) LoadAllItems() (map[string]*Item, error) {
+func LoadAllItems(kp *KeyPair) (map[string]*Item, error) {
 	var itemsData []ItemData
 	err := kp.Scan("items", &itemsData)
 	if err != nil {
@@ -467,7 +484,7 @@ func (kp *KeyPair) LoadAllItems() (map[string]*Item, error) {
 			Logger.Warn("Skipping item with empty ID")
 			continue
 		}
-		item, err := kp.itemFromData(&itemData)
+		item, err := itemFromData(&itemData, kp)
 		if err != nil {
 			Logger.Error("Error creating item from data", "item_id", itemData.ItemID, "error", err)
 			continue
@@ -500,7 +517,7 @@ func (r *Room) AddItem(item *Item) {
 }
 
 // RemoveItem removes an item from the room's item list.
-func (r *Room) RemoveItem(item *Item) {
+func RemoveItem(item *Item, r *Room) {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 

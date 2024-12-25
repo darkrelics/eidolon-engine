@@ -99,6 +99,8 @@ Key components:
 - [ ] Add rate limiting to the server.
 - [ ] Expand error handling.
 - [ ] Add Session Timeout.
+- [ ] Add log rotation for by Cloudwatch Stream.
+- [ ] Add batching for Clpudwatch log writes.
 
 ## Commands
 
@@ -221,16 +223,6 @@ Deploying the server involves several steps:
    go build ./ssh_server
    ./ssh_server
    ```
-
-## Development
-
-- `core/` directory contains the main game logic and types.
-- `data/` directory contains the data files for the game.
-- `database/` directory contains Python scripts for database management.
-- `editor/` directory contains the editor for creating and editing game content.
-- `registration/` directory contains the web registration page for new players.
-- `scripts/` directory contains deployment and utility scripts.
-- `ssh_server/` directory contains the main server implementation.
 
 ## License
 

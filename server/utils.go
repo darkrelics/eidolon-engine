@@ -1,81 +1,34 @@
-package core
+package main
 
 import (
-	"bufio"
 	"fmt"
 	"math"
 	"math/rand"
-	"os"
 	"strings"
-	"time"
+	"sync"
 	"unicode"
 )
 
-func Challenge(attacker, defender, balance float64) float64 {
-	// Calculate the difference to determine the shift
-	diff := attacker - defender
-
-	// Simplified sigmoid function evaluation at x=0 with shift
-	sigmoidValue := 1 / (1 + math.Exp(balance*diff))
-
-	// Generate a random float64 number
-	randomNumber := rand.Float64()
-
-	// Divide the random number by the sigmoid value
-	result := randomNumber / sigmoidValue
-
-	return result
+type Index struct {
+	IndexID uint64
+	mu      sync.RWMutex
 }
 
-// AutoSave periodically saves the game state in the background.
-func AutoSave(game *Game, stop chan os.Signal) {
-	// Configure the auto-save interval
-	interval := game.Config.Game.AutoSave
-	if interval == 0 {
-		interval = 5 // Default to 5 minutes
-		Logger.Warn("Auto-save interval not configured, defaulting to 5 minutes")
-	}
+func (i *Index) GetID() uint64 {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 
-	// Convert interval to duration
-	saveInterval := time.Duration(interval) * time.Minute
-
-	// Create a channel to signal the routine to stop
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-
-	Logger.Info("Starting auto-save routine with interval", "interval", saveInterval)
-
-	for {
-		select {
-		case <-time.After(saveInterval):
-			err := performAutoSave(game)
-			if err != nil {
-				Logger.Error("Auto-save failed", "error", err)
-			} else {
-				Logger.Debug("Auto-save completed successfully")
-			}
-		case <-stopCh:
-			Logger.Info("Auto-save routine stopped")
-			return
-		case <-stop:
-			Logger.Info("Received signal to stop auto-save routine")
-			return
-		}
-	}
+	i.IndexID++
+	return i.IndexID
 }
 
-func performAutoSave(game *Game) error {
-	// Save active game state
-	if err := game.SaveActiveCharacters(); err != nil {
-		return fmt.Errorf("failed to save characters: %w", err)
+func (i *Index) SetID(id uint64) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	if id > i.IndexID {
+		i.IndexID = id
 	}
-	if err := game.SaveActiveItems(); err != nil {
-		return fmt.Errorf("failed to save items: %w", err)
-	}
-	if err := game.SaveActiveRooms(); err != nil {
-		return fmt.Errorf("failed to save rooms: %w", err)
-	}
-	return nil
 }
 
 // wrapText wraps the given text to the specified width, preserving
@@ -125,48 +78,6 @@ func wrapText(text string, width int) string {
 	}
 
 	return result.String()
-}
-
-func (i *Index) GetID() uint64 {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	i.IndexID++
-	return i.IndexID
-}
-
-func (i *Index) SetID(id uint64) {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	if id > i.IndexID {
-		i.IndexID = id
-	}
-}
-
-// loadNamesFromFile reads a file line by line and returns a slice of names.
-func loadNamesFromFile(filePath string) ([]string, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open %s: %w", filePath, err)
-	}
-	defer file.Close()
-
-	var names []string
-	scanner := bufio.NewScanner(file)
-	lineNumber := 1
-	for scanner.Scan() {
-		name := strings.TrimSpace(scanner.Text())
-		if name != "" {
-			names = append(names, strings.ToLower(name))
-		}
-		lineNumber++
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
-	}
-
-	return names, nil
 }
 
 func getLookTarget(character *Character, target string) string {
@@ -230,4 +141,46 @@ func ParseDims(b []byte) (width, height int) {
 	width = int(b[0])<<24 | int(b[1])<<16 | int(b[2])<<8 | int(b[3])
 	height = int(b[4])<<24 | int(b[5])<<16 | int(b[6])<<8 | int(b[7])
 	return width, height
+}
+
+func Challenge(attacker, defender, balance float64) float64 {
+	// Calculate the difference to determine the shift
+	diff := attacker - defender
+
+	// Simplified sigmoid function evaluation at x=0 with shift
+	sigmoidValue := 1 / (1 + math.Exp(balance*diff))
+
+	// Generate a random float64 number
+	randomNumber := rand.Float64()
+
+	// Divide the random number by the sigmoid value
+	result := randomNumber / sigmoidValue
+
+	return result
+}
+
+// LoadCharacterNames loads all character names from the database to initialize the bloom filter.
+func LoadCharacterNames(kp *KeyPair) (map[string]bool, error) {
+	names := make(map[string]bool)
+
+	var characters []struct {
+		CharacterName string `dynamodbav:"Name"`
+	}
+
+	err := kp.Scan("characters", &characters)
+	if err != nil {
+		Logger.Error("Error scanning characters table", "error", err)
+		return nil, fmt.Errorf("error scanning characters: %w", err)
+	}
+
+	for _, character := range characters {
+		names[strings.ToLower(character.CharacterName)] = true
+	}
+
+	if len(names) == 0 {
+		Logger.Warn("No characters found in the database")
+		return names, nil // Return empty map without error
+	}
+
+	return names, nil
 }

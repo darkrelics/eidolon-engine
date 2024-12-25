@@ -1,90 +1,72 @@
-package core
+package main
 
 import (
 	"fmt"
 	"strings"
 )
 
-func ExecuteAssessCommand(character *Character, tokens []string) bool {
-	Logger.Debug("Player is assessing combat situation", "playerName", character.Player.PlayerID)
-
-	if !character.IsInCombat() {
-		// Add facing info even when not in combat
-		if character.Facing != nil {
-			character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are facing %s but not in combat.\n\r", character.Facing.Name)
-		} else {
-			character.Player.ToPlayer <- "\n\rYou are not currently in combat.\n\r"
-		}
-		return false
-	}
-
+func ExecuteAssessCommand(character *Character, tokens []string) {
 	var assessment strings.Builder
 	assessment.WriteString("\n\rCombat Assessment:\n\r")
 
-	if len(character.CombatRange) == 0 {
-		// Add facing info even with no range information
+	if !character.IsInCombat() {
 		if character.Facing != nil {
-			assessment.WriteString(fmt.Sprintf("You are facing %s but not engaged with any opponents.\n\r", character.Facing.Name))
+			assessment.WriteString(fmt.Sprintf("You are facing %s but not in combat.\n\r", character.Facing.Name))
 		} else {
-			assessment.WriteString("You are in combat, but not engaged with any specific opponents.\n\r")
+			assessment.WriteString("You are not currently in combat.\n\r")
 		}
-	} else {
-		// Track who we're advancing towards
+		character.Player.toPlayer <- assessment.String()
+		return
+	}
+
+	if len(character.CombatRange) > 0 {
 		var advanceTarget *Character
 		if character.Advancing && character.Facing != nil {
 			advanceTarget = character.Facing
 		}
 
-		// First assess our own situation with each combatant
 		for targetID, distance := range character.CombatRange {
-			targetCharacter := character.Game.Characters[targetID]
-			if targetCharacter == nil {
-				continue
+			if targetCharacter := character.Game.Characters[targetID]; targetCharacter != nil {
+				assessment.WriteString(formatCombatStatus(character, targetCharacter, distance, advanceTarget))
 			}
-
-			// Build status line with precise distance
-			statusLine := fmt.Sprintf("%s is at %s range (%.1f units)",
-				targetCharacter.Name,
-				getRangeDescription(distance),
-				distance)
-
-			// Add facing information
-			if targetCharacter.GetFacing() == character {
-				statusLine += " and is facing you"
-			}
-
-			// Note if this is who we're facing
-			if targetCharacter == character.Facing {
-				statusLine += " and you are facing them"
-			}
-
-			// Add advance information
-			if targetCharacter == advanceTarget {
-				statusLine += " and you are advancing"
-			}
-			if targetCharacter.Advancing && targetCharacter.Facing == character {
-				statusLine += " and they are advancing towards you"
-			}
-
-			assessment.WriteString(statusLine + ".\n\r")
 		}
 	}
 
-	// Add escape possibility
 	if character.CanEscape() {
 		assessment.WriteString("You can attempt to escape from combat.\n\r")
 	} else {
 		assessment.WriteString("You are engaged in melee combat!\n\r")
 	}
 
-	character.Player.ToPlayer <- assessment.String()
-	return false
+	character.Player.toPlayer <- assessment.String()
 }
 
-func ExecuteFaceCommand(character *Character, tokens []string) bool {
+func formatCombatStatus(character, target *Character, distance float64, advanceTarget *Character) string {
+	var status strings.Builder
+	status.WriteString(fmt.Sprintf("%s is at %s range (%.1f units)",
+		target.Name, getRangeDescription(distance), distance))
+
+	if target.GetFacing() == character {
+		status.WriteString(" and is facing you")
+	}
+	if target == character.Facing {
+		status.WriteString(" and you are facing them")
+	}
+	if target == advanceTarget {
+		status.WriteString(" and you are advancing")
+	}
+	if target.Advancing && target.Facing == character {
+		status.WriteString(" and they are advancing towards you")
+	}
+	status.WriteString(".\n\r")
+
+	return status.String()
+}
+
+func ExecuteFaceCommand(character *Character, tokens []string) {
 	if len(tokens) < 2 {
-		character.Player.ToPlayer <- "\n\rUsage: face <character name>\n\r"
-		return false
+		character.Player.toPlayer <- "\n\rUsage: face <character name>\n\r"
+		return
 	}
 
 	targetName := strings.Join(tokens[1:], " ")
@@ -99,8 +81,8 @@ func ExecuteFaceCommand(character *Character, tokens []string) bool {
 	}
 
 	if targetCharacter == nil {
-		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou don't see %s here.\n\r", targetName)
-		return false
+		character.Player.toPlayer <- fmt.Sprintf("\n\rYou don't see %s here.\n\r", targetName)
+		return
 	}
 
 	// Set facing for the character executing the command
@@ -114,35 +96,34 @@ func ExecuteFaceCommand(character *Character, tokens []string) bool {
 	targetCharacter.EnterCombat()
 	targetCharacter.SetCombatRange(character, DefaultDistance)
 
-	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are now facing %s at a distance of %.1f units.\n\r",
+	character.Player.toPlayer <- fmt.Sprintf("\n\rYou are now facing %s at a distance of %.1f units.\n\r",
 		targetCharacter.Name, DefaultDistance)
 
 	// Notify the target character with range information
-	targetCharacter.Player.ToPlayer <- fmt.Sprintf("\n\r%s is now facing you at a distance of %.1f units.\n\r",
+	targetCharacter.Player.toPlayer <- fmt.Sprintf("\n\r%s is now facing you at a distance of %.1f units.\n\r",
 		character.Name, DefaultDistance)
-	targetCharacter.Player.ToPlayer <- targetCharacter.Player.Prompt
+	targetCharacter.Player.toPlayer <- targetCharacter.Player.prompt
 
-	return false
 }
 
-func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
+func ExecuteAdvanceCommand(character *Character, tokens []string) {
 	if character == nil {
 		Logger.Error("Attempted to advance with nil character")
-		return false
+		return
 	}
 
 	// Check if already advancing
 	if character.Advancing {
-		character.Player.ToPlayer <- "\n\rYou are already advancing.\n\r"
-		return false
+		character.Player.toPlayer <- "\n\rYou are already advancing.\n\r"
+		return
 	}
 
 	// Check if already in melee with someone
 	for targetID, distance := range character.CombatRange {
 		if distance <= MeleeRange {
 			if target := character.Game.Characters[targetID]; target != nil {
-				character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already in melee combat with %s.\n\r", target.Name)
-				return false
+				character.Player.toPlayer <- fmt.Sprintf("\n\rYou are already in melee combat with %s.\n\r", target.Name)
+				return
 			}
 		}
 	}
@@ -184,14 +165,14 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 	}
 
 	if target == nil {
-		character.Player.ToPlayer <- "\n\rAdvance towards whom?\n\r"
-		return false
+		character.Player.toPlayer <- "\n\rAdvance towards whom?\n\r"
+		return
 	}
 
 	// Check for self-targeting
 	if target == character {
-		character.Player.ToPlayer <- "\n\rYou cannot advance towards yourself.\n\r"
-		return false
+		character.Player.toPlayer <- "\n\rYou cannot advance towards yourself.\n\r"
+		return
 	}
 
 	character.Mutex.Lock()
@@ -202,22 +183,21 @@ func ExecuteAdvanceCommand(character *Character, tokens []string) bool {
 	go performAdvance(character, target, desiredDistance)
 
 	// Inform the character and room
-	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou begin advancing towards %s.\n\r", target.Name)
+	character.Player.toPlayer <- fmt.Sprintf("\n\rYou begin advancing towards %s.\n\r", target.Name)
 	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s begins advancing towards %s.\n\r", character.Name, target.Name), character)
 
-	return false
 }
 
-func ExecuteRetreatCommand(character *Character, tokens []string) bool {
+func ExecuteRetreatCommand(character *Character, tokens []string) {
 	if character == nil {
 		Logger.Error("Attempted to retreat with nil character")
-		return false
+		return
 	}
 
 	// Check if already advancing/retreating
 	if character.Advancing {
-		character.Player.ToPlayer <- "\n\rYou are already in motion.\n\r"
-		return false
+		character.Player.toPlayer <- "\n\rYou are already in motion.\n\r"
+		return
 	}
 
 	// Default values
@@ -255,8 +235,8 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 	}
 
 	if target == nil {
-		character.Player.ToPlayer <- "\n\rRetreat from whom?\n\r"
-		return false
+		character.Player.toPlayer <- "\n\rRetreat from whom?\n\r"
+		return
 	}
 
 	// Get current distance
@@ -264,9 +244,9 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 
 	// If already at or beyond desired distance
 	if currentDistance >= desiredDistance {
-		character.Player.ToPlayer <- fmt.Sprintf("\n\rYou are already at %s range from %s.\n\r",
+		character.Player.toPlayer <- fmt.Sprintf("\n\rYou are already at %s range from %s.\n\r",
 			getRangeDescription(desiredDistance), target.Name)
-		return false
+		return
 	}
 
 	// Start the retreat
@@ -274,8 +254,7 @@ func ExecuteRetreatCommand(character *Character, tokens []string) bool {
 	go performAdvance(character, target, desiredDistance)
 
 	// Inform the character and room
-	character.Player.ToPlayer <- fmt.Sprintf("\n\rYou begin retreating from %s.\n\r", target.Name)
+	character.Player.toPlayer <- fmt.Sprintf("\n\rYou begin retreating from %s.\n\r", target.Name)
 	SendRoomMessageExcept(character.Room, fmt.Sprintf("\n\r%s begins retreating from %s.\n\r", character.Name, target.Name), character)
 
-	return false
 }

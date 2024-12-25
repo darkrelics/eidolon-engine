@@ -37,9 +37,8 @@ Resources:
       AdminCreateUserConfig:
         AllowAdminCreateUserOnly: false
         InviteMessageTemplate:
-          EmailMessage: "Your username is {username} and temporary password is {####}."
           EmailSubject: "Your temporary password"
-          SMSMessage: "Your username is {username} and temporary password is {####}."
+          EmailMessage: "Your username is {username} and temporary password is {####}."
         UnusedAccountValidityDays: 7
       Policies:
         PasswordPolicy:
@@ -65,7 +64,7 @@ Resources:
       AutoVerifiedAttributes:
         - email
       EmailVerificationSubject: !Ref VerificationSubject
-      EmailVerificationMessage: "Please verify your email by clicking this link: {##Click Here##}"
+      EmailVerificationMessage: "Please verify your email by clicking this link: {####}"
       MfaConfiguration: "OFF"
       AccountRecoverySetting:
         RecoveryMechanisms:
