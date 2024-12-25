@@ -14,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/sync/errgroup"
 )
 
 type Player struct {
@@ -34,6 +33,7 @@ type Player struct {
 	login         time.Time
 	server        *Server
 	mutex         sync.RWMutex
+	interfaceCtx  context.Context
 	ctx           context.Context
 	cancel        context.CancelFunc
 	shutdownOnce  sync.Once
@@ -45,11 +45,12 @@ type PlayerData struct {
 	SeenMotDs     []string          `json:"seenMotD" dynamodbav:"SeenMotD"`
 }
 
-func NewPlayer(server *Server, playerName string, conn ssh.Channel) (*Player, error) {
+func NewPlayer(server *Server, playerName string, conn ssh.Channel, interfaceCtx context.Context) (*Player, error) {
 	playerCtx, playerCancel := context.WithCancel(context.Background())
 
 	player := &Player{
 		server:        server,
+		interfaceCtx:  interfaceCtx,
 		playerID:      playerName,
 		toPlayer:      make(chan string, 10),
 		fromPlayer:    make(chan string, 10),
@@ -84,36 +85,55 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 	Logger.Info("starting player session", "player", p.playerID)
 	defer p.Stop()
 
-	group, ctx := errgroup.WithContext(p.ctx)
+	requestDone := make(chan error, 1)
+	go func() {
+		requestDone <- p.handleRequests(p.ctx, requests)
+	}()
 
-	group.Go(func() error {
-		return p.handleRequests(ctx, requests)
-	})
-
-	group.Go(func() error {
-		return p.handleInput(ctx)
-	})
-
-	group.Go(func() error {
-		return p.handleOutput(ctx)
-	})
-
-	group.Go(func() error {
+	for {
 		if err := DisplayUnseenMOTDs(p); err != nil {
-			return fmt.Errorf("motd display: %w", err)
+			Logger.Error("motd display error", "player", p.playerID, "error", err)
+			return
 		}
 
-		character, err := SelectCharacter(ctx, p)
+		character, err := SelectCharacter(p.ctx, p)
 		if err != nil {
-			return fmt.Errorf("character selection: %w", err)
+			Logger.Error("character selection error", "player", p.playerID, "error", err)
+			return
 		}
 
 		p.character = character
-		return character.Run()
-	})
+		charDone := make(chan error, 1)
+		go func() {
+			charDone <- character.Run()
+		}()
 
-	if err := group.Wait(); err != nil {
-		Logger.Error("player session error", "player", p.playerID, "error", err)
+		select {
+		case <-p.ctx.Done():
+			Logger.Info("player session ended", "player", p.playerID)
+			return
+		case <-p.interfaceCtx.Done():
+			Logger.Info("interface session ended", "player", p.playerID)
+			return
+		case <-p.server.context.Done():
+			Logger.Info("server session ended", "player", p.playerID)
+			return
+		case <-p.server.globalContext.Done():
+			Logger.Info("global session ended", "player", p.playerID)
+			return
+		case err := <-requestDone:
+			Logger.Error("ssh request handler error", "player", p.playerID, "error", err)
+			return
+		case err := <-charDone:
+			if err != nil {
+				Logger.Error("character error", "player", p.playerID, "error", err)
+				return
+			}
+			p.character = nil
+			continue
+		case <-p.ctx.Done():
+			return
+		}
 	}
 }
 
