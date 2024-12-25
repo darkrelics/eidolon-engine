@@ -231,7 +231,7 @@ class AuthScreen extends StatelessWidget {
                   const SizedBox(height: 20),
                   TextButton(
                     onPressed: () => authState.toggleAuthMode(),
-                    child: const Text("Already have an account? Sign in"),
+                    child: const Text('Already have an account? Sign in'),
                   ),
                 ] else if (!authState.isVerificationMode) ...[
                   TextFormField(
@@ -265,7 +265,7 @@ class AuthScreen extends StatelessWidget {
                   const SizedBox(height: 20),
                   TextButton(
                     onPressed: () => authState.toggleAuthMode(),
-                    child: const Text("Need an Account? Sign up"),
+                    child: const Text('Need an Account? Sign up'),
                   ),
                 ] else ...[
                   TextFormField(

@@ -12,6 +12,7 @@ dependencies:
   http: ^1.2.2
   crypto: ^3.0.3
 
+  provider: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
