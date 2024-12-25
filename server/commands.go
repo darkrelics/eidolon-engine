@@ -57,56 +57,60 @@ var CommandHandlers = map[string]CommandHandler{
 	"q!":        ExecuteQuitCommand,      // Allow for q! to be used as a shortcut for the quit command
 }
 
+type commandLexer struct {
+	input string
+	pos   int
+}
+
+func newCommandLexer(input string) *commandLexer {
+	return &commandLexer{input: input}
+}
+
+func (l *commandLexer) tokenize() []string {
+	var tokens []string
+	var current strings.Builder
+	inQuotes := false
+
+	for l.pos < len(l.input) {
+		switch l.input[l.pos] {
+		case '"':
+			inQuotes = !inQuotes
+		case ' ', '\t':
+			if !inQuotes && current.Len() > 0 {
+				tokens = append(tokens, current.String())
+				current.Reset()
+			} else if inQuotes {
+				current.WriteByte(l.input[l.pos])
+			}
+		default:
+			current.WriteByte(l.input[l.pos])
+		}
+		l.pos++
+	}
+
+	if current.Len() > 0 {
+		tokens = append(tokens, current.String())
+	}
+
+	return tokens
+}
+
 func ValidateCommand(command string) (string, []string, error) {
-	// Early return for empty input
 	if len(command) == 0 {
 		return "", nil, errors.New("\n\rNo command entered.\n\r")
 	}
 
-	// Handle quoted strings and split into tokens
-	var tokens []string
-	var currentToken strings.Builder
-	inQuotes := false
+	lexer := newCommandLexer(command)
+	tokens := lexer.tokenize()
 
-	// Single pass tokenization
-	for i := 0; i < len(command); i++ {
-		switch command[i] {
-		case '"':
-			inQuotes = !inQuotes
-		case ' ', '\t':
-			if !inQuotes {
-				if currentToken.Len() > 0 {
-					tokens = append(tokens, currentToken.String())
-					currentToken.Reset()
-				}
-			} else {
-				currentToken.WriteByte(command[i])
-			}
-		default:
-			currentToken.WriteByte(command[i])
-		}
-	}
-
-	// Add final token if exists
-	if currentToken.Len() > 0 {
-		tokens = append(tokens, currentToken.String())
-	}
-
-	// Validate tokens
 	if len(tokens) == 0 {
 		return "", nil, errors.New("\n\rNo command entered.\n\r")
 	}
 
-	// Convert first token to lowercase for command lookup
 	verb := strings.ToLower(tokens[0])
-
-	// Validate command exists
 	if _, exists := CommandHandlers[verb]; !exists {
 		return "", nil, fmt.Errorf("\n\rCommand '%s' not understood.\n\r", verb)
 	}
-
-	// Only log valid commands
-	Logger.Debug("Valid command received", "verb", verb, "args", tokens[1:])
 
 	return verb, tokens, nil
 }
