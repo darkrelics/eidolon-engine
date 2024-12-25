@@ -135,7 +135,7 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		player, err := NewPlayer(ssh_interface.server, sshConn.User(), channel)
+		player, err := NewPlayer(ssh_interface.server, sshConn.User(), channel, ssh_interface.ctx)
 		if err != nil {
 			Logger.Error("Failed to create player", "error", err)
 			channel.Close()
