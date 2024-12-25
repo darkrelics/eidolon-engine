@@ -45,7 +45,6 @@ jobs:
           govulncheck ./...
           cd ..
 
-
       - name: Check for changes
         id: git-check
         run: |
