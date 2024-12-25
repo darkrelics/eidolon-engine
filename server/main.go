@@ -42,9 +42,9 @@ func main() {
 		cloudWatch.mutex.Unlock()
 	}
 
-	go runMetrics(ctx, cloudWatch, errChan)
-	go runGame(ctx, game, errChan)
-	go runServer(ctx, server, errChan)
+	go runMetrics(cloudWatch, errChan)
+	go runGame(game, errChan)
+	go runServer(server, errChan)
 
 	if err = handleSignals(game, server, cloudWatch, errChan); err != nil {
 		Logger.Error("Runtime error", "error", err)
@@ -67,21 +67,21 @@ func initialize(ctx context.Context, config *Configuration) (*Game, *Server, err
 	return game, server, nil
 }
 
-func runMetrics(ctx context.Context, cloudWatch *CloudWatchHandler, errChan chan error) {
+func runMetrics(cloudWatch *CloudWatchHandler, errChan chan error) {
 	if err := cloudWatch.Run(); err != nil {
 		Logger.Error("metrics collection failed", "error", err)
 		errChan <- fmt.Errorf("metrics collection failed: %w", err)
 	}
 }
 
-func runServer(ctx context.Context, server *Server, errChan chan error) {
+func runServer(server *Server, errChan chan error) {
 	if err := server.Run(); err != nil {
 		Logger.Error("server error", "error", err)
 		errChan <- fmt.Errorf("server error: %w", err)
 	}
 }
 
-func runGame(ctx context.Context, game *Game, errChan chan error) {
+func runGame(game *Game, errChan chan error) {
 	if err := game.Run(); err != nil {
 		Logger.Error("game error", "error", err)
 		errChan <- fmt.Errorf("game error: %w", err)

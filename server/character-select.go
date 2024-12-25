@@ -163,8 +163,6 @@ func receiveInput(ctx context.Context, player *Player) (string, error) {
 
 func handleCharacterSelection(ctx context.Context, input string, options []string, player *Player) (*Character, bool) {
 
-	game := player.server.game
-
 	if input == "X" && len(options) > 0 {
 		if err := handleCharacterDeletion(ctx, options, player); err != nil {
 			player.toPlayer <- fmt.Sprintf("Error deleting character: %v\n\r", err)
@@ -178,13 +176,13 @@ func handleCharacterSelection(ctx context.Context, input string, options []strin
 		return nil, true
 	}
 
-	character, err := loadOrCreateCharacter(ctx, choice, options, player)
+	character, err := loadOrCreateCharacter(choice, options, player)
 	if err != nil {
 		player.toPlayer <- fmt.Sprintf("Error: %v\n\r", err)
 		return nil, true
 	}
 
-	if err := addCharacterToRoom(character, game); err != nil {
+	if err := addCharacterToRoom(character); err != nil {
 		player.toPlayer <- fmt.Sprintf("Error adding character to room: %v\n\r", err)
 		return nil, true
 	}
@@ -192,7 +190,7 @@ func handleCharacterSelection(ctx context.Context, input string, options []strin
 	return character, false
 }
 
-func loadOrCreateCharacter(ctx context.Context, choice int, options []string, player *Player) (*Character, error) {
+func loadOrCreateCharacter(choice int, options []string, player *Player) (*Character, error) {
 	game := player.server.game
 
 	if choice == 0 {
@@ -252,7 +250,7 @@ func loadOrCreateCharacter(ctx context.Context, choice int, options []string, pl
 	return nil, fmt.Errorf("invalid choice")
 }
 
-func addCharacterToRoom(character *Character, game *Game) error {
+func addCharacterToRoom(character *Character) error {
 	if character.Room == nil {
 		return fmt.Errorf("character has no assigned room")
 	}

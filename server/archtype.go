@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+type Archetype struct {
+	ArchetypeName string             `json:"ArchetypeName" dynamodbav:"ArchetypeName"`
+	Description   string             `json:"Description" dynamodbav:"Description"`
+	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
+	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"Abilities"`
+	StartRoom     int64              `json:"StartRoom" dynamodbav:"StartRoom"`
+}
+
 // DisplayArchetypes logs the loaded archetypes for debugging purposes.
 func DisplayArchetypes(g *Game) {
 	for key, archtype := range g.ArcheTypes {
