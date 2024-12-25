@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/google/uuid"
 )
@@ -111,107 +112,57 @@ func getRangeDescription(distance float64) string {
 }
 
 func performAdvance(character *Character, target *Character, desiredDistance float64) {
-	Logger.Debug("Starting performAdvance", "character", character.Name, "target", target.Name, "desiredDistance", desiredDistance)
-
-	// Clear advancing state when done
 	defer func() {
-		Logger.Debug("Clearing advancing state", "character", character.Name)
 		character.Mutex.Lock()
 		character.Advancing = false
 		character.Mutex.Unlock()
-		Logger.Debug("Advancing state cleared", "character", character.Name)
 	}()
 
-	// Get initial state under a single lock
-	Logger.Debug("Acquiring character lock for initial state", "character", character.Name)
 	character.Mutex.Lock()
-	agility, exists := character.Attributes["agility"]
-	characterName := character.Name
-	startingRoom := character.Room
-	currentDistance := character.GetCombatRange(target)
-	character.Mutex.Unlock()
-	Logger.Debug("Released initial state lock", "character", characterName)
-
-	if !exists || agility < 0.1 {
-		Logger.Debug("Adjusting minimum agility", "character", characterName, "defaultAgility", 0.1)
+	agility := character.Attributes["agility"]
+	if agility < 0.1 {
 		agility = 0.1
 	}
+	startingRoom := character.Room
+	currentDistance := character.GetCombatRange(target)
+	characterName := character.Name
+	character.Mutex.Unlock()
 
 	moveRate := 1.0 * agility
 	isRetreat := desiredDistance > currentDistance
 	if isRetreat {
 		moveRate *= 1.05
-	}
-
-	distanceToMove := currentDistance - desiredDistance
-	if isRetreat {
-		distanceToMove = desiredDistance - currentDistance
 		if desiredDistance > VeryFarRange {
 			desiredDistance = VeryFarRange
 		}
 	}
 
-	if distanceToMove <= 0 {
-		Logger.Debug("No movement needed", "character", characterName)
-		character.Player.toPlayer <- "\n\rYou are already at the desired distance.\n\r"
-		return
-	}
-
 	for {
 		select {
 		case <-character.End:
-			Logger.Debug("Received end signal, stopping movement", "character", characterName)
 			character.Player.toPlayer <- "\n\rMovement interrupted.\n\r"
 			return
-		case <-target.End:
-			Logger.Debug("Received end signal, stopping movement", "character", characterName)
-			character.Player.toPlayer <- "\n\rMovement interrupted.\n\r"
-			return
-		case <-character.Game.ticker.C:
-			// Get states before acquiring locks
-			Logger.Debug("Pre-lock state check", "character", characterName)
 
-			// First check character's state with minimal lock time
+		case <-target.End:
+			character.Player.toPlayer <- "\n\rMovement interrupted.\n\r"
+			return
+
+		case <-character.Game.ticker.C:
 			character.Mutex.Lock()
 			if !character.Advancing || character.Room != startingRoom {
 				character.Mutex.Unlock()
-				Logger.Debug("Character state invalid, ending movement", "character", characterName)
 				character.Player.toPlayer <- "\n\rMovement interrupted.\n\r"
 				return
 			}
 			curDistance := character.GetCombatRange(target)
 			character.Mutex.Unlock()
 
-			// Then check target's state with minimal lock time
-			target.Mutex.Lock()
-			targetInRoom := target.Room == startingRoom
-			target.Mutex.Unlock()
-
-			if !targetInRoom {
-				Logger.Debug("Target left room, ending movement", "character", characterName)
-				character.Player.toPlayer <- "\n\rMovement interrupted.\n\r"
-				return
-			}
-
-			// Calculate new distance before acquiring locks
 			var newDistance float64
 			if isRetreat {
-				newDistance = curDistance + moveRate
-				if newDistance > desiredDistance {
-					newDistance = desiredDistance
-				}
-				if newDistance > VeryFarRange {
-					newDistance = VeryFarRange
-				}
+				newDistance = math.Min(desiredDistance, math.Min(curDistance+moveRate, VeryFarRange))
 			} else {
-				newDistance = curDistance - moveRate
-				if newDistance < desiredDistance {
-					newDistance = desiredDistance
-				}
+				newDistance = math.Max(desiredDistance, curDistance-moveRate)
 			}
-
-			// Update distances with minimal lock time
-			Logger.Debug("Acquiring locks for distance update", "character", characterName, "currentDistance", curDistance, "newDistance", newDistance)
 
 			character.Mutex.Lock()
 			character.SetCombatRange(target, newDistance)
@@ -221,32 +172,23 @@ func performAdvance(character *Character, target *Character, desiredDistance flo
 			target.SetCombatRange(character, newDistance)
 			target.Mutex.Unlock()
 
-			Logger.Debug("Released locks after distance update", "character", characterName, "newDistance", newDistance)
-
 			rangeDesc := getRangeDescription(newDistance)
-
-			// Send movement notifications using SendRoomMessageExcept
 			if isRetreat {
 				character.Player.toPlayer <- fmt.Sprintf("\n\rYou retreat to %s range (%.1f units) from %s.\n\r",
 					rangeDesc, newDistance, target.Name)
-
-				roomMessage := fmt.Sprintf("\n\r%s retreats to %s range (%.1f units) from %s.\n\r",
-					characterName, rangeDesc, newDistance, target.Name)
-				SendRoomMessageExcept(startingRoom, roomMessage, character)
+				SendRoomMessageExcept(startingRoom,
+					fmt.Sprintf("\n\r%s retreats to %s range (%.1f units) from %s.\n\r",
+						characterName, rangeDesc, newDistance, target.Name), character)
 			} else {
 				character.Player.toPlayer <- fmt.Sprintf("\n\rYou advance to %s range (%.1f units) with %s.\n\r",
 					rangeDesc, newDistance, target.Name)
-
-				roomMessage := fmt.Sprintf("\n\r%s advances to %s range (%.1f units) with %s.\n\r",
-					characterName, rangeDesc, newDistance, target.Name)
-				SendRoomMessageExcept(startingRoom, roomMessage, character)
+				SendRoomMessageExcept(startingRoom,
+					fmt.Sprintf("\n\r%s advances to %s range (%.1f units) with %s.\n\r",
+						characterName, rangeDesc, newDistance, target.Name), character)
 			}
 
-			if (isRetreat && newDistance >= desiredDistance) ||
-				(!isRetreat && newDistance <= desiredDistance) {
-				Logger.Debug("Movement complete",
-					"character", characterName,
-					"finalDistance", newDistance)
+			if (!isRetreat && newDistance <= desiredDistance) ||
+				(isRetreat && newDistance >= desiredDistance) {
 				return
 			}
 		}
