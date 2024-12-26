@@ -38,7 +38,7 @@ type Game struct {
 }
 
 func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
-	Logger.Info("Initializing game...")
+	Logger.Info("Initializing game engine...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
@@ -82,7 +82,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 }
 
 func (g *Game) Run() error {
-	Logger.Info("Starting game...")
+	Logger.Info("Starting game engine...")
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 

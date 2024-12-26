@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,9 @@ type CloudWatchHandler struct {
 }
 
 func NewLogHandler(ctx context.Context, cfg *Configuration) (*CloudWatchHandler, error) {
+
+	fmt.Println("Initializing logging...")
+
 	awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(cfg.Aws.Region))
 	if err != nil {
 		return nil, fmt.Errorf("aws config load: %w", err)
@@ -163,12 +167,25 @@ func (h *CloudWatchHandler) initLogStream(ctx context.Context) error {
 		return nil
 	}
 
-	_, err := h.logsClient.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
-		LogGroupName:  aws.String(h.logGroup),
-		LogStreamName: aws.String(h.logStream),
+	// Try to describe the log stream first to check if it exists
+	_, err := h.logsClient.DescribeLogStreams(ctx, &cloudwatchlogs.DescribeLogStreamsInput{
+		LogGroupName:        aws.String(h.logGroup),
+		LogStreamNamePrefix: aws.String(h.logStream),
 	})
-	if err != nil && !errors.Is(err, &cwlogtypes.ResourceAlreadyExistsException{}) {
-		return fmt.Errorf("create log stream: %w", err)
+
+	if err != nil {
+		// If the stream doesn't exist, create it
+		if strings.Contains(err.Error(), "ResourceNotFoundException") {
+			_, err = h.logsClient.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
+				LogGroupName:  aws.String(h.logGroup),
+				LogStreamName: aws.String(h.logStream),
+			})
+			if err != nil && !strings.Contains(err.Error(), "ResourceAlreadyExistsException") {
+				return fmt.Errorf("create log stream: %w", err)
+			}
+		} else {
+			return fmt.Errorf("describe log stream: %w", err)
+		}
 	}
 
 	h.initialized = true

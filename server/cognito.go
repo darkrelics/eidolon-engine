@@ -158,11 +158,14 @@ func handleCognitoError(err error, email string) error {
 }
 
 func Authenticate(username, password string, ssh_interface *Interface_SSH) bool {
+	secretHash := ssh_interface.server.calculateSecretHash(username)
+
 	authOutput, err := ssh_interface.server.cognito.InitiateAuth(&cognitoidentityprovider.InitiateAuthInput{
 		AuthFlow: aws.String("USER_PASSWORD_AUTH"),
 		AuthParameters: map[string]*string{
-			"USERNAME": aws.String(username),
-			"PASSWORD": aws.String(password),
+			"USERNAME":    aws.String(username),
+			"PASSWORD":    aws.String(password),
+			"SECRET_HASH": aws.String(secretHash),
 		},
 		ClientId: aws.String(ssh_interface.config.Cognito.ClientID),
 	})

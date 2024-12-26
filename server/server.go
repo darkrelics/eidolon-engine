@@ -30,6 +30,9 @@ type Server struct {
 }
 
 func NewServer(globalCtx context.Context, config *Configuration) (*Server, error) {
+
+	fmt.Println("Initializing server...")
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	database, err := NewKeyPair(config.Aws.Region)
@@ -73,20 +76,29 @@ func (s *Server) Run() error {
 		return fmt.Errorf("ssh interface init error: %w", err)
 	}
 
-	// Start the Interfaces
-	go sshInterface.Run()
+	// Create error channel for SSH interface
+	sshErrChan := make(chan error, 1)
+	go func() {
+		sshErrChan <- sshInterface.Run()
+	}()
 
-	for {
-		select {
-		case <-s.globalContext.Done():
-			return s.shutdown("global shutdown")
-		case <-s.context.Done():
-			return s.shutdown("server shutdown")
+	// Wait for either a shutdown signal or SSH interface error
+	select {
+	case <-s.globalContext.Done():
+		return s.shutdown("global shutdown")
+	case <-s.context.Done():
+		return s.shutdown("server shutdown")
+	case err := <-sshErrChan:
+		if err != nil {
+			return fmt.Errorf("ssh interface error: %w", err)
 		}
+		return nil
 	}
 }
 
 func (s *Server) Stop() error {
+
+	fmt.Println("Stopping server...")
 
 	var stopErr error
 

@@ -75,23 +75,23 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 	return sshInterface, nil
 }
 
-func (ssh_interface *Interface_SSH) Run() {
+func (ssh_interface *Interface_SSH) Run() error {
 	Logger.Info("Starting SSH interface", "port", ssh_interface.port)
 	defer ssh_interface.listener.Close()
 
 	for {
 		select {
 		case <-ssh_interface.server.globalContext.Done():
-			return
+			return nil
 		case <-ssh_interface.server.context.Done():
-			return
+			return nil
 		case <-ssh_interface.ctx.Done():
-			return
+			return nil
 		default:
 			conn, err := ssh_interface.listener.Accept()
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
-					return
+					return err
 				}
 				Logger.Error("Connection accept failed", "error", err)
 				continue
