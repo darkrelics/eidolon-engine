@@ -113,12 +113,12 @@ func (g *Game) initBloomFilter() error {
 		return fmt.Errorf("character names load error: %w", err)
 	}
 
-	namesFromFile, err := loadNamesFromFile("./data/names.txt")
+	namesFromFile, err := loadNamesFromFile("../data/names.txt")
 	if err != nil {
 		return fmt.Errorf("names file load error: %w", err)
 	}
 
-	obscenities, err := loadNamesFromFile("./data/obscenity.txt")
+	obscenities, err := loadNamesFromFile("../data/obscenity.txt")
 	if err != nil {
 		return fmt.Errorf("obscenity file load error: %w", err)
 	}
