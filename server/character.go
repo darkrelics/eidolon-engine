@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -741,9 +740,15 @@ func moveCharacter(character *Character, direction string) error {
 // InputLoop is the main loop that handles player commands.
 // It reads commands from the player's input and executes them accordingly.
 func (c *Character) InputLoop() error {
-	var lastCommand string
+	if c == nil || c.Player == nil {
+		return fmt.Errorf("invalid character or player")
+	}
+
 	shouldQuit := false
 	const commandTimeout = 5 * time.Second
+
+	// Send initial prompt
+	c.Player.toPlayer <- c.prompt
 
 	for !shouldQuit {
 		select {
@@ -754,40 +759,29 @@ func (c *Character) InputLoop() error {
 			if !ok {
 				return fmt.Errorf("input channel closed")
 			}
-			if lastCommand == "" {
-				lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
+
+			verb, tokens, err := ValidateCommand(strings.TrimSpace(inputLine))
+			if err != nil {
+				c.Player.toPlayer <- err.Error() + "\n\r"
+			} else {
+				shouldQuit = ExecuteCommand(c, verb, tokens)
+				Logger.Debug("Command executed",
+					"character", c.Name,
+					"command", strings.Join(tokens, " "))
 			}
 
-		case <-c.Game.ticker.C:
-			if lastCommand != "" {
-				cmdCtx, cancel := context.WithTimeout(c.Player.ctx, commandTimeout)
-				defer cancel()
+			// Send prompt after command execution
+			if !shouldQuit {
+				c.Player.toPlayer <- c.prompt
+			}
 
-				verb, tokens, err := ValidateCommand(strings.TrimSpace(lastCommand))
-				if err != nil {
-					select {
-					case c.outputChan <- err.Error() + "\n\r":
-					case <-cmdCtx.Done():
-						return fmt.Errorf("command context cancelled")
-					}
-				} else {
-					shouldQuit = ExecuteCommand(c, verb, tokens)
-					Logger.Debug("Command executed",
-						"character", c.Name,
-						"command", strings.Join(tokens, " "))
-				}
+		case <-c.End:
+			return nil
 
-				if !shouldQuit {
-					select {
-					case c.outputChan <- c.prompt:
-					case <-cmdCtx.Done():
-						return fmt.Errorf("prompt context cancelled")
-					default:
-						Logger.Warn("Unable to send prompt", "characterName", c.Name)
-					}
-				}
-
-				lastCommand = ""
+		case <-time.After(30 * time.Second):
+			// Periodic keep-alive check
+			if c.Player == nil || c.Player.ctx.Err() != nil {
+				return fmt.Errorf("player connection lost")
 			}
 		}
 	}
