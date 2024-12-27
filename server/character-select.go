@@ -58,16 +58,20 @@ func createNewCharacter(player *Player) (*Character, error) {
 		return nil, err
 	}
 
-	archetype, err := selectArchetype(player)
-	if err != nil {
-		Logger.Warn("Error selecting archetype", "error", err)
-		archetype = ""
+	// Skip archetype selection if none exist
+	var archetype string
+	if len(player.server.game.ArcheTypes) > 0 {
+		archetype, err = selectArchetype(player)
+		if err != nil {
+			Logger.Warn("Error selecting archetype", "error", err)
+			archetype = ""
+		}
 	}
 
 	room, err := getStartingRoom(player.server.game, archetype)
 	if err != nil {
 		Logger.Warn("Error getting starting room", "error", err)
-		room = player.server.game.Rooms[0]
+		room = player.server.game.Rooms[0] // Fallback to Room 0
 	}
 
 	character, err := CreateCharacter(name, player, room, archetype, player.server.game)

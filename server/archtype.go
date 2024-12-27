@@ -79,7 +79,7 @@ func StoreArchetypes(g *Game) error {
 func selectArchetype(player *Player) (string, error) {
 	options := buildArchetypeOptions(player.server.game)
 	if len(options) == 0 {
-		return "", fmt.Errorf("no archetypes available")
+		return "", nil // No archetypes available
 	}
 
 	msg := "\n\rSelect a character archetype.\n\r"
