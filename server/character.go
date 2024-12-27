@@ -745,12 +745,21 @@ func (c *Character) InputLoop() error {
 	}
 
 	shouldQuit := false
-	const commandTimeout = 5 * time.Second
+	const idleTimeout = 30 * time.Second
 
 	// Send initial prompt
-	c.Player.toPlayer <- c.prompt
+	select {
+	case c.Player.toPlayer <- c.prompt:
+	case <-c.Player.ctx.Done():
+		return fmt.Errorf("player context cancelled during initial prompt")
+	}
+
+	timer := time.NewTimer(idleTimeout)
+	defer timer.Stop()
 
 	for !shouldQuit {
+		timer.Reset(idleTimeout)
+
 		select {
 		case <-c.Player.ctx.Done():
 			return fmt.Errorf("player context cancelled")
@@ -762,7 +771,9 @@ func (c *Character) InputLoop() error {
 
 			verb, tokens, err := ValidateCommand(strings.TrimSpace(inputLine))
 			if err != nil {
-				c.Player.toPlayer <- err.Error() + "\n\r"
+				if err := c.sendMessage(err.Error() + "\n\r"); err != nil {
+					return fmt.Errorf("failed to send error message: %w", err)
+				}
 			} else {
 				shouldQuit = ExecuteCommand(c, verb, tokens)
 				Logger.Debug("Command executed",
@@ -770,21 +781,31 @@ func (c *Character) InputLoop() error {
 					"command", strings.Join(tokens, " "))
 			}
 
-			// Send prompt after command execution
 			if !shouldQuit {
-				c.Player.toPlayer <- c.prompt
+				if err := c.sendMessage(c.prompt); err != nil {
+					return fmt.Errorf("failed to send prompt: %w", err)
+				}
 			}
 
 		case <-c.End:
-			return nil
+			return fmt.Errorf("character end signaled")
 
-		case <-time.After(30 * time.Second):
-			// Periodic keep-alive check
+		case <-timer.C:
 			if c.Player == nil || c.Player.ctx.Err() != nil {
 				return fmt.Errorf("player connection lost")
 			}
 		}
 	}
 
-	return nil
+	return fmt.Errorf("character quit")
+}
+
+// Helper method to handle message sending with error checking
+func (c *Character) sendMessage(msg string) error {
+	select {
+	case c.Player.toPlayer <- msg:
+		return nil
+	case <-c.Player.ctx.Done():
+		return fmt.Errorf("player context cancelled while sending message")
+	}
 }

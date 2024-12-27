@@ -213,12 +213,15 @@ func (p *Player) handleInput(ctx context.Context) error {
 			r, _, err := reader.ReadRune()
 			if err != nil {
 				if err == io.EOF {
+					Logger.Debug("Connection closed by client", "player", p.playerID)
 					return nil
 				}
+				Logger.Error("Error reading input", "player", p.playerID, "error", err)
 				return fmt.Errorf("read error: %w", err)
 			}
 
 			if !p.processInput(r, &inputBuffer) {
+				Logger.Debug("Input processing stopped", "player", p.playerID)
 				return nil
 			}
 		}
