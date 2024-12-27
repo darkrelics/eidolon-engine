@@ -71,10 +71,14 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 func (s *Server) Run() error {
 	Logger.Info("Starting server...")
 
+	fmt.Println("Starting SSH Service...")
+
 	sshInterface, err := NewSSHInterface(s)
 	if err != nil {
 		return fmt.Errorf("ssh interface init error: %w", err)
 	}
+
+	fmt.Println("SSH Service started successfully")
 
 	// Create error channel for SSH interface
 	sshErrChan := make(chan error, 1)

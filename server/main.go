@@ -78,19 +78,22 @@ func main() {
 }
 
 func initialize(ctx context.Context, config *Configuration) (*Game, *Server, error) {
+	fmt.Println("Initializing game...")
 	game, err := NewGame(ctx, config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("game init error: %w", err)
 	}
+	fmt.Println("Game initialized successfully")
 
+	fmt.Println("Initializing server...")
 	server, err := NewServer(ctx, config)
 	if err != nil {
-		// Clean up game resources since server failed
 		if cerr := game.Stop(); cerr != nil {
 			return nil, nil, fmt.Errorf("server init error: %w, game cleanup error: %v", err, cerr)
 		}
 		return nil, nil, fmt.Errorf("server init error: %w", err)
 	}
+	fmt.Println("Server initialized successfully")
 
 	server.game = game
 	return game, server, nil

@@ -38,15 +38,21 @@ type CloudWatchHandler struct {
 }
 
 func NewLogHandler(ctx context.Context, cfg *Configuration) (*CloudWatchHandler, error) {
-
-	fmt.Println("Initializing logging...")
-
 	awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(cfg.Aws.Region))
 	if err != nil {
 		return nil, fmt.Errorf("aws config load: %w", err)
 	}
 
 	handlerCtx, cancel := context.WithCancel(ctx)
+
+	// Create console handler first
+	consoleHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: parseLogLevel(cfg.Logging.LogLevel),
+	}).WithAttrs([]slog.Attr{
+		slog.String("application", cfg.Logging.ApplicationName),
+		slog.String("region", cfg.Aws.Region),
+	})
+
 	handler := &CloudWatchHandler{
 		ctx:           handlerCtx,
 		cancel:        cancel,
@@ -56,17 +62,11 @@ func NewLogHandler(ctx context.Context, cfg *Configuration) (*CloudWatchHandler,
 		logStream:     cfg.Logging.LogStream,
 		namespace:     cfg.Logging.MetricNamespace,
 		interval:      time.Minute,
-		handlers: []slog.Handler{
-			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-				Level: parseLogLevel(cfg.Logging.LogLevel),
-			}).WithAttrs([]slog.Attr{
-				slog.String("application", cfg.Logging.ApplicationName),
-				slog.String("region", cfg.Aws.Region),
-			}),
-		},
+		handlers:      []slog.Handler{consoleHandler},
 	}
 
-	Logger = slog.New(handler)
+	// Create logger with console handler first so we get immediate output
+	Logger = slog.New(consoleHandler)
 	slog.SetDefault(Logger)
 
 	return handler, nil
