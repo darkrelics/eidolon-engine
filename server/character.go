@@ -174,9 +174,22 @@ func (c *Character) cleanupRoom() error {
 }
 
 func CreateCharacter(name string, player *Player, room *Room, archetypeName string, game *Game) (*Character, error) {
+
+	Logger.Debug("Creating character", "name", name)
+
 	// Validate character name
 	if game.CharacterBloomFilter.Test([]byte(name)) {
 		return nil, fmt.Errorf("character name '%s' already exists", name)
+	}
+
+	if player == nil {
+		return nil, fmt.Errorf("player cannot be nil")
+	}
+	if room == nil {
+		return nil, fmt.Errorf("room cannot be nil")
+	}
+	if game == nil {
+		return nil, fmt.Errorf("game cannot be nil")
 	}
 
 	character := NewCharacter()
@@ -237,6 +250,9 @@ func CreateCharacter(name string, player *Player, room *Room, archetypeName stri
 }
 
 func LoadCharacter(characterID uuid.UUID, player *Player, game *Game) (*Character, error) {
+
+	Logger.Debug("Loading character", "characterID", characterID)
+
 	character := NewCharacter()
 	character.ID = characterID
 	character.Player = player

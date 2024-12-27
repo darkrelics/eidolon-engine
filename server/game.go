@@ -52,6 +52,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Rooms:         make(map[int64]*Room),
 		Prototypes:    make(map[uuid.UUID]*Prototype),
 		Items:         make(map[uuid.UUID]*Item),
+		ticker:        time.NewTicker(time.Second),
 	}
 
 	database, err := NewKeyPair(config.Aws.Region)
