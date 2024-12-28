@@ -85,17 +85,34 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 	Logger.Info("starting player session", "player", p.playerID)
 	defer p.Stop()
 
+	// Create channels for each goroutine
 	requestDone := make(chan error, 1)
+	inputDone := make(chan error, 1)
+	outputDone := make(chan error, 1)
+
+	// Start request handler
 	go func() {
 		requestDone <- p.handleRequests(p.ctx, requests)
 	}()
 
-	for {
-		if err := DisplayUnseenMOTDs(p); err != nil {
-			Logger.Error("motd display error", "player", p.playerID, "error", err)
-			return
-		}
+	// Start input handler
+	go func() {
+		inputDone <- p.handleInput(p.ctx)
+	}()
 
+	// Start output handler
+	go func() {
+		outputDone <- p.handleOutput(p.ctx)
+	}()
+
+	// Display MOTDs
+	if err := DisplayUnseenMOTDs(p); err != nil {
+		Logger.Error("motd display error", "player", p.playerID, "error", err)
+		return
+	}
+
+	// Character selection loop
+	for {
 		character, err := SelectCharacter(p.ctx, p)
 		if err != nil {
 			Logger.Error("character selection error", "player", p.playerID, "error", err)
@@ -113,16 +130,19 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 			Logger.Info("player session ended", "player", p.playerID)
 			return
 		case <-p.interfaceCtx.Done():
-			Logger.Info("interface session ended", "player", p.playerID)
 			return
 		case <-p.server.context.Done():
-			Logger.Info("server session ended", "player", p.playerID)
 			return
 		case <-p.server.globalContext.Done():
-			Logger.Info("global session ended", "player", p.playerID)
 			return
 		case err := <-requestDone:
 			Logger.Error("ssh request handler error", "player", p.playerID, "error", err)
+			return
+		case err := <-inputDone:
+			Logger.Error("input handler error", "player", p.playerID, "error", err)
+			return
+		case err := <-outputDone:
+			Logger.Error("output handler error", "player", p.playerID, "error", err)
 			return
 		case err := <-charDone:
 			if err != nil {
@@ -131,8 +151,6 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 			}
 			p.character = nil
 			continue
-		case <-p.ctx.Done():
-			return
 		}
 	}
 }
@@ -195,12 +213,15 @@ func (p *Player) handleInput(ctx context.Context) error {
 			r, _, err := reader.ReadRune()
 			if err != nil {
 				if err == io.EOF {
+					Logger.Debug("Connection closed by client", "player", p.playerID)
 					return nil
 				}
+				Logger.Error("Error reading input", "player", p.playerID, "error", err)
 				return fmt.Errorf("read error: %w", err)
 			}
 
 			if !p.processInput(r, &inputBuffer) {
+				Logger.Debug("Input processing stopped", "player", p.playerID)
 				return nil
 			}
 		}

@@ -220,8 +220,9 @@ Deploying the server involves several steps:
    This script will create the necessary AWS resources using CloudFormation.
 6. Once deployment is complete, build and run the server:
    ```
-   go build ./ssh_server
-   ./ssh_server
+   cd ./server
+   go build . -o server
+   ./server
    ```
 
 ## License

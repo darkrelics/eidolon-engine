@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,6 +44,15 @@ func NewLogHandler(ctx context.Context, cfg *Configuration) (*CloudWatchHandler,
 	}
 
 	handlerCtx, cancel := context.WithCancel(ctx)
+
+	// Create console handler first
+	consoleHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: parseLogLevel(cfg.Logging.LogLevel),
+	}).WithAttrs([]slog.Attr{
+		slog.String("application", cfg.Logging.ApplicationName),
+		slog.String("region", cfg.Aws.Region),
+	})
+
 	handler := &CloudWatchHandler{
 		ctx:           handlerCtx,
 		cancel:        cancel,
@@ -52,17 +62,11 @@ func NewLogHandler(ctx context.Context, cfg *Configuration) (*CloudWatchHandler,
 		logStream:     cfg.Logging.LogStream,
 		namespace:     cfg.Logging.MetricNamespace,
 		interval:      time.Minute,
-		handlers: []slog.Handler{
-			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-				Level: parseLogLevel(cfg.Logging.LogLevel),
-			}).WithAttrs([]slog.Attr{
-				slog.String("application", cfg.Logging.ApplicationName),
-				slog.String("region", cfg.Aws.Region),
-			}),
-		},
+		handlers:      []slog.Handler{consoleHandler},
 	}
 
-	Logger = slog.New(handler)
+	// Create logger with console handler first so we get immediate output
+	Logger = slog.New(consoleHandler)
 	slog.SetDefault(Logger)
 
 	return handler, nil
@@ -163,12 +167,25 @@ func (h *CloudWatchHandler) initLogStream(ctx context.Context) error {
 		return nil
 	}
 
-	_, err := h.logsClient.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
-		LogGroupName:  aws.String(h.logGroup),
-		LogStreamName: aws.String(h.logStream),
+	// Try to describe the log stream first to check if it exists
+	_, err := h.logsClient.DescribeLogStreams(ctx, &cloudwatchlogs.DescribeLogStreamsInput{
+		LogGroupName:        aws.String(h.logGroup),
+		LogStreamNamePrefix: aws.String(h.logStream),
 	})
-	if err != nil && !errors.Is(err, &cwlogtypes.ResourceAlreadyExistsException{}) {
-		return fmt.Errorf("create log stream: %w", err)
+
+	if err != nil {
+		// If the stream doesn't exist, create it
+		if strings.Contains(err.Error(), "ResourceNotFoundException") {
+			_, err = h.logsClient.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
+				LogGroupName:  aws.String(h.logGroup),
+				LogStreamName: aws.String(h.logStream),
+			})
+			if err != nil && !strings.Contains(err.Error(), "ResourceAlreadyExistsException") {
+				return fmt.Errorf("create log stream: %w", err)
+			}
+		} else {
+			return fmt.Errorf("describe log stream: %w", err)
+		}
 	}
 
 	h.initialized = true

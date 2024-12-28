@@ -10,6 +10,7 @@ import (
 )
 
 func main() {
+	fmt.Println("Starting server...")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -18,50 +19,81 @@ func main() {
 	configFile := flag.String("config", "config.yml", "Configuration file")
 	flag.Parse()
 
+	fmt.Printf("Loading configuration from %s\n", *configFile)
 	config, err := loadConfiguration(*configFile)
 	if err != nil {
 		fmt.Printf("Error loading configuration: %v\n", err)
 		os.Exit(1)
 	}
 
+	fmt.Println("Initializing logging...")
 	cloudWatch, err := NewLogHandler(ctx, config)
 	if err != nil {
 		fmt.Printf("Error initializing logging: %v\n", err)
 		os.Exit(1)
 	}
 
+	fmt.Println("Start initializing server...")
 	game, server, err := initialize(ctx, config)
 	if err != nil {
-		Logger.Error("Initialization error", "error", err)
+		fmt.Printf("Initialization error: %v\n", err)
+		if cerr := cloudWatch.Stop(); cerr != nil {
+			fmt.Printf("Error stopping cloudwatch during cleanup: %v\n", cerr)
+		}
 		os.Exit(1)
 	}
 
-	if server != nil {
-		cloudWatch.mutex.Lock()
-		cloudWatch.server = server
-		cloudWatch.mutex.Unlock()
+	cloudWatch.mutex.Lock()
+	cloudWatch.server = server
+	cloudWatch.mutex.Unlock()
+
+	fmt.Println("Starting server components...")
+
+	// Start components with error channels
+	go func() { errChan <- cloudWatch.Run() }()
+	go func() { errChan <- game.Run() }()
+	go func() { errChan <- server.Run() }()
+
+	// Handle shutdown via signal or component error
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case sig := <-sigChan:
+		fmt.Printf("Received signal: %v\n", sig)
+	case err := <-errChan:
+		if err != nil {
+			fmt.Printf("Component error: %v\n", err)
+		}
 	}
 
-	go runMetrics(cloudWatch, errChan)
-	go runGame(game, errChan)
-	go runServer(server, errChan)
-
-	if err = handleSignals(game, server, cloudWatch, errChan); err != nil {
-		Logger.Error("Runtime error", "error", err)
+	// Initiate graceful shutdown
+	cancel()
+	if err := shutdown(game, server, cloudWatch, "shutdown requested"); err != nil {
+		fmt.Printf("Error during shutdown: %v\n", err)
 		os.Exit(1)
 	}
+
+	os.Exit(0)
 }
 
 func initialize(ctx context.Context, config *Configuration) (*Game, *Server, error) {
+	fmt.Println("Initializing game...")
 	game, err := NewGame(ctx, config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("game init error: %w", err)
 	}
+	fmt.Println("Game initialized successfully")
 
+	fmt.Println("Initializing server...")
 	server, err := NewServer(ctx, config)
 	if err != nil {
+		if cerr := game.Stop(); cerr != nil {
+			return nil, nil, fmt.Errorf("server init error: %w, game cleanup error: %v", err, cerr)
+		}
 		return nil, nil, fmt.Errorf("server init error: %w", err)
 	}
+	fmt.Println("Server initialized successfully")
 
 	server.game = game
 	return game, server, nil

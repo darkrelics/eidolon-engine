@@ -75,7 +75,7 @@ Resources:
       UserPoolTags:
         Environment: Production
         Application: MUD
-      DeletionProtection: ACTIVE
+      DeletionProtection: INACTIVE
 
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient

@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +17,7 @@ type Archetype struct {
 
 // DisplayArchetypes logs the loaded archetypes for debugging purposes.
 func DisplayArchetypes(g *Game) {
+	Logger.Debug("Archetypes:" + fmt.Sprint(len(g.ArcheTypes)))
 	for key, archtype := range g.ArcheTypes {
 		Logger.Debug("Archetype", "name", key, "description", archtype.Description)
 	}
@@ -22,6 +25,7 @@ func DisplayArchetypes(g *Game) {
 
 // LoadArchetypes retrieves all archetypes from the DynamoDB table and stores them in the Server's ArcheTypes map.
 func LoadArchetypes(g *Game) error {
+	DisplayArchetypes(g)
 	var archetypes []Archetype
 	err := g.Database.Scan("archetypes", &archetypes)
 	if err != nil {
@@ -70,4 +74,39 @@ func StoreArchetypes(g *Game) error {
 	}
 
 	return nil
+}
+
+func selectArchetype(player *Player) (string, error) {
+	options := buildArchetypeOptions(player.server.game)
+	if len(options) == 0 {
+		return "", nil // No archetypes available
+	}
+
+	msg := "\n\rSelect a character archetype.\n\r"
+	for i, option := range options {
+		msg += fmt.Sprintf("%d: %s\n\r", i+1, option)
+	}
+	msg += "Enter the number of your choice: "
+
+	player.toPlayer <- msg
+	selection, ok := <-player.fromPlayer
+	if !ok {
+		return "", fmt.Errorf("player input channel closed")
+	}
+
+	num, err := strconv.Atoi(strings.TrimSpace(selection))
+	if err != nil || num < 1 || num > len(options) {
+		return "", fmt.Errorf("invalid archetype selection")
+	}
+
+	return strings.Split(options[num-1], " - ")[0], nil
+}
+
+func buildArchetypeOptions(g *Game) []string {
+	options := make([]string, 0, len(g.ArcheTypes))
+	for name, archetype := range g.ArcheTypes {
+		options = append(options, name+" - "+archetype.Description)
+	}
+	sort.Strings(options)
+	return options
 }

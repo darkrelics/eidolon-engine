@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -174,9 +173,22 @@ func (c *Character) cleanupRoom() error {
 }
 
 func CreateCharacter(name string, player *Player, room *Room, archetypeName string, game *Game) (*Character, error) {
+
+	Logger.Debug("Creating character", "name", name)
+
 	// Validate character name
 	if game.CharacterBloomFilter.Test([]byte(name)) {
 		return nil, fmt.Errorf("character name '%s' already exists", name)
+	}
+
+	if player == nil {
+		return nil, fmt.Errorf("player cannot be nil")
+	}
+	if room == nil {
+		return nil, fmt.Errorf("room cannot be nil")
+	}
+	if game == nil {
+		return nil, fmt.Errorf("game cannot be nil")
 	}
 
 	character := NewCharacter()
@@ -237,6 +249,9 @@ func CreateCharacter(name string, player *Player, room *Room, archetypeName stri
 }
 
 func LoadCharacter(characterID uuid.UUID, player *Player, game *Game) (*Character, error) {
+
+	Logger.Debug("Loading character", "characterID", characterID)
+
 	character := NewCharacter()
 	character.ID = characterID
 	character.Player = player
@@ -725,11 +740,26 @@ func moveCharacter(character *Character, direction string) error {
 // InputLoop is the main loop that handles player commands.
 // It reads commands from the player's input and executes them accordingly.
 func (c *Character) InputLoop() error {
-	var lastCommand string
+	if c == nil || c.Player == nil {
+		return fmt.Errorf("invalid character or player")
+	}
+
 	shouldQuit := false
-	const commandTimeout = 5 * time.Second
+	const idleTimeout = 30 * time.Second
+
+	// Send initial prompt
+	select {
+	case c.Player.toPlayer <- c.prompt:
+	case <-c.Player.ctx.Done():
+		return fmt.Errorf("player context cancelled during initial prompt")
+	}
+
+	timer := time.NewTimer(idleTimeout)
+	defer timer.Stop()
 
 	for !shouldQuit {
+		timer.Reset(idleTimeout)
+
 		select {
 		case <-c.Player.ctx.Done():
 			return fmt.Errorf("player context cancelled")
@@ -738,43 +768,44 @@ func (c *Character) InputLoop() error {
 			if !ok {
 				return fmt.Errorf("input channel closed")
 			}
-			if lastCommand == "" {
-				lastCommand = strings.Replace(inputLine, "\n", "\n\r", -1)
+
+			verb, tokens, err := ValidateCommand(strings.TrimSpace(inputLine))
+			if err != nil {
+				if err := c.sendMessage(err.Error() + "\n\r"); err != nil {
+					return fmt.Errorf("failed to send error message: %w", err)
+				}
+			} else {
+				shouldQuit = ExecuteCommand(c, verb, tokens)
+				Logger.Debug("Command executed",
+					"character", c.Name,
+					"command", strings.Join(tokens, " "))
 			}
 
-		case <-c.Game.ticker.C:
-			if lastCommand != "" {
-				cmdCtx, cancel := context.WithTimeout(c.Player.ctx, commandTimeout)
-				defer cancel()
-
-				verb, tokens, err := ValidateCommand(strings.TrimSpace(lastCommand))
-				if err != nil {
-					select {
-					case c.outputChan <- err.Error() + "\n\r":
-					case <-cmdCtx.Done():
-						return fmt.Errorf("command context cancelled")
-					}
-				} else {
-					shouldQuit = ExecuteCommand(c, verb, tokens)
-					Logger.Debug("Command executed",
-						"character", c.Name,
-						"command", strings.Join(tokens, " "))
+			if !shouldQuit {
+				if err := c.sendMessage(c.prompt); err != nil {
+					return fmt.Errorf("failed to send prompt: %w", err)
 				}
+			}
 
-				if !shouldQuit {
-					select {
-					case c.outputChan <- c.prompt:
-					case <-cmdCtx.Done():
-						return fmt.Errorf("prompt context cancelled")
-					default:
-						Logger.Warn("Unable to send prompt", "characterName", c.Name)
-					}
-				}
+		case <-c.End:
+			return fmt.Errorf("character end signaled")
 
-				lastCommand = ""
+		case <-timer.C:
+			if c.Player == nil || c.Player.ctx.Err() != nil {
+				return fmt.Errorf("player connection lost")
 			}
 		}
 	}
 
-	return nil
+	return fmt.Errorf("character quit")
+}
+
+// Helper method to handle message sending with error checking
+func (c *Character) sendMessage(msg string) error {
+	select {
+	case c.Player.toPlayer <- msg:
+		return nil
+	case <-c.Player.ctx.Done():
+		return fmt.Errorf("player context cancelled while sending message")
+	}
 }

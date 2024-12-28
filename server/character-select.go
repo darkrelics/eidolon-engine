@@ -58,23 +58,31 @@ func createNewCharacter(player *Player) (*Character, error) {
 		return nil, err
 	}
 
-	archetype, err := selectArchetype(player)
-	if err != nil {
-		return nil, err
+	// Skip archetype selection if none exist
+	var archetype string
+	if len(player.server.game.ArcheTypes) > 0 {
+		archetype, err = selectArchetype(player)
+		if err != nil {
+			Logger.Warn("Error selecting archetype", "error", err)
+			archetype = ""
+		}
 	}
 
 	room, err := getStartingRoom(player.server.game, archetype)
 	if err != nil {
-		return nil, err
+		Logger.Warn("Error getting starting room", "error", err)
+		room = player.server.game.Rooms[0] // Fallback to Room 0
 	}
 
 	character, err := CreateCharacter(name, player, room, archetype, player.server.game)
 	if err != nil {
+		Logger.Warn("Error creating character", "error", err)
 		return nil, err
 	}
 
 	err = WriteCharacter(character, player.server.database)
 	if err != nil {
+		Logger.Warn("Error writing character", "error", err)
 		return nil, err
 	}
 
@@ -86,6 +94,7 @@ func createNewCharacter(player *Player) (*Character, error) {
 	player.mutex.Unlock()
 
 	if err := player.WritePlayer(); err != nil {
+		Logger.Warn("Error writing player", "error", err)
 		return nil, err
 	}
 
@@ -267,41 +276,6 @@ func validateCharacterName(name string, g *Game) error {
 	}
 
 	return nil
-}
-
-func selectArchetype(player *Player) (string, error) {
-	options := buildArchetypeOptions(player.server.game)
-	if len(options) == 0 {
-		return "", fmt.Errorf("no archetypes available")
-	}
-
-	msg := "\n\rSelect a character archetype.\n\r"
-	for i, option := range options {
-		msg += fmt.Sprintf("%d: %s\n\r", i+1, option)
-	}
-	msg += "Enter the number of your choice: "
-
-	player.toPlayer <- msg
-	selection, ok := <-player.fromPlayer
-	if !ok {
-		return "", fmt.Errorf("player input channel closed")
-	}
-
-	num, err := strconv.Atoi(strings.TrimSpace(selection))
-	if err != nil || num < 1 || num > len(options) {
-		return "", fmt.Errorf("invalid archetype selection")
-	}
-
-	return strings.Split(options[num-1], " - ")[0], nil
-}
-
-func buildArchetypeOptions(g *Game) []string {
-	options := make([]string, 0, len(g.ArcheTypes))
-	for name, archetype := range g.ArcheTypes {
-		options = append(options, name+" - "+archetype.Description)
-	}
-	sort.Strings(options)
-	return options
 }
 
 func getStartingRoom(g *Game, archetype string) (*Room, error) {

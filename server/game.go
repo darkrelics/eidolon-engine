@@ -38,7 +38,7 @@ type Game struct {
 }
 
 func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
-	Logger.Info("Initializing game...")
+	Logger.Info("Initializing game engine...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
@@ -52,6 +52,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Rooms:         make(map[int64]*Room),
 		Prototypes:    make(map[uuid.UUID]*Prototype),
 		Items:         make(map[uuid.UUID]*Item),
+		ticker:        time.NewTicker(time.Second),
 	}
 
 	database, err := NewKeyPair(config.Aws.Region)
@@ -82,7 +83,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 }
 
 func (g *Game) Run() error {
-	Logger.Info("Starting game...")
+	Logger.Info("Starting game engine...")
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -113,12 +114,12 @@ func (g *Game) initBloomFilter() error {
 		return fmt.Errorf("character names load error: %w", err)
 	}
 
-	namesFromFile, err := loadNamesFromFile("./data/names.txt")
+	namesFromFile, err := loadNamesFromFile("../data/names.txt")
 	if err != nil {
 		return fmt.Errorf("names file load error: %w", err)
 	}
 
-	obscenities, err := loadNamesFromFile("./data/obscenity.txt")
+	obscenities, err := loadNamesFromFile("../data/obscenity.txt")
 	if err != nil {
 		return fmt.Errorf("obscenity file load error: %w", err)
 	}
