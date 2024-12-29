@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -16,15 +15,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
-	cwlogtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 )
 
 var Logger *slog.Logger
 
-type CloudWatchHandler struct {
+type CloudWatch struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
-	logsClient    *cloudwatchlogs.Client
+	logClient     *cloudwatchlogs.Client
 	metricsClient *cloudwatch.Client
 	logGroup      string
 	logStream     string
@@ -37,216 +35,40 @@ type CloudWatchHandler struct {
 	server        *Server
 }
 
-func NewLogHandler(ctx context.Context, cfg *Configuration) (*CloudWatchHandler, error) {
-	awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(cfg.Aws.Region))
-	if err != nil {
-		return nil, fmt.Errorf("aws config load: %w", err)
-	}
-
+func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error) {
 	handlerCtx, cancel := context.WithCancel(ctx)
 
-	// Create console handler first
-	consoleHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: parseLogLevel(cfg.Logging.LogLevel),
-	}).WithAttrs([]slog.Attr{
-		slog.String("application", cfg.Logging.ApplicationName),
-		slog.String("region", cfg.Aws.Region),
+	fmt.Println("Creating console handler...")
+
+	awsConfig, err := config.LoadDefaultConfig(ctx, config.WithRegion(cfg.aws.region))
+	if err != nil {
+		fmt.Printf("Error loading AWS config: %v\n", err)
+		return nil, fmt.Errorf("error loading AWS config: %w", err)
+
+	}
+
+	//Create Console Hander
+
+	consoleHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: parseLogLevel(cfg.logging.logLevel),
 	})
 
-	handler := &CloudWatchHandler{
+	//Create CloudWatch Handler
+
+	handler := &CloudWatch{
 		ctx:           handlerCtx,
 		cancel:        cancel,
-		logsClient:    cloudwatchlogs.NewFromConfig(awsCfg),
-		metricsClient: cloudwatch.NewFromConfig(awsCfg),
-		logGroup:      cfg.Logging.LogGroup,
-		logStream:     cfg.Logging.LogStream,
-		namespace:     cfg.Logging.MetricNamespace,
-		interval:      time.Minute,
+		logClient:     cloudwatchlogs.NewFromConfig(awsConfig),
+		metricsClient: cloudwatch.NewFromConfig(awsConfig),
+		logGroup:      cfg.logging.logGroup,
+		logStream:     cfg.logging.logStream,
+		namespace:     cfg.logging.namespace,
 		handlers:      []slog.Handler{consoleHandler},
+		initialized:   false,
+		interval:      time.Minute,
 	}
-
-	// Create logger with console handler first so we get immediate output
-	Logger = slog.New(consoleHandler)
-	slog.SetDefault(Logger)
 
 	return handler, nil
-}
-
-func (h *CloudWatchHandler) Run() error {
-	if err := h.initLogStream(h.ctx); err != nil {
-		return fmt.Errorf("log stream init: %w", err)
-	}
-
-	ticker := time.NewTicker(h.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-h.ctx.Done():
-			return nil
-		case <-ticker.C:
-			if err := h.sendMetrics(); err != nil {
-				Logger.Error("metrics send failed", "error", err)
-			}
-		}
-	}
-}
-
-func (h *CloudWatchHandler) Stop() error {
-	h.cancel()
-	return nil
-}
-
-func (h *CloudWatchHandler) Handle(ctx context.Context, r slog.Record) error {
-	if err := h.initLogStream(ctx); err != nil {
-		return err
-	}
-
-	input := &cloudwatchlogs.PutLogEventsInput{
-		LogGroupName:  aws.String(h.logGroup),
-		LogStreamName: aws.String(h.logStream),
-		LogEvents: []cwlogtypes.InputLogEvent{{
-			Message:   aws.String(h.formatMessage(r)),
-			Timestamp: aws.Int64(time.Now().UnixNano() / int64(time.Millisecond)),
-		}},
-	}
-
-	if err := h.putLogs(ctx, input); err != nil {
-		return err
-	}
-
-	return h.handleDownstream(ctx, r)
-}
-
-func (h *CloudWatchHandler) putLogs(ctx context.Context, input *cloudwatchlogs.PutLogEventsInput) error {
-	const maxRetries = 3
-	backoff := time.Second
-
-	h.mutex.RLock()
-	if h.sequenceToken != nil {
-		input.SequenceToken = h.sequenceToken
-	}
-	h.mutex.RUnlock()
-
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		output, err := h.logsClient.PutLogEvents(ctx, input)
-		if err == nil {
-			h.mutex.Lock()
-			h.sequenceToken = output.NextSequenceToken
-			h.mutex.Unlock()
-			return nil
-		}
-
-		if errors.Is(err, &cwlogtypes.ResourceNotFoundException{}) {
-			if err := h.initLogStream(ctx); err != nil {
-				return err
-			}
-			continue
-		}
-
-		if attempt < maxRetries-1 {
-			time.Sleep(backoff)
-			backoff *= 2
-			continue
-		}
-
-		return fmt.Errorf("put logs failed: %w", err)
-	}
-	return nil
-}
-
-func (h *CloudWatchHandler) initLogStream(ctx context.Context) error {
-	if h.initialized {
-		return nil
-	}
-
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	if h.initialized {
-		return nil
-	}
-
-	// Try to describe the log stream first to check if it exists
-	_, err := h.logsClient.DescribeLogStreams(ctx, &cloudwatchlogs.DescribeLogStreamsInput{
-		LogGroupName:        aws.String(h.logGroup),
-		LogStreamNamePrefix: aws.String(h.logStream),
-	})
-
-	if err != nil {
-		// If the stream doesn't exist, create it
-		if strings.Contains(err.Error(), "ResourceNotFoundException") {
-			_, err = h.logsClient.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
-				LogGroupName:  aws.String(h.logGroup),
-				LogStreamName: aws.String(h.logStream),
-			})
-			if err != nil && !strings.Contains(err.Error(), "ResourceAlreadyExistsException") {
-				return fmt.Errorf("create log stream: %w", err)
-			}
-		} else {
-			return fmt.Errorf("describe log stream: %w", err)
-		}
-	}
-
-	h.initialized = true
-	return nil
-}
-
-func (h *CloudWatchHandler) sendMetrics() error {
-	metrics := h.collectMetrics()
-
-	_, err := h.metricsClient.PutMetricData(h.ctx, &cloudwatch.PutMetricDataInput{
-		Namespace:  aws.String(h.namespace),
-		MetricData: metrics,
-	})
-
-	return err
-}
-
-func (h *CloudWatchHandler) collectMetrics() []types.MetricDatum {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
-	metrics := []types.MetricDatum{
-		{
-			MetricName: aws.String("MemoryUsage"),
-			Unit:       types.StandardUnitMegabytes,
-			Value:      aws.Float64(float64(m.Alloc) / 1024 / 1024),
-		},
-		{
-			MetricName: aws.String("RoutineCount"),
-			Unit:       types.StandardUnitCount,
-			Value:      aws.Float64(float64(runtime.NumGoroutine())),
-		},
-	}
-
-	if h.server != nil {
-		metrics = append(metrics, types.MetricDatum{
-			MetricName: aws.String("PlayerCount"),
-			Unit:       types.StandardUnitCount,
-			Value:      aws.Float64(float64(h.server.PlayerCount())),
-		})
-	}
-
-	return metrics
-}
-
-func (h *CloudWatchHandler) handleDownstream(ctx context.Context, r slog.Record) error {
-	for _, handler := range h.handlers {
-		if err := handler.Handle(ctx, r); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (h *CloudWatchHandler) formatMessage(r slog.Record) string {
-	msg := r.Message
-	r.Attrs(func(a slog.Attr) bool {
-		msg += fmt.Sprintf(" %s=%v", a.Key, a.Value)
-		return true
-	})
-	return msg
 }
 
 func parseLogLevel(level int) slog.Level {
@@ -264,15 +86,100 @@ func parseLogLevel(level int) slog.Level {
 	}
 }
 
-// Required slog.Handler interface methods
-func (h *CloudWatchHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return true
+func (c *CloudWatch) initLogStream() error {
+
+	if c.initialized {
+		return nil
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	// Describe the Log Stream
+	_, err := c.logClient.DescribeLogStreams(c.ctx, &cloudwatchlogs.DescribeLogStreamsInput{
+		LogGroupName:        aws.String(c.logGroup),
+		LogStreamNamePrefix: aws.String(c.logStream),
+	})
+
+	if err != nil {
+		if strings.Contains(err.Error(), "ResourceNotFoundException") {
+			// Create the log group
+			_, err = c.logClient.CreateLogStream(c.ctx, &cloudwatchlogs.CreateLogStreamInput{
+				LogGroupName:  aws.String(c.logGroup),
+				LogStreamName: aws.String(c.logStream),
+			})
+			if err != nil && !strings.Contains(err.Error(), "ResourceAlreadyExistsException") {
+				return fmt.Errorf("create log stream: %w", err)
+			}
+		} else {
+			return fmt.Errorf("error describing log stream: %w", err)
+		}
+
+	}
+
+	c.initialized = true
+
+	return nil
 }
 
-func (h *CloudWatchHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return h
+func (c *CloudWatch) collectMetrics() []types.MetricDatum {
+
+	var m runtime.MemStats
+
+	runtime.ReadMemStats(&m)
+
+	metrics := []types.MetricDatum{
+		{
+			MetricName: aws.String("Memory Usage"),
+			Unit:       types.StandardUnitMegabytes,
+			Value:      aws.Float64(float64(m.Alloc) / 1024 / 1024),
+		},
+		{
+			MetricName: aws.String("Go Routines"),
+			Unit:       types.StandardUnitCount,
+			Value:      aws.Float64(float64(runtime.NumGoroutine())),
+		},
+	}
+
+	return metrics
 }
 
-func (h *CloudWatchHandler) WithGroup(name string) slog.Handler {
-	return h
+func (c *CloudWatch) sendMetrics() error {
+
+	metrics := c.collectMetrics()
+
+	_, err := c.metricsClient.PutMetricData(c.ctx, &cloudwatch.PutMetricDataInput{
+		Namespace:  aws.String(c.namespace),
+		MetricData: metrics,
+	})
+
+	return err
+}
+
+func (c *CloudWatch) Run() error {
+
+	if !c.initialized {
+		if err := c.initLogStream(); err != nil {
+			return fmt.Errorf("error initializing log stream: %w", err)
+		}
+	}
+
+	ticker := time.NewTicker(c.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return nil
+		case <-ticker.C:
+			if err := c.sendMetrics(); err != nil {
+				Logger.Error("Error sending metrics", "error", err)
+			}
+		}
+	}
+}
+
+func (c *CloudWatch) Stop() error {
+	c.cancel()
+	return nil
 }

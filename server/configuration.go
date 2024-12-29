@@ -3,84 +3,86 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Configuration struct {
-	SSH struct {
-		Enabled        bool   `yaml:"Enabled"`
-		Port           uint16 `yaml:"Port"`
-		PrivateKeyPath string `yaml:"PrivateKeyPath"`
+	ssh struct {
+		enabled bool   `yaml:"Enabled"`
+		port    uint16 `yaml:"Port"`
+		key     string `yaml:"PrivateKeyPath"`
 	} `yaml:"SSH"`
-	Aws struct {
-		Region string `yaml:"Region"`
-	} `yaml:"Aws"`
-	Cognito struct {
-		UserPoolID     string `yaml:"UserPoolId"`
-		ClientSecret   string `yaml:"UserPoolClientSecret"`
-		ClientID       string `yaml:"UserPoolClientId"`
-		UserPoolDomain string `yaml:"UserPoolDomain"`
-		UserPoolArn    string `yaml:"UserPoolArn"`
+	aws struct {
+		region string `yaml:"Region"`
+	} `yaml:"AWS"`
+	cognito struct {
+		userPoolId     string `yaml:"UserPoolId"`
+		clientSecret   string `yaml:"UserPoolClientSecret"`
+		client         string `yaml:"UserPoolClientId"`
+		userPoolDomain string `yaml:"UserPoolDomain"`
+		userPoolArn    string `yaml:"UserPoolArn"`
 	} `yaml:"Cognito"`
-	Game struct {
-		Balance         float64 `yaml:"Balance"`
-		AutoSave        uint16  `yaml:"AutoSave"`
-		StartingEssence uint16  `yaml:"StartingEssence"`
-		StartingHealth  uint16  `yaml:"StartingHealth"`
+	game struct {
+		balance         float64 `yaml:"Balance"`
+		startingEssence uint16  `yaml:"StartingEssence"`
+		startingHealth  uint16  `yaml:"StartingHealth"`
 	} `yaml:"Game"`
-	Logging struct {
-		ApplicationName string `yaml:"ApplicationName"`
-		LogLevel        int    `yaml:"LogLevel"`
-		LogGroup        string `yaml:"LogGroup"`
-		LogStream       string `yaml:"LogStream"`
-		MetricNamespace string `yaml:"MetricNamespace"`
+	logging struct {
+		application string `yaml:"ApplicationName"`
+		logLevel    int    `yaml:"LogLevel"`
+		logGroup    string `yaml:"LogGroup"`
+		logStream   string `yaml:"LogStream"`
+		namespace   string `yaml:"MetricNamespace"`
 	} `yaml:"Logging"`
 }
 
-// loadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
-func loadConfiguration(configFile string) (*Configuration, error) {
+// LoadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
+func LoadConfiguration(configurationFile string) (*Configuration, error) {
+
 	var config Configuration
 
-	data, err := os.ReadFile(configFile)
+	fmt.Printf("Loading configuration from", configurationFile)
+
+	data, err := os.ReadFile(configurationFile)
 	if err != nil {
-		return nil, fmt.Errorf("error reading config file '%s': %w", configFile, err)
+		return nil, fmt.Errorf("error reading configuration file '%s': %w", configurationFile, err)
 	}
 
 	// Add validation before unmarshaling
-	if err := validateConfigData(data); err != nil {
+	if err := validateConfig(data); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
+	// Unmarshal the configuration data into the Configuration struct
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling config from '%s': %w", configFile, err)
+		fmt.Printf("Error unmarshaling config from '%s': %v\n", configurationFile, err)
+		return nil, fmt.Errorf("error unmarshaling config from '%s': %w", configurationFile, err)
 	}
+
+	fmt.Println("Configuration loaded successfully")
 
 	return &config, nil
 }
 
-func validateConfigData(data []byte) error {
-	// Verify required fields exist
-	var rawConfig map[string]interface{}
-	if err := yaml.Unmarshal(data, &rawConfig); err != nil {
-		return err
+// validateConfig validates the configuration data before unmarshaling it.
+func validateConfig(data []byte) error {
+	// Verify required fileds are present
+	var configMap map[string]interface{}
+	if err := yaml.Unmarshal(data, &configMap); err != nil {
+		fmt.Printf("Error unmarshaling config data: %v", err)
+		return fmt.Errorf("error unmarshaling config data: %w", err)
 	}
 
-	required := []string{"Aws.Region", "Game.Balance", "Game.AutoSave"}
+	// Check for required fields
+	required := []string{"SSH", "AWS", "Cognito", "Game", "Logging"}
 	for _, field := range required {
-		parts := strings.Split(field, ".")
-		value := rawConfig
-		for _, part := range parts {
-			if v, ok := value[part].(map[string]interface{}); ok {
-				value = v
-				continue
-			}
-			if _, ok := value[part]; !ok {
-				return fmt.Errorf("missing required field: %s", field)
-			}
+		if _, ok := configMap[field]; !ok {
+			return fmt.Errorf("missing required field: %s", field)
 		}
 	}
 	return nil
+
+	// Add more validation rules
 }
