@@ -77,7 +77,7 @@ func NewCharacter() *Character {
 		outputChan:  make(chan string, 10),
 		End:         make(chan bool),
 		Mutex:       sync.RWMutex{},
-		prompt:      "\n\r> ",
+		prompt:      "> ",
 	}
 }
 
