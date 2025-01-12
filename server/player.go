@@ -120,6 +120,7 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 		}
 
 		p.character = character
+
 		charDone := make(chan error, 1)
 		go func() {
 			charDone <- character.Run()
