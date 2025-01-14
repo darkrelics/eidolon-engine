@@ -43,6 +43,7 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 	awsConfig, err := config.LoadDefaultConfig(ctx, config.WithRegion(cfg.aws.region))
 	if err != nil {
 		fmt.Printf("Error loading AWS config: %v\n", err)
+		cancel()
 		return nil, fmt.Errorf("error loading AWS config: %w", err)
 
 	}
@@ -66,6 +67,7 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		handlers:      []slog.Handler{consoleHandler},
 		initialized:   false,
 		interval:      time.Minute,
+		sequenceToken: nil,
 	}
 
 	return handler, nil

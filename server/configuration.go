@@ -42,7 +42,7 @@ func LoadConfiguration(configurationFile string) (*Configuration, error) {
 
 	var config Configuration
 
-	fmt.Printf("Loading configuration from", configurationFile)
+	fmt.Println("Loading configuration from", configurationFile)
 
 	data, err := os.ReadFile(configurationFile)
 	if err != nil {

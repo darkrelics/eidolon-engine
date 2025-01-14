@@ -73,7 +73,7 @@ func main() {
 	// Handle shutdown via signal or component error
 
 	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM, os.Kill)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
 
 	select {
 	case sig := <-signalChannel:
@@ -96,6 +96,9 @@ func main() {
 }
 
 func shutdown(game *Game, server *Server, cloudWatch *CloudWatch, reason string) error {
+
+	fmt.Printf("Shutting down server: %s\n", reason)
+
 	if err := cloudWatch.Stop(); err != nil {
 		return err
 	}

@@ -50,18 +50,27 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 	// Create a new game object
 
 	game := &Game{
-		config:     config,
-		globalCtx:  globalCtx,
-		ctx:        ctx,
-		cancel:     cancel,
-		start:      time.Now(),
-		characters: make(map[uuid.UUID]*Character),
-		rooms:      make(map[int64]*Room),
-		exits:      make(map[uuid.UUID]*Exit),
-		prototypes: make(map[uuid.UUID]*Prototype),
-		items:      make(map[uuid.UUID]*Item),
-		ticker:     time.NewTicker(time.Second),
+		config:           config,
+		globalCtx:        globalCtx,
+		ctx:              ctx,
+		cancel:           cancel,
+		mutex:            sync.RWMutex{},
+		start:            time.Now(),
+		characterCount:   atomic.Uint64{},
+		archeTypes:       make(map[string]*Archetype),
+		characters:       make(map[uuid.UUID]*Character),
+		rooms:            make(map[int64]*Room),
+		exits:            make(map[uuid.UUID]*Exit),
+		prototypes:       make(map[uuid.UUID]*Prototype),
+		items:            make(map[uuid.UUID]*Item),
+		ticker:           time.NewTicker(time.Second),
+		startingHealth:   config.game.startingHealth,
+		startingEssence:  config.game.startingEssence,
+		balance:          config.game.balance,
+		autoSaveInterval: 5,
 	}
+
+	game.characterCount.Store(0)
 
 	// Initialize Game Database Interface
 

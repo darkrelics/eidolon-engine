@@ -62,6 +62,7 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 		globalContext: globalCtx,
 		context:       ctx,
 		cancel:        cancel,
+		mutex:         sync.RWMutex{},
 		game:          nil,
 		start:         time.Now(),
 		database:      database,
@@ -73,6 +74,8 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 	}
 
 	server.playerCount.Store(0)
+
+	server.activeMotDs = nil
 
 	return server, nil
 }
