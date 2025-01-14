@@ -171,3 +171,14 @@ func (g *Game) InitCharacterBloomFilter() error {
 
 	return nil
 }
+
+func (g *Game) Stop() error {
+	g.cancel()
+
+	// Save all data
+
+	// Logout all characters
+
+	return nil
+
+}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 var CONFIGURATION_FILE string = "config.yml"
@@ -67,4 +69,44 @@ func main() {
 	fmt.Println("Starting server components...")
 
 	// Start components with error channels
+
+	// Handle shutdown via signal or component error
+
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM, os.Kill)
+
+	select {
+	case sig := <-signalChannel:
+		fmt.Printf("Received signal: %v\n", sig)
+	case err := <-errorChannel:
+		if err != nil {
+			fmt.Printf("Component error: %v\n", err)
+		}
+	}
+
+	// Initiate graceful shutdown
+	cancel()
+
+	if err := shutdown(game, server, cloudWatch, "shutdown requested"); err != nil {
+		fmt.Printf("Error during shutdown: %v\n", err)
+		os.Exit(121)
+	}
+
+	os.Exit(0)
+}
+
+func shutdown(game *Game, server *Server, cloudWatch *CloudWatch, reason string) error {
+	if err := cloudWatch.Stop(); err != nil {
+		return err
+	}
+
+	if err := game.Stop(); err != nil {
+		return err
+	}
+
+	if err := server.Stop(); err != nil {
+		return err
+	}
+
+	return nil
 }
