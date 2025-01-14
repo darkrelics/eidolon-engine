@@ -77,7 +77,7 @@ prompt-toolkit==3.0.48
 psutil==6.1.1
 pure-eval==0.2.3
 pycparser==2.22
-pygments==2.18.0
+pygments==2.19.1
 pyparsing==3.2.1
 python-dateutil==2.9.0.post0
 python-json-logger==3.2.1
