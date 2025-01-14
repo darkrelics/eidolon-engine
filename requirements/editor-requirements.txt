@@ -70,7 +70,7 @@ overrides==7.7.0
 packaging==24.2
 pandocfilters==1.5.1
 parso==0.8.4
-pillow==11.0.0
+pillow==11.1.0
 platformdirs==4.3.6
 prometheus-client==0.21.1
 prompt-toolkit==3.0.48
