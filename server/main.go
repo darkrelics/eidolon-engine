@@ -72,6 +72,7 @@ func main() {
 
 	go cloudWatch.Run(errorChannel)
 	go game.Run(errorChannel)
+	go server.Run(errorChannel)
 
 	// Handle shutdown via signal or component error
 

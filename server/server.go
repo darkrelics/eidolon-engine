@@ -94,3 +94,27 @@ func (s *Server) Stop() error {
 
 	return nil
 }
+
+func (s *Server) Run(errorChan chan error) error {
+
+	fmt.Println("Starting server...")
+
+	fmt.Println("Starting SSH Interface...")
+
+	// Start SSH Interface
+
+	fmt.Println("SSH Interface started successfully")
+
+	// Wait until server is stopped
+
+	select {
+	case <-s.globalContext.Done():
+		return nil
+	case <-s.context.Done():
+		return nil
+	case err := <-errorChan:
+		Logger.Error("System error", "error", err)
+		return nil
+	}
+
+}
