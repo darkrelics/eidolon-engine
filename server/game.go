@@ -63,7 +63,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		exits:            make(map[uuid.UUID]*Exit),
 		prototypes:       make(map[uuid.UUID]*Prototype),
 		items:            make(map[uuid.UUID]*Item),
-		ticker:           time.NewTicker(time.Second),
+		ticker:           nil,
 		startingHealth:   config.game.startingHealth,
 		startingEssence:  config.game.startingEssence,
 		balance:          config.game.balance,
@@ -190,4 +190,42 @@ func (g *Game) Stop() error {
 
 	return nil
 
+}
+
+// Run the game engine
+
+func (g *Game) Run(errChan chan error) error {
+
+	fmt.Println("Starting game engine...")
+
+	// Start Game Heart Beat
+
+	g.ticker = time.NewTicker(time.Second)
+	defer g.ticker.Stop()
+
+	for {
+		select {
+		case <-g.globalCtx.Done():
+			Logger.Info("Global shutdown requested")
+			return nil
+		case <-g.ctx.Done():
+			Logger.Info("Game shutdown requested")
+			return nil
+		case <-g.ticker.C:
+			// Run game logic
+			err := g.tick()
+			if err != nil {
+				Logger.Error("Error running game logic", "error", err)
+				errChan <- fmt.Errorf("error running game logic: %w", err)
+				return fmt.Errorf("error running game logic: %w", err)
+			}
+		}
+	}
+}
+
+// Game heart beat
+
+func (g *Game) tick() error {
+	// Run game logic
+	return nil
 }

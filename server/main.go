@@ -70,6 +70,9 @@ func main() {
 
 	// Start components with error channels
 
+	go cloudWatch.Run(errorChannel)
+	go game.Run(errorChannel)
+
 	// Handle shutdown via signal or component error
 
 	signalChannel := make(chan os.Signal, 1)
@@ -87,7 +90,7 @@ func main() {
 	// Initiate graceful shutdown
 	cancel()
 
-	if err := shutdown(game, server, cloudWatch, "shutdown requested"); err != nil {
+	if err := shutdown(errorChannel, game, server, cloudWatch, "shutdown requested"); err != nil {
 		fmt.Printf("Error during shutdown: %v\n", err)
 		os.Exit(121)
 	}
@@ -95,19 +98,22 @@ func main() {
 	os.Exit(0)
 }
 
-func shutdown(game *Game, server *Server, cloudWatch *CloudWatch, reason string) error {
+func shutdown(errorChan chan error, game *Game, server *Server, cloudWatch *CloudWatch, reason string) error {
 
 	fmt.Printf("Shutting down server: %s\n", reason)
 
 	if err := cloudWatch.Stop(); err != nil {
+		errorChan <- err
 		return err
 	}
 
 	if err := game.Stop(); err != nil {
+		errorChan <- err
 		return err
 	}
 
 	if err := server.Stop(); err != nil {
+		errorChan <- err
 		return err
 	}
 

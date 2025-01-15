@@ -158,7 +158,9 @@ func (c *CloudWatch) sendMetrics() error {
 	return err
 }
 
-func (c *CloudWatch) Run() error {
+func (c *CloudWatch) Run(errChan chan error) error {
+
+	println("Starting CloudWatch metrics collection")
 
 	if !c.initialized {
 		if err := c.initLogStream(); err != nil {
@@ -176,6 +178,8 @@ func (c *CloudWatch) Run() error {
 		case <-ticker.C:
 			if err := c.sendMetrics(); err != nil {
 				Logger.Error("Error sending metrics", "error", err)
+				errChan <- fmt.Errorf("error sending metrics: %w", err)
+				return fmt.Errorf("error sending metrics: %w", err)
 			}
 		}
 	}
