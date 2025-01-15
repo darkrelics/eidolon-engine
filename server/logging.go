@@ -54,6 +54,7 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		Level: parseLogLevel(cfg.logging.logLevel),
 	})
 	Logger = slog.New(consoleHandler)
+	slog.SetDefault(Logger)
 
 	//Create CloudWatch Handler
 
@@ -159,7 +160,7 @@ func (c *CloudWatch) SendMetrics(metrics []types.MetricDatum) error {
 
 func (c *CloudWatch) Run(errChan chan error) error {
 
-	println("Starting CloudWatch metrics collection")
+	Logger.Info("Starting CloudWatch metrics collection")
 
 	if !c.initialized {
 		if err := c.initLogStream(); err != nil {
