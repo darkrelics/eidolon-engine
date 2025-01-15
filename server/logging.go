@@ -53,6 +53,7 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 	consoleHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: parseLogLevel(cfg.logging.logLevel),
 	})
+	Logger = slog.New(consoleHandler)
 
 	//Create CloudWatch Handler
 

@@ -103,7 +103,7 @@ func shutdown(errorChan chan error, game *Game, server *Server, cloudWatch *Clou
 
 	fmt.Printf("Shutting down server: %s\n", reason)
 
-	if err := cloudWatch.Stop(); err != nil {
+	if err := server.Stop(); err != nil {
 		errorChan <- err
 		return err
 	}
@@ -113,7 +113,7 @@ func shutdown(errorChan chan error, game *Game, server *Server, cloudWatch *Clou
 		return err
 	}
 
-	if err := server.Stop(); err != nil {
+	if err := cloudWatch.Stop(); err != nil {
 		errorChan <- err
 		return err
 	}
