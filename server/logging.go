@@ -147,9 +147,7 @@ func (c *CloudWatch) collectMetrics() []types.MetricDatum {
 	return metrics
 }
 
-func (c *CloudWatch) sendMetrics() error {
-
-	metrics := c.collectMetrics()
+func (c *CloudWatch) SendMetrics(metrics []types.MetricDatum) error {
 
 	_, err := c.metricsClient.PutMetricData(c.ctx, &cloudwatch.PutMetricDataInput{
 		Namespace:  aws.String(c.namespace),
@@ -177,7 +175,7 @@ func (c *CloudWatch) Run(errChan chan error) error {
 		case <-c.ctx.Done():
 			return nil
 		case <-ticker.C:
-			if err := c.sendMetrics(); err != nil {
+			if err := c.SendMetrics(c.collectMetrics()); err != nil {
 				Logger.Error("Error sending metrics", "error", err)
 				errChan <- fmt.Errorf("error sending metrics: %w", err)
 				return fmt.Errorf("error sending metrics: %w", err)
