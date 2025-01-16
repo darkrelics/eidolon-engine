@@ -33,14 +33,20 @@ type CloudWatch struct {
 	initialized   bool
 	interval      time.Duration
 	server        *Server
+	metrics       chan types.MetricDatum
 }
 
 func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error) {
-	handlerCtx, cancel := context.WithCancel(ctx)
 
 	fmt.Println("Creating console handler...")
 
-	awsConfig, err := config.LoadDefaultConfig(ctx, config.WithRegion(cfg.aws.region))
+	handlerCtx, cancel := context.WithCancel(ctx)
+
+	awsConfig, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(cfg.aws.region),
+		config.WithRetryMode(aws.RetryModeStandard),
+		config.WithRetryMaxAttempts(3),
+	)
 	if err != nil {
 		fmt.Printf("Error loading AWS config: %v\n", err)
 		cancel()
@@ -53,6 +59,8 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 	consoleHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: parseLogLevel(cfg.logging.logLevel),
 	})
+
+	// Set up logger
 	Logger = slog.New(consoleHandler)
 	slog.SetDefault(Logger)
 
@@ -70,6 +78,7 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		initialized:   false,
 		interval:      time.Minute,
 		sequenceToken: nil,
+		metrics:       make(chan types.MetricDatum, 100),
 	}
 
 	return handler, nil
@@ -158,14 +167,13 @@ func (c *CloudWatch) SendMetrics(metrics []types.MetricDatum) error {
 	return err
 }
 
+// Run handles periodic metric submission and log processing
 func (c *CloudWatch) Run(errChan chan error) error {
 
 	Logger.Info("Starting CloudWatch metrics collection")
 
-	if !c.initialized {
-		if err := c.initLogStream(); err != nil {
-			return fmt.Errorf("error initializing log stream: %w", err)
-		}
+	if err := c.initLogStream(); err != nil {
+		return fmt.Errorf("log stream init: %w", err)
 	}
 
 	ticker := time.NewTicker(c.interval)
@@ -188,4 +196,21 @@ func (c *CloudWatch) Run(errChan chan error) error {
 func (c *CloudWatch) Stop() error {
 	c.cancel()
 	return nil
+}
+
+// AddMetric allows other parts of the system to submit metrics
+func (c *CloudWatch) AddMetric(metric types.MetricDatum) {
+	select {
+	case c.metrics <- metric:
+	default:
+		Logger.Warn("Metrics channel full, dropping metric", "name", *metric.MetricName)
+	}
+}
+
+func (c *CloudWatch) sendSingleMetric(metric types.MetricDatum) error {
+	_, err := c.metricsClient.PutMetricData(c.ctx, &cloudwatch.PutMetricDataInput{
+		Namespace:  aws.String(c.namespace),
+		MetricData: []types.MetricDatum{metric},
+	})
+	return err
 }
