@@ -1,0 +1,133 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"runtime"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
+)
+
+// AWS CloudWatch has a limit of 20 metrics per request
+const batchSize = 20
+
+func (c *CloudWatch) collectMetrics() {
+
+	var m runtime.MemStats
+
+	runtime.ReadMemStats(&m)
+
+	c.metrics <- types.MetricDatum{
+		MetricName: aws.String("Memory Usage"),
+		Unit:       types.StandardUnitMegabytes,
+		Value:      aws.Float64(float64(m.Alloc) / 1024 / 1024),
+	}
+
+	c.metrics <- types.MetricDatum{
+		MetricName: aws.String("Go Routines"),
+		Unit:       types.StandardUnitCount,
+		Value:      aws.Float64(float64(runtime.NumGoroutine())),
+	}
+}
+
+func (c *CloudWatch) SendMetrics(metrics []types.MetricDatum) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	for i := 0; i < len(metrics); i += batchSize {
+		end := i + batchSize
+		if end > len(metrics) {
+			end = len(metrics)
+		}
+
+		batch := metrics[i:end]
+
+		// Create context with timeout for the API call
+		ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+		defer cancel()
+
+		input := &cloudwatch.PutMetricDataInput{
+			Namespace:  aws.String(c.namespace),
+			MetricData: batch,
+		}
+
+		// Implement retry with backoff
+		var err error
+		for retries := 0; retries < 3; retries++ {
+			_, err = c.metricsClient.PutMetricData(ctx, input)
+			if err == nil {
+				break
+			}
+
+			if retries < 2 {
+				// Exponential backoff
+				time.Sleep(time.Duration(1<<retries) * time.Second)
+			}
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to send metrics batch after retries: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// Run handles periodic metric submission and log processing
+func (c *CloudWatch) Run(errChan chan error) error {
+	Logger.Info("Starting CloudWatch metrics collection")
+
+	if err := c.initLogStream(); err != nil {
+		return fmt.Errorf("log stream init: %w", err)
+	}
+
+	ticker := time.NewTicker(c.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return nil
+		case <-ticker.C:
+			c.collectMetrics()
+
+			metrics := make([]types.MetricDatum, 0)
+
+		drainLoop:
+			for {
+				select {
+				case metric := <-c.metrics:
+					metrics = append(metrics, metric)
+				default:
+					break drainLoop
+				}
+			}
+
+			if len(metrics) > 0 {
+				if err := c.SendMetrics(metrics); err != nil {
+					Logger.Error("Error sending metrics", "error", err)
+					errChan <- fmt.Errorf("error sending metrics: %w", err)
+					return fmt.Errorf("error sending metrics: %w", err)
+				}
+			}
+		}
+	}
+}
+
+func (c *CloudWatch) Stop() error {
+	c.cancel()
+	return nil
+}
+
+// AddMetric allows other parts of the system to submit metrics
+func (c *CloudWatch) AddMetric(metric types.MetricDatum) {
+	select {
+	case c.metrics <- metric:
+	default:
+		Logger.Warn("Metrics channel full, dropping metric", "name", *metric.MetricName)
+	}
+}

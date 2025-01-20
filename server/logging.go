@@ -1,88 +1,18 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
-	"os"
-	"runtime"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 )
 
+// TODO: split out the logging betweent the Console and Clouwatch to allow different format and
+// levles for each.
+
 var Logger *slog.Logger
-
-type CloudWatch struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	logClient     *cloudwatchlogs.Client
-	metricsClient *cloudwatch.Client
-	logGroup      string
-	logStream     string
-	namespace     string
-	handlers      []slog.Handler
-	sequenceToken *string
-	mutex         sync.RWMutex
-	initialized   bool
-	interval      time.Duration
-	server        *Server
-	metrics       chan types.MetricDatum
-}
-
-func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error) {
-
-	fmt.Println("Creating console handler...")
-
-	handlerCtx, cancel := context.WithCancel(ctx)
-
-	awsConfig, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(cfg.aws.region),
-		config.WithRetryMode(aws.RetryModeStandard),
-		config.WithRetryMaxAttempts(3),
-	)
-	if err != nil {
-		fmt.Printf("Error loading AWS config: %v\n", err)
-		cancel()
-		return nil, fmt.Errorf("error loading AWS config: %w", err)
-
-	}
-
-	//Create Console Hander
-
-	consoleHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: parseLogLevel(cfg.logging.logLevel),
-	})
-
-	// Set up logger
-	Logger = slog.New(consoleHandler)
-	slog.SetDefault(Logger)
-
-	//Create CloudWatch Handler
-
-	handler := &CloudWatch{
-		ctx:           handlerCtx,
-		cancel:        cancel,
-		logClient:     cloudwatchlogs.NewFromConfig(awsConfig),
-		metricsClient: cloudwatch.NewFromConfig(awsConfig),
-		logGroup:      cfg.logging.logGroup,
-		logStream:     cfg.logging.logStream,
-		namespace:     cfg.logging.namespace,
-		handlers:      []slog.Handler{consoleHandler},
-		initialized:   false,
-		interval:      time.Minute,
-		sequenceToken: nil,
-		metrics:       make(chan types.MetricDatum, 100),
-	}
-
-	return handler, nil
-}
 
 func parseLogLevel(level int) slog.Level {
 	switch level {
@@ -133,84 +63,4 @@ func (c *CloudWatch) initLogStream() error {
 	c.initialized = true
 
 	return nil
-}
-
-func (c *CloudWatch) collectMetrics() []types.MetricDatum {
-
-	var m runtime.MemStats
-
-	runtime.ReadMemStats(&m)
-
-	metrics := []types.MetricDatum{
-		{
-			MetricName: aws.String("Memory Usage"),
-			Unit:       types.StandardUnitMegabytes,
-			Value:      aws.Float64(float64(m.Alloc) / 1024 / 1024),
-		},
-		{
-			MetricName: aws.String("Go Routines"),
-			Unit:       types.StandardUnitCount,
-			Value:      aws.Float64(float64(runtime.NumGoroutine())),
-		},
-	}
-
-	return metrics
-}
-
-func (c *CloudWatch) SendMetrics(metrics []types.MetricDatum) error {
-
-	_, err := c.metricsClient.PutMetricData(c.ctx, &cloudwatch.PutMetricDataInput{
-		Namespace:  aws.String(c.namespace),
-		MetricData: metrics,
-	})
-
-	return err
-}
-
-// Run handles periodic metric submission and log processing
-func (c *CloudWatch) Run(errChan chan error) error {
-
-	Logger.Info("Starting CloudWatch metrics collection")
-
-	if err := c.initLogStream(); err != nil {
-		return fmt.Errorf("log stream init: %w", err)
-	}
-
-	ticker := time.NewTicker(c.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-c.ctx.Done():
-			return nil
-		case <-ticker.C:
-			if err := c.SendMetrics(c.collectMetrics()); err != nil {
-				Logger.Error("Error sending metrics", "error", err)
-				errChan <- fmt.Errorf("error sending metrics: %w", err)
-				return fmt.Errorf("error sending metrics: %w", err)
-			}
-		}
-	}
-}
-
-func (c *CloudWatch) Stop() error {
-	c.cancel()
-	return nil
-}
-
-// AddMetric allows other parts of the system to submit metrics
-func (c *CloudWatch) AddMetric(metric types.MetricDatum) {
-	select {
-	case c.metrics <- metric:
-	default:
-		Logger.Warn("Metrics channel full, dropping metric", "name", *metric.MetricName)
-	}
-}
-
-func (c *CloudWatch) sendSingleMetric(metric types.MetricDatum) error {
-	_, err := c.metricsClient.PutMetricData(c.ctx, &cloudwatch.PutMetricDataInput{
-		Namespace:  aws.String(c.namespace),
-		MetricData: []types.MetricDatum{metric},
-	})
-	return err
 }
