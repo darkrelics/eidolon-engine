@@ -20,6 +20,7 @@ type CloudWatch struct {
 	cancel        context.CancelFunc
 	logClient     *cloudwatchlogs.Client
 	metricsClient *cloudwatch.Client
+	logLevel      int
 	logGroup      string
 	logStream     string
 	namespace     string
@@ -51,7 +52,8 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 
 	// Create CloudWatch Handler (JSON)
 	loghandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: parseLogLevel(cfg.logging.logLevel),
+		Level:     parseLogLevel(cfg.logging.logLevel),
+		AddSource: true,
 	})
 
 	//Create CloudWatch Handler
@@ -61,6 +63,7 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		cancel:        cancel,
 		logClient:     cloudwatchlogs.NewFromConfig(awsConfig),
 		metricsClient: cloudwatch.NewFromConfig(awsConfig),
+		logLevel:      cfg.logging.logLevel,
 		logGroup:      cfg.logging.logGroup,
 		logStream:     cfg.logging.logStream,
 		namespace:     cfg.logging.namespace,
@@ -76,4 +79,16 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 	slog.SetDefault(Logger)
 
 	return handler, nil
+}
+
+func (c *CloudWatch) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= parseLogLevel(c.logLevel)
+}
+
+func (c *CloudWatch) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return c
+}
+
+func (c *CloudWatch) WithGroup(name string) slog.Handler {
+	return c
 }

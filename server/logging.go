@@ -1,16 +1,21 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	cwlogtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 )
 
 // TODO: split out the logging betweent the Console and Clouwatch to allow different format and
 // levles for each.
+
+const maxRetries = 3
 
 var Logger *slog.Logger
 
@@ -63,4 +68,80 @@ func (c *CloudWatch) initLogStream() error {
 	c.initialized = true
 
 	return nil
+}
+
+func (c *CloudWatch) Handle(ctx context.Context, r slog.Record) error {
+	if err := c.initLogStream(); err != nil {
+		return fmt.Errorf("failed to initialize log stream: %w", err)
+	}
+
+	input := &cloudwatchlogs.PutLogEventsInput{
+		LogGroupName:  aws.String(c.logGroup),
+		LogStreamName: aws.String(c.logStream),
+		LogEvents: []cwlogtypes.InputLogEvent{{
+			Message:   aws.String(c.formatLogMessage(r)),
+			Timestamp: aws.Int64(time.Now().UnixNano() / int64(time.Millisecond)),
+		}},
+	}
+
+	if c.sequenceToken != nil {
+		input.SequenceToken = c.sequenceToken
+	}
+
+	output, err := c.logClient.PutLogEvents(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to put log events: %w", err)
+	}
+
+	c.mutex.Lock()
+	c.sequenceToken = output.NextSequenceToken
+	c.mutex.Unlock()
+
+	for _, handler := range c.handlers {
+		if err := handler.Handle(ctx, r); err != nil {
+			return fmt.Errorf("handler error: %w", err)
+		}
+	}
+	return nil
+}
+
+func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
+
+	backoff := time.Second
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		output, err := c.logClient.PutLogEvents(c.ctx, input)
+		if err == nil {
+			c.mutex.Lock()
+			c.sequenceToken = output.NextSequenceToken
+			c.mutex.Unlock()
+			return nil
+		}
+
+		if strings.Contains(err.Error(), "ResourceNotFoundException") {
+			if err := c.initLogStream(); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if attempt < maxRetries-1 {
+			time.Sleep(backoff)
+			backoff *= 2
+			continue
+		}
+
+		return fmt.Errorf("put logs failed after %d attempts: %w", maxRetries, err)
+	}
+
+	return nil
+}
+
+func (c *CloudWatch) formatLogMessage(r slog.Record) string {
+	msg := r.Message
+	r.Attrs(func(a slog.Attr) bool {
+		msg += fmt.Sprintf(" %s=%v", a.Key, a.Value)
+		return true
+	})
+	return msg
 }
