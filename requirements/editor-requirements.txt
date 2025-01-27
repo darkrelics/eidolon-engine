@@ -73,7 +73,7 @@ parso==0.8.4
 pillow==11.1.0
 platformdirs==4.3.6
 prometheus-client==0.21.1
-prompt-toolkit==3.0.48
+prompt-toolkit==3.0.50
 psutil==6.1.1
 pure-eval==0.2.3
 pycparser==2.22
