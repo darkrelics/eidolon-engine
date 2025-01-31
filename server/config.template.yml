@@ -4,18 +4,18 @@ Cognito:
   UserPoolId: us-east-1_xxxxxxxxx
   UserPoolClientSecret: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   UserPoolClientId: xxxxxxxxxxxxxxxxxxxxxxxxxx
-  UserPoolDomain: mud-user-pool
+  UserPoolDomain: eidolon-user-pool
   UserPoolArn: arn:aws:cognito-idp:us-east-1:999999999999:userpool/us-east-1_xxxxxxxxx
 Game:
   Balance: 0.25
   StartingHealth: 10
   StartingEssence: 3
 Logging:
-  ApplicationName: mud
+  ApplicationName: eidolon-engine
   LogLevel: 20
-  LogGroup: /mud
-  LogStream: application
-  MetricNamespace: MUD/Application
+  LogGroup: /eidolon
+  LogStream: system
+  MetricNamespace: eidolon/system
 SSH:
   Enabled: true
   PrivateKeyPath: ./server.key
