@@ -161,8 +161,8 @@ def update_configuration_file(config_updates) -> None:
             {
                 "ApplicationName": "Eidolon Engine",
                 "LogLevel": 20,
-                "LogGroup": config_updates.get("CloudWatch", {}).get("LogGroupName", "/eidolon/system"),
-                "LogStream": "application",
+                "LogGroup": config_updates.get("CloudWatch", {}).get("LogGroupName", "/eidolon"),
+                "LogStream": "system",
                 "MetricNamespace": config_updates.get("CloudWatch", {}).get("MetricNamespace", "eidolon/system"),
             }
         )
