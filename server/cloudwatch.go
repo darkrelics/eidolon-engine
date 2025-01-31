@@ -84,7 +84,7 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		logLevel:      cfg.logging.logLevel,
 		logGroup:      cfg.logging.logGroup,
 		logStream:     cfg.logging.logStream,
-		namespace:     cfg.logging.namespace,
+		namespace:     cfg.logging.metricNamespace,
 		handlers:      []slog.Handler{loghandler},
 		initialized:   false,
 		interval:      time.Minute,
