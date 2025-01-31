@@ -1,4 +1,4 @@
-module github.com/robinje/multi-user-dungeon/server
+module github.com/robinje/eidolon-engine
 
 go 1.23
 

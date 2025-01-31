@@ -209,9 +209,9 @@ def gather_all_parameters() -> dict:
     # CodeBuild parameters
     parameters["codebuild"] = {
         "GitHubSourceRepo": input(
-            "Enter the GitHub repository URL for the source code [default: https://github.com/robinje/multi-user-dungeon]: "
+            "Enter the GitHub repository URL for the source code [default: https://github.com/robinje/eidolon-engine]: "
         )
-        or "https://github.com/robinje/multi-user-dungeon",
+        or "https://github.com/robinje/eidolon-engine",
         "S3BucketName": input("Enter the name of the existing S3 bucket for build artifacts: "),
     }
 
