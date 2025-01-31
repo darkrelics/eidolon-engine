@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "DynamoDB tables for Multi-User Dungeon game"
+Description: "DynamoDB tables for Eidolon Engine"
 
 Resources:
   PlayersTable:
