@@ -58,7 +58,7 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 	handlerCtx, cancel := context.WithCancel(ctx)
 
 	awsConfig, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(cfg.aws.region),
+		config.WithRegion(cfg.AWS.Region),
 		config.WithRetryMode(aws.RetryModeStandard),
 		config.WithRetryMaxAttempts(3),
 	)
@@ -70,8 +70,8 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 
 	// Create CloudWatch Handler (JSON)
 	loghandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level:     parseLogLevel(cfg.logging.logLevel),
-		AddSource: true,
+		Level:     parseLogLevel(cfg.Logging.LogLevel),
+		AddSource: false,
 	})
 
 	//Create CloudWatch Handler
@@ -81,10 +81,10 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		cancel:        cancel,
 		logClient:     cloudwatchlogs.NewFromConfig(awsConfig),
 		metricsClient: cloudwatch.NewFromConfig(awsConfig),
-		logLevel:      cfg.logging.logLevel,
-		logGroup:      cfg.logging.logGroup,
-		logStream:     cfg.logging.logStream,
-		namespace:     cfg.logging.metricNamespace,
+		logLevel:      cfg.Logging.LogLevel,
+		logGroup:      cfg.Logging.LogGroup,
+		logStream:     cfg.Logging.LogStream,
+		namespace:     cfg.Logging.MetricNamespace,
 		handlers:      []slog.Handler{loghandler},
 		initialized:   false,
 		interval:      time.Minute,

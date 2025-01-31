@@ -64,7 +64,7 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 		return nil, fmt.Errorf("database init error: %w", err)
 	}
 
-	serverSession, err := session.NewSession(&aws.Config{Region: aws.String(config.aws.region)})
+	serverSession, err := session.NewSession(&aws.Config{Region: aws.String(config.AWS.Region)})
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("AWS session init error: %w", err)

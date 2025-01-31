@@ -28,47 +28,47 @@ import (
 // Configuration holds all configuration settings
 type Configuration struct {
 	// AWS configuration settings
-	aws struct {
-		region string `yaml:"Region"`
+	AWS struct {
+		Region string `yaml:"Region"`
 	} `yaml:"AWS"`
 
 	// Cognito authentication settings
-	cognito struct {
-		userPoolID           string `yaml:"UserPoolId"`
-		userPoolClientSecret string `yaml:"UserPoolClientSecret"`
-		userPoolClientID     string `yaml:"UserPoolClientId"`
-		userPoolDomain       string `yaml:"UserPoolDomain"`
-		userPoolARN          string `yaml:"UserPoolArn"`
+	Cognito struct {
+		UserPoolID           string `yaml:"UserPoolId"`
+		UserPoolClientSecret string `yaml:"UserPoolClientSecret"`
+		UserPoolClientID     string `yaml:"UserPoolClientId"`
+		UserPoolDomain       string `yaml:"UserPoolDomain"`
+		UserPoolARN          string `yaml:"UserPoolArn"`
 	} `yaml:"Cognito"`
 
 	// Game mechanics settings
-	game struct {
-		balance         float64 `yaml:"Balance"`
-		startingEssence uint16  `yaml:"StartingEssence"`
-		startingHealth  uint16  `yaml:"StartingHealth"`
-		autoSave        uint16  `yaml:"AutoSave"`
+	Game struct {
+		Balance         float64 `yaml:"Balance"`
+		StartingEssence uint16  `yaml:"StartingEssence"`
+		StartingHealth  uint16  `yaml:"StartingHealth"`
+		AutoSave        uint16  `yaml:"AutoSave"`
 	} `yaml:"Game"`
 
 	// Logging and metrics settings
-	logging struct {
-		applicationName string `yaml:"ApplicationName"`
-		logLevel        int    `yaml:"LogLevel"`
-		logGroup        string `yaml:"LogGroup"`
-		logStream       string `yaml:"LogStream"`
-		metricNamespace string `yaml:"MetricNamespace"`
+	Logging struct {
+		ApplicationName string `yaml:"ApplicationName"`
+		LogLevel        int    `yaml:"LogLevel"`
+		LogGroup        string `yaml:"LogGroup"`
+		LogStream       string `yaml:"LogStream"`
+		MetricNamespace string `yaml:"MetricNamespace"`
 	} `yaml:"Logging"`
 
 	// SSH server settings
-	ssh struct {
-		enabled        bool   `yaml:"Enabled"`
-		port           uint16 `yaml:"Port"`
-		privateKeyPath string `yaml:"PrivateKeyPath"`
+	SSH struct {
+		Enabled        bool   `yaml:"Enabled"`
+		Port           uint16 `yaml:"Port"`
+		PrivateKeyPath string `yaml:"PrivateKeyPath"`
 	} `yaml:"SSH"`
 }
 
 // LoadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
 func LoadConfiguration(configurationFile string) (*Configuration, error) {
-	Logger.Info("Loading configuration", "file", configurationFile)
+	fmt.Println("Loading configuration", "file", configurationFile)
 
 	data, err := os.ReadFile(configurationFile)
 	if err != nil {
@@ -81,62 +81,86 @@ func LoadConfiguration(configurationFile string) (*Configuration, error) {
 		return nil, fmt.Errorf("error parsing configuration from '%s': %w", configurationFile, err)
 	}
 
+	fmt.Printf("AWS Settings:\n")
+	fmt.Printf("  Region: %s\n", config.AWS.Region)
+
+	fmt.Printf("\nCognito Settings:\n")
+	fmt.Printf("  User Pool ID: %s\n", config.Cognito.UserPoolID)
+	fmt.Printf("  User Pool Client Secret: %s\n", config.Cognito.UserPoolClientSecret)
+	fmt.Printf("  User Pool Client ID: %s\n", config.Cognito.UserPoolClientID)
+	fmt.Printf("  User Pool Domain: %s\n", config.Cognito.UserPoolDomain)
+	fmt.Printf("  User Pool ARN: %s\n", config.Cognito.UserPoolARN)
+
+	fmt.Printf("\nGame Settings:\n")
+	fmt.Printf("  Balance: %.2f\n", config.Game.Balance)
+	fmt.Printf("  Starting Essence: %d\n", config.Game.StartingEssence)
+	fmt.Printf("  Starting Health: %d\n", config.Game.StartingHealth)
+	fmt.Printf("  Auto Save: %d\n", config.Game.AutoSave)
+
+	fmt.Printf("\nLogging Settings:\n")
+	fmt.Printf("  Application Name: %s\n", config.Logging.ApplicationName)
+	fmt.Printf("  Log Level: %d\n", config.Logging.LogLevel)
+	fmt.Printf("  Log Group: %s\n", config.Logging.LogGroup)
+	fmt.Printf("  Log Stream: %s\n", config.Logging.LogStream)
+	fmt.Printf("  Metric Namespace: %s\n", config.Logging.MetricNamespace)
+
+	fmt.Printf("\nSSH Settings:\n")
+	fmt.Printf("  Enabled: %t\n", config.SSH.Enabled)
+	fmt.Printf("  Port: %d\n", config.SSH.Port)
+	fmt.Printf("  Private Key Path: %s\n", config.SSH.PrivateKeyPath)
+
 	if err := validateConfiguration(&config); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	Logger.Info("Configuration loaded successfully")
+	fmt.Println("Configuration loaded successfully")
 	return &config, nil
 }
 
 // validateConfiguration performs validation checks on the configuration
 func validateConfiguration(config *Configuration) error {
-	if config.aws.region == "" {
+	if config.AWS.Region == "" {
 		return fmt.Errorf("AWS Region is required")
 	}
 
-	if config.cognito.userPoolID == "" {
+	if config.Cognito.UserPoolID == "" {
 		return fmt.Errorf("cognito userPoolId is required")
 	}
 
-	if config.cognito.userPoolClientID == "" {
+	if config.Cognito.UserPoolClientID == "" {
 		return fmt.Errorf("cognito userPoolClientId is required")
 	}
 
-	if config.cognito.userPoolClientSecret == "" {
+	if config.Cognito.UserPoolClientSecret == "" {
 		return fmt.Errorf("cognito userPoolClientSecret is required")
 	}
 
-	if config.game.startingHealth == 0 {
+	if config.Game.StartingHealth <= 0 {
 		return fmt.Errorf("game startingHealth must be greater than 0")
 	}
 
-	if config.game.startingEssence == 0 {
-		return fmt.Errorf("game startingEssence must be greater than 0")
-	}
-
-	if config.game.balance <= 0 {
+	if config.Game.Balance <= 0 {
 		return fmt.Errorf("game balance must be greater than 0")
 	}
 
-	if config.ssh.enabled {
-		if config.ssh.port == 0 {
+	if config.SSH.Enabled {
+		if config.SSH.Port == 0 {
 			return fmt.Errorf("ssh port is required when ssh is enabled")
 		}
-		if config.ssh.privateKeyPath == "" {
+		if config.SSH.PrivateKeyPath == "" {
 			return fmt.Errorf("ssh privateKeyPath is required when ssh is enabled")
 		}
 	}
 
-	if config.logging.logGroup == "" {
+	if config.Logging.LogGroup == "" {
 		return fmt.Errorf("logging logGroup is required")
 	}
 
-	if config.logging.logStream == "" {
+	if config.Logging.LogStream == "" {
 		return fmt.Errorf("logging logStream is required")
 	}
 
-	if config.logging.metricNamespace == "" {
+	if config.Logging.MetricNamespace == "" {
 		return fmt.Errorf("logging metricNamespace is required")
 	}
 

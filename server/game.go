@@ -82,9 +82,9 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		prototypes:       make(map[uuid.UUID]*Prototype),
 		items:            make(map[uuid.UUID]*Item),
 		ticker:           nil,
-		startingHealth:   config.game.startingHealth,
-		startingEssence:  config.game.startingEssence,
-		balance:          config.game.balance,
+		startingHealth:   config.Game.StartingHealth,
+		startingEssence:  config.Game.StartingEssence,
+		balance:          config.Game.Balance,
 		autoSaveInterval: 5,
 	}
 

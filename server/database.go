@@ -37,10 +37,10 @@ type KeyPair struct {
 
 // NewKeyPair initializes a new DynamoDB client.
 func NewKeyPair(config *Configuration) (*KeyPair, error) {
-	Logger.Info("Initializing DynamoDB client", "region", config.aws.region)
+	Logger.Info("Initializing DynamoDB client", "region", config.AWS.Region)
 
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(config.aws.region),
+		Region: aws.String(config.AWS.Region),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error creating AWS session: %w", err)
