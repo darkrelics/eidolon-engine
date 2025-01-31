@@ -136,15 +136,12 @@ def update_configuration_file(config_updates) -> None:
         config = load_config()
 
         # Ensure top-level keys exist
-        for key in ["Server", "Aws", "Cognito", "Game", "Logging"]:
+        for key in ["Server", "AWS", "Cognito", "Game", "Logging"]:
             if key not in config or config[key] is None:
                 config[key] = {}
 
-        # Update Server configuration
-        config["Server"]["Port"] = 9050
-
-        # Update Aws configuration
-        config["Aws"]["Region"] = "us-east-1"
+        # Update AWS configuration
+        config["AWS"]["Region"] = "us-east-1"
 
         # Update Game configuration
         config["Game"].update(
