@@ -114,9 +114,21 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Error("Error loading archetypes", "error", err)
 	}
 
+	// Build Archetype Options
+
+	if err := game.BuildArchetypeOptions(); err != nil {
+		Logger.Error("Error loading archetype options", "error", err)
+	}
+
 	// Create Default Room
 
 	game.rooms[0] = NewRoom(0, "The Void", "The Void", "Default void room.")
+
+	// Load Rooms
+
+	if err := game.LoadRooms(); err != nil {
+		Logger.Error("Error loading rooms", "error", err)
+	}
 
 	return game, nil
 

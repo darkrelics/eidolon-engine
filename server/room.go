@@ -52,20 +52,22 @@ type RoomData struct {
 
 // Exit represents the in-memory structure for an exit
 type Exit struct {
-	exitID     uuid.UUID
-	direction  string
-	targetRoom *Room
-	visible    bool
-	lastEdited time.Time
-	lastSaved  time.Time
+	exitID      uuid.UUID
+	direction   string
+	description string
+	targetRoom  *Room
+	visible     bool
+	lastEdited  time.Time
+	lastSaved   time.Time
 }
 
 // ExitData represents the structure for storing exit data in DynamoDB
 type ExitData struct {
-	ExitID     string `json:"ExitID" dynamodbav:"ExitID"`
-	Direction  string `json:"Direction" dynamodbav:"Direction"`
-	TargetRoom int64  `json:"TargetRoom" dynamodbav:"TargetRoom"`
-	Visible    bool   `json:"Visible" dynamodbav:"Visible"`
+	ExitID      string `json:"ExitID" dynamodbav:"ExitID"`
+	Direction   string `json:"Direction" dynamodbav:"Direction"`
+	Description string `json:"Description" dynamodbav:"Description"`
+	TargetRoom  int64  `json:"TargetRoom" dynamodbav:"TargetRoom"`
+	Visible     bool   `json:"Visible" dynamodbav:"Visible"`
 }
 
 // Initialize a new room
@@ -90,17 +92,18 @@ func NewRoom(roomID int64, area, title, description string) *Room {
 
 // Initialize a new exit
 
-func NewExit(exitID uuid.UUID, direction string, targetRoom *Room, visible bool) *Exit {
+func NewExit(exitID uuid.UUID, direction string, description string, targetRoom *Room, visible bool) *Exit {
 
 	fmt.Println("New Exit...Initalizing Exit...")
 
 	return &Exit{
-		exitID:     exitID,
-		direction:  direction,
-		targetRoom: targetRoom,
-		visible:    visible,
-		lastEdited: time.Now(),
-		lastSaved:  time.Now(),
+		exitID:      exitID,
+		direction:   direction,
+		description: description,
+		targetRoom:  targetRoom,
+		visible:     visible,
+		lastEdited:  time.Now(),
+		lastSaved:   time.Now(),
 	}
 }
 
@@ -124,7 +127,7 @@ func (g *Game) LoadExits() error {
 			Logger.Warn("Error parsing exit ID", "error", err)
 		}
 
-		g.exits[exitID] = NewExit(exitID, exitData.Direction, g.rooms[exitData.TargetRoom], exitData.Visible)
+		g.exits[exitID] = NewExit(exitID, exitData.Direction, exitData.Description, g.rooms[exitData.TargetRoom], exitData.Visible)
 	}
 
 	return nil
