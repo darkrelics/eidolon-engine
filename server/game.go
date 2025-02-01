@@ -280,3 +280,20 @@ func (g *Game) tick() error {
 	// Run game logic
 	return nil
 }
+
+func (g *Game) ValidateCharacterName(name string) error {
+
+	if len(name) < 4 {
+		return fmt.Errorf("character name is too short")
+	}
+
+	if len(name) > 20 {
+		return fmt.Errorf("character name is too long")
+	}
+
+	if g.characterBloomFilter.TestString(strings.ToLower(name)) {
+		return fmt.Errorf("character name is invalid")
+	}
+
+	return nil
+}

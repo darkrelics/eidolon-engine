@@ -29,7 +29,7 @@ import (
 
 type Player struct {
 	index         uint64
-	playerID      string
+	id            uuid.UUID
 	toPlayer      chan string
 	fromPlayer    chan string
 	playerError   chan error
