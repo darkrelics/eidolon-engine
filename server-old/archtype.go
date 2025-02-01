@@ -18,8 +18,8 @@ type Archetype struct {
 // DisplayArchetypes logs the loaded archetypes for debugging purposes.
 func DisplayArchetypes(g *Game) {
 	Logger.Debug("Archetypes:" + fmt.Sprint(len(g.ArcheTypes)))
-	for key, archtype := range g.ArcheTypes {
-		Logger.Debug("Archetype", "name", key, "description", archtype.Description)
+	for key, archetype := range g.ArcheTypes {
+		Logger.Debug("Archetype", "name", key, "description", archetype.Description)
 	}
 }
 

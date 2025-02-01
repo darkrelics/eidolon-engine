@@ -81,7 +81,7 @@ Key components:
 - [x] Add a Message of the Day (MOTD) command.
 - [x] Add Bloom Filter to check for existing characters names being used.
 - [x] Add the ability to delete characters.
-- [x] Allow starting room to be set by Archtype.
+- [x] Allow starting room to be set by Archetype.
 - [x] Improve the input filters
 - [x] Handle unplanned disconnections.
 - [x] Limit Auto Save to updated objects.

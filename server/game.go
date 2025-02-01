@@ -45,7 +45,8 @@ type Game struct {
 	characterCount       atomic.Uint64
 	ticker               *time.Ticker
 	database             *KeyPair
-	archeTypes           map[string]*Archetype
+	archetypes           map[string]*Archetype
+	archetypeOptions     []string
 	characterBloomFilter *bloom.BloomFilter
 	characters           map[uuid.UUID]*Character
 	rooms                map[int64]*Room
@@ -76,7 +77,8 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		mutex:            sync.RWMutex{},
 		start:            time.Now(),
 		characterCount:   atomic.Uint64{},
-		archeTypes:       make(map[string]*Archetype),
+		archetypes:       make(map[string]*Archetype),
+		archetypeOptions: make([]string, 0),
 		characters:       make(map[uuid.UUID]*Character),
 		rooms:            make(map[int64]*Room),
 		exits:            make(map[uuid.UUID]*Exit),
@@ -106,7 +108,11 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Warn("Error initializing character bloom filter", "error", err)
 	}
 
-	// Load Archtypes
+	// Load Archetypes
+
+	if err := game.LoadArchetypes(); err != nil {
+		Logger.Error("Error loading archetypes", "error", err)
+	}
 
 	// Create Default Room
 

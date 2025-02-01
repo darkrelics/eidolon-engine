@@ -18,10 +18,118 @@ limitations under the License.
 
 package main
 
+import (
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+)
+
 type Archetype struct {
 	ArchetypeName string             `json:"ArchetypeName" dynamodbav:"archetypeName"`
 	Description   string             `json:"Description" dynamodbav:"description"`
 	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"attributes"`
 	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"abilities"`
 	StartRoom     int64              `json:"StartRoom" dynamodbav:"startRoom"`
+}
+
+// Display Archetypes for debugging purposes.
+func (g *Game) DisplayArchetypes() error {
+	fmt.Println("Display Archetypes")
+
+	Logger.Debug("Archetypes:" + fmt.Sprint(len(g.archetypes)))
+	for key, archetype := range g.archetypes {
+		Logger.Debug("Archetype", "name", key, "description", archetype.Description)
+	}
+
+	return nil
+}
+
+// LoadArchetypes retrieves all archetypes from the DynamoDB table and stores them in the Games's ArcheTypes map.
+func (g *Game) LoadArchetypes() error {
+	fmt.Println("Load Archetypes")
+
+	var archetypes []Archetype
+
+	err := g.database.Scan("archetypes", &archetypes)
+	if err != nil {
+		Logger.Error("Load Archetypes: Error Scanning Archetypes Table", "error", err)
+		return fmt.Errorf("error scanning archetypes table: %w", err)
+	}
+
+	g.archetypes = make(map[string]*Archetype)
+
+	for _, archetype := range archetypes {
+
+		// Normalize map keys once during load
+		for k, v := range archetype.Attributes {
+			lowerKey := strings.ToLower(k)
+			if lowerKey != k {
+				archetype.Attributes[lowerKey] = v
+				delete(archetype.Attributes, k)
+			}
+		}
+
+		for k, v := range archetype.Abilities {
+			lowerKey := strings.ToLower(k)
+			if lowerKey != k {
+				archetype.Abilities[lowerKey] = v
+				delete(archetype.Abilities, k)
+			}
+		}
+
+		g.archetypes[archetype.ArchetypeName] = &archetype
+		fmt.Println("Loaded archetype", "name", archetype.ArchetypeName)
+	}
+
+	g.DisplayArchetypes()
+
+	return nil
+}
+
+func (g *Game) BuildArchetypeOptions() error {
+
+	fmt.Println("Building Archetype Options")
+
+	options := make([]string, 0, len(g.archetypes))
+
+	for name, archetype := range g.archetypes {
+		options = append(options, name+" - "+archetype.Description)
+	}
+
+	sort.Strings(options)
+
+	g.archetypeOptions = options
+
+	return nil
+
+}
+
+func (c *Character) SelectArchetype() (string, error) {
+
+	if len(c.game.archetypeOptions) == 0 {
+		return "", nil // No archetypes available.
+	}
+
+	options := c.game.archetypeOptions
+
+	msg := "\n\rSelect a character archetype.\n\r"
+	for i, option := range options {
+		msg += fmt.Sprintf("%d: %s\n\r", i+1, option)
+	}
+	msg += "Enter the number of your choice: "
+
+	c.fromGame <- msg
+	selection, ok := <-c.toGame
+	if !ok {
+		Logger.Warn("Character input channel closed")
+		return "", fmt.Errorf("character input channel closed")
+	}
+
+	num, err := strconv.Atoi(strings.TrimSpace(selection))
+	if err != nil || num < 1 || num >= len(options) {
+		return "", fmt.Errorf("invalid archetype selection")
+	}
+
+	return strings.Split(options[num-1], " - ")[0], nil
 }
