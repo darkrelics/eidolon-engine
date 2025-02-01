@@ -53,7 +53,7 @@ type CloudWatch struct {
 
 func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error) {
 
-	fmt.Println("Creating console handler...")
+	fmt.Println("New CloudWatch...Initalizing CloudWatch...")
 
 	handlerCtx, cancel := context.WithCancel(ctx)
 
@@ -100,13 +100,22 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 }
 
 func (c *CloudWatch) Enabled(ctx context.Context, level slog.Level) bool {
+
+	fmt.Println("CloudWatch Enabled...")
+
 	return level >= parseLogLevel(c.logLevel)
 }
 
 func (c *CloudWatch) WithAttrs(attrs []slog.Attr) slog.Handler {
+
+	fmt.Println("CloudWatch WithAttrs...")
+
 	return c
 }
 
 func (c *CloudWatch) WithGroup(name string) slog.Handler {
+
+	fmt.Println("CloudWatch WithGroup...")
+
 	return c
 }

@@ -61,7 +61,8 @@ type Game struct {
 // Initalize the game engine
 
 func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
-	fmt.Println("Initializing game engine...")
+
+	fmt.Println("New Game...Initalizing Game...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
@@ -119,6 +120,8 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 func (g *Game) LoadCharacterNames() ([]string, error) {
 
+	fmt.Println("Loading character names from database...")
+
 	var names []string
 
 	var characters []struct {
@@ -141,6 +144,9 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 // Load names from a file.
 
 func LoadNameFromFile(path string) ([]string, error) {
+
+	fmt.Println("Loading names from file", "path", path)
+
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %w", err)
@@ -165,6 +171,9 @@ func LoadNameFromFile(path string) ([]string, error) {
 // Initialize Character Name Bloom Filter
 
 func (g *Game) InitCharacterBloomFilter() error {
+
+	fmt.Println("Initializing character name bloom filter...")
+
 	names, err := g.LoadCharacterNames()
 	if err != nil {
 		Logger.Warn("Error loading character names from database", "error", err)
@@ -200,6 +209,9 @@ func (g *Game) InitCharacterBloomFilter() error {
 }
 
 func (g *Game) Stop() error {
+
+	fmt.Println("Stopping game engine...")
+
 	g.cancel()
 
 	// Save all data
@@ -244,6 +256,9 @@ func (g *Game) Run(errChan chan error) error {
 // Game heart beat
 
 func (g *Game) tick() error {
+
+	fmt.Print(".")
+
 	// Run game logic
 	return nil
 }

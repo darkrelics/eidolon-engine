@@ -32,7 +32,7 @@ func main() {
 
 	// Initialize the system components
 
-	fmt.Println("Starting System...")
+	fmt.Println("Main - Starting System...")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -41,38 +41,38 @@ func main() {
 
 	// Load configuration
 
-	fmt.Printf("Loading configuration from %s\n", CONFIGURATION_FILE)
+	fmt.Printf("Main - Loading configuration from %s\n", CONFIGURATION_FILE)
 
 	config, err := LoadConfiguration(CONFIGURATION_FILE)
 	if err != nil {
-		fmt.Printf("Error loading configuration: %v\n", err)
+		fmt.Printf("Main - Error loading configuration: %v\n", err)
 		os.Exit(125)
 	}
 
 	// Initialize logging
 
-	fmt.Println("Initializing logging...")
+	fmt.Println("Main - Initializing logging...")
 	cloudWatch, err := NewCloudWatch(ctx, config)
 	if err != nil {
-		fmt.Printf("Error initializing logging: %v\n", err)
+		fmt.Printf("Main - Error initializing logging: %v\n", err)
 		os.Exit(124)
 	}
 
 	// Initialize game engine
 
-	fmt.Println("Starting Game Engine...")
+	fmt.Println("Main - Starting Game Engine...")
 	game, err := NewGame(ctx, config)
 	if err != nil {
-		fmt.Printf("Error initializing game engine: %v\n", err)
+		fmt.Printf("Main - Error initializing game engine: %v\n", err)
 		os.Exit(123)
 	}
 
 	// Initialize server
 
-	fmt.Println("Starting Server...")
+	fmt.Println("Main - Starting Server...")
 	server, err := NewServer(ctx, config)
 	if err != nil {
-		fmt.Printf("Error initializing server: %v\n", err)
+		fmt.Printf("Main - Error initializing server: %v\n", err)
 		os.Exit(122)
 	}
 
@@ -84,7 +84,7 @@ func main() {
 	cloudWatch.server = server
 	cloudWatch.mutex.Unlock()
 
-	fmt.Println("Starting server components...")
+	fmt.Println("Main - Starting server components...")
 
 	// Start components with error channels
 
@@ -99,10 +99,10 @@ func main() {
 
 	select {
 	case sig := <-signalChannel:
-		fmt.Printf("Received signal: %v\n", sig)
+		fmt.Printf("Main - Received signal: %v\n", sig)
 	case err := <-errorChannel:
 		if err != nil {
-			fmt.Printf("Component error: %v\n", err)
+			fmt.Printf("Main - Component error: %v\n", err)
 		}
 	}
 
@@ -119,7 +119,7 @@ func main() {
 
 func shutdown(errorChan chan error, game *Game, server *Server, cloudWatch *CloudWatch, reason string) error {
 
-	fmt.Printf("Shutting down server: %s\n", reason)
+	fmt.Printf("Main - Shutting down server: %s\n", reason)
 
 	if err := server.Stop(); err != nil {
 		errorChan <- err

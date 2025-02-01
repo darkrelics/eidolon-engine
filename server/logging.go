@@ -54,6 +54,8 @@ func parseLogLevel(level int) slog.Level {
 
 func (c *CloudWatch) initLogStream() error {
 
+	fmt.Println("Initilize Log Stream...")
+
 	if c.initialized {
 		return nil
 	}
@@ -89,6 +91,9 @@ func (c *CloudWatch) initLogStream() error {
 }
 
 func (c *CloudWatch) Handle(ctx context.Context, r slog.Record) error {
+
+	fmt.Println("CloudWatch Handle...")
+
 	if err := c.initLogStream(); err != nil {
 		return fmt.Errorf("failed to initialize log stream: %w", err)
 	}
@@ -125,6 +130,8 @@ func (c *CloudWatch) Handle(ctx context.Context, r slog.Record) error {
 
 func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
 
+	fmt.Println("Putting Logs...")
+
 	backoff := time.Second
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -156,6 +163,9 @@ func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
 }
 
 func (c *CloudWatch) formatLogMessage(r slog.Record) string {
+
+	fmt.Println("CloudWatch Format Log Message...")
+
 	msg := r.Message
 	r.Attrs(func(a slog.Attr) bool {
 		msg += fmt.Sprintf(" %s=%v", a.Key, a.Value)

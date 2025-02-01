@@ -37,7 +37,8 @@ type KeyPair struct {
 
 // NewKeyPair initializes a new DynamoDB client.
 func NewKeyPair(config *Configuration) (*KeyPair, error) {
-	Logger.Info("Initializing DynamoDB client", "region", config.AWS.Region)
+
+	fmt.Println("Initializing DynamoDB client", "region", config.AWS.Region)
 
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String(config.AWS.Region),
@@ -56,6 +57,9 @@ func NewKeyPair(config *Configuration) (*KeyPair, error) {
 }
 
 func (k *KeyPair) Put(tableName string, item interface{}) error {
+
+	fmt.Println("Putting item into table", "tableName", tableName)
+
 	av, err := dynamodbattribute.MarshalMap(item)
 	if err != nil {
 		return fmt.Errorf("error marshalling item: %w", err)
@@ -88,6 +92,9 @@ func (k *KeyPair) Put(tableName string, item interface{}) error {
 
 // Get retrieves an item from the DynamoDB table.
 func (k *KeyPair) Get(tableName string, key map[string]*dynamodb.AttributeValue, item interface{}) error {
+
+	fmt.Println("Getting item from table", "tableName", tableName)
+
 	input := &dynamodb.GetItemInput{
 		Key:       key,
 		TableName: aws.String(tableName),
@@ -124,6 +131,9 @@ func (k *KeyPair) Get(tableName string, key map[string]*dynamodb.AttributeValue,
 
 // Delete removes an item from the DynamoDB table.
 func (k *KeyPair) Delete(tableName string, key map[string]*dynamodb.AttributeValue) error {
+
+	fmt.Println("Deleting item from table", "tableName", tableName)
+
 	input := &dynamodb.DeleteItemInput{
 		Key:       key,
 		TableName: aws.String(tableName),
@@ -150,6 +160,9 @@ func (k *KeyPair) Delete(tableName string, key map[string]*dynamodb.AttributeVal
 
 // Query performs a query operation on the DynamoDB table.
 func (k *KeyPair) Query(tableName string, keyConditionExpression string, expressionAttributeValues map[string]*dynamodb.AttributeValue, items interface{}) error {
+
+	fmt.Println("Querying table", "tableName", tableName)
+
 	input := &dynamodb.QueryInput{
 		TableName:                 aws.String(tableName),
 		KeyConditionExpression:    aws.String(keyConditionExpression),
@@ -184,6 +197,9 @@ func (k *KeyPair) Query(tableName string, keyConditionExpression string, express
 
 // Scan performs a scan operation on the DynamoDB table.
 func (k *KeyPair) Scan(tableName string, items interface{}) error {
+
+	fmt.Println("Scanning table", "tableName", tableName)
+
 	input := &dynamodb.ScanInput{
 		TableName: aws.String(tableName),
 	}
@@ -216,6 +232,9 @@ func (k *KeyPair) Scan(tableName string, items interface{}) error {
 
 // isRetryableError checks if the error is retryable based on AWS error codes.
 func isRetryableError(err error) bool {
+
+	fmt.Println("Checking if error is retryable", "error", err)
+
 	if awsErr, ok := err.(awserr.Error); ok {
 		switch awsErr.Code() {
 		case dynamodb.ErrCodeProvisionedThroughputExceededException,

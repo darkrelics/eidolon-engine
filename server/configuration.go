@@ -68,6 +68,7 @@ type Configuration struct {
 
 // LoadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
 func LoadConfiguration(configurationFile string) (*Configuration, error) {
+
 	fmt.Println("Loading configuration", "file", configurationFile)
 
 	data, err := os.ReadFile(configurationFile)
@@ -81,34 +82,6 @@ func LoadConfiguration(configurationFile string) (*Configuration, error) {
 		return nil, fmt.Errorf("error parsing configuration from '%s': %w", configurationFile, err)
 	}
 
-	fmt.Printf("AWS Settings:\n")
-	fmt.Printf("  Region: %s\n", config.AWS.Region)
-
-	fmt.Printf("\nCognito Settings:\n")
-	fmt.Printf("  User Pool ID: %s\n", config.Cognito.UserPoolID)
-	fmt.Printf("  User Pool Client Secret: %s\n", config.Cognito.UserPoolClientSecret)
-	fmt.Printf("  User Pool Client ID: %s\n", config.Cognito.UserPoolClientID)
-	fmt.Printf("  User Pool Domain: %s\n", config.Cognito.UserPoolDomain)
-	fmt.Printf("  User Pool ARN: %s\n", config.Cognito.UserPoolARN)
-
-	fmt.Printf("\nGame Settings:\n")
-	fmt.Printf("  Balance: %.2f\n", config.Game.Balance)
-	fmt.Printf("  Starting Essence: %d\n", config.Game.StartingEssence)
-	fmt.Printf("  Starting Health: %d\n", config.Game.StartingHealth)
-	fmt.Printf("  Auto Save: %d\n", config.Game.AutoSave)
-
-	fmt.Printf("\nLogging Settings:\n")
-	fmt.Printf("  Application Name: %s\n", config.Logging.ApplicationName)
-	fmt.Printf("  Log Level: %d\n", config.Logging.LogLevel)
-	fmt.Printf("  Log Group: %s\n", config.Logging.LogGroup)
-	fmt.Printf("  Log Stream: %s\n", config.Logging.LogStream)
-	fmt.Printf("  Metric Namespace: %s\n", config.Logging.MetricNamespace)
-
-	fmt.Printf("\nSSH Settings:\n")
-	fmt.Printf("  Enabled: %t\n", config.SSH.Enabled)
-	fmt.Printf("  Port: %d\n", config.SSH.Port)
-	fmt.Printf("  Private Key Path: %s\n", config.SSH.PrivateKeyPath)
-
 	if err := validateConfiguration(&config); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
@@ -119,6 +92,9 @@ func LoadConfiguration(configurationFile string) (*Configuration, error) {
 
 // validateConfiguration performs validation checks on the configuration
 func validateConfiguration(config *Configuration) error {
+
+	fmt.Println("Validating configuration...")
+
 	if config.AWS.Region == "" {
 		return fmt.Errorf("AWS Region is required")
 	}
@@ -163,6 +139,8 @@ func validateConfiguration(config *Configuration) error {
 	if config.Logging.MetricNamespace == "" {
 		return fmt.Errorf("logging metricNamespace is required")
 	}
+
+	fmt.Println("Configuration is valid")
 
 	return nil
 }
