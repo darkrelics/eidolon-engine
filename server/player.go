@@ -23,13 +23,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
 )
 
 type Player struct {
 	index         uint64
-	id            uuid.UUID
+	id            string
 	toPlayer      chan string
 	fromPlayer    chan string
 	playerError   chan error
@@ -54,4 +56,51 @@ type PlayerData struct {
 	PlayerID      string            `json:"PlayerID" dynamodbav:"PlayerID"`
 	CharacterList map[string]string `json:"characterList" dynamodbav:"CharacterList"`
 	SeenMotDs     []string          `json:"seenMotD" dynamodbav:"SeenMotD"`
+}
+
+func (p *Player) LoadPlayer(playerName string) error {
+
+	Logger.Debug("Loading player data", "player_name", playerName)
+
+	database := p.server.database
+
+	key := map[string]*dynamodb.AttributeValue{
+		"PlayerID": {S: aws.String(playerName)},
+	}
+
+	var playerData PlayerData
+
+	err := database.Get("players", key, &playerData)
+	if err != nil {
+		// Return an empty map for new players.
+
+		// TODO: Build an initalization Lambda function for Cognito.
+		Logger.Info("First time player", "playerName", playerName)
+
+}
+
+
+
+func NewPlayer(server *Server, playerName string, conn ssh.Channel, interfaceCtx context.Context) (*Player, error) {
+
+	ctx, cancel := context.WithCancel(server.globalContext)
+
+	player := &Player{
+		server:        server,
+		id:				playerName,
+		toPlayer:      make(chan string, 10),
+		fromPlayer:    make(chan string, 10),
+		playerError:   make(chan error, 1),
+		echo:          true,
+		connection:   conn,
+		consoleWidth: 80,
+		consoleHeight: 24,
+		login:		 time.Now(),
+		interfaceCtx: interfaceCtx,
+		ctx:           ctx,
+		cancel:        cancel,
+		shutdownOnce:  sync.Once{},
+	}
+
+
 }
