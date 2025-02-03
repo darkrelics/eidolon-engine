@@ -15,7 +15,7 @@ arrow==1.3.0
 asttokens==3.0.0
 async-lru==2.0.4
 attrs==25.1.0
-babel==2.16.0
+babel==2.17.0
 beautifulsoup4==4.12.3
 bleach==6.2.0
 certifi==2024.12.14
