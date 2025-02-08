@@ -76,31 +76,65 @@ func (p *Player) LoadPlayer(playerName string) error {
 
 		// TODO: Build an initalization Lambda function for Cognito.
 		Logger.Info("First time player", "playerName", playerName)
+	}
+
+	return nil
 
 }
 
-
-
-func NewPlayer(server *Server, playerName string, conn ssh.Channel, interfaceCtx context.Context) (*Player, error) {
+func NewPlayerSSH(server *Server, playerName string, conn ssh.Channel, interfaceCtx context.Context) (*Player, error) {
 
 	ctx, cancel := context.WithCancel(server.globalContext)
 
 	player := &Player{
 		server:        server,
-		id:				playerName,
+		id:            playerName,
 		toPlayer:      make(chan string, 10),
 		fromPlayer:    make(chan string, 10),
 		playerError:   make(chan error, 1),
 		echo:          true,
-		connection:   conn,
-		consoleWidth: 80,
+		connection:    conn,
+		consoleWidth:  80,
 		consoleHeight: 24,
-		login:		 time.Now(),
-		interfaceCtx: interfaceCtx,
+		login:         time.Now(),
+		interfaceCtx:  interfaceCtx,
 		ctx:           ctx,
 		cancel:        cancel,
 		shutdownOnce:  sync.Once{},
 	}
 
+	return player, nil
 
+}
+
+func (p *Player) Run(requests <-chan *ssh.Request) {
+	Logger.Info("Player connected", "player_name", p.id)
+	defer func() {
+		Logger.Info("Player disconnected", "player_name", p.id)
+		p.shutdownOnce.Do(func() {
+			p.cancel()
+			close(p.toPlayer)
+			close(p.fromPlayer)
+			close(p.playerError)
+			if p.character != nil {
+				// Save character state
+				if err := p.character.Save(); err != nil {
+					Logger.Error("Error saving character on disconnect", "error", err)
+				}
+				p.character = nil
+			}
+			p.connection.Close()
+		})
+	}()
+
+	// Wait for shutdown conditions
+	select {
+	case <-p.ctx.Done():
+		return
+	case <-p.interfaceCtx.Done():
+		return
+	case err := <-p.playerError:
+		Logger.Error("Player error", "player_name", p.id, "error", err)
+		return
+	}
 }

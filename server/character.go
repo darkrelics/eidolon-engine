@@ -94,7 +94,7 @@ func (c *Character) CharacterToData() *CharacterData {
 
 	return &CharacterData{
 		CharacterID:   c.id.String(),
-		PlayerID:      c.player.id.String(),
+		PlayerID:      c.player.id,
 		CharacterName: c.name,
 		Attributes:    c.attributes,
 		Abilities:     c.abilities,
