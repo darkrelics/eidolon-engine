@@ -34,7 +34,7 @@ const batchSize = 20
 
 func (c *CloudWatch) collectMetrics() {
 
-	fmt.Println("Collecting metrics...")
+	Logger.Debug("Collecting metrics...")
 
 	var m runtime.MemStats
 
@@ -55,7 +55,7 @@ func (c *CloudWatch) collectMetrics() {
 
 func (c *CloudWatch) SendMetrics(metrics []types.MetricDatum) error {
 
-	fmt.Println("Sending metrics...")
+	Logger.Debug("Sending metrics...")
 
 	if len(metrics) == 0 {
 		return nil
@@ -103,7 +103,7 @@ func (c *CloudWatch) SendMetrics(metrics []types.MetricDatum) error {
 // Run handles periodic metric submission and log processing
 func (c *CloudWatch) Run(errChan chan error) error {
 
-	fmt.Println("Starting CloudWatch Metrics Collection")
+	Logger.Info("CloudWatch: Starting CloudWatch Metrics Collection")
 
 	if err := c.initLogStream(); err != nil {
 		return fmt.Errorf("log stream init: %w", err)
@@ -115,6 +115,7 @@ func (c *CloudWatch) Run(errChan chan error) error {
 	for {
 		select {
 		case <-c.ctx.Done():
+			Logger.Info("CloudWatch: Run - Shutdown signal received")
 			return nil
 		case <-ticker.C:
 			c.collectMetrics()
@@ -142,18 +143,10 @@ func (c *CloudWatch) Run(errChan chan error) error {
 	}
 }
 
-func (c *CloudWatch) Stop() error {
-
-	fmt.Println("Stopping CloudWatch Metrics Collection")
-
-	c.cancel()
-	return nil
-}
-
 // AddMetric allows other parts of the system to submit metrics
 func (c *CloudWatch) AddMetric(metric types.MetricDatum) {
 
-	fmt.Println("Adding metric...")
+	Logger.Debug("Adding metric...")
 
 	select {
 	case c.metrics <- metric:

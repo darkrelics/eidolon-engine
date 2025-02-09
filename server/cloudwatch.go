@@ -119,3 +119,22 @@ func (c *CloudWatch) WithGroup(name string) slog.Handler {
 
 	return c
 }
+
+// Stop gracefully shuts down the CloudWatch component.
+func (c *CloudWatch) Stop() error {
+	Logger.Info("CloudWatch: Stopping CloudWatch...")
+	defer Logger.Info("CloudWatch: CloudWatch stopped")
+
+	// Signal the Run goroutine to stop
+	c.cancel()
+
+	// Give the Run goroutine some time to exit and flush any remaining metrics/logs
+	select {
+	case <-c.ctx.Done():
+		Logger.Info("CloudWatch: CloudWatch shutdown complete")
+		return nil
+	case <-time.After(10 * time.Second): // Example timeout
+		Logger.Error("CloudWatch: CloudWatch shutdown timed out", "error", "timeout")
+		return fmt.Errorf("cloudwatch shutdown timeout")
+	}
+}

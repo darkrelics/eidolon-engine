@@ -56,7 +56,7 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 
 	fmt.Println("New Server...Initializing server...")
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(globalCtx)
 
 	database, err := NewKeyPair(config)
 	if err != nil {
@@ -100,7 +100,8 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 
 func (s *Server) Stop() error {
 
-	fmt.Println("Stopping server...")
+	Logger.Info("Server: Stopping server...")
+	defer Logger.Info("Server: Server stopped")
 
 	// Log out players
 

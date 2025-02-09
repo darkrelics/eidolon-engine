@@ -77,12 +77,7 @@ func main() {
 	}
 
 	server.game = game
-
-	// Associate server with cloudWatch
-
-	cloudWatch.mutex.Lock()
 	cloudWatch.server = server
-	cloudWatch.mutex.Unlock()
 
 	fmt.Println("Main - Starting server components...")
 
@@ -99,18 +94,26 @@ func main() {
 
 	select {
 	case sig := <-signalChannel:
-		fmt.Printf("Main - Received signal: %v\n", sig)
+		Logger.Info("Main: Received signal", "signal", sig)
 	case err := <-errorChannel:
 		if err != nil {
-			fmt.Printf("Main - Component error: %v\n", err)
+			Logger.Error("Main: Component error", "error", err)
+			// Attempt to drain the error channel
+			select {
+			case err2 := <-errorChannel:
+				Logger.Error("Main: Additional Component error", "error", err2)
+			default:
+				break // No more errors in the channel
+			}
 		}
 	}
 
 	// Initiate graceful shutdown
 	cancel()
 
-	if err := shutdown(errorChannel, game, server, cloudWatch, "shutdown requested"); err != nil {
-		fmt.Printf("Error during shutdown: %v\n", err)
+	shutdownErr := shutdown(errorChannel, game, server, cloudWatch, "shutdown requested")
+	if shutdownErr != nil {
+		Logger.Error("Main: Error during shutdown", "error", shutdownErr)
 		os.Exit(121)
 	}
 

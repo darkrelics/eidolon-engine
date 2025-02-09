@@ -55,6 +55,7 @@ func parseLogLevel(level int) slog.Level {
 func (c *CloudWatch) initLogStream() error {
 
 	fmt.Println("Initilize Log Stream...")
+	defer Logger.Info("CloudWatch: Log stream initialized")
 
 	if c.initialized {
 		return nil
@@ -163,7 +164,6 @@ func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
 }
 
 func (c *CloudWatch) formatLogMessage(r slog.Record) string {
-
 	fmt.Println("CloudWatch Format Log Message...")
 
 	msg := r.Message

@@ -175,7 +175,8 @@ func handleCognitoError(err error, email string) error {
 	return fmt.Errorf("authentication failed")
 }
 
-func Authenticate(username, password string, ssh_interface *Interface_SSH) bool {
+func Authenticate(username, password string, ssh_interface *Interface_SSH) (bool, error) {
+
 	secretHash := ssh_interface.server.calculateSecretHash(username)
 
 	authOutput, err := ssh_interface.server.cognito.InitiateAuth(&cognitoidentityprovider.InitiateAuthInput{
@@ -190,13 +191,13 @@ func Authenticate(username, password string, ssh_interface *Interface_SSH) bool 
 
 	if err != nil {
 		Logger.Error("authentication failed", "username", username, "error", err)
-		return false
+		return false, err
 	}
 
 	if authOutput.AuthenticationResult == nil {
 		Logger.Error("no authentication result", "username", username)
-		return false
+		return false, fmt.Errorf("no authentication result")
 	}
 
-	return true
+	return true, nil
 }

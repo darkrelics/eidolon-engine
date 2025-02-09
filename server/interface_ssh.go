@@ -44,7 +44,11 @@ type Interface_SSH struct {
 
 func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Interface_SSH) (*ssh.Permissions, error) {
 
-	authenticated := Authenticate(conn.User(), string(password), sshInterface)
+	authenticated, err := Authenticate(conn.User(), string(password), sshInterface)
+	if err != nil {
+		Logger.Info("Failed to authenticate player", "error", err)
+		return nil, err
+	}
 
 	if authenticated {
 		Logger.Info("Player authenticated", "player_name", conn.User())
