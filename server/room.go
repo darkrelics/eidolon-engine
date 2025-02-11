@@ -74,7 +74,7 @@ type ExitData struct {
 
 func NewRoom(roomID int64, area, title, description string) *Room {
 
-	fmt.Println("New Room...Initalizing Room...")
+	Logger.Info("New Room...Initalizing Room...")
 
 	return &Room{
 		roomID:      roomID,
@@ -94,7 +94,7 @@ func NewRoom(roomID int64, area, title, description string) *Room {
 
 func NewExit(exitID uuid.UUID, direction string, description string, targetRoom *Room, visible bool) *Exit {
 
-	fmt.Println("New Exit...Initalizing Exit...")
+	Logger.Info("New Exit...Initalizing Exit...")
 
 	return &Exit{
 		exitID:      exitID,
@@ -111,7 +111,7 @@ func NewExit(exitID uuid.UUID, direction string, description string, targetRoom 
 
 func (g *Game) LoadExits() error {
 
-	fmt.Println("Load Exits...Loading Exits...")
+	Logger.Info("Load Exits...Loading Exits...")
 
 	var exitsData []ExitData
 
@@ -137,7 +137,7 @@ func (g *Game) LoadExits() error {
 
 func (g *Game) LoadRooms() error {
 
-	fmt.Println("Load Rooms...Loading Rooms...")
+	Logger.Info("Load Rooms...Loading Rooms...")
 
 	// Load room data from DynamoDB
 	var roomsData []RoomData

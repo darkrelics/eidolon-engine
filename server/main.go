@@ -60,26 +60,26 @@ func main() {
 
 	// Initialize game engine
 
-	fmt.Println("Main - Starting Game Engine...")
+	Logger.Info("Main - Starting Game Engine...")
 	game, err := NewGame(ctx, config)
 	if err != nil {
-		fmt.Printf("Main - Error initializing game engine: %v\n", err)
+		Logger.Error("Main - Error initializing game engine", "error", err)
 		os.Exit(123)
 	}
 
 	// Initialize server
 
-	fmt.Println("Main - Starting Server...")
+	Logger.Info("Main - Starting Server...")
 	server, err := NewServer(ctx, config)
 	if err != nil {
-		fmt.Printf("Main - Error initializing server: %v\n", err)
+		Logger.Error("Main - Error initializing server", "error", err)
 		os.Exit(122)
 	}
 
 	server.game = game
 	cloudWatch.server = server
 
-	fmt.Println("Main - Starting server components...")
+	Logger.Info("Main - Starting server components...")
 
 	// Start components with error channels
 
@@ -111,7 +111,7 @@ func main() {
 	// Initiate graceful shutdown
 	cancel()
 
-	shutdownErr := shutdown(errorChannel, game, server, cloudWatch, "shutdown requested")
+	shutdownErr := shutdown(errorChannel, game, server, cloudWatch)
 	if shutdownErr != nil {
 		Logger.Error("Main: Error during shutdown", "error", shutdownErr)
 		os.Exit(121)
@@ -120,9 +120,11 @@ func main() {
 	os.Exit(0)
 }
 
-func shutdown(errorChan chan error, game *Game, server *Server, cloudWatch *CloudWatch, reason string) error {
+func shutdown(errorChan chan error, game *Game, server *Server, cloudWatch *CloudWatch) error {
 
-	fmt.Printf("Main - Shutting down server: %s\n", reason)
+	// TODO: handle error channel
+
+	Logger.Info("Main - Shutting down system")
 
 	if err := server.Stop(); err != nil {
 		errorChan <- err

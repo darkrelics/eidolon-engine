@@ -66,6 +66,8 @@ type Character struct {
 	lastSaved   time.Time
 	toGame      chan string
 	fromGame    chan string
+	toPlayer    chan string
+	fromPlayer  chan string
 	end         chan bool
 	prompt      string
 }
@@ -85,7 +87,7 @@ type CharacterData struct {
 
 func (c *Character) CharacterToData() *CharacterData {
 
-	fmt.Println("CharacterToData:", c.id.String())
+	Logger.Info("CharacterToData", "CharacterID", c.id.String())
 
 	inventory := make(map[string]string)
 	for name, item := range c.inventory {
@@ -107,7 +109,7 @@ func (c *Character) CharacterToData() *CharacterData {
 
 func (p *Player) CharacterFromData(characterData *CharacterData) (*Character, error) {
 
-	fmt.Println("CharacterFromData:", characterData.CharacterID)
+	Logger.Info("CharacterFromData", "CharacterID", characterData.CharacterID)
 
 	character := &Character{
 		game:        p.server.game,
@@ -127,6 +129,8 @@ func (p *Player) CharacterFromData(characterData *CharacterData) (*Character, er
 		lastSaved:   time.Now(),
 		toGame:      make(chan string, 10),
 		fromGame:    make(chan string, 10),
+		toPlayer:    make(chan string, 10),
+		fromPlayer:  make(chan string, 10),
 		end:         make(chan bool, 1),
 		prompt:      "> ",
 	}
@@ -153,7 +157,7 @@ func (p *Player) CharacterFromData(characterData *CharacterData) (*Character, er
 
 func (c *Character) Save() error {
 
-	fmt.Println("Saving Character", c.id.String())
+	Logger.Info("Saving Character", "CharacterID", c.id.String())
 
 	characterData := c.CharacterToData()
 
@@ -246,7 +250,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 func (p *Player) LoadCharacter(characterID uuid.UUID) (*Character, error) {
 
-	fmt.Println("Loading Character", characterID.String())
+	Logger.Info("Loading Character", "CharacterID", characterID.String())
 
 	characterData := &CharacterData{}
 	key := map[string]*dynamodb.AttributeValue{

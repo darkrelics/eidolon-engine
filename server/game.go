@@ -62,7 +62,7 @@ type Game struct {
 
 func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
-	fmt.Println("New Game...Initalizing Game...")
+	Logger.Info("New Game...Initalizing Game...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
@@ -136,7 +136,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 func (g *Game) LoadCharacterNames() ([]string, error) {
 
-	fmt.Println("Loading character names from database...")
+	Logger.Info("Loading character names from database...")
 
 	var names []string
 
@@ -161,7 +161,7 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 
 func LoadNameFromFile(path string) ([]string, error) {
 
-	fmt.Println("Loading names from file", "path", path)
+	Logger.Info("Loading names from file", "path", path)
 
 	file, err := os.Open(path)
 	if err != nil {
@@ -188,7 +188,7 @@ func LoadNameFromFile(path string) ([]string, error) {
 
 func (g *Game) InitCharacterBloomFilter() error {
 
-	fmt.Println("Initializing character name bloom filter...")
+	Logger.Info("Initializing character name bloom filter...")
 
 	names, err := g.LoadCharacterNames()
 	if err != nil {
@@ -226,7 +226,7 @@ func (g *Game) InitCharacterBloomFilter() error {
 
 func (g *Game) Stop() error {
 
-	fmt.Println("Stopping game engine...")
+	Logger.Info("Stopping game engine...")
 
 	g.cancel()
 
@@ -242,7 +242,7 @@ func (g *Game) Stop() error {
 
 func (g *Game) Run(errChan chan error) error {
 
-	fmt.Println("Starting game engine...")
+	Logger.Info("Starting game engine...")
 
 	// Start Game Heart Beat
 

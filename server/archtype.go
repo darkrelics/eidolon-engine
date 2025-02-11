@@ -35,7 +35,7 @@ type Archetype struct {
 
 // Display Archetypes for debugging purposes.
 func (g *Game) DisplayArchetypes() error {
-	fmt.Println("Display Archetypes")
+	Logger.Info("Display Archetypes")
 
 	Logger.Debug("Archetypes:" + fmt.Sprint(len(g.archetypes)))
 	for key, archetype := range g.archetypes {
@@ -47,7 +47,7 @@ func (g *Game) DisplayArchetypes() error {
 
 // LoadArchetypes retrieves all archetypes from the DynamoDB table and stores them in the Games's ArcheTypes map.
 func (g *Game) LoadArchetypes() error {
-	fmt.Println("Load Archetypes")
+	Logger.Info("Load Archetypes")
 
 	var archetypes []Archetype
 
@@ -79,7 +79,7 @@ func (g *Game) LoadArchetypes() error {
 		}
 
 		g.archetypes[archetype.ArchetypeName] = &archetype
-		fmt.Println("Loaded archetype", "name", archetype.ArchetypeName)
+		Logger.Info("Loaded archetype", "name", archetype.ArchetypeName)
 	}
 
 	g.DisplayArchetypes()
@@ -89,7 +89,7 @@ func (g *Game) LoadArchetypes() error {
 
 func (g *Game) BuildArchetypeOptions() error {
 
-	fmt.Println("Building Archetype Options")
+	Logger.Info("Building Archetype Options")
 
 	options := make([]string, 0, len(g.archetypes))
 

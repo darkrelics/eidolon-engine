@@ -53,7 +53,7 @@ type Index struct {
 
 func NewServer(globalCtx context.Context, config *Configuration) (*Server, error) {
 
-	fmt.Println("New Server...Initializing server...")
+	Logger.Info("New Server...Initializing server...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
@@ -114,13 +114,13 @@ func (s *Server) Stop() error {
 
 func (s *Server) Run(errorChan chan error) error {
 
-	fmt.Println("Run server...")
+	Logger.Info("Run server...")
 
-	fmt.Println("Starting SSH Interface...")
+	Logger.Info("Starting SSH Interface...")
 
 	// Start SSH Interface
 
-	fmt.Println("SSH Interface started successfully")
+	Logger.Info("SSH Interface started successfully")
 
 	// Wait until server is stopped
 
