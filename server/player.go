@@ -30,6 +30,8 @@ import (
 )
 
 type Player struct {
+	ctx           context.Context
+	cancel        context.CancelFunc
 	index         uint64
 	id            string
 	toPlayer      chan string
@@ -46,9 +48,6 @@ type Player struct {
 	login         time.Time
 	server        *Server
 	mutex         sync.RWMutex
-	interfaceCtx  context.Context
-	ctx           context.Context
-	cancel        context.CancelFunc
 	shutdownOnce  sync.Once
 }
 
@@ -84,7 +83,7 @@ func (p *Player) LoadPlayer(playerName string) error {
 
 func NewPlayerSSH(server *Server, playerName string, conn ssh.Channel, interfaceCtx context.Context) (*Player, error) {
 
-	ctx, cancel := context.WithCancel(server.globalContext)
+	ctx, cancel := context.WithCancel(server.ctx)
 
 	player := &Player{
 		server:        server,
@@ -97,7 +96,6 @@ func NewPlayerSSH(server *Server, playerName string, conn ssh.Channel, interface
 		consoleWidth:  80,
 		consoleHeight: 24,
 		login:         time.Now(),
-		interfaceCtx:  interfaceCtx,
 		ctx:           ctx,
 		cancel:        cancel,
 		shutdownOnce:  sync.Once{},
@@ -130,8 +128,6 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 	// Wait for shutdown conditions
 	select {
 	case <-p.ctx.Done():
-		return
-	case <-p.interfaceCtx.Done():
 		return
 	case err := <-p.playerError:
 		Logger.Error("Player error", "player_name", p.id, "error", err)

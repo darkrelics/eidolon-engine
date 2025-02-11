@@ -37,7 +37,6 @@ var OBSCENITY_PATH = "../data/obscenity.txt"
 
 type Game struct {
 	config               *Configuration
-	globalCtx            context.Context
 	ctx                  context.Context
 	cancel               context.CancelFunc
 	mutex                sync.RWMutex
@@ -71,7 +70,6 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	game := &Game{
 		config:           config,
-		globalCtx:        globalCtx,
 		ctx:              ctx,
 		cancel:           cancel,
 		mutex:            sync.RWMutex{},
@@ -253,9 +251,6 @@ func (g *Game) Run(errChan chan error) error {
 
 	for {
 		select {
-		case <-g.globalCtx.Done():
-			Logger.Info("Global shutdown requested")
-			return nil
 		case <-g.ctx.Done():
 			Logger.Info("Game shutdown requested")
 			return nil

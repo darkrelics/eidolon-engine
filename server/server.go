@@ -31,20 +31,19 @@ import (
 )
 
 type Server struct {
-	config        *Configuration
-	globalContext context.Context
-	context       context.Context
-	cancel        context.CancelFunc
-	mutex         sync.RWMutex
-	game          *Game
-	database      *KeyPair
-	start         time.Time
-	playerCount   atomic.Uint64
-	players       map[uint64]*Player
-	shutdownOnce  sync.Once
-	cognito       *cognitoidentityprovider.CognitoIdentityProvider
-	index         *Index
-	activeMotDs   []*MOTD
+	config       *Configuration
+	ctx          context.Context
+	cancel       context.CancelFunc
+	mutex        sync.RWMutex
+	game         *Game
+	database     *KeyPair
+	start        time.Time
+	playerCount  atomic.Uint64
+	players      map[uint64]*Player
+	shutdownOnce sync.Once
+	cognito      *cognitoidentityprovider.CognitoIdentityProvider
+	index        *Index
+	activeMotDs  []*MOTD
 }
 
 type Index struct {
@@ -76,19 +75,18 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 	}
 
 	server := &Server{
-		config:        config,
-		globalContext: globalCtx,
-		context:       ctx,
-		cancel:        cancel,
-		mutex:         sync.RWMutex{},
-		game:          nil,
-		start:         time.Now(),
-		database:      database,
-		playerCount:   atomic.Uint64{},
-		players:       make(map[uint64]*Player),
-		shutdownOnce:  sync.Once{},
-		cognito:       cognitoidentityprovider.New(serverSession),
-		index:         index,
+		config:       config,
+		ctx:          ctx,
+		cancel:       cancel,
+		mutex:        sync.RWMutex{},
+		game:         nil,
+		start:        time.Now(),
+		database:     database,
+		playerCount:  atomic.Uint64{},
+		players:      make(map[uint64]*Player),
+		shutdownOnce: sync.Once{},
+		cognito:      cognitoidentityprovider.New(serverSession),
+		index:        index,
 	}
 
 	server.playerCount.Store(0)
@@ -127,9 +125,7 @@ func (s *Server) Run(errorChan chan error) error {
 	// Wait until server is stopped
 
 	select {
-	case <-s.globalContext.Done():
-		return nil
-	case <-s.context.Done():
+	case <-s.ctx.Done():
 		return nil
 	case err := <-errorChan:
 		Logger.Error("System error", "error", err)

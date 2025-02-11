@@ -75,7 +75,7 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(server.globalContext)
+	ctx, cancel := context.WithCancel(server.ctx)
 
 	config := server.config
 
