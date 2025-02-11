@@ -141,5 +141,13 @@ func shutdown(errorChan chan error, game *Game, server *Server, cloudWatch *Clou
 		return err
 	}
 
+	select {
+	case err := <-errorChan:
+		Logger.Error("Main: Error during shutdown", "error", err)
+		return err
+	default:
+		break
+	}
+
 	return nil
 }
