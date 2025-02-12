@@ -134,8 +134,6 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 			return
 		case <-p.server.context.Done():
 			return
-		case <-p.server.globalContext.Done():
-			return
 		case err := <-requestDone:
 			Logger.Error("ssh request handler error", "player", p.playerID, "error", err)
 			return

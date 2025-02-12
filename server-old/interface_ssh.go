@@ -81,8 +81,6 @@ func (ssh_interface *Interface_SSH) Run() error {
 
 	for {
 		select {
-		case <-ssh_interface.server.globalContext.Done():
-			return nil
 		case <-ssh_interface.server.context.Done():
 			return nil
 		case <-ssh_interface.ctx.Done():

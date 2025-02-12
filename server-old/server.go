@@ -13,20 +13,19 @@ import (
 )
 
 type Server struct {
-	config        *Configuration
-	globalContext context.Context
-	context       context.Context
-	cancel        context.CancelFunc
-	mutex         sync.RWMutex
-	game          *Game
-	database      *KeyPair
-	start         time.Time
-	playerCount   atomic.Uint64
-	players       map[uint64]*Player
-	shutdownOnce  sync.Once
-	cognito       *cognitoidentityprovider.CognitoIdentityProvider
-	index         *Index
-	activeMotDs   []*MOTD
+	config       *Configuration
+	context      context.Context
+	cancel       context.CancelFunc
+	mutex        sync.RWMutex
+	game         *Game
+	database     *KeyPair
+	start        time.Time
+	playerCount  atomic.Uint64
+	players      map[uint64]*Player
+	shutdownOnce sync.Once
+	cognito      *cognitoidentityprovider.CognitoIdentityProvider
+	index        *Index
+	activeMotDs  []*MOTD
 }
 
 func NewServer(globalCtx context.Context, config *Configuration) (*Server, error) {
@@ -53,16 +52,15 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 	}
 
 	server := &Server{
-		config:        config,
-		globalContext: globalCtx,
-		context:       ctx,
-		cancel:        cancel,
-		game:          nil,
-		start:         time.Now(),
-		database:      database,
-		players:       make(map[uint64]*Player),
-		cognito:       cognitoidentityprovider.New(sess),
-		index:         index,
+		config:   config,
+		context:  ctx,
+		cancel:   cancel,
+		game:     nil,
+		start:    time.Now(),
+		database: database,
+		players:  make(map[uint64]*Player),
+		cognito:  cognitoidentityprovider.New(sess),
+		index:    index,
 	}
 
 	return server, nil
@@ -88,8 +86,6 @@ func (s *Server) Run() error {
 
 	// Wait for either a shutdown signal or SSH interface error
 	select {
-	case <-s.globalContext.Done():
-		return s.shutdown("global shutdown")
 	case <-s.context.Done():
 		return s.shutdown("server shutdown")
 	case err := <-sshErrChan:

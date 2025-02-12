@@ -75,6 +75,13 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
 
+	art := `
+	┏┓• ┓  ┓      ┏┓    •    
+	┣ ┓┏┫┏┓┃┏┓┏┓  ┣ ┏┓┏┓┓┏┓┏┓
+	┗┛┗┗┻┗┛┗┗┛┛┗  ┗┛┛┗┗┫┗┛┗┗
+					   ┛     
+	`
+
 	ctx, cancel := context.WithCancel(server.ctx)
 
 	config := server.config
@@ -100,12 +107,6 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 		// TODO: Add MFA support using KeyboardInteractiveCallback
 
 		BannerCallback: func(conn ssh.ConnMetadata) string {
-			art := `
-			┏┓• ┓  ┓      ┏┓    •    
-			┣ ┓┏┫┏┓┃┏┓┏┓  ┣ ┏┓┏┓┓┏┓┏┓
-			┗┛┗┗┻┗┛┗┗┛┛┗  ┗┛┛┗┗┫┗┛┗┗
-							   ┛     
-			`
 			return art
 		},
 	}
