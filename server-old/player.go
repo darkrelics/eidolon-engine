@@ -113,7 +113,7 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 
 	// Character selection loop
 	for {
-		character, err := SelectCharacter(p.ctx, p)
+		character, err := SelectCharacter(p)
 		if err != nil {
 			Logger.Error("character selection error", "player", p.playerID, "error", err)
 			return

@@ -64,7 +64,7 @@ type PlayerData struct {
 	SeenMotDs     []string          `json:"seenMotD" dynamodbav:"SeenMotD"`
 }
 
-func (p *Player) LoadPlayer(playerName string) error {
+func (p *Player) Load(playerName string) error {
 
 	// TODO: Build an initalization Lambda function for Cognito.
 
@@ -85,7 +85,7 @@ func (p *Player) LoadPlayer(playerName string) error {
 	if err != nil {
 		if strings.Contains(err.Error(), "item not found") {
 			Logger.Info("New player", "player_name", playerName)
-			p.SavePlayer()
+			p.Save()
 
 			return nil
 		}
@@ -123,7 +123,7 @@ func (p *Player) LoadPlayer(playerName string) error {
 
 }
 
-func (p *Player) SavePlayer() error {
+func (p *Player) Save() error {
 
 	Logger.Info("Saving player data", "player_name", p.id)
 
@@ -181,7 +181,7 @@ func NewPlayerSSH(server *Server, playerName string, conn ssh.Channel, interface
 	}
 
 	// Load player data
-	if err := player.LoadPlayer(playerName); err != nil {
+	if err := player.Load(playerName); err != nil {
 		cancel()
 		return nil, fmt.Errorf("player data load: %w", err)
 	}
@@ -246,7 +246,7 @@ func (p *Player) Stop() {
 
 		// Stop Character
 
-		p.SavePlayer()
+		p.Save()
 
 		if p.connection != nil {
 			p.connection.Close()

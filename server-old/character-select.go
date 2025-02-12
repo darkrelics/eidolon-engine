@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -11,21 +10,21 @@ import (
 	"github.com/google/uuid"
 )
 
-func SelectCharacter(ctx context.Context, player *Player) (*Character, error) {
+func SelectCharacter(player *Player) (*Character, error) {
 	options := buildCharacterOptions(player)
 
 	for {
-		if err := sendOptions(ctx, player, options); err != nil {
+		if err := sendOptions(player, options); err != nil {
 			return nil, err
 		}
 
-		input, err := receiveInput(ctx, player)
+		input, err := receiveInput(player)
 		if err != nil {
 			return nil, err
 		}
 
 		if input == "X" && len(options) > 0 {
-			if err := handleCharacterDeletion(ctx, options, player); err != nil {
+			if err := handleCharacterDeletion(options, player); err != nil {
 				player.toPlayer <- fmt.Sprintf("Error deleting character: %v\n\r", err)
 				continue
 			}
@@ -139,10 +138,10 @@ func buildCharacterOptions(player *Player) []string {
 	return options
 }
 
-func sendOptions(ctx context.Context, player *Player, options []string) error {
+func sendOptions(player *Player, options []string) error {
 	select {
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-player.ctx.Done():
+		return player.ctx.Err()
 	case player.toPlayer <- "Select a character:\n\r":
 		player.toPlayer <- "0: Create a new character\n\r"
 		for i, name := range options {
@@ -158,10 +157,10 @@ func sendOptions(ctx context.Context, player *Player, options []string) error {
 	}
 }
 
-func receiveInput(ctx context.Context, player *Player) (string, error) {
+func receiveInput(player *Player) (string, error) {
 	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
+	case <-player.ctx.Done():
+		return "", player.ctx.Err()
 	case input, ok := <-player.fromPlayer:
 		if !ok {
 			return "", fmt.Errorf("player input channel closed")
@@ -170,10 +169,10 @@ func receiveInput(ctx context.Context, player *Player) (string, error) {
 	}
 }
 
-func handleCharacterSelection(ctx context.Context, input string, options []string, player *Player) (*Character, bool) {
+func handleCharacterSelection(input string, options []string, player *Player) (*Character, bool) {
 
 	if input == "X" && len(options) > 0 {
-		if err := handleCharacterDeletion(ctx, options, player); err != nil {
+		if err := handleCharacterDeletion(options, player); err != nil {
 			player.toPlayer <- fmt.Sprintf("Error deleting character: %v\n\r", err)
 		}
 		return nil, true
@@ -324,12 +323,12 @@ func promptArchetypeSelection(player *Player, options []string) (int, error) {
 	return num, nil
 }
 
-func handleCharacterDeletion(ctx context.Context, options []string, player *Player) error {
-	if err := sendDeletionOptions(ctx, options, player); err != nil {
+func handleCharacterDeletion(options []string, player *Player) error {
+	if err := sendDeletionOptions(options, player); err != nil {
 		return err
 	}
 
-	deleteChoice, err := receiveInput(ctx, player)
+	deleteChoice, err := receiveInput(player)
 	if err != nil {
 		return err
 	}
@@ -348,10 +347,10 @@ func handleCharacterDeletion(ctx context.Context, options []string, player *Play
 	return nil
 }
 
-func sendDeletionOptions(ctx context.Context, options []string, player *Player) error {
+func sendDeletionOptions(options []string, player *Player) error {
 	select {
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-player.ctx.Done():
+		return player.ctx.Err()
 	case player.toPlayer <- "Select a character to delete: \n\r":
 		for i, name := range options {
 			player.toPlayer <- fmt.Sprintf("%d: %s\n\r", i+1, name)

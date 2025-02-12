@@ -85,16 +85,20 @@ type CharacterData struct {
 	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
 }
 
-func (c *Character) CharacterToData() *CharacterData {
+func (c *Character) Save() error {
 
-	Logger.Info("CharacterToData", "CharacterID", c.id.String())
+	Logger.Debug("Saving character", "characterName", c.name)
 
-	inventory := make(map[string]string)
+	kp := c.game.database
+
+	// Convert inventory to ID map
+	inventoryIDs := make(map[string]string)
 	for name, item := range c.inventory {
-		inventory[name] = item.id.String()
+		inventoryIDs[name] = item.id.String()
 	}
 
-	return &CharacterData{
+	// Create character data for storage
+	characterData := &CharacterData{
 		CharacterID:   c.id.String(),
 		PlayerID:      c.player.id,
 		CharacterName: c.name,
@@ -103,76 +107,103 @@ func (c *Character) CharacterToData() *CharacterData {
 		Essence:       c.essence,
 		Health:        c.health,
 		RoomID:        c.room.roomID,
-		Inventory:     inventory,
+		Inventory:     inventoryIDs,
 	}
+
+	// Write to database
+	err := kp.Put("characters", characterData)
+	if err != nil {
+		Logger.Error("Error writing character data", "characterName", c.name, "error", err)
+		return fmt.Errorf("error writing character data: %w", err)
+	}
+
+	Logger.Debug("Successfully wrote character to database", "characterName", c.name, "characterID", c.id.String())
+
+	c.lastSaved = time.Now()
+
+	return nil
 }
 
-func (p *Player) CharacterFromData(characterData *CharacterData) (*Character, error) {
+func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
+	Logger.Debug("Loading character", "characterID", characterID)
 
-	Logger.Info("CharacterFromData", "CharacterID", characterData.CharacterID)
+	game := player.server.game
 
+	// Initialize new character with default values
 	character := &Character{
-		game:        p.server.game,
-		id:          uuid.MustParse(characterData.CharacterID),
-		player:      p,
-		name:        characterData.CharacterName,
-		attributes:  characterData.Attributes,
-		abilities:   characterData.Abilities,
-		essence:     characterData.Essence,
-		health:      characterData.Health,
+		game:        game,
+		id:          characterID,
+		player:      player,
+		attributes:  make(map[string]float64),
+		abilities:   make(map[string]float64),
 		inventory:   make(map[string]*Item),
 		mutex:       sync.RWMutex{},
 		facing:      nil,
 		advancing:   false,
 		combatRange: make(map[uuid.UUID]float64),
 		lastEdited:  time.Now(),
-		lastSaved:   time.Now(),
 		toGame:      make(chan string, 10),
 		fromGame:    make(chan string, 10),
 		toPlayer:    make(chan string, 10),
 		fromPlayer:  make(chan string, 10),
-		end:         make(chan bool, 1),
-		prompt:      "> ",
+		end:         make(chan bool),
+		prompt:      "\n\r> ",
 	}
 
-	// Place character in room
-	room, exists := p.server.game.rooms[characterData.RoomID]
+	// Load character data from database
+	cd := &CharacterData{}
+	key := map[string]*dynamodb.AttributeValue{
+		"CharacterID": {S: aws.String(characterID.String())},
+	}
+
+	if err := game.database.Get("characters", key, cd); err != nil {
+		return nil, fmt.Errorf("error loading character data: %w", err)
+	}
+
+	// Populate character from data
+	var err error
+	character.id, err = uuid.Parse(cd.CharacterID)
+	if err != nil {
+		return nil, fmt.Errorf("parse character ID: %w", err)
+	}
+	character.name = cd.CharacterName
+	character.attributes = cd.Attributes
+	character.abilities = cd.Abilities
+	character.essence = cd.Essence
+	character.health = cd.Health
+
+	// Set character room
+	room, exists := game.rooms[cd.RoomID]
 	if !exists {
-		Logger.Warn("Room does not exist", "roomID", characterData.RoomID)
-		room, exists = p.server.game.rooms[0]
+		Logger.Warn("Room not found, defaulting to room ID 0", "roomID", cd.RoomID)
+		room, exists = game.rooms[0]
 		if !exists {
-			Logger.Error("Starting room does not exist")
-			return nil, fmt.Errorf("starting room does not exist")
+			return nil, fmt.Errorf("default room not found")
 		}
 	}
-
 	character.room = room
 
-	// initialize inventory
+	// Load inventory items
+	// for name, itemIDStr := range cd.Inventory {
+	// 	itemID, err := uuid.Parse(itemIDStr)
+	// 	if err != nil {
+	// 		Logger.Error("Error parsing item UUID", "itemID", itemIDStr, "error", err)
+	// 		continue
+	// 	}
+	// 	item, err := LoadItem(itemID.String(), game.database)
+	// 	if err != nil {
+	// 		Logger.Error("Error loading item for character", "itemID", itemID, "characterName", character.Name, "error", err)
+	// 		continue
+	// 	}
+	// 	character.inventory[name] = item
+	// }
+
+	// Add character to game state
+	game.mutex.Lock()
+	game.characters[character.id] = character
+	game.mutex.Unlock()
 
 	return character, nil
-}
-
-// Save the character to the database
-
-func (c *Character) Save() error {
-
-	Logger.Info("Saving Character", "CharacterID", c.id.String())
-
-	characterData := c.CharacterToData()
-
-	err := c.game.database.Put("characters", *characterData)
-	if err != nil {
-		Logger.Error("Error saving character", "error", err)
-		return fmt.Errorf("error saving character: %w", err)
-	}
-
-	Logger.Debug("Character saved", "character", c.id.String())
-
-	c.lastSaved = time.Now()
-
-	return nil
-
 }
 
 // CreateCharacter creates a new character for the player.
@@ -243,35 +274,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		Logger.Error("Error saving character", "error", err)
 		return nil, fmt.Errorf("error saving character: %w", err)
 	}
-
-	return character, nil
-
-}
-
-func (p *Player) LoadCharacter(characterID uuid.UUID) (*Character, error) {
-
-	Logger.Info("Loading Character", "CharacterID", characterID.String())
-
-	characterData := &CharacterData{}
-	key := map[string]*dynamodb.AttributeValue{
-		"CharacterID": {S: aws.String(characterID.String())},
-	}
-
-	if err := p.server.database.Get("characters", key, characterData); err != nil {
-		Logger.Error("Error loading character", "error", err)
-		return nil, fmt.Errorf("error loading character: %w", err)
-	}
-
-	character, err := p.CharacterFromData(characterData)
-	if err != nil {
-		Logger.Error("Error creating character from data", "error", err)
-		return nil, fmt.Errorf("error creating character from data: %w", err)
-	}
-
-	game := p.server.game
-	game.mutex.Lock()
-	game.characters[character.id] = character
-	game.mutex.Unlock()
 
 	return character, nil
 
