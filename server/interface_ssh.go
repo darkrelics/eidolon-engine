@@ -168,7 +168,7 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		go player.Run(requests)
+		go player.RunSSH(requests)
 	}
 }
 

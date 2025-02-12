@@ -85,6 +85,7 @@ func (p *Player) LoadPlayer(playerName string) error {
 	if err != nil {
 		if strings.Contains(err.Error(), "item not found") {
 			Logger.Info("New player", "player_name", playerName)
+			p.SavePlayer()
 
 			return nil
 		}
@@ -179,42 +180,69 @@ func NewPlayerSSH(server *Server, playerName string, conn ssh.Channel, interface
 		shutdownOnce:  sync.Once{},
 	}
 
+	// Load player data
+	if err := player.LoadPlayer(playerName); err != nil {
+		cancel()
+		return nil, fmt.Errorf("player data load: %w", err)
+	}
+
+	// Register with server
+
+	err := server.AddPlayer(player)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("player registration: %w", err)
+	}
+
 	return player, nil
 
 }
 
-func (p *Player) Run(requests <-chan *ssh.Request) {
+func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 	Logger.Info("Player connected", "player_name", p.id)
-	defer func() {
-		Logger.Info("Player disconnected", "player_name", p.id)
-		p.shutdownOnce.Do(func() {
-			p.cancel()
-			close(p.toPlayer)
-			close(p.fromPlayer)
-			close(p.playerError)
-			if p.character != nil {
-				// Save character state
-				if err := p.character.Save(); err != nil {
-					Logger.Error("Error saving character on disconnect", "error", err)
-				}
-				p.character = nil
-			}
-			p.connection.Close()
-		})
-	}()
+
+	defer p.Stop()
+
+	// Create channels for each goroutine
+	requestDone := make(chan error, 1)
+	inputDone := make(chan error, 1)
+	outputDone := make(chan error, 1)
+
+	// Start request handler
+
+	go p.handleRequests(p.ctx, requests, requestDone)
+
+	// Start input handler
+
+	go p.handleInput(p.ctx, inputDone)
+
+	// Start output handler
+
+	go p.handleOutput(p.ctx, outputDone)
+
+	// Start Player Interface
 
 	// Wait for shutdown conditions
 	select {
 	case <-p.ctx.Done():
+		close(outputDone)
+		close(inputDone)
+		close(requestDone)
 		return
 	case err := <-p.playerError:
+		close(outputDone)
+		close(inputDone)
+		close(requestDone)
 		Logger.Error("Player error", "player_name", p.id, "error", err)
 		return
 	}
+
 }
 
 func (p *Player) Stop() {
 	p.shutdownOnce.Do(func() {
+
+		Logger.Info("Player disconnected", "player_name", p.id)
 
 		// Stop Character
 
@@ -238,23 +266,25 @@ func (p *Player) Stop() {
 	})
 }
 
-func (p *Player) handleInput(ctx context.Context) error {
+func (p *Player) handleInput(ctx context.Context, done chan error) {
 	var inputBuffer []rune
 	reader := bufio.NewReader(p.connection)
 
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			done <- ctx.Err()
+			return
 		default:
 			r, _, err := reader.ReadRune()
 			if err != nil {
 				if err == io.EOF {
-					Logger.Debug("Connection closed by client", "player", p.id)
-					return nil
+					Logger.Info("Connection closed by client", "player", p.id)
+					return
 				}
 				Logger.Error("Error reading input", "player", p.id, "error", err)
-				return fmt.Errorf("read error: %w", err)
+				done <- fmt.Errorf("read error: %w", err)
+				return
 			}
 
 			// Handle different input cases
@@ -269,7 +299,8 @@ func (p *Player) handleInput(ctx context.Context) error {
 						}
 						inputBuffer = inputBuffer[:0]
 					case <-ctx.Done():
-						return ctx.Err()
+						done <- ctx.Err()
+						return
 					}
 				}
 
@@ -283,7 +314,7 @@ func (p *Player) handleInput(ctx context.Context) error {
 
 			case '\x03': // Ctrl-C
 				p.playerError <- errors.New("player interrupt")
-				return nil
+				return
 
 			default:
 				if len(inputBuffer) < 1024 {
@@ -297,14 +328,16 @@ func (p *Player) handleInput(ctx context.Context) error {
 	}
 }
 
-func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request) error {
+func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request, done chan error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			done <- ctx.Err()
+			return
+
 		case req, ok := <-requests:
 			if !ok {
-				return nil
+				return
 			}
 
 			p.mutex.Lock()
@@ -329,17 +362,19 @@ func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Reques
 	}
 }
 
-func (p *Player) handleOutput(ctx context.Context) error {
+func (p *Player) handleOutput(ctx context.Context, done chan error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			done <- ctx.Err()
+			return
 		case msg, ok := <-p.toPlayer:
 			if !ok {
-				return nil
+				return
 			}
 			if _, err := p.connection.Write([]byte(wrapText(msg, p.consoleWidth))); err != nil {
-				return fmt.Errorf("write error: %w", err)
+				done <- fmt.Errorf("write error: %w", err)
+				return
 			}
 		}
 	}

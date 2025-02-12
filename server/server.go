@@ -51,6 +51,23 @@ type Index struct {
 	mu      sync.RWMutex
 }
 
+func (i *Index) GetID() uint64 {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	i.IndexID++
+	return i.IndexID
+}
+
+func (i *Index) SetID(id uint64) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	if id > i.IndexID {
+		i.IndexID = id
+	}
+}
+
 func NewServer(globalCtx context.Context, config *Configuration) (*Server, error) {
 
 	Logger.Info("New Server...Initializing server...")
@@ -144,6 +161,28 @@ func (s *Server) Run(errorChan chan error) error {
 
 	}
 
+}
+
+func (s *Server) AddPlayer(player *Player) error {
+
+	if player == nil {
+		return fmt.Errorf("player is nil")
+	}
+
+	id := s.index.GetID()
+
+	player.mutex.Lock()
+	player.index = id
+	player.mutex.Unlock()
+
+	s.mutex.Lock()
+	s.players[id] = player
+	s.mutex.Unlock()
+
+	s.playerCount.Add(1)
+	Logger.Info("Player added", "playerID", id)
+
+	return nil
 }
 
 func (s *Server) RemovePlayer(playerID uint64) error {
