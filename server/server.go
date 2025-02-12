@@ -145,3 +145,19 @@ func (s *Server) Run(errorChan chan error) error {
 	}
 
 }
+
+func (s *Server) RemovePlayer(playerID uint64) error {
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	delete(s.players, playerID)
+
+	s.playerCount.Add(^uint64(0))
+
+	return nil
+}
+
+func (s *Server) PlayerCount() uint64 {
+	return s.playerCount.Load()
+}

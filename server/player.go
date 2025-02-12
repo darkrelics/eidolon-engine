@@ -19,8 +19,11 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -217,6 +220,176 @@ func (p *Player) Stop() {
 
 		p.SavePlayer()
 
+		if p.connection != nil {
+			p.connection.Close()
+		}
+
+		close(p.toPlayer)
+		close(p.fromPlayer)
+		close(p.playerError)
+
+		if p.server != nil {
+			_ = p.server.RemovePlayer(p.index)
+		}
+
+		Logger.Info("Player stopped", "player_name", p.id)
+
 		p.cancel()
 	})
+}
+
+func (p *Player) handleInput(ctx context.Context) error {
+	var inputBuffer []rune
+	reader := bufio.NewReader(p.connection)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			r, _, err := reader.ReadRune()
+			if err != nil {
+				if err == io.EOF {
+					Logger.Debug("Connection closed by client", "player", p.id)
+					return nil
+				}
+				Logger.Error("Error reading input", "player", p.id, "error", err)
+				return fmt.Errorf("read error: %w", err)
+			}
+
+			// Handle different input cases
+			switch r {
+			case '\n', '\r':
+				if len(inputBuffer) > 0 {
+					select {
+					case p.fromPlayer <- string(inputBuffer):
+						if p.echo {
+							p.connection.Write([]byte("\r\n"))
+							p.connection.Write([]byte(p.prompt))
+						}
+						inputBuffer = inputBuffer[:0]
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+
+			case '\b', 127: // Backspace
+				if len(inputBuffer) > 0 {
+					inputBuffer = inputBuffer[:len(inputBuffer)-1]
+					if p.echo {
+						p.connection.Write([]byte("\b \b"))
+					}
+				}
+
+			case '\x03': // Ctrl-C
+				p.playerError <- errors.New("player interrupt")
+				return nil
+
+			default:
+				if len(inputBuffer) < 1024 {
+					inputBuffer = append(inputBuffer, r)
+					if p.echo {
+						p.connection.Write([]byte(string(r)))
+					}
+				}
+			}
+		}
+	}
+}
+
+func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case req, ok := <-requests:
+			if !ok {
+				return nil
+			}
+
+			p.mutex.Lock()
+			switch req.Type {
+			case "shell":
+				req.Reply(true, nil)
+			case "pty-req":
+				termLen := req.Payload[3]
+				w, h := ParseDims(req.Payload[termLen+4:])
+				p.consoleWidth = w
+				p.consoleHeight = h
+				req.Reply(true, nil)
+			case "window-change":
+				w, h := ParseDims(req.Payload)
+				p.consoleWidth = w
+				p.consoleHeight = h
+			default:
+				req.Reply(false, nil)
+			}
+			p.mutex.Unlock()
+		}
+	}
+}
+
+func (p *Player) handleOutput(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case msg, ok := <-p.toPlayer:
+			if !ok {
+				return nil
+			}
+			if _, err := p.connection.Write([]byte(wrapText(msg, p.consoleWidth))); err != nil {
+				return fmt.Errorf("write error: %w", err)
+			}
+		}
+	}
+}
+
+// wrapText wraps the given text to the specified width, preserving
+// empty lines and whitespace. It uses \r\n as the line break.
+func wrapText(text string, width int) string {
+	var result strings.Builder
+
+	// Split the text into lines
+	lines := strings.Split(text, "\n")
+
+	for i, line := range lines {
+		// Preserve empty lines
+		if len(strings.TrimSpace(line)) == 0 {
+			result.WriteString(line)
+			if i < len(lines)-1 {
+				result.WriteString("\r\n")
+			}
+			continue
+		}
+
+		// Wrap the line to the specified width
+		for len(line) > 0 {
+			if len(line) <= width {
+				result.WriteString(line)
+				break
+			}
+
+			// Find the last space within the width
+			lastSpace := strings.LastIndex(line[:width+1], " ")
+			if lastSpace == -1 {
+				// No space found, force break at width
+				result.WriteString(line[:width])
+				line = line[width:]
+			} else {
+				// Break at the last space
+				result.WriteString(line[:lastSpace])
+				line = strings.TrimLeft(line[lastSpace+1:], " ")
+			}
+
+			result.WriteString("\r\n")
+		}
+
+		// Add newline between original lines if not the last line
+		if i < len(lines)-1 {
+			result.WriteString("\r\n")
+		}
+	}
+
+	return result.String()
 }
