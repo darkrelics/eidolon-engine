@@ -19,7 +19,9 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -92,18 +94,24 @@ func (c *CloudWatch) initLogStream() error {
 }
 
 func (c *CloudWatch) Handle(ctx context.Context, r slog.Record) error {
-
 	fmt.Println("CloudWatch Handle...")
 
 	if err := c.initLogStream(); err != nil {
 		return fmt.Errorf("failed to initialize log stream: %w", err)
 	}
 
+	// Marshal the slog.Record to JSON
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	if err := encoder.Encode(r); err != nil {
+		return fmt.Errorf("failed to marshal slog.Record to JSON: %w", err)
+	}
+
 	input := &cloudwatchlogs.PutLogEventsInput{
 		LogGroupName:  aws.String(c.logGroup),
 		LogStreamName: aws.String(c.logStream),
 		LogEvents: []cwlogtypes.InputLogEvent{{
-			Message:   aws.String(c.formatLogMessage(r)),
+			Message:   aws.String(buf.String()), // Send the JSON string
 			Timestamp: aws.Int64(time.Now().UnixNano() / int64(time.Millisecond)),
 		}},
 	}
@@ -121,11 +129,6 @@ func (c *CloudWatch) Handle(ctx context.Context, r slog.Record) error {
 	c.sequenceToken = output.NextSequenceToken
 	c.mutex.Unlock()
 
-	for _, handler := range c.handlers {
-		if err := handler.Handle(ctx, r); err != nil {
-			return fmt.Errorf("handler error: %w", err)
-		}
-	}
 	return nil
 }
 
@@ -161,15 +164,4 @@ func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
 	}
 
 	return nil
-}
-
-func (c *CloudWatch) formatLogMessage(r slog.Record) string {
-	fmt.Println("CloudWatch Format Log Message...")
-
-	msg := r.Message
-	r.Attrs(func(a slog.Attr) bool {
-		msg += fmt.Sprintf(" %s=%v", a.Key, a.Value)
-		return true
-	})
-	return msg
 }
