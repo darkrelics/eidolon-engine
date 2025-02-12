@@ -45,6 +45,12 @@ jobs:
           govulncheck ./...
           cd ..
 
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.62
+          working-directory: ./server
+
       - name: Check for changes
         id: git-check
         run: |
