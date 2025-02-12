@@ -79,7 +79,6 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 		ctx:          ctx,
 		cancel:       cancel,
 		mutex:        sync.RWMutex{},
-		game:         nil,
 		start:        time.Now(),
 		database:     database,
 		playerCount:  atomic.Uint64{},
@@ -90,8 +89,6 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 	}
 
 	server.playerCount.Store(0)
-
-	server.activeMotDs = nil
 
 	return server, nil
 }
@@ -118,7 +115,21 @@ func (s *Server) Run(errorChan chan error) error {
 
 	Logger.Info("Starting SSH Interface...")
 
+	var sshInterface *Interface_SSH
+
 	// Start SSH Interface
+
+	if s.config.SSH.Enabled {
+
+		sshInterface, err := NewSSHInterface(s)
+		if err != nil {
+			Logger.Error("Failed to start SSH interface", "error", err)
+		}
+
+		if err == nil {
+			go sshInterface.Run(errorChan)
+		}
+	}
 
 	Logger.Info("SSH Interface started successfully")
 
@@ -126,10 +137,11 @@ func (s *Server) Run(errorChan chan error) error {
 
 	select {
 	case <-s.ctx.Done():
+		if s.config.SSH.Enabled {
+			sshInterface.Stop()
+		}
 		return nil
-	case err := <-errorChan:
-		Logger.Error("System error", "error", err)
-		return nil
+
 	}
 
 }

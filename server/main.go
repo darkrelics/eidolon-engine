@@ -37,7 +37,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	errorChannel := make(chan error, 3)
+	errorChannel := make(chan error, 10)
 
 	// Load configuration
 

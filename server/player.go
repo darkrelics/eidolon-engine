@@ -20,6 +20,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,6 +48,8 @@ type Player struct {
 	seenMotD      []uuid.UUID
 	character     *Character
 	login         time.Time
+	lastEdited    time.Time
+	lastSaved     time.Time
 	server        *Server
 	mutex         sync.RWMutex
 	shutdownOnce  sync.Once
@@ -59,6 +63,8 @@ type PlayerData struct {
 
 func (p *Player) LoadPlayer(playerName string) error {
 
+	// TODO: Build an initalization Lambda function for Cognito.
+
 	Logger.Debug("Loading player data", "player_name", playerName)
 
 	database := p.server.database
@@ -69,13 +75,82 @@ func (p *Player) LoadPlayer(playerName string) error {
 
 	var playerData PlayerData
 
+	p.characterList = make(map[string]uuid.UUID)
+	p.seenMotD = make([]uuid.UUID, 0)
+
 	err := database.Get("players", key, &playerData)
 	if err != nil {
-		// Return an empty map for new players.
+		if strings.Contains(err.Error(), "item not found") {
+			Logger.Info("New player", "player_name", playerName)
 
-		// TODO: Build an initalization Lambda function for Cognito.
-		Logger.Info("First time player", "playerName", playerName)
+			return nil
+		}
+		Logger.Error("Error loading player data", "error", err)
+		return err
 	}
+
+	Logger.Info("Player data loaded", "player_name", playerName)
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	for characterName, characterID := range playerData.CharacterList {
+		p.characterList[characterName], err = uuid.Parse(characterID)
+		if err != nil {
+			Logger.Error("Error parsing character ID", "character_id", characterID)
+			continue
+		}
+
+	}
+
+	for _, motdID := range playerData.SeenMotDs {
+		motdUUID, err := uuid.Parse(motdID)
+		if err != nil {
+			Logger.Error("Error parsing MOTD ID", "motd_id", motdID)
+			continue
+		}
+		p.seenMotD = append(p.seenMotD, motdUUID)
+	}
+
+	p.lastEdited = time.Now()
+	p.lastSaved = time.Now()
+
+	return nil
+
+}
+
+func (p *Player) SavePlayer() error {
+
+	Logger.Info("Saving player data", "player_name", p.id)
+
+	database := p.server.database
+
+	playerData := PlayerData{
+		PlayerID:      p.id,
+		CharacterList: make(map[string]string),
+		SeenMotDs:     make([]string, len(p.seenMotD)),
+	}
+
+	// Convert character IDs to strings
+	for characterName, characterID := range p.characterList {
+		playerData.CharacterList[characterName] = characterID.String()
+	}
+
+	// Convert MOTD IDs to strings
+	for i, motdID := range p.seenMotD {
+		playerData.SeenMotDs[i] = motdID.String()
+	}
+
+	err := database.Put("players", playerData)
+	if err != nil {
+		Logger.Error("Error saving player data", "error", err)
+		p.toPlayer <- "Error saving player data. Please contact an administrator.\n"
+		return fmt.Errorf("error saving player data: %w", err)
+	}
+
+	p.mutex.Lock()
+	p.lastSaved = time.Now()
+	p.mutex.Unlock()
 
 	return nil
 
@@ -133,4 +208,15 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 		Logger.Error("Player error", "player_name", p.id, "error", err)
 		return
 	}
+}
+
+func (p *Player) Stop() {
+	p.shutdownOnce.Do(func() {
+
+		// Stop Character
+
+		p.SavePlayer()
+
+		p.cancel()
+	})
 }

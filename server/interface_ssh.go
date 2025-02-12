@@ -20,6 +20,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -116,6 +117,7 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 	sshInterface.sshConfig = sshConfig
 
 	address := fmt.Sprintf(":%d", server.config.SSH.Port)
+
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on port %d: %w", server.config.SSH.Port, err)
@@ -168,4 +170,34 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 
 		go player.Run(requests)
 	}
+}
+
+func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
+	Logger.Info("Starting SSH interface", "port", ssh_interface.port)
+	defer ssh_interface.listener.Close()
+
+	for {
+		select {
+		case <-ssh_interface.server.ctx.Done():
+			return
+		case <-ssh_interface.ctx.Done():
+			return
+		default:
+			conn, err := ssh_interface.listener.Accept()
+			Logger.Info("New connection", "remote_addr", conn.RemoteAddr())
+			if err != nil {
+				if errors.Is(err, net.ErrClosed) {
+					Logger.Warn("Listener closed", "error", err)
+				}
+				Logger.Error("Connection accept failed", "error", err)
+				continue
+			}
+			go ssh_interface.handleConnection(conn)
+		}
+	}
+}
+
+func (ssh_interface *Interface_SSH) Stop() error {
+	ssh_interface.cancel()
+	return ssh_interface.listener.Close()
 }
