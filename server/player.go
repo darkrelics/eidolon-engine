@@ -222,6 +222,8 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 
 	// Start Player Interface
 
+	p.Console()
+
 	// Wait for shutdown conditions
 	select {
 	case <-p.ctx.Done():
