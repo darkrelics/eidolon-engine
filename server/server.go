@@ -137,8 +137,8 @@ func (s *Server) Run(errorChan chan error) error {
 	// Start SSH Interface
 
 	if s.config.SSH.Enabled {
-
-		sshInterface, err := NewSSHInterface(s)
+		var err error
+		sshInterface, err = NewSSHInterface(s)
 		if err != nil {
 			Logger.Error("Failed to start SSH interface", "error", err)
 		}
@@ -155,7 +155,7 @@ func (s *Server) Run(errorChan chan error) error {
 	select {
 	case <-s.ctx.Done():
 		if s.config.SSH.Enabled {
-			if sshInterface != nil { // Ignore this complaint
+			if sshInterface != nil {
 				sshInterface.Stop()
 			}
 
