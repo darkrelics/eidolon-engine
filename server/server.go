@@ -155,7 +155,10 @@ func (s *Server) Run(errorChan chan error) error {
 	select {
 	case <-s.ctx.Done():
 		if s.config.SSH.Enabled {
-			sshInterface.Stop()
+			if sshInterface != nil { // Ignore this complaint
+				sshInterface.Stop()
+			}
+
 		}
 		return nil
 

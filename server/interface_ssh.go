@@ -76,12 +76,7 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
 
-	art := `
-	┏┓• ┓  ┓      ┏┓    •    
-	┣ ┓┏┫┏┓┃┏┓┏┓  ┣ ┏┓┏┓┓┏┓┏┓
-	┗┛┗┗┻┗┛┗┗┛┛┗  ┗┛┛┗┗┫┗┛┗┗
-					   ┛     
-	`
+	art := "Edolon Engine\nCopyright 2024-2025 Jason Robinson\n"
 
 	ctx, cancel := context.WithCancel(server.ctx)
 

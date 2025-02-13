@@ -53,7 +53,7 @@ type CloudWatch struct {
 
 func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error) {
 
-	Logger.Info("New CloudWatch...Initalizing CloudWatch...")
+	fmt.Println("New CloudWatch...Initalizing CloudWatch...")
 
 	handlerCtx, cancel := context.WithCancel(ctx)
 
