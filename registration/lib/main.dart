@@ -17,9 +17,45 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Cognito Email Verification',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
+      title: 'Eidolon Engine Email Verification',
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: Colors.black,
+        primaryColor: Colors.white,
+        colorScheme: const ColorScheme.dark(
+          primary: Colors.white,
+          secondary: Colors.white70,
+          surface: Colors.black,
+          background: Colors.black,
+          onPrimary: Colors.black,
+          onSecondary: Colors.black,
+          onSurface: Colors.white,
+          onBackground: Colors.white,
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          labelStyle: TextStyle(color: Colors.white70),
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: Colors.white70),
+          ),
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: Colors.white),
+          ),
+        ),
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: Colors.white),
+          bodyMedium: TextStyle(color: Colors.white),
+          titleMedium: TextStyle(color: Colors.white),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            foregroundColor: Colors.black,
+            backgroundColor: Colors.white,
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.white,
+          ),
+        ),
       ),
       home: const AuthScreen(),
     );
@@ -37,13 +73,11 @@ class AuthState extends ChangeNotifier {
   CognitoUser? _currentUser;
   late final CognitoUserPool userPool;
 
-  // Getters for controllers
   TextEditingController get emailController => _emailController;
   TextEditingController get verificationCodeController =>
       _verificationCodeController;
   TextEditingController get passwordController => _passwordController;
 
-  // Public getters for state
   CognitoUser? get currentUser => _currentUser;
   bool get isVerificationMode => _isVerificationMode;
   bool get isSignUpMode => _isSignUpMode;
@@ -191,7 +225,10 @@ class AuthScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-            context.watch<AuthState>().isSignUpMode ? 'Sign Up' : 'Sign In'),
+          context.watch<AuthState>().isSignUpMode ? 'Sign Up' : 'Sign In',
+          style: const TextStyle(color: Colors.white),
+        ),
+        backgroundColor: Colors.black,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -204,6 +241,7 @@ class AuthScreen extends StatelessWidget {
                     controller: authState.emailController,
                     decoration: const InputDecoration(labelText: 'Email'),
                     keyboardType: TextInputType.emailAddress,
+                    style: const TextStyle(color: Colors.white),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
@@ -215,6 +253,7 @@ class AuthScreen extends StatelessWidget {
                     controller: authState.passwordController,
                     obscureText: true,
                     decoration: const InputDecoration(labelText: 'Password'),
+                    style: const TextStyle(color: Colors.white),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your password';
@@ -238,6 +277,7 @@ class AuthScreen extends StatelessWidget {
                     controller: authState.emailController,
                     decoration: const InputDecoration(labelText: 'Email'),
                     keyboardType: TextInputType.emailAddress,
+                    style: const TextStyle(color: Colors.white),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
@@ -249,6 +289,7 @@ class AuthScreen extends StatelessWidget {
                     controller: authState.passwordController,
                     obscureText: true,
                     decoration: const InputDecoration(labelText: 'Password'),
+                    style: const TextStyle(color: Colors.white),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your password';
@@ -272,6 +313,7 @@ class AuthScreen extends StatelessWidget {
                     controller: authState.verificationCodeController,
                     decoration:
                         const InputDecoration(labelText: 'Verification Code'),
+                    style: const TextStyle(color: Colors.white),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter verification code';
@@ -289,14 +331,16 @@ class AuthScreen extends StatelessWidget {
                 ],
                 const SizedBox(height: 20),
                 if (authState.isLoading)
-                  const CircularProgressIndicator()
+                  const CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  )
                 else if (authState.message.isNotEmpty)
                   Text(
                     authState.message,
                     style: TextStyle(
                       color: authState.message.toLowerCase().contains('error')
                           ? Colors.red
-                          : Colors.green,
+                          : Colors.green[300],
                     ),
                     textAlign: TextAlign.center,
                   ),

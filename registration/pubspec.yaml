@@ -1,5 +1,5 @@
 name: cognito_email_verification
-description: A simple Flutter app for Cognito email verification
+description: Eidolon Engine email verification app.
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -11,6 +11,7 @@ dependencies:
   amazon_cognito_identity_dart_2: ^3.6.5
   http: ^1.2.2
   crypto: ^3.0.3
+  provider: ^6.1.1
 
   provider: any
 dev_dependencies:
