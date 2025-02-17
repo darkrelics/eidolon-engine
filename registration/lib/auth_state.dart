@@ -49,7 +49,7 @@ Future<void> signUp() async {
         _updateMessage('User registered successfully. You can now log in.');
         _isSignUpMode = false;
       } else {
-        _updateMessage('Verification code sent. Please check your email and enter it below.');
+        _updateMessage('Verification link sent. Please check your email.');
         _isVerificationMode = true;
       }
     } on CognitoClientException catch (e) {
