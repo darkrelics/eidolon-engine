@@ -48,9 +48,9 @@ Future<CognitoUser> signIn(String email, String password) async {
   final authDetails = AuthenticationDetails(
     username: email,
     password: password,
-    validationData: {
-      'SECRET_HASH': _computeSecretHash(email),
-    },
+    authParameters: [
+      AttributeArg(name: 'SECRET_HASH', value: _computeSecretHash(email)),
+    ],
   );
 
   await user.authenticateUser(authDetails);
