@@ -1,47 +1,47 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-    <base href="$FLUTTER_BASE_HREF">
+  <head>
+    <base href="$FLUTTER_BASE_HREF" />
 
-    <meta charset="UTF-8">
-    <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-    <meta name="description" content="Eidolon Engine Email Verification">
+    <meta charset="UTF-8" />
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
+    <meta name="description" content="Eidolon Engine Email Verification" />
 
     <!-- iOS meta tags & icons -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <meta name="apple-mobile-web-app-title" content="cognito_email_verification">
-    <meta name="mobile-web-app-capable" content="yes">
-    <link rel="apple-touch-icon" href="icons/Icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="cognito_email_verification" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="apple-touch-icon" href="icons/Icon-192.png" />
 
     <!-- Favicon -->
-    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="icon" type="image/png" href="favicon.png" />
 
     <title>Eidolon Engine Email Verification</title>
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json" />
 
     <script>
-        // The value below is injected by flutter build, do not touch.
-        const serviceWorkerVersion = '{{flutter_service_worker_version}}';
+      // The value below is injected by flutter build, do not touch.
+      const serviceWorkerVersion = "{{flutter_service_worker_version}}";
     </script>
     <!-- This script adds the flutter initialization JS code -->
     <script src="flutter.js" defer></script>
-</head>
-<body style="background-color: black;">
+  </head>
+  <body style="background-color: black">
     <script>
-        window.addEventListener('load', function (ev) {
-            // Download main.dart.js
-            _flutter.loader.loadEntrypoint({
-                serviceWorker: {
-                    serviceWorkerVersion: serviceWorkerVersion,
-                },
-                onEntrypointLoaded: function(engineInitializer) {
-                    engineInitializer.initializeEngine().then(function(appRunner) {
-                        appRunner.runApp();
-                    });
-                }
+      window.addEventListener("load", function (ev) {
+        // Download main.dart.js
+        _flutter.loader.loadEntrypoint({
+          serviceWorker: {
+            serviceWorkerVersion: serviceWorkerVersion,
+          },
+          onEntrypointLoaded: function (engineInitializer) {
+            engineInitializer.initializeEngine().then(function (appRunner) {
+              appRunner.runApp();
             });
+          },
         });
+      });
     </script>
-</body>
+  </body>
 </html>
