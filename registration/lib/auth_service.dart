@@ -49,7 +49,7 @@ Future<CognitoUser> signIn(String email, String password) async {
     username: email,
     password: password,
     validationData: {
-      'SECRET_HASH': _computeSecretHash(email),
+      'SecretHash': _computeSecretHash(email),
     },
   );
 
