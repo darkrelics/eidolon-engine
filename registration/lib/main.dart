@@ -78,118 +78,120 @@ class AuthScreen extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Consumer<AuthState>(
-            builder: (context, authState, child) => Column(
-              children: <Widget>[
-                if (authState.isSignUpMode) ...[
-                  TextFormField(
-                    controller: authState.emailController,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(color: Colors.white),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your email';
-                      }
-                      return null;
-                    },
-                  ),
-                  TextFormField(
-                    controller: authState.passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                    style: const TextStyle(color: Colors.white),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your password';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed:
-                        authState.isLoading ? null : () => authState.signUp(),
-                    child: const Text('Sign Up'),
-                  ),
-                  const SizedBox(height: 20),
-                  TextButton(
-                    onPressed: () => authState.toggleAuthMode(),
-                    child: const Text('Already have an account? Sign in'),
-                  ),
-                ] else if (!authState.isVerificationMode) ...[
-                  TextFormField(
-                    controller: authState.emailController,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(color: Colors.white),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your email';
-                      }
-                      return null;
-                    },
-                  ),
-                  TextFormField(
-                    controller: authState.passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                    style: const TextStyle(color: Colors.white),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your password';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed:
-                        authState.isLoading ? null : () => authState.signIn(),
-                    child: const Text('Sign In'),
-                  ),
-                  const SizedBox(height: 20),
-                  TextButton(
-                    onPressed: () => authState.toggleAuthMode(),
-                    child: const Text('Need an Account? Sign up'),
-                  ),
-                ] else ...[
-                  TextFormField(
-                    controller: authState.verificationCodeController,
-                    decoration:
-                        const InputDecoration(labelText: 'Verification Code'),
-                    style: const TextStyle(color: Colors.white),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter verification code';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: authState.isLoading
-                        ? null
-                        : () => authState.confirmRegistration(),
-                    child: const Text('Verify'),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                if (authState.isLoading)
-                  const CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  )
-                else if (authState.message.isNotEmpty)
-                  Text(
-                    authState.message,
-                    style: TextStyle(
-                      color: authState.message.toLowerCase().contains('error')
-                          ? Colors.red
-                          : Colors.green[300],
+            builder: (context, authState, child) => AutofillGroup(
+              child: Column(
+                children: <Widget>[
+                  if (authState.isSignUpMode) ...[
+                    TextFormField(
+                      controller: authState.emailController,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.email],
+                      style: const TextStyle(color: Colors.white),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your email';
+                        }
+                        return null;
+                      },
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-              ],
+                    TextFormField(
+                      controller: authState.passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'Password'),
+                      autofillHints: const [AutofillHints.newPassword],
+                      style: const TextStyle(color: Colors.white),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your password';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: authState.isLoading ? null : () => authState.signUp(),
+                      child: const Text('Sign Up'),
+                    ),
+                    const SizedBox(height: 20),
+                    TextButton(
+                      onPressed: () => authState.toggleAuthMode(),
+                      child: const Text('Already have an account? Sign in'),
+                    ),
+                  ] else if (!authState.isVerificationMode) ...[
+                    TextFormField(
+                      controller: authState.emailController,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.email],
+                      style: const TextStyle(color: Colors.white),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your email';
+                        }
+                        return null;
+                      },
+                    ),
+                    TextFormField(
+                      controller: authState.passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'Password'),
+                      autofillHints: const [AutofillHints.password],
+                      style: const TextStyle(color: Colors.white),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your password';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: authState.isLoading ? null : () => authState.signIn(),
+                      child: const Text('Sign In'),
+                    ),
+                    const SizedBox(height: 20),
+                    TextButton(
+                      onPressed: () => authState.toggleAuthMode(),
+                      child: const Text('Need an Account? Sign up'),
+                    ),
+                  ] else ...[
+                    TextFormField(
+                      controller: authState.verificationCodeController,
+                      decoration: const InputDecoration(labelText: 'Verification Code'),
+                      style: const TextStyle(color: Colors.white),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter verification code';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: authState.isLoading ? null : () => authState.confirmRegistration(),
+                      child: const Text('Verify'),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  if (authState.isLoading)
+                    const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    )
+                  else if (authState.message.isNotEmpty)
+                    Text(
+                      authState.message,
+                      style: TextStyle(
+                        color: authState.message.toLowerCase().contains('error')
+                            ? Colors.red
+                            : Colors.green[300],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                ],
+              ),
             ),
           ),
         ),
