@@ -49,7 +49,7 @@ Future<CognitoUser> signIn(String email, String password) async {
     username: email,
     password: password,
     validationData: {
-      'SecretHash': _computeSecretHash(email),
+      'SECRET_HASH': _computeSecretHash(email),
     },
   );
 
@@ -60,7 +60,7 @@ Future<CognitoUser> signIn(String email, String password) async {
 
 String _computeSecretHash(String username) {
   final key = utf8.encode(const String.fromEnvironment('CLIENT_SECRET'));
-  final message = utf8.encode(username + const String.fromEnvironment('CLIENT_ID'));
+  final message = utf8.encode(username + const String.fromEnvironment('CLIENT_ID') + const String.fromEnvironment('CLIENT_SECRET'));
   final hmac = Hmac(sha256, key);
   final digest = hmac.convert(message);
   return base64.encode(digest.bytes);
