@@ -7,7 +7,7 @@ class AuthState extends ChangeNotifier {
   final _emailController = TextEditingController();
   final _verificationCodeController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   String _message = '';
   bool _isLoading = false;
   bool _isVerificationMode = false;
@@ -16,7 +16,8 @@ class AuthState extends ChangeNotifier {
   AuthState({required AuthService authService}) : _authService = authService;
 
   TextEditingController get emailController => _emailController;
-  TextEditingController get verificationCodeController => _verificationCodeController;
+  TextEditingController get verificationCodeController =>
+      _verificationCodeController;
   TextEditingController get passwordController => _passwordController;
 
   CognitoUser? get currentUser => _authService.currentUser;
@@ -35,7 +36,7 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
   }
 
-Future<void> signUp() async {
+  Future<void> signUp() async {
     if (!_validateInputs()) return;
 
     _setLoading(true);
@@ -59,9 +60,9 @@ Future<void> signUp() async {
     } finally {
       _setLoading(false);
     }
-}
+  }
 
-Future<void> confirmRegistration() async {
+  Future<void> confirmRegistration() async {
     if (_verificationCodeController.text.isEmpty) {
       _updateMessage('Please enter the verification code');
       return;
@@ -82,9 +83,9 @@ Future<void> confirmRegistration() async {
     } finally {
       _setLoading(false);
     }
-}
+  }
 
-Future<void> signIn() async {
+  Future<void> signIn() async {
     if (!_validateInputs()) return;
 
     _setLoading(true);
@@ -102,7 +103,7 @@ Future<void> signIn() async {
     } finally {
       _setLoading(false);
     }
-}
+  }
 
   bool _validateInputs() {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
