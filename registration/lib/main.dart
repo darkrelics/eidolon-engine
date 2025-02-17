@@ -181,11 +181,12 @@ class AuthScreen extends StatelessWidget {
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     )
                   else if (authState.message.isNotEmpty)
-                    Text(
+                    SelectableText(
                       authState.message,
                       style: TextStyle(
-                        color: authState.message.toLowerCase().contains('error')
-                            ? Colors.red
+                        color: authState.message.toLowerCase().contains('fail') ||
+                              authState.message.toLowerCase().contains('error')
+                            ? Colors.red[400]
                             : Colors.green[300],
                       ),
                       textAlign: TextAlign.center,

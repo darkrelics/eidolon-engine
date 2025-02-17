@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 
 class AuthService {
@@ -41,17 +43,28 @@ Future<CognitoUserPoolData> signUp(String email, String password) async {
     return true;
   }
 
-  Future<CognitoUser> signIn(String email, String password) async {
-    final user = CognitoUser(email, userPool);
-    final authDetails = AuthenticationDetails(
-      username: email,
-      password: password,
-    );
+Future<CognitoUser> signIn(String email, String password) async {
+  final user = CognitoUser(email, userPool);
+  final authDetails = AuthenticationDetails(
+    username: email,
+    password: password,
+    validationData: {
+      'SECRET_HASH': _computeSecretHash(email),
+    },
+  );
 
-    await user.authenticateUser(authDetails);
-    _currentUser = user;
-    return user;
-  }
+  await user.authenticateUser(authDetails);
+  _currentUser = user;
+  return user;
+}
+
+String _computeSecretHash(String username) {
+  final key = utf8.encode(const String.fromEnvironment('CLIENT_SECRET'));
+  final message = utf8.encode(username + const String.fromEnvironment('CLIENT_ID'));
+  final hmac = Hmac(sha256, key);
+  final digest = hmac.convert(message);
+  return base64.encode(digest.bytes);
+}
 
   CognitoUser? get currentUser => _currentUser;
 }
