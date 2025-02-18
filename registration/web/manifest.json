@@ -1,11 +1,11 @@
 {
-  "name": "Cognito Email Verification",
+  "name": "Eidolon Engine Email Verification",
   "short_name": "Email Verify",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#0175C2",
   "theme_color": "#0175C2",
-  "description": "A Flutter app for Cognito email verification.",
+  "description": "The Eidolon Engine email verification app.",
   "orientation": "portrait-primary",
   "prefer_related_applications": false,
   "icons": [
