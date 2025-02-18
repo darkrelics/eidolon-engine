@@ -5,6 +5,7 @@ import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 class AuthService {
   late final CognitoUserPool userPool;
   CognitoUser? _currentUser;
+  CognitoUserSession? _session;
 
   AuthService() {
     _initializeCognito();
@@ -27,33 +28,57 @@ class AuthService {
   }
 
   Future<CognitoUserPoolData> signUp(String email, String password) async {
-    final signUpResult = await userPool.signUp(
-      email,
-      password,
-      userAttributes: [AttributeArg(name: 'email', value: email)],
-    );
-    return signUpResult;
+    try {
+      final signUpResult = await userPool.signUp(
+        email,
+        password,
+        userAttributes: [AttributeArg(name: 'email', value: email)],
+      );
+      return signUpResult;
+    } on CognitoClientException {
+      rethrow;
+    }
   }
 
   Future<bool> confirmRegistration(String email, String code) async {
-    final user = CognitoUser(email, userPool);
-    await user.confirmRegistration(code);
-    return true;
+    try {
+      final user = CognitoUser(email, userPool);
+      return await user.confirmRegistration(code);
+    } on CognitoClientException {
+      rethrow;
+    }
   }
 
   Future<CognitoUser> signIn(String email, String password) async {
-    final user = CognitoUser(email, userPool);
-    final authDetails = AuthenticationDetails(
-      username: email,
-      password: password,
-      authParameters: [
-        AttributeArg(name: 'SECRET_HASH', value: _computeSecretHash(email)),
-      ],
-    );
+    try {
+      final user = CognitoUser(email, userPool);
+      final authDetails = AuthenticationDetails(
+        username: email,
+        password: password,
+        authParameters: [
+          AttributeArg(name: 'SECRET_HASH', value: _computeSecretHash(email)),
+        ],
+      );
 
-    await user.authenticateUser(authDetails);
-    _currentUser = user;
-    return user;
+      _session = await user.authenticateUser(authDetails);
+      _currentUser = user;
+      return user;
+    } on CognitoClientException {
+      rethrow;
+    }
+  }
+
+  Future<void> signOut() async {
+    if (_currentUser != null) {
+      await _currentUser?.signOut();
+      _currentUser = null;
+      _session = null;
+    }
+  }
+
+  Future<bool> isAuthenticated() async {
+    if (_currentUser == null || _session == null) return false;
+    return _session!.isValid();
   }
 
   String _computeSecretHash(String username) {
@@ -69,4 +94,5 @@ class AuthService {
   }
 
   CognitoUser? get currentUser => _currentUser;
+  CognitoUserSession? get session => _session;
 }

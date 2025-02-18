@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show AlwaysStoppedAnimation, AppBar, AutofillGroup, AutofillHints, AutovalidateMode, BorderSide, BuildContext, CircularProgressIndicator, Color, ColorScheme, Colors, Column, EdgeInsets, ElevatedButton, ElevatedButtonThemeData, Form, InputDecoration, InputDecorationTheme, MaterialApp, Padding, Scaffold, SelectableText, SizedBox, StatelessWidget, Text, TextAlign, TextButton, TextButtonThemeData, TextFormField, TextInputType, TextStyle, TextTheme, ThemeData, UnderlineInputBorder, Widget, runApp;
 import 'package:provider/provider.dart';
 import 'auth_service.dart';
 import 'auth_state.dart';
