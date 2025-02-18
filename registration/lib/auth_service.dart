@@ -12,9 +12,13 @@ class AuthService {
   }
 
   void _initializeCognito() {
-    final userPoolId = const String.fromEnvironment('USER_POOL_ID');
-    final clientId = const String.fromEnvironment('CLIENT_ID');
-    final clientSecret = const String.fromEnvironment('CLIENT_SECRET');
+    // Get values from environment or use defaults for development
+    final userPoolId = const String.fromEnvironment('USER_POOL_ID', 
+        defaultValue: bool.fromEnvironment('dart.vm.product') ? '' : 'dev-user-pool-id');
+    final clientId = const String.fromEnvironment('CLIENT_ID',
+        defaultValue: bool.fromEnvironment('dart.vm.product') ? '' : 'dev-client-id');
+    final clientSecret = const String.fromEnvironment('CLIENT_SECRET',
+        defaultValue: bool.fromEnvironment('dart.vm.product') ? '' : 'dev-client-secret');
 
     if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
       throw Exception('Missing required Cognito configuration');
