@@ -253,14 +253,14 @@ def main() -> None:
 
         codebuild_outputs: dict = get_stack_outputs(cloudformation_client, CODEBUILD_STACK_NAME)
 
-        # Start the 'RegistrationApplicationBuild' CodeBuild job
+        # Start the 'PortalApplicationBuild' CodeBuild job
         codebuild_client = boto3.client("codebuild")
         try:
-            print("Starting RegistrationApplicationBuild CodeBuild job...")
-            build_response = codebuild_client.start_build(projectName="RegistrationApplicationBuild")
+            print("Starting PortalApplicationBuild CodeBuild job...")
+            build_response = codebuild_client.start_build(projectName="PortalApplicationBuild")
             print(f"Build started successfully: {build_response['build']['id']}")
         except ClientError as build_err:
-            print(f"Failed to start RegistrationApplicationBuild CodeBuild job: {build_err}")
+            print(f"Failed to start PortalApplicationBuild CodeBuild job: {build_err}")
 
         # Deploy CloudWatch stack
         cloudwatch_template: str = load_template(CLOUDWATCH_TEMPLATE_PATH)
