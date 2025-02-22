@@ -53,11 +53,11 @@ Resources:
       ManagedPolicyArns:
         - !Ref CodeBuildAccessPolicy
 
-  RegistrationApplicationCodeBuild:
+  PortalApplicationCodeBuild:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: RegistrationApplicationBuild
-      Description: Build project for the Flutter Web Registration Application
+      Name: PortalApplicationBuild
+      Description: Build project for the Web Portal Application
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
         Type: NO_ARTIFACTS
@@ -77,14 +77,14 @@ Resources:
       Source:
         Type: GITHUB
         Location: !Ref GitHubSourceRepo
-        BuildSpec: buildspec/registration.yml
+        BuildSpec: buildspec/portal.yml
       TimeoutInMinutes: 15
 
 Outputs:
   CodeBuildProjectName:
-    Description: "Name of the CodeBuild Project"
-    Value: !Ref RegistrationApplicationCodeBuild
+    Description: "Portal CodeBuild Project"
+    Value: !Ref PortalApplicationCodeBuild
 
   CodeBuildProjectARN:
-    Description: "ARN of the CodeBuild Project"
-    Value: !GetAtt RegistrationApplicationCodeBuild.Arn
+    Description: "ARN of Portal Project"
+    Value: !GetAtt PortalApplicationCodeBuild.Arn
