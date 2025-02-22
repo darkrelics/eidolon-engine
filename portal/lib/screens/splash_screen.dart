@@ -10,7 +10,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   bool _showStartButton = false;
@@ -22,29 +23,29 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       duration: const Duration(seconds: 3),
       vsync: this,
     );
-    
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeIn,
-      ),
-    );
-    
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
+
     _controller.forward();
-    
+
     // Check authentication status after animation
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         setState(() {
           _showStartButton = true;
         });
-        
+
         // Check if user is already authenticated
         final authState = Provider.of<AuthState>(context, listen: false);
         authState.checkAuthStatus().then((isAuthenticated) {
           if (isAuthenticated) {
             Timer(const Duration(milliseconds: 500), () {
-              Navigator.of(context).pushReplacementNamed('/character-management');
+              Navigator.of(
+                context,
+              ).pushReplacementNamed('/character-management');
             });
           }
         });
@@ -62,9 +63,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.black,
-        ),
+        decoration: const BoxDecoration(color: Colors.black),
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Center(
@@ -128,7 +127,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                             Navigator.of(context).pushNamed('/login');
                           },
                           style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 40,
+                              vertical: 12,
+                            ),
                           ),
                           child: const Text(
                             'ENTER THE REALM',

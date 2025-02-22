@@ -25,10 +25,12 @@ class RegistrationScreen extends StatelessWidget {
           builder: (context, authState, child) {
             if (authState.isAuthenticated) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                Navigator.of(context).pushReplacementNamed('/character-management');
+                Navigator.of(
+                  context,
+                ).pushReplacementNamed('/character-management');
               });
             }
-            
+
             return Form(
               autovalidateMode: AutovalidateMode.onUserInteraction,
               child: AutofillGroup(
@@ -60,8 +62,12 @@ class RegistrationScreen extends StatelessWidget {
                         decoration: const InputDecoration(
                           labelText: 'Password',
                           prefixIcon: Icon(Icons.lock, color: Colors.white70),
-                          helperText: 'Password must be at least 8 characters with lowercase, uppercase, numbers and symbols',
-                          helperStyle: TextStyle(color: Colors.white54, fontSize: 12),
+                          helperText:
+                              'Password must be at least 8 characters with lowercase, uppercase, numbers and symbols',
+                          helperStyle: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
                         ),
                         autofillHints: const [AutofillHints.newPassword],
                         style: const TextStyle(color: Colors.white),
@@ -77,24 +83,34 @@ class RegistrationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 32),
                       ElevatedButton(
-                        onPressed: authState.isLoading ? null : () => authState.signUp(),
+                        onPressed:
+                            authState.isLoading
+                                ? null
+                                : () => authState.signUp(),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        child: authState.isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.black,
+                        child:
+                            authState.isLoading
+                                ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.black,
+                                  ),
+                                )
+                                : const Text(
+                                  'CREATE ACCOUNT',
+                                  style: TextStyle(fontSize: 16),
                                 ),
-                              )
-                            : const Text('CREATE ACCOUNT', style: TextStyle(fontSize: 16)),
                       ),
                       const SizedBox(height: 16),
                       TextButton(
-                        onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
+                        onPressed:
+                            () => Navigator.of(
+                              context,
+                            ).pushReplacementNamed('/login'),
                         child: const Text('Already have an account? Sign in'),
                       ),
                     ] else ...[
@@ -110,9 +126,7 @@ class RegistrationScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       const Text(
                         'Please check your email for a verification link or enter the verification code below.',
-                        style: TextStyle(
-                          color: Colors.white70,
-                        ),
+                        style: TextStyle(color: Colors.white70),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
@@ -120,7 +134,10 @@ class RegistrationScreen extends StatelessWidget {
                         controller: authState.verificationCodeController,
                         decoration: const InputDecoration(
                           labelText: 'Verification Code',
-                          prefixIcon: Icon(Icons.verified_user, color: Colors.white70),
+                          prefixIcon: Icon(
+                            Icons.verified_user,
+                            color: Colors.white70,
+                          ),
                         ),
                         style: const TextStyle(color: Colors.white),
                         validator: (value) {
@@ -132,20 +149,27 @@ class RegistrationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 32),
                       ElevatedButton(
-                        onPressed: authState.isLoading ? null : () => authState.confirmRegistration(),
+                        onPressed:
+                            authState.isLoading
+                                ? null
+                                : () => authState.confirmRegistration(),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        child: authState.isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.black,
+                        child:
+                            authState.isLoading
+                                ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.black,
+                                  ),
+                                )
+                                : const Text(
+                                  'VERIFY',
+                                  style: TextStyle(fontSize: 16),
                                 ),
-                              )
-                            : const Text('VERIFY', style: TextStyle(fontSize: 16)),
                       ),
                     ],
                     if (authState.message.isNotEmpty) ...[
@@ -153,10 +177,15 @@ class RegistrationScreen extends StatelessWidget {
                       Text(
                         authState.message,
                         style: TextStyle(
-                          color: authState.message.toLowerCase().contains('fail') ||
-                                  authState.message.toLowerCase().contains('error')
-                              ? Colors.red[400]
-                              : Colors.green[300],
+                          color:
+                              authState.message.toLowerCase().contains(
+                                        'fail',
+                                      ) ||
+                                      authState.message.toLowerCase().contains(
+                                        'error',
+                                      )
+                                  ? Colors.red[400]
+                                  : Colors.green[300],
                         ),
                         textAlign: TextAlign.center,
                       ),

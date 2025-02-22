@@ -9,10 +9,7 @@ class LoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Sign In',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Sign In', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.black,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -26,10 +23,12 @@ class LoginScreen extends StatelessWidget {
             // If authenticated, navigate to character management
             if (authState.isAuthenticated) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                Navigator.of(context).pushReplacementNamed('/character-management');
+                Navigator.of(
+                  context,
+                ).pushReplacementNamed('/character-management');
               });
             }
-            
+
             return Form(
               autovalidateMode: AutovalidateMode.onUserInteraction,
               child: AutofillGroup(
@@ -72,24 +71,32 @@ class LoginScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 32),
                     ElevatedButton(
-                      onPressed: authState.isLoading ? null : () => authState.signIn(),
+                      onPressed:
+                          authState.isLoading ? null : () => authState.signIn(),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      child: authState.isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.black,
+                      child:
+                          authState.isLoading
+                              ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.black,
+                                ),
+                              )
+                              : const Text(
+                                'SIGN IN',
+                                style: TextStyle(fontSize: 16),
                               ),
-                            )
-                          : const Text('SIGN IN', style: TextStyle(fontSize: 16)),
                     ),
                     const SizedBox(height: 16),
                     TextButton(
-                      onPressed: () => Navigator.of(context).pushReplacementNamed('/register'),
+                      onPressed:
+                          () => Navigator.of(
+                            context,
+                          ).pushReplacementNamed('/register'),
                       child: const Text('Need an Account? Sign up'),
                     ),
                     if (authState.message.isNotEmpty) ...[
@@ -97,10 +104,15 @@ class LoginScreen extends StatelessWidget {
                       Text(
                         authState.message,
                         style: TextStyle(
-                          color: authState.message.toLowerCase().contains('fail') ||
-                                  authState.message.toLowerCase().contains('error')
-                              ? Colors.red[400]
-                              : Colors.green[300],
+                          color:
+                              authState.message.toLowerCase().contains(
+                                        'fail',
+                                      ) ||
+                                      authState.message.toLowerCase().contains(
+                                        'error',
+                                      )
+                                  ? Colors.red[400]
+                                  : Colors.green[300],
                         ),
                         textAlign: TextAlign.center,
                       ),

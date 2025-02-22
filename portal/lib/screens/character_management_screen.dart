@@ -8,7 +8,7 @@ class CharacterManagementScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authState = Provider.of<AuthState>(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -58,17 +58,19 @@ class CharacterManagementScreen extends StatelessWidget {
               const SizedBox(height: 30),
               const Text(
                 'Character Management will be available soon.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.white70,
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.white70),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 40),
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color.fromRGBO(255, 255, 255, 0.1), // White with 0.1 opacity
+                  color: const Color.fromRGBO(
+                    255,
+                    255,
+                    255,
+                    0.1,
+                  ), // White with 0.1 opacity
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.white30),
                 ),
@@ -85,19 +87,31 @@ class CharacterManagementScreen extends StatelessWidget {
                     const SizedBox(height: 16),
                     const Text(
                       'This feature will connect to AWS Lambda functions to manage character creation, stats, inventory, and progression within the Eidolon Engine world.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white70,
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.white70),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 20),
                     ElevatedButton(
                       onPressed: null, // Disabled for now
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromRGBO(255, 255, 255, 0.3), // White with 0.3 opacity
-                        disabledBackgroundColor: const Color.fromRGBO(255, 255, 255, 0.1), // White with 0.1 opacity
-                        disabledForegroundColor: const Color.fromRGBO(255, 255, 255, 0.3), // White with 0.3 opacity
+                        backgroundColor: const Color.fromRGBO(
+                          255,
+                          255,
+                          255,
+                          0.3,
+                        ), // White with 0.3 opacity
+                        disabledBackgroundColor: const Color.fromRGBO(
+                          255,
+                          255,
+                          255,
+                          0.1,
+                        ), // White with 0.1 opacity
+                        disabledForegroundColor: const Color.fromRGBO(
+                          255,
+                          255,
+                          255,
+                          0.3,
+                        ), // White with 0.3 opacity
                       ),
                       child: const Text('Create New Character'),
                     ),
