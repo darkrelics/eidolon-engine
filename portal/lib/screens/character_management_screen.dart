@@ -33,10 +33,10 @@ class CharacterManagementScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.black,
           image: DecorationImage(
-            image: const AssetImage('assets/background.jpg'),
+            image: const AssetImage('portal/assets/background.jpg'),
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(
-              Colors.black.withOpacity(0.7),
+              Colors.black.copyWith(alpha: 179), // equivalent to opacity 0.7 (0.7 * 255 ≈ 179)
               BlendMode.dstATop,
             ),
           ),
@@ -68,7 +68,7 @@ class CharacterManagementScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.copyWith(alpha: 26), // equivalent to opacity 0.1 (0.1 * 255 ≈ 26)
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.white30),
                 ),
@@ -95,9 +95,9 @@ class CharacterManagementScreen extends StatelessWidget {
                     ElevatedButton(
                       onPressed: null, // Disabled for now
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.3),
-                        disabledBackgroundColor: Colors.white.withOpacity(0.1),
-                        disabledForegroundColor: Colors.white.withOpacity(0.3),
+                        backgroundColor: Colors.white.copyWith(alpha: 77), // equivalent to opacity 0.3 (0.3 * 255 ≈ 77)
+                        disabledBackgroundColor: Colors.white.copyWith(alpha: 26), // equivalent to opacity 0.1 (0.1 * 255 ≈ 26)
+                        disabledForegroundColor: Colors.white.copyWith(alpha: 77), // equivalent to opacity 0.3 (0.3 * 255 ≈ 77)
                       ),
                       child: const Text('Create New Character'),
                     ),
