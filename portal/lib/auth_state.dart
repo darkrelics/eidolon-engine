@@ -12,8 +12,12 @@ class AuthState extends ChangeNotifier {
   bool _isLoading = false;
   bool _isVerificationMode = false;
   bool _isSignUpMode = true;
+  bool _isAuthenticated = false;
 
-  AuthState({required AuthService authService}) : _authService = authService;
+  AuthState({required AuthService authService}) : _authService = authService {
+    // Check authentication status when initialized
+    checkAuthStatus();
+  }
 
   TextEditingController get emailController => _emailController;
   TextEditingController get verificationCodeController =>
@@ -25,6 +29,7 @@ class AuthState extends ChangeNotifier {
   bool get isSignUpMode => _isSignUpMode;
   String get message => _message;
   bool get isLoading => _isLoading;
+  bool get isAuthenticated => _isAuthenticated;
 
   void _updateMessage(String message) {
     _message = message;
@@ -34,6 +39,18 @@ class AuthState extends ChangeNotifier {
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
+  }
+
+  Future<bool> checkAuthStatus() async {
+    try {
+      _isAuthenticated = await _authService.isAuthenticated();
+      notifyListeners();
+      return _isAuthenticated;
+    } catch (e) {
+      _isAuthenticated = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<void> signUp() async {
@@ -96,10 +113,27 @@ class AuthState extends ChangeNotifier {
       );
       _updateMessage('Login Successful!');
       _isSignUpMode = false;
+      _isAuthenticated = true;
+      notifyListeners();
     } on CognitoClientException catch (e) {
       _updateMessage('Login failed: ${e.message}');
+      _isAuthenticated = false;
     } catch (e) {
       _updateMessage('An unexpected error occurred: ${e.toString()}');
+      _isAuthenticated = false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> signOut() async {
+    _setLoading(true);
+    try {
+      await _authService.signOut();
+      _isAuthenticated = false;
+      _updateMessage('Successfully signed out');
+    } catch (e) {
+      _updateMessage('Error signing out: ${e.toString()}');
     } finally {
       _setLoading(false);
     }

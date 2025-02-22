@@ -1,7 +1,11 @@
-import 'package:flutter/material.dart' show AlwaysStoppedAnimation, AppBar, AutofillGroup, AutofillHints, AutovalidateMode, BorderSide, BuildContext, CircularProgressIndicator, Color, ColorScheme, Colors, Column, EdgeInsets, ElevatedButton, ElevatedButtonThemeData, Form, InputDecoration, InputDecorationTheme, MaterialApp, Padding, Scaffold, SelectableText, SizedBox, StatelessWidget, Text, TextAlign, TextButton, TextButtonThemeData, TextFormField, TextInputType, TextStyle, TextTheme, ThemeData, UnderlineInputBorder, Widget, runApp;
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'auth_service.dart';
 import 'auth_state.dart';
+import 'screens/splash_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/registration_screen.dart';
+import 'screens/character_management_screen.dart';
 
 void main() {
   final authService = AuthService();
@@ -19,7 +23,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Eidolon Engine Email Verification',
+      title: 'Eidolon Engine',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: Colors.black,
         primaryColor: Colors.white,
@@ -55,169 +60,13 @@ class MyApp extends StatelessWidget {
           style: TextButton.styleFrom(foregroundColor: Colors.white),
         ),
       ),
-      home: const AuthScreen(),
-    );
-  }
-}
-
-class AuthScreen extends StatelessWidget {
-  const AuthScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          context.watch<AuthState>().isSignUpMode ? 'Sign Up' : 'Sign In',
-          style: const TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.black,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          child: Consumer<AuthState>(
-            builder:
-                (context, authState, child) => AutofillGroup(
-                  child: Column(
-                    children: <Widget>[
-                      if (authState.isSignUpMode) ...[
-                        TextFormField(
-                          controller: authState.emailController,
-                          decoration: const InputDecoration(labelText: 'Email'),
-                          keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.email],
-                          style: const TextStyle(color: Colors.white),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your email';
-                            }
-                            return null;
-                          },
-                        ),
-                        TextFormField(
-                          controller: authState.passwordController,
-                          obscureText: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Password',
-                          ),
-                          autofillHints: const [AutofillHints.newPassword],
-                          style: const TextStyle(color: Colors.white),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your password';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed:
-                              authState.isLoading
-                                  ? null
-                                  : () => authState.signUp(),
-                          child: const Text('Sign Up'),
-                        ),
-                        const SizedBox(height: 20),
-                        TextButton(
-                          onPressed: () => authState.toggleAuthMode(),
-                          child: const Text('Already have an account? Sign in'),
-                        ),
-                      ] else if (!authState.isVerificationMode) ...[
-                        TextFormField(
-                          controller: authState.emailController,
-                          decoration: const InputDecoration(labelText: 'Email'),
-                          keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.email],
-                          style: const TextStyle(color: Colors.white),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your email';
-                            }
-                            return null;
-                          },
-                        ),
-                        TextFormField(
-                          controller: authState.passwordController,
-                          obscureText: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Password',
-                          ),
-                          autofillHints: const [AutofillHints.password],
-                          style: const TextStyle(color: Colors.white),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your password';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed:
-                              authState.isLoading
-                                  ? null
-                                  : () => authState.signIn(),
-                          child: const Text('Sign In'),
-                        ),
-                        const SizedBox(height: 20),
-                        TextButton(
-                          onPressed: () => authState.toggleAuthMode(),
-                          child: const Text('Need an Account? Sign up'),
-                        ),
-                      ] else ...[
-                        TextFormField(
-                          controller: authState.verificationCodeController,
-                          decoration: const InputDecoration(
-                            labelText: 'Verification Code',
-                          ),
-                          style: const TextStyle(color: Colors.white),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter verification code';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed:
-                              authState.isLoading
-                                  ? null
-                                  : () => authState.confirmRegistration(),
-                          child: const Text('Verify'),
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      if (authState.isLoading)
-                        const CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        )
-                      else if (authState.message.isNotEmpty)
-                        SelectableText(
-                          authState.message,
-                          style: TextStyle(
-                            color:
-                                authState.message.toLowerCase().contains(
-                                          'fail',
-                                        ) ||
-                                        authState.message
-                                            .toLowerCase()
-                                            .contains('error')
-                                    ? Colors.red[400]
-                                    : Colors.green[300],
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                    ],
-                  ),
-                ),
-          ),
-        ),
-      ),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const SplashScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/register': (context) => const RegistrationScreen(),
+        '/character-management': (context) => const CharacterManagementScreen(),
+      },
     );
   }
 }
