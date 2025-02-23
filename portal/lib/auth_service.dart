@@ -18,40 +18,38 @@ class AuthService {
       'CLIENT_ID',
       defaultValue: bool.fromEnvironment('dart.vm.product') ? '' : 'dev-client-id',
     );
-    final secretKey = const String.fromEnvironment(
+    final clientSecret = const String.fromEnvironment(
       'CLIENT_SECRET',
       defaultValue: bool.fromEnvironment('dart.vm.product') ? '' : 'dev-client-secret',
     );
 
-    if (userPoolId.isEmpty || clientId.isEmpty || secretKey.isEmpty) {
+    if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
       throw Exception('Missing required Cognito configuration');
     }
 
     userPool = CognitoUserPool(
       userPoolId,
       clientId,
-      secretKey: secretKey,
+      clientSecret: clientSecret,  // Changed from secretKey to clientSecret
     );
   }
 
   Future<CognitoUserPoolData> signUp(String email, String password) async {
     try {
-      final secretHash = userPool.calculateAuthenticationHash(email);
       final signUpResult = await userPool.signUp(
         email,
         password,
         userAttributes: [AttributeArg(name: 'email', value: email)],
-        secretHash: secretHash,
         validationData: [
           AttributeArg(name: 'email', value: email),
         ],
       );
       return signUpResult;
     } on CognitoClientException catch (e) {
-      print('SignUp error: ${e.message}'); // Helpful for debugging
+      _logError('SignUp error', e);
       rethrow;
     } catch (e) {
-      print('Unexpected error during signup: $e'); // Helpful for debugging
+      _logError('Unexpected error during signup', e);
       rethrow;
     }
   }
@@ -59,39 +57,35 @@ class AuthService {
   Future<bool> confirmRegistration(String email, String code) async {
     try {
       final user = CognitoUser(email, userPool);
-      final secretHash = userPool.calculateAuthenticationHash(email);
-      return await user.confirmRegistration(
-        code,
-        secretHash: secretHash,
-      );
+      return await user.confirmRegistration(code);
     } on CognitoClientException catch (e) {
-      print('Confirmation error: ${e.message}'); // Helpful for debugging
+      _logError('Confirmation error', e);
       rethrow;
     } catch (e) {
-      print('Unexpected error during confirmation: $e'); // Helpful for debugging
+      _logError('Unexpected error during confirmation', e);
       rethrow;
     }
   }
 
-Future<CognitoUser> signIn(String email, String password) async {
+  Future<CognitoUser> signIn(String email, String password) async {
     try {
-      final user = CognitoUser(email, userPool, clientSecret: userPool.getClientSecret());
+      final user = CognitoUser(email, userPool);
       final authDetails = AuthenticationDetails(
         username: email,
         password: password,
-        authParameters: {
-          'CHALLENGE_NAME': 'SRP_A',
-        },
+        validationData: [
+          AttributeArg(name: 'email', value: email),
+        ],
       );
 
       _session = await user.authenticateUser(authDetails);
       _currentUser = user;
       return user;
     } on CognitoClientException catch (e) {
-      print('SignIn error: ${e.message}');
+      _logError('SignIn error', e);
       rethrow;
     } catch (e) {
-      print('Unexpected error during signin: $e');
+      _logError('Unexpected error during signin', e);
       rethrow;
     }
   }
@@ -104,7 +98,7 @@ Future<CognitoUser> signIn(String email, String password) async {
         _session = null;
       }
     } catch (e) {
-      print('SignOut error: $e'); // Helpful for debugging
+      _logError('SignOut error', e);
       rethrow;
     }
   }
@@ -114,7 +108,7 @@ Future<CognitoUser> signIn(String email, String password) async {
       if (_currentUser == null || _session == null) return false;
       return _session!.isValid();
     } catch (e) {
-      print('Authentication check error: $e'); // Helpful for debugging
+      _logError('Authentication check error', e);
       return false;
     }
   }
@@ -122,14 +116,17 @@ Future<CognitoUser> signIn(String email, String password) async {
   Future<void> resendConfirmationCode(String email) async {
     try {
       final user = CognitoUser(email, userPool);
-      final secretHash = userPool.calculateAuthenticationHash(email);
-      await user.resendConfirmationCode(
-        secretHash: secretHash,
-      );
+      await user.resendConfirmationCode();
     } catch (e) {
-      print('Resend confirmation code error: $e'); // Helpful for debugging
+      _logError('Resend confirmation code error', e);
       rethrow;
     }
+  }
+
+  void _logError(String message, dynamic error) {
+    // TODO: Replace with proper logging framework
+    // ignore: avoid_print
+    print('$message: $error');
   }
 
   CognitoUser? get currentUser => _currentUser;
