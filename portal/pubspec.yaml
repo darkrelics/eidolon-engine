@@ -1,5 +1,5 @@
 name: cognito_email_verification
-description: Eidolon Engine email verification app.
+description: Eidolon Engine Web Portal.
 
 environment:
   sdk: ">=3.7.0 <4.0.0"
@@ -20,3 +20,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/background.jpg

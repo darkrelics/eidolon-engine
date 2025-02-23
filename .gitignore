@@ -18,7 +18,7 @@
 # vendor/
 
 # Go workspace file
-# go.work
+go.work
 
 .vscode/
 
@@ -38,6 +38,8 @@
 
 **/*.key
 **/*.pem
+
+.env
 
 # Ignore bolt files.
 

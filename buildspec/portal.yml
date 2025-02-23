@@ -16,7 +16,7 @@ phases:
 
   pre_build:
     commands:
-      - cd registration
+      - cd portal
       - flutter pub get
       - dart fix --apply
       - dart analyze
@@ -34,6 +34,6 @@ phases:
       - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive
 
 artifacts:
-  base-directory: registration/build/web
+  base-directory: portal/build/web
   files:
     - "**/*"
