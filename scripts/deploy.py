@@ -184,7 +184,8 @@ def gather_all_parameters() -> dict:
         or "https://localhost:3000/callback",
         "SignOutURL": input("Enter the URL of the sign-out page for the app client [default: https://localhost:3000/sign-out]: ")
         or "https://localhost:3000/sign-out",
-        "ReplyEmailAddress": input("Enter the email address to send from [default: contact@darkrelics.net]: ") or "contact@darkrelics.net",
+        "ReplyEmailAddress": input("Enter the email address to send from [default: contact@darkrelics.net]: ")
+        or "contact@darkrelics.net",
     }
 
     # DynamoDB parameters (empty for now)
@@ -201,8 +202,10 @@ def gather_all_parameters() -> dict:
 
     # CloudWatch parameters
     parameters["cloudwatch"] = {
-        "LogGroupName": input("Enter the name for the CloudWatch Log Group [default: /eidolon/game-logs]: ") or "/eidolon/game-logs",
-        "MetricNamespace": input("Enter the namespace for CloudWatch Metrics [default: eidolon/application]: ") or "eidolon/application",
+        "LogGroupName": input("Enter the name for the CloudWatch Log Group [default: /eidolon/game-logs]: ")
+        or "/eidolon/game-logs",
+        "MetricNamespace": input("Enter the namespace for CloudWatch Metrics [default: eidolon/application]: ")
+        or "eidolon/application",
     }
 
     return parameters
