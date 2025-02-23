@@ -31,26 +31,19 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Check authentication status after animation
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         setState(() {
           _showStartButton = true;
         });
-
-        // Check if user is already authenticated
-        final authState = Provider.of<AuthState>(context, listen: false);
-        authState.checkAuthStatus().then((isAuthenticated) {
-          if (isAuthenticated) {
-            Timer(const Duration(milliseconds: 500), () {
-              Navigator.of(
-                context,
-              ).pushReplacementNamed('/character-management');
-            });
-          }
-        });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override

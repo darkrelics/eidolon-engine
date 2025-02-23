@@ -1,47 +1,71 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <base href="$FLUTTER_BASE_HREF" />
+<head>
+    <base href="$FLUTTER_BASE_HREF">
 
-    <meta charset="UTF-8" />
-    <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
-    <meta name="description" content="Eidolon Engine Email Verification" />
+    <meta charset="UTF-8">
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+    <meta name="description" content="Eidolon Engine">
 
     <!-- iOS meta tags & icons -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-    <meta name="apple-mobile-web-app-title" content="cognito_email_verification" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <link rel="apple-touch-icon" href="icons/Icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Eidolon Engine">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
     <!-- Favicon -->
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="icon" type="image/png" href="favicon.png">
 
-    <title>Eidolon Engine Email Verification</title>
-    <link rel="manifest" href="manifest.json" />
+    <title>Eidolon Engine</title>
+    <link rel="manifest" href="manifest.json">
+
+    <style>
+        body {
+            background-color: black;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .loading {
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            text-align: center;
+        }
+    </style>
 
     <script>
-      // The value below is injected by flutter build, do not touch.
-      const serviceWorkerVersion = "{{flutter_service_worker_version}}";
+        // The value below is injected by flutter build, do not touch.
+        const serviceWorkerVersion = null;
     </script>
-    <!-- This script adds the flutter initialization JS code -->
     <script src="flutter.js" defer></script>
-  </head>
-  <body style="background-color: black">
+</head>
+<body>
+    <div id="loading" class="loading">
+        Entering Eidolon...
+    </div>
     <script>
-      window.addEventListener("load", function (ev) {
-        // Download main.dart.js
-        _flutter.loader.loadEntrypoint({
-          serviceWorker: {
-            serviceWorkerVersion: serviceWorkerVersion,
-          },
-          onEntrypointLoaded: function (engineInitializer) {
-            engineInitializer.initializeEngine().then(function (appRunner) {
-              appRunner.runApp();
+        window.addEventListener('load', function(ev) {
+            var loading = document.querySelector('#loading');
+            
+            // Download main.dart.js
+            _flutter.loader.loadEntrypoint({
+                serviceWorker: {
+                    serviceWorkerVersion: serviceWorkerVersion,
+                },
+                onEntrypointLoaded: function(engineInitializer) {
+                    loading.textContent = 'Initializing Eidolon Engine...';
+                    engineInitializer.initializeEngine().then(function(appRunner) {
+                        loading.remove();
+                        appRunner.runApp();
+                    });
+                }
             });
-          },
         });
-      });
     </script>
-  </body>
+</body>
 </html>
