@@ -9,10 +9,10 @@ import yaml
 from botocore.exceptions import ClientError
 
 # Constants for stack names
-COGNITO_STACK_NAME = "MUD-Cognito-Stack"
-DYNAMO_STACK_NAME = "MUD-DynamoDB-Stack"
-CODEBUILD_STACK_NAME = "MUD-CodeBuild-Stack"
-CLOUDWATCH_STACK_NAME = "MUD-CloudWatch-Stack"
+COGNITO_STACK_NAME = "Eidolon-Cognito-Stack"
+DYNAMO_STACK_NAME = "Eidolon-DynamoDB-Stack"
+CODEBUILD_STACK_NAME = "Eidolon-CodeBuild-Stack"
+CLOUDWATCH_STACK_NAME = "Eidolon-CloudWatch-Stack"
 
 # Paths to the CloudFormation templates
 COGNITO_TEMPLATE_PATH = "../cloudformation/cognito.yml"
@@ -145,9 +145,9 @@ def update_configuration_file(config_updates) -> None:
             {
                 "ApplicationName": "mud",
                 "LogLevel": 20,
-                "LogGroup": config_updates.get("CloudWatch", {}).get("LogGroupName", "/mud/game-logs"),
+                "LogGroup": config_updates.get("CloudWatch", {}).get("LogGroupName", "/eidolon/game-logs"),
                 "LogStream": "application",
-                "MetricNamespace": config_updates.get("CloudWatch", {}).get("MetricNamespace", "MUD/Application"),
+                "MetricNamespace": config_updates.get("CloudWatch", {}).get("MetricNamespace", "eidolon/application"),
             }
         )
 
@@ -178,13 +178,13 @@ def gather_all_parameters() -> dict:
 
     # Cognito parameters
     parameters["cognito"] = {
-        "UserPoolName": input("Enter the Name of the user pool [default: mud-user-pool]: ") or "mud-user-pool",
-        "AppClientName": input("Enter the Name of the app client [default: mud-app-client]: ") or "mud-app-client",
+        "UserPoolName": input("Enter the Name of the user pool [default: eidolon-user-pool]: ") or "eidolon-user-pool",
+        "AppClientName": input("Enter the Name of the app client [default: eidolon-app-client]: ") or "eidolon-app-client",
         "CallbackURL": input("Enter the URL of the callback for the app client [default: https://localhost:3000/callback]: ")
         or "https://localhost:3000/callback",
         "SignOutURL": input("Enter the URL of the sign-out page for the app client [default: https://localhost:3000/sign-out]: ")
         or "https://localhost:3000/sign-out",
-        "ReplyEmailAddress": input("Enter the email address to send from: "),
+        "ReplyEmailAddress": input("Enter the email address to send from [default: contact@darkrelics.net]: ") or "contact@darkrelics.net",
     }
 
     # DynamoDB parameters (empty for now)
@@ -193,16 +193,16 @@ def gather_all_parameters() -> dict:
     # CodeBuild parameters
     parameters["codebuild"] = {
         "GitHubSourceRepo": input(
-            "Enter the GitHub repository URL for the source code [default: https://github.com/robinje/multi-user-dungeon]: "
+            "Enter the GitHub repository URL for the source code [default: https://github.com/robinje/eidolon-engine]: "
         )
-        or "https://github.com/robinje/multi-user-dungeon",
+        or "https://github.com/robinje/eidolon-engine",
         "S3BucketName": input("Enter the name of the existing S3 bucket for build artifacts: "),
     }
 
     # CloudWatch parameters
     parameters["cloudwatch"] = {
-        "LogGroupName": input("Enter the name for the CloudWatch Log Group [default: /mud/game-logs]: ") or "/mud/game-logs",
-        "MetricNamespace": input("Enter the namespace for CloudWatch Metrics [default: MUD/Application]: ") or "MUD/Application",
+        "LogGroupName": input("Enter the name for the CloudWatch Log Group [default: /eidolon/game-logs]: ") or "/eidolon/game-logs",
+        "MetricNamespace": input("Enter the namespace for CloudWatch Metrics [default: eidolon/application]: ") or "eidolon/application",
     }
 
     return parameters
