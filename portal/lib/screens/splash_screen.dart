@@ -54,7 +54,7 @@ class _SplashScreenState extends State<SplashScreen>
             image: const AssetImage('assets/background.jpg'),
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(
-              Colors.black.withOpacity(0.7),
+              Colors.black.withAlpha(179), // 0.7 opacity = 179 in alpha (255 * 0.7)
               BlendMode.darken,
             ),
           ),
