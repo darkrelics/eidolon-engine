@@ -45,11 +45,20 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(color: Colors.black),
+        decoration: BoxDecoration(
+          color: Colors.black,
+          image: DecorationImage(
+            image: const AssetImage('assets/background.jpg'),
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Colors.black.withOpacity(0.7),
+              BlendMode.darken,
+            ),
+          ),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Center(

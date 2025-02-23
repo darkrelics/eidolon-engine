@@ -153,6 +153,14 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearInputs() {
+    _emailController.clear();
+    _passwordController.clear();
+    _verificationCodeController.clear();
+    _message = '';
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _emailController.dispose();

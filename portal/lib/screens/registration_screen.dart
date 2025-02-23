@@ -107,10 +107,11 @@ class RegistrationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       TextButton(
-                        onPressed:
-                            () => Navigator.of(
-                              context,
-                            ).pushReplacementNamed('/login'),
+                        onPressed: () {
+                          final authState = Provider.of<AuthState>(context, listen: false);
+                          authState.clearInputs();
+                          Navigator.of(context).pushReplacementNamed('/login');
+                        },
                         child: const Text('Already have an account? Sign in'),
                       ),
                     ] else ...[
@@ -125,7 +126,7 @@ class RegistrationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        'Please check your email for a verification link or enter the verification code below.',
+                        'Please check your email and click the verification link to complete your registration.',
                         style: TextStyle(color: Colors.white70),
                         textAlign: TextAlign.center,
                       ),

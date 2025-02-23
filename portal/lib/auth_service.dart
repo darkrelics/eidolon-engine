@@ -68,9 +68,6 @@ class AuthService {
       final authDetails = AuthenticationDetails(
         username: email,
         password: password,
-        authParameters: [
-          AttributeArg(name: 'SECRET_HASH', value: _computeSecretHash(email)),
-        ],
       );
 
       _session = await user.authenticateUser(authDetails);
