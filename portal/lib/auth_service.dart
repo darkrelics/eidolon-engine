@@ -10,18 +10,16 @@ class AuthService {
   }
 
   void _initializeCognito() {
-    final userPoolId = const String.fromEnvironment(
-      'USER_POOL_ID',
-      defaultValue: bool.fromEnvironment('dart.vm.product') ? '' : 'dev-user-pool-id',
-    );
-    final clientId = const String.fromEnvironment(
-      'CLIENT_ID',
-      defaultValue: bool.fromEnvironment('dart.vm.product') ? '' : 'dev-client-id',
-    );
-    final clientSecret = const String.fromEnvironment(
-      'CLIENT_SECRET',
-      defaultValue: bool.fromEnvironment('dart.vm.product') ? '' : 'dev-client-secret',
-    );
+    final userPoolId = const String.fromEnvironment('USER_POOL_ID');
+    final clientId = const String.fromEnvironment('CLIENT_ID');
+    final clientSecret = const String.fromEnvironment('CLIENT_SECRET');
+
+    // Use existing _logError method which is already set up for proper logging
+    _logError('Cognito Configuration Status', {
+      'poolIdPresent': userPoolId.isNotEmpty,
+      'clientIdPresent': clientId.isNotEmpty,
+      'secretPresent': clientSecret.isNotEmpty
+    });
 
     if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
       throw Exception('Missing required Cognito configuration');
@@ -30,10 +28,9 @@ class AuthService {
     userPool = CognitoUserPool(
       userPoolId,
       clientId,
-      clientSecret: clientSecret,  // Changed from secretKey to clientSecret
+      clientSecret: clientSecret,
     );
   }
-
   Future<CognitoUserPoolData> signUp(String email, String password) async {
     try {
       final signUpResult = await userPool.signUp(
