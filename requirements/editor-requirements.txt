@@ -37,7 +37,7 @@ httpcore==1.0.7
 httpx==0.28.1
 idna==3.10
 ipykernel==6.29.5
-ipython==8.31.0
+ipython==8.32.0
 ipywidgets==8.1.5
 isoduration==20.11.0
 jedi==0.19.2
@@ -86,7 +86,7 @@ referencing==0.36.2
 requests==2.32.3
 rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
-rpds-py==0.22.3
+rpds-py==0.23.1
 send2trash==1.8.3
 setuptools==75.8.0
 six==1.17.0
