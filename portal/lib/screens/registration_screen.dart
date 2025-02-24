@@ -126,7 +126,7 @@ class RegistrationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        'Please check your email and click the verification link to complete your registration.',
+                        'Please check your email for a verification code to complete your registration.',
                         style: TextStyle(color: Colors.white70),
                         textAlign: TextAlign.center,
                       ),

@@ -67,7 +67,7 @@ class AuthState extends ChangeNotifier {
         _updateMessage('User registered successfully. You can now log in.');
         _isSignUpMode = false;
       } else {
-        _updateMessage('Verification link sent. Please check your email.');
+        _updateMessage('Please check your email for your verification code.');
         _isVerificationMode = true;
       }
     } on CognitoClientException catch (e) {
