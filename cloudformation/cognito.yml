@@ -40,8 +40,6 @@ Resources:
           EmailSubject: "Your temporary password"
           EmailMessage: "Your username is {username} and temporary password is {####}."
         UnusedAccountValidityDays: 7
-      AutoVerifiedAttributes:
-              - email
       Policies:
         PasswordPolicy:
           MinimumLength: 8

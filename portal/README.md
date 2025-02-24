@@ -12,4 +12,3 @@ A Flutter Application for Player Registration and self service.
 - [ ] Add asset preloading
 - [ ] Address Client Secret Issues
 - [ ] Add session timeout
-
