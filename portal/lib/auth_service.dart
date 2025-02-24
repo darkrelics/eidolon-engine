@@ -88,30 +88,29 @@ class AuthService {
     }
   }
 
-  Future<CognitoUser> signIn(String email, String password) async {
-    try {
-      final secretHash = _generateSecretHash(email);
-      final user = CognitoUser(email, userPool);
-      final authDetails = AuthenticationDetails(
-        username: email,
-        password: password,
-        validationData: {
-          'email': email,
-          'SECRET_HASH': secretHash,
-        },
-      );
+Future<CognitoUser> signIn(String email, String password) async {
+  try {
+    final user = CognitoUser(
+      email, 
+      userPool,
+      clientSecret: _clientSecret  // Same pattern as confirmRegistration
+    );
+    final authDetails = AuthenticationDetails(
+      username: email,
+      password: password,
+    );
 
-      _session = await user.authenticateUser(authDetails);
-      _currentUser = user;
-      return user;
-    } on CognitoClientException catch (e) {
-      _logError('SignIn error', e);
-      rethrow;
-    } catch (e) {
-      _logError('Unexpected error during signin', e);
-      rethrow;
-    }
+    _session = await user.authenticateUser(authDetails);
+    _currentUser = user;
+    return user;
+  } on CognitoClientException catch (e) {
+    _logError('SignIn error', e);
+    rethrow;
+  } catch (e) {
+    _logError('Unexpected error during signin', e);
+    rethrow;
   }
+}
 
   Future<void> signOut() async {
     try {
