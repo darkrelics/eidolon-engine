@@ -68,6 +68,7 @@ class AuthState extends ChangeNotifier {
         _isSignUpMode = false;
       } else {
         _updateMessage('Please check your email for your verification code.');
+        clearInputs();
         _isVerificationMode = true;
       }
     } on CognitoClientException catch (e) {
@@ -112,6 +113,7 @@ class AuthState extends ChangeNotifier {
         _passwordController.text,
       );
       _updateMessage('Login Successful!');
+      clearInputs();
       _isSignUpMode = false;
       _isAuthenticated = true;
       notifyListeners();
