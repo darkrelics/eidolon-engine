@@ -1,71 +1,73 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <base href="$FLUTTER_BASE_HREF" />
+<head>
+    <base href="$FLUTTER_BASE_HREF">
 
-    <meta charset="UTF-8" />
-    <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
-    <meta name="description" content="Eidolon Engine" />
+    <meta charset="UTF-8">
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+    <meta name="description" content="Eidolon Engine">
 
     <!-- iOS meta tags & icons -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-    <meta name="apple-mobile-web-app-title" content="Eidolon Engine" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <link rel="apple-touch-icon" href="icons/Icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Eidolon Engine">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
     <!-- Favicon -->
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="icon" type="image/png" href="favicon.png">
 
     <title>Eidolon Engine</title>
-    <link rel="manifest" href="manifest.json" />
+    <link rel="manifest" href="manifest.json">
 
     <style>
-      body {
-        background-color: black;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-      }
-      .loading {
-        color: white;
-        font-family: Arial, sans-serif;
-        font-size: 24px;
-        text-align: center;
-      }
+        body {
+            background-color: black;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .loading {
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            text-align: center;
+        }
     </style>
 
     <script>
-      // The value below is injected by flutter build, do not touch.
-      var flutter_service_worker_version = "{{flutter_service_worker_version}}";
+        // The value below is injected by flutter build, do not touch.
+        const serviceWorkerVersion = null;
     </script>
     <script src="flutter.js" defer></script>
-  </head>
-  <body>
+</head>
+<body>
     <div id="loading" class="loading">Entering Eidolon...</div>
     <script>
-      window.addEventListener("load", function (ev) {
-        var loading = document.querySelector("#loading");
-
-        // Initialize Flutter
-        _flutter.loader
-          .load({
-            serviceWorker: {
-              serviceWorkerVersion: flutter_service_worker_version,
-            },
-          })
-          .then(function (engineInitializer) {
-            loading.textContent = "Initializing Eidolon Engine...";
-            return engineInitializer.initializeEngine();
-          })
-          .then(function (appRunner) {
-            loading.remove();
-            return appRunner.runApp();
-          });
-      });
+        window.addEventListener('load', function() {
+            const loading = document.querySelector('#loading');
+            
+            // Initialize Flutter
+            _flutter.loader.load({
+                serviceWorker: {
+                    serviceWorkerVersion: serviceWorkerVersion,
+                }
+            })
+            .then(function(engineInitializer) {
+                loading.textContent = 'Initializing Eidolon Engine...';
+                return engineInitializer.initializeEngine();
+            })
+            .then(function(appRunner) {
+                loading.remove();
+                return appRunner.runApp();
+            })
+            .catch(function(error) {
+                loading.textContent = 'Error initializing Eidolon Engine: ' + error;
+            });
+        });
     </script>
-  </body>
+</body>
 </html>
