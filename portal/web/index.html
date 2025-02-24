@@ -39,8 +39,13 @@
     </style>
 
     <script>
-        // The value below is injected by flutter build, do not touch.
         const serviceWorkerVersion = null;
+        window._flutter = {
+            buildConfig: {
+                locale: 'en',
+                serviceWorkerVersion: serviceWorkerVersion
+            }
+        };
     </script>
     <script src="flutter.js" defer></script>
 </head>
@@ -50,22 +55,19 @@
         window.addEventListener('load', function() {
             const loading = document.querySelector('#loading');
             
-            // Initialize Flutter
-            _flutter.loader.load({
+            _flutter.loader.loadEntrypoint({
                 serviceWorker: {
                     serviceWorkerVersion: serviceWorkerVersion,
+                },
+                onEntrypointLoaded: async function(engineInitializer) {
+                    loading.textContent = 'Initializing Eidolon Engine...';
+                    const appRunner = await engineInitializer.initializeEngine();
+                    loading.remove();
+                    await appRunner.runApp();
                 }
-            })
-            .then(function(engineInitializer) {
-                loading.textContent = 'Initializing Eidolon Engine...';
-                return engineInitializer.initializeEngine();
-            })
-            .then(function(appRunner) {
-                loading.remove();
-                return appRunner.runApp();
-            })
-            .catch(function(error) {
+            }).catch(function(error) {
                 loading.textContent = 'Error initializing Eidolon Engine: ' + error;
+                console.error('Flutter initialization error:', error);
             });
         });
     </script>
