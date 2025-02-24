@@ -108,7 +108,10 @@ class RegistrationScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       TextButton(
                         onPressed: () {
-                          final authState = Provider.of<AuthState>(context, listen: false);
+                          final authState = Provider.of<AuthState>(
+                            context,
+                            listen: false,
+                          );
                           authState.clearInputs();
                           Navigator.of(context).pushReplacementNamed('/login');
                         },
@@ -150,30 +153,35 @@ class RegistrationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 32),
                       ElevatedButton(
-                        onPressed: authState.isLoading
-                            ? null
-                            : () async {
-                                await authState.confirmRegistration();
-                                if (!authState.isVerificationMode && context.mounted) {
-                                  Navigator.of(context).pushReplacementNamed('/login');
-                                }
-                              },
+                        onPressed:
+                            authState.isLoading
+                                ? null
+                                : () async {
+                                  await authState.confirmRegistration();
+                                  if (!authState.isVerificationMode &&
+                                      context.mounted) {
+                                    Navigator.of(
+                                      context,
+                                    ).pushReplacementNamed('/login');
+                                  }
+                                },
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        child: authState.isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.black,
+                        child:
+                            authState.isLoading
+                                ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.black,
+                                  ),
+                                )
+                                : const Text(
+                                  'VERIFY',
+                                  style: TextStyle(fontSize: 16),
                                 ),
-                              )
-                            : const Text(
-                                'VERIFY',
-                                style: TextStyle(fontSize: 16),
-                              ),
                       ),
                     ],
                     if (authState.message.isNotEmpty) ...[

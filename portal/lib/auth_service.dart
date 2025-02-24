@@ -21,7 +21,7 @@ class AuthService {
     _logError('Cognito Configuration Status', {
       'poolIdPresent': userPoolId.isNotEmpty,
       'clientIdPresent': clientId.isNotEmpty,
-      'secretPresent': clientSecret.isNotEmpty
+      'secretPresent': clientSecret.isNotEmpty,
     });
 
     if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
@@ -45,7 +45,7 @@ class AuthService {
     final digest = hmac.convert(message);
     return base64.encode(digest.bytes);
   }
-  
+
   Future<CognitoUserPoolData> signUp(String email, String password) async {
     try {
       final secretHash = _generateSecretHash(email);
@@ -71,14 +71,12 @@ class AuthService {
   Future<bool> confirmRegistration(String email, String code) async {
     try {
       final user = CognitoUser(
-        email, 
+        email,
         userPool,
-        clientSecret: _clientSecret  // This will trigger internal SECRET_HASH generation
+        clientSecret:
+            _clientSecret, // This will trigger internal SECRET_HASH generation
       );
-      return await user.confirmRegistration(
-        code,
-        forceAliasCreation: false,
-      );
+      return await user.confirmRegistration(code, forceAliasCreation: false);
     } on CognitoClientException catch (e) {
       _logError('Confirmation error', e);
       rethrow;
@@ -88,29 +86,29 @@ class AuthService {
     }
   }
 
-Future<CognitoUser> signIn(String email, String password) async {
-  try {
-    final user = CognitoUser(
-      email, 
-      userPool,
-      clientSecret: _clientSecret  // Same pattern as confirmRegistration
-    );
-    final authDetails = AuthenticationDetails(
-      username: email,
-      password: password,
-    );
+  Future<CognitoUser> signIn(String email, String password) async {
+    try {
+      final user = CognitoUser(
+        email,
+        userPool,
+        clientSecret: _clientSecret, // Same pattern as confirmRegistration
+      );
+      final authDetails = AuthenticationDetails(
+        username: email,
+        password: password,
+      );
 
-    _session = await user.authenticateUser(authDetails);
-    _currentUser = user;
-    return user;
-  } on CognitoClientException catch (e) {
-    _logError('SignIn error', e);
-    rethrow;
-  } catch (e) {
-    _logError('Unexpected error during signin', e);
-    rethrow;
+      _session = await user.authenticateUser(authDetails);
+      _currentUser = user;
+      return user;
+    } on CognitoClientException catch (e) {
+      _logError('SignIn error', e);
+      rethrow;
+    } catch (e) {
+      _logError('Unexpected error during signin', e);
+      rethrow;
+    }
   }
-}
 
   Future<void> signOut() async {
     try {

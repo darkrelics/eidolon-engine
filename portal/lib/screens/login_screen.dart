@@ -94,7 +94,10 @@ class LoginScreen extends StatelessWidget {
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: () {
-                        final authState = Provider.of<AuthState>(context, listen: false);
+                        final authState = Provider.of<AuthState>(
+                          context,
+                          listen: false,
+                        );
                         authState.clearInputs();
                         Navigator.of(context).pushReplacementNamed('/register');
                       },
