@@ -32,9 +32,6 @@ class MyApp extends StatelessWidget {
           primary: Colors.white,
           secondary: Colors.white70,
           surface: Colors.black,
-          onPrimary: Colors.black,
-          onSecondary: Colors.black,
-          onSurface: Colors.white,
         ),
         inputDecorationTheme: const InputDecorationTheme(
           labelStyle: TextStyle(color: Colors.white70),
@@ -61,11 +58,35 @@ class MyApp extends StatelessWidget {
         ),
       ),
       initialRoute: '/',
-      routes: {
-        '/': (context) => const SplashScreen(),
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const RegistrationScreen(),
-        '/character-management': (context) => const CharacterManagementScreen(),
+      onGenerateRoute: (settings) {
+        // Check if user is authenticated for protected routes
+        final authState = Provider.of<AuthState>(context, listen: false);
+
+        if (settings.name == '/character-management' &&
+            !authState.isAuthenticated) {
+          return MaterialPageRoute(builder: (context) => const LoginScreen());
+        }
+
+        switch (settings.name) {
+          case '/':
+            return MaterialPageRoute(
+              builder: (context) => const SplashScreen(),
+            );
+          case '/login':
+            return MaterialPageRoute(builder: (context) => const LoginScreen());
+          case '/register':
+            return MaterialPageRoute(
+              builder: (context) => const RegistrationScreen(),
+            );
+          case '/character-management':
+            return MaterialPageRoute(
+              builder: (context) => const CharacterManagementScreen(),
+            );
+          default:
+            return MaterialPageRoute(
+              builder: (context) => const SplashScreen(),
+            );
+        }
       },
     );
   }
