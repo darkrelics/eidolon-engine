@@ -110,42 +110,6 @@ func (s *Server) GetUserData(accessToken string) (*cognitoidentityprovider.GetUs
 	return s.cognito.GetUser(getUserInput)
 }
 
-// func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string) error {
-// 	signInOutput, err := s.SignInUser(string(player.id), oldPassword)
-// 	if err != nil {
-// 		return fmt.Errorf("authentication failed: %w", err)
-// 	}
-
-// 	if signInOutput.ChallengeName != nil && *signInOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
-// 		secretHash := s.calculateSecretHash(player.id)
-// 		challengeInput := &cognitoidentityprovider.RespondToAuthChallengeInput{
-// 			ChallengeName: aws.String(cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired),
-// 			ClientId:      aws.String(s.config.Cognito.UserPoolClientID),
-// 			ChallengeResponses: map[string]*string{
-// 				"USERNAME":     aws.String(player.id),
-// 				"NEW_PASSWORD": aws.String(newPassword),
-// 				"SECRET_HASH":  aws.String(secretHash),
-// 			},
-// 			Session: signInOutput.Session,
-// 		}
-// 		_, err := s.cognito.RespondToAuthChallenge(challengeInput)
-// 		return err
-// 	}
-
-// 	if signInOutput.AuthenticationResult == nil || signInOutput.AuthenticationResult.AccessToken == nil {
-// 		return fmt.Errorf("no valid access token available")
-// 	}
-
-// 	input := &cognitoidentityprovider.ChangePasswordInput{
-// 		PreviousPassword: aws.String(oldPassword),
-// 		ProposedPassword: aws.String(newPassword),
-// 		AccessToken:      signInOutput.AuthenticationResult.AccessToken,
-// 	}
-
-// 	_, err = s.cognito.ChangePassword(input)
-// 	return err
-// }
-
 func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string) error {
 	signInOutput, err := s.SignInUser(player.email, oldPassword)
 	if err != nil {
@@ -211,33 +175,6 @@ func handleCognitoError(err error, email string) error {
 	Logger.Error("Non-AWS auth error", "email", email)
 	return fmt.Errorf("authentication failed")
 }
-
-// func Authenticate(username, password string, ssh_interface *Interface_SSH) (bool, error) {
-
-// 	secretHash := ssh_interface.server.calculateSecretHash(username)
-
-// 	authOutput, err := ssh_interface.server.cognito.InitiateAuth(&cognitoidentityprovider.InitiateAuthInput{
-// 		AuthFlow: aws.String("USER_PASSWORD_AUTH"),
-// 		AuthParameters: map[string]*string{
-// 			"USERNAME":    aws.String(username),
-// 			"PASSWORD":    aws.String(password),
-// 			"SECRET_HASH": aws.String(secretHash),
-// 		},
-// 		ClientId: aws.String(ssh_interface.config.Cognito.UserPoolClientID),
-// 	})
-
-// 	if err != nil {
-// 		Logger.Error("authentication failed", "username", username, "error", err)
-// 		return false, err
-// 	}
-
-// 	if authOutput.AuthenticationResult == nil {
-// 		Logger.Error("no authentication result", "username", username)
-// 		return false, fmt.Errorf("no authentication result")
-// 	}
-
-// 	return true, nil
-// }
 
 func Authenticate(username, password string, ssh_interface *Interface_SSH) (bool, uuid.UUID, error) {
 	secretHash := ssh_interface.server.calculateSecretHash(username)

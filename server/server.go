@@ -141,9 +141,10 @@ func (s *Server) Run(errorChan chan error) error {
 		sshInterface, err = NewSSHInterface(s)
 		if err != nil {
 			Logger.Error("Failed to start SSH interface", "error", err)
-		}
-
-		if err == nil {
+			// Add error to the error channel so main can handle it
+			errorChan <- fmt.Errorf("SSH interface initialization failed: %w", err)
+		} else {
+			// Only run if no error and interface is properly initialized
 			go sshInterface.Run(errorChan)
 		}
 	}

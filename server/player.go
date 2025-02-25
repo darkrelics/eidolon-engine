@@ -34,30 +34,6 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// type Player struct {
-// 	ctx           context.Context
-// 	cancel        context.CancelFunc
-// 	index         uint64
-// 	id            string
-// 	toPlayer      chan string
-// 	fromPlayer    chan string
-// 	playerError   chan error
-// 	echo          bool
-// 	prompt        string
-// 	connection    ssh.Channel
-// 	consoleWidth  int
-// 	consoleHeight int
-// 	characterList map[string]uuid.UUID
-// 	seenMotD      []uuid.UUID
-// 	character     *Character
-// 	login         time.Time
-// 	lastEdited    time.Time
-// 	lastSaved     time.Time
-// 	server        *Server
-// 	mutex         sync.RWMutex
-// 	shutdownOnce  sync.Once
-// }
-
 type Player struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -83,75 +59,12 @@ type Player struct {
 	shutdownOnce  sync.Once
 }
 
-// type PlayerData struct {
-// 	PlayerID      string            `json:"PlayerID" dynamodbav:"PlayerID"`
-// 	CharacterList map[string]string `json:"characterList" dynamodbav:"CharacterList"`
-// 	SeenMotDs     []string          `json:"seenMotD" dynamodbav:"SeenMotD"`
-// }
-
 type PlayerData struct {
 	PlayerID      string            `json:"PlayerID" dynamodbav:"PlayerID"` // Store UUID as string in DynamoDB
 	Email         string            `json:"Email" dynamodbav:"Email"`       // Store email
 	CharacterList map[string]string `json:"CharacterList" dynamodbav:"CharacterList"`
 	SeenMotDs     []string          `json:"SeenMotD" dynamodbav:"SeenMotD"`
 }
-
-// func (p *Player) Load(playerName string) error {
-
-// 	Logger.Debug("Loading player data", "player_name", playerName)
-
-// 	database := p.server.database
-
-// 	key := map[string]*dynamodb.AttributeValue{
-// 		"PlayerID": {S: aws.String(playerName)},
-// 	}
-
-// 	var playerData PlayerData
-
-// 	p.characterList = make(map[string]uuid.UUID)
-// 	p.seenMotD = make([]uuid.UUID, 0)
-
-// 	err := database.Get("players", key, &playerData)
-// 	if err != nil {
-// 		if strings.Contains(err.Error(), "item not found") {
-// 			Logger.Info("New player", "player_name", playerName)
-// 			p.Save()
-
-// 			return nil
-// 		}
-// 		Logger.Error("Error loading player data", "error", err)
-// 		return err
-// 	}
-
-// 	Logger.Info("Player data loaded", "player_name", playerName)
-
-// 	p.mutex.Lock()
-// 	defer p.mutex.Unlock()
-
-// 	for characterName, characterID := range playerData.CharacterList {
-// 		p.characterList[characterName], err = uuid.Parse(characterID)
-// 		if err != nil {
-// 			Logger.Error("Error parsing character ID", "character_id", characterID)
-// 			continue
-// 		}
-
-// 	}
-
-// 	for _, motdID := range playerData.SeenMotDs {
-// 		motdUUID, err := uuid.Parse(motdID)
-// 		if err != nil {
-// 			Logger.Error("Error parsing MOTD ID", "motd_id", motdID)
-// 			continue
-// 		}
-// 		p.seenMotD = append(p.seenMotD, motdUUID)
-// 	}
-
-// 	p.lastEdited = time.Now()
-// 	p.lastSaved = time.Now()
-
-// 	return nil
-
-// }
 
 func (p *Player) Load(playerID uuid.UUID) error {
 	Logger.Debug("Loading player data", "player_id", playerID.String())
@@ -210,43 +123,6 @@ func (p *Player) Load(playerID uuid.UUID) error {
 	return nil
 }
 
-// func (p *Player) Save() error {
-
-// 	Logger.Info("Saving player data", "player_name", p.id)
-
-// 	database := p.server.database
-
-// 	playerData := PlayerData{
-// 		PlayerID:      p.id,
-// 		CharacterList: make(map[string]string),
-// 		SeenMotDs:     make([]string, len(p.seenMotD)),
-// 	}
-
-// 	// Convert character IDs to strings
-// 	for characterName, characterID := range p.characterList {
-// 		playerData.CharacterList[characterName] = characterID.String()
-// 	}
-
-// 	// Convert MOTD IDs to strings
-// 	for i, motdID := range p.seenMotD {
-// 		playerData.SeenMotDs[i] = motdID.String()
-// 	}
-
-// 	err := database.Put("players", playerData)
-// 	if err != nil {
-// 		Logger.Error("Error saving player data", "error", err)
-// 		p.toPlayer <- "Error saving player data. Please contact an administrator.\n"
-// 		return fmt.Errorf("error saving player data: %w", err)
-// 	}
-
-// 	p.mutex.Lock()
-// 	p.lastSaved = time.Now()
-// 	p.mutex.Unlock()
-
-// 	return nil
-
-// }
-
 func (p *Player) Save() error {
 	Logger.Info("Saving player data", "player_id", p.id.String(), "email", p.email)
 
@@ -282,44 +158,6 @@ func (p *Player) Save() error {
 
 	return nil
 }
-
-// func NewPlayerSSH(server *Server, playerName string, conn ssh.Channel, interfaceCtx context.Context) (*Player, error) {
-
-// 	ctx, cancel := context.WithCancel(server.ctx)
-
-// 	player := &Player{
-// 		server:        server,
-// 		id:            playerName,
-// 		toPlayer:      make(chan string, 10),
-// 		fromPlayer:    make(chan string, 10),
-// 		playerError:   make(chan error, 1),
-// 		echo:          true,
-// 		connection:    conn,
-// 		consoleWidth:  80,
-// 		consoleHeight: 24,
-// 		login:         time.Now(),
-// 		ctx:           ctx,
-// 		cancel:        cancel,
-// 		shutdownOnce:  sync.Once{},
-// 	}
-
-// 	// Load player data
-// 	if err := player.Load(playerName); err != nil {
-// 		cancel()
-// 		return nil, fmt.Errorf("player data load: %w", err)
-// 	}
-
-// 	// Register with server
-
-// 	err := server.AddPlayer(player)
-// 	if err != nil {
-// 		cancel()
-// 		return nil, fmt.Errorf("player registration: %w", err)
-// 	}
-
-// 	return player, nil
-
-// }
 
 func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfaceCtx context.Context, userUUID uuid.UUID) (*Player, error) {
 	ctx, cancel := context.WithCancel(server.ctx)

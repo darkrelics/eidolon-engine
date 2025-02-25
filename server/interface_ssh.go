@@ -44,23 +44,6 @@ type Interface_SSH struct {
 	sshConfig      *ssh.ServerConfig
 }
 
-// func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Interface_SSH) (*ssh.Permissions, error) {
-
-// 	authenticated, err := Authenticate(conn.User(), string(password), sshInterface)
-// 	if err != nil {
-// 		Logger.Info("Failed to authenticate player", "error", err)
-// 		return nil, err
-// 	}
-
-// 	if authenticated {
-// 		Logger.Info("Player authenticated", "player_name", conn.User())
-// 		return nil, nil
-// 	} else {
-// 		Logger.Warn("Player failed to authenticate", "player_name", conn.User())
-// 		return nil, fmt.Errorf("password rejected for %q", conn.User())
-// 	}
-// }
-
 func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Interface_SSH) (*ssh.Permissions, error) {
 	authenticated, userUUID, err := Authenticate(conn.User(), string(password), sshInterface)
 	if err != nil {
@@ -84,7 +67,6 @@ func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Inte
 }
 
 func NewSSHInterface(server *Server) (*Interface_SSH, error) {
-
 	if !server.config.SSH.Enabled {
 		return nil, fmt.Errorf("ssh interface is disabled")
 	}
@@ -105,6 +87,7 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 
 	config := server.config
 
+	// Create the SSH interface structure
 	sshInterface := &Interface_SSH{
 		config:         config,
 		server:         server,
@@ -115,80 +98,34 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 		start:          time.Now(),
 	}
 
+	// Set up the SSH server config
 	sshConfig := &ssh.ServerConfig{
 		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			return PasswordCallBack(conn, password, sshInterface)
 		},
 		NoClientAuth: false,
-
-		// TODO: Add support for certificate authentication
-
-		// TODO: Add MFA support using KeyboardInteractiveCallback
-
 		BannerCallback: func(conn ssh.ConnMetadata) string {
 			return art
 		},
 	}
 
 	sshConfig.AddHostKey(private)
-
 	sshInterface.sshConfig = sshConfig
 
+	// Try to create the listener
 	address := fmt.Sprintf(":%d", server.config.SSH.Port)
-
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
+		// Cancel the context we created since we're returning an error
+		cancel()
 		return nil, fmt.Errorf("failed to listen on port %d: %w", server.config.SSH.Port, err)
 	}
+
+	// Only set the listener if we successfully created it
 	sshInterface.listener = listener
 
 	return sshInterface, nil
 }
-
-// func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
-// 	defer conn.Close()
-
-// 	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
-// 		Logger.Error("Failed to set handshake deadline", "error", err)
-// 		return
-// 	}
-
-// 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, ssh_interface.sshConfig)
-// 	if err != nil {
-// 		Logger.Error("SSH handshake failed", "error", err)
-// 		return
-// 	}
-// 	defer sshConn.Close()
-
-// 	if err := conn.SetDeadline(time.Time{}); err != nil {
-// 		Logger.Error("Failed to clear deadline", "error", err)
-// 		return
-// 	}
-
-// 	go ssh.DiscardRequests(reqs)
-
-// 	for newChannel := range chans {
-// 		if newChannel.ChannelType() != "session" {
-// 			newChannel.Reject(ssh.UnknownChannelType, "unknown channel type")
-// 			continue
-// 		}
-
-// 		channel, requests, err := newChannel.Accept()
-// 		if err != nil {
-// 			Logger.Error("Could not accept channel", "error", err)
-// 			continue
-// 		}
-
-// 		player, err := NewPlayerSSH(ssh_interface.server, sshConn.User(), channel, ssh_interface.ctx)
-// 		if err != nil {
-// 			Logger.Error("Failed to create player", "error", err)
-// 			channel.Close()
-// 			continue
-// 		}
-
-// 		go player.RunSSH(requests)
-// 	}
-// }
 
 func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 	defer conn.Close()
