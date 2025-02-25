@@ -19,7 +19,7 @@ dynamodb = boto3.resource("dynamodb")
 player_table = dynamodb.Table("players")  # type: ignore
 
 
-def lambda_handler(event, _):
+def lambda_handler(event, _) -> None:
     """
     Lambda function triggered by Cognito Post Confirmation.
     Creates a new player record in DynamoDB using the Cognito user's UUID.
@@ -72,7 +72,5 @@ def lambda_handler(event, _):
 
     except Exception as err:
         logger.error(f"Error processing user registration: {str(err)}")
-        # Continue the Cognito flow even if there's an error with our processing
 
-    # Return the event object to continue the Cognito flow
-    return event
+    return
