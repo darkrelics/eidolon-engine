@@ -394,7 +394,9 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 		close(outputDone)
 		close(inputDone)
 		close(requestDone)
-		Logger.Error("Player error", "player_name", p.id, "error", err)
+		if err != nil {
+			Logger.Error("Player error", "player_name", p.id, "error", err)
+		}
 		return
 	}
 
