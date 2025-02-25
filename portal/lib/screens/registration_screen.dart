@@ -160,6 +160,8 @@ class RegistrationScreen extends StatelessWidget {
                                   await authState.confirmRegistration();
                                   if (!authState.isVerificationMode &&
                                       context.mounted) {
+                                    authState
+                                        .clearInputs(); // Clear inputs before navigation
                                     Navigator.of(
                                       context,
                                     ).pushReplacementNamed('/login');
