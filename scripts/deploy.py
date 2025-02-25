@@ -23,7 +23,7 @@ CLOUDWATCH_TEMPLATE_PATH = "../cloudformation/cloudwatch.yml"
 # Configuration file paths
 CONFIG_PATH = "../server/config.yml"
 CONFIG_TEMPLATE_PATH = "../server/config.template.yml"
-
+ENV_FILE_PATH = "../portal/.env"
 
 def load_config() -> dict:
     if not os.path.exists(CONFIG_PATH):
@@ -45,8 +45,8 @@ def validate_s3_bucket(bucket_name, region="us-east-1") -> bool:
         s3_client.head_bucket(Bucket=bucket_name)
         print(f"S3 bucket '{bucket_name}' exists and is accessible")
         return True
-    except ClientError as e:
-        print(f"Error accessing S3 bucket '{bucket_name}': {e}")
+    except ClientError as err:
+        print(f"Error accessing S3 bucket '{bucket_name}': {err}")
         return False
 
 
@@ -110,14 +110,14 @@ def get_stack_outputs(client, stack_name) -> dict:
         stack = client.describe_stacks(StackName=stack_name)
         outputs = stack["Stacks"][0]["Outputs"]
         return {output["OutputKey"]: output["OutputValue"] for output in outputs}
-    except ClientError as e:
-        print(f"Error getting stack outputs for {stack_name}: {e}")
+    except ClientError as err:
+        print(f"Error getting stack outputs for {stack_name}: {err}")
         return {}
 
 
 def update_configuration_file(config_updates) -> None:
     try:
-        config = load_config()
+        config: dict = load_config()
 
         # Ensure top-level keys exist
         for key in ["Server", "Aws", "Cognito", "Game", "Logging"]:
@@ -167,10 +167,39 @@ def update_configuration_file(config_updates) -> None:
             yaml.dump(config, file, default_flow_style=False)
 
         print("Configuration file updated successfully.")
-    except (IOError, yaml.YAMLError) as e:
-        print(f"Error updating configuration file: {e}")
+    except (IOError, yaml.YAMLError) as err:
+        print(f"Error updating configuration file: {err}")
         print("Current config_updates:", config_updates)
         print("Current config:", config)
+
+
+def generate_env_file(config_updates) -> None:
+    """
+    Generate a .env file for local Flutter development based on deployed resources.
+    """
+    try:
+        cognito_updates = config_updates.get("Cognito", {})
+        
+        # Create content for .env file
+        env_content = f"""# Eidolon Engine local development configuration
+        # DO NOT COMMIT THIS FILE TO VERSION CONTROL
+
+        USER_POOL_ID={cognito_updates.get("UserPoolId", "")}
+        CLIENT_ID={cognito_updates.get("UserPoolClientId", "")}
+        CLIENT_SECRET={cognito_updates.get("UserPoolClientSecret", "")}
+        """
+
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(ENV_FILE_PATH), exist_ok=True)
+        
+        # Write .env file
+        with open(ENV_FILE_PATH, "w", encoding="utf-8") as env_file:
+            env_file.write(env_content)
+            
+        print(f"Generated .env file at {ENV_FILE_PATH}")
+            
+    except IOError as err:
+        print(f"Error generating .env file: {err}")
 
 
 def gather_all_parameters() -> dict:
@@ -281,10 +310,13 @@ def main() -> None:
             "CloudWatch": cloudwatch_outputs,
         }
         update_configuration_file(config_updates)
+        
+        # Generate .env file for local Flutter development
+        generate_env_file(config_updates)
 
         print("Deployment completed successfully.")
-    except Exception as e:
-        print(f"An unexpected error occurred during deployment: {e}")
+    except Exception as err:
+        print(f"An unexpected error occurred during deployment: {err}")
 
 
 if __name__ == "__main__":
