@@ -1,0 +1,36 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+  language:
+    strict-casts: true
+
+linter:
+  rules:
+    - always_declare_return_types
+    - prefer_single_quotes
+    - annotate_overrides
+    - avoid_empty_else
+    # - avoid_print
+    - avoid_redundant_argument_values
+    - avoid_type_to_string
+    - avoid_types_as_parameter_names
+    - avoid_web_libraries_in_flutter
+    - cancel_subscriptions
+    - close_sinks
+    - comment_references
+    - library_private_types_in_public_api
+    - no_duplicate_case_values
+    - null_check_on_nullable_type_parameter
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_fields
+    - prefer_relative_imports
+    - sort_child_properties_last
+    - unnecessary_overrides
+    - use_build_context_synchronously
+    - use_key_in_widget_constructors
+    - use_named_constants
+    - use_rethrow_when_possible

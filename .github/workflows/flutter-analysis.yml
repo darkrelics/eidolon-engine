@@ -33,15 +33,15 @@ jobs:
           git config --global user.email "contact@darkrelics.net"
 
       - name: Install dependencies
-        working-directory: registration
+        working-directory: portal
         run: flutter pub get
 
       - name: Verify formatting
-        working-directory: registration
+        working-directory: portal
         run: dart format .
 
       - name: Analyze project source
-        working-directory: registration
+        working-directory: portal
         run: |
           dart fix --apply 
           dart analyze
@@ -60,6 +60,5 @@ jobs:
       - name: Commit and push changes
         if: steps.git-check.outputs.changes == 'true'
         run: |
-          git pull --rebase origin ${{github.head_ref}}
           git commit -m "Apply Flutter Autoformatting" -vv
           git push -vv

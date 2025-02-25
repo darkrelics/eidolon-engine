@@ -5,11 +5,11 @@ Parameters:
   UserPoolName:
     Type: String
     Description: Name of the user pool
-    Default: my-user-pool
+    Default: eidolon-user-pool
   AppClientName:
     Type: String
     Description: Name of the app client
-    Default: my-app-client
+    Default: eidolon-app-client
   CallbackURL:
     Type: String
     Description: URL of the callback for the app client
@@ -24,7 +24,7 @@ Parameters:
   VerificationSubject:
     Type: String
     Description: Subject of the email verification message
-    Default: Your verification link
+    Default: Eidolon Engine verification code
 
 Resources:
   CognitoUserPool:
@@ -64,14 +64,16 @@ Resources:
       AutoVerifiedAttributes:
         - email
       EmailVerificationSubject: !Ref VerificationSubject
-      EmailVerificationMessage: "Please verify your email by clicking this link: {####}"
+      EmailVerificationMessage: "Your verification code is {####}"
       MfaConfiguration: "OFF"
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Name: verified_email
             Priority: 1
       VerificationMessageTemplate:
-        DefaultEmailOption: CONFIRM_WITH_LINK
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailMessage: "Your verification code is {####}"
+        EmailSubject: !Ref VerificationSubject
       UserPoolTags:
         Environment: Production
         Application: Eidolon

@@ -16,7 +16,7 @@ phases:
 
   pre_build:
     commands:
-      - cd registration
+      - cd portal
       - flutter pub get
       - dart fix --apply
       - dart analyze
@@ -31,9 +31,9 @@ phases:
   post_build:
     commands:
       - echo Uploading to S3...
-      - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive
+      - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive --cache-control "max-age=31536000"
 
 artifacts:
-  base-directory: registration/build/web
+  base-directory: portal/build/web
   files:
     - "**/*"

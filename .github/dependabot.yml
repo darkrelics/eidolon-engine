@@ -16,6 +16,6 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: "pub"
-    directory: "/registration"
+    directory: "/portal"
     schedule:
       interval: "weekly"
