@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 
+import 'config/environment.dart';
+
 class AuthService {
   late final CognitoUserPool userPool;
   CognitoUser? _currentUser;
@@ -12,26 +14,24 @@ class AuthService {
   }
 
   void _initializeCognito() {
-    // Get values from environment or use defaults for development
-    final userPoolId = const String.fromEnvironment(
-      'USER_POOL_ID',
-      defaultValue:
-          bool.fromEnvironment('dart.vm.product') ? '' : 'dev-user-pool-id',
-    );
-    final clientId = const String.fromEnvironment(
-      'CLIENT_ID',
-      defaultValue:
-          bool.fromEnvironment('dart.vm.product') ? '' : 'dev-client-id',
-    );
-    final clientSecret = const String.fromEnvironment(
-      'CLIENT_SECRET',
-      defaultValue:
-          bool.fromEnvironment('dart.vm.product') ? '' : 'dev-client-secret',
-    );
+    final config = Environment.instance;
+    
+    final userPoolId = config.userPoolId;
+    final clientId = config.clientId;
+    final clientSecret = config.clientSecret;
+
+    _logError('Cognito Configuration Status', {
+      'poolIdPresent': userPoolId.isNotEmpty,
+      'clientIdPresent': clientId.isNotEmpty,
+      'secretPresent': clientSecret.isNotEmpty,
+    });
 
     if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
       throw Exception('Missing required Cognito configuration');
     }
+
+    _clientId = clientId;
+    _clientSecret = clientSecret;
 
     userPool = CognitoUserPool(
       userPoolId,
