@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -43,19 +44,41 @@ type Interface_SSH struct {
 	sshConfig      *ssh.ServerConfig
 }
 
-func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Interface_SSH) (*ssh.Permissions, error) {
+// func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Interface_SSH) (*ssh.Permissions, error) {
 
-	authenticated, err := Authenticate(conn.User(), string(password), sshInterface)
+// 	authenticated, err := Authenticate(conn.User(), string(password), sshInterface)
+// 	if err != nil {
+// 		Logger.Info("Failed to authenticate player", "error", err)
+// 		return nil, err
+// 	}
+
+// 	if authenticated {
+// 		Logger.Info("Player authenticated", "player_name", conn.User())
+// 		return nil, nil
+// 	} else {
+// 		Logger.Warn("Player failed to authenticate", "player_name", conn.User())
+// 		return nil, fmt.Errorf("password rejected for %q", conn.User())
+// 	}
+// }
+
+func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Interface_SSH) (*ssh.Permissions, error) {
+	authenticated, userUUID, err := Authenticate(conn.User(), string(password), sshInterface)
 	if err != nil {
 		Logger.Info("Failed to authenticate player", "error", err)
 		return nil, err
 	}
 
 	if authenticated {
-		Logger.Info("Player authenticated", "player_name", conn.User())
-		return nil, nil
+		Logger.Info("Player authenticated", "player_email", conn.User(), "player_uuid", userUUID.String())
+		// Store the UUID string in the permissions so it can be retrieved later
+		perms := &ssh.Permissions{
+			Extensions: map[string]string{
+				"uuid": userUUID.String(),
+			},
+		}
+		return perms, nil
 	} else {
-		Logger.Warn("Player failed to authenticate", "player_name", conn.User())
+		Logger.Warn("Player failed to authenticate", "player_email", conn.User())
 		return nil, fmt.Errorf("password rejected for %q", conn.User())
 	}
 }
@@ -122,6 +145,51 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 	return sshInterface, nil
 }
 
+// func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
+// 	defer conn.Close()
+
+// 	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+// 		Logger.Error("Failed to set handshake deadline", "error", err)
+// 		return
+// 	}
+
+// 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, ssh_interface.sshConfig)
+// 	if err != nil {
+// 		Logger.Error("SSH handshake failed", "error", err)
+// 		return
+// 	}
+// 	defer sshConn.Close()
+
+// 	if err := conn.SetDeadline(time.Time{}); err != nil {
+// 		Logger.Error("Failed to clear deadline", "error", err)
+// 		return
+// 	}
+
+// 	go ssh.DiscardRequests(reqs)
+
+// 	for newChannel := range chans {
+// 		if newChannel.ChannelType() != "session" {
+// 			newChannel.Reject(ssh.UnknownChannelType, "unknown channel type")
+// 			continue
+// 		}
+
+// 		channel, requests, err := newChannel.Accept()
+// 		if err != nil {
+// 			Logger.Error("Could not accept channel", "error", err)
+// 			continue
+// 		}
+
+// 		player, err := NewPlayerSSH(ssh_interface.server, sshConn.User(), channel, ssh_interface.ctx)
+// 		if err != nil {
+// 			Logger.Error("Failed to create player", "error", err)
+// 			channel.Close()
+// 			continue
+// 		}
+
+// 		go player.RunSSH(requests)
+// 	}
+// }
+
 func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
@@ -144,6 +212,24 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 
 	go ssh.DiscardRequests(reqs)
 
+	// Extract UUID from permissions
+	userUUIDStr := ""
+	if sshConn.Permissions != nil && sshConn.Permissions.Extensions != nil {
+		userUUIDStr = sshConn.Permissions.Extensions["uuid"]
+	}
+
+	if userUUIDStr == "" {
+		Logger.Error("No UUID found for authenticated user", "email", sshConn.User())
+		return
+	}
+
+	// Parse the UUID string
+	userUUID, err := uuid.Parse(userUUIDStr)
+	if err != nil {
+		Logger.Error("Failed to parse UUID", "uuid_string", userUUIDStr, "error", err)
+		return
+	}
+
 	for newChannel := range chans {
 		if newChannel.ChannelType() != "session" {
 			newChannel.Reject(ssh.UnknownChannelType, "unknown channel type")
@@ -156,7 +242,7 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		player, err := NewPlayerSSH(ssh_interface.server, sshConn.User(), channel, ssh_interface.ctx)
+		player, err := NewPlayerSSH(ssh_interface.server, sshConn.User(), channel, ssh_interface.ctx, userUUID)
 		if err != nil {
 			Logger.Error("Failed to create player", "error", err)
 			channel.Close()

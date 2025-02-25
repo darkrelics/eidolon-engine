@@ -100,7 +100,7 @@ func (c *Character) Save() error {
 	// Create character data for storage
 	characterData := &CharacterData{
 		CharacterID:   c.id.String(),
-		PlayerID:      c.player.id,
+		PlayerID:      c.player.id.String(),
 		CharacterName: c.name,
 		Attributes:    c.attributes,
 		Abilities:     c.abilities,
