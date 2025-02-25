@@ -32,9 +32,6 @@ class MyApp extends StatelessWidget {
           primary: Colors.white,
           secondary: Colors.white70,
           surface: Colors.black,
-          onPrimary: Colors.black,
-          onSecondary: Colors.black,
-          onSurface: Colors.white,
         ),
         inputDecorationTheme: const InputDecorationTheme(
           labelStyle: TextStyle(color: Colors.white70),

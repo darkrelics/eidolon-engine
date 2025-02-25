@@ -14,9 +14,9 @@ class AuthService {
   }
 
   void _initializeCognito() {
-    final userPoolId = const String.fromEnvironment('USER_POOL_ID');
-    final clientId = const String.fromEnvironment('CLIENT_ID');
-    final clientSecret = const String.fromEnvironment('CLIENT_SECRET');
+    const userPoolId = String.fromEnvironment('USER_POOL_ID');
+    const clientId = String.fromEnvironment('CLIENT_ID');
+    const clientSecret = String.fromEnvironment('CLIENT_SECRET');
 
     _logError('Cognito Configuration Status', {
       'poolIdPresent': userPoolId.isNotEmpty,
@@ -76,7 +76,7 @@ class AuthService {
         clientSecret:
             _clientSecret, // This will trigger internal SECRET_HASH generation
       );
-      return await user.confirmRegistration(code, forceAliasCreation: false);
+      return await user.confirmRegistration(code);
     } on CognitoClientException catch (e) {
       _logError('Confirmation error', e);
       rethrow;
