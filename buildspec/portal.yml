@@ -31,7 +31,7 @@ phases:
   post_build:
     commands:
       - echo Uploading to S3...
-      - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive
+      - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive --cache-control "max-age=31536000"
 
 artifacts:
   base-directory: portal/build/web

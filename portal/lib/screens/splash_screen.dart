@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../auth_state.dart';
-import 'dart:async';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -31,23 +28,10 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Check authentication status after animation
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         setState(() {
           _showStartButton = true;
-        });
-
-        // Check if user is already authenticated
-        final authState = Provider.of<AuthState>(context, listen: false);
-        authState.checkAuthStatus().then((isAuthenticated) {
-          if (isAuthenticated) {
-            Timer(const Duration(milliseconds: 500), () {
-              Navigator.of(
-                context,
-              ).pushReplacementNamed('/character-management');
-            });
-          }
         });
       }
     });
@@ -63,7 +47,19 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(color: Colors.black),
+        decoration: BoxDecoration(
+          color: Colors.black,
+          image: DecorationImage(
+            image: const AssetImage('assets/background.jpg'),
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Colors.black.withAlpha(
+                179,
+              ), // 0.7 opacity = 179 in alpha (255 * 0.7)
+              BlendMode.darken,
+            ),
+          ),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Center(
