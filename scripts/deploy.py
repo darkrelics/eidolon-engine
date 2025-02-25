@@ -223,10 +223,6 @@ def gather_all_parameters() -> dict:
     parameters["cognito"] = {
         "UserPoolName": input("Enter the Name of the user pool [default: eidolon-user-pool]: ") or "eidolon-user-pool",
         "AppClientName": input("Enter the Name of the app client [default: eidolon-app-client]: ") or "eidolon-app-client",
-        "CallbackURL": input("Enter the URL of the callback for the app client [default: https://localhost:3000/callback]: ")
-        or "https://localhost:3000/callback",
-        "SignOutURL": input("Enter the URL of the sign-out page for the app client [default: https://localhost:3000/sign-out]: ")
-        or "https://localhost:3000/sign-out",
         "ReplyEmailAddress": input("Enter the email address to send from [default: contact@darkrelics.net]: ")
         or "contact@darkrelics.net",
     }
