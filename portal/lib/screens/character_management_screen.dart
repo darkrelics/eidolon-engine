@@ -30,13 +30,13 @@ class CharacterManagementScreen extends StatelessWidget {
         ],
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.black,
           image: DecorationImage(
-            image: const AssetImage('assets/background.jpg'),
+            image: AssetImage('assets/background.jpg'),
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(
-              const Color.fromRGBO(0, 0, 0, 0.7), // Black with 0.7 opacity
+              Color.fromRGBO(0, 0, 0, 0.7), // Black with 0.7 opacity
               BlendMode.dstATop,
             ),
           ),

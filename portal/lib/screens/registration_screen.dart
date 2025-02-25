@@ -107,10 +107,14 @@ class RegistrationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       TextButton(
-                        onPressed:
-                            () => Navigator.of(
-                              context,
-                            ).pushReplacementNamed('/login'),
+                        onPressed: () {
+                          final authState = Provider.of<AuthState>(
+                            context,
+                            listen: false,
+                          );
+                          authState.clearInputs();
+                          Navigator.of(context).pushReplacementNamed('/login');
+                        },
                         child: const Text('Already have an account? Sign in'),
                       ),
                     ] else ...[
@@ -125,7 +129,7 @@ class RegistrationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        'Please check your email for a verification link or enter the verification code below.',
+                        'Please check your email for a verification code to complete your registration.',
                         style: TextStyle(color: Colors.white70),
                         textAlign: TextAlign.center,
                       ),
@@ -152,7 +156,17 @@ class RegistrationScreen extends StatelessWidget {
                         onPressed:
                             authState.isLoading
                                 ? null
-                                : () => authState.confirmRegistration(),
+                                : () async {
+                                  await authState.confirmRegistration();
+                                  if (!authState.isVerificationMode &&
+                                      context.mounted) {
+                                    authState
+                                        .clearInputs(); // Clear inputs before navigation
+                                    Navigator.of(
+                                      context,
+                                    ).pushReplacementNamed('/login');
+                                  }
+                                },
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
