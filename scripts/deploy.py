@@ -25,6 +25,7 @@ CONFIG_PATH = "../server/config.yml"
 CONFIG_TEMPLATE_PATH = "../server/config.template.yml"
 ENV_FILE_PATH = "../portal/.env"
 
+
 def load_config() -> dict:
     if not os.path.exists(CONFIG_PATH):
         if not os.path.exists(CONFIG_TEMPLATE_PATH):
@@ -179,7 +180,7 @@ def generate_env_file(config_updates) -> None:
     """
     try:
         cognito_updates = config_updates.get("Cognito", {})
-        
+
         # Create content for .env file
         env_content = f"""# Eidolon Engine local development configuration
         # DO NOT COMMIT THIS FILE TO VERSION CONTROL
@@ -191,13 +192,13 @@ def generate_env_file(config_updates) -> None:
 
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(ENV_FILE_PATH), exist_ok=True)
-        
+
         # Write .env file
         with open(ENV_FILE_PATH, "w", encoding="utf-8") as env_file:
             env_file.write(env_content)
-            
+
         print(f"Generated .env file at {ENV_FILE_PATH}")
-            
+
     except IOError as err:
         print(f"Error generating .env file: {err}")
 
@@ -310,7 +311,7 @@ def main() -> None:
             "CloudWatch": cloudwatch_outputs,
         }
         update_configuration_file(config_updates)
-        
+
         # Generate .env file for local Flutter development
         generate_env_file(config_updates)
 
