@@ -19,8 +19,15 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/google/uuid"
 )
 
 func (p *Player) Console() {
@@ -54,18 +61,18 @@ func (p *Player) Console() {
 					p.HandlePasswordChange()
 
 				case "2":
-					p.toPlayer <- "Character creation not yet implemented\n"
+					p.HandleCharacterCreation()
 
 				case "3":
 					if characterCount > 0 {
-						p.toPlayer <- "Character selection not yet implemented\n"
+						p.HandleCharacterSelection()
 					} else {
 						p.toPlayer <- "No characters available\n"
 					}
 
 				case "4":
 					if characterCount > 0 {
-						p.toPlayer <- "Character deletion not yet implemented\n"
+						p.HandleCharacterDeletion()
 					} else {
 						p.toPlayer <- "No characters available\n"
 					}
@@ -175,4 +182,255 @@ func (p *Player) HandlePasswordChange() {
 		p.toPlayer <- "Password successfully changed.\n"
 		return
 	}
+}
+
+func (p *Player) HandleCharacterCreation() {
+	// Get character name
+	p.toPlayer <- "\nEnter character name (3-15 letters only): "
+	name, ok := <-p.fromPlayer
+	if !ok {
+		Logger.Warn("Player input channel closed")
+		return
+	}
+
+	name = strings.TrimSpace(name)
+
+	// Validate character name
+	if err := p.validateCharacterName(name); err != nil {
+		p.toPlayer <- fmt.Sprintf("Invalid name: %s\n", err.Error())
+		return
+	}
+
+	// Select archetype
+	archetypeName, err := p.selectArchetype()
+	if err != nil {
+		p.toPlayer <- fmt.Sprintf("Archetype selection failed: %s\n", err.Error())
+		return
+	}
+
+	// Create character
+	character, err := p.CreateCharacter(name, archetypeName)
+	if err != nil {
+		p.toPlayer <- fmt.Sprintf("Character creation failed: %s\n", err.Error())
+		return
+	}
+
+	p.toPlayer <- fmt.Sprintf("\nCharacter '%s' created successfully!\n", name)
+
+	// Save the character to the player's character list
+	p.mutex.Lock()
+	if p.characterList == nil {
+		p.characterList = make(map[string]uuid.UUID)
+	}
+	p.characterList[name] = character.id
+	p.mutex.Unlock()
+
+	// Save player data
+	err = p.Save()
+	if err != nil {
+		p.toPlayer <- "Warning: Failed to save player data. Your character may not appear in your character list next time you log in.\n"
+		Logger.Error("Failed to save player data after character creation", "player", p.id, "error", err)
+	}
+}
+
+func (p *Player) validateCharacterName(name string) error {
+	// Check if name is empty
+	if len(name) == 0 {
+		return fmt.Errorf("name cannot be empty")
+	}
+
+	// Check name length
+	if len(name) < 3 {
+		return fmt.Errorf("name must be at least 3 characters")
+	}
+	if len(name) > 15 {
+		return fmt.Errorf("name must be 15 characters or fewer")
+	}
+
+	// Check if name contains only letters
+	if !regexp.MustCompile(`^[a-zA-Z]+$`).MatchString(name) {
+		return fmt.Errorf("name must contain only letters")
+	}
+
+	// Check if name already exists
+	if p.server.game.characterBloomFilter.TestString(strings.ToLower(name)) {
+		return fmt.Errorf("name already exists")
+	}
+
+	return nil
+}
+
+func (p *Player) selectArchetype() (string, error) {
+	if len(p.server.game.archetypeOptions) == 0 {
+		return "", nil // No archetypes available
+	}
+
+	// Create a character instance to use SelectArchetype method
+	tempChar := &Character{
+		game:     p.server.game,
+		fromGame: p.toPlayer,   // Route game messages to player
+		toGame:   p.fromPlayer, // Route player input to game
+	}
+
+	return tempChar.SelectArchetype()
+}
+
+func (p *Player) HandleCharacterSelection() {
+	options := p.buildCharacterOptions()
+	if len(options) == 0 {
+		p.toPlayer <- "No characters available.\n"
+		return
+	}
+
+	p.displayCharacterOptions(options)
+
+	choice, ok := <-p.fromPlayer
+	if !ok {
+		Logger.Warn("Player input channel closed")
+		return
+	}
+
+	num, err := strconv.Atoi(strings.TrimSpace(choice))
+	if err != nil || num < 1 || num > len(options) {
+		p.toPlayer <- "Invalid selection.\n"
+		return
+	}
+
+	// Get character ID from player's character list
+	characterName := options[num-1]
+	p.mutex.RLock()
+	characterID := p.characterList[characterName]
+	p.mutex.RUnlock()
+
+	// Load the character
+	character, err := LoadCharacter(p, characterID)
+	if err != nil {
+		p.toPlayer <- fmt.Sprintf("Failed to load character: %s\n", err.Error())
+		return
+	}
+
+	p.character = character
+	p.toPlayer <- fmt.Sprintf("\nYou are now playing as %s.\n", characterName)
+
+	// TODO: Implement character play session
+	p.PlayCharacter()
+}
+
+func (p *Player) buildCharacterOptions() []string {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	options := make([]string, 0, len(p.characterList))
+	for name := range p.characterList {
+		options = append(options, name)
+	}
+	sort.Strings(options)
+	return options
+}
+
+func (p *Player) displayCharacterOptions(options []string) {
+	p.toPlayer <- "\nSelect a character:\n"
+	for i, name := range options {
+		p.toPlayer <- fmt.Sprintf("%d) %s\n", i+1, name)
+	}
+	p.toPlayer <- "\nEnter your choice: "
+}
+
+func (p *Player) HandleCharacterDeletion() {
+	options := p.buildCharacterOptions()
+	if len(options) == 0 {
+		p.toPlayer <- "No characters available to delete.\n"
+		return
+	}
+
+	p.toPlayer <- "\nSelect a character to delete:\n"
+	for i, name := range options {
+		p.toPlayer <- fmt.Sprintf("%d) %s\n", i+1, name)
+	}
+	p.toPlayer <- "\nEnter your choice (or 0 to cancel): "
+
+	choice, ok := <-p.fromPlayer
+	if !ok {
+		Logger.Warn("Player input channel closed")
+		return
+	}
+
+	num, err := strconv.Atoi(strings.TrimSpace(choice))
+	if err != nil {
+		p.toPlayer <- "Invalid selection.\n"
+		return
+	}
+
+	// Check for cancel option
+	if num == 0 {
+		p.toPlayer <- "Character deletion cancelled.\n"
+		return
+	}
+
+	// Validate selection
+	if num < 1 || num > len(options) {
+		p.toPlayer <- "Invalid selection.\n"
+		return
+	}
+
+	// Get character info
+	characterName := options[num-1]
+	p.mutex.RLock()
+	characterID := p.characterList[characterName]
+	p.mutex.RUnlock()
+
+	// Confirm deletion
+	p.toPlayer <- fmt.Sprintf("\nAre you sure you want to delete '%s'? This cannot be undone.\nType 'DELETE' to confirm: ", characterName)
+
+	confirmation, ok := <-p.fromPlayer
+	if !ok {
+		Logger.Warn("Player input channel closed")
+		return
+	}
+
+	if strings.TrimSpace(confirmation) != "DELETE" {
+		p.toPlayer <- "Character deletion cancelled.\n"
+		return
+	}
+
+	// Delete the character from database
+	err = p.deleteCharacterFromDatabase(characterID)
+	if err != nil {
+		p.toPlayer <- fmt.Sprintf("Failed to delete character: %s\n", err.Error())
+		return
+	}
+
+	// Remove character from player's list
+	p.mutex.Lock()
+	delete(p.characterList, characterName)
+	p.mutex.Unlock()
+
+	// Save player data
+	err = p.Save()
+	if err != nil {
+		p.toPlayer <- "Warning: Failed to update player data after character deletion.\n"
+		Logger.Error("Failed to save player data after character deletion", "player", p.id, "error", err)
+	}
+
+	p.toPlayer <- fmt.Sprintf("\nCharacter '%s' has been deleted.\n", characterName)
+}
+
+func (p *Player) deleteCharacterFromDatabase(characterID uuid.UUID) error {
+	// Create key for DynamoDB delete operation
+	key := map[string]*dynamodb.AttributeValue{
+		"CharacterID": {S: aws.String(characterID.String())},
+	}
+
+	// Delete character from database
+	return p.server.game.database.Delete("characters", key)
+}
+
+func (p *Player) PlayCharacter() {
+	// This is a placeholder for character gameplay
+	// The actual implementation would handle character commands, movement, combat, etc.
+	p.toPlayer <- "\nCharacter play functionality is not yet implemented.\n"
+	p.toPlayer <- "Returning to console...\n"
+
+	// Clear the character selection when returning to console
+	p.character = nil
 }
