@@ -192,32 +192,80 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 
 func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
 	Logger.Info("Starting SSH interface", "port", ssh_interface.port)
+
+	// Make sure listener is not nil
+	if ssh_interface.listener == nil {
+		Logger.Error("SSH listener is nil, cannot run interface")
+		errorChan <- fmt.Errorf("SSH listener is nil")
+		return
+	}
+
 	defer ssh_interface.listener.Close()
+
+	// Create a done channel to signal the loop to exit
+	done := make(chan struct{})
+
+	// Set up a goroutine to listen for context cancellation
+	go func() {
+		select {
+		case <-ssh_interface.server.ctx.Done():
+			ssh_interface.listener.Close()
+			close(done)
+		case <-ssh_interface.ctx.Done():
+			ssh_interface.listener.Close()
+			close(done)
+		}
+	}()
 
 	for {
 		select {
-		case <-ssh_interface.server.ctx.Done():
-			return
-		case <-ssh_interface.ctx.Done():
+		case <-done:
 			return
 		default:
+			// Set a short timeout for Accept to ensure we can exit cleanly
+			ssh_interface.listener.(*net.TCPListener).SetDeadline(time.Now().Add(1 * time.Second))
+
 			conn, err := ssh_interface.listener.Accept()
-			Logger.Info("New connection", "remote_addr", conn.RemoteAddr())
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
 					Logger.Warn("Listener closed", "error", err)
+					return
 				}
+
+				// Check for timeout error which we use to poll for context cancellation
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					// Check if context is done to exit
+					select {
+					case <-done:
+						return
+					default:
+						// Just a timeout, continue
+						continue
+					}
+				}
+
 				Logger.Error("Connection accept failed", "error", err)
 				continue
 			}
+
+			Logger.Info("New connection", "remote_addr", conn.RemoteAddr())
 			go ssh_interface.handleConnection(conn)
 		}
 	}
 }
 
 func (ssh_interface *Interface_SSH) Stop() error {
+	Logger.Info("Stopping SSH interface")
+
+	// Cancel the context first
 	ssh_interface.cancel()
-	return ssh_interface.listener.Close()
+
+	// Close the listener if it exists
+	if ssh_interface.listener != nil {
+		return ssh_interface.listener.Close()
+	}
+
+	return nil
 }
 
 // parseDims parses terminal dimensions from the SSH payload.

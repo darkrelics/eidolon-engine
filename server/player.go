@@ -205,69 +205,122 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 	inputDone := make(chan error, 1)
 	outputDone := make(chan error, 1)
 
-	// Start request handler
-
+	// Start handlers
 	go p.handleRequests(p.ctx, requests, requestDone)
-
-	// Start input handler
-
 	go p.handleInput(p.ctx, inputDone)
-
-	// Start output handler
-
 	go p.handleOutput(p.ctx, outputDone)
 
 	// Start Player Interface
-
 	p.Console()
 
 	// Wait for shutdown conditions
 	select {
 	case <-p.ctx.Done():
-		close(outputDone)
-		close(inputDone)
-		close(requestDone)
+		Logger.Info("Player session ending due to context cancellation", "player", p.id)
 		return
 	case err := <-p.playerError:
-		close(outputDone)
-		close(inputDone)
-		close(requestDone)
 		if err != nil {
 			Logger.Error("Player error", "player_name", p.id, "error", err)
 		}
 		return
+	case err := <-requestDone:
+		if err != nil && err != context.Canceled {
+			Logger.Error("Request handler error", "player", p.id, "error", err)
+		}
+		return
+	case err := <-inputDone:
+		if err != nil && err != context.Canceled {
+			Logger.Error("Input handler error", "player", p.id, "error", err)
+		}
+		return
+	case err := <-outputDone:
+		if err != nil && err != context.Canceled {
+			Logger.Error("Output handler error", "player", p.id, "error", err)
+		}
+		return
 	}
-
 }
 
 func (p *Player) Stop() {
 	p.shutdownOnce.Do(func() {
-
 		Logger.Info("Player disconnected", "player_name", p.id)
 
-		// Stop Character
+		// First cancel the context to signal all goroutines to exit
+		p.cancel()
 
+		// Save player data
 		p.Save()
 
+		// Close the connection
 		if p.connection != nil {
 			p.connection.Close()
 		}
+
+		// Remove from server
+		if p.server != nil {
+			_ = p.server.RemovePlayer(p.index)
+		}
+
+		time.Sleep(100 * time.Millisecond)
 
 		close(p.toPlayer)
 		close(p.fromPlayer)
 		close(p.playerError)
 
-		if p.server != nil {
-			_ = p.server.RemovePlayer(p.index)
-		}
-
 		Logger.Info("Player stopped", "player_name", p.id)
-
-		p.cancel()
 	})
 }
 
+func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request, done chan error) {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Warn("Recovered in handleRequests", "player", p.id, "recover", r)
+			done <- fmt.Errorf("panic in request handler: %v", r)
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			done <- ctx.Err()
+			return
+		case req, ok := <-requests:
+			if !ok {
+				Logger.Debug("Request channel closed", "player", p.id)
+				done <- nil
+				return
+			}
+
+			p.mutex.Lock()
+			switch req.Type {
+			case "shell":
+				req.Reply(true, nil)
+			case "pty-req":
+				termLen := req.Payload[3]
+				w, h := ParseDims(req.Payload[termLen+4:])
+				p.consoleWidth = w
+				p.consoleHeight = h
+				req.Reply(true, nil)
+			case "window-change":
+				w, h := ParseDims(req.Payload)
+				p.consoleWidth = w
+				p.consoleHeight = h
+			default:
+				req.Reply(false, nil)
+			}
+			p.mutex.Unlock()
+		}
+	}
+}
+
 func (p *Player) handleInput(ctx context.Context, done chan error) {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Warn("Recovered in handleInput", "player", p.id, "recover", r)
+			done <- fmt.Errorf("panic in input handler: %v", r)
+		}
+	}()
+
 	var inputBuffer []rune
 	reader := bufio.NewReader(p.connection)
 
@@ -281,6 +334,7 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 			if err != nil {
 				if err == io.EOF {
 					Logger.Info("Connection closed by client", "player", p.id)
+					done <- nil
 					return
 				}
 				Logger.Error("Error reading input", "player", p.id, "error", err)
@@ -314,7 +368,7 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				}
 
 			case '\x03': // Ctrl-C
-				p.playerError <- errors.New("player interrupt")
+				done <- errors.New("player interrupt")
 				return
 
 			default:
@@ -329,41 +383,14 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 	}
 }
 
-func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request, done chan error) {
-	for {
-		select {
-		case <-ctx.Done():
-			done <- ctx.Err()
-			return
-
-		case req, ok := <-requests:
-			if !ok {
-				return
-			}
-
-			p.mutex.Lock()
-			switch req.Type {
-			case "shell":
-				req.Reply(true, nil)
-			case "pty-req":
-				termLen := req.Payload[3]
-				w, h := ParseDims(req.Payload[termLen+4:])
-				p.consoleWidth = w
-				p.consoleHeight = h
-				req.Reply(true, nil)
-			case "window-change":
-				w, h := ParseDims(req.Payload)
-				p.consoleWidth = w
-				p.consoleHeight = h
-			default:
-				req.Reply(false, nil)
-			}
-			p.mutex.Unlock()
-		}
-	}
-}
-
 func (p *Player) handleOutput(ctx context.Context, done chan error) {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Warn("Recovered in handleOutput", "player", p.id, "recover", r)
+			done <- fmt.Errorf("panic in output handler: %v", r)
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -371,9 +398,13 @@ func (p *Player) handleOutput(ctx context.Context, done chan error) {
 			return
 		case msg, ok := <-p.toPlayer:
 			if !ok {
+				Logger.Debug("Output channel closed", "player", p.id)
+				done <- nil
 				return
 			}
+
 			if _, err := p.connection.Write([]byte(wrapText(msg, p.consoleWidth))); err != nil {
+				Logger.Error("Write error in output handler", "player", p.id, "error", err)
 				done <- fmt.Errorf("write error: %w", err)
 				return
 			}

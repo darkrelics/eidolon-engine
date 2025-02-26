@@ -44,6 +44,7 @@ type Server struct {
 	cognito      *cognitoidentityprovider.CognitoIdentityProvider
 	index        *Index
 	activeMotDs  []*MOTD
+	sshInterface *Interface_SSH
 }
 
 type Index struct {
@@ -110,24 +111,7 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 	return server, nil
 }
 
-func (s *Server) Stop() error {
-
-	Logger.Info("Server: Stopping server...")
-	defer Logger.Info("Server: Server stopped")
-
-	// Log out players
-
-	// Shutdown Interfaces
-
-	s.shutdownOnce.Do(func() {
-		s.cancel()
-	})
-
-	return nil
-}
-
 func (s *Server) Run(errorChan chan error) error {
-
 	Logger.Info("Run server...")
 
 	Logger.Info("Starting SSH Interface...")
@@ -135,36 +119,57 @@ func (s *Server) Run(errorChan chan error) error {
 	var sshInterface *Interface_SSH
 
 	// Start SSH Interface
-
 	if s.config.SSH.Enabled {
 		var err error
 		sshInterface, err = NewSSHInterface(s)
 		if err != nil {
 			Logger.Error("Failed to start SSH interface", "error", err)
-			// Add error to the error channel so main can handle it
 			errorChan <- fmt.Errorf("SSH interface initialization failed: %w", err)
 		} else {
-			// Only run if no error and interface is properly initialized
 			go sshInterface.Run(errorChan)
+
+			// Store the SSH interface in the server struct for proper shutdown
+			s.mutex.Lock()
+			s.sshInterface = sshInterface
+			s.mutex.Unlock()
 		}
 	}
 
 	Logger.Info("SSH Interface started successfully")
 
 	// Wait until server is stopped
+	<-s.ctx.Done()
 
-	select {
-	case <-s.ctx.Done():
-		if s.config.SSH.Enabled {
-			if sshInterface != nil {
-				sshInterface.Stop()
-			}
-
+	// Clean shutdown for SSH interface if it was started
+	if s.config.SSH.Enabled && s.sshInterface != nil {
+		if err := s.sshInterface.Stop(); err != nil {
+			Logger.Error("Error stopping SSH interface", "error", err)
 		}
-		return nil
-
 	}
 
+	return nil
+}
+
+func (s *Server) Stop() error {
+	Logger.Info("Server: Stopping server...")
+	defer Logger.Info("Server: Server stopped")
+
+	s.shutdownOnce.Do(func() {
+		// First stop SSH interface if it exists
+		if s.config.SSH.Enabled && s.sshInterface != nil {
+			if err := s.sshInterface.Stop(); err != nil {
+				Logger.Error("Error stopping SSH interface", "error", err)
+			}
+		}
+
+		// Then cancel the context - this will signal all goroutines to stop
+		s.cancel()
+
+		// Give a short time for goroutines to clean up
+		time.Sleep(100 * time.Millisecond)
+	})
+
+	return nil
 }
 
 func (s *Server) AddPlayer(player *Player) error {
