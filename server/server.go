@@ -109,6 +109,12 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 
 	server.playerCount.Store(0)
 
+	// Load active MOTDs
+	if err := server.LoadMOTDs(); err != nil {
+		Logger.Error("Failed to load MOTDs", "error", err)
+		// Continue startup despite MOTD loading failure
+	}
+
 	return server, nil
 }
 

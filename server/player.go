@@ -210,6 +210,12 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 	go p.handleInput(p.ctx, inputDone)
 	go p.handleOutput(p.ctx, outputDone)
 
+	// Display MOTDs after connection is established but before entering main loop
+	if err := DisplayUnseenMOTDs(p); err != nil {
+		Logger.Error("motd display error", "player", p.id, "error", err)
+		// Continue despite MOTD display error
+	}
+
 	// Start Player Interface
 	p.Console()
 

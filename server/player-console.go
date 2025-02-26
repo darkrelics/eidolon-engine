@@ -39,15 +39,15 @@ func (p *Player) Console() {
 			characterCount := len(p.characterList)
 
 			p.toPlayer <- "\n=====Console=====\n"
+			p.toPlayer <- "1) Change Password\n"
+			p.toPlayer <- "2) View Messages\n"
+			p.toPlayer <- "3) Create Character\n"
+
 			if characterCount == 0 {
-				p.toPlayer <- "1) Change Password\n"
-				p.toPlayer <- "2) Create Character\n"
 				p.toPlayer <- "9) Quit\n"
 			} else {
-				p.toPlayer <- "1) Change Password\n"
-				p.toPlayer <- "2) Create Character\n"
-				p.toPlayer <- "3) Select Character\n"
-				p.toPlayer <- "4) Delete Character\n"
+				p.toPlayer <- "4) Select Character\n"
+				p.toPlayer <- "5) Delete Character\n"
 				p.toPlayer <- "9) Quit\n"
 			}
 			p.toPlayer <- "\nEnter your choice: "
@@ -61,20 +61,23 @@ func (p *Player) Console() {
 					p.HandlePasswordChange()
 
 				case "2":
-					p.HandleCharacterCreation()
+					p.HandleViewMOTDs()
 
 				case "3":
-					if characterCount > 0 {
-						p.HandleCharacterSelection()
-					} else {
-						p.toPlayer <- "No characters available\n"
-					}
+					p.HandleCharacterCreation()
 
 				case "4":
 					if characterCount > 0 {
+						p.HandleCharacterSelection()
+					} else {
+						p.toPlayer <- "Invalid choice. Please try again.\n"
+					}
+
+				case "5":
+					if characterCount > 0 {
 						p.HandleCharacterDeletion()
 					} else {
-						p.toPlayer <- "No characters available\n"
+						p.toPlayer <- "Invalid choice. Please try again.\n"
 					}
 
 				case "9":
@@ -433,4 +436,35 @@ func (p *Player) PlayCharacter() {
 
 	// Clear the character selection when returning to console
 	p.character = nil
+}
+
+func (p *Player) HandleViewMOTDs() {
+	p.toPlayer <- "\n\r=== Active Messages ===\n\r"
+
+	p.mutex.RLock()
+	activeMotDs := p.server.activeMotDs
+	p.mutex.RUnlock()
+
+	if len(activeMotDs) == 0 {
+		p.toPlayer <- "No messages to display.\n\r"
+		return
+	}
+
+	// Display messages with creation date, sorted newest first
+	for _, motd := range activeMotDs {
+		if motd == nil || !motd.Active {
+			continue
+		}
+
+		// Format the creation date
+		dateStr := motd.CreatedAt.Format("Jan 02, 2006")
+
+		// Default MOTD has no date displayed
+		defaultMOTDID, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
+		if motd.MotdID == defaultMOTDID {
+			p.toPlayer <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
+		} else {
+			p.toPlayer <- fmt.Sprintf("\n\r[%s]\n\r%s\n\r", dateStr, motd.Message)
+		}
+	}
 }
