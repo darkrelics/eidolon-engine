@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -116,34 +117,35 @@ func (s *Server) Run(errorChan chan error) error {
 
 	Logger.Info("Starting SSH Interface...")
 
-	var sshInterface *Interface_SSH
-
 	// Start SSH Interface
 	if s.config.SSH.Enabled {
 		var err error
-		sshInterface, err = NewSSHInterface(s)
+		sshInterface, err := NewSSHInterface(s)
 		if err != nil {
 			Logger.Error("Failed to start SSH interface", "error", err)
-			errorChan <- fmt.Errorf("SSH interface initialization failed: %w", err)
 		} else {
-			go sshInterface.Run(errorChan)
-
-			// Store the SSH interface in the server struct for proper shutdown
+			// Store the interface before starting the goroutine
 			s.mutex.Lock()
 			s.sshInterface = sshInterface
 			s.mutex.Unlock()
-		}
-	}
 
-	Logger.Info("SSH Interface started successfully")
+			go sshInterface.Run(errorChan)
+			Logger.Info("SSH Interface started successfully")
+		}
+	} else {
+		Logger.Info("SSH Interface disabled")
+	}
 
 	// Wait until server is stopped
 	<-s.ctx.Done()
 
-	// Clean shutdown for SSH interface if it was started
-	if s.config.SSH.Enabled && s.sshInterface != nil {
+	// Now it's safe to explicitly stop the SSH interface
+	if s.sshInterface != nil {
 		if err := s.sshInterface.Stop(); err != nil {
-			Logger.Error("Error stopping SSH interface", "error", err)
+			// Only log serious errors, not just "already closed"
+			if !strings.Contains(err.Error(), "use of closed network connection") {
+				Logger.Error("Error stopping SSH interface", "error", err)
+			}
 		}
 	}
 
@@ -154,18 +156,15 @@ func (s *Server) Stop() error {
 	Logger.Info("Server: Stopping server...")
 	defer Logger.Info("Server: Server stopped")
 
+	// Use the shutdownOnce to ensure we only execute this once
 	s.shutdownOnce.Do(func() {
-		// First stop SSH interface if it exists
-		if s.config.SSH.Enabled && s.sshInterface != nil {
-			if err := s.sshInterface.Stop(); err != nil {
-				Logger.Error("Error stopping SSH interface", "error", err)
-			}
-		}
-
-		// Then cancel the context - this will signal all goroutines to stop
+		// Cancel the context first - this signals all components to shut down
 		s.cancel()
 
-		// Give a short time for goroutines to clean up
+		// No need to explicitly stop the SSH interface here as it will
+		// detect the context cancellation
+
+		// Give components time to react to context cancellation
 		time.Sleep(100 * time.Millisecond)
 	})
 

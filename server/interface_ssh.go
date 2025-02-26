@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -260,9 +261,18 @@ func (ssh_interface *Interface_SSH) Stop() error {
 	// Cancel the context first
 	ssh_interface.cancel()
 
-	// Close the listener if it exists
+	// Use a mutex to ensure we only close the listener once
+	ssh_interface.mutex.Lock()
+	defer ssh_interface.mutex.Unlock()
+
+	// Check if listener is already closed
 	if ssh_interface.listener != nil {
-		return ssh_interface.listener.Close()
+		// Try to close the listener but don't report error if it's already closed
+		err := ssh_interface.listener.Close()
+		if err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
+			return err
+		}
+		ssh_interface.listener = nil
 	}
 
 	return nil
