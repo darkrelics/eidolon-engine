@@ -1,3 +1,5 @@
+// logging.go
+
 /*
 Eidolon Engine
 
@@ -19,11 +21,12 @@ limitations under the License.
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -32,8 +35,8 @@ import (
 	cwlogtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 )
 
-// TODO: split out the logging betweent the Console and Clouwatch to allow different format and
-// levles for each.
+// TODO: split out the logging between the Console and Cloudwatch to allow different format and
+// levels for each.
 
 const maxRetries = 3
 
@@ -54,92 +57,289 @@ func parseLogLevel(level int) slog.Level {
 	}
 }
 
+// CloudWatchHandler implements slog.Handler for AWS CloudWatch
+type CloudWatchHandler struct {
+	cloudWatch  *CloudWatch
+	level       slog.Level
+	attrs       []slog.Attr
+	groups      []string
+	consoleJSON bool
+	jsonHandler slog.Handler
+}
+
+// NewCloudWatchHandler creates a new CloudWatch handler for slog
+func NewCloudWatchHandler(cw *CloudWatch, level slog.Level, consoleJSON bool) *CloudWatchHandler {
+	var jsonHandler slog.Handler
+	if consoleJSON {
+		jsonHandler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level:     level,
+			AddSource: false,
+		})
+	}
+
+	return &CloudWatchHandler{
+		cloudWatch:  cw,
+		level:       level,
+		attrs:       []slog.Attr{},
+		groups:      []string{},
+		consoleJSON: consoleJSON,
+		jsonHandler: jsonHandler,
+	}
+}
+
+// Enabled implements slog.Handler.Enabled
+func (h *CloudWatchHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= h.level
+}
+
+// Handle implements slog.Handler.Handle
+func (h *CloudWatchHandler) Handle(ctx context.Context, record slog.Record) error {
+	// Also output to console JSON handler if enabled
+	if h.consoleJSON && h.jsonHandler != nil {
+		h.jsonHandler.Handle(ctx, record)
+	}
+
+	// Skip if CloudWatch is not initialized
+	if h.cloudWatch == nil {
+		return nil
+	}
+
+	// Marshal record to JSON for CloudWatch
+	type logEntry struct {
+		Time    string         `json:"time"`
+		Level   string         `json:"level"`
+		Message string         `json:"message"`
+		Attrs   map[string]any `json:"attrs,omitempty"`
+		File    string         `json:"file,omitempty"`
+		Line    int            `json:"line,omitempty"`
+		Func    string         `json:"function,omitempty"`
+	}
+
+	entry := logEntry{
+		Time:    record.Time.Format(time.RFC3339),
+		Level:   record.Level.String(),
+		Message: record.Message,
+		Attrs:   make(map[string]any),
+	}
+
+	// Get file/line info for the log entry if available
+	if record.PC != 0 {
+		fs := runtime.CallersFrames([]uintptr{record.PC})
+		if frame, _ := fs.Next(); frame.PC != 0 {
+			entry.File = frame.File
+			entry.Line = frame.Line
+			entry.Func = frame.Function
+		}
+	}
+
+	// Add attributes
+	record.Attrs(func(attr slog.Attr) bool {
+		if attr.Key != "" && attr.Value.Kind() != slog.KindGroup {
+			entry.Attrs[attr.Key] = attr.Value.Any()
+		}
+		return true
+	})
+
+	// Add handler attributes
+	for _, attr := range h.attrs {
+		if attr.Key != "" {
+			entry.Attrs[attr.Key] = attr.Value.Any()
+		}
+	}
+
+	// Marshal to JSON
+	jsonData, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("failed to marshal log entry: %w", err)
+	}
+
+	// Send to CloudWatch
+	if err := h.cloudWatch.initLogStream(); err != nil {
+		return err
+	}
+
+	input := &cloudwatchlogs.PutLogEventsInput{
+		LogGroupName:  aws.String(h.cloudWatch.logGroup),
+		LogStreamName: aws.String(h.cloudWatch.logStream),
+		LogEvents: []cwlogtypes.InputLogEvent{
+			{
+				Message:   aws.String(string(jsonData)),
+				Timestamp: aws.Int64(time.Now().UnixNano() / int64(time.Millisecond)),
+			},
+		},
+	}
+
+	h.cloudWatch.mutex.RLock()
+	if h.cloudWatch.sequenceToken != nil {
+		input.SequenceToken = h.cloudWatch.sequenceToken
+	}
+	h.cloudWatch.mutex.RUnlock()
+
+	return h.cloudWatch.putLogs(input)
+}
+
+// WithAttrs implements slog.Handler.WithAttrs
+func (h *CloudWatchHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	newH := *h
+	newH.attrs = append(h.attrs, attrs...)
+
+	// Also update console JSON handler if enabled
+	if h.consoleJSON && h.jsonHandler != nil {
+		newH.jsonHandler = h.jsonHandler.WithAttrs(attrs)
+	}
+
+	return &newH
+}
+
+// WithGroup implements slog.Handler.WithGroup
+func (h *CloudWatchHandler) WithGroup(name string) slog.Handler {
+	newH := *h
+	newH.groups = append(h.groups, name)
+
+	// Also update console JSON handler if enabled
+	if h.consoleJSON && h.jsonHandler != nil {
+		newH.jsonHandler = h.jsonHandler.WithGroup(name)
+	}
+
+	return &newH
+}
+
 func (c *CloudWatch) initLogStream() error {
-
-	fmt.Println("Initilize Log Stream...")
-	defer Logger.Info("CloudWatch: Log stream initialized")
-
+	// Skip if already initialized
 	if c.initialized {
 		return nil
 	}
 
+	// Use fmt for debugging to avoid recursive logging
+	fmt.Printf("Initializing CloudWatch log stream: %s/%s\n", c.logGroup, c.logStream)
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// Describe the Log Stream
-	_, err := c.logClient.DescribeLogStreams(c.ctx, &cloudwatchlogs.DescribeLogStreamsInput{
+	// Double-check if already initialized after acquiring the lock
+	if c.initialized {
+		return nil
+	}
+
+	// First check if the log group exists
+	_, err := c.logClient.DescribeLogGroups(c.ctx, &cloudwatchlogs.DescribeLogGroupsInput{
+		LogGroupNamePrefix: aws.String(c.logGroup),
+	})
+
+	if err != nil {
+		fmt.Printf("Error checking log group %s: %v\n", c.logGroup, err)
+		// Create the log group
+		_, err = c.logClient.CreateLogGroup(c.ctx, &cloudwatchlogs.CreateLogGroupInput{
+			LogGroupName: aws.String(c.logGroup),
+		})
+
+		if err != nil && !strings.Contains(err.Error(), "ResourceAlreadyExistsException") {
+			fmt.Printf("Failed to create log group %s: %v\n", c.logGroup, err)
+			return fmt.Errorf("create log group: %w", err)
+		}
+		fmt.Printf("Created log group: %s\n", c.logGroup)
+	}
+
+	// Now check if the log stream exists
+	resp, err := c.logClient.DescribeLogStreams(c.ctx, &cloudwatchlogs.DescribeLogStreamsInput{
 		LogGroupName:        aws.String(c.logGroup),
 		LogStreamNamePrefix: aws.String(c.logStream),
 	})
 
-	if err != nil {
-		if strings.Contains(err.Error(), "ResourceNotFoundException") {
-			// Create the log group
-			_, err = c.logClient.CreateLogStream(c.ctx, &cloudwatchlogs.CreateLogStreamInput{
-				LogGroupName:  aws.String(c.logGroup),
-				LogStreamName: aws.String(c.logStream),
-			})
-			if err != nil && !strings.Contains(err.Error(), "ResourceAlreadyExistsException") {
+	logStreamExists := false
+	if err == nil && resp != nil && len(resp.LogStreams) > 0 {
+		for _, stream := range resp.LogStreams {
+			if aws.ToString(stream.LogStreamName) == c.logStream {
+				logStreamExists = true
+				if stream.UploadSequenceToken != nil {
+					c.sequenceToken = stream.UploadSequenceToken
+					fmt.Printf("Found existing log stream with sequence token: %s\n", *c.sequenceToken)
+				}
+				break
+			}
+		}
+	}
+
+	if !logStreamExists {
+		fmt.Printf("Creating log stream: %s in group: %s\n", c.logStream, c.logGroup)
+		// Create the log stream explicitly
+		_, err = c.logClient.CreateLogStream(c.ctx, &cloudwatchlogs.CreateLogStreamInput{
+			LogGroupName:  aws.String(c.logGroup),
+			LogStreamName: aws.String(c.logStream),
+		})
+
+		if err != nil {
+			if !strings.Contains(err.Error(), "ResourceAlreadyExistsException") {
+				fmt.Printf("Failed to create log stream %s: %v\n", c.logStream, err)
 				return fmt.Errorf("create log stream: %w", err)
 			}
+			fmt.Printf("Log stream already exists (race condition): %s\n", c.logStream)
 		} else {
-			return fmt.Errorf("error describing log stream: %w", err)
+			fmt.Printf("Successfully created log stream: %s\n", c.logStream)
 		}
-
 	}
 
-	c.initialized = true
-
-	return nil
-}
-
-func (c *CloudWatch) Handle(ctx context.Context, r slog.Record) error {
-	fmt.Println("CloudWatch Handle...")
-
-	if err := c.initLogStream(); err != nil {
-		return fmt.Errorf("failed to initialize log stream: %w", err)
-	}
-
-	// Marshal the slog.Record to JSON
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
-	if err := encoder.Encode(r); err != nil {
-		return fmt.Errorf("failed to marshal slog.Record to JSON: %w", err)
-	}
-
-	input := &cloudwatchlogs.PutLogEventsInput{
+	// Write a test message to verify the log stream is working
+	testInput := &cloudwatchlogs.PutLogEventsInput{
 		LogGroupName:  aws.String(c.logGroup),
 		LogStreamName: aws.String(c.logStream),
-		LogEvents: []cwlogtypes.InputLogEvent{{
-			Message:   aws.String(buf.String()), // Send the JSON string
-			Timestamp: aws.Int64(time.Now().UnixNano() / int64(time.Millisecond)),
-		}},
+		LogEvents: []cwlogtypes.InputLogEvent{
+			{
+				Message:   aws.String("CloudWatch logging initialized"),
+				Timestamp: aws.Int64(time.Now().UnixNano() / int64(time.Millisecond)),
+			},
+		},
 	}
 
 	if c.sequenceToken != nil {
-		input.SequenceToken = c.sequenceToken
+		testInput.SequenceToken = c.sequenceToken
 	}
 
-	output, err := c.logClient.PutLogEvents(ctx, input)
+	testOutput, err := c.logClient.PutLogEvents(c.ctx, testInput)
 	if err != nil {
-		return fmt.Errorf("failed to put log events: %w", err)
+		fmt.Printf("Error sending test log event: %v\n", err)
+
+		// Handle invalid sequence token error
+		if strings.Contains(err.Error(), "InvalidSequenceTokenException") {
+			parts := strings.Split(err.Error(), "sequenceToken is: ")
+			if len(parts) > 1 {
+				token := strings.TrimSpace(parts[1])
+				token = strings.Trim(token, "\"")
+
+				c.sequenceToken = aws.String(token)
+				fmt.Printf("Updated sequence token to: %s\n", *c.sequenceToken)
+
+				// Try again with the correct token
+				testInput.SequenceToken = c.sequenceToken
+				testOutput, err = c.logClient.PutLogEvents(c.ctx, testInput)
+				if err != nil {
+					fmt.Printf("Error sending test log event after token update: %v\n", err)
+					return fmt.Errorf("failed to send test log event: %w", err)
+				}
+			}
+		} else {
+			return fmt.Errorf("failed to send test log event: %w", err)
+		}
 	}
 
-	c.mutex.Lock()
-	c.sequenceToken = output.NextSequenceToken
-	c.mutex.Unlock()
+	if testOutput != nil && testOutput.NextSequenceToken != nil {
+		c.sequenceToken = testOutput.NextSequenceToken
+		fmt.Printf("Updated sequence token to: %s\n", *c.sequenceToken)
+	}
 
+	c.initialized = true
+	fmt.Printf("CloudWatch log stream initialization complete\n")
 	return nil
 }
 
 func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
-
-	fmt.Println("Putting Logs...")
-
+	var err error
 	backoff := time.Second
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		output, err := c.logClient.PutLogEvents(c.ctx, input)
+		var output *cloudwatchlogs.PutLogEventsOutput
+
+		output, err = c.logClient.PutLogEvents(c.ctx, input)
 		if err == nil {
 			c.mutex.Lock()
 			c.sequenceToken = output.NextSequenceToken
@@ -147,6 +347,7 @@ func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
 			return nil
 		}
 
+		// Handle specific error cases
 		if strings.Contains(err.Error(), "ResourceNotFoundException") {
 			if err := c.initLogStream(); err != nil {
 				return err
@@ -154,14 +355,30 @@ func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
 			continue
 		}
 
+		// Handle invalid sequence token error
+		if strings.Contains(err.Error(), "InvalidSequenceTokenException") {
+			// Extract the expected sequence token from the error message
+			parts := strings.Split(err.Error(), "sequenceToken is: ")
+			if len(parts) > 1 {
+				token := strings.TrimSpace(parts[1])
+				token = strings.Trim(token, "\"")
+
+				c.mutex.Lock()
+				c.sequenceToken = aws.String(token)
+				c.mutex.Unlock()
+
+				input.SequenceToken = aws.String(token)
+				continue
+			}
+		}
+
+		// Back off and retry
 		if attempt < maxRetries-1 {
 			time.Sleep(backoff)
 			backoff *= 2
 			continue
 		}
-
-		return fmt.Errorf("put logs failed after %d attempts: %w", maxRetries, err)
 	}
 
-	return nil
+	return fmt.Errorf("put logs failed after %d attempts: %w", maxRetries, err)
 }

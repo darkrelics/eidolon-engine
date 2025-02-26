@@ -52,8 +52,7 @@ type CloudWatch struct {
 }
 
 func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error) {
-
-	fmt.Println("New CloudWatch...Initalizing CloudWatch...")
+	fmt.Println("New CloudWatch...Initializing CloudWatch...")
 
 	handlerCtx, cancel := context.WithCancel(ctx)
 
@@ -68,15 +67,18 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		return nil, fmt.Errorf("error loading AWS config: %w", err)
 	}
 
-	// Create CloudWatch Handler (JSON)
-	loghandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level:     parseLogLevel(cfg.Logging.LogLevel),
-		AddSource: false,
+	// Create a temporary console logger for bootstrapping
+	tempHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: parseLogLevel(cfg.Logging.LogLevel),
 	})
+	tempLogger := slog.New(tempHandler)
 
-	//Create CloudWatch Handler
+	// Set temporary logger
+	Logger = tempLogger
+	slog.SetDefault(tempLogger)
 
-	handler := &CloudWatch{
+	// Create CloudWatch instance
+	cloudWatch := &CloudWatch{
 		ctx:           handlerCtx,
 		cancel:        cancel,
 		logClient:     cloudwatchlogs.NewFromConfig(awsConfig),
@@ -85,39 +87,48 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		logGroup:      cfg.Logging.LogGroup,
 		logStream:     cfg.Logging.LogStream,
 		namespace:     cfg.Logging.MetricNamespace,
-		handlers:      []slog.Handler{loghandler},
 		initialized:   false,
 		interval:      time.Minute,
 		sequenceToken: nil,
 		metrics:       make(chan types.MetricDatum, 100),
 	}
 
-	// Set up global logger
-	Logger = slog.New(loghandler)
-	slog.SetDefault(Logger)
+	// Create the CloudWatch handler that implements slog.Handler
+	cwHandler := NewCloudWatchHandler(cloudWatch, parseLogLevel(cfg.Logging.LogLevel), true)
 
-	return handler, nil
+	// Create and set the final logger
+	finalLogger := slog.New(cwHandler)
+	Logger = finalLogger
+	slog.SetDefault(finalLogger)
+
+	// Store handlers
+	cloudWatch.handlers = []slog.Handler{cwHandler}
+
+	return cloudWatch, nil
 }
 
 func (c *CloudWatch) Enabled(ctx context.Context, level slog.Level) bool {
-
-	Logger.Info("CloudWatch Enabled...")
-
+	// This function is kept for backward compatibility but no longer implements
+	// the slog.Handler interface directly
 	return level >= parseLogLevel(c.logLevel)
 }
 
 func (c *CloudWatch) WithAttrs(attrs []slog.Attr) slog.Handler {
-
-	Logger.Info("CloudWatch WithAttrs...")
-
+	// This function is kept for backward compatibility but no longer implements
+	// the slog.Handler interface directly
 	return c
 }
 
 func (c *CloudWatch) WithGroup(name string) slog.Handler {
-
-	Logger.Info("CloudWatch WithGroup...")
-
+	// This function is kept for backward compatibility but no longer implements
+	// the slog.Handler interface directly
 	return c
+}
+
+func (c *CloudWatch) Handle(ctx context.Context, r slog.Record) error {
+	// This function is kept for backward compatibility but no longer implements
+	// the slog.Handler interface directly
+	return nil
 }
 
 // Stop gracefully shuts down the CloudWatch component.

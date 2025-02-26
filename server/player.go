@@ -378,10 +378,13 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				return
 
 			default:
-				if len(inputBuffer) < 1024 {
-					inputBuffer = append(inputBuffer, r)
-					if p.echo {
-						p.connection.Write([]byte(string(r)))
+				// Filter input to only allow printable ASCII (32-126)
+				if r >= 32 && r <= 126 {
+					if len(inputBuffer) < 1024 {
+						inputBuffer = append(inputBuffer, r)
+						if p.echo {
+							p.connection.Write([]byte(string(r)))
+						}
 					}
 				}
 			}
