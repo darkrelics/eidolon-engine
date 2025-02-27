@@ -29,23 +29,25 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
+	"github.com/google/uuid"
 )
 
 type Server struct {
-	config       *Configuration
-	ctx          context.Context
-	cancel       context.CancelFunc
-	mutex        sync.RWMutex
-	game         *Game
-	database     *KeyPair
-	start        time.Time
-	playerCount  atomic.Uint64
-	players      map[uint64]*Player
-	shutdownOnce sync.Once
-	cognito      *cognitoidentityprovider.CognitoIdentityProvider
-	index        *Index
-	activeMotDs  []*MOTD
-	sshInterface *Interface_SSH
+	config        *Configuration
+	ctx           context.Context
+	cancel        context.CancelFunc
+	mutex         sync.RWMutex
+	game          *Game
+	database      *KeyPair
+	start         time.Time
+	playerCount   atomic.Uint64
+	players       map[uint64]*Player
+	playersByUUID map[uuid.UUID]*Player
+	shutdownOnce  sync.Once
+	cognito       *cognitoidentityprovider.CognitoIdentityProvider
+	index         *Index
+	activeMotDs   []*MOTD
+	sshInterface  *Interface_SSH
 }
 
 type Index struct {
@@ -94,17 +96,18 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 	}
 
 	server := &Server{
-		config:       config,
-		ctx:          ctx,
-		cancel:       cancel,
-		mutex:        sync.RWMutex{},
-		start:        time.Now(),
-		database:     database,
-		playerCount:  atomic.Uint64{},
-		players:      make(map[uint64]*Player),
-		shutdownOnce: sync.Once{},
-		cognito:      cognitoidentityprovider.New(serverSession),
-		index:        index,
+		config:        config,
+		ctx:           ctx,
+		cancel:        cancel,
+		mutex:         sync.RWMutex{},
+		start:         time.Now(),
+		database:      database,
+		playerCount:   atomic.Uint64{},
+		players:       make(map[uint64]*Player),
+		playersByUUID: make(map[uuid.UUID]*Player),
+		shutdownOnce:  sync.Once{},
+		cognito:       cognitoidentityprovider.New(serverSession),
+		index:         index,
 	}
 
 	server.playerCount.Store(0)
@@ -178,7 +181,6 @@ func (s *Server) Stop() error {
 }
 
 func (s *Server) AddPlayer(player *Player) error {
-
 	if player == nil {
 		return fmt.Errorf("player is nil")
 	}
@@ -190,23 +192,46 @@ func (s *Server) AddPlayer(player *Player) error {
 	player.mutex.Unlock()
 
 	s.mutex.Lock()
-	s.players[id] = player
-	s.mutex.Unlock()
-
-	s.playerCount.Add(1)
-	Logger.Info("Player added", "playerID", id)
-
-	return nil
-}
-
-func (s *Server) RemovePlayer(playerID uint64) error {
-
-	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	delete(s.players, playerID)
+	// Check if this player (by UUID) is already logged in
+	existingPlayer, alreadyLoggedIn := s.playersByUUID[player.id]
+	if alreadyLoggedIn {
+		Logger.Info("Player already logged in, disconnecting previous session",
+			"playerID", player.id.String(),
+			"email", player.email)
 
-	s.playerCount.Add(^uint64(0))
+		// Store previous session info for messaging
+		previousSessionIndex := existingPlayer.index
+		hasActiveCharacter := existingPlayer.character != nil
+
+		// Disconnect the existing player's session
+		// We need to unlock the mutex before calling Stop to avoid deadlock
+		s.mutex.Unlock()
+
+		// Send a message to the existing player
+		existingPlayer.toPlayer <- "\r\nYou are being disconnected because your account has logged in from another location.\r\n"
+
+		// Stop the existing player session
+		existingPlayer.Stop()
+
+		// Reacquire the mutex
+		s.mutex.Lock()
+
+		// Log the action
+		if hasActiveCharacter {
+			Logger.Info("Disconnected player with active character",
+				"playerID", player.id.String(),
+				"playerIndex", previousSessionIndex)
+		}
+	}
+
+	// Add the new player to both maps
+	s.players[id] = player
+	s.playersByUUID[player.id] = player
+
+	s.playerCount.Add(1)
+	Logger.Info("Player added", "playerID", id, "playerUUID", player.id.String())
 
 	return nil
 }

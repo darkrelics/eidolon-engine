@@ -469,3 +469,23 @@ func wrapText(text string, width int) string {
 
 	return result.String()
 }
+
+func (s *Server) RemovePlayer(playerID uint64) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	// Find the player by index
+	player, exists := s.players[playerID]
+	if exists {
+		// Remove from both maps
+		delete(s.players, playerID)
+		delete(s.playersByUUID, player.id)
+
+		s.playerCount.Add(^uint64(0)) // Decrement count
+		Logger.Info("Player removed", "playerID", playerID, "playerUUID", player.id.String())
+	} else {
+		Logger.Warn("Attempted to remove non-existent player", "playerID", playerID)
+	}
+
+	return nil
+}
