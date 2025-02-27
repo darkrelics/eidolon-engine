@@ -278,3 +278,80 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 	return character, nil
 
 }
+
+// Run starts the character's main gameplay loop
+func (c *Character) Run() {
+	Logger.Info("Starting character session", "characterName", c.name)
+
+	// Add character to the game's active characters
+	c.game.mutex.Lock()
+	c.game.characters[c.id] = c
+	c.game.mutex.Unlock()
+
+	// Add character to the room
+	c.room.mutex.Lock()
+	c.room.characters[c.id] = c
+	c.room.mutex.Unlock()
+
+	// Main input loop
+	for {
+		// Send prompt to player
+		c.toPlayer <- c.prompt
+
+		select {
+		case <-c.end:
+			Logger.Info("Character session ending via end channel", "characterName", c.name)
+			return
+
+		case input, ok := <-c.fromPlayer:
+			if !ok {
+				Logger.Info("Character input channel closed", "characterName", c.name)
+				return
+			}
+
+			// Process the input
+			cmd := strings.TrimSpace(strings.ToLower(input))
+
+			if cmd == "quit" || cmd == "exit" {
+				c.toPlayer <- "\nLeaving game...\n"
+				close(c.end)
+				return
+			} else if cmd == "" {
+				// Empty command, just send prompt again
+				continue
+			} else {
+				c.toPlayer <- fmt.Sprintf("You entered: %s\n", cmd)
+			}
+		}
+	}
+}
+
+// Stop cleanly shuts down the character session
+func (c *Character) Stop() {
+	Logger.Info("Stopping character session", "characterName", c.name)
+
+	// Remove character from room
+	if c.room != nil {
+		c.room.mutex.Lock()
+		delete(c.room.characters, c.id)
+		c.room.mutex.Unlock()
+	}
+
+	// Remove character from game's active characters
+	c.game.mutex.Lock()
+	delete(c.game.characters, c.id)
+	c.game.mutex.Unlock()
+
+	// Save character state
+	err := c.Save()
+	if err != nil {
+		Logger.Error("Error saving character during shutdown", "characterName", c.name, "error", err)
+	}
+
+	// Signal the end channel if it hasn't been closed already
+	select {
+	case c.end <- true:
+	default:
+		// Channel might already be closed or full
+	}
+}

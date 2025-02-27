@@ -429,13 +429,63 @@ func (p *Player) deleteCharacterFromDatabase(characterID uuid.UUID) error {
 }
 
 func (p *Player) PlayCharacter() {
-	// This is a placeholder for character gameplay
-	// The actual implementation would handle character commands, movement, combat, etc.
-	p.toPlayer <- "\nCharacter play functionality is not yet implemented.\n"
-	p.toPlayer <- "Returning to console...\n"
+	if p.character == nil {
+		p.toPlayer <- "No character selected.\n"
+		return
+	}
 
-	// Clear the character selection when returning to console
-	p.character = nil
+	// Send a welcome message
+	p.toPlayer <- fmt.Sprintf("\nYou are now playing as %s.\n", p.character.name)
+
+	// Send the initial room description
+	if p.character.room != nil {
+		p.toPlayer <- fmt.Sprintf("\n%s\n%s\n", p.character.room.title, p.character.room.description)
+	}
+
+	// Create a new end channel if needed
+	if p.character.end == nil {
+		p.character.end = make(chan bool, 1)
+	}
+
+	// Main loop for character play
+	for {
+		// Send prompt to player
+		p.toPlayer <- p.character.prompt
+
+		select {
+		case <-p.character.end:
+			// If end signal received, exit loop
+			p.character.Stop()
+			p.character = nil
+			p.toPlayer <- "\nReturning to console...\n"
+			return
+
+		case input, ok := <-p.fromPlayer:
+			if !ok {
+				// Channel closed, exit
+				p.character.Stop()
+				p.character = nil
+				return
+			}
+
+			// Process the input
+			cmd := strings.TrimSpace(strings.ToLower(input))
+
+			if cmd == "quit" || cmd == "exit" {
+				p.toPlayer <- "\nLeaving game...\n"
+				p.character.Stop()
+				p.character = nil
+				p.toPlayer <- "\nReturning to console...\n"
+				return
+			} else if cmd == "" {
+				// Empty command, just continue
+				continue
+			} else {
+				// Handle the command (for now just echo it)
+				p.toPlayer <- fmt.Sprintf("You entered: %s\n", cmd)
+			}
+		}
+	}
 }
 
 func (p *Player) HandleViewMOTDs() {
