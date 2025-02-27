@@ -280,50 +280,96 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 }
 
 // Run starts the character's main gameplay loop
-func (c *Character) Run() {
-	Logger.Info("Starting character session", "characterName", c.name)
+// Run is the main loop that handles player commands.
+// It reads commands from the player's input and executes them accordingly.
+func (c *Character) Run() error {
+	if c == nil || c.player == nil {
+		Logger.Error("Invalid character or player in Run method")
+		return fmt.Errorf("invalid character or player")
+	}
 
-	// Add character to the game's active characters
+	Logger.Debug("Starting character run", "characterName", c.name)
+
+	// If the room is nil, move the character to room 0
+	if c.room == nil {
+		if defaultRoom, exists := c.game.rooms[0]; exists {
+			c.room = defaultRoom
+			Logger.Info("Character placed in default room", "characterName", c.name, "roomID", 0)
+		} else {
+			Logger.Error("Default room not found", "characterName", c.name)
+			return fmt.Errorf("default room not found")
+		}
+	}
+
+	// Add character to game's active characters
 	c.game.mutex.Lock()
 	c.game.characters[c.id] = c
 	c.game.mutex.Unlock()
 
 	// Add character to the room
 	c.room.mutex.Lock()
+	if c.room.characters == nil {
+		c.room.characters = make(map[uuid.UUID]*Character)
+	}
 	c.room.characters[c.id] = c
 	c.room.mutex.Unlock()
 
-	// Main input loop
-	for {
-		// Send prompt to player
-		c.toPlayer <- c.prompt
+	// Notify room of arrival (without holding locks)
+	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
+
+	// Show initial room description
+	if err := executeLookCommand(c, []string{"look"}); err != nil {
+		Logger.Warn("Failed to show initial room", "characterName", c.name, "error", err)
+	}
+
+	// Send initial prompt
+	c.player.toPlayer <- c.prompt
+
+	shouldQuit := false
+	const idleTimeout = 30 * time.Second
+
+	timer := time.NewTimer(idleTimeout)
+	defer timer.Stop()
+
+	for !shouldQuit {
+		timer.Reset(idleTimeout)
 
 		select {
-		case <-c.end:
-			Logger.Info("Character session ending via end channel", "characterName", c.name)
-			return
-
-		case input, ok := <-c.fromPlayer:
+		case inputLine, ok := <-c.player.fromPlayer:
 			if !ok {
-				Logger.Info("Character input channel closed", "characterName", c.name)
-				return
+				Logger.Info("Player input channel closed", "characterName", c.name)
+				return nil
 			}
 
-			// Process the input
-			cmd := strings.TrimSpace(strings.ToLower(input))
-
-			if cmd == "quit" || cmd == "exit" {
-				c.toPlayer <- "\nLeaving game...\n"
-				close(c.end)
-				return
-			} else if cmd == "" {
-				// Empty command, just send prompt again
-				continue
+			// Process the command - this handles both timed and untimed commands
+			quit, err := ProcessCommand(c, strings.TrimSpace(inputLine))
+			if err != nil {
+				// Send error message to player
+				c.player.toPlayer <- err.Error() + "\n\r"
 			} else {
-				c.toPlayer <- fmt.Sprintf("You entered: %s\n", cmd)
+				// Command processed successfully
+				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine, "quit", quit)
+				shouldQuit = quit
+			}
+
+			if !shouldQuit {
+				c.player.toPlayer <- c.prompt
+			}
+
+		case <-c.end:
+			Logger.Info("Character end signaled", "characterName", c.name)
+			return nil
+
+		case <-timer.C:
+			if c.player == nil {
+				Logger.Warn("Player connection lost", "characterName", c.name)
+				return nil
 			}
 		}
 	}
+
+	Logger.Info("Character quit", "characterName", c.name)
+	return nil
 }
 
 // Stop cleanly shuts down the character session
