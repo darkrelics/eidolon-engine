@@ -163,8 +163,7 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 			Logger.Warn("Slow command execution", "verb", verb, "duration", elapsed, "character", character.name)
 		}
 
-		// Return true if the command was "quit"
-		return verb == "quit", err
+		return false, err
 	} else {
 		// For timed commands, send to the game loop for processing
 		Logger.Debug("Queuing timed command for processing", "verb", verb, "character", character.name)
@@ -218,36 +217,22 @@ func executeHelpCommand(character *Character, tokens []string) error {
 		return showCommandHelp(character, tokens[1])
 	}
 
-	// Show general help with all commands
-	var untimedCommands, timedCommands []string
-	for name, info := range Commands {
-		if info.Type == CommandUntimed {
-			untimedCommands = append(untimedCommands, name)
-		} else {
-			timedCommands = append(timedCommands, name)
-		}
+	// Collect all commands
+	var commandNames []string
+	for name := range Commands {
+		commandNames = append(commandNames, name)
 	}
 
 	// Sort commands alphabetically
-	sort.Strings(untimedCommands)
-	sort.Strings(timedCommands)
+	sort.Strings(commandNames)
 
 	// Build help message
 	var helpMsg strings.Builder
 	helpMsg.WriteString("\n\rAvailable Commands:\n\r\n\r")
 
-	helpMsg.WriteString("Untimed Commands (execute immediately):\n\r")
-	for _, cmd := range untimedCommands {
+	for _, cmd := range commandNames {
 		info := Commands[cmd]
 		helpMsg.WriteString(fmt.Sprintf("  %-12s - %s\n\r", cmd, info.Description))
-	}
-
-	if len(timedCommands) > 0 {
-		helpMsg.WriteString("\n\rTimed Commands (process with game clock):\n\r")
-		for _, cmd := range timedCommands {
-			info := Commands[cmd]
-			helpMsg.WriteString(fmt.Sprintf("  %-12s - %s\n\r", cmd, info.Description))
-		}
 	}
 
 	helpMsg.WriteString("\n\rType 'help <command>' for more information on a specific command.\n\r")
@@ -270,12 +255,6 @@ func showCommandHelp(character *Character, cmdName string) error {
 	msg.WriteString(fmt.Sprintf("\n\rCommand: %s\n\r", cmdName))
 	msg.WriteString(fmt.Sprintf("Description: %s\n\r", cmdInfo.Description))
 	msg.WriteString(fmt.Sprintf("Usage: %s\n\r", cmdInfo.Usage))
-
-	if cmdInfo.Type == CommandTimed {
-		msg.WriteString("Note: This is a timed command and will be processed with the game clock.\n\r")
-	} else {
-		msg.WriteString("Note: This is an untimed command and will execute immediately.\n\r")
-	}
 
 	character.player.toPlayer <- msg.String()
 	return nil

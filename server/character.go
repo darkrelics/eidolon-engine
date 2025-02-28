@@ -318,16 +318,14 @@ func (c *Character) Run() error {
 	// Send initial prompt
 	c.player.toPlayer <- c.prompt
 
-	shouldQuit := false
 	const idleTimeout = 30 * time.Second
-
 	timer := time.NewTimer(idleTimeout)
 	defer timer.Stop()
 
 	// Channel to track when a command is processing
 	commandProcessing := make(chan struct{}, 1)
 
-	for !shouldQuit {
+	for {
 		timer.Reset(idleTimeout)
 
 		select {
@@ -344,15 +342,14 @@ func (c *Character) Run() error {
 				// Channel already has a value, which is fine
 			}
 
-			// Process the command - this handles both timed and untimed commands
-			quit, err := ProcessCommand(c, strings.TrimSpace(inputLine))
+			// Process the command
+			_, err := ProcessCommand(c, strings.TrimSpace(inputLine))
 			if err != nil {
 				// Send error message to player
 				c.player.toPlayer <- err.Error() + "\n\r"
 			} else {
 				// Command processed successfully
-				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine, "quit", quit)
-				shouldQuit = quit
+				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
 			}
 
 			// Clear the processing signal
@@ -362,10 +359,8 @@ func (c *Character) Run() error {
 				// Channel already empty, which is fine
 			}
 
-			if !shouldQuit {
-				// Always send prompt after processing a command
-				c.player.toPlayer <- c.prompt
-			}
+			// Always send prompt after processing a command
+			c.player.toPlayer <- c.prompt
 
 		case <-c.end:
 			Logger.Info("Character end signaled", "characterName", c.name)
@@ -378,9 +373,6 @@ func (c *Character) Run() error {
 			}
 		}
 	}
-
-	Logger.Info("Character quit", "characterName", c.name)
-	return nil
 }
 
 // Stop cleanly shuts down the character session
