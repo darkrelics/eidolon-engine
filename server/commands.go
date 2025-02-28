@@ -26,14 +26,6 @@ import (
 	"time"
 )
 
-// CommandType defines whether a command is timed or untimed
-type CommandType int
-
-const (
-	CommandUntimed CommandType = iota // Commands that don't affect the game world and execute immediately
-	CommandTimed                      // Commands that affect the game world and are processed with the game clock
-)
-
 // Command messages
 const (
 	msgNoExits     = "There are no visible exits.\n\r"
@@ -51,44 +43,40 @@ const (
 
 // CommandInfo stores metadata about each command
 type CommandInfo struct {
-	Type        CommandType                               // Whether the command is timed or untimed
-	Handler     func(c *Character, tokens []string) error // Function to execute the command
-	Description string                                    // Description for help text
-	Usage       string                                    // Usage information
+	timed       bool                                      // Whether the command is timed (true) or untimed (false)
+	handler     func(c *Character, tokens []string) error // Function to execute the command
+	description string                                    // Description for help text
+	usage       string                                    // Usage information
 }
 
-// Global commands map
-var Commands map[string]CommandInfo
-
 // Initialize commands
-func init() {
-	Commands = make(map[string]CommandInfo)
+func (g *Game) initCommands() {
 
 	// Register basic commands
-	Commands["quit"] = CommandInfo{
-		Type:        CommandUntimed,
-		Handler:     executeQuitCommand,
-		Description: "Exit the game",
-		Usage:       "quit",
+	g.commands["quit"] = CommandInfo{
+		timed:       false,
+		handler:     executeQuitCommand,
+		description: "Exit the game",
+		usage:       "quit",
 	}
 
-	Commands["look"] = CommandInfo{
-		Type:        CommandUntimed,
-		Handler:     executeLookCommand,
-		Description: "Look around or examine something",
-		Usage:       "look [target]",
+	g.commands["look"] = CommandInfo{
+		timed:       false,
+		handler:     executeLookCommand,
+		description: "Look around or examine something",
+		usage:       "look [target]",
 	}
 
-	Commands["help"] = CommandInfo{
-		Type:        CommandUntimed,
-		Handler:     executeHelpCommand,
-		Description: "Display available commands",
-		Usage:       "help [command]",
+	g.commands["help"] = CommandInfo{
+		timed:       false,
+		handler:     executeHelpCommand,
+		description: "Display available commands",
+		usage:       "help [command]",
 	}
 }
 
 // ValidateCommand checks if a command is valid and returns its verb and tokens
-func ValidateCommand(input string) (string, []string, error) {
+func ValidateCommand(character *Character, input string) (string, []string, error) {
 	if len(input) == 0 {
 		return "", nil, errors.New("\n\rNo command entered.\n\r")
 	}
@@ -100,7 +88,15 @@ func ValidateCommand(input string) (string, []string, error) {
 	}
 
 	verb := strings.ToLower(tokens[0])
-	if _, exists := Commands[verb]; !exists {
+	if character == nil || character.game == nil {
+		return "", nil, errors.New("\n\rInvalid character state.\n\r")
+	}
+
+	character.game.mutex.RLock()
+	_, exists := character.game.commands[verb]
+	character.game.mutex.RUnlock()
+
+	if !exists {
 		return "", nil, fmt.Errorf("\n\rCommand '%s' not understood.\n\r", verb)
 	}
 
@@ -139,24 +135,31 @@ func tokenizeInput(input string) []string {
 // ProcessCommand determines if a command is timed or untimed and handles it accordingly
 func ProcessCommand(character *Character, input string) (bool, error) {
 	// Parse and validate the command
-	verb, tokens, err := ValidateCommand(input)
+	verb, tokens, err := ValidateCommand(character, input)
 	if err != nil {
 		return false, err
 	}
 
+	if character == nil || character.game == nil {
+		return false, errors.New("\n\rInvalid character state.\n\r")
+	}
+
 	// Retrieve the command info
-	cmdInfo, exists := Commands[verb]
+	character.game.mutex.RLock()
+	cmdInfo, exists := character.game.commands[verb]
+	character.game.mutex.RUnlock()
+
 	if !exists {
 		return false, fmt.Errorf("command '%s' not understood", verb)
 	}
 
 	// Process based on command type
-	if cmdInfo.Type == CommandUntimed {
+	if !cmdInfo.timed {
 		// Execute untimed commands immediately
 		Logger.Debug("Executing untimed command", "verb", verb, "character", character.name)
 		start := time.Now()
 
-		err := cmdInfo.Handler(character, tokens)
+		err := cmdInfo.handler(character, tokens)
 
 		elapsed := time.Since(start)
 		if elapsed > 100*time.Millisecond {
@@ -206,7 +209,7 @@ func executeQuitCommand(character *Character, tokens []string) error {
 
 // executeHelpCommand handles the help command
 func executeHelpCommand(character *Character, tokens []string) error {
-	if character == nil || character.player == nil {
+	if character == nil || character.player == nil || character.game == nil {
 		return errors.New("invalid character state")
 	}
 
@@ -218,10 +221,14 @@ func executeHelpCommand(character *Character, tokens []string) error {
 	}
 
 	// Collect all commands
+	character.game.mutex.RLock()
+
 	var commandNames []string
-	for name := range Commands {
+	for name := range character.game.commands {
 		commandNames = append(commandNames, name)
 	}
+
+	character.game.mutex.RUnlock()
 
 	// Sort commands alphabetically
 	sort.Strings(commandNames)
@@ -230,10 +237,14 @@ func executeHelpCommand(character *Character, tokens []string) error {
 	var helpMsg strings.Builder
 	helpMsg.WriteString("\n\rAvailable Commands:\n\r\n\r")
 
+	character.game.mutex.RLock()
+
 	for _, cmd := range commandNames {
-		info := Commands[cmd]
-		helpMsg.WriteString(fmt.Sprintf("  %-12s - %s\n\r", cmd, info.Description))
+		info := character.game.commands[cmd]
+		helpMsg.WriteString(fmt.Sprintf("  %-12s - %s\n\r", cmd, info.description))
 	}
+
+	character.game.mutex.RUnlock()
 
 	helpMsg.WriteString("\n\rType 'help <command>' for more information on a specific command.\n\r")
 
@@ -243,8 +254,15 @@ func executeHelpCommand(character *Character, tokens []string) error {
 
 // showCommandHelp displays help for a specific command
 func showCommandHelp(character *Character, cmdName string) error {
+	if character == nil || character.player == nil || character.game == nil {
+		return errors.New("invalid character state")
+	}
+
 	cmdName = strings.ToLower(cmdName)
-	cmdInfo, exists := Commands[cmdName]
+
+	character.game.mutex.RLock()
+	cmdInfo, exists := character.game.commands[cmdName]
+	character.game.mutex.RUnlock()
 
 	if !exists {
 		character.player.toPlayer <- fmt.Sprintf("\n\rNo help available for '%s'. Command not found.\n\r", cmdName)
@@ -253,8 +271,8 @@ func showCommandHelp(character *Character, cmdName string) error {
 
 	var msg strings.Builder
 	msg.WriteString(fmt.Sprintf("\n\rCommand: %s\n\r", cmdName))
-	msg.WriteString(fmt.Sprintf("Description: %s\n\r", cmdInfo.Description))
-	msg.WriteString(fmt.Sprintf("Usage: %s\n\r", cmdInfo.Usage))
+	msg.WriteString(fmt.Sprintf("Description: %s\n\r", cmdInfo.description))
+	msg.WriteString(fmt.Sprintf("Usage: %s\n\r", cmdInfo.usage))
 
 	character.player.toPlayer <- msg.String()
 	return nil

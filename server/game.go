@@ -52,6 +52,7 @@ type Game struct {
 	exits                map[uuid.UUID]*Exit
 	prototypes           map[uuid.UUID]*Prototype
 	items                map[uuid.UUID]*Item
+	commands             map[string]CommandInfo
 	startingHealth       uint16
 	startingEssence      uint16
 	balance              float64
@@ -82,6 +83,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		exits:            make(map[uuid.UUID]*Exit),
 		prototypes:       make(map[uuid.UUID]*Prototype),
 		items:            make(map[uuid.UUID]*Item),
+		commands:         make(map[string]CommandInfo),
 		ticker:           nil,
 		startingHealth:   config.Game.StartingHealth,
 		startingEssence:  config.Game.StartingEssence,
@@ -127,6 +129,8 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 	if err := game.LoadRooms(); err != nil {
 		Logger.Error("Error loading rooms", "error", err)
 	}
+
+	game.initCommands()
 
 	return game, nil
 

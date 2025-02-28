@@ -62,7 +62,7 @@ Key components:
 ## TODO
 
 - [ ] Fix output formatting for the client.
-- [ ] Allow players to enter their name.
+- [x] Allow players to enter their name.
 - [x] Display the incoming IP address and Port on the server.
 - [x] Add a help command.
 - [ ] Add a character list command.
@@ -100,7 +100,7 @@ Key components:
 - [ ] Expand error handling.
 - [ ] Add Session Timeout.
 - [ ] Add log rotation for by Cloudwatch Stream.
-- [ ] Add batching for Clpudwatch log writes.
+- [ ] Add batching for Cloudwatch log writes.
 
 ## Commands
 
