@@ -49,78 +49,42 @@ const (
 	whoEmpty       = "\n\rNo other players online.\n\r"
 )
 
-// CommandHandler is the function signature for command handlers
-type CommandHandler func(character *Character, tokens []string) error
-
 // CommandInfo stores metadata about each command
 type CommandInfo struct {
-	Type        CommandType    // Whether the command is timed or untimed
-	Handler     CommandHandler // Function to execute the command
-	Description string         // Description for help text
-	Usage       string         // Usage information
+	Type        CommandType                               // Whether the command is timed or untimed
+	Handler     func(c *Character, tokens []string) error // Function to execute the command
+	Description string                                    // Description for help text
+	Usage       string                                    // Usage information
 }
 
-// Commands map stores all available commands and their handlers
-var Commands = map[string]CommandInfo{
-	"quit": {
+// Global commands map
+var Commands map[string]CommandInfo
+
+// Initialize commands
+func init() {
+	Commands = make(map[string]CommandInfo)
+
+	// Register basic commands
+	Commands["quit"] = CommandInfo{
 		Type:        CommandUntimed,
 		Handler:     executeQuitCommand,
 		Description: "Exit the game",
 		Usage:       "quit",
-	},
-	"look": {
+	}
+
+	Commands["look"] = CommandInfo{
 		Type:        CommandUntimed,
 		Handler:     executeLookCommand,
 		Description: "Look around or examine something",
 		Usage:       "look [target]",
-	},
-	"help": {
+	}
+
+	Commands["help"] = CommandInfo{
 		Type:        CommandUntimed,
 		Handler:     executeHelpCommand,
 		Description: "Display available commands",
 		Usage:       "help [command]",
-	},
-}
-
-// commandLexer splits input into tokens while respecting quoted strings
-type commandLexer struct {
-	input string
-	pos   int
-}
-
-// newCommandLexer creates a new lexer for parsing commands
-func newCommandLexer(input string) *commandLexer {
-	return &commandLexer{input: input}
-}
-
-// tokenize breaks the input into individual tokens
-func (l *commandLexer) tokenize() []string {
-	var tokens []string
-	var current strings.Builder
-	inQuotes := false
-
-	for l.pos < len(l.input) {
-		switch l.input[l.pos] {
-		case '"':
-			inQuotes = !inQuotes
-		case ' ', '\t':
-			if !inQuotes && current.Len() > 0 {
-				tokens = append(tokens, current.String())
-				current.Reset()
-			} else if inQuotes {
-				current.WriteByte(l.input[l.pos])
-			}
-		default:
-			current.WriteByte(l.input[l.pos])
-		}
-		l.pos++
 	}
-
-	if current.Len() > 0 {
-		tokens = append(tokens, current.String())
-	}
-
-	return tokens
 }
 
 // ValidateCommand checks if a command is valid and returns its verb and tokens
@@ -129,8 +93,7 @@ func ValidateCommand(input string) (string, []string, error) {
 		return "", nil, errors.New("\n\rNo command entered.\n\r")
 	}
 
-	lexer := newCommandLexer(input)
-	tokens := lexer.tokenize()
+	tokens := tokenizeInput(input)
 
 	if len(tokens) == 0 {
 		return "", nil, errors.New("\n\rNo command entered.\n\r")
@@ -142,6 +105,35 @@ func ValidateCommand(input string) (string, []string, error) {
 	}
 
 	return verb, tokens, nil
+}
+
+// tokenizeInput breaks the input into individual tokens
+func tokenizeInput(input string) []string {
+	var tokens []string
+	var current strings.Builder
+	inQuotes := false
+
+	for i := 0; i < len(input); i++ {
+		switch input[i] {
+		case '"':
+			inQuotes = !inQuotes
+		case ' ', '\t':
+			if !inQuotes && current.Len() > 0 {
+				tokens = append(tokens, current.String())
+				current.Reset()
+			} else if inQuotes {
+				current.WriteByte(input[i])
+			}
+		default:
+			current.WriteByte(input[i])
+		}
+	}
+
+	if current.Len() > 0 {
+		tokens = append(tokens, current.String())
+	}
+
+	return tokens
 }
 
 // ProcessCommand determines if a command is timed or untimed and handles it accordingly
@@ -161,46 +153,26 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 	// Process based on command type
 	if cmdInfo.Type == CommandUntimed {
 		// Execute untimed commands immediately
-		Logger.Debug("Executing untimed command", "verb", verb, "character", character.Name)
+		Logger.Debug("Executing untimed command", "verb", verb, "character", character.name)
 		start := time.Now()
 
 		err := cmdInfo.Handler(character, tokens)
 
 		elapsed := time.Since(start)
 		if elapsed > 100*time.Millisecond {
-			Logger.Warn("Slow command execution", "verb", verb, "duration", elapsed, "character", character.Name)
+			Logger.Warn("Slow command execution", "verb", verb, "duration", elapsed, "character", character.name)
 		}
 
 		// Return true if the command was "quit"
 		return verb == "quit", err
 	} else {
 		// For timed commands, send to the game loop for processing
-		Logger.Debug("Queuing timed command for processing", "verb", verb, "character", character.Name)
+		Logger.Debug("Queuing timed command for processing", "verb", verb, "character", character.name)
 
-		// Create a command package to send to the game loop
-		cmdPackage := &CommandPackage{
-			Character: character,
-			Verb:      verb,
-			Tokens:    tokens,
-			Timestamp: time.Now(),
-		}
-
-		// Send to game loop for processing
-		select {
-		case character.game.commandQueue <- cmdPackage:
-			return false, nil
-		default:
-			return false, errors.New("\n\rServer is busy. Please try again in a moment.\n\r")
-		}
+		// TODO: Implement timed commands via a command queue in the Game struct
+		Logger.Error("Timed commands not implemented", "character", character.name, "command", verb)
+		return false, errors.New("\n\rTimed commands are not yet implemented.\n\r")
 	}
-}
-
-// CommandPackage represents a command to be processed by the game loop
-type CommandPackage struct {
-	Character *Character
-	Verb      string
-	Tokens    []string
-	Timestamp time.Time
 }
 
 // executeQuitCommand handles the quit command
@@ -217,7 +189,7 @@ func executeQuitCommand(character *Character, tokens []string) error {
 		select {
 		case character.player.toPlayer <- "\n\rSaving character state...\n\r":
 		default:
-			Logger.Warn("Failed to notify player: ToPlayer channel is full or closed", "characterName", character.Name)
+			Logger.Warn("Failed to notify player: ToPlayer channel is full or closed", "characterName", character.name)
 		}
 	}
 
@@ -229,11 +201,7 @@ func executeQuitCommand(character *Character, tokens []string) error {
 	}
 
 	// Clean up and save character state
-	if err := character.Stop(); err != nil {
-		Logger.Error("Error stopping character", "characterName", character.name, "error", err)
-		return fmt.Errorf("error during character logout: %w", err)
-	}
-
+	character.Stop()
 	return nil
 }
 
@@ -488,78 +456,4 @@ func formatCharacterDescription(target *Character, observer *Character) string {
 	}
 
 	return desc.String()
-}
-
-// formatItemDescription creates a description of an item
-func formatItemDescription(item *Item) string {
-	var desc strings.Builder
-	desc.WriteString(fmt.Sprintf("\n\r%s\n\r", item.name))
-	desc.WriteString(item.description)
-	desc.WriteString("\n\r")
-
-	if item.wearable && len(item.wornOn) > 0 {
-		desc.WriteString(fmt.Sprintf("It can be worn on: %s\n\r", strings.Join(item.wornOn, ", ")))
-	}
-
-	return desc.String()
-}
-
-// SendRoomMessageExcept sends a message to all characters in a room except one
-func SendRoomMessageExcept(room *Room, message string, except *Character) {
-	if room == nil {
-		return
-	}
-
-	room.mutex.RLock()
-	defer room.mutex.RUnlock()
-
-	for _, c := range room.characters {
-		if c != nil && c != except && c.player != nil {
-			select {
-			case c.player.toPlayer <- message:
-				// Message sent successfully
-			default:
-				Logger.Warn("Failed to send room message to player",
-					"recipient", c.name,
-					"message", message)
-			}
-		}
-	}
-}
-
-// formatHandSlot formats a hand slot for inventory display
-func formatHandSlot(slotName string, item *Item) string {
-	if item == nil {
-		return fmt.Sprintf("  %s: empty\n\r", slotName)
-	}
-
-	description := fmt.Sprintf("  %s: %s", slotName, item.name)
-	if item.stackable && item.quantity > 1 {
-		description += fmt.Sprintf(" (x%d)", item.quantity)
-	}
-	description += "\n\r"
-
-	return description
-}
-
-// formatWornItem formats a worn item for inventory display
-func formatWornItem(item *Item) string {
-	description := fmt.Sprintf("  %s", item.name)
-	if len(item.wornOn) > 0 {
-		description += fmt.Sprintf(" (worn on %s)", strings.Join(item.wornOn, ", "))
-	}
-	description += "\n\r"
-
-	return description
-}
-
-// formatCarriedItem formats a carried item for inventory display
-func formatCarriedItem(item *Item) string {
-	description := fmt.Sprintf("  %s", item.name)
-	if item.stackable && item.quantity > 1 {
-		description += fmt.Sprintf(" (x%d)", item.quantity)
-	}
-	description += "\n\r"
-
-	return description
 }

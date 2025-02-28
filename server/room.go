@@ -179,3 +179,26 @@ func (g *Game) LoadRooms() error {
 	return nil
 
 }
+
+// SendRoomMessageExcept sends a message to all characters in a room except one
+func SendRoomMessageExcept(room *Room, message string, except *Character) {
+	if room == nil {
+		return
+	}
+
+	room.mutex.RLock()
+	defer room.mutex.RUnlock()
+
+	for _, c := range room.characters {
+		if c != nil && c != except && c.player != nil {
+			select {
+			case c.player.toPlayer <- message:
+				// Message sent successfully
+			default:
+				Logger.Warn("Failed to send room message to player",
+					"recipient", c.name,
+					"message", message)
+			}
+		}
+	}
+}
