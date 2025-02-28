@@ -33,11 +33,11 @@ Key components:
 
 ## Current Objectives
 
-- [x] Create the TCP server for client connections.
+- [x] Create the SSH server for client connections.
 - [x] Create a text parser for user input.
 - [x] Implement a player authentication system.
 - [x] Implement a database for the game.
-- [x] Implement a character creation system.
+- [*] Implement a character creation system.
 - [x] Implement a text colorization system.
 - [x] Add Cloudwatch Logs and Metrics.
 - [x] Build an interactive password change system.
@@ -61,30 +61,30 @@ Key components:
 
 ## TODO
 
-- [x] Fix output formatting for the client.
-- [x] Allow players to enter their name.
+- [ ] Fix output formatting for the client.
+- [ ] Allow players to enter their name.
 - [x] Display the incoming IP address and Port on the server.
 - [x] Add a help command.
-- [x] Add a character list command.
+- [ ] Add a character list command.
 - [x] Allow users to change their passwords.
-- [x] Expand the character creation process.
-- [x] Add take item command.
-- [x] Add inventory command.
-- [x] Add drop item command.
-- [x] Add wear item command.
-- [x] Add remove item command.
-- [x] Add examine item command.
+- [ ] Expand the character creation process.
+- [ ] Add take item command.
+- [ ] Add inventory command.
+- [ ] Add drop item command.
+- [ ] Add wear item command.
+- [ ] Add remove item command.
+- [ ] Add examine item command.
 - [x] Implement Persistent Logging.
-- [x] Load item prototypes at start.
-- [x] Create function for creating items from prototypes.
+- [ ] Load item prototypes at start.
+- [ ] Create function for creating items from prototypes.
 - [x] Ensure that a message is passed when a character is added to the game.
 - [x] Add a Message of the Day (MOTD) command.
 - [x] Add Bloom Filter to check for existing characters names being used.
 - [x] Add the ability to delete characters.
-- [x] Allow starting room to be set by Archetype.
-- [x] Improve the input filters
-- [x] Handle unplanned disconnections.
-- [x] Limit Auto Save to updated objects.
+- [*] Allow starting room to be set by Archetype.
+- [ ] Improve the input filters
+- [*] Handle unplanned disconnections.
+- [ ] Limit Auto Save to updated objects.
 - [ ] Improve the say command.
 - [ ] Add look at item command.
 - [ ] Implement an obscenity filter.
@@ -112,11 +112,11 @@ Game Information:
 - [ ] MOTD: Display the message of the day.
 - [ ] REPORT: Report a bug or issue.
 - [ ] BUG: Report a bug or issue.
-- [x] WHO: Display a list of players.
+- [ ] WHO: Display a list of players.
 
 Basic Movement:
 
-- [x] GO: Move to a new room.
+- [ ] GO: Move to a new room.
 - [x] LOOK: Look at the current room.
 - [ ] CLIMB: Climb an object like a tree or ladder.
 - [ ] SWIM: Swim through water.
@@ -145,10 +145,10 @@ Communication:
 
 Combat:
 
-- [x] FACE: Face another player or NPC.
+- [ ] FACE: Face another player or NPC.
 - [ ] ADVACE: Move towards another player or NPC.
 - [ ] RETREAT: Move away from another player or NPC.
-- [x] ASSESS: Assess the situation.
+- [ ] ASSESS: Assess the situation.
 - [ ] ATTACK: Attack another player or NPC.
 - [ ] PARRY: Defend against an attack.
 - [ ] DODGE: Avoid an attack.

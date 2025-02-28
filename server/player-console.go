@@ -434,58 +434,23 @@ func (p *Player) PlayCharacter() {
 		return
 	}
 
-	// Send a welcome message
-	p.toPlayer <- fmt.Sprintf("\nYou are now playing as %s.\n", p.character.name)
-
-	// Send the initial room description
-	if p.character.room != nil {
-		p.toPlayer <- fmt.Sprintf("\n%s\n%s\n", p.character.room.title, p.character.room.description)
-	}
+	// Connect player channels to character channels
+	p.character.fromPlayer = p.fromPlayer
+	p.character.toPlayer = p.toPlayer
 
 	// Create a new end channel if needed
 	if p.character.end == nil {
 		p.character.end = make(chan bool, 1)
 	}
 
-	// Main loop for character play
-	for {
-		// Send prompt to player
-		p.toPlayer <- p.character.prompt
-
-		select {
-		case <-p.character.end:
-			// If end signal received, exit loop
-			p.character.Stop()
-			p.character = nil
-			p.toPlayer <- "\nReturning to console...\n"
-			return
-
-		case input, ok := <-p.fromPlayer:
-			if !ok {
-				// Channel closed, exit
-				p.character.Stop()
-				p.character = nil
-				return
-			}
-
-			// Process the input
-			cmd := strings.TrimSpace(strings.ToLower(input))
-
-			if cmd == "quit" || cmd == "exit" {
-				p.toPlayer <- "\nLeaving game...\n"
-				p.character.Stop()
-				p.character = nil
-				p.toPlayer <- "\nReturning to console...\n"
-				return
-			} else if cmd == "" {
-				// Empty command, just continue
-				continue
-			} else {
-				// Handle the command (for now just echo it)
-				p.toPlayer <- fmt.Sprintf("You entered: %s\n", cmd)
-			}
-		}
+	// Run the character's lifecycle
+	err := p.character.Run()
+	if err != nil {
+		Logger.Error("Error during character session", "characterName", p.character.name, "error", err)
 	}
+
+	p.character = nil
+	p.toPlayer <- "\nReturning to console...\n"
 }
 
 func (p *Player) HandleViewMOTDs() {

@@ -354,14 +354,21 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				if len(inputBuffer) > 0 {
 					select {
 					case p.fromPlayer <- string(inputBuffer):
+						// Don't write the prompt here, let the command processor
+						// or game logic handle sending the prompt after processing
 						if p.echo {
 							p.connection.Write([]byte("\r\n"))
-							p.connection.Write([]byte(p.prompt))
 						}
 						inputBuffer = inputBuffer[:0]
 					case <-ctx.Done():
 						done <- ctx.Err()
 						return
+					}
+				} else {
+					// Handle empty input - just show prompt again
+					if p.echo {
+						p.connection.Write([]byte("\r\n"))
+						p.connection.Write([]byte(p.prompt))
 					}
 				}
 

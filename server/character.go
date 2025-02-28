@@ -279,9 +279,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 }
 
-// Run starts the character's main gameplay loop
 // Run is the main loop that handles player commands.
-// It reads commands from the player's input and executes them accordingly.
 func (c *Character) Run() error {
 	if c == nil || c.player == nil {
 		Logger.Error("Invalid character or player in Run method")
@@ -375,6 +373,11 @@ func (c *Character) Run() error {
 // Stop cleanly shuts down the character session
 func (c *Character) Stop() {
 	Logger.Info("Stopping character session", "characterName", c.name)
+
+	// Notify the room of departure before removing the character
+	if c.room != nil {
+		SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has left.\n\r", c.name), c)
+	}
 
 	// Remove character from room
 	if c.room != nil {
