@@ -329,6 +329,9 @@ func (c *Character) Run() error {
 	timer := time.NewTimer(idleTimeout)
 	defer timer.Stop()
 
+	// Channel to track when a command is processing
+	commandProcessing := make(chan struct{}, 1)
+
 	for !shouldQuit {
 		timer.Reset(idleTimeout)
 
@@ -337,6 +340,13 @@ func (c *Character) Run() error {
 			if !ok {
 				Logger.Info("Player input channel closed", "characterName", c.name)
 				return nil
+			}
+
+			// Signal that a command is processing
+			select {
+			case commandProcessing <- struct{}{}:
+			default:
+				// Channel already has a value, which is fine
 			}
 
 			// Process the command - this handles both timed and untimed commands
@@ -350,7 +360,15 @@ func (c *Character) Run() error {
 				shouldQuit = quit
 			}
 
+			// Clear the processing signal
+			select {
+			case <-commandProcessing:
+			default:
+				// Channel already empty, which is fine
+			}
+
 			if !shouldQuit {
+				// Always send prompt after processing a command
 				c.player.toPlayer <- c.prompt
 			}
 

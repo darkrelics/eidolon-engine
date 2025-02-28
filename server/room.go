@@ -193,7 +193,14 @@ func SendRoomMessageExcept(room *Room, message string, except *Character) {
 		if c != nil && c != except && c.player != nil {
 			select {
 			case c.player.toPlayer <- message:
-				// Message sent successfully
+				// After sending room message, send the prompt again to ensure consistent UI
+				select {
+				case c.player.toPlayer <- c.prompt:
+					// Prompt sent successfully
+				default:
+					Logger.Warn("Failed to send prompt after room message to player",
+						"recipient", c.name)
+				}
 			default:
 				Logger.Warn("Failed to send room message to player",
 					"recipient", c.name,
