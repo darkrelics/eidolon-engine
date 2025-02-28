@@ -184,19 +184,19 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	character.room = room
 
 	// Load inventory items
-	// for name, itemIDStr := range cd.Inventory {
-	// 	itemID, err := uuid.Parse(itemIDStr)
-	// 	if err != nil {
-	// 		Logger.Error("Error parsing item UUID", "itemID", itemIDStr, "error", err)
-	// 		continue
-	// 	}
-	// 	item, err := LoadItem(itemID.String(), game.database)
-	// 	if err != nil {
-	// 		Logger.Error("Error loading item for character", "itemID", itemID, "characterName", character.Name, "error", err)
-	// 		continue
-	// 	}
-	// 	character.inventory[name] = item
-	// }
+	for name, itemIDStr := range cd.Inventory {
+		itemID, err := uuid.Parse(itemIDStr)
+		if err != nil {
+			Logger.Error("Error parsing item UUID", "itemID", itemIDStr, "error", err)
+			continue
+		}
+		item, err := LoadItem(itemID.String(), game.database)
+		if err != nil {
+			Logger.Error("Error loading item for character", "itemID", itemID, "characterName", character.name, "error", err)
+			continue
+		}
+		character.inventory[name] = item
+	}
 
 	// Add character to game state
 	game.mutex.Lock()
@@ -290,13 +290,8 @@ func (c *Character) Run() error {
 
 	// If the room is nil, move the character to room 0
 	if c.room == nil {
-		if defaultRoom, exists := c.game.rooms[0]; exists {
-			c.room = defaultRoom
-			Logger.Info("Character placed in default room", "characterName", c.name, "roomID", 0)
-		} else {
-			Logger.Error("Default room not found", "characterName", c.name)
-			return fmt.Errorf("default room not found")
-		}
+		Logger.Warn("Character room is nil, defaulting to room ID 0", "characterName", c.name)
+		c.room = c.game.rooms[0]
 	}
 
 	// Add character to game's active characters

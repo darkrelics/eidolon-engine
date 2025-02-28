@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/google/uuid"
 )
 
@@ -166,4 +168,86 @@ func formatCarriedItem(item *Item) string {
 	description += "\n\r"
 
 	return description
+}
+
+// LoadItem retrieves an item from the DynamoDB table by its ID.
+func LoadItem(id string, k *KeyPair) (*Item, error) {
+	Logger.Debug("Loading item", "itemID", id)
+
+	if id == "" {
+		return nil, fmt.Errorf("empty item ID provided")
+	}
+
+	// Create the key for DynamoDB lookup
+	key := map[string]*dynamodb.AttributeValue{
+		"ItemID": {
+			S: aws.String(id),
+		},
+	}
+
+	// Retrieve item data from DynamoDB
+	var itemData ItemData
+	err := k.Get("items", key, &itemData)
+	if err != nil {
+		Logger.Error("Error loading item data", "itemID", id, "error", err)
+		return nil, fmt.Errorf("error loading item data: %w", err)
+	}
+
+	// Convert ItemData to Item
+	return itemDataToItem(&itemData)
+}
+
+// itemDataToItem converts ItemData from DynamoDB to an in-memory Item
+func itemDataToItem(data *ItemData) (*Item, error) {
+	if data == nil {
+		return nil, fmt.Errorf("nil item data provided")
+	}
+
+	// Parse UUID strings
+	itemID, err := uuid.Parse(data.ItemID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid item ID format: %w", err)
+	}
+
+	prototypeID, err := uuid.Parse(data.PrototypeID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid prototype ID format: %w", err)
+	}
+
+	// Create new item with parsed data
+	item := &Item{
+		id:          itemID,
+		prototypeID: prototypeID,
+		name:        data.Name,
+		description: data.Description,
+		mass:        data.Mass,
+		value:       data.Value,
+		stackable:   data.Stackable,
+		maxStack:    data.MaxStack,
+		quantity:    data.Quantity,
+		wearable:    data.Wearable,
+		wornOn:      data.WornOn,
+		verbs:       data.Verbs,
+		overrides:   data.Overrides,
+		traitMods:   data.TraitMods,
+		container:   data.Container,
+		isWorn:      data.IsWorn,
+		canPickUp:   data.CanPickUp,
+		metadata:    data.Metadata,
+		mutex:       sync.RWMutex{},
+		lastEdited:  time.Now(),
+		lastSaved:   time.Now(),
+	}
+
+	// If this is a container, we need to parse its contents
+	if data.Container && len(data.Contents) > 0 {
+		item.contents = make([]*Item, 0, len(data.Contents))
+		// We'll leave the contents as an empty slice for now
+		// The actual loading of contained items would need to be
+		// done separately to avoid circular references
+	} else {
+		item.contents = make([]*Item, 0)
+	}
+
+	return item, nil
 }
