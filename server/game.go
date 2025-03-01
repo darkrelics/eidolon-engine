@@ -274,8 +274,6 @@ func (g *Game) Run(errChan chan error) error {
 
 func (g *Game) tick() error {
 
-	fmt.Print(".")
-
 	// Run game logic
 	return nil
 }

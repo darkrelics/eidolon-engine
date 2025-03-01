@@ -25,8 +25,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/google/uuid"
 )
 
@@ -315,7 +313,6 @@ func (p *Player) HandleCharacterSelection() {
 	p.character = character
 	p.toPlayer <- fmt.Sprintf("\nYou are now playing as %s.\n", characterName)
 
-	// TODO: Implement character play session
 	p.PlayCharacter()
 }
 
@@ -397,7 +394,7 @@ func (p *Player) HandleCharacterDeletion() {
 	}
 
 	// Delete the character from database
-	err = p.deleteCharacterFromDatabase(characterID)
+	err = p.DeleteCharacter(characterID)
 	if err != nil {
 		p.toPlayer <- fmt.Sprintf("Failed to delete character: %s\n", err.Error())
 		return
@@ -418,16 +415,6 @@ func (p *Player) HandleCharacterDeletion() {
 	p.toPlayer <- fmt.Sprintf("\nCharacter '%s' has been deleted.\n", characterName)
 }
 
-func (p *Player) deleteCharacterFromDatabase(characterID uuid.UUID) error {
-	// Create key for DynamoDB delete operation
-	key := map[string]*dynamodb.AttributeValue{
-		"CharacterID": {S: aws.String(characterID.String())},
-	}
-
-	// Delete character from database
-	return p.server.game.database.Delete("characters", key)
-}
-
 func (p *Player) PlayCharacter() {
 	if p.character == nil {
 		p.toPlayer <- "No character selected.\n"
@@ -440,17 +427,23 @@ func (p *Player) PlayCharacter() {
 
 	// Create a new end channel if needed
 	if p.character.end == nil {
-		p.character.end = make(chan bool, 1)
+		p.character.end = make(chan bool, 5)
 	}
 
 	// Run the character's lifecycle
-	err := p.character.Run()
-	if err != nil {
-		Logger.Error("Error during character session", "characterName", p.character.name, "error", err)
+	go p.character.Run(p.character.end)
+
+	// Wait for the character to finish
+	<-p.character.end
+
+	// Ensure the character is fully stopped
+	if p.character != nil {
+		p.character.Stop()
+		p.character = nil
 	}
 
-	p.character = nil
-	p.toPlayer <- "\nReturning to console...\n"
+	// Ensure we're fully back to console mode
+	p.toPlayer <- "\n\rReturning to console.\n\r"
 }
 
 func (p *Player) HandleViewMOTDs() {

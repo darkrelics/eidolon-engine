@@ -196,13 +196,6 @@ func executeQuitCommand(character *Character, tokens []string) error {
 	}
 
 	// Signal the end of character's lifecycle
-	select {
-	case character.end <- true:
-	default:
-		Logger.Warn("End channel is full or closed", "characterName", character.name)
-	}
-
-	// Clean up and save character state
 	character.Stop()
 	return nil
 }

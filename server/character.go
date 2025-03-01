@@ -206,6 +206,39 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	return character, nil
 }
 
+// Removes a character from the database by its ID
+func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
+	Logger.Info("Deleting character from database", "characterID", characterID)
+
+	// Check if character is currently active in the game
+	p.server.game.mutex.RLock()
+	activeChar, isActive := p.server.game.characters[characterID]
+	p.server.game.mutex.RUnlock()
+
+	// If character is active, stop it first
+	if isActive && activeChar != nil {
+		Logger.Info("Stopping active character before deletion", "characterName", activeChar.name)
+		activeChar.Stop()
+	}
+
+	// Create the key for DynamoDB deletion
+	key := map[string]*dynamodb.AttributeValue{
+		"CharacterID": {
+			S: aws.String(characterID.String()),
+		},
+	}
+
+	// Delete the character from the database
+	err := p.server.database.Delete("characters", key)
+	if err != nil {
+		Logger.Error("Failed to delete character", "characterID", characterID, "error", err)
+		return fmt.Errorf("failed to delete character: %w", err)
+	}
+
+	Logger.Info("Character deleted successfully", "characterID", characterID)
+	return nil
+}
+
 // CreateCharacter creates a new character for the player.
 
 func (p *Player) CreateCharacter(name string, archetype string) (*Character, error) {
@@ -280,10 +313,10 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 }
 
 // Run is the main loop that handles player commands.
-func (c *Character) Run() error {
+func (c *Character) Run(chan bool) {
 	if c == nil || c.player == nil {
 		Logger.Error("Invalid character or player in Run method")
-		return fmt.Errorf("invalid character or player")
+		c.end <- true
 	}
 
 	Logger.Debug("Starting character run", "characterName", c.name)
@@ -332,7 +365,7 @@ func (c *Character) Run() error {
 		case inputLine, ok := <-c.player.fromPlayer:
 			if !ok {
 				Logger.Info("Player input channel closed", "characterName", c.name)
-				return nil
+				c.end <- true
 			}
 
 			// Signal that a command is processing
@@ -364,12 +397,14 @@ func (c *Character) Run() error {
 
 		case <-c.end:
 			Logger.Info("Character end signaled", "characterName", c.name)
-			return nil
+			// Explicitly call Stop to ensure proper cleanup
+			c.Stop()
+			c.end <- true
 
 		case <-timer.C:
 			if c.player == nil {
 				Logger.Warn("Player connection lost", "characterName", c.name)
-				return nil
+				c.end <- true
 			}
 		}
 	}
@@ -402,10 +437,21 @@ func (c *Character) Stop() {
 		Logger.Error("Error saving character during shutdown", "characterName", c.name, "error", err)
 	}
 
-	// Signal the end channel if it hasn't been closed already
+	// Store a reference to the player before resetting
+	player := c.player
+
+	// Use a non-blocking send to avoid deadlocks
 	select {
 	case c.end <- true:
+		Logger.Debug("End signal sent successfully", "characterName", c.name)
 	default:
-		// Channel might already be closed or full
+		Logger.Warn("End channel is full or closed", "characterName", c.name)
+	}
+
+	// If we have a valid player reference, inform them we're returning to console
+	if player != nil {
+		// Reset the player's character reference
+		player.character = nil
+
 	}
 }
