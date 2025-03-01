@@ -85,7 +85,7 @@ Key components:
 - [ ] Improve the input filters
 - [*] Handle unplanned disconnections.
 - [ ] Limit Auto Save to updated objects.
-- [ ] Improve the say command.
+- [x] Improve the say command.
 - [ ] Add look at item command.
 - [ ] Implement an obscenity filter.
 - [ ] Validate graph of loaded rooms and exits.
@@ -190,9 +190,7 @@ Crafting:
 
 Session Management:
 
-- [ ] PASSWORD: Change your password.
-- [ ] QUIT: Exit the game.
-- [ ] LOGOUT: Exit the game. (return to character managment)
+- [*] QUIT: Exit the game.
 - [ ] SETTINGS: Change your settings.
 
 OTHER:
