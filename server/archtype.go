@@ -127,7 +127,7 @@ func (c *Character) SelectArchetype() (string, error) {
 	}
 
 	num, err := strconv.Atoi(strings.TrimSpace(selection))
-	if err != nil || num < 1 || num >= len(options) {
+	if err != nil || num < 1 || num > len(options) {
 		return "", fmt.Errorf("invalid archetype selection")
 	}
 
