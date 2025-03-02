@@ -43,6 +43,7 @@ type Player struct {
 	toPlayer      chan string
 	fromPlayer    chan string
 	playerError   chan error
+	consoleDone   chan bool
 	echo          bool
 	prompt        string
 	connection    ssh.Channel
@@ -169,6 +170,7 @@ func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfac
 		toPlayer:      make(chan string, 10),
 		fromPlayer:    make(chan string, 10),
 		playerError:   make(chan error, 1),
+		consoleDone:   make(chan bool, 1),
 		echo:          true,
 		connection:    conn,
 		consoleWidth:  80,
@@ -217,7 +219,7 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 	}
 
 	// Start Player Interface
-	p.Console()
+	go p.Console(p.consoleDone)
 
 	// Wait for shutdown conditions
 	select {
@@ -244,15 +246,36 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 			Logger.Error("Output handler error", "player", p.id, "error", err)
 		}
 		return
+	case <-p.consoleDone:
+		Logger.Info("Player console session ended", "player", p.id)
+		return
 	}
 }
 
 func (p *Player) Stop() {
+	if p == nil {
+		return
+	}
+
+	// Use shutdownOnce to ensure we only perform cleanup once
 	p.shutdownOnce.Do(func() {
 		Logger.Info("Player disconnected", "player_name", p.id)
 
-		// First cancel the context to signal all goroutines to exit
-		p.cancel()
+		// Cancel context if not already done
+		select {
+		case <-p.ctx.Done():
+			// Context is already canceled
+		default:
+			// Cancel the context to signal all goroutines to exit
+			p.cancel()
+		}
+
+		// Stop the character if active
+		if p.character != nil {
+			Logger.Info("Stopping active character", "character", p.character.name)
+			p.character.Stop(p.character.end)
+			p.character = nil
+		}
 
 		// Save player data
 		p.Save()
@@ -262,18 +285,20 @@ func (p *Player) Stop() {
 			p.connection.Close()
 		}
 
-		// Remove from server
+		// Remove from server (do this last to avoid race conditions)
 		if p.server != nil {
-			_ = p.server.RemovePlayer(p.index)
+			p.server.mutex.Lock()
+			delete(p.server.players, p.index)
+			delete(p.server.playersByUUID, p.id)
+			p.server.playerCount.Add(^uint64(0)) // Decrement count
+			p.server.mutex.Unlock()
+			Logger.Info("Player removed from server", "player_name", p.id)
 		}
 
-		time.Sleep(100 * time.Millisecond)
-
+		// Close channels after all operations are done
 		close(p.toPlayer)
 		close(p.fromPlayer)
 		close(p.playerError)
-
-		Logger.Info("Player stopped", "player_name", p.id)
 	})
 }
 
@@ -478,6 +503,18 @@ func wrapText(text string, width int) string {
 }
 
 func (s *Server) RemovePlayer(playerID uint64) error {
+
+	if s.players[playerID] == nil {
+		Logger.Warn("Attempted to remove non-existent player", "playerID", playerID)
+		return nil
+	}
+
+	player := s.players[playerID]
+
+	// Stop the existing player session
+
+	Logger.Info("Disconnected player with active character", "playerID", player.id.String(), "playerIndex", playerID)
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 

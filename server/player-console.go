@@ -28,10 +28,11 @@ import (
 	"github.com/google/uuid"
 )
 
-func (p *Player) Console() {
+func (p *Player) Console(done chan bool) {
 	for {
 		select {
 		case <-p.ctx.Done():
+			done <- true
 			return
 		default:
 			characterCount := len(p.characterList)
@@ -52,6 +53,7 @@ func (p *Player) Console() {
 
 			select {
 			case <-p.ctx.Done():
+				done <- true
 				return
 			case choice := <-p.fromPlayer:
 				switch strings.TrimSpace(choice) {
@@ -81,6 +83,7 @@ func (p *Player) Console() {
 				case "9":
 					p.toPlayer <- "\nGoodbye!\n"
 					p.Stop()
+					done <- true
 					return
 
 				default:

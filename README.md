@@ -65,7 +65,7 @@ Key components:
 - [x] Allow players to enter their name.
 - [x] Display the incoming IP address and Port on the server.
 - [x] Add a help command.
-- [ ] Add a character list command.
+- [ ] Add a character list (who) command.
 - [x] Allow users to change their passwords.
 - [ ] Expand the character creation process.
 - [ ] Add take item command.
@@ -190,7 +190,7 @@ Crafting:
 
 Session Management:
 
-- [*] QUIT: Exit the game.
+- [x] QUIT: Exit the game.
 - [ ] SETTINGS: Change your settings.
 
 OTHER:

@@ -180,6 +180,7 @@ func (s *Server) Stop() error {
 	return nil
 }
 
+// AddPlayer registers a new player with the server, handling existing sessions
 func (s *Server) AddPlayer(player *Player) error {
 	if player == nil {
 		return fmt.Errorf("player is nil")
@@ -194,36 +195,11 @@ func (s *Server) AddPlayer(player *Player) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	// Check if this player (by UUID) is already logged in
-	existingPlayer, alreadyLoggedIn := s.playersByUUID[player.id]
-	if alreadyLoggedIn {
-		Logger.Info("Player already logged in, disconnecting previous session",
-			"playerID", player.id.String(),
-			"email", player.email)
-
-		// Store previous session info for messaging
-		previousSessionIndex := existingPlayer.index
-		hasActiveCharacter := existingPlayer.character != nil
-
-		// Disconnect the existing player's session
-		// We need to unlock the mutex before calling Stop to avoid deadlock
-		s.mutex.Unlock()
-
-		// Send a message to the existing player
-		existingPlayer.toPlayer <- "\r\nYou are being disconnected because your account has logged in from another location.\r\n"
-
-		// Stop the existing player session
-		existingPlayer.Stop()
-
-		// Reacquire the mutex
-		s.mutex.Lock()
-
-		// Log the action
-		if hasActiveCharacter {
-			Logger.Info("Disconnected player with active character",
-				"playerID", player.id.String(),
-				"playerIndex", previousSessionIndex)
-		}
+	// Check for existing session
+	existingPlayer, exists := s.playersByUUID[player.id]
+	if exists {
+		// Disconnect existing session
+		s.DuplicatePlayer(existingPlayer)
 	}
 
 	// Add the new player to both maps
@@ -234,6 +210,32 @@ func (s *Server) AddPlayer(player *Player) error {
 	Logger.Info("Player added", "playerID", id, "playerUUID", player.id.String())
 
 	return nil
+}
+
+// DuplicatePlayer handles the process of disconnecting a player with an existing session
+func (s *Server) DuplicatePlayer(existingPlayer *Player) {
+	if existingPlayer == nil {
+		return
+	}
+
+	Logger.Info("Player already logged in, disconnecting previous session",
+		"playerID", existingPlayer.id.String(),
+		"email", existingPlayer.email)
+
+	// Send a message to the existing player
+	select {
+	case existingPlayer.toPlayer <- "\r\nYou are being disconnected because your account has logged in from another location.\r\n":
+		// Message sent successfully
+	default:
+		// Channel might be full or closed, log and continue
+		Logger.Warn("Could not send disconnect message to existing player",
+			"playerID", existingPlayer.id.String())
+	}
+
+	// This signals all of the player's goroutines to terminate
+	existingPlayer.cancel()
+
+	Logger.Info("Waiting for player session to clean up", "playerID", existingPlayer.id.String())
 }
 
 func (s *Server) PlayerCount() uint64 {
