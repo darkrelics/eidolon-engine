@@ -146,7 +146,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		fromGame:    make(chan string, 10),
 		toPlayer:    make(chan string, 10),
 		fromPlayer:  make(chan string, 10),
-		end:         make(chan bool),
+		end:         make(chan bool, 5),
 		prompt:      "\n\r> ",
 	}
 
@@ -218,7 +218,7 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 	// If character is active, stop it first
 	if isActive && activeChar != nil {
 		Logger.Info("Stopping active character before deletion", "characterName", activeChar.name)
-		activeChar.Stop()
+		activeChar.Stop(activeChar.end)
 	}
 
 	// Create the key for DynamoDB deletion
@@ -313,11 +313,16 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 }
 
 // Run is the main loop that handles player commands.
-func (c *Character) Run(chan bool) {
+// Run is the main loop that handles player commands.
+func (c *Character) Run(done chan bool) {
 	if c == nil || c.player == nil {
 		Logger.Error("Invalid character or player in Run method")
-		c.end <- true
+		done <- true
+		return
 	}
+
+	// Ensure character is properly stopped when the function exits
+	defer c.Stop(done)
 
 	Logger.Debug("Starting character run", "characterName", c.name)
 
@@ -365,7 +370,7 @@ func (c *Character) Run(chan bool) {
 		case inputLine, ok := <-c.player.fromPlayer:
 			if !ok {
 				Logger.Info("Player input channel closed", "characterName", c.name)
-				c.end <- true
+				return
 			}
 
 			// Signal that a command is processing
@@ -376,13 +381,19 @@ func (c *Character) Run(chan bool) {
 			}
 
 			// Process the command
-			_, err := ProcessCommand(c, strings.TrimSpace(inputLine))
+			isQuit, err := ProcessCommand(c, strings.TrimSpace(inputLine))
 			if err != nil {
 				// Send error message to player
 				c.player.toPlayer <- err.Error() + "\n\r"
 			} else {
 				// Command processed successfully
 				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
+			}
+
+			// If the quit command was processed, exit the loop
+			if isQuit {
+				Logger.Info("Quit command processed, exiting character loop", "characterName", c.name)
+				return
 			}
 
 			// Clear the processing signal
@@ -397,21 +408,24 @@ func (c *Character) Run(chan bool) {
 
 		case <-c.end:
 			Logger.Info("Character end signaled", "characterName", c.name)
-			// Explicitly call Stop to ensure proper cleanup
-			c.Stop()
-			c.end <- true
+			return
 
 		case <-timer.C:
 			if c.player == nil {
 				Logger.Warn("Player connection lost", "characterName", c.name)
-				c.end <- true
+				return
 			}
 		}
 	}
 }
 
 // Stop cleanly shuts down the character session
-func (c *Character) Stop() {
+func (c *Character) Stop(done chan bool) {
+
+	defer func() {
+		done <- true
+	}()
+
 	Logger.Info("Stopping character session", "characterName", c.name)
 
 	// Notify the room of departure before removing the character

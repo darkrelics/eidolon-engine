@@ -421,26 +421,16 @@ func (p *Player) PlayCharacter() {
 		return
 	}
 
-	// Connect player channels to character channels
-	p.character.fromPlayer = p.fromPlayer
-	p.character.toPlayer = p.toPlayer
-
 	// Create a new end channel if needed
 	if p.character.end == nil {
 		p.character.end = make(chan bool, 5)
 	}
 
-	// Run the character's lifecycle
-	go p.character.Run(p.character.end)
+	// Run the character's lifecycle (this blocks until character session ends)
+	p.character.Run(p.character.end)
 
-	// Wait for the character to finish
-	<-p.character.end
-
-	// Ensure the character is fully stopped
-	if p.character != nil {
-		p.character.Stop()
-		p.character = nil
-	}
+	// Character Run has completed (due to quit command or other exit condition)
+	p.character = nil
 
 	// Ensure we're fully back to console mode
 	p.toPlayer <- "\n\rReturning to console.\n\r"
