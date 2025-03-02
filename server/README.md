@@ -19,11 +19,13 @@ Testing will primarily be conducted through live user interaction, with unit tes
 ## Project State
 
 ### Server Architecture
+
 - [x] Establish two primary goroutines (server and game)
 - [x] Implement context-based coordination rather than WaitGroups
 - [ ] Support 1,000 concurrent players
 
 ### Interfaces
+
 - [x] SSH interface implementation
 - [ ] HTTPS interface implementation
 - [ ] gRPC interface implementation
@@ -31,20 +33,23 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [x] CloudWatch metrics reporting
 
 ### Authentication
+
 - [x] AWS Cognito integration
 - [x] User authentication flow
 - [x] Password change functionality
 - [ ] Session management
 
 ### Player Management
+
 - [x] Player session handling
 - [x] Character creation
 - [x] Character selection
-- [x] Character deletion 
+- [x] Character deletion
 - [ ] Anti-abuse rate limiting
 - [x] Console formatting for sensitive input
 
 ### Character System
+
 - [x] Command parsing system
 - [x] Local vs. game command handling
 - [ ] I/O buffering with game-defined limits
@@ -52,6 +57,7 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [x] Character cleanup on disconnect
 
 ### Game World
+
 - [ ] Room implementation
 - [ ] Exit implementation
 - [ ] Item implementation
@@ -60,17 +66,20 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [ ] Time passage simulation
 
 ### Database
+
 - [x] DynamoDB integration
 - [x] Database operations abstraction
 - [ ] RAM caching to minimize database access
 - [ ] Non-blocking database operations
 
 ### AWS Integration
+
 - [x] CloudWatch for metrics and logging
 - [x] Cognito for authentication
 - [x] DynamoDB for persistence
 - [ ] Infrastructure optimization for AWS
 
 ### Testing
+
 - [ ] Unit testing for standalone functions
 - [ ] Live user interaction testing
