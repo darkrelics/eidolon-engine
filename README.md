@@ -37,7 +37,7 @@ Key components:
 - [x] Create a text parser for user input.
 - [x] Implement a player authentication system.
 - [x] Implement a database for the game.
-- [*] Implement a character creation system.
+- [x] Implement a character creation system.
 - [x] Implement a text colorization system.
 - [x] Add Cloudwatch Logs and Metrics.
 - [x] Build an interactive password change system.
@@ -61,7 +61,7 @@ Key components:
 
 ## TODO
 
-- [ ] Fix output formatting for the client.
+- [x] Fix output formatting for the client.
 - [x] Allow players to enter their name.
 - [x] Display the incoming IP address and Port on the server.
 - [x] Add a help command.
