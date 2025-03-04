@@ -1,6 +1,6 @@
 **Schema Overview:**
 
-This schema supports a multi-user dungeon (MUD) game, providing structures for players, characters, rooms, items, and game messages. It facilitates:
+This schema supports the Eidolon Engine, providing structures for players, characters, rooms, items, and game messages. It facilitates:
 
 - Player management with associated characters and messages seen.
 - Character progression with attributes, abilities, inventory, and location tracking.

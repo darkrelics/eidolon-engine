@@ -1,8 +1,27 @@
+/*
+Eidolon Engine
+
+Copyright 2024-2025 Jason Robinson
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,12 +29,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
+	"github.com/google/uuid"
 )
 
 type Server struct {
 	config        *Configuration
-	globalContext context.Context
-	context       context.Context
+	ctx           context.Context
 	cancel        context.CancelFunc
 	mutex         sync.RWMutex
 	game          *Game
@@ -23,25 +42,49 @@ type Server struct {
 	start         time.Time
 	playerCount   atomic.Uint64
 	players       map[uint64]*Player
+	playersByUUID map[uuid.UUID]*Player
 	shutdownOnce  sync.Once
 	cognito       *cognitoidentityprovider.CognitoIdentityProvider
 	index         *Index
 	activeMotDs   []*MOTD
+	sshInterface  *Interface_SSH
+}
+
+type Index struct {
+	IndexID uint64
+	mu      sync.RWMutex
+}
+
+func (i *Index) GetID() uint64 {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	i.IndexID++
+	return i.IndexID
+}
+
+func (i *Index) SetID(id uint64) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	if id > i.IndexID {
+		i.IndexID = id
+	}
 }
 
 func NewServer(globalCtx context.Context, config *Configuration) (*Server, error) {
 
-	fmt.Println("Initializing server...")
+	Logger.Info("New Server...Initializing server...")
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(globalCtx)
 
-	database, err := NewKeyPair(config.Aws.Region)
+	database, err := NewKeyPair(config)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("database init error: %w", err)
 	}
 
-	sess, err := session.NewSession(&aws.Config{Region: aws.String(config.Aws.Region)})
+	serverSession, err := session.NewSession(&aws.Config{Region: aws.String(config.AWS.Region)})
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("AWS session init error: %w", err)
@@ -54,111 +97,145 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 
 	server := &Server{
 		config:        config,
-		globalContext: globalCtx,
-		context:       ctx,
+		ctx:           ctx,
 		cancel:        cancel,
-		game:          nil,
+		mutex:         sync.RWMutex{},
 		start:         time.Now(),
 		database:      database,
+		playerCount:   atomic.Uint64{},
 		players:       make(map[uint64]*Player),
-		cognito:       cognitoidentityprovider.New(sess),
+		playersByUUID: make(map[uuid.UUID]*Player),
+		shutdownOnce:  sync.Once{},
+		cognito:       cognitoidentityprovider.New(serverSession),
 		index:         index,
+	}
+
+	server.playerCount.Store(0)
+
+	// Load active MOTDs
+	if err := server.LoadMOTDs(); err != nil {
+		Logger.Error("Failed to load MOTDs", "error", err)
+		// Continue startup despite MOTD loading failure
 	}
 
 	return server, nil
 }
 
-func (s *Server) Run() error {
-	Logger.Info("Starting server...")
+func (s *Server) Run(errorChan chan error) error {
+	Logger.Info("Run server...")
 
-	fmt.Println("Starting SSH Service...")
+	Logger.Info("Starting SSH Interface...")
 
-	sshInterface, err := NewSSHInterface(s)
-	if err != nil {
-		return fmt.Errorf("ssh interface init error: %w", err)
-	}
-
-	fmt.Println("SSH Service started successfully")
-
-	// Create error channel for SSH interface
-	sshErrChan := make(chan error, 1)
-	go func() {
-		sshErrChan <- sshInterface.Run()
-	}()
-
-	// Wait for either a shutdown signal or SSH interface error
-	select {
-	case <-s.globalContext.Done():
-		return s.shutdown("global shutdown")
-	case <-s.context.Done():
-		return s.shutdown("server shutdown")
-	case err := <-sshErrChan:
+	// Start SSH Interface
+	if s.config.SSH.Enabled {
+		var err error
+		sshInterface, err := NewSSHInterface(s)
 		if err != nil {
-			return fmt.Errorf("ssh interface error: %w", err)
+			Logger.Error("Failed to start SSH interface", "error", err)
+		} else {
+			// Store the interface before starting the goroutine
+			s.mutex.Lock()
+			s.sshInterface = sshInterface
+			s.mutex.Unlock()
+
+			go sshInterface.Run(errorChan)
+			Logger.Info("SSH Interface started successfully")
 		}
-		return nil
+	} else {
+		Logger.Info("SSH Interface disabled")
 	}
-}
 
-func (s *Server) Stop() error {
+	// Wait until server is stopped
+	<-s.ctx.Done()
 
-	fmt.Println("Stopping server...")
-
-	var stopErr error
-
-	// Modify system to specifically stop the interfaces.
-
-	// Modify system to specifically replace the players.
-
-	s.shutdownOnce.Do(func() {
-		s.cancel()
-		stopErr = s.shutdown("manual stop")
-	})
-
-	return stopErr
-}
-
-func (s *Server) shutdown(reason string) error {
-	Logger.Info("server shutdown", "reason", reason)
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	for _, player := range s.players {
-		player.Stop()
+	// Now it's safe to explicitly stop the SSH interface
+	if s.sshInterface != nil {
+		if err := s.sshInterface.Stop(); err != nil {
+			// Only log serious errors, not just "already closed"
+			if !strings.Contains(err.Error(), "use of closed network connection") {
+				Logger.Error("Error stopping SSH interface", "error", err)
+			}
+		}
 	}
 
 	return nil
 }
 
-func (s *Server) AddPlayer(player *Player) (uint64, error) {
+func (s *Server) Stop() error {
+	Logger.Info("Server: Stopping server...")
+	defer Logger.Info("Server: Server stopped")
+
+	// Use the shutdownOnce to ensure we only execute this once
+	s.shutdownOnce.Do(func() {
+		// Cancel the context first - this signals all components to shut down
+		s.cancel()
+
+		// No need to explicitly stop the SSH interface here as it will
+		// detect the context cancellation
+
+		// Give components time to react to context cancellation
+		time.Sleep(100 * time.Millisecond)
+	})
+
+	return nil
+}
+
+// AddPlayer registers a new player with the server, handling existing sessions
+func (s *Server) AddPlayer(player *Player) error {
 	if player == nil {
-		return 0, fmt.Errorf("player cannot be nil")
+		return fmt.Errorf("player is nil")
 	}
 
 	id := s.index.GetID()
 
+	player.mutex.Lock()
+	player.index = id
+	player.mutex.Unlock()
+
 	s.mutex.Lock()
-	s.players[id] = player
-	s.mutex.Unlock()
+	defer s.mutex.Unlock()
 
-	s.playerCount.Add(1)
-	Logger.Info("player added", "id", id, "name", player.playerID)
-
-	return id, nil
-}
-
-func (s *Server) RemovePlayer(id uint64) *Player {
-	s.mutex.Lock()
-	player := s.players[id]
-	delete(s.players, id)
-	s.mutex.Unlock()
-
-	if player != nil {
-		s.playerCount.Add(^uint64(0))
-		Logger.Info("player removed", "id", id, "name", player.playerID)
+	// Check for existing session
+	existingPlayer, exists := s.playersByUUID[player.id]
+	if exists {
+		// Disconnect existing session
+		s.DuplicatePlayer(existingPlayer)
 	}
 
-	return player
+	// Add the new player to both maps
+	s.players[id] = player
+	s.playersByUUID[player.id] = player
+
+	s.playerCount.Add(1)
+	Logger.Info("Player added", "playerID", id, "playerUUID", player.id.String())
+
+	return nil
+}
+
+// DuplicatePlayer handles the process of disconnecting a player with an existing session
+func (s *Server) DuplicatePlayer(existingPlayer *Player) {
+	if existingPlayer == nil {
+		return
+	}
+
+	Logger.Info("Player already logged in, disconnecting previous session",
+		"playerID", existingPlayer.id.String(),
+		"email", existingPlayer.email)
+
+	// Send a message to the existing player
+	select {
+	case existingPlayer.toPlayer <- "\r\nYou are being disconnected because your account has logged in from another location.\r\n":
+		// Message sent successfully
+	default:
+		// Channel might be full or closed, log and continue
+		Logger.Warn("Could not send disconnect message to existing player",
+			"playerID", existingPlayer.id.String())
+	}
+
+	// This signals all of the player's goroutines to terminate
+	existingPlayer.cancel()
+
+	Logger.Info("Waiting for player session to clean up", "playerID", existingPlayer.id.String())
 }
 
 func (s *Server) PlayerCount() uint64 {

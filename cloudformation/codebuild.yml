@@ -17,7 +17,7 @@ Parameters:
   GitHubSourceRepo:
     Type: String
     Description: The GitHub repository URL for the source code
-    Default: https://github.com/robinje/multi-user-dungeon
+    Default: https://github.com/robinje/eidolon-engine
 
 Resources:
   CodeBuildAccessPolicy:

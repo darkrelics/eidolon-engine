@@ -1,3 +1,21 @@
+/*
+Eidolon Engine
+
+Copyright 2024-2025 Jason Robinson
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
@@ -8,79 +26,92 @@ import (
 )
 
 type Archetype struct {
-	ArchetypeName string             `json:"ArchetypeName" dynamodbav:"ArchetypeName"`
-	Description   string             `json:"Description" dynamodbav:"Description"`
-	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
-	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"Abilities"`
-	StartRoom     int64              `json:"StartRoom" dynamodbav:"StartRoom"`
+	ArchetypeName string             `json:"ArchetypeName" dynamodbav:"archetypeName"`
+	Description   string             `json:"Description" dynamodbav:"description"`
+	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"attributes"`
+	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"abilities"`
+	StartRoom     int64              `json:"StartRoom" dynamodbav:"startRoom"`
 }
 
-// DisplayArchetypes logs the loaded archetypes for debugging purposes.
-func DisplayArchetypes(g *Game) {
-	Logger.Debug("Archetypes:" + fmt.Sprint(len(g.ArcheTypes)))
-	for key, archtype := range g.ArcheTypes {
-		Logger.Debug("Archetype", "name", key, "description", archtype.Description)
+// Display Archetypes for debugging purposes.
+func (g *Game) DisplayArchetypes() error {
+	Logger.Info("Display Archetypes")
+
+	Logger.Debug("Archetypes:" + fmt.Sprint(len(g.archetypes)))
+	for key, archetype := range g.archetypes {
+		Logger.Debug("Archetype", "name", key, "description", archetype.Description)
 	}
+
+	return nil
 }
 
-// LoadArchetypes retrieves all archetypes from the DynamoDB table and stores them in the Server's ArcheTypes map.
-func LoadArchetypes(g *Game) error {
-	DisplayArchetypes(g)
+// LoadArchetypes retrieves all archetypes from the DynamoDB table and stores them in the Games's ArcheTypes map.
+func (g *Game) LoadArchetypes() error {
+	Logger.Info("Load Archetypes")
+
 	var archetypes []Archetype
-	err := g.Database.Scan("archetypes", &archetypes)
+
+	err := g.database.Scan("archetypes", &archetypes)
 	if err != nil {
+		Logger.Error("Load Archetypes: Error Scanning Archetypes Table", "error", err)
 		return fmt.Errorf("error scanning archetypes table: %w", err)
 	}
 
-	g.ArcheTypes = make(map[string]*Archetype)
+	g.archetypes = make(map[string]*Archetype)
 
 	for _, archetype := range archetypes {
-		archetypeCopy := archetype
 
 		// Normalize map keys once during load
-		for k, v := range archetypeCopy.Attributes {
+		for k, v := range archetype.Attributes {
 			lowerKey := strings.ToLower(k)
 			if lowerKey != k {
-				archetypeCopy.Attributes[lowerKey] = v
-				delete(archetypeCopy.Attributes, k)
+				archetype.Attributes[lowerKey] = v
+				delete(archetype.Attributes, k)
 			}
 		}
 
-		for k, v := range archetypeCopy.Abilities {
+		for k, v := range archetype.Abilities {
 			lowerKey := strings.ToLower(k)
 			if lowerKey != k {
-				archetypeCopy.Abilities[lowerKey] = v
-				delete(archetypeCopy.Abilities, k)
+				archetype.Abilities[lowerKey] = v
+				delete(archetype.Abilities, k)
 			}
 		}
 
-		g.ArcheTypes[archetype.ArchetypeName] = &archetypeCopy
-		Logger.Debug("Loaded archetype", "name", archetype.ArchetypeName)
+		g.archetypes[archetype.ArchetypeName] = &archetype
+		Logger.Info("Loaded archetype", "name", archetype.ArchetypeName)
 	}
+
+	g.DisplayArchetypes()
 
 	return nil
 }
 
-// StoreArchetypes stores all archetypes from the Server's ArcheTypes map into the DynamoDB table.
-func StoreArchetypes(g *Game) error {
+func (g *Game) BuildArchetypeOptions() error {
 
-	for _, archetype := range g.ArcheTypes {
-		err := g.Database.Put("archetypes", *archetype)
-		if err != nil {
-			return fmt.Errorf("error storing archetype %s: %w", archetype.ArchetypeName, err)
-		}
+	Logger.Info("Building Archetype Options")
 
-		Logger.Debug("Stored archetype", "name", archetype.ArchetypeName)
+	options := make([]string, 0, len(g.archetypes))
+
+	for name, archetype := range g.archetypes {
+		options = append(options, name+" - "+archetype.Description)
 	}
+
+	sort.Strings(options)
+
+	g.archetypeOptions = options
 
 	return nil
+
 }
 
-func selectArchetype(player *Player) (string, error) {
-	options := buildArchetypeOptions(player.server.game)
-	if len(options) == 0 {
-		return "", nil // No archetypes available
+func (c *Character) SelectArchetype() (string, error) {
+
+	if len(c.game.archetypeOptions) == 0 {
+		return "", nil // No archetypes available.
 	}
+
+	options := c.game.archetypeOptions
 
 	msg := "\n\rSelect a character archetype.\n\r"
 	for i, option := range options {
@@ -88,10 +119,11 @@ func selectArchetype(player *Player) (string, error) {
 	}
 	msg += "Enter the number of your choice: "
 
-	player.toPlayer <- msg
-	selection, ok := <-player.fromPlayer
+	c.fromGame <- msg
+	selection, ok := <-c.toGame
 	if !ok {
-		return "", fmt.Errorf("player input channel closed")
+		Logger.Warn("Character input channel closed")
+		return "", fmt.Errorf("character input channel closed")
 	}
 
 	num, err := strconv.Atoi(strings.TrimSpace(selection))
@@ -100,13 +132,4 @@ func selectArchetype(player *Player) (string, error) {
 	}
 
 	return strings.Split(options[num-1], " - ")[0], nil
-}
-
-func buildArchetypeOptions(g *Game) []string {
-	options := make([]string, 0, len(g.ArcheTypes))
-	for name, archetype := range g.ArcheTypes {
-		options = append(options, name+" - "+archetype.Description)
-	}
-	sort.Strings(options)
-	return options
 }

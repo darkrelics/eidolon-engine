@@ -1,6 +1,6 @@
-module github.com/robinje/multi-user-dungeon/server
+module github.com/robinje/eidolon-engine
 
-go 1.23
+go 1.23.6
 
 require (
 	github.com/aws/aws-sdk-go v1.54.15
@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.37.5
 	github.com/bits-and-blooms/bloom/v3 v3.7.0
 	github.com/google/uuid v1.6.0
-	golang.org/x/crypto v0.31.0
+	golang.org/x/crypto v0.35.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -30,5 +30,5 @@ require (
 	github.com/bits-and-blooms/bitset v1.14.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 )

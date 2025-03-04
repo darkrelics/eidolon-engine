@@ -1,3 +1,21 @@
+/*
+Eidolon Engine
+
+Copyright 2024-2025 Jason Robinson
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
@@ -14,237 +32,144 @@ import (
 	"github.com/google/uuid"
 )
 
+var NAMES_PATH = "../data/names.txt"
+var OBSCENITY_PATH = "../data/obscenity.txt"
+
 type Game struct {
-	Config               *Configuration
-	GlobalContext        context.Context
-	Context              context.Context
-	Cancel               context.CancelFunc
-	Mutex                sync.RWMutex
-	StartTime            time.Time
+	config               *Configuration
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	mutex                sync.RWMutex
+	start                time.Time
 	characterCount       atomic.Uint64
 	ticker               *time.Ticker
-	Database             *KeyPair
-	ArcheTypes           map[string]*Archetype
-	CharacterBloomFilter *bloom.BloomFilter
-	Characters           map[uuid.UUID]*Character
-	Rooms                map[int64]*Room
-	Prototypes           map[uuid.UUID]*Prototype
-	Items                map[uuid.UUID]*Item
-	StartingHealth       uint16
-	StartingEssence      uint16
-	Balance              float64
-	AutoSaveInterval     uint16
-	shutdownOnce         sync.Once
+	database             *KeyPair
+	archetypes           map[string]*Archetype
+	archetypeOptions     []string
+	characterBloomFilter *bloom.BloomFilter
+	characters           map[uuid.UUID]*Character
+	rooms                map[int64]*Room
+	exits                map[uuid.UUID]*Exit
+	prototypes           map[uuid.UUID]*Prototype
+	items                map[uuid.UUID]*Item
+	commands             map[string]CommandInfo
+	startingHealth       uint16
+	startingEssence      uint16
+	balance              float64
+	autoSaveInterval     uint16
 }
 
+// Initalize the game engine
+
 func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
-	Logger.Info("Initializing game engine...")
+
+	Logger.Info("New Game...Initalizing Game...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
+	// Create a new game object
+
 	game := &Game{
-		Config:        config,
-		GlobalContext: globalCtx,
-		Context:       ctx,
-		Cancel:        cancel,
-		StartTime:     time.Now(),
-		Characters:    make(map[uuid.UUID]*Character),
-		Rooms:         make(map[int64]*Room),
-		Prototypes:    make(map[uuid.UUID]*Prototype),
-		Items:         make(map[uuid.UUID]*Item),
-		ticker:        time.NewTicker(time.Second),
+		config:           config,
+		ctx:              ctx,
+		cancel:           cancel,
+		mutex:            sync.RWMutex{},
+		start:            time.Now(),
+		characterCount:   atomic.Uint64{},
+		archetypes:       make(map[string]*Archetype),
+		archetypeOptions: make([]string, 0),
+		characters:       make(map[uuid.UUID]*Character),
+		rooms:            make(map[int64]*Room),
+		exits:            make(map[uuid.UUID]*Exit),
+		prototypes:       make(map[uuid.UUID]*Prototype),
+		items:            make(map[uuid.UUID]*Item),
+		commands:         make(map[string]CommandInfo),
+		ticker:           nil,
+		startingHealth:   config.Game.StartingHealth,
+		startingEssence:  config.Game.StartingEssence,
+		balance:          config.Game.Balance,
+		autoSaveInterval: 5,
 	}
 
-	database, err := NewKeyPair(config.Aws.Region)
+	game.characterCount.Store(0)
+
+	// Initialize Game Database Interface
+
+	database, err := NewKeyPair(config)
 	if err != nil {
 		return nil, fmt.Errorf("database init error: %w", err)
 	}
-	game.Database = database
 
-	if err := game.initBloomFilter(); err != nil {
-		return nil, fmt.Errorf("bloom filter init error: %w", err)
+	game.database = database
+
+	// Load Character Bloom Filter
+
+	if err := game.InitCharacterBloomFilter(); err != nil {
+		Logger.Warn("Error initializing character bloom filter", "error", err)
 	}
 
-	if err := LoadArchetypes(game); err != nil {
-		Logger.Error("archetype loading failed", "error", err)
+	// Load Archetypes
+
+	if err := game.LoadArchetypes(); err != nil {
+		Logger.Error("Error loading archetypes", "error", err)
 	}
 
-	game.Rooms[0] = NewRoom(0, "The Void", "The Void", "Default void room.")
+	// Build Archetype Options
 
-	if rooms, err := game.Database.LoadRooms(); err != nil {
-		Logger.Error("room loading failed", "error", err)
-	} else {
-		for id, room := range rooms {
-			game.Rooms[id] = room
-		}
+	if err := game.BuildArchetypeOptions(); err != nil {
+		Logger.Error("Error loading archetype options", "error", err)
 	}
+
+	// Create Default Room
+
+	game.rooms[0] = NewRoom(0, "The Void", "The Void", "Default void room.")
+
+	// Load Rooms
+
+	if err := game.LoadRooms(); err != nil {
+		Logger.Error("Error loading rooms", "error", err)
+	}
+
+	game.initCommands()
 
 	return game, nil
+
 }
 
-func (g *Game) Run() error {
-	Logger.Info("Starting game engine...")
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+// Load names from the database.
 
-	for {
-		select {
-		case <-g.GlobalContext.Done():
-			return g.shutdown("global shutdown")
-		case <-g.Context.Done():
-			return g.shutdown("game shutdown")
-		case <-ticker.C:
-			g.tick()
-		}
+func (g *Game) LoadCharacterNames() ([]string, error) {
+
+	Logger.Info("Loading character names from database...")
+
+	var names []string
+
+	var characters []struct {
+		CharacterName string `dynamodbav:"Name"`
 	}
-}
 
-func (g *Game) Stop() error {
-	var stopErr error
-	g.shutdownOnce.Do(func() {
-		g.Cancel()
-		stopErr = g.shutdown("manual stop")
-	})
-	return stopErr
-}
-
-func (g *Game) initBloomFilter() error {
-	names, err := LoadCharacterNames(g.Database)
+	err := g.database.Scan("characters", &characters)
 	if err != nil {
-		return fmt.Errorf("character names load error: %w", err)
+		Logger.Error("Error scanning characters table", "error", err)
+		return nil, fmt.Errorf("error scanning characters: %w", err)
 	}
 
-	namesFromFile, err := loadNamesFromFile("../data/names.txt")
-	if err != nil {
-		return fmt.Errorf("names file load error: %w", err)
+	for _, character := range characters {
+		names = append(names, strings.ToLower(character.CharacterName))
 	}
 
-	obscenities, err := loadNamesFromFile("../data/obscenity.txt")
-	if err != nil {
-		return fmt.Errorf("obscenity file load error: %w", err)
-	}
-
-	totalItems := len(names) + len(namesFromFile) + len(obscenities)
-	if totalItems < 100 {
-		totalItems = 100
-	}
-
-	g.CharacterBloomFilter = bloom.NewWithEstimates(uint(totalItems), 0.01)
-
-	for name := range names {
-		g.CharacterBloomFilter.AddString(strings.ToLower(name))
-	}
-	for _, name := range append(namesFromFile, obscenities...) {
-		g.CharacterBloomFilter.AddString(strings.ToLower(name))
-	}
-
-	return nil
+	return names, nil
 }
 
-func (g *Game) AutoSave(ctx context.Context) error {
-	if g.AutoSaveInterval == 0 {
-		return nil
-	}
+// Load names from a file.
 
-	ticker := time.NewTicker(time.Duration(g.AutoSaveInterval) * time.Minute)
-	defer ticker.Stop()
+func LoadNameFromFile(path string) ([]string, error) {
 
-	if err := g.saveAll(ctx); err != nil {
-		Logger.Error("initial save failed", "error", err)
-	}
+	Logger.Info("Loading names from file", "path", path)
 
-	for {
-		select {
-		case <-ctx.Done():
-			return g.saveAll(context.Background())
-		case <-ticker.C:
-			if err := g.saveAll(ctx); err != nil {
-				Logger.Error("auto-save failed", "error", err)
-			}
-		}
-	}
-}
-
-func (g *Game) saveAll(ctx context.Context) error {
-	saveCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	var wg sync.WaitGroup
-	errChan := make(chan error, 3)
-
-	wg.Add(3)
-	go func() {
-		defer wg.Done()
-		if err := g.SaveActiveCharacters(); err != nil {
-			errChan <- fmt.Errorf("character save error: %w", err)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		if err := SaveActiveItems(g); err != nil {
-			errChan <- fmt.Errorf("item save error: %w", err)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		if err := SaveActiveRooms(g); err != nil {
-			errChan <- fmt.Errorf("room save error: %w", err)
-		}
-	}()
-
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-saveCtx.Done():
-		return fmt.Errorf("save timeout: %w", saveCtx.Err())
-	case err := <-errChan:
-		return err
-	case <-done:
-		return nil
-	}
-}
-
-func (g *Game) SaveActiveCharacters() error {
-	g.Mutex.RLock()
-	defer g.Mutex.RUnlock()
-
-	for _, c := range g.Characters {
-		if !c.LastEdited.After(c.LastSaved) {
-			continue
-		}
-
-		c.Mutex.Lock()
-		c.LastSaved = time.Now()
-		c.Mutex.Unlock()
-	}
-
-	return nil
-}
-
-func (g *Game) tick() {
-	g.Mutex.RLock()
-	defer g.Mutex.RUnlock()
-	// Game tick logic here
-}
-
-func (g *Game) shutdown(reason string) error {
-	Logger.Info("game shutdown", "reason", reason)
-	if err := g.saveAll(context.Background()); err != nil {
-		return fmt.Errorf("shutdown save failed: %w", err)
-	}
-	return nil
-}
-
-func loadNamesFromFile(path string) ([]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("file open error: %w", err)
+		return nil, fmt.Errorf("error opening file: %w", err)
 	}
 	defer file.Close()
 
@@ -261,4 +186,111 @@ func loadNamesFromFile(path string) ([]string, error) {
 	}
 
 	return names, nil
+}
+
+// Initialize Character Name Bloom Filter
+
+func (g *Game) InitCharacterBloomFilter() error {
+
+	Logger.Info("Initializing character name bloom filter...")
+
+	names, err := g.LoadCharacterNames()
+	if err != nil {
+		Logger.Warn("Error loading character names from database", "error", err)
+	}
+
+	namesFromFile, err := LoadNameFromFile(NAMES_PATH)
+	if err != nil {
+		Logger.Warn("Error loading character names from file", "error", err)
+	}
+
+	obscenities, err := LoadNameFromFile(OBSCENITY_PATH)
+	if err != nil {
+		Logger.Warn("Error loading obscenities from file", "error", err)
+	}
+
+	totalItems := len(names) + len(namesFromFile) + len(obscenities)
+	if totalItems < 100 {
+		totalItems = 100
+	}
+
+	g.characterBloomFilter = bloom.NewWithEstimates(uint(totalItems), 0.01)
+
+	completeNames := make([]string, 0, totalItems)
+	completeNames = append(completeNames, names...)
+	completeNames = append(completeNames, namesFromFile...)
+	completeNames = append(completeNames, obscenities...)
+
+	for _, name := range completeNames {
+		g.characterBloomFilter.AddString(strings.ToLower(name))
+	}
+
+	return nil
+}
+
+func (g *Game) Stop() error {
+
+	Logger.Info("Stopping game engine...")
+
+	g.cancel()
+
+	// Save all data
+
+	// Logout all characters
+
+	return nil
+
+}
+
+// Run the game engine
+
+func (g *Game) Run(errChan chan error) error {
+
+	Logger.Info("Starting game engine...")
+
+	// Start Game Heart Beat
+
+	g.ticker = time.NewTicker(time.Second)
+	defer g.ticker.Stop()
+
+	for {
+		select {
+		case <-g.ctx.Done():
+			Logger.Info("Game shutdown requested")
+			return nil
+		case <-g.ticker.C:
+			// Run game logic
+			err := g.tick()
+			if err != nil {
+				Logger.Error("Error running game logic", "error", err)
+				errChan <- fmt.Errorf("error running game logic: %w", err)
+				return fmt.Errorf("error running game logic: %w", err)
+			}
+		}
+	}
+}
+
+// Game heart beat
+
+func (g *Game) tick() error {
+
+	// Run game logic
+	return nil
+}
+
+func (g *Game) ValidateCharacterName(name string) error {
+
+	if len(name) < 4 {
+		return fmt.Errorf("character name is too short")
+	}
+
+	if len(name) > 20 {
+		return fmt.Errorf("character name is too long")
+	}
+
+	if g.characterBloomFilter.TestString(strings.ToLower(name)) {
+		return fmt.Errorf("character name is invalid")
+	}
+
+	return nil
 }

@@ -1,3 +1,21 @@
+/*
+Eidolon Engine
+
+Copyright 2024-2025 Jason Robinson
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
@@ -5,7 +23,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
@@ -18,11 +35,12 @@ type KeyPair struct {
 }
 
 // NewKeyPair initializes a new DynamoDB client.
-func NewKeyPair(region string) (*KeyPair, error) {
-	Logger.Info("Initializing DynamoDB client", "region", region)
+func NewKeyPair(config *Configuration) (*KeyPair, error) {
+
+	Logger.Info("Initializing DynamoDB client", "region", config.AWS.Region)
 
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(region),
+		Region: aws.String(config.AWS.Region),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error creating AWS session: %w", err)
@@ -38,6 +56,9 @@ func NewKeyPair(region string) (*KeyPair, error) {
 }
 
 func (k *KeyPair) Put(tableName string, item interface{}) error {
+
+	Logger.Info("Putting item into table", "tableName", tableName)
+
 	av, err := dynamodbattribute.MarshalMap(item)
 	if err != nil {
 		return fmt.Errorf("error marshalling item: %w", err)
@@ -48,48 +69,29 @@ func (k *KeyPair) Put(tableName string, item interface{}) error {
 		TableName: aws.String(tableName),
 	}
 
-	// Implement retries with exponential backoff
-	const maxRetries = 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		_, err = k.db.PutItem(input)
-		if err != nil {
-			if isRetryableError(err) && attempt < maxRetries-1 {
-				backoffDuration := time.Duration(attempt+1) * time.Second
-				Logger.Warn("Retryable error in PutItem, will retry", "attempt", attempt+1, "backoff", backoffDuration, "error", err)
-				time.Sleep(backoffDuration)
-				continue
-			}
-			return fmt.Errorf("error putting item into table %s: %w", tableName, err)
-		}
-		Logger.Debug("Successfully put item into table", "tableName", tableName)
-		return nil
+	_, err = k.db.PutItem(input)
+	if err != nil {
+		return fmt.Errorf("error putting item into table %s: %w", tableName, err)
 	}
 
-	return fmt.Errorf("failed to put item into table %s after %d attempts", tableName, maxRetries)
+	Logger.Debug("Successfully put item into table", "tableName", tableName)
+	return nil
+
 }
 
 // Get retrieves an item from the DynamoDB table.
 func (k *KeyPair) Get(tableName string, key map[string]*dynamodb.AttributeValue, item interface{}) error {
+
+	Logger.Info("Getting item from table", "tableName", tableName)
+
 	input := &dynamodb.GetItemInput{
 		Key:       key,
 		TableName: aws.String(tableName),
 	}
 
-	const maxRetries = 3
-	var result *dynamodb.GetItemOutput
-	var err error
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		result, err = k.db.GetItem(input)
-		if err != nil {
-			if isRetryableError(err) && attempt < maxRetries-1 {
-				backoffDuration := time.Duration(attempt+1) * time.Second
-				Logger.Warn("Retryable error in GetItem, will retry", "attempt", attempt+1, "backoff", backoffDuration, "error", err)
-				time.Sleep(backoffDuration)
-				continue
-			}
-			return fmt.Errorf("error getting item from table %s: %w", tableName, err)
-		}
-		break
+	result, err := k.db.GetItem(input)
+	if err != nil {
+		return fmt.Errorf("error getting item from table %s: %w", tableName, err)
 	}
 
 	if result.Item == nil {
@@ -106,54 +108,37 @@ func (k *KeyPair) Get(tableName string, key map[string]*dynamodb.AttributeValue,
 
 // Delete removes an item from the DynamoDB table.
 func (k *KeyPair) Delete(tableName string, key map[string]*dynamodb.AttributeValue) error {
+
+	Logger.Info("Deleting item from table", "tableName", tableName)
+
 	input := &dynamodb.DeleteItemInput{
 		Key:       key,
 		TableName: aws.String(tableName),
 	}
 
-	const maxRetries = 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		_, err := k.db.DeleteItem(input)
-		if err != nil {
-			if isRetryableError(err) && attempt < maxRetries-1 {
-				backoffDuration := time.Duration(attempt+1) * time.Second
-				Logger.Warn("Retryable error in DeleteItem, will retry", "attempt", attempt+1, "backoff", backoffDuration, "error", err)
-				time.Sleep(backoffDuration)
-				continue
-			}
-			return fmt.Errorf("error deleting item from table %s: %w", tableName, err)
-		}
-		Logger.Info("Successfully deleted item from table", "tableName", tableName)
-		return nil
+	_, err := k.db.DeleteItem(input)
+	if err != nil {
+		return fmt.Errorf("error deleting item from table %s: %w", tableName, err)
 	}
 
-	return fmt.Errorf("failed to delete item from table %s after %d attempts", tableName, maxRetries)
+	Logger.Info("Successfully deleted item from table", "tableName", tableName)
+	return nil
 }
 
 // Query performs a query operation on the DynamoDB table.
 func (k *KeyPair) Query(tableName string, keyConditionExpression string, expressionAttributeValues map[string]*dynamodb.AttributeValue, items interface{}) error {
+
+	Logger.Info("Querying table", "tableName", tableName)
+
 	input := &dynamodb.QueryInput{
 		TableName:                 aws.String(tableName),
 		KeyConditionExpression:    aws.String(keyConditionExpression),
 		ExpressionAttributeValues: expressionAttributeValues,
 	}
 
-	// Implement retries with exponential backoff
-	const maxRetries = 3
-	var result *dynamodb.QueryOutput
-	var err error
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		result, err = k.db.Query(input)
-		if err != nil {
-			if isRetryableError(err) && attempt < maxRetries-1 {
-				backoffDuration := time.Duration(attempt+1) * time.Second
-				Logger.Warn("Retryable error in Query, will retry", "attempt", attempt+1, "backoff", backoffDuration, "error", err)
-				time.Sleep(backoffDuration)
-				continue
-			}
-			return fmt.Errorf("error querying table %s: %w", tableName, err)
-		}
-		break
+	result, err := k.db.Query(input)
+	if err != nil {
+		return fmt.Errorf("error querying table %s: %w", tableName, err)
 	}
 
 	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, items)
@@ -166,26 +151,16 @@ func (k *KeyPair) Query(tableName string, keyConditionExpression string, express
 
 // Scan performs a scan operation on the DynamoDB table.
 func (k *KeyPair) Scan(tableName string, items interface{}) error {
+
+	Logger.Info("Scanning table", "tableName", tableName)
+
 	input := &dynamodb.ScanInput{
 		TableName: aws.String(tableName),
 	}
 
-	// Implement retries with exponential backoff
-	const maxRetries = 3
-	var result *dynamodb.ScanOutput
-	var err error
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		result, err = k.db.Scan(input)
-		if err != nil {
-			if isRetryableError(err) && attempt < maxRetries-1 {
-				backoffDuration := time.Duration(attempt+1) * time.Second
-				Logger.Warn("Retryable error in Scan, will retry", "attempt", attempt+1, "backoff", backoffDuration, "error", err)
-				time.Sleep(backoffDuration)
-				continue
-			}
-			return fmt.Errorf("error scanning table %s: %w", tableName, err)
-		}
-		break
+	result, err := k.db.Scan(input)
+	if err != nil {
+		return fmt.Errorf("error scanning table %s: %w", tableName, err)
 	}
 
 	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, items)
@@ -194,18 +169,4 @@ func (k *KeyPair) Scan(tableName string, items interface{}) error {
 	}
 
 	return nil
-}
-
-// isRetryableError checks if the error is retryable based on AWS error codes.
-func isRetryableError(err error) bool {
-	if awsErr, ok := err.(awserr.Error); ok {
-		switch awsErr.Code() {
-		case dynamodb.ErrCodeProvisionedThroughputExceededException,
-			dynamodb.ErrCodeInternalServerError,
-			"ThrottlingException",
-			"RequestLimitExceeded":
-			return true
-		}
-	}
-	return false
 }

@@ -1,5 +1,21 @@
 """
-Multi User Dungeon Deployment Script
+Eidolon Engine
+
+Copyright 2024-2025 Jason Robinson
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Eidolon Engine Deployment Script
 """
 
 import os
@@ -121,15 +137,12 @@ def update_configuration_file(config_updates) -> None:
         config: dict = load_config()
 
         # Ensure top-level keys exist
-        for key in ["Server", "Aws", "Cognito", "Game", "Logging"]:
+        for key in ["Server", "AWS", "Cognito", "Game", "Logging"]:
             if key not in config or config[key] is None:
                 config[key] = {}
 
-        # Update Server configuration
-        config["Server"]["Port"] = 9050
-
-        # Update Aws configuration
-        config["Aws"]["Region"] = "us-east-1"
+        # Update AWS configuration
+        config["AWS"]["Region"] = "us-east-1"
 
         # Update Game configuration
         config["Game"].update(
@@ -144,7 +157,7 @@ def update_configuration_file(config_updates) -> None:
         # Update Logging configuration
         config["Logging"].update(
             {
-                "ApplicationName": "mud",
+                "ApplicationName": "Eidolon Engine",
                 "LogLevel": 20,
                 "LogGroup": config_updates.get("CloudWatch", {}).get("LogGroupName", "/eidolon/game-logs"),
                 "LogStream": "application",
@@ -210,10 +223,6 @@ def gather_all_parameters() -> dict:
     parameters["cognito"] = {
         "UserPoolName": input("Enter the Name of the user pool [default: eidolon-user-pool]: ") or "eidolon-user-pool",
         "AppClientName": input("Enter the Name of the app client [default: eidolon-app-client]: ") or "eidolon-app-client",
-        "CallbackURL": input("Enter the URL of the callback for the app client [default: https://localhost:3000/callback]: ")
-        or "https://localhost:3000/callback",
-        "SignOutURL": input("Enter the URL of the sign-out page for the app client [default: https://localhost:3000/sign-out]: ")
-        or "https://localhost:3000/sign-out",
         "ReplyEmailAddress": input("Enter the email address to send from [default: contact@darkrelics.net]: ")
         or "contact@darkrelics.net",
     }

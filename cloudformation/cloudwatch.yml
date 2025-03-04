@@ -5,12 +5,12 @@ Parameters:
   LogGroupName:
     Type: String
     Description: Name for the CloudWatch Log Group
-    Default: "/mud/application"
+    Default: "/eidolon/system"
 
   MetricNamespace:
     Type: String
     Description: Namespace for CloudWatch Metrics
-    Default: "MUD/Application"
+    Default: "eidolon/system"
 
   RetentionInDays:
     Type: Number
@@ -18,13 +18,13 @@ Parameters:
     Default: 30
 
 Resources:
-  MUDLogGroup:
+  EidolonLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Ref LogGroupName
       RetentionInDays: !Ref RetentionInDays
 
-  MUDCloudWatchPolicy:
+  EidolonCloudWatchPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       Description: Allows writing to CloudWatch Logs and Metrics
@@ -35,7 +35,7 @@ Resources:
             Action:
               - logs:CreateLogStream
               - logs:PutLogEvents
-            Resource: !GetAtt MUDLogGroup.Arn
+            Resource: !GetAtt EidolonLogGroup.Arn
           - Effect: Allow
             Action:
               - cloudwatch:PutMetricData
@@ -47,7 +47,7 @@ Resources:
 Outputs:
   LogGroupName:
     Description: Name of the created CloudWatch Log Group
-    Value: !Ref MUDLogGroup
+    Value: !Ref EidolonLogGroup
 
   MetricNamespace:
     Description: Namespace for CloudWatch Metrics
@@ -55,4 +55,4 @@ Outputs:
 
   CloudWatchPolicyArn:
     Description: ARN of the IAM Managed Policy for CloudWatch access
-    Value: !Ref MUDCloudWatchPolicy
+    Value: !Ref EidolonCloudWatchPolicy

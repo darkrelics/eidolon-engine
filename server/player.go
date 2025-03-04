@@ -1,3 +1,21 @@
+/*
+Eidolon Engine
+
+Copyright 2024-2025 Jason Robinson
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
@@ -17,11 +35,15 @@ import (
 )
 
 type Player struct {
+	ctx           context.Context
+	cancel        context.CancelFunc
 	index         uint64
-	playerID      string
+	id            uuid.UUID // Using uuid.UUID type instead of string
+	email         string    // Field to store email address
 	toPlayer      chan string
 	fromPlayer    chan string
 	playerError   chan error
+	consoleDone   chan bool
 	echo          bool
 	prompt        string
 	connection    ssh.Channel
@@ -31,58 +53,153 @@ type Player struct {
 	seenMotD      []uuid.UUID
 	character     *Character
 	login         time.Time
+	lastEdited    time.Time
+	lastSaved     time.Time
 	server        *Server
 	mutex         sync.RWMutex
-	interfaceCtx  context.Context
-	ctx           context.Context
-	cancel        context.CancelFunc
 	shutdownOnce  sync.Once
 }
 
 type PlayerData struct {
-	PlayerID      string            `json:"PlayerID" dynamodbav:"PlayerID"`
-	CharacterList map[string]string `json:"characterList" dynamodbav:"CharacterList"`
-	SeenMotDs     []string          `json:"seenMotD" dynamodbav:"SeenMotD"`
+	PlayerID      string            `json:"PlayerID" dynamodbav:"PlayerID"` // Store UUID as string in DynamoDB
+	Email         string            `json:"Email" dynamodbav:"Email"`       // Store email
+	CharacterList map[string]string `json:"CharacterList" dynamodbav:"CharacterList"`
+	SeenMotDs     []string          `json:"SeenMotD" dynamodbav:"SeenMotD"`
 }
 
-func NewPlayer(server *Server, playerName string, conn ssh.Channel, interfaceCtx context.Context) (*Player, error) {
-	playerCtx, playerCancel := context.WithCancel(context.Background())
+func (p *Player) Load(playerID uuid.UUID) error {
+	Logger.Debug("Loading player data", "player_id", playerID.String())
+
+	database := p.server.database
+
+	key := map[string]*dynamodb.AttributeValue{
+		"PlayerID": {S: aws.String(playerID.String())},
+	}
+
+	var playerData PlayerData
+
+	p.characterList = make(map[string]uuid.UUID)
+	p.seenMotD = make([]uuid.UUID, 0)
+
+	err := database.Get("players", key, &playerData)
+	if err != nil {
+		if strings.Contains(err.Error(), "item not found") {
+			Logger.Info("New player", "player_id", playerID.String(), "email", p.email)
+			p.Save()
+			return nil
+		}
+		Logger.Error("Error loading player data", "error", err)
+		return err
+	}
+
+	Logger.Info("Player data loaded", "player_id", playerID.String(), "email", playerData.Email)
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	// Update email from database
+	p.email = playerData.Email
+
+	for characterName, characterID := range playerData.CharacterList {
+		parsedUUID, err := uuid.Parse(characterID)
+		if err != nil {
+			Logger.Error("Error parsing character ID", "character_id", characterID)
+			continue
+		}
+		p.characterList[characterName] = parsedUUID
+	}
+
+	for _, motdID := range playerData.SeenMotDs {
+		motdUUID, err := uuid.Parse(motdID)
+		if err != nil {
+			Logger.Error("Error parsing MOTD ID", "motd_id", motdID)
+			continue
+		}
+		p.seenMotD = append(p.seenMotD, motdUUID)
+	}
+
+	p.lastEdited = time.Now()
+	p.lastSaved = time.Now()
+
+	return nil
+}
+
+func (p *Player) Save() error {
+	Logger.Info("Saving player data", "player_id", p.id.String(), "email", p.email)
+
+	database := p.server.database
+
+	playerData := PlayerData{
+		PlayerID:      p.id.String(),
+		Email:         p.email,
+		CharacterList: make(map[string]string),
+		SeenMotDs:     make([]string, len(p.seenMotD)),
+	}
+
+	// Convert character IDs to strings
+	for characterName, characterID := range p.characterList {
+		playerData.CharacterList[characterName] = characterID.String()
+	}
+
+	// Convert MOTD IDs to strings
+	for i, motdID := range p.seenMotD {
+		playerData.SeenMotDs[i] = motdID.String()
+	}
+
+	err := database.Put("players", playerData)
+	if err != nil {
+		Logger.Error("Error saving player data", "error", err)
+		p.toPlayer <- "Error saving player data. Please contact an administrator.\n"
+		return fmt.Errorf("error saving player data: %w", err)
+	}
+
+	p.mutex.Lock()
+	p.lastSaved = time.Now()
+	p.mutex.Unlock()
+
+	return nil
+}
+
+func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfaceCtx context.Context, userUUID uuid.UUID) (*Player, error) {
+	ctx, cancel := context.WithCancel(server.ctx)
 
 	player := &Player{
 		server:        server,
-		interfaceCtx:  interfaceCtx,
-		playerID:      playerName,
+		id:            userUUID,    // Using uuid.UUID directly
+		email:         playerEmail, // Store email separately
 		toPlayer:      make(chan string, 10),
 		fromPlayer:    make(chan string, 10),
 		playerError:   make(chan error, 1),
+		consoleDone:   make(chan bool, 1),
 		echo:          true,
 		connection:    conn,
 		consoleWidth:  80,
 		consoleHeight: 24,
 		login:         time.Now(),
-		ctx:           playerCtx,
-		cancel:        playerCancel,
+		ctx:           ctx,
+		cancel:        cancel,
+		shutdownOnce:  sync.Once{},
 	}
 
 	// Load player data
-	if err := player.loadData(); err != nil {
-		playerCancel()
+	if err := player.Load(userUUID); err != nil {
+		cancel()
 		return nil, fmt.Errorf("player data load: %w", err)
 	}
 
 	// Register with server
-	id, err := server.AddPlayer(player)
+	err := server.AddPlayer(player)
 	if err != nil {
-		playerCancel()
-		return nil, fmt.Errorf("server registration: %w", err)
+		cancel()
+		return nil, fmt.Errorf("player registration: %w", err)
 	}
-	player.index = id
 
 	return player, nil
 }
 
-func (p *Player) Run(requests <-chan *ssh.Request) {
-	Logger.Info("starting player session", "player", p.playerID)
+func (p *Player) RunSSH(requests <-chan *ssh.Request) {
+	Logger.Info("Player connected", "player_name", p.id)
+
 	defer p.Stop()
 
 	// Create channels for each goroutine
@@ -90,327 +207,329 @@ func (p *Player) Run(requests <-chan *ssh.Request) {
 	inputDone := make(chan error, 1)
 	outputDone := make(chan error, 1)
 
-	// Start request handler
-	go func() {
-		requestDone <- p.handleRequests(p.ctx, requests)
-	}()
+	// Start handlers
+	go p.handleRequests(p.ctx, requests, requestDone)
+	go p.handleInput(p.ctx, inputDone)
+	go p.handleOutput(p.ctx, outputDone)
 
-	// Start input handler
-	go func() {
-		inputDone <- p.handleInput(p.ctx)
-	}()
-
-	// Start output handler
-	go func() {
-		outputDone <- p.handleOutput(p.ctx)
-	}()
-
-	// Display MOTDs
+	// Display MOTDs after connection is established but before entering main loop
 	if err := DisplayUnseenMOTDs(p); err != nil {
-		Logger.Error("motd display error", "player", p.playerID, "error", err)
-		return
+		Logger.Error("motd display error", "player", p.id, "error", err)
+		// Continue despite MOTD display error
 	}
 
-	// Character selection loop
-	for {
-		character, err := SelectCharacter(p.ctx, p)
+	// Start Player Interface
+	go p.Console(p.consoleDone)
+
+	// Wait for shutdown conditions
+	select {
+	case <-p.ctx.Done():
+		Logger.Info("Player session ending due to context cancellation", "player", p.id)
+		return
+	case err := <-p.playerError:
 		if err != nil {
-			Logger.Error("character selection error", "player", p.playerID, "error", err)
-			return
+			Logger.Error("Player error", "player_name", p.id, "error", err)
 		}
-
-		p.character = character
-
-		charDone := make(chan error, 1)
-		go func() {
-			charDone <- character.Run()
-		}()
-
-		select {
-		case <-p.ctx.Done():
-			Logger.Info("player session ended", "player", p.playerID)
-			return
-		case <-p.interfaceCtx.Done():
-			return
-		case <-p.server.context.Done():
-			return
-		case <-p.server.globalContext.Done():
-			return
-		case err := <-requestDone:
-			Logger.Error("ssh request handler error", "player", p.playerID, "error", err)
-			return
-		case err := <-inputDone:
-			Logger.Error("input handler error", "player", p.playerID, "error", err)
-			return
-		case err := <-outputDone:
-			Logger.Error("output handler error", "player", p.playerID, "error", err)
-			return
-		case err := <-charDone:
-			if err != nil {
-				Logger.Error("character error", "player", p.playerID, "error", err)
-				return
-			}
-			p.character = nil
-			continue
+		return
+	case err := <-requestDone:
+		if err != nil && err != context.Canceled {
+			Logger.Error("Request handler error", "player", p.id, "error", err)
 		}
+		return
+	case err := <-inputDone:
+		if err != nil && err != context.Canceled {
+			Logger.Error("Input handler error", "player", p.id, "error", err)
+		}
+		return
+	case err := <-outputDone:
+		if err != nil && err != context.Canceled {
+			Logger.Error("Output handler error", "player", p.id, "error", err)
+		}
+		return
+	case <-p.consoleDone:
+		Logger.Info("Player console session ended", "player", p.id)
+		return
 	}
 }
 
-func (p *Player) Stop() error {
-	var stopErr error
-	p.shutdownOnce.Do(func() {
-		p.cancel()
+func (p *Player) Stop() {
+	if p == nil {
+		return
+	}
 
-		if p.character != nil {
-			if err := p.character.Stop(); err != nil {
-				Logger.Error("character stop error", "playerID", p.playerID, "error", err)
-				stopErr = err
-				return
-			}
+	// Use shutdownOnce to ensure we only perform cleanup once
+	p.shutdownOnce.Do(func() {
+		Logger.Info("Player disconnected", "player_name", p.id)
+
+		// Cancel context if not already done
+		select {
+		case <-p.ctx.Done():
+			// Context is already canceled
+		default:
+			// Cancel the context to signal all goroutines to exit
+			p.cancel()
 		}
 
-		p.saveData()
+		// Stop the character if active
+		if p.character != nil {
+			Logger.Info("Stopping active character", "character", p.character.name)
+			p.character.Stop(p.character.end)
+			p.character = nil
+		}
 
+		// Save player data
+		p.Save()
+
+		// Close the connection
 		if p.connection != nil {
 			p.connection.Close()
 		}
 
+		// Remove from server (do this last to avoid race conditions)
+		if p.server != nil {
+			p.server.mutex.Lock()
+			delete(p.server.players, p.index)
+			delete(p.server.playersByUUID, p.id)
+			p.server.playerCount.Add(^uint64(0)) // Decrement count
+			p.server.mutex.Unlock()
+			Logger.Info("Player removed from server", "player_name", p.id)
+		}
+
+		// Close channels after all operations are done
 		close(p.toPlayer)
 		close(p.fromPlayer)
 		close(p.playerError)
-
-		if p.server != nil {
-			_ = p.server.RemovePlayer(p.index)
-		}
-
-		Logger.Info("player stopped", "playerID", p.playerID)
 	})
-	return stopErr
 }
 
-func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request) error {
+func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request, done chan error) {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Warn("Recovered in handleRequests", "player", p.id, "recover", r)
+			done <- fmt.Errorf("panic in request handler: %v", r)
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			done <- ctx.Err()
+			return
 		case req, ok := <-requests:
 			if !ok {
-				return nil
+				Logger.Debug("Request channel closed", "player", p.id)
+				done <- nil
+				return
 			}
-			p.processRequest(req)
+
+			p.mutex.Lock()
+			switch req.Type {
+			case "shell":
+				req.Reply(true, nil)
+			case "pty-req":
+				termLen := req.Payload[3]
+				w, h := ParseDims(req.Payload[termLen+4:])
+				p.consoleWidth = w
+				p.consoleHeight = h
+				req.Reply(true, nil)
+			case "window-change":
+				w, h := ParseDims(req.Payload)
+				p.consoleWidth = w
+				p.consoleHeight = h
+			default:
+				req.Reply(false, nil)
+			}
+			p.mutex.Unlock()
 		}
 	}
 }
 
-func (p *Player) handleInput(ctx context.Context) error {
+func (p *Player) handleInput(ctx context.Context, done chan error) {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Warn("Recovered in handleInput", "player", p.id, "recover", r)
+			done <- fmt.Errorf("panic in input handler: %v", r)
+		}
+	}()
+
 	var inputBuffer []rune
 	reader := bufio.NewReader(p.connection)
 
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			done <- ctx.Err()
+			return
 		default:
 			r, _, err := reader.ReadRune()
 			if err != nil {
 				if err == io.EOF {
-					Logger.Debug("Connection closed by client", "player", p.playerID)
-					return nil
+					Logger.Info("Connection closed by client", "player", p.id)
+					done <- nil
+					return
 				}
-				Logger.Error("Error reading input", "player", p.playerID, "error", err)
-				return fmt.Errorf("read error: %w", err)
+				Logger.Error("Error reading input", "player", p.id, "error", err)
+				done <- fmt.Errorf("read error: %w", err)
+				return
 			}
 
-			if !p.processInput(r, &inputBuffer) {
-				Logger.Debug("Input processing stopped", "player", p.playerID)
-				return nil
+			// Handle different input cases
+			switch r {
+			case '\n', '\r':
+				if len(inputBuffer) > 0 {
+					select {
+					case p.fromPlayer <- string(inputBuffer):
+						// Don't write the prompt here, let the command processor
+						// or game logic handle sending the prompt after processing
+						if p.echo {
+							p.connection.Write([]byte("\r\n"))
+						}
+						inputBuffer = inputBuffer[:0]
+					case <-ctx.Done():
+						done <- ctx.Err()
+						return
+					}
+				} else {
+					// Handle empty input - just show prompt again
+					if p.echo {
+						p.connection.Write([]byte("\r\n"))
+						p.connection.Write([]byte(p.prompt))
+					}
+				}
+
+			case '\b', 127: // Backspace
+				if len(inputBuffer) > 0 {
+					inputBuffer = inputBuffer[:len(inputBuffer)-1]
+					if p.echo {
+						p.connection.Write([]byte("\b \b"))
+					}
+				}
+
+			case '\x03': // Ctrl-C
+				done <- errors.New("player interrupt")
+				return
+
+			default:
+				// Filter input to only allow printable ASCII (32-126)
+				if r >= 32 && r <= 126 {
+					if len(inputBuffer) < 1024 {
+						inputBuffer = append(inputBuffer, r)
+						if p.echo {
+							p.connection.Write([]byte(string(r)))
+						}
+					}
+				}
 			}
 		}
 	}
 }
 
-func (p *Player) handleOutput(ctx context.Context) error {
+func (p *Player) handleOutput(ctx context.Context, done chan error) {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Warn("Recovered in handleOutput", "player", p.id, "recover", r)
+			done <- fmt.Errorf("panic in output handler: %v", r)
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			done <- ctx.Err()
+			return
 		case msg, ok := <-p.toPlayer:
 			if !ok {
-				return nil
+				Logger.Debug("Output channel closed", "player", p.id)
+				done <- nil
+				return
 			}
+
 			if _, err := p.connection.Write([]byte(wrapText(msg, p.consoleWidth))); err != nil {
-				return fmt.Errorf("write error: %w", err)
+				Logger.Error("Write error in output handler", "player", p.id, "error", err)
+				done <- fmt.Errorf("write error: %w", err)
+				return
 			}
 		}
 	}
 }
 
-func (p *Player) processRequest(req *ssh.Request) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+// wrapText wraps the given text to the specified width, preserving
+// empty lines and whitespace. It uses \r\n as the line break.
+func wrapText(text string, width int) string {
+	var result strings.Builder
 
-	switch req.Type {
-	case "shell":
-		req.Reply(true, nil)
-	case "pty-req":
-		termLen := req.Payload[3]
-		w, h := ParseDims(req.Payload[termLen+4:])
-		p.consoleWidth = w
-		p.consoleHeight = h
-		req.Reply(true, nil)
-	case "window-change":
-		w, h := ParseDims(req.Payload)
-		p.consoleWidth = w
-		p.consoleHeight = h
-	default:
-		req.Reply(false, nil)
-	}
-}
+	// Split the text into lines
+	lines := strings.Split(text, "\n")
 
-func (p *Player) processInput(r rune, buffer *[]rune) bool {
-	switch r {
-	case '\n', '\r':
-		if len(*buffer) > 0 {
-			select {
-			case p.fromPlayer <- string(*buffer):
-				if p.echo {
-					p.connection.Write([]byte("\r\n"))
-					p.connection.Write([]byte(p.prompt))
-				}
-				*buffer = (*buffer)[:0]
-			case <-p.ctx.Done():
-				return false
+	for i, line := range lines {
+		// Preserve empty lines
+		if len(strings.TrimSpace(line)) == 0 {
+			result.WriteString(line)
+			if i < len(lines)-1 {
+				result.WriteString("\r\n")
 			}
-		}
-
-	case '\b', 127: // Backspace
-		if len(*buffer) > 0 {
-			*buffer = (*buffer)[:len(*buffer)-1]
-			if p.echo {
-				p.connection.Write([]byte("\b \b"))
-			}
-		}
-
-	case '\x03': // Ctrl-C
-		p.playerError <- errors.New("player interrupt")
-		return false
-
-	default:
-		if len(*buffer) < 1024 {
-			*buffer = append(*buffer, r)
-			if p.echo {
-				p.connection.Write([]byte(string(r)))
-			}
-		}
-	}
-	return true
-}
-
-func (p *Player) loadData() error {
-	_, charList, motd, err := p.ReadPlayer(p.playerID)
-	if err != nil {
-		if err.Error() == "player not found" {
-			return nil
-		}
-		return fmt.Errorf("database read: %w", err)
-	}
-
-	p.mutex.Lock()
-	p.characterList = charList
-	p.seenMotD = motd
-	p.mutex.Unlock()
-
-	return nil
-}
-
-func (p *Player) saveData() error {
-	if err := p.WritePlayer(); err != nil {
-		Logger.Error("failed to save player data", "playerID", p.playerID, "error", err)
-		return fmt.Errorf("database write: %w", err)
-	}
-	return nil
-}
-
-// WritePlayer stores the player data into the DynamoDB database.
-func (p *Player) WritePlayer() error {
-
-	k := p.server.database
-
-	pd := PlayerData{
-		PlayerID:      p.playerID,
-		CharacterList: make(map[string]string),
-		SeenMotDs:     make([]string, len(p.seenMotD)),
-	}
-
-	// Convert UUIDs to strings for CharacterList
-	for charName, charID := range p.characterList {
-		pd.CharacterList[charName] = charID.String()
-	}
-
-	// Convert UUIDs to strings for SeenMotDs
-	for i, motdID := range p.seenMotD {
-		pd.SeenMotDs[i] = motdID.String()
-	}
-
-	// Write the player data to the DynamoDB table with proper error handling
-	err := k.Put("players", pd)
-	if err != nil {
-		Logger.Error("Error storing player data", "playerName", p.playerID, "error", err)
-		return fmt.Errorf("error storing player data: %w", err)
-	}
-
-	Logger.Debug("Successfully wrote player data", "playerName", p.playerID, "characterCount", len(p.characterList), "seenMotDCount", len(p.seenMotD))
-	return nil
-}
-
-// ReadPlayer retrieves the player data from the DynamoDB database.
-func (p *Player) ReadPlayer(playerName string) (string, map[string]uuid.UUID, []uuid.UUID, error) {
-	Logger.Debug("Reading player data from database", "playerName", playerName)
-
-	k := p.server.database
-
-	key := map[string]*dynamodb.AttributeValue{
-		"PlayerID": {S: aws.String(playerName)},
-	}
-
-	var pd PlayerData
-	err := k.Get("players", key, &pd)
-	if err != nil {
-		if strings.Contains(err.Error(), "item not found") {
-			// Return empty maps for new players instead of error
-			Logger.Info("First time player, creating new data", "playerName", playerName)
-			return playerName, make(map[string]uuid.UUID), make([]uuid.UUID, 0), nil
-		}
-		Logger.Error("Error reading player data", "playerName", playerName, "error", err)
-		return "", nil, nil, fmt.Errorf("error reading player data: %w", err)
-	}
-
-	// Convert character IDs from strings to UUIDs
-	characterList := make(map[string]uuid.UUID)
-	for name, idString := range pd.CharacterList {
-		id, err := uuid.Parse(idString)
-		if err != nil {
-			Logger.Error("Error parsing character UUID", "characterName", name, "uuid", idString, "error", err)
 			continue
 		}
-		characterList[name] = id
-	}
 
-	// Convert SeenMotDs from strings to UUIDs
-	seenMotDs := make([]uuid.UUID, 0, len(pd.SeenMotDs))
-	for _, idString := range pd.SeenMotDs {
-		id, err := uuid.Parse(idString)
-		if err != nil {
-			Logger.Error("Error parsing MOTD UUID", "uuid", idString, "error", err)
-			continue
+		// Wrap the line to the specified width
+		for len(line) > 0 {
+			if len(line) <= width {
+				result.WriteString(line)
+				break
+			}
+
+			// Find the last space within the width
+			lastSpace := strings.LastIndex(line[:width+1], " ")
+			if lastSpace == -1 {
+				// No space found, force break at width
+				result.WriteString(line[:width])
+				line = line[width:]
+			} else {
+				// Break at the last space
+				result.WriteString(line[:lastSpace])
+				line = strings.TrimLeft(line[lastSpace+1:], " ")
+			}
+
+			result.WriteString("\r\n")
 		}
-		seenMotDs = append(seenMotDs, id)
+
+		// Add newline between original lines if not the last line
+		if i < len(lines)-1 {
+			result.WriteString("\r\n")
+		}
 	}
 
-	Logger.Debug("Successfully read player data",
-		"playerName", pd.PlayerID,
-		"characterCount", len(characterList),
-		"seenMotDCount", len(seenMotDs))
+	return result.String()
+}
 
-	return pd.PlayerID, characterList, seenMotDs, nil
+func (s *Server) RemovePlayer(playerID uint64) error {
+
+	if s.players[playerID] == nil {
+		Logger.Warn("Attempted to remove non-existent player", "playerID", playerID)
+		return nil
+	}
+
+	player := s.players[playerID]
+
+	// Stop the existing player session
+
+	Logger.Info("Disconnected player with active character", "playerID", player.id.String(), "playerIndex", playerID)
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	// Find the player by index
+	player, exists := s.players[playerID]
+	if exists {
+		// Remove from both maps
+		delete(s.players, playerID)
+		delete(s.playersByUUID, player.id)
+
+		s.playerCount.Add(^uint64(0)) // Decrement count
+		Logger.Info("Player removed", "playerID", playerID, "playerUUID", player.id.String())
+	} else {
+		Logger.Warn("Attempted to remove non-existent player", "playerID", playerID)
+	}
+
+	return nil
 }
