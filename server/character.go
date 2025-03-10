@@ -469,3 +469,39 @@ func (c *Character) Stop(done chan bool) {
 
 	}
 }
+
+// formatCharacterDescription creates a description of a character
+func formatCharacterDescription(target *Character, observer *Character) string {
+	target.mutex.RLock()
+	defer target.mutex.RUnlock()
+
+	var desc strings.Builder
+	desc.WriteString(fmt.Sprintf("\n\r%s\n\r", target.name))
+
+	// Basic appearance info
+	desc.WriteString("You see a ")
+
+	// Add more descriptive elements here based on character attributes, equipment, etc.
+	// This is placeholder logic
+	if target.health < float64(target.game.startingHealth)/2 {
+		desc.WriteString("wounded ")
+	}
+
+	desc.WriteString("person.\n\r")
+
+	// Equipment description
+	var visibleItems []string
+	for _, item := range target.inventory {
+		if item != nil && item.isWorn {
+			visibleItems = append(visibleItems, fmt.Sprintf("%s on %s", item.name, strings.Join(item.wornOn, " and ")))
+		}
+	}
+
+	if len(visibleItems) > 0 {
+		desc.WriteString("They are wearing ")
+		desc.WriteString(strings.Join(visibleItems, ", "))
+		desc.WriteString(".\n\r")
+	}
+
+	return desc.String()
+}

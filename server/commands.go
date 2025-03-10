@@ -71,7 +71,14 @@ func (g *Game) initCommands() {
 		timed:       false,
 		handler:     executeHelpCommand,
 		description: "Display available commands",
-		usage:       "help [command]",
+		usage:       "help",
+	}
+
+	g.commands["who"] = CommandInfo{
+		timed:       false,
+		handler:     executeWhoCommand,
+		description: "Display currently online characters",
+		usage:       "who",
 	}
 }
 
@@ -412,38 +419,79 @@ func getLookTarget(character *Character, target string) string {
 	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
 }
 
-// formatCharacterDescription creates a description of a character
-func formatCharacterDescription(target *Character, observer *Character) string {
-	target.mutex.RLock()
-	defer target.mutex.RUnlock()
-
-	var desc strings.Builder
-	desc.WriteString(fmt.Sprintf("\n\r%s\n\r", target.name))
-
-	// Basic appearance info
-	desc.WriteString("You see a ")
-
-	// Add more descriptive elements here based on character attributes, equipment, etc.
-	// This is placeholder logic
-	if target.health < float64(target.game.startingHealth)/2 {
-		desc.WriteString("wounded ")
+// executeWhoCommand handles the who command, displaying all online characters
+func executeWhoCommand(character *Character, tokens []string) error {
+	if character == nil || character.player == nil || character.game == nil {
+		return errors.New("invalid character state")
 	}
 
-	desc.WriteString("person.\n\r")
+	Logger.Debug("Player checking who is online", "characterName", character.name)
 
-	// Equipment description
-	var visibleItems []string
-	for _, item := range target.inventory {
-		if item != nil && item.isWorn {
-			visibleItems = append(visibleItems, fmt.Sprintf("%s on %s", item.name, strings.Join(item.wornOn, " and ")))
+	// Get all active characters from the game
+	character.game.mutex.RLock()
+	var characterNames []string
+	for _, c := range character.game.characters {
+		if c != nil && c.name != "" {
+			characterNames = append(characterNames, c.name)
+		}
+	}
+	character.game.mutex.RUnlock()
+
+	// Sort names alphabetically
+	sort.Strings(characterNames)
+
+	// Check if there are any other characters online
+	if len(characterNames) == 0 {
+		character.player.toPlayer <- whoEmpty
+		return nil
+	}
+
+	// Build message with character list
+	var msg strings.Builder
+	msg.WriteString(whoHeader)
+	msg.WriteString("----------------\n\r")
+
+	// Determine column count based on console width and character count
+	consoleWidth := 80 // Default
+	if character.player.consoleWidth > 0 {
+		consoleWidth = character.player.consoleWidth
+	}
+
+	// Column width is 16 characters (as specified)
+	const colWidth = 16
+	maxCols := consoleWidth / colWidth
+
+	// If fewer than 20 characters, use single column layout as specified
+	if len(characterNames) < 20 {
+		// Single column layout
+		for _, name := range characterNames {
+			msg.WriteString(fmt.Sprintf("%-16s\n\r", name))
+		}
+	} else {
+		// Multi-column layout
+		cols := maxCols
+		if cols < 1 {
+			cols = 1 // Ensure at least one column
+		}
+
+		// Calculate rows needed
+		rows := (len(characterNames) + cols - 1) / cols // Ceiling division
+
+		// Display characters in column-first order
+		for r := 0; r < rows; r++ {
+			for c := 0; c < cols; c++ {
+				idx := c*rows + r
+				if idx < len(characterNames) {
+					msg.WriteString(fmt.Sprintf("%-16s", characterNames[idx]))
+				}
+			}
+			msg.WriteString("\n\r")
 		}
 	}
 
-	if len(visibleItems) > 0 {
-		desc.WriteString("They are wearing ")
-		desc.WriteString(strings.Join(visibleItems, ", "))
-		desc.WriteString(".\n\r")
-	}
+	msg.WriteString("\n\r")
+	msg.WriteString(fmt.Sprintf("Total Characters Online: %d\n\r", len(characterNames)))
 
-	return desc.String()
+	character.player.toPlayer <- msg.String()
+	return nil
 }
