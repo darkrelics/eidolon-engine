@@ -66,7 +66,7 @@ Key components:
 - [x] Allow players to enter their name.
 - [x] Display the incoming IP address and Port on the server.
 - [x] Add a help command.
-- [ ] Add a character list (who) command.
+- [x] Add a character list (who) command.
 - [x] Allow users to change their passwords.
 - [ ] Expand the character creation process.
 - [ ] Add take item command.
@@ -113,7 +113,7 @@ Game Information:
 - [ ] MOTD: Display the message of the day.
 - [ ] REPORT: Report a bug or issue.
 - [ ] BUG: Report a bug or issue.
-- [ ] WHO: Display a list of players.
+- [x] WHO: Display a list of players.
 
 Basic Movement:
 
@@ -151,15 +151,15 @@ Combat:
 - [ ] RETREAT: Move away from another player or NPC.
 - [ ] ASSESS: Assess the situation.
 - [ ] ATTACK: Attack another player or NPC.
-- [ ] PARRY: Defend against an attack.
-- [ ] DODGE: Avoid an attack.
 - [ ] LOAD: Load a weapon.
 - [ ] FIRE: Fire a weapon.
 
 Character Manegment:
 
-- [ ] SKILLS: Display your skills.
+- [ ] SHOW: Display your character information.
+- [ ] SKILL: Display your skills.
 - [ ] STATUS: Display the character status.
+- [ ] INVENTORY: Display the contents of your inventory.
 
 Group:
 
