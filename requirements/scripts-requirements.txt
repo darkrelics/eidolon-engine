@@ -1,6 +1,6 @@
 #Required 
 PyYAML==6.0.2
-boto3==1.37.9
+boto3==1.37.23
 
 #Dependancies
 botocore==1.37.18
