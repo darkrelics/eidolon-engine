@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 var CONFIGURATION_FILE string = "config.yml"
@@ -121,33 +122,43 @@ func main() {
 }
 
 func shutdown(errorChan chan error, game *Game, server *Server, cloudWatch *CloudWatch) error {
-
-	// TODO: handle error channel
-
 	Logger.Info("Main - Shutting down system")
 
+	var shutdownErr error
+
+	// Stop components in reverse order
 	if err := server.Stop(); err != nil {
-		errorChan <- err
-		return err
+		Logger.Error("Error stopping server", "error", err)
+		shutdownErr = err
 	}
 
 	if err := game.Stop(); err != nil {
-		errorChan <- err
-		return err
+		Logger.Error("Error stopping game engine", "error", err)
+		if shutdownErr == nil {
+			shutdownErr = err
+		}
 	}
 
 	if err := cloudWatch.Stop(); err != nil {
-		errorChan <- err
-		return err
+		Logger.Error("Error stopping CloudWatch", "error", err)
+		if shutdownErr == nil {
+			shutdownErr = err
+		}
 	}
+
+	// Try to drain the error channel with a timeout
+	drainTimer := time.NewTimer(2 * time.Second)
+	defer drainTimer.Stop()
 
 	select {
 	case err := <-errorChan:
-		Logger.Error("Main: Error during shutdown", "error", err)
-		return err
-	default:
-		break
+		if err != nil && shutdownErr == nil {
+			Logger.Error("Error during component shutdown", "error", err)
+			shutdownErr = err
+		}
+	case <-drainTimer.C:
+		// Timeout waiting for error channel
 	}
 
-	return nil
+	return shutdownErr
 }
