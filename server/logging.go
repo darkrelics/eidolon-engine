@@ -204,6 +204,7 @@ func (h *CloudWatchHandler) WithGroup(name string) slog.Handler {
 	return &newH
 }
 
+// initLogStream initializes the CloudWatch log stream, creating the log group and stream if needed.
 func (c *CloudWatch) initLogStream() error {
 	// Skip if already initialized
 	if c.initialized {
@@ -221,13 +222,39 @@ func (c *CloudWatch) initLogStream() error {
 		return nil
 	}
 
-	// First check if the log group exists
+	// Check and create log group if needed
+	if err := c.ensureLogGroupExists(); err != nil {
+		return err
+	}
+
+	// Check and create log stream if needed
+	token, err := c.ensureLogStreamExists()
+	if err != nil {
+		return err
+	}
+	if token != nil {
+		c.sequenceToken = token
+	}
+
+	// Verify the log stream is working with a test message
+	if err := c.sendTestMessage(); err != nil {
+		return err
+	}
+
+	c.initialized = true
+	fmt.Printf("CloudWatch log stream initialization complete\n")
+	return nil
+}
+
+// ensureLogGroupExists checks if the log group exists and creates it if needed.
+func (c *CloudWatch) ensureLogGroupExists() error {
 	_, err := c.logClient.DescribeLogGroups(c.ctx, &cloudwatchlogs.DescribeLogGroupsInput{
 		LogGroupNamePrefix: aws.String(c.logGroup),
 	})
 
 	if err != nil {
 		fmt.Printf("Error checking log group %s: %v\n", c.logGroup, err)
+
 		// Create the log group
 		_, err = c.logClient.CreateLogGroup(c.ctx, &cloudwatchlogs.CreateLogGroupInput{
 			LogGroupName: aws.String(c.logGroup),
@@ -240,29 +267,37 @@ func (c *CloudWatch) initLogStream() error {
 		fmt.Printf("Created log group: %s\n", c.logGroup)
 	}
 
-	// Now check if the log stream exists
+	return nil
+}
+
+// ensureLogStreamExists checks if the log stream exists and creates it if needed.
+// Returns the current sequence token if available.
+func (c *CloudWatch) ensureLogStreamExists() (*string, error) {
 	resp, err := c.logClient.DescribeLogStreams(c.ctx, &cloudwatchlogs.DescribeLogStreamsInput{
 		LogGroupName:        aws.String(c.logGroup),
 		LogStreamNamePrefix: aws.String(c.logStream),
 	})
 
+	// Check if the log stream exists and get its sequence token
+	var sequenceToken *string
 	logStreamExists := false
 	if err == nil && resp != nil && len(resp.LogStreams) > 0 {
 		for _, stream := range resp.LogStreams {
 			if aws.ToString(stream.LogStreamName) == c.logStream {
 				logStreamExists = true
 				if stream.UploadSequenceToken != nil {
-					c.sequenceToken = stream.UploadSequenceToken
-					fmt.Printf("Found existing log stream with sequence token: %s\n", *c.sequenceToken)
+					sequenceToken = stream.UploadSequenceToken
+					fmt.Printf("Found existing log stream with sequence token: %s\n", *sequenceToken)
 				}
 				break
 			}
 		}
 	}
 
+	// Create the log stream if it doesn't exist
 	if !logStreamExists {
 		fmt.Printf("Creating log stream: %s in group: %s\n", c.logStream, c.logGroup)
-		// Create the log stream explicitly
+
 		_, err = c.logClient.CreateLogStream(c.ctx, &cloudwatchlogs.CreateLogStreamInput{
 			LogGroupName:  aws.String(c.logGroup),
 			LogStreamName: aws.String(c.logStream),
@@ -271,7 +306,7 @@ func (c *CloudWatch) initLogStream() error {
 		if err != nil {
 			if !strings.Contains(err.Error(), "ResourceAlreadyExistsException") {
 				fmt.Printf("Failed to create log stream %s: %v\n", c.logStream, err)
-				return fmt.Errorf("create log stream: %w", err)
+				return nil, fmt.Errorf("create log stream: %w", err)
 			}
 			fmt.Printf("Log stream already exists (race condition): %s\n", c.logStream)
 		} else {
@@ -279,7 +314,11 @@ func (c *CloudWatch) initLogStream() error {
 		}
 	}
 
-	// Write a test message to verify the log stream is working
+	return sequenceToken, nil
+}
+
+// sendTestMessage sends a test message to verify the log stream is working.
+func (c *CloudWatch) sendTestMessage() error {
 	testInput := &cloudwatchlogs.PutLogEventsInput{
 		LogGroupName:  aws.String(c.logGroup),
 		LogStreamName: aws.String(c.logStream),
@@ -301,12 +340,9 @@ func (c *CloudWatch) initLogStream() error {
 
 		// Handle invalid sequence token error
 		if strings.Contains(err.Error(), "InvalidSequenceTokenException") {
-			parts := strings.Split(err.Error(), "sequenceToken is: ")
-			if len(parts) > 1 {
-				token := strings.TrimSpace(parts[1])
-				token = strings.Trim(token, "\"")
-
-				c.sequenceToken = aws.String(token)
+			updatedToken := c.extractSequenceTokenFromError(err)
+			if updatedToken != "" {
+				c.sequenceToken = aws.String(updatedToken)
 				fmt.Printf("Updated sequence token to: %s\n", *c.sequenceToken)
 
 				// Try again with the correct token
@@ -327,9 +363,17 @@ func (c *CloudWatch) initLogStream() error {
 		fmt.Printf("Updated sequence token to: %s\n", *c.sequenceToken)
 	}
 
-	c.initialized = true
-	fmt.Printf("CloudWatch log stream initialization complete\n")
 	return nil
+}
+
+// extractSequenceTokenFromError extracts the sequence token from an invalid sequence token error.
+func (c *CloudWatch) extractSequenceTokenFromError(err error) string {
+	parts := strings.Split(err.Error(), "sequenceToken is: ")
+	if len(parts) > 1 {
+		token := strings.TrimSpace(parts[1])
+		return strings.Trim(token, "\"")
+	}
+	return ""
 }
 
 func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
