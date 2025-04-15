@@ -456,7 +456,18 @@ func (p *Player) handleOutput(ctx context.Context, done chan error) {
 // wrapText wraps the given text to the specified width, preserving
 // empty lines and whitespace. It uses \r\n as the line break.
 func wrapText(text string, width int) string {
+	// Handle edge cases
+	if width <= 0 {
+		width = 80 // Default width
+	}
+
+	if len(text) == 0 {
+		return text
+	}
+
 	var result strings.Builder
+	// Pre-allocate a reasonable buffer size to avoid reallocations
+	result.Grow(len(text) + len(text)/10) // Add 10% for possible line breaks
 
 	// Split the text into lines
 	lines := strings.Split(text, "\n")
@@ -471,29 +482,59 @@ func wrapText(text string, width int) string {
 			continue
 		}
 
-		// Wrap the line to the specified width
-		for len(line) > 0 {
-			if len(line) <= width {
-				result.WriteString(line)
-				break
+		// Track position in the current line (excluding ANSI sequences)
+		linePos := 0
+		lastSpace := -1
+		startSegment := 0
+		inAnsiSequence := false
+
+		// Process each character in the line
+		for pos, char := range line {
+			// Handle ANSI escape sequences (don't count toward width)
+			if char == '\033' {
+				inAnsiSequence = true
 			}
 
-			// Find the last space within the width
-			lastSpace := strings.LastIndex(line[:width+1], " ")
-			if lastSpace == -1 {
-				// No space found, force break at width
-				result.WriteString(line[:width])
-				line = line[width:]
-			} else {
-				// Break at the last space
-				result.WriteString(line[:lastSpace])
-				line = strings.TrimLeft(line[lastSpace+1:], " ")
+			if inAnsiSequence {
+				if char == 'm' {
+					inAnsiSequence = false
+				}
+				continue // Don't count ANSI sequence chars toward width
 			}
 
-			result.WriteString("\r\n")
+			// Track spaces for potential line breaks
+			if char == ' ' {
+				lastSpace = pos
+			}
+
+			// Increment visible character position
+			linePos++
+
+			// Check if we need to wrap
+			if linePos > width {
+				if lastSpace != -1 {
+					// Break at the last space
+					result.WriteString(line[startSegment:lastSpace])
+					result.WriteString("\r\n")
+					startSegment = lastSpace + 1
+					linePos = pos - lastSpace
+					lastSpace = -1
+				} else {
+					// No space found, force break
+					result.WriteString(line[startSegment:pos])
+					result.WriteString("\r\n")
+					startSegment = pos
+					linePos = 1
+				}
+			}
 		}
 
-		// Add newline between original lines if not the last line
+		// Add the remainder of the line
+		if startSegment < len(line) {
+			result.WriteString(line[startSegment:])
+		}
+
+		// Add line break if not the last line
 		if i < len(lines)-1 {
 			result.WriteString("\r\n")
 		}

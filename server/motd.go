@@ -39,6 +39,60 @@ type MOTDData struct {
 	CreatedAt string `json:"createdAt" dynamodbav:"CreatedAt"`
 }
 
+/*
+
+Areas for Improvement
+
+Error Handling:
+
+When saving player data after displaying MOTDs fails, it returns the error but continues execution
+Consider adding retry logic or more graceful degradation
+
+
+Default Message Management:
+
+The default welcome message is hard-coded
+Could be moved to a configuration file or database record for easier customization
+
+
+Pagination:
+
+No pagination mechanism for a large number of MOTDs
+Could implement pagination if many MOTDs need to be displayed
+
+
+Message Categorization:
+
+No categorization of messages (e.g., system announcements, events, maintenance)
+Adding categories could improve organization and allow filtering
+
+
+Efficiency:
+
+The code loads all MOTDs and then filters for active ones
+Could optimize the database query to only return active MOTDs
+
+
+Formatting and Styling:
+
+Basic text formatting with line breaks
+Could extend to support richer formatting or ANSI color codes for better visual presentation
+
+
+Time-Based Messages:
+
+No expiration date for messages
+Could add start/end dates to automatically activate/deactivate messages
+
+
+Caching:
+
+No caching mechanism for frequently accessed MOTDs
+Implementing a cache could reduce database load
+
+
+*/
+
 // LoadMOTDs retrieves all active MOTDs from the database
 func (s *Server) LoadMOTDs() error {
 	Logger.Info("Loading active MOTDs")

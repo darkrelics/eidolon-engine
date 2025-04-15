@@ -32,6 +32,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// TODO: Move to config
 var NAMES_PATH = "../data/names.txt"
 var OBSCENITY_PATH = "../data/obscenity.txt"
 

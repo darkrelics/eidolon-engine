@@ -125,9 +125,8 @@ func (k *KeyPair) Delete(tableName string, key map[string]*dynamodb.AttributeVal
 	return nil
 }
 
-// Query performs a query operation on the DynamoDB table.
+// Query performs a query operation on the DynamoDB table with pagination.
 func (k *KeyPair) Query(tableName string, keyConditionExpression string, expressionAttributeValues map[string]*dynamodb.AttributeValue, items interface{}) error {
-
 	Logger.Info("Querying table", "tableName", tableName)
 
 	input := &dynamodb.QueryInput{
@@ -136,12 +135,49 @@ func (k *KeyPair) Query(tableName string, keyConditionExpression string, express
 		ExpressionAttributeValues: expressionAttributeValues,
 	}
 
-	result, err := k.db.Query(input)
-	if err != nil {
-		return fmt.Errorf("error querying table %s: %w", tableName, err)
+	var allItems []map[string]*dynamodb.AttributeValue
+	var lastEvaluatedKey map[string]*dynamodb.AttributeValue
+
+	for {
+		// Set the exclusive start key for pagination
+		if lastEvaluatedKey != nil {
+			input.ExclusiveStartKey = lastEvaluatedKey
+		}
+
+		// Perform the query operation
+		result, err := k.db.Query(input)
+		if err != nil {
+			return fmt.Errorf("error querying table %s: %w", tableName, err)
+		}
+
+		// Append the current page of results
+		allItems = append(allItems, result.Items...)
+
+		// Get the last evaluated key for the next page
+		lastEvaluatedKey = result.LastEvaluatedKey
+
+		if lastEvaluatedKey == nil {
+			break
+		}
+
+		Logger.Debug("Retrieved query page",
+			"tableName", tableName,
+			"itemCount", len(result.Items),
+			"continuingPagination", true)
 	}
 
-	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, items)
+	Logger.Info("Query completed", "tableName", tableName, "totalItems", len(allItems))
+
+	if len(allItems) == 0 {
+		err := dynamodbattribute.UnmarshalListOfMaps([]map[string]*dynamodb.AttributeValue{}, items)
+		if err != nil {
+			return fmt.Errorf("error unmarshalling empty query results: %w", err)
+		}
+		return nil
+	}
+
+	// Unmarshal all the collected items
+	err := dynamodbattribute.UnmarshalListOfMaps(allItems, items)
 	if err != nil {
 		return fmt.Errorf("error unmarshalling query results: %w", err)
 	}
@@ -149,21 +185,56 @@ func (k *KeyPair) Query(tableName string, keyConditionExpression string, express
 	return nil
 }
 
-// Scan performs a scan operation on the DynamoDB table.
+// Scan performs a scan operation on the DynamoDB table with pagination..
 func (k *KeyPair) Scan(tableName string, items interface{}) error {
-
 	Logger.Info("Scanning table", "tableName", tableName)
 
 	input := &dynamodb.ScanInput{
 		TableName: aws.String(tableName),
 	}
 
-	result, err := k.db.Scan(input)
-	if err != nil {
-		return fmt.Errorf("error scanning table %s: %w", tableName, err)
+	var allItems []map[string]*dynamodb.AttributeValue
+	var lastEvaluatedKey map[string]*dynamodb.AttributeValue
+
+	for {
+		// Set the exclusive start key for pagination
+		if lastEvaluatedKey != nil {
+			input.ExclusiveStartKey = lastEvaluatedKey
+		}
+
+		// Perform the scan operation
+		result, err := k.db.Scan(input)
+		if err != nil {
+			return fmt.Errorf("error scanning table %s: %w", tableName, err)
+		}
+
+		allItems = append(allItems, result.Items...)
+
+		lastEvaluatedKey = result.LastEvaluatedKey
+
+		if lastEvaluatedKey == nil {
+			break
+		}
+
+		Logger.Debug("Retrieved scan page",
+			"tableName", tableName,
+			"itemCount", len(result.Items),
+			"continuingPagination", true)
 	}
 
-	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, items)
+	Logger.Info("Scan completed", "tableName", tableName, "totalItems", len(allItems))
+
+	// Handle the case of no items found
+	if len(allItems) == 0 {
+		err := dynamodbattribute.UnmarshalListOfMaps([]map[string]*dynamodb.AttributeValue{}, items)
+		if err != nil {
+			return fmt.Errorf("error unmarshalling empty scan results: %w", err)
+		}
+		return nil
+	}
+
+	// Unmarshal all the collected items
+	err := dynamodbattribute.UnmarshalListOfMaps(allItems, items)
 	if err != nil {
 		return fmt.Errorf("error unmarshalling scan results: %w", err)
 	}

@@ -107,30 +107,6 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 	return cloudWatch, nil
 }
 
-func (c *CloudWatch) Enabled(ctx context.Context, level slog.Level) bool {
-	// This function is kept for backward compatibility but no longer implements
-	// the slog.Handler interface directly
-	return level >= parseLogLevel(c.logLevel)
-}
-
-func (c *CloudWatch) WithAttrs(attrs []slog.Attr) slog.Handler {
-	// This function is kept for backward compatibility but no longer implements
-	// the slog.Handler interface directly
-	return c
-}
-
-func (c *CloudWatch) WithGroup(name string) slog.Handler {
-	// This function is kept for backward compatibility but no longer implements
-	// the slog.Handler interface directly
-	return c
-}
-
-func (c *CloudWatch) Handle(ctx context.Context, r slog.Record) error {
-	// This function is kept for backward compatibility but no longer implements
-	// the slog.Handler interface directly
-	return nil
-}
-
 // Stop gracefully shuts down the CloudWatch component.
 func (c *CloudWatch) Stop() error {
 	Logger.Info("CloudWatch: Stopping CloudWatch...")
@@ -144,7 +120,7 @@ func (c *CloudWatch) Stop() error {
 	case <-c.ctx.Done():
 		Logger.Info("CloudWatch: CloudWatch shutdown complete")
 		return nil
-	case <-time.After(10 * time.Second): // Example timeout
+	case <-time.After(3 * time.Second):
 		Logger.Error("CloudWatch: CloudWatch shutdown timed out", "error", "timeout")
 		return fmt.Errorf("cloudwatch shutdown timeout")
 	}
