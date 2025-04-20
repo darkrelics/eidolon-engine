@@ -66,8 +66,9 @@ class LoginScreen extends StatelessWidget {
                       const SizedBox(height: 24),
                       StatusMessage(
                         message: authState.message,
-                        isError: authState.message.toLowerCase().contains('fail') ||
-                               authState.message.toLowerCase().contains('error'),
+                        isError:
+                            authState.message.toLowerCase().contains('fail') ||
+                            authState.message.toLowerCase().contains('error'),
                       ),
                     ],
                   ),

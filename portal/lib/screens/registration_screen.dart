@@ -26,8 +26,9 @@ class RegistrationScreen extends StatelessWidget {
             builder: (context, authState, child) {
               if (authState.isAuthenticated) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  Navigator.of(context)
-                      .pushReplacementNamed('/character-management');
+                  Navigator.of(
+                    context,
+                  ).pushReplacementNamed('/character-management');
                 });
               }
 
@@ -75,22 +76,24 @@ class RegistrationScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 32),
                         FilledButton(
-                          onPressed: authState.isLoading
-                              ? null
-                              : () => authState.signUp(),
-                          child: authState.isLoading
-                              ? SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: colorScheme.onPrimary,
+                          onPressed:
+                              authState.isLoading
+                                  ? null
+                                  : () => authState.signUp(),
+                          child:
+                              authState.isLoading
+                                  ? SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: colorScheme.onPrimary,
+                                    ),
+                                  )
+                                  : const Text(
+                                    'CREATE ACCOUNT',
+                                    style: TextStyle(fontSize: 16),
                                   ),
-                                )
-                              : const Text(
-                                  'CREATE ACCOUNT',
-                                  style: TextStyle(fontSize: 16),
-                                ),
                         ),
                         const SizedBox(height: 16),
                         TextButton(
@@ -100,7 +103,9 @@ class RegistrationScreen extends StatelessWidget {
                               listen: false,
                             );
                             authState.clearInputs();
-                            Navigator.of(context).pushReplacementNamed('/login');
+                            Navigator.of(
+                              context,
+                            ).pushReplacementNamed('/login');
                           },
                           child: const Text('Already have an account? Sign in'),
                         ),
@@ -137,30 +142,33 @@ class RegistrationScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 32),
                         FilledButton(
-                          onPressed: authState.isLoading
-                              ? null
-                              : () async {
-                                  await authState.confirmRegistration();
-                                  if (!authState.isVerificationMode &&
-                                      context.mounted) {
-                                    authState.clearInputs();
-                                    Navigator.of(context)
-                                        .pushReplacementNamed('/login');
-                                  }
-                                },
-                          child: authState.isLoading
-                              ? SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: colorScheme.onPrimary,
+                          onPressed:
+                              authState.isLoading
+                                  ? null
+                                  : () async {
+                                    await authState.confirmRegistration();
+                                    if (!authState.isVerificationMode &&
+                                        context.mounted) {
+                                      authState.clearInputs();
+                                      Navigator.of(
+                                        context,
+                                      ).pushReplacementNamed('/login');
+                                    }
+                                  },
+                          child:
+                              authState.isLoading
+                                  ? SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: colorScheme.onPrimary,
+                                    ),
+                                  )
+                                  : const Text(
+                                    'VERIFY',
+                                    style: TextStyle(fontSize: 16),
                                   ),
-                                )
-                              : const Text(
-                                  'VERIFY',
-                                  style: TextStyle(fontSize: 16),
-                                ),
                         ),
                       ],
                       if (authState.message.isNotEmpty) ...[
@@ -170,10 +178,15 @@ class RegistrationScreen extends StatelessWidget {
                           child: Text(
                             authState.message,
                             style: TextStyle(
-                              color: authState.message.toLowerCase().contains('fail') ||
-                                      authState.message.toLowerCase().contains('error')
-                                  ? colorScheme.error
-                                  : colorScheme.primary,
+                              color:
+                                  authState.message.toLowerCase().contains(
+                                            'fail',
+                                          ) ||
+                                          authState.message
+                                              .toLowerCase()
+                                              .contains('error')
+                                      ? colorScheme.error
+                                      : colorScheme.primary,
                             ),
                             textAlign: TextAlign.center,
                           ),
