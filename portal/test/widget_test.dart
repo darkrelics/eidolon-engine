@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cognito_email_verification/main.dart';
+import 'package:portal/main.dart';
 
 void main() {
   testWidgets('Smoke test', (WidgetTester tester) async {

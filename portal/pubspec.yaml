@@ -1,4 +1,4 @@
-name: cognito_email_verification
+name: portal
 description: Eidolon Engine Web Portal.
 
 environment:
