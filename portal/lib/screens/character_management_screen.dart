@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../utils/auth_state.dart';
+import '../widgets/ui_components.dart';
 
 class CharacterManagementScreen extends StatelessWidget {
   const CharacterManagementScreen({super.key});
@@ -27,18 +28,7 @@ class CharacterManagementScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.black,
-          image: DecorationImage(
-            image: AssetImage('assets/background.jpg'),
-            fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(
-              Color.fromRGBO(0, 0, 0, 0.7),
-              BlendMode.dstATop,
-            ),
-          ),
-        ),
+      body: BackgroundContainer(
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -56,18 +46,18 @@ class CharacterManagementScreen extends StatelessWidget {
                 Text(
                   'Character Management will be available soon.',
                   style: theme.textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurface.withOpacity(0.7),
+                    color: colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
                 Card(
-                  color: colorScheme.surface.withOpacity(0.1),
+                  color: colorScheme.surface.withValues(alpha: 0.1),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                     side: BorderSide(
-                      color: colorScheme.outline.withOpacity(0.3),
+                      color: colorScheme.outline.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Padding(
@@ -84,14 +74,14 @@ class CharacterManagementScreen extends StatelessWidget {
                         Text(
                           'This feature will connect to AWS Lambda functions to manage character creation, stats, inventory, and progression within the Eidolon Engine world.',
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurface.withOpacity(0.7),
+                            color: colorScheme.onSurface.withValues(alpha: 0.7),
                           ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 24),
-                        FilledButton.tonal(
+                        const FilledButton.tonal(
                           onPressed: null,
-                          child: const Text('Create New Character'),
+                          child: Text('Create New Character'),
                         ),
                       ],
                     ),
@@ -103,7 +93,7 @@ class CharacterManagementScreen extends StatelessWidget {
                     'Stay tuned for updates!',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontStyle: FontStyle.italic,
-                      color: colorScheme.onSurface.withOpacity(0.6),
+                      color: colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
                 ),

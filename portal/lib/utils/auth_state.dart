@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
-import 'package:portal/services/auth_service.dart';
+import '../services/auth_service.dart';
 
 class AuthState extends ChangeNotifier {
   final AuthService _authService;
