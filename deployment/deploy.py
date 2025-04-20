@@ -171,7 +171,6 @@ def update_configuration_file(config_updates) -> None:
             {
                 "UserPoolId": cognito_updates.get("UserPoolId", ""),
                 "UserPoolClientSecret": cognito_updates.get("UserPoolClientSecret", ""),
-                "UserPoolClientId": cognito_updates.get("UserPoolClientId", ""),
                 "UserPoolDomain": cognito_updates.get("UserPoolDomain", ""),
                 "UserPoolArn": cognito_updates.get("UserPoolArn", ""),
             }
@@ -200,7 +199,6 @@ def generate_env_file(config_updates) -> None:
 
         USER_POOL_ID={cognito_updates.get("UserPoolId", "")}
         CLIENT_ID={cognito_updates.get("UserPoolClientId", "")}
-        CLIENT_SECRET={cognito_updates.get("UserPoolClientSecret", "")}
         """
 
         # Create directory if it doesn't exist
@@ -283,7 +281,6 @@ def main() -> None:
             {
                 "UserPoolId": cognito_outputs.get("UserPoolId", ""),
                 "ClientId": cognito_outputs.get("UserPoolClientId", ""),
-                "ClientSecret": cognito_outputs.get("UserPoolClientSecret", ""),
             }
         )
 
