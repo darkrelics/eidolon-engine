@@ -34,11 +34,11 @@ type Configuration struct {
 
 	// Cognito authentication settings
 	Cognito struct {
-		UserPoolID           string `yaml:"UserPoolId"`
-		UserPoolClientSecret string `yaml:"UserPoolClientSecret"`
-		UserPoolClientID     string `yaml:"UserPoolClientId"`
-		UserPoolDomain       string `yaml:"UserPoolDomain"`
-		UserPoolARN          string `yaml:"UserPoolArn"`
+		UserPoolID string `yaml:"UserPoolId"`
+		// Removed UserPoolClientSecret
+		UserPoolClientID string `yaml:"UserPoolClientId"`
+		UserPoolDomain   string `yaml:"UserPoolDomain"`
+		UserPoolARN      string `yaml:"UserPoolArn"`
 	} `yaml:"Cognito"`
 
 	// Game mechanics settings
@@ -107,9 +107,7 @@ func validateConfiguration(config *Configuration) error {
 		return fmt.Errorf("cognito userPoolClientId is required")
 	}
 
-	if config.Cognito.UserPoolClientSecret == "" {
-		return fmt.Errorf("cognito userPoolClientSecret is required")
-	}
+	// Removed check for UserPoolClientSecret
 
 	if config.Game.StartingHealth <= 0 {
 		return fmt.Errorf("game startingHealth must be greater than 0")
