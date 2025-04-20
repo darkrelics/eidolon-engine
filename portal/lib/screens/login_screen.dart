@@ -1,131 +1,128 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:portal/utils/auth_state.dart';
+
+import '../utils/auth_state.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sign In', style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.black,
+        title: const Text('Sign In'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Consumer<AuthState>(
-          builder: (context, authState, child) {
-            // If authenticated, navigate to character management
-            if (authState.isAuthenticated) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                Navigator.of(
-                  context,
-                ).pushReplacementNamed('/character-management');
-              });
-            }
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Consumer<AuthState>(
+            builder: (context, authState, child) {
+              // If authenticated, navigate to character management
+              if (authState.isAuthenticated) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  Navigator.of(context)
+                      .pushReplacementNamed('/character-management');
+                });
+              }
 
-            return Form(
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-              child: AutofillGroup(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      controller: authState.emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email, color: Colors.white70),
+              return Form(
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                child: AutofillGroup(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      const SizedBox(height: 24),
+                      TextField(
+                        controller: authState.emailController,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(
+                            Icons.email_outlined,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          hintText: 'Enter your email',
+                          border: const OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
+                        style: TextStyle(color: colorScheme.onSurface),
                       ),
-                      keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
-                      style: const TextStyle(color: Colors.white),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your email';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: authState.passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: Icon(Icons.lock, color: Colors.white70),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: authState.passwordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          prefixIcon: Icon(
+                            Icons.lock_outline,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          hintText: 'Enter your password',
+                          border: const OutlineInputBorder(),
+                        ),
+                        autofillHints: const [AutofillHints.password],
+                        style: TextStyle(color: colorScheme.onSurface),
                       ),
-                      autofillHints: const [AutofillHints.password],
-                      style: const TextStyle(color: Colors.white),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your password';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton(
-                      onPressed:
-                          authState.isLoading ? null : () => authState.signIn(),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child:
-                          authState.isLoading
-                              ? const SizedBox(
-                                height: 20,
-                                width: 20,
+                      const SizedBox(height: 32),
+                      FilledButton(
+                        onPressed: authState.isLoading 
+                            ? null 
+                            : () => authState.signIn(),
+                        child: authState.isLoading
+                            ? SizedBox(
+                                height: 24,
+                                width: 24,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.black,
+                                  color: colorScheme.onPrimary,
                                 ),
                               )
-                              : const Text(
+                            : const Text(
                                 'SIGN IN',
                                 style: TextStyle(fontSize: 16),
                               ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () {
-                        final authState = Provider.of<AuthState>(
-                          context,
-                          listen: false,
-                        );
-                        authState.clearInputs();
-                        Navigator.of(context).pushReplacementNamed('/register');
-                      },
-                      child: const Text('Need an Account? Sign up'),
-                    ),
-                    if (authState.message.isNotEmpty) ...[
-                      const SizedBox(height: 20),
-                      Text(
-                        authState.message,
-                        style: TextStyle(
-                          color:
-                              authState.message.toLowerCase().contains(
-                                        'fail',
-                                      ) ||
-                                      authState.message.toLowerCase().contains(
-                                        'error',
-                                      )
-                                  ? Colors.red[400]
-                                  : Colors.green[300],
-                        ),
-                        textAlign: TextAlign.center,
                       ),
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: () {
+                          final authState = Provider.of<AuthState>(
+                            context,
+                            listen: false,
+                          );
+                          authState.clearInputs();
+                          Navigator.of(context).pushReplacementNamed('/register');
+                        },
+                        child: const Text('Need an Account? Sign up'),
+                      ),
+                      if (authState.message.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            authState.message,
+                            style: TextStyle(
+                              color: authState.message.toLowerCase().contains('fail') ||
+                                      authState.message.toLowerCase().contains('error')
+                                  ? colorScheme.error
+                                  : colorScheme.primary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
