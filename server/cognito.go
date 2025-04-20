@@ -47,7 +47,6 @@ func (s *Server) SignInUser(email, password string) (*cognitoidentityprovider.In
 	}
 
 	if authOutput.AuthenticationResult == nil {
-		// Check for challenges only if no auth result
 		if authOutput.ChallengeName != nil &&
 			*authOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
 			return authOutput, nil
@@ -59,12 +58,10 @@ func (s *Server) SignInUser(email, password string) (*cognitoidentityprovider.In
 }
 
 func (s *Server) SignUpUser(email, password string) (*cognitoidentityprovider.SignUpOutput, error) {
-	// Removed secret hash calculation
 	signUpInput := &cognitoidentityprovider.SignUpInput{
 		ClientId: aws.String(s.config.Cognito.UserPoolClientID),
 		Username: aws.String(email),
 		Password: aws.String(password),
-		// Removed SecretHash
 		UserAttributes: []*cognitoidentityprovider.AttributeType{
 			{Name: aws.String("email"), Value: aws.String(email)},
 		},
@@ -80,12 +77,10 @@ func (s *Server) SignUpUser(email, password string) (*cognitoidentityprovider.Si
 }
 
 func (s *Server) ConfirmUser(email, confirmationCode string) (*cognitoidentityprovider.ConfirmSignUpOutput, error) {
-	// Removed secret hash calculation
 	confirmSignUpInput := &cognitoidentityprovider.ConfirmSignUpInput{
 		ClientId:         aws.String(s.config.Cognito.UserPoolClientID),
 		Username:         aws.String(email),
 		ConfirmationCode: aws.String(confirmationCode),
-		// Removed SecretHash
 	}
 
 	return s.cognito.ConfirmSignUp(confirmSignUpInput)
@@ -105,14 +100,12 @@ func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string)
 	}
 
 	if signInOutput.ChallengeName != nil && *signInOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
-		// Removed secret hash calculation
 		challengeInput := &cognitoidentityprovider.RespondToAuthChallengeInput{
 			ChallengeName: aws.String(cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired),
 			ClientId:      aws.String(s.config.Cognito.UserPoolClientID),
 			ChallengeResponses: map[string]*string{
 				"USERNAME":     aws.String(player.email),
 				"NEW_PASSWORD": aws.String(newPassword),
-				// Removed SECRET_HASH
 			},
 			Session: signInOutput.Session,
 		}
@@ -165,13 +158,11 @@ func handleCognitoError(err error, email string) error {
 }
 
 func Authenticate(username, password string, ssh_interface *Interface_SSH) (bool, uuid.UUID, error) {
-	// Removed secret hash calculation
 	authOutput, err := ssh_interface.server.cognito.InitiateAuth(&cognitoidentityprovider.InitiateAuthInput{
 		AuthFlow: aws.String("USER_PASSWORD_AUTH"),
 		AuthParameters: map[string]*string{
 			"USERNAME": aws.String(username),
 			"PASSWORD": aws.String(password),
-			// Removed SECRET_HASH
 		},
 		ClientId: aws.String(ssh_interface.config.Cognito.UserPoolClientID),
 	})

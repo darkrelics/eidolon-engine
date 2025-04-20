@@ -34,8 +34,7 @@ type Configuration struct {
 
 	// Cognito authentication settings
 	Cognito struct {
-		UserPoolID string `yaml:"UserPoolId"`
-		// Removed UserPoolClientSecret
+		UserPoolID       string `yaml:"UserPoolId"`
 		UserPoolClientID string `yaml:"UserPoolClientId"`
 		UserPoolDomain   string `yaml:"UserPoolDomain"`
 		UserPoolARN      string `yaml:"UserPoolArn"`
