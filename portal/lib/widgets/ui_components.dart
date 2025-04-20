@@ -1,15 +1,15 @@
-// Eidolon Engine
+// Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
+// Copyright 2024‑2025 Jason Robinson
 //
-// Licensed under the Apache License, Version 2.0 (the “License”);
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an “AS IS” BASIS,
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -17,6 +17,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../utils/input_sanitizer.dart';
+import '../utils/route_guard.dart';
 
 /// Custom text field with validation support
 class AppTextField extends StatelessWidget {
@@ -35,6 +37,7 @@ class AppTextField extends StatelessWidget {
   final FocusNode? focusNode;
   final List<TextInputFormatter>? inputFormatters;
   final bool readOnly;
+  final bool sanitizeInput;
 
   const AppTextField({
     super.key,
@@ -53,11 +56,18 @@ class AppTextField extends StatelessWidget {
     this.focusNode,
     this.inputFormatters,
     this.readOnly = false,
+    this.sanitizeInput = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+
+    // Combine default sanitizers with provided formatters
+    final formatters = <TextInputFormatter>[
+      if (sanitizeInput) InputSanitizer.noXSSChars(),
+      ...?inputFormatters,
+    ];
 
     return TextFormField(
       controller: controller,
@@ -66,7 +76,10 @@ class AppTextField extends StatelessWidget {
         labelText: labelText,
         prefixIcon: Icon(prefixIcon, color: colorScheme.onSurfaceVariant),
         hintText: hintText,
-        helperText: helperText,
+        helperText:
+            helperText != null
+                ? InputSanitizer.sanitizeDisplayText(helperText!)
+                : null,
         helperMaxLines: helperMaxLines,
         border: const OutlineInputBorder(),
         errorMaxLines: 2,
@@ -78,7 +91,7 @@ class AppTextField extends StatelessWidget {
       onChanged: onChanged,
       onFieldSubmitted: onSubmitted,
       focusNode: focusNode,
-      inputFormatters: inputFormatters,
+      inputFormatters: formatters,
       readOnly: readOnly,
       autovalidateMode: AutovalidateMode.onUserInteraction,
     );
@@ -198,7 +211,7 @@ class AuthAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      title: Text(title),
+      title: Text(InputSanitizer.sanitizeDisplayText(title)),
       leading:
           showBackButton
               ? IconButton(
@@ -257,7 +270,7 @@ class StatusMessage extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                message,
+                InputSanitizer.sanitizeDisplayText(message),
                 style: TextStyle(color: color),
                 textAlign: TextAlign.center,
               ),
@@ -275,6 +288,7 @@ class BackgroundContainer extends StatelessWidget {
   final double opacity;
   final bool blurBackground;
   final double blurStrength;
+  final String? backgroundAsset;
 
   const BackgroundContainer({
     super.key,
@@ -282,15 +296,27 @@ class BackgroundContainer extends StatelessWidget {
     this.opacity = 0.7,
     this.blurBackground = false,
     this.blurStrength = 5.0,
+    this.backgroundAsset,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Validate and sanitize asset path
+    final validatedAssetPath =
+        backgroundAsset != null
+            ? InputSanitizer.validateAssetPath(backgroundAsset!)
+            : 'assets/background.jpg';
+
+    if (validatedAssetPath == null) {
+      // Fallback to safe default if path is invalid
+      debugPrint('Invalid asset path detected. Using default background.');
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         image: DecorationImage(
-          image: const AssetImage('assets/background.jpg'),
+          image: AssetImage(validatedAssetPath ?? 'assets/background.jpg'),
           fit: BoxFit.cover,
           colorFilter: ColorFilter.mode(
             Theme.of(context).colorScheme.surface.withValues(alpha: opacity),
@@ -351,14 +377,32 @@ class NavigationHelper {
     });
   }
 
+  static void navigateToRoute(
+    BuildContext context,
+    String routeName, {
+    Object? arguments,
+  }) {
+    final routeGuard = RouteGuard.isProtectedRoute(routeName);
+
+    if (routeGuard) {
+      // Check authentication before navigating to protected route
+      Navigator.of(context).pushNamed(routeName, arguments: arguments);
+    } else {
+      Navigator.of(context).pushNamed(routeName, arguments: arguments);
+    }
+  }
+
   static void showSnackBar(
     BuildContext context,
     String message, {
     bool isError = false,
   }) {
+    // Sanitize message before showing in SnackBar
+    final sanitizedMessage = InputSanitizer.sanitizeDisplayText(message);
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(sanitizedMessage),
         backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
@@ -377,7 +421,7 @@ class FieldValidators {
     if (value == null || value.isEmpty) {
       return 'Email is required';
     }
-    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+    if (!InputSanitizer.validateEmail(value)) {
       return 'Please enter a valid email address';
     }
     return null;
@@ -389,6 +433,9 @@ class FieldValidators {
     }
     if (value.length < 8) {
       return 'Password must be at least 8 characters long';
+    }
+    if (InputSanitizer.containsDangerousChars(value)) {
+      return 'Password contains invalid characters';
     }
     if (checkComplexity) {
       if (!RegExp(r'^(?=.*[a-z])').hasMatch(value)) {
@@ -424,6 +471,19 @@ class FieldValidators {
     if (value.length < 6) {
       return 'Verification code must be at least 6 characters';
     }
+    if (InputSanitizer.containsDangerousChars(value)) {
+      return 'Verification code contains invalid characters';
+    }
+    return null;
+  }
+
+  static String? assetPath(String? value) {
+    if (value == null || value.isEmpty) {
+      return null; // Optional field
+    }
+    if (InputSanitizer.validateAssetPath(value) == null) {
+      return 'Invalid asset path';
+    }
     return null;
   }
 }
@@ -454,8 +514,8 @@ class CustomDialog extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return AlertDialog(
-      title: Text(title),
-      content: Text(content),
+      title: Text(InputSanitizer.sanitizeDisplayText(title)),
+      content: Text(InputSanitizer.sanitizeDisplayText(content)),
       actions: [
         if (cancelText != null)
           TextButton(
@@ -499,79 +559,6 @@ class CustomDialog extends StatelessWidget {
             isDestructive: isDestructive,
           ),
     );
-  }
-}
-
-/// Custom shimmer loading effect for placeholders
-class ShimmerLoading extends StatefulWidget {
-  final Widget child;
-  final bool isLoading;
-
-  const ShimmerLoading({
-    super.key,
-    required this.child,
-    required this.isLoading,
-  });
-
-  @override
-  State<ShimmerLoading> createState() => _ShimmerLoadingState();
-}
-
-class _ShimmerLoadingState extends State<ShimmerLoading>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _shimmerController;
-
-  @override
-  void initState() {
-    super.initState();
-    _shimmerController = AnimationController.unbounded(vsync: this)
-      ..repeat(min: -0.5, max: 1.5, period: const Duration(milliseconds: 1000));
-  }
-
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!widget.isLoading) return widget.child;
-
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (context, child) {
-        return ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (bounds) {
-            return LinearGradient(
-              colors: [
-                Colors.white.withValues(alpha: 0.3),
-                Colors.white.withValues(alpha: 0.5),
-                Colors.white.withValues(alpha: 0.3),
-              ],
-              stops: const [0.1, 0.3, 0.4],
-              begin: const Alignment(-1.0 - 1.5, -0.3),
-              end: const Alignment(1.0 + 1.5, 0.3),
-              transform: _ShimmerTransform(_shimmerController.value),
-            ).createShader(bounds);
-          },
-          child: child,
-        );
-      },
-      child: widget.child,
-    );
-  }
-}
-
-class _ShimmerTransform extends GradientTransform {
-  final double translate;
-
-  const _ShimmerTransform(this.translate);
-
-  @override
-  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
-    return Matrix4.translationValues(bounds.width * translate, 0.0, 0.0);
   }
 }
 
@@ -628,25 +615,6 @@ class ResponsiveBuilder extends StatelessWidget {
         }
       },
     );
-  }
-}
-
-/// Device type helper
-class DeviceType {
-  // Prevent instantiation
-  DeviceType._();
-
-  static bool isMobile(BuildContext context) {
-    return MediaQuery.of(context).size.width < 768;
-  }
-
-  static bool isTablet(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    return width >= 768 && width < 1024;
-  }
-
-  static bool isDesktop(BuildContext context) {
-    return MediaQuery.of(context).size.width >= 1024;
   }
 }
 

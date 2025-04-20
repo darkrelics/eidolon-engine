@@ -1,15 +1,15 @@
-// Eidolon Engine
+// Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
+// Copyright 2024‑2025 Jason Robinson
 //
-// Licensed under the Apache License, Version 2.0 (the “License”);
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an “AS IS” BASIS,
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -18,6 +18,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../utils/auth_state.dart';
+import '../widgets/ui_components.dart';
+import '../utils/input_sanitizer.dart';
 
 class RegistrationScreen extends StatelessWidget {
   const RegistrationScreen({super.key});
@@ -56,60 +58,43 @@ class RegistrationScreen extends StatelessWidget {
                     children: <Widget>[
                       const SizedBox(height: 24),
                       if (!authState.isVerificationMode) ...[
-                        TextField(
+                        AppTextField(
                           controller: authState.emailController,
-                          decoration: InputDecoration(
-                            labelText: 'Email',
-                            prefixIcon: Icon(
-                              Icons.email_outlined,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            hintText: 'Enter your email',
-                            border: const OutlineInputBorder(),
-                          ),
+                          labelText: 'Email',
+                          prefixIcon: Icons.email_outlined,
+                          hintText: 'Enter your email',
                           keyboardType: TextInputType.emailAddress,
                           autofillHints: const [AutofillHints.email],
-                          style: TextStyle(color: colorScheme.onSurface),
+                          validator: FieldValidators.email,
+                          inputFormatters: [InputSanitizer.noXSSChars()],
                         ),
                         const SizedBox(height: 16),
-                        TextField(
+                        AppTextField(
                           controller: authState.passwordController,
+                          labelText: 'Password',
+                          prefixIcon: Icons.lock_outline,
+                          hintText: 'Create a password',
+                          helperText:
+                              'Password must be at least 8 characters with lowercase, uppercase, numbers and symbols',
+                          helperMaxLines: 2,
                           obscureText: true,
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: Icon(
-                              Icons.lock_outline,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            hintText: 'Create a password',
-                            helperText:
-                                'Password must be at least 8 characters with lowercase, uppercase, numbers and symbols',
-                            helperMaxLines: 2,
-                            border: const OutlineInputBorder(),
-                          ),
                           autofillHints: const [AutofillHints.newPassword],
-                          style: TextStyle(color: colorScheme.onSurface),
+                          validator:
+                              (value) => FieldValidators.password(
+                                value,
+                                checkComplexity: true,
+                              ),
+                          inputFormatters: [InputSanitizer.noXSSChars()],
                         ),
                         const SizedBox(height: 32),
-                        FilledButton(
-                          onPressed:
-                              authState.isLoading
-                                  ? null
-                                  : () => authState.signUp(),
-                          child:
-                              authState.isLoading
-                                  ? SizedBox(
-                                    height: 24,
-                                    width: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: colorScheme.onPrimary,
-                                    ),
-                                  )
-                                  : const Text(
-                                    'CREATE ACCOUNT',
-                                    style: TextStyle(fontSize: 16),
-                                  ),
+                        LoadingButton(
+                          isLoading: authState.isLoading,
+                          onPressed: () async {
+                            if (Form.of(context).validate()) {
+                              await authState.signUp();
+                            }
+                          },
+                          text: 'CREATE ACCOUNT',
                         ),
                         const SizedBox(height: 16),
                         TextButton(
@@ -143,69 +128,41 @@ class RegistrationScreen extends StatelessWidget {
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 24),
-                        TextField(
+                        AppTextField(
                           controller: authState.verificationCodeController,
-                          decoration: InputDecoration(
-                            labelText: 'Verification Code',
-                            prefixIcon: Icon(
-                              Icons.verified_user_outlined,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            hintText: 'Enter verification code',
-                            border: const OutlineInputBorder(),
-                          ),
-                          style: TextStyle(color: colorScheme.onSurface),
+                          labelText: 'Verification Code',
+                          prefixIcon: Icons.verified_user_outlined,
+                          hintText: 'Enter verification code',
+                          validator: FieldValidators.verificationCode,
+                          inputFormatters: [InputSanitizer.noXSSChars()],
                         ),
                         const SizedBox(height: 32),
-                        FilledButton(
-                          onPressed:
-                              authState.isLoading
-                                  ? null
-                                  : () async {
-                                    await authState.confirmRegistration();
-                                    if (!authState.isVerificationMode &&
-                                        context.mounted) {
-                                      authState.clearInputs();
-                                      Navigator.of(
-                                        context,
-                                      ).pushReplacementNamed('/login');
-                                    }
-                                  },
-                          child:
-                              authState.isLoading
-                                  ? SizedBox(
-                                    height: 24,
-                                    width: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: colorScheme.onPrimary,
-                                    ),
-                                  )
-                                  : const Text(
-                                    'VERIFY',
-                                    style: TextStyle(fontSize: 16),
-                                  ),
+                        LoadingButton(
+                          isLoading: authState.isLoading,
+                          onPressed: () async {
+                            if (Form.of(context).validate()) {
+                              await authState.confirmRegistration();
+                              if (!authState.isVerificationMode &&
+                                  context.mounted) {
+                                authState.clearInputs();
+                                Navigator.of(
+                                  context,
+                                ).pushReplacementNamed('/login');
+                              }
+                            }
+                          },
+                          text: 'VERIFY',
                         ),
                       ],
                       if (authState.message.isNotEmpty) ...[
                         const SizedBox(height: 24),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            authState.message,
-                            style: TextStyle(
-                              color:
-                                  authState.message.toLowerCase().contains(
-                                            'fail',
-                                          ) ||
-                                          authState.message
-                                              .toLowerCase()
-                                              .contains('error')
-                                      ? colorScheme.error
-                                      : colorScheme.primary,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+                        StatusMessage(
+                          message: authState.message,
+                          isError:
+                              authState.message.toLowerCase().contains(
+                                'fail',
+                              ) ||
+                              authState.message.toLowerCase().contains('error'),
                         ),
                       ],
                     ],

@@ -1,15 +1,15 @@
-// Eidolon Engine
+// Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
+// Copyright 2024‑2025 Jason Robinson
 //
-// Licensed under the Apache License, Version 2.0 (the “License”);
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an “AS IS” BASIS,
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -17,6 +17,7 @@
 import 'package:flutter/material.dart';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 import '../services/auth_service.dart';
+import 'input_sanitizer.dart';
 
 /// State management for authentication
 class AuthState extends ChangeNotifier {
@@ -30,6 +31,8 @@ class AuthState extends ChangeNotifier {
   bool _isVerificationMode = false;
   bool _isSignUpMode = true;
   bool _isAuthenticated = false;
+  int _loginAttempts = 0;
+  DateTime? _lastAttemptTime;
 
   AuthState({required AuthService authService}) : _authService = authService {
     // Check authentication status when initialized
@@ -50,7 +53,7 @@ class AuthState extends ChangeNotifier {
 
   /// Updates message and notifies listeners
   void _updateMessage(String message) {
-    _message = message;
+    _message = InputSanitizer.sanitizeDisplayText(message);
     notifyListeners();
   }
 
@@ -58,6 +61,32 @@ class AuthState extends ChangeNotifier {
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
+  }
+
+  /// Checks if account is locked due to too many attempts
+  bool _isAccountLocked() {
+    if (_loginAttempts >= 5 && _lastAttemptTime != null) {
+      final difference = DateTime.now().difference(_lastAttemptTime!);
+      if (difference.inMinutes < 15) {
+        return true;
+      }
+      // Reset after 15 minutes
+      _loginAttempts = 0;
+      _lastAttemptTime = null;
+    }
+    return false;
+  }
+
+  /// Increments login attempts
+  void _incrementLoginAttempts() {
+    _loginAttempts++;
+    _lastAttemptTime = DateTime.now();
+  }
+
+  /// Resets login attempts
+  void _resetLoginAttempts() {
+    _loginAttempts = 0;
+    _lastAttemptTime = null;
   }
 
   /// Checks current authentication status
@@ -111,6 +140,12 @@ class AuthState extends ChangeNotifier {
       return;
     }
 
+    // Sanitize verification code
+    if (!_validateSecureInput(code)) {
+      _updateMessage('Invalid verification code format');
+      return;
+    }
+
     _setLoading(true);
     try {
       await _authService.confirmRegistration(
@@ -133,6 +168,11 @@ class AuthState extends ChangeNotifier {
 
   /// Signs in a user
   Future<void> signIn() async {
+    if (_isAccountLocked()) {
+      _updateMessage('Account temporarily locked. Please try again later.');
+      return;
+    }
+
     if (!_validateInputs(isSignUp: false)) return;
 
     _setLoading(true);
@@ -144,8 +184,10 @@ class AuthState extends ChangeNotifier {
       _updateMessage('Sign in successful');
       _isSignUpMode = false;
       _isAuthenticated = true;
+      _resetLoginAttempts();
       clearInputs();
     } on CognitoClientException catch (e) {
+      _incrementLoginAttempts();
       // Authentication-specific errors already formatted by AuthService
       _updateMessage(e.message ?? 'Sign in failed');
       _isAuthenticated = false;
@@ -174,13 +216,18 @@ class AuthState extends ChangeNotifier {
 
   /// Validates email format
   bool _validateEmail(String email) {
-    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+    return InputSanitizer.validateEmail(email);
   }
 
   /// Validates password complexity
   bool _validatePassword(String password, {bool checkComplexity = false}) {
     if (password.length < 8) {
       _updateMessage('Password must be at least 8 characters long');
+      return false;
+    }
+
+    if (InputSanitizer.containsDangerousChars(password)) {
+      _updateMessage('Password contains invalid characters');
       return false;
     }
 
@@ -197,6 +244,11 @@ class AuthState extends ChangeNotifier {
     }
 
     return true;
+  }
+
+  /// Validates secure input without XSS characters
+  bool _validateSecureInput(String input) {
+    return !InputSanitizer.containsDangerousChars(input);
   }
 
   /// Validates input fields before submission
@@ -236,12 +288,15 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clears all input fields and messages
+  /// Clears all input fields and messages securely
   void clearInputs() {
     _emailController.clear();
     _passwordController.clear();
     _verificationCodeController.clear();
     _message = '';
+    // Force a garbage collection hint for sensitive data
+    // This is a hint to Dart runtime, not a guarantee
+    String.fromCharCodes([]);
     notifyListeners();
   }
 
@@ -252,12 +307,17 @@ class AuthState extends ChangeNotifier {
       final email = uri.queryParameters['email'];
 
       if (code != null && email != null) {
-        _emailController.text = email;
-        _verificationCodeController.text = code;
-        _isVerificationMode = true;
-        _isSignUpMode = true;
-        notifyListeners();
-        await confirmRegistration();
+        // Sanitize inputs from deep link
+        if (_validateEmail(email) && _validateSecureInput(code)) {
+          _emailController.text = email;
+          _verificationCodeController.text = code;
+          _isVerificationMode = true;
+          _isSignUpMode = true;
+          notifyListeners();
+          await confirmRegistration();
+        } else {
+          _updateMessage('Invalid verification link');
+        }
       }
     }
   }
@@ -266,6 +326,11 @@ class AuthState extends ChangeNotifier {
   Future<void> resendVerificationCode() async {
     if (_emailController.text.isEmpty) {
       _updateMessage('Please enter your email address');
+      return;
+    }
+
+    if (!_validateEmail(_emailController.text.trim())) {
+      _updateMessage('Please enter a valid email address');
       return;
     }
 

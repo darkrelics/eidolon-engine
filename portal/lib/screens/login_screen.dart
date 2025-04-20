@@ -1,15 +1,15 @@
-// Eidolon Engine
+// Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
+// Copyright 2024‑2025 Jason Robinson
 //
-// Licensed under the Apache License, Version 2.0 (the “License”);
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an “AS IS” BASIS,
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -19,9 +19,13 @@ import 'package:provider/provider.dart';
 
 import '../utils/auth_state.dart';
 import '../widgets/ui_components.dart';
+import '../utils/input_sanitizer.dart';
 
 class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
+  final String? redirectRoute;
+  final Object? redirectArgs;
+
+  const LoginScreen({super.key, this.redirectRoute, this.redirectArgs});
 
   @override
   Widget build(BuildContext context) {
@@ -32,9 +36,12 @@ class LoginScreen extends StatelessWidget {
           padding: const EdgeInsets.all(24.0),
           child: Consumer<AuthState>(
             builder: (context, authState, child) {
-              // If authenticated, navigate to character management
+              // If authenticated, navigate to appropriate route
               if (authState.isAuthenticated) {
-                NavigationHelper.handleAuthenticated(context);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _handleNavigation(context, redirectRoute, redirectArgs);
+                });
+                return const Center(child: CircularProgressIndicator());
               }
 
               return Form(
@@ -51,6 +58,8 @@ class LoginScreen extends StatelessWidget {
                         hintText: 'Enter your email',
                         keyboardType: TextInputType.emailAddress,
                         autofillHints: const [AutofillHints.email],
+                        validator: FieldValidators.email,
+                        inputFormatters: [InputSanitizer.noXSSChars()],
                       ),
                       const SizedBox(height: 16),
                       AppTextField(
@@ -60,11 +69,24 @@ class LoginScreen extends StatelessWidget {
                         hintText: 'Enter your password',
                         obscureText: true,
                         autofillHints: const [AutofillHints.password],
+                        validator: FieldValidators.password,
+                        inputFormatters: [InputSanitizer.noXSSChars()],
                       ),
                       const SizedBox(height: 32),
                       LoadingButton(
                         isLoading: authState.isLoading,
-                        onPressed: () => authState.signIn(),
+                        onPressed: () async {
+                          if (Form.of(context).validate()) {
+                            await authState.signIn();
+                            if (authState.isAuthenticated && context.mounted) {
+                              _handleNavigation(
+                                context,
+                                redirectRoute,
+                                redirectArgs,
+                              );
+                            }
+                          }
+                        },
                         text: 'SIGN IN',
                       ),
                       const SizedBox(height: 16),
@@ -81,7 +103,9 @@ class LoginScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 24),
                       StatusMessage(
-                        message: authState.message,
+                        message: InputSanitizer.sanitizeDisplayText(
+                          authState.message,
+                        ),
                         isError:
                             authState.message.toLowerCase().contains('fail') ||
                             authState.message.toLowerCase().contains('error'),
@@ -95,5 +119,19 @@ class LoginScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _handleNavigation(
+    BuildContext context,
+    String? redirectRoute,
+    Object? redirectArgs,
+  ) {
+    if (redirectRoute != null) {
+      Navigator.of(
+        context,
+      ).pushReplacementNamed(redirectRoute, arguments: redirectArgs);
+    } else {
+      Navigator.of(context).pushReplacementNamed('/character-management');
+    }
   }
 }

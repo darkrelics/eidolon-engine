@@ -1,15 +1,15 @@
-// Eidolon Engine
+// Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
+// Copyright 2024‑2025 Jason Robinson
 //
-// Licensed under the Apache License, Version 2.0 (the “License”);
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an “AS IS” BASIS,
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -28,6 +28,16 @@ class CharacterManagementScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    // Double-check authentication on build
+    if (!authState.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      });
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Character Management'),
@@ -36,10 +46,22 @@ class CharacterManagementScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              await authState.signOut();
-              if (context.mounted) {
-                Navigator.of(context).pushReplacementNamed('/');
-              }
+              // Show confirmation dialog
+              await CustomDialog.show(
+                context,
+                title: 'Sign Out',
+                content: 'Are you sure you want to sign out?',
+                confirmText: 'SIGN OUT',
+                cancelText: 'CANCEL',
+                onConfirm: () async {
+                  Navigator.of(context).pop();
+                  await authState.signOut();
+                  if (context.mounted) {
+                    Navigator.of(context).pushReplacementNamed('/');
+                  }
+                },
+                isDestructive: true,
+              );
             },
           ),
         ],
@@ -95,9 +117,15 @@ class CharacterManagementScreen extends StatelessWidget {
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 24),
-                        const FilledButton.tonal(
-                          onPressed: null,
-                          child: Text('Create New Character'),
+                        FilledButton.tonal(
+                          onPressed: () {
+                            // Show coming soon message
+                            NavigationHelper.showSnackBar(
+                              context,
+                              'Character creation coming soon!',
+                            );
+                          },
+                          child: const Text('Create New Character'),
                         ),
                       ],
                     ),

@@ -1,15 +1,15 @@
-// Eidolon Engine
+// Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
+// Copyright 2024‑2025 Jason Robinson
 //
-// Licensed under the Apache License, Version 2.0 (the “License”);
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an “AS IS” BASIS,
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -26,6 +26,8 @@ import 'screens/login_screen.dart';
 import 'screens/registration_screen.dart';
 import 'screens/character_management_screen.dart';
 import 'utils/security_config.dart';
+import 'utils/route_guard.dart';
+import 'utils/session_monitor.dart';
 
 void main() {
   // Enable proper error handling for the app
@@ -50,6 +52,7 @@ void main() {
   };
 
   final authService = AuthService();
+  final sessionMonitor = SessionMonitor();
 
   runApp(
     MultiProvider(
@@ -58,6 +61,7 @@ void main() {
           create: (_) => AuthState(authService: authService),
         ),
         ChangeNotifierProvider(create: (_) => ThemeProvider.create()),
+        Provider.value(value: sessionMonitor),
       ],
       child: const MyApp(),
     ),
@@ -71,6 +75,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
+        final sessionMonitor = Provider.of<SessionMonitor>(
+          context,
+          listen: false,
+        );
+
         return MaterialApp(
           title: 'Eidolon Engine',
           debugShowCheckedModeBanner: false,
@@ -79,6 +88,12 @@ class MyApp extends StatelessWidget {
           onGenerateRoute: (settings) => _onGenerateRoute(context, settings),
           // Add a global key for navigation from anywhere
           navigatorKey: GlobalNavigationKey.navigatorKey,
+          builder: (context, child) {
+            return ActivityMonitor(
+              sessionMonitor: sessionMonitor,
+              child: child!,
+            );
+          },
         );
       },
     );
@@ -88,18 +103,43 @@ class MyApp extends StatelessWidget {
     BuildContext context,
     RouteSettings settings,
   ) {
+    // Route guard for protected routes
+    if (RouteGuard.isProtectedRoute(settings.name)) {
+      final authState = Provider.of<AuthState>(context, listen: false);
+      if (!authState.isAuthenticated) {
+        return MaterialPageRoute(
+          builder:
+              (_) => LoginScreen(
+                redirectRoute: settings.name,
+                redirectArgs: settings.arguments,
+              ),
+        );
+      }
+    }
+
     switch (settings.name) {
       case '/':
         return MaterialPageRoute(builder: (_) => const SplashScreen());
       case '/login':
-        return MaterialPageRoute(builder: (_) => const LoginScreen());
+        String? redirectRoute;
+        Object? redirectArgs;
+        if (settings.arguments is Map<String, dynamic>) {
+          final args = settings.arguments as Map<String, dynamic>;
+          redirectRoute = args['redirectRoute'] as String?;
+          redirectArgs = args['redirectArgs'];
+        }
+        return MaterialPageRoute(
+          builder:
+              (_) => LoginScreen(
+                redirectRoute: redirectRoute,
+                redirectArgs: redirectArgs,
+              ),
+        );
       case '/register':
         return MaterialPageRoute(builder: (_) => const RegistrationScreen());
       case '/character-management':
         return MaterialPageRoute(
-          builder:
-              (_) =>
-                  const AuthenticatedRoute(child: CharacterManagementScreen()),
+          builder: (_) => const CharacterManagementScreen(),
         );
       default:
         return MaterialPageRoute(
@@ -113,35 +153,6 @@ class MyApp extends StatelessWidget {
 class GlobalNavigationKey {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
-}
-
-/// Wrapper widget that checks authentication status for protected routes
-class AuthenticatedRoute extends StatelessWidget {
-  final Widget child;
-
-  const AuthenticatedRoute({super.key, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<AuthState>(
-      builder: (context, authState, _) {
-        // Check authentication status
-        if (!authState.isAuthenticated) {
-          // Schedule navigation after the frame is built
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.of(context).pushReplacementNamed('/login');
-          });
-          // Show loading while redirecting
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        // User is authenticated, show the protected screen
-        return child;
-      },
-    );
-  }
 }
 
 /// Error screen for unknown routes or errors
@@ -181,8 +192,9 @@ class ErrorScreen extends StatelessWidget {
 /// App lifecycle observer to handle app state changes
 class AppLifecycleObserver extends WidgetsBindingObserver {
   final AuthState authState;
+  final SessionMonitor sessionMonitor;
 
-  AppLifecycleObserver(this.authState);
+  AppLifecycleObserver(this.authState, this.sessionMonitor);
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -190,6 +202,9 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
       case AppLifecycleState.resumed:
         // Check authentication when app resumes
         authState.checkAuthStatus();
+        if (authState.isAuthenticated) {
+          sessionMonitor.registerActivity();
+        }
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -219,7 +234,8 @@ class _AppWithLifecycleObserverState extends State<AppWithLifecycleObserver> {
   void initState() {
     super.initState();
     final authState = Provider.of<AuthState>(context, listen: false);
-    _observer = AppLifecycleObserver(authState);
+    final sessionMonitor = Provider.of<SessionMonitor>(context, listen: false);
+    _observer = AppLifecycleObserver(authState, sessionMonitor);
     WidgetsBinding.instance.addObserver(_observer);
   }
 
