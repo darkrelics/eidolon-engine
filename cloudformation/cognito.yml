@@ -1,12 +1,12 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Cognito User Pool and Client for Eidolon Engine'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Cognito User Pool and Client for Eidolon Engine"
 
 Parameters:
   UserPoolName:
     Type: String
     Description: Name of the user pool
     Default: eidolon-user-pool
-  
+
   AppClientName:
     Type: String
     Description: Name of the app client
@@ -43,7 +43,7 @@ Resources:
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Ref  AppClientName
+      ClientName: !Ref AppClientName
       UserPoolId: !Ref CognitoUserPool
       GenerateSecret: false
       ExplicitAuthFlows:
