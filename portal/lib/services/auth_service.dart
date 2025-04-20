@@ -1,13 +1,9 @@
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 
 class AuthService {
   late final CognitoUserPool userPool;
   CognitoUser? _currentUser;
   CognitoUserSession? _session;
-  late final String _clientId;
-  late final String _clientSecret;
 
   AuthService() {
     _initializeCognito();
@@ -16,47 +12,28 @@ class AuthService {
   void _initializeCognito() {
     const userPoolId = String.fromEnvironment('USER_POOL_ID');
     const clientId = String.fromEnvironment('CLIENT_ID');
-    const clientSecret = String.fromEnvironment('CLIENT_SECRET');
 
     _logError('Cognito Configuration Status', {
       'poolIdPresent': userPoolId.isNotEmpty,
       'clientIdPresent': clientId.isNotEmpty,
-      'secretPresent': clientSecret.isNotEmpty,
     });
 
-    if (userPoolId.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
+    if (userPoolId.isEmpty || clientId.isEmpty) {
       throw Exception('Missing required Cognito configuration');
     }
-
-    _clientId = clientId;
-    _clientSecret = clientSecret;
 
     userPool = CognitoUserPool(
       userPoolId,
       clientId,
-      clientSecret: clientSecret,
     );
-  }
-
-  String _generateSecretHash(String username) {
-    final key = utf8.encode(_clientSecret);
-    final message = utf8.encode(username + _clientId);
-    final hmac = Hmac(sha256, key);
-    final digest = hmac.convert(message);
-    return base64.encode(digest.bytes);
   }
 
   Future<CognitoUserPoolData> signUp(String email, String password) async {
     try {
-      final secretHash = _generateSecretHash(email);
       final signUpResult = await userPool.signUp(
         email,
         password,
         userAttributes: [AttributeArg(name: 'email', value: email)],
-        validationData: [
-          AttributeArg(name: 'email', value: email),
-          AttributeArg(name: 'SECRET_HASH', value: secretHash),
-        ],
       );
       return signUpResult;
     } on CognitoClientException catch (e) {
@@ -70,12 +47,7 @@ class AuthService {
 
   Future<bool> confirmRegistration(String email, String code) async {
     try {
-      final user = CognitoUser(
-        email,
-        userPool,
-        clientSecret:
-            _clientSecret, // This will trigger internal SECRET_HASH generation
-      );
+      final user = CognitoUser(email, userPool);
       return await user.confirmRegistration(code);
     } on CognitoClientException catch (e) {
       _logError('Confirmation error', e);
@@ -88,11 +60,7 @@ class AuthService {
 
   Future<CognitoUser> signIn(String email, String password) async {
     try {
-      final user = CognitoUser(
-        email,
-        userPool,
-        clientSecret: _clientSecret, // Same pattern as confirmRegistration
-      );
+      final user = CognitoUser(email, userPool);
       final authDetails = AuthenticationDetails(
         username: email,
         password: password,

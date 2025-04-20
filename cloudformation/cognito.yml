@@ -1,45 +1,28 @@
-AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudFormation template for Cognito User Pool and IAM Policy"
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Cognito User Pool and Client for Eidolon Engine'
 
 Parameters:
   UserPoolName:
     Type: String
-    Description: Name of the user pool
-    Default: eidolon-user-pool
-  AppClientName:
+    Default: EidolonEngineUserPool
+    Description: Name of the Cognito User Pool
+  
+  ClientAppName:
     Type: String
-    Description: Name of the app client
-    Default: eidolon-app-client
-  CallbackURL:
-    Type: String
-    Description: URL of the callback for the app client
-    Default: https://localhost:3000/callback
-  SignOutURL:
-    Type: String
-    Description: URL of the sign-out page for the app client
-    Default: https://localhost:3000/sign-out
-  ReplyEmailAddress:
-    Type: String
-    Description: Email address to send from
-  VerificationSubject:
-    Type: String
-    Description: Subject of the email verification message
-    Default: Eidolon Engine verification code
+    Default: EidolonEngineWebApp
+    Description: Name of the Cognito App Client
 
 Resources:
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Ref UserPoolName
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
       EmailConfiguration:
         EmailSendingAccount: COGNITO_DEFAULT
-        ReplyToEmailAddress: !Ref ReplyEmailAddress
-      AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: false
-        InviteMessageTemplate:
-          EmailSubject: "Your temporary password"
-          EmailMessage: "Your username is {username} and temporary password is {####}."
-        UnusedAccountValidityDays: 7
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -48,102 +31,51 @@ Resources:
           RequireSymbols: true
           RequireUppercase: true
       Schema:
-        - AttributeDataType: String
-          Name: email
+        - Name: email
+          AttributeDataType: String
           Required: true
-        - AttributeDataType: String
-          Name: given_name
-          Required: false
-        - AttributeDataType: String
-          Name: family_name
-          Required: false
-      UsernameAttributes:
-        - email
-      UsernameConfiguration:
-        CaseSensitive: false
-      AutoVerifiedAttributes:
-        - email
-      EmailVerificationSubject: !Ref VerificationSubject
-      EmailVerificationMessage: "Your verification code is {####}"
-      MfaConfiguration: "OFF"
+          Mutable: false
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Name: verified_email
             Priority: 1
-      VerificationMessageTemplate:
-        DefaultEmailOption: CONFIRM_WITH_CODE
-        EmailMessage: "Your verification code is {####}"
-        EmailSubject: !Ref VerificationSubject
-      UserPoolTags:
-        Environment: Production
-        Application: Eidolon
-      DeletionProtection: INACTIVE
 
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
+      ClientName: !Ref ClientAppName
       UserPoolId: !Ref CognitoUserPool
-      ClientName: !Ref AppClientName
-      GenerateSecret: true
+      GenerateSecret: false
       ExplicitAuthFlows:
-        - ALLOW_ADMIN_USER_PASSWORD_AUTH
         - ALLOW_USER_PASSWORD_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
-        - ALLOW_USER_SRP_AUTH
       PreventUserExistenceErrors: ENABLED
-      CallbackURLs:
-        - !Ref CallbackURL
-      LogoutURLs:
-        - !Ref SignOutURL
-
-  CognitoUserPoolDomain:
-    Type: AWS::Cognito::UserPoolDomain
-    Properties:
-      UserPoolId: !Ref CognitoUserPool
-      Domain: !Ref UserPoolName
-
-  CognitoReadOnlyPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      Description: "Policy providing read-only access to Cognito user objects"
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action:
-              - cognito-idp:ListUsers
-              - cognito-idp:DescribeUserPool
-            Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPool}"
-
-  CognitoReadOnlyRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - cognito-idp.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      ManagedPolicyArns:
-        - !Ref CognitoReadOnlyPolicy
-      Description: "Role with read-only access to Cognito user objects"
+      SupportedIdentityProviders:
+        - COGNITO
+      AuthSessionValidity: 3
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
 
 Outputs:
   UserPoolId:
-    Description: The ID of the user pool
     Value: !Ref CognitoUserPool
-  UserPoolArn:
-    Description: The ARN of the user pool
-    Value: !GetAtt CognitoUserPool.Arn
+    Description: ID of the Cognito User Pool
+    Export:
+      Name: EidolonEngine-UserPoolId
+
   UserPoolClientId:
-    Description: The ID of the user pool client
     Value: !Ref CognitoUserPoolClient
-  UserPoolClientSecret:
-    Description: The secret of the user pool client
-    Value: !GetAtt CognitoUserPoolClient.ClientSecret
-  UserPoolDomain:
-    Description: The domain of the user pool
-    Value: !Ref CognitoUserPoolDomain
+    Description: ID of the Cognito App Client
+    Export:
+      Name: EidolonEngine-ClientId
+
+  UserPoolArn:
+    Value: !GetAtt CognitoUserPool.Arn
+    Description: ARN of the Cognito User Pool
+    Export:
+      Name: EidolonEngine-UserPoolArn
