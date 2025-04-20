@@ -2,7 +2,6 @@ AWS:
   Region: us-east-1
 Cognito:
   UserPoolId: us-east-1_xxxxxxxxx
-  UserPoolClientSecret: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   UserPoolClientId: xxxxxxxxxxxxxxxxxxxxxxxxxx
   UserPoolDomain: eidolon-user-pool
   UserPoolArn: arn:aws:cognito-idp:us-east-1:999999999999:userpool/us-east-1_xxxxxxxxx
