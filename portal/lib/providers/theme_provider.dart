@@ -229,9 +229,7 @@ class ThemeProvider extends ChangeNotifier {
         enabledBorder: UnderlineInputBorder(
           borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.3)),
         ),
-        focusedBorder: const UnderlineInputBorder(
-          
-        ),
+        focusedBorder: const UnderlineInputBorder(),
         errorBorder: UnderlineInputBorder(
           borderSide: BorderSide(color: Colors.red.shade400),
         ),

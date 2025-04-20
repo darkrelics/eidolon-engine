@@ -9,10 +9,21 @@ import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/registration_screen.dart';
 import 'screens/character_management_screen.dart';
+import 'utils/security_config.dart';
 
 void main() {
   // Enable proper error handling for the app
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Apply security configurations for web
+  if (kIsWeb) {
+    SecurityConfig.applyWebSecurityConfig();
+
+    // Validate security headers in debug mode
+    if (kDebugMode) {
+      SecurityConfig.validateSecurityHeaders();
+    }
+  }
 
   // Set up error reporting (in production, use a proper error reporting service)
   FlutterError.onError = (FlutterErrorDetails details) {
