@@ -4,13 +4,13 @@ Description: 'Cognito User Pool and Client for Eidolon Engine'
 Parameters:
   UserPoolName:
     Type: String
-    Default: EidolonEngineUserPool
-    Description: Name of the Cognito User Pool
+    Description: Name of the user pool
+    Default: eidolon-user-pool
   
-  ClientAppName:
+  AppClientName:
     Type: String
-    Default: EidolonEngineWebApp
-    Description: Name of the Cognito App Client
+    Description: Name of the app client
+    Default: eidolon-app-client
 
 Resources:
   CognitoUserPool:
@@ -43,7 +43,7 @@ Resources:
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Ref ClientAppName
+      ClientName: !Ref  AppClientName
       UserPoolId: !Ref CognitoUserPool
       GenerateSecret: false
       ExplicitAuthFlows:
@@ -63,19 +63,13 @@ Resources:
 
 Outputs:
   UserPoolId:
-    Value: !Ref CognitoUserPool
     Description: ID of the Cognito User Pool
-    Export:
-      Name: EidolonEngine-UserPoolId
+    Value: !Ref CognitoUserPool
+
+  UserPoolArn:
+    Description: ARN of the Cognito User Pool
+    Value: !GetAtt CognitoUserPool.Arn
 
   UserPoolClientId:
     Value: !Ref CognitoUserPoolClient
     Description: ID of the Cognito App Client
-    Export:
-      Name: EidolonEngine-ClientId
-
-  UserPoolArn:
-    Value: !GetAtt CognitoUserPool.Arn
-    Description: ARN of the Cognito User Pool
-    Export:
-      Name: EidolonEngine-UserPoolArn
