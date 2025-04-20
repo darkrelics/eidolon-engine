@@ -22,25 +22,25 @@ import 'auth_state.dart';
 class SessionMonitor {
   static const Duration _inactivityTimeout = Duration(minutes: 30);
   static const Duration _absoluteTimeout = Duration(hours: 24);
-  
+
   Timer? _inactivityTimer;
   Timer? _absoluteTimer;
   DateTime? _sessionStartTime;
   DateTime? _lastActivityTime;
   AuthState? _authState;
   BuildContext? _context;
-  
+
   /// Starts monitoring the session
   void startMonitoring(BuildContext context, AuthState authState) {
     _context = context;
     _authState = authState;
     _sessionStartTime = DateTime.now();
     _lastActivityTime = DateTime.now();
-    
+
     _startInactivityTimer();
     _startAbsoluteTimer();
   }
-  
+
   /// Stops monitoring the session
   void stopMonitoring() {
     _inactivityTimer?.cancel();
@@ -52,91 +52,90 @@ class SessionMonitor {
     _authState = null;
     _context = null;
   }
-  
+
   /// Registers activity to reset inactivity timer
   void registerActivity() {
     _lastActivityTime = DateTime.now();
     _resetInactivityTimer();
   }
-  
+
   /// Starts the inactivity timer
   void _startInactivityTimer() {
     _inactivityTimer?.cancel();
     _inactivityTimer = Timer(_inactivityTimeout, _handleInactivityTimeout);
   }
-  
+
   /// Resets the inactivity timer
   void _resetInactivityTimer() {
     _inactivityTimer?.cancel();
     _startInactivityTimer();
   }
-  
+
   /// Starts the absolute session timer
   void _startAbsoluteTimer() {
     _absoluteTimer?.cancel();
     _absoluteTimer = Timer(_absoluteTimeout, _handleAbsoluteTimeout);
   }
-  
+
   /// Handles inactivity timeout
   void _handleInactivityTimeout() {
     _showTimeoutDialog('Your session has expired due to inactivity');
   }
-  
+
   /// Handles absolute session timeout
   void _handleAbsoluteTimeout() {
     _showTimeoutDialog('Your session has expired for security reasons');
   }
-  
+
   /// Shows timeout dialog and logs out user
   void _showTimeoutDialog(String message) {
     if (_context != null && _authState != null) {
       showDialog(
         context: _context!,
         barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('Session Expired'),
-          content: Text(message),
-          actions: [
-            FilledButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await _authState!.signOut();
-                if (_context!.mounted) {
-                  Navigator.of(_context!).pushReplacementNamed('/login');
-                }
-              },
-              child: const Text('OK'),
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Session Expired'),
+              content: Text(message),
+              actions: [
+                FilledButton(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await _authState!.signOut();
+                    if (_context!.mounted) {
+                      Navigator.of(_context!).pushReplacementNamed('/login');
+                    }
+                  },
+                  child: const Text('OK'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
     }
   }
-  
+
   /// Checks if the session is still valid
   bool isSessionValid() {
     if (_sessionStartTime == null || _lastActivityTime == null) {
       return false;
     }
-    
+
     final now = DateTime.now();
     final absoluteDuration = now.difference(_sessionStartTime!);
     final inactiveDuration = now.difference(_lastActivityTime!);
-    
-    return absoluteDuration < _absoluteTimeout && 
-           inactiveDuration < _inactivityTimeout;
+
+    return absoluteDuration < _absoluteTimeout &&
+        inactiveDuration < _inactivityTimeout;
   }
-  
+
   /// Gets remaining session time
   Duration getRemainingSessionTime() {
     if (_sessionStartTime == null) return Duration.zero;
-    
+
     final now = DateTime.now();
     final absoluteDuration = now.difference(_sessionStartTime!);
     return _absoluteTimeout - absoluteDuration;
   }
-  
-
 }
 
 /// Widget that monitors user activity
