@@ -5,12 +5,11 @@ Parameters:
   UserPoolId:
     Type: String
     Description: The ID of the AWS Cognito User Pool
+
   ClientId:
     Type: String
     Description: The Client ID of the AWS Cognito User Pool
-  ClientSecret:
-    Type: String
-    Description: The Client Secret of the AWS Cognito User Pool
+
   S3BucketName:
     Type: String
     Description: The name of the S3 bucket where build artifacts will be stored
@@ -70,8 +69,6 @@ Resources:
             Value: !Ref UserPoolId
           - Name: CLIENT_ID
             Value: !Ref ClientId
-          - Name: CLIENT_SECRET
-            Value: !Ref ClientSecret
           - Name: S3_BUCKET_NAME
             Value: !Ref S3BucketName
       Source:

@@ -19,9 +19,6 @@ limitations under the License.
 package main
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -30,23 +27,16 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Server) calculateSecretHash(email string) string {
-	message := []byte(email + s.config.Cognito.UserPoolClientID)
-	key := []byte(s.config.Cognito.UserPoolClientSecret)
-	hash := hmac.New(sha256.New, key)
-	hash.Write(message)
-	return base64.StdEncoding.EncodeToString(hash.Sum(nil))
-}
+// Removed calculateSecretHash function
 
 func (s *Server) SignInUser(email, password string) (*cognitoidentityprovider.InitiateAuthOutput, error) {
-	secretHash := s.calculateSecretHash(email)
-
+	// Removed secret hash calculation
 	authInput := &cognitoidentityprovider.InitiateAuthInput{
 		AuthFlow: aws.String(cognitoidentityprovider.AuthFlowTypeUserPasswordAuth),
 		AuthParameters: map[string]*string{
-			"USERNAME":    aws.String(email),
-			"PASSWORD":    aws.String(password),
-			"SECRET_HASH": aws.String(secretHash),
+			"USERNAME": aws.String(email),
+			"PASSWORD": aws.String(password),
+			// Removed SECRET_HASH
 		},
 		ClientId: aws.String(s.config.Cognito.UserPoolClientID),
 	}
@@ -57,7 +47,6 @@ func (s *Server) SignInUser(email, password string) (*cognitoidentityprovider.In
 	}
 
 	if authOutput.AuthenticationResult == nil {
-		// Check for challenges only if no auth result
 		if authOutput.ChallengeName != nil &&
 			*authOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
 			return authOutput, nil
@@ -69,13 +58,10 @@ func (s *Server) SignInUser(email, password string) (*cognitoidentityprovider.In
 }
 
 func (s *Server) SignUpUser(email, password string) (*cognitoidentityprovider.SignUpOutput, error) {
-	secretHash := s.calculateSecretHash(email)
-
 	signUpInput := &cognitoidentityprovider.SignUpInput{
-		ClientId:   aws.String(s.config.Cognito.UserPoolClientID),
-		Username:   aws.String(email),
-		Password:   aws.String(password),
-		SecretHash: aws.String(secretHash),
+		ClientId: aws.String(s.config.Cognito.UserPoolClientID),
+		Username: aws.String(email),
+		Password: aws.String(password),
 		UserAttributes: []*cognitoidentityprovider.AttributeType{
 			{Name: aws.String("email"), Value: aws.String(email)},
 		},
@@ -91,13 +77,10 @@ func (s *Server) SignUpUser(email, password string) (*cognitoidentityprovider.Si
 }
 
 func (s *Server) ConfirmUser(email, confirmationCode string) (*cognitoidentityprovider.ConfirmSignUpOutput, error) {
-	secretHash := s.calculateSecretHash(email)
-
 	confirmSignUpInput := &cognitoidentityprovider.ConfirmSignUpInput{
 		ClientId:         aws.String(s.config.Cognito.UserPoolClientID),
 		Username:         aws.String(email),
 		ConfirmationCode: aws.String(confirmationCode),
-		SecretHash:       aws.String(secretHash),
 	}
 
 	return s.cognito.ConfirmSignUp(confirmSignUpInput)
@@ -117,14 +100,12 @@ func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string)
 	}
 
 	if signInOutput.ChallengeName != nil && *signInOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
-		secretHash := s.calculateSecretHash(player.email)
 		challengeInput := &cognitoidentityprovider.RespondToAuthChallengeInput{
 			ChallengeName: aws.String(cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired),
 			ClientId:      aws.String(s.config.Cognito.UserPoolClientID),
 			ChallengeResponses: map[string]*string{
 				"USERNAME":     aws.String(player.email),
 				"NEW_PASSWORD": aws.String(newPassword),
-				"SECRET_HASH":  aws.String(secretHash),
 			},
 			Session: signInOutput.Session,
 		}
@@ -177,14 +158,11 @@ func handleCognitoError(err error, email string) error {
 }
 
 func Authenticate(username, password string, ssh_interface *Interface_SSH) (bool, uuid.UUID, error) {
-	secretHash := ssh_interface.server.calculateSecretHash(username)
-
 	authOutput, err := ssh_interface.server.cognito.InitiateAuth(&cognitoidentityprovider.InitiateAuthInput{
 		AuthFlow: aws.String("USER_PASSWORD_AUTH"),
 		AuthParameters: map[string]*string{
-			"USERNAME":    aws.String(username),
-			"PASSWORD":    aws.String(password),
-			"SECRET_HASH": aws.String(secretHash),
+			"USERNAME": aws.String(username),
+			"PASSWORD": aws.String(password),
 		},
 		ClientId: aws.String(ssh_interface.config.Cognito.UserPoolClientID),
 	})
