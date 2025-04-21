@@ -28,8 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
 )
@@ -72,8 +71,8 @@ func (p *Player) Load(playerID uuid.UUID) error {
 
 	database := p.server.database
 
-	key := map[string]*dynamodb.AttributeValue{
-		"PlayerID": {S: aws.String(playerID.String())},
+	key := map[string]types.AttributeValue{
+		"PlayerID": &types.AttributeValueMemberS{Value: playerID.String()},
 	}
 
 	var playerData PlayerData

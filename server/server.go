@@ -26,9 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/google/uuid"
 )
 
@@ -44,7 +43,7 @@ type Server struct {
 	players       map[uint64]*Player
 	playersByUUID map[uuid.UUID]*Player
 	shutdownOnce  sync.Once
-	cognito       *cognitoidentityprovider.CognitoIdentityProvider
+	cognito       *cognitoidentityprovider.Client
 	index         *Index
 	activeMotDs   []*MOTD
 	sshInterface  *Interface_SSH
@@ -72,22 +71,24 @@ func (i *Index) SetID(id uint64) {
 	}
 }
 
-func NewServer(globalCtx context.Context, config *Configuration) (*Server, error) {
+func NewServer(globalCtx context.Context, cfg *Configuration) (*Server, error) {
 
 	Logger.Info("New Server...Initializing server...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
-	database, err := NewKeyPair(config)
+	database, err := NewKeyPair(cfg)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("database init error: %w", err)
 	}
 
-	serverSession, err := session.NewSession(&aws.Config{Region: aws.String(config.AWS.Region)})
+	awsConfig, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(cfg.AWS.Region),
+	)
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("AWS session init error: %w", err)
+		return nil, fmt.Errorf("AWS config init error: %w", err)
 	}
 
 	index := &Index{
@@ -96,7 +97,7 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 	}
 
 	server := &Server{
-		config:        config,
+		config:        cfg,
 		ctx:           ctx,
 		cancel:        cancel,
 		mutex:         sync.RWMutex{},
@@ -106,7 +107,7 @@ func NewServer(globalCtx context.Context, config *Configuration) (*Server, error
 		players:       make(map[uint64]*Player),
 		playersByUUID: make(map[uuid.UUID]*Player),
 		shutdownOnce:  sync.Once{},
-		cognito:       cognitoidentityprovider.New(serverSession),
+		cognito:       cognitoidentityprovider.NewFromConfig(awsConfig),
 		index:         index,
 	}
 

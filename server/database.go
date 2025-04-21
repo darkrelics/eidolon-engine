@@ -19,37 +19,39 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 type KeyPair struct {
-	db          *dynamodb.DynamoDB
+	db          *dynamodb.Client
 	maxRetries  int
 	baseBackoff time.Duration
 }
 
 // NewKeyPair initializes a new DynamoDB client.
-func NewKeyPair(config *Configuration) (*KeyPair, error) {
+func NewKeyPair(cfg *Configuration) (*KeyPair, error) {
 
-	Logger.Info("Initializing DynamoDB client", "region", config.AWS.Region)
+	Logger.Info("Initializing DynamoDB client", "region", cfg.AWS.Region)
 
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(config.AWS.Region),
-	})
+	awsConfig, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(cfg.AWS.Region),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("error creating AWS session: %w", err)
+		return nil, fmt.Errorf("error creating AWS config: %w", err)
 	}
 
-	svc := dynamodb.New(sess)
+	client := dynamodb.NewFromConfig(awsConfig)
 
 	return &KeyPair{
-		db:          svc,
+		db:          client,
 		maxRetries:  3,
 		baseBackoff: time.Second,
 	}, nil
@@ -59,7 +61,7 @@ func (k *KeyPair) Put(tableName string, item interface{}) error {
 
 	Logger.Info("Putting item into table", "tableName", tableName)
 
-	av, err := dynamodbattribute.MarshalMap(item)
+	av, err := attributevalue.MarshalMap(item)
 	if err != nil {
 		return fmt.Errorf("error marshalling item: %w", err)
 	}
@@ -69,7 +71,7 @@ func (k *KeyPair) Put(tableName string, item interface{}) error {
 		TableName: aws.String(tableName),
 	}
 
-	_, err = k.db.PutItem(input)
+	_, err = k.db.PutItem(context.TODO(), input)
 	if err != nil {
 		return fmt.Errorf("error putting item into table %s: %w", tableName, err)
 	}
@@ -80,7 +82,7 @@ func (k *KeyPair) Put(tableName string, item interface{}) error {
 }
 
 // Get retrieves an item from the DynamoDB table.
-func (k *KeyPair) Get(tableName string, key map[string]*dynamodb.AttributeValue, item interface{}) error {
+func (k *KeyPair) Get(tableName string, key map[string]types.AttributeValue, item interface{}) error {
 
 	Logger.Info("Getting item from table", "tableName", tableName)
 
@@ -89,7 +91,7 @@ func (k *KeyPair) Get(tableName string, key map[string]*dynamodb.AttributeValue,
 		TableName: aws.String(tableName),
 	}
 
-	result, err := k.db.GetItem(input)
+	result, err := k.db.GetItem(context.TODO(), input)
 	if err != nil {
 		return fmt.Errorf("error getting item from table %s: %w", tableName, err)
 	}
@@ -98,7 +100,7 @@ func (k *KeyPair) Get(tableName string, key map[string]*dynamodb.AttributeValue,
 		return fmt.Errorf("item not found in table %s", tableName)
 	}
 
-	err = dynamodbattribute.UnmarshalMap(result.Item, item)
+	err = attributevalue.UnmarshalMap(result.Item, item)
 	if err != nil {
 		return fmt.Errorf("error unmarshalling item: %w", err)
 	}
@@ -107,7 +109,7 @@ func (k *KeyPair) Get(tableName string, key map[string]*dynamodb.AttributeValue,
 }
 
 // Delete removes an item from the DynamoDB table.
-func (k *KeyPair) Delete(tableName string, key map[string]*dynamodb.AttributeValue) error {
+func (k *KeyPair) Delete(tableName string, key map[string]types.AttributeValue) error {
 
 	Logger.Info("Deleting item from table", "tableName", tableName)
 
@@ -116,7 +118,7 @@ func (k *KeyPair) Delete(tableName string, key map[string]*dynamodb.AttributeVal
 		TableName: aws.String(tableName),
 	}
 
-	_, err := k.db.DeleteItem(input)
+	_, err := k.db.DeleteItem(context.TODO(), input)
 	if err != nil {
 		return fmt.Errorf("error deleting item from table %s: %w", tableName, err)
 	}
@@ -126,7 +128,7 @@ func (k *KeyPair) Delete(tableName string, key map[string]*dynamodb.AttributeVal
 }
 
 // Query performs a query operation on the DynamoDB table with pagination.
-func (k *KeyPair) Query(tableName string, keyConditionExpression string, expressionAttributeValues map[string]*dynamodb.AttributeValue, items interface{}) error {
+func (k *KeyPair) Query(tableName string, keyConditionExpression string, expressionAttributeValues map[string]types.AttributeValue, items interface{}) error {
 	Logger.Info("Querying table", "tableName", tableName)
 
 	input := &dynamodb.QueryInput{
@@ -135,8 +137,8 @@ func (k *KeyPair) Query(tableName string, keyConditionExpression string, express
 		ExpressionAttributeValues: expressionAttributeValues,
 	}
 
-	var allItems []map[string]*dynamodb.AttributeValue
-	var lastEvaluatedKey map[string]*dynamodb.AttributeValue
+	var allItems []map[string]types.AttributeValue
+	var lastEvaluatedKey map[string]types.AttributeValue
 
 	for {
 		// Set the exclusive start key for pagination
@@ -145,7 +147,7 @@ func (k *KeyPair) Query(tableName string, keyConditionExpression string, express
 		}
 
 		// Perform the query operation
-		result, err := k.db.Query(input)
+		result, err := k.db.Query(context.TODO(), input)
 		if err != nil {
 			return fmt.Errorf("error querying table %s: %w", tableName, err)
 		}
@@ -169,7 +171,7 @@ func (k *KeyPair) Query(tableName string, keyConditionExpression string, express
 	Logger.Info("Query completed", "tableName", tableName, "totalItems", len(allItems))
 
 	if len(allItems) == 0 {
-		err := dynamodbattribute.UnmarshalListOfMaps([]map[string]*dynamodb.AttributeValue{}, items)
+		err := attributevalue.UnmarshalListOfMaps([]map[string]types.AttributeValue{}, items)
 		if err != nil {
 			return fmt.Errorf("error unmarshalling empty query results: %w", err)
 		}
@@ -177,7 +179,7 @@ func (k *KeyPair) Query(tableName string, keyConditionExpression string, express
 	}
 
 	// Unmarshal all the collected items
-	err := dynamodbattribute.UnmarshalListOfMaps(allItems, items)
+	err := attributevalue.UnmarshalListOfMaps(allItems, items)
 	if err != nil {
 		return fmt.Errorf("error unmarshalling query results: %w", err)
 	}
@@ -193,8 +195,8 @@ func (k *KeyPair) Scan(tableName string, items interface{}) error {
 		TableName: aws.String(tableName),
 	}
 
-	var allItems []map[string]*dynamodb.AttributeValue
-	var lastEvaluatedKey map[string]*dynamodb.AttributeValue
+	var allItems []map[string]types.AttributeValue
+	var lastEvaluatedKey map[string]types.AttributeValue
 
 	for {
 		// Set the exclusive start key for pagination
@@ -203,7 +205,7 @@ func (k *KeyPair) Scan(tableName string, items interface{}) error {
 		}
 
 		// Perform the scan operation
-		result, err := k.db.Scan(input)
+		result, err := k.db.Scan(context.TODO(), input)
 		if err != nil {
 			return fmt.Errorf("error scanning table %s: %w", tableName, err)
 		}
@@ -226,7 +228,7 @@ func (k *KeyPair) Scan(tableName string, items interface{}) error {
 
 	// Handle the case of no items found
 	if len(allItems) == 0 {
-		err := dynamodbattribute.UnmarshalListOfMaps([]map[string]*dynamodb.AttributeValue{}, items)
+		err := attributevalue.UnmarshalListOfMaps([]map[string]types.AttributeValue{}, items)
 		if err != nil {
 			return fmt.Errorf("error unmarshalling empty scan results: %w", err)
 		}
@@ -234,7 +236,7 @@ func (k *KeyPair) Scan(tableName string, items interface{}) error {
 	}
 
 	// Unmarshal all the collected items
-	err := dynamodbattribute.UnmarshalListOfMaps(allItems, items)
+	err := attributevalue.UnmarshalListOfMaps(allItems, items)
 	if err != nil {
 		return fmt.Errorf("error unmarshalling scan results: %w", err)
 	}

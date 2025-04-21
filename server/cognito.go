@@ -19,36 +19,33 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+	"github.com/aws/smithy-go"
 	"github.com/google/uuid"
 )
 
-// Removed calculateSecretHash function
-
 func (s *Server) SignInUser(email, password string) (*cognitoidentityprovider.InitiateAuthOutput, error) {
-	// Removed secret hash calculation
 	authInput := &cognitoidentityprovider.InitiateAuthInput{
-		AuthFlow: aws.String(cognitoidentityprovider.AuthFlowTypeUserPasswordAuth),
-		AuthParameters: map[string]*string{
-			"USERNAME": aws.String(email),
-			"PASSWORD": aws.String(password),
-			// Removed SECRET_HASH
+		AuthFlow: types.AuthFlowTypeUserPasswordAuth,
+		AuthParameters: map[string]string{
+			"USERNAME": email,
+			"PASSWORD": password,
 		},
 		ClientId: aws.String(s.config.Cognito.UserPoolClientID),
 	}
 
-	authOutput, err := s.cognito.InitiateAuth(authInput)
+	authOutput, err := s.cognito.InitiateAuth(s.ctx, authInput)
 	if err != nil {
 		return nil, handleCognitoError(err, email)
 	}
 
 	if authOutput.AuthenticationResult == nil {
-		if authOutput.ChallengeName != nil &&
-			*authOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
+		if authOutput.ChallengeName == types.ChallengeNameTypeNewPasswordRequired {
 			return authOutput, nil
 		}
 		return nil, fmt.Errorf("unexpected authentication result for user %s", email)
@@ -62,12 +59,12 @@ func (s *Server) SignUpUser(email, password string) (*cognitoidentityprovider.Si
 		ClientId: aws.String(s.config.Cognito.UserPoolClientID),
 		Username: aws.String(email),
 		Password: aws.String(password),
-		UserAttributes: []*cognitoidentityprovider.AttributeType{
+		UserAttributes: []types.AttributeType{
 			{Name: aws.String("email"), Value: aws.String(email)},
 		},
 	}
 
-	signUpOutput, err := s.cognito.SignUp(signUpInput)
+	signUpOutput, err := s.cognito.SignUp(s.ctx, signUpInput)
 	if err != nil {
 		Logger.Error("Error signing up user", "email", email, "error", err)
 		return nil, fmt.Errorf("error signing up, please try again")
@@ -83,14 +80,14 @@ func (s *Server) ConfirmUser(email, confirmationCode string) (*cognitoidentitypr
 		ConfirmationCode: aws.String(confirmationCode),
 	}
 
-	return s.cognito.ConfirmSignUp(confirmSignUpInput)
+	return s.cognito.ConfirmSignUp(s.ctx, confirmSignUpInput)
 }
 
 func (s *Server) GetUserData(accessToken string) (*cognitoidentityprovider.GetUserOutput, error) {
 	getUserInput := &cognitoidentityprovider.GetUserInput{
 		AccessToken: aws.String(accessToken),
 	}
-	return s.cognito.GetUser(getUserInput)
+	return s.cognito.GetUser(s.ctx, getUserInput)
 }
 
 func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string) error {
@@ -99,17 +96,17 @@ func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string)
 		return fmt.Errorf("authentication failed: %w", err)
 	}
 
-	if signInOutput.ChallengeName != nil && *signInOutput.ChallengeName == cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired {
+	if signInOutput.ChallengeName == types.ChallengeNameTypeNewPasswordRequired {
 		challengeInput := &cognitoidentityprovider.RespondToAuthChallengeInput{
-			ChallengeName: aws.String(cognitoidentityprovider.ChallengeNameTypeNewPasswordRequired),
+			ChallengeName: types.ChallengeNameTypeNewPasswordRequired,
 			ClientId:      aws.String(s.config.Cognito.UserPoolClientID),
-			ChallengeResponses: map[string]*string{
-				"USERNAME":     aws.String(player.email),
-				"NEW_PASSWORD": aws.String(newPassword),
+			ChallengeResponses: map[string]string{
+				"USERNAME":     player.email,
+				"NEW_PASSWORD": newPassword,
 			},
 			Session: signInOutput.Session,
 		}
-		_, err := s.cognito.RespondToAuthChallenge(challengeInput)
+		_, err := s.cognito.RespondToAuthChallenge(s.ctx, challengeInput)
 		return err
 	}
 
@@ -123,32 +120,33 @@ func (s *Server) ChangePassword(player *Player, oldPassword, newPassword string)
 		AccessToken:      signInOutput.AuthenticationResult.AccessToken,
 	}
 
-	_, err = s.cognito.ChangePassword(input)
+	_, err = s.cognito.ChangePassword(s.ctx, input)
 	return err
 }
 
 func handleCognitoError(err error, email string) error {
-	if awsErr, ok := err.(awserr.Error); ok {
-		switch awsErr.Code() {
-		case cognitoidentityprovider.ErrCodeUserNotFoundException,
-			cognitoidentityprovider.ErrCodeNotAuthorizedException:
+	var ae smithy.APIError
+	if errors.As(err, &ae) {
+		switch ae.ErrorCode() {
+		case "UserNotFoundException",
+			"NotAuthorizedException":
 			Logger.Error("Auth failed", "email", email)
 			return fmt.Errorf("incorrect username or password")
 
-		case cognitoidentityprovider.ErrCodeUserNotConfirmedException:
+		case "UserNotConfirmedException":
 			Logger.Error("User unconfirmed", "email", email)
 			return fmt.Errorf("account not confirmed")
 
-		case cognitoidentityprovider.ErrCodePasswordResetRequiredException:
+		case "PasswordResetRequiredException":
 			Logger.Error("Password reset needed", "email", email)
 			return fmt.Errorf("password reset required")
 
-		case cognitoidentityprovider.ErrCodeInvalidParameterException:
+		case "InvalidParameterException":
 			Logger.Error("Invalid parameters", "email", email)
 			return fmt.Errorf("invalid authentication parameters")
 
 		default:
-			Logger.Error("Unknown auth error", "email", email, "code", awsErr.Code())
+			Logger.Error("Unknown auth error", "email", email, "code", ae.ErrorCode())
 			return fmt.Errorf("authentication failed")
 		}
 	}
@@ -158,11 +156,11 @@ func handleCognitoError(err error, email string) error {
 }
 
 func Authenticate(username, password string, ssh_interface *Interface_SSH) (bool, uuid.UUID, error) {
-	authOutput, err := ssh_interface.server.cognito.InitiateAuth(&cognitoidentityprovider.InitiateAuthInput{
-		AuthFlow: aws.String("USER_PASSWORD_AUTH"),
-		AuthParameters: map[string]*string{
-			"USERNAME": aws.String(username),
-			"PASSWORD": aws.String(password),
+	authOutput, err := ssh_interface.server.cognito.InitiateAuth(ssh_interface.server.ctx, &cognitoidentityprovider.InitiateAuthInput{
+		AuthFlow: types.AuthFlowTypeUserPasswordAuth,
+		AuthParameters: map[string]string{
+			"USERNAME": username,
+			"PASSWORD": password,
 		},
 		ClientId: aws.String(ssh_interface.config.Cognito.UserPoolClientID),
 	})
@@ -182,7 +180,7 @@ func Authenticate(username, password string, ssh_interface *Interface_SSH) (bool
 		AccessToken: authOutput.AuthenticationResult.AccessToken,
 	}
 
-	userData, err := ssh_interface.server.cognito.GetUser(getUserInput)
+	userData, err := ssh_interface.server.cognito.GetUser(ssh_interface.server.ctx, getUserInput)
 	if err != nil {
 		Logger.Error("failed to get user data", "username", username, "error", err)
 		return true, uuid.Nil, fmt.Errorf("authenticated but failed to get user ID: %w", err)
