@@ -33,6 +33,58 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// InputBuffer provides thread-safe operations for storing and manipulating runes
+type InputBuffer struct {
+	buffer []rune
+	mutex  sync.Mutex
+}
+
+func NewInputBuffer() *InputBuffer {
+	return &InputBuffer{
+		buffer: make([]rune, 0, 1024),
+	}
+}
+
+func (ib *InputBuffer) Append(r rune) bool {
+	ib.mutex.Lock()
+	defer ib.mutex.Unlock()
+
+	if len(ib.buffer) >= 1024 {
+		return false
+	}
+	ib.buffer = append(ib.buffer, r)
+	return true
+}
+
+func (ib *InputBuffer) RemoveLast() bool {
+	ib.mutex.Lock()
+	defer ib.mutex.Unlock()
+
+	if len(ib.buffer) == 0 {
+		return false
+	}
+	ib.buffer = ib.buffer[:len(ib.buffer)-1]
+	return true
+}
+
+func (ib *InputBuffer) Clear() {
+	ib.mutex.Lock()
+	defer ib.mutex.Unlock()
+	ib.buffer = ib.buffer[:0]
+}
+
+func (ib *InputBuffer) String() string {
+	ib.mutex.Lock()
+	defer ib.mutex.Unlock()
+	return string(ib.buffer)
+}
+
+func (ib *InputBuffer) Length() int {
+	ib.mutex.Lock()
+	defer ib.mutex.Unlock()
+	return len(ib.buffer)
+}
+
 type Player struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -351,7 +403,7 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 		}
 	}()
 
-	var inputBuffer []rune
+	inputBuffer := NewInputBuffer()
 	reader := bufio.NewReader(p.connection)
 
 	for {
@@ -375,15 +427,14 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 			// Handle different input cases
 			switch r {
 			case '\n', '\r':
-				if len(inputBuffer) > 0 {
+				if inputBuffer.Length() > 0 {
+					input := inputBuffer.String()
 					select {
-					case p.fromPlayer <- string(inputBuffer):
-						// Don't write the prompt here, let the command processor
-						// or game logic handle sending the prompt after processing
+					case p.fromPlayer <- input:
 						if p.echo {
 							p.connection.Write([]byte("\r\n"))
 						}
-						inputBuffer = inputBuffer[:0]
+						inputBuffer.Clear()
 					case <-ctx.Done():
 						done <- ctx.Err()
 						return
@@ -397,11 +448,8 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				}
 
 			case '\b', 127: // Backspace
-				if len(inputBuffer) > 0 {
-					inputBuffer = inputBuffer[:len(inputBuffer)-1]
-					if p.echo {
-						p.connection.Write([]byte("\b \b"))
-					}
+				if inputBuffer.RemoveLast() && p.echo {
+					p.connection.Write([]byte("\b \b"))
 				}
 
 			case '\x03': // Ctrl-C
@@ -411,11 +459,8 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 			default:
 				// Filter input to only allow printable ASCII (32-126)
 				if r >= 32 && r <= 126 {
-					if len(inputBuffer) < 1024 {
-						inputBuffer = append(inputBuffer, r)
-						if p.echo {
-							p.connection.Write([]byte(string(r)))
-						}
+					if inputBuffer.Append(r) && p.echo {
+						p.connection.Write([]byte(string(r)))
 					}
 				}
 			}

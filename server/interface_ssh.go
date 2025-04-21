@@ -30,7 +30,24 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/time/rate"
 )
+
+const (
+	// Authentication rate limiting
+	authLimitRate    = 1 // attempts per second
+	authLimitBurst   = 5 // burst size
+	authTimeout      = 30 * time.Second
+	authBanThreshold = 10
+	authBanDuration  = 15 * time.Minute
+)
+
+// AuthAttempt tracks authentication attempts and bans
+type AuthAttempt struct {
+	attempts int
+	banUntil time.Time
+	limiter  *rate.Limiter
+}
 
 type Interface_SSH struct {
 	config         *Configuration
@@ -43,18 +60,37 @@ type Interface_SSH struct {
 	privateKeyPath string
 	listener       net.Listener
 	sshConfig      *ssh.ServerConfig
+	authAttempts   map[string]*AuthAttempt
+	authMutex      sync.RWMutex
 }
 
 func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Interface_SSH) (*ssh.Permissions, error) {
-	authenticated, userUUID, err := Authenticate(conn.User(), string(password), sshInterface)
-	if err != nil {
-		Logger.Info("Failed to authenticate player", "error", err)
+	clientIP := getClientIP(conn)
+
+	// Check if client is rate limited or banned
+	if err := sshInterface.checkAuthLimit(clientIP); err != nil {
+		Logger.Warn("Rate limited or banned client", "ip", clientIP, "error", err)
 		return nil, err
 	}
 
+	// Sanitize password before use
+	sanitizedPassword := string(password)
+	if !isValidPassword(sanitizedPassword) {
+		sshInterface.recordFailedAttempt(clientIP)
+		return nil, fmt.Errorf("invalid password format")
+	}
+
+	authenticated, userUUID, err := Authenticate(conn.User(), sanitizedPassword, sshInterface)
+	if err != nil {
+		sshInterface.recordFailedAttempt(clientIP)
+		Logger.Info("Failed to authenticate player", "error", err)
+		// Return generic error to prevent user enumeration
+		return nil, fmt.Errorf("authentication failed")
+	}
+
 	if authenticated {
+		sshInterface.resetAuthAttempts(clientIP)
 		Logger.Info("Player authenticated", "player_email", conn.User(), "player_uuid", userUUID.String())
-		// Store the UUID string in the permissions so it can be retrieved later
 		perms := &ssh.Permissions{
 			Extensions: map[string]string{
 				"uuid": userUUID.String(),
@@ -62,8 +98,9 @@ func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Inte
 		}
 		return perms, nil
 	} else {
+		sshInterface.recordFailedAttempt(clientIP)
 		Logger.Warn("Player failed to authenticate", "player_email", conn.User())
-		return nil, fmt.Errorf("password rejected for %q", conn.User())
+		return nil, fmt.Errorf("authentication failed")
 	}
 }
 
@@ -97,6 +134,7 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 		port:           config.SSH.Port,
 		privateKeyPath: config.SSH.PrivateKeyPath,
 		start:          time.Now(),
+		authAttempts:   make(map[string]*AuthAttempt),
 	}
 
 	// Set up the SSH server config
@@ -108,6 +146,13 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 		BannerCallback: func(conn ssh.ConnMetadata) string {
 			return art
 		},
+		AuthLogCallback: func(conn ssh.ConnMetadata, method string, err error) {
+			if err != nil {
+				Logger.Info("SSH auth attempt", "method", method, "success", false, "client", conn.RemoteAddr())
+			} else {
+				Logger.Info("SSH auth attempt", "method", method, "success", true, "client", conn.RemoteAddr())
+			}
+		},
 	}
 
 	sshConfig.AddHostKey(private)
@@ -117,13 +162,14 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 	address := fmt.Sprintf(":%d", server.config.SSH.Port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		// Cancel the context we created since we're returning an error
 		cancel()
 		return nil, fmt.Errorf("failed to listen on port %d: %w", server.config.SSH.Port, err)
 	}
 
-	// Only set the listener if we successfully created it
 	sshInterface.listener = listener
+
+	// Start cleanup routine for expired auth attempts
+	go sshInterface.cleanupAuthAttempts()
 
 	return sshInterface, nil
 }
@@ -131,18 +177,20 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+	// Set authentication timeout
+	if err := conn.SetDeadline(time.Now().Add(authTimeout)); err != nil {
 		Logger.Error("Failed to set handshake deadline", "error", err)
 		return
 	}
 
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, ssh_interface.sshConfig)
 	if err != nil {
-		Logger.Error("SSH handshake failed", "error", err)
+		Logger.Error("SSH handshake failed", "remote_addr", conn.RemoteAddr(), "error", err)
 		return
 	}
 	defer sshConn.Close()
 
+	// Clear deadline after successful authentication
 	if err := conn.SetDeadline(time.Time{}); err != nil {
 		Logger.Error("Failed to clear deadline", "error", err)
 		return
@@ -276,6 +324,98 @@ func (ssh_interface *Interface_SSH) Stop() error {
 	}
 
 	return nil
+}
+
+// Rate limiting and ban functions
+func (ssh_interface *Interface_SSH) checkAuthLimit(clientIP string) error {
+	ssh_interface.authMutex.RLock()
+	attempt, exists := ssh_interface.authAttempts[clientIP]
+	ssh_interface.authMutex.RUnlock()
+
+	if !exists {
+		ssh_interface.authMutex.Lock()
+		attempt = &AuthAttempt{
+			limiter: rate.NewLimiter(authLimitRate, authLimitBurst),
+		}
+		ssh_interface.authAttempts[clientIP] = attempt
+		ssh_interface.authMutex.Unlock()
+	}
+
+	// Check if client is banned
+	if time.Now().Before(attempt.banUntil) {
+		return fmt.Errorf("client is banned until %v", attempt.banUntil)
+	}
+
+	// Check rate limit
+	if !attempt.limiter.Allow() {
+		return fmt.Errorf("rate limit exceeded")
+	}
+
+	return nil
+}
+
+func (ssh_interface *Interface_SSH) recordFailedAttempt(clientIP string) {
+	ssh_interface.authMutex.Lock()
+	defer ssh_interface.authMutex.Unlock()
+
+	attempt, exists := ssh_interface.authAttempts[clientIP]
+	if !exists {
+		attempt = &AuthAttempt{
+			limiter: rate.NewLimiter(authLimitRate, authLimitBurst),
+		}
+		ssh_interface.authAttempts[clientIP] = attempt
+	}
+
+	attempt.attempts++
+	if attempt.attempts >= authBanThreshold {
+		attempt.banUntil = time.Now().Add(authBanDuration)
+		Logger.Warn("Client banned due to excessive failed attempts", "ip", clientIP, "ban_until", attempt.banUntil)
+	}
+}
+
+func (ssh_interface *Interface_SSH) resetAuthAttempts(clientIP string) {
+	ssh_interface.authMutex.Lock()
+	defer ssh_interface.authMutex.Unlock()
+	delete(ssh_interface.authAttempts, clientIP)
+}
+
+func (ssh_interface *Interface_SSH) cleanupAuthAttempts() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ssh_interface.ctx.Done():
+			return
+		case <-ticker.C:
+			ssh_interface.authMutex.Lock()
+			now := time.Now()
+			for ip, attempt := range ssh_interface.authAttempts {
+				if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
+					delete(ssh_interface.authAttempts, ip)
+				}
+			}
+			ssh_interface.authMutex.Unlock()
+		}
+	}
+}
+
+func getClientIP(conn ssh.ConnMetadata) string {
+	addr := conn.RemoteAddr().String()
+	idx := strings.LastIndex(addr, ":")
+	if idx != -1 {
+		return addr[:idx]
+	}
+	return addr
+}
+
+func isValidPassword(password string) bool {
+	// Basic password validation - adjust as needed
+	if len(password) < 8 || len(password) > 128 {
+		return false
+	}
+	// Add additional validation as required
+	return true
 }
 
 // parseDims parses terminal dimensions from the SSH payload.

@@ -47,6 +47,7 @@ type Server struct {
 	index         *Index
 	activeMotDs   []*MOTD
 	sshInterface  *Interface_SSH
+	wg            sync.WaitGroup
 }
 
 type Index struct {
@@ -109,6 +110,7 @@ func NewServer(globalCtx context.Context, cfg *Configuration) (*Server, error) {
 		shutdownOnce:  sync.Once{},
 		cognito:       cognitoidentityprovider.NewFromConfig(awsConfig),
 		index:         index,
+		wg:            sync.WaitGroup{},
 	}
 
 	server.playerCount.Store(0)
@@ -123,42 +125,49 @@ func NewServer(globalCtx context.Context, cfg *Configuration) (*Server, error) {
 }
 
 func (s *Server) Run(errorChan chan error) error {
-	Logger.Info("Run server...")
+	Logger.Info("Running server...")
 
-	Logger.Info("Starting SSH Interface...")
-
-	// Start SSH Interface
+	// Start SSH Interface if enabled
 	if s.config.SSH.Enabled {
-		var err error
-		sshInterface, err := NewSSHInterface(s)
-		if err != nil {
-			Logger.Error("Failed to start SSH interface", "error", err)
-		} else {
-			// Store the interface before starting the goroutine
-			s.mutex.Lock()
-			s.sshInterface = sshInterface
-			s.mutex.Unlock()
-
-			go sshInterface.Run(errorChan)
-			Logger.Info("SSH Interface started successfully")
+		if err := s.startSSHInterface(errorChan); err != nil {
+			return err
 		}
 	} else {
 		Logger.Info("SSH Interface disabled")
 	}
 
-	// Wait until server is stopped
-	<-s.ctx.Done()
+	// Run server main loop
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
 
-	// Now it's safe to explicitly stop the SSH interface
-	if s.sshInterface != nil {
-		if err := s.sshInterface.Stop(); err != nil {
-			// Only log serious errors, not just "already closed"
-			if !strings.Contains(err.Error(), "use of closed network connection") {
-				Logger.Error("Error stopping SSH interface", "error", err)
-			}
+	for {
+		select {
+		case <-s.ctx.Done():
+			Logger.Info("Server context cancelled, initiating shutdown")
+			return s.shutdown()
+		case <-ticker.C:
+			// Periodic cleanup of stale sessions
+			s.cleanupStaleSessions()
 		}
 	}
+}
 
+func (s *Server) startSSHInterface(errorChan chan error) error {
+	var err error
+	s.sshInterface, err = NewSSHInterface(s)
+	if err != nil {
+		Logger.Error("Failed to start SSH interface", "error", err)
+		return fmt.Errorf("failed to start SSH interface: %w", err)
+	}
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.sshInterface.Run(errorChan)
+		Logger.Info("SSH Interface finished")
+	}()
+
+	Logger.Info("SSH Interface started successfully")
 	return nil
 }
 
@@ -166,19 +175,106 @@ func (s *Server) Stop() error {
 	Logger.Info("Server: Stopping server...")
 	defer Logger.Info("Server: Server stopped")
 
-	// Use the shutdownOnce to ensure we only execute this once
-	s.shutdownOnce.Do(func() {
-		// Cancel the context first - this signals all components to shut down
-		s.cancel()
+	var shutdownError error
 
-		// No need to explicitly stop the SSH interface here as it will
-		// detect the context cancellation
+	s.shutdownOnce.Do(func() {
+		// Cancel the context to signal all components to shut down
+		s.cancel()
 
 		// Give components time to react to context cancellation
 		time.Sleep(100 * time.Millisecond)
+
+		// Stop all active players
+		s.stopAllPlayers()
+
+		// Stop the SSH interface if it's running
+		if s.sshInterface != nil {
+			if err := s.sshInterface.Stop(); err != nil {
+				if !strings.Contains(err.Error(), "use of closed network connection") {
+					Logger.Error("Error stopping SSH interface", "error", err)
+					shutdownError = err
+				}
+			}
+		}
+
+		// Wait for all goroutines to finish
+		doneChan := make(chan struct{})
+		go func() {
+			s.wg.Wait()
+			close(doneChan)
+		}()
+
+		select {
+		case <-doneChan:
+			Logger.Info("All server components stopped gracefully")
+		case <-time.After(10 * time.Second):
+			Logger.Error("Server shutdown timed out waiting for components")
+			shutdownError = fmt.Errorf("server shutdown timeout")
+		}
 	})
 
-	return nil
+	return shutdownError
+}
+
+func (s *Server) shutdown() error {
+	return s.Stop()
+}
+
+func (s *Server) stopAllPlayers() {
+	s.mutex.RLock()
+	playersCopy := make([]*Player, 0, len(s.players))
+	for _, player := range s.players {
+		playersCopy = append(playersCopy, player)
+	}
+	s.mutex.RUnlock()
+
+	// Stop each player outside the main lock to avoid deadlocks
+	for _, player := range playersCopy {
+		if player != nil {
+			player.Stop()
+		}
+	}
+}
+
+func (s *Server) cleanupStaleSessions() {
+	Logger.Debug("Running session cleanup")
+
+	s.mutex.RLock()
+	now := time.Now()
+	stalePlayerIDs := make([]uint64, 0)
+
+	for id, player := range s.players {
+		if player == nil {
+			stalePlayerIDs = append(stalePlayerIDs, id)
+			continue
+		}
+
+		// Check for players with closed connections
+		if player.connection == nil {
+			stalePlayerIDs = append(stalePlayerIDs, id)
+		}
+
+		// Check for inactive players (no activity for 30 minutes)
+		if now.Sub(player.login) > 30*time.Minute {
+			player.mutex.RLock()
+			lastActivity := player.lastEdited
+			player.mutex.RUnlock()
+
+			if now.Sub(lastActivity) > 30*time.Minute {
+				stalePlayerIDs = append(stalePlayerIDs, id)
+			}
+		}
+	}
+	s.mutex.RUnlock()
+
+	// Remove stale players outside the main lock
+	for _, id := range stalePlayerIDs {
+		s.RemovePlayer(id)
+	}
+
+	if len(stalePlayerIDs) > 0 {
+		Logger.Info("Cleaned up stale sessions", "count", len(stalePlayerIDs))
+	}
 }
 
 // AddPlayer registers a new player with the server, handling existing sessions
@@ -200,7 +296,10 @@ func (s *Server) AddPlayer(player *Player) error {
 	existingPlayer, exists := s.playersByUUID[player.id]
 	if exists {
 		// Disconnect existing session
-		s.DuplicatePlayer(existingPlayer)
+		go s.DuplicatePlayer(existingPlayer)
+
+		// Wait a bit to allow existing session to clean up
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// Add the new player to both maps
@@ -233,12 +332,55 @@ func (s *Server) DuplicatePlayer(existingPlayer *Player) {
 			"playerID", existingPlayer.id.String())
 	}
 
-	// This signals all of the player's goroutines to terminate
-	existingPlayer.cancel()
+	// Stop the existing player session
+	existingPlayer.Stop()
 
 	Logger.Info("Waiting for player session to clean up", "playerID", existingPlayer.id.String())
 }
 
 func (s *Server) PlayerCount() uint64 {
 	return s.playerCount.Load()
+}
+
+// GetPlayer returns a player by their UUID
+func (s *Server) GetPlayer(uuid uuid.UUID) *Player {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	return s.playersByUUID[uuid]
+}
+
+// BroadcastMessage sends a message to all connected players
+func (s *Server) BroadcastMessage(message string) {
+	s.mutex.RLock()
+	players := make([]*Player, 0, len(s.players))
+	for _, player := range s.players {
+		if player != nil {
+			players = append(players, player)
+		}
+	}
+	s.mutex.RUnlock()
+
+	// Send messages outside the lock to avoid deadlocks
+	for _, player := range players {
+		select {
+		case player.toPlayer <- message:
+			// Message sent successfully
+		default:
+			Logger.Warn("Failed to send broadcast message to player", "playerID", player.id.String())
+		}
+	}
+}
+
+// GetPlayerList returns a list of all connected players
+func (s *Server) GetPlayerList() []uuid.UUID {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	playerList := make([]uuid.UUID, 0, len(s.playersByUUID))
+	for uuid := range s.playersByUUID {
+		playerList = append(playerList, uuid)
+	}
+
+	return playerList
 }
