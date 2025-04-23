@@ -235,9 +235,11 @@ func (g *Game) Stop() error {
 
 	g.cancel()
 
-	// Save all data
+	// Save all active characters
+	g.saveAllCharacters()
 
 	// Logout all characters
+	g.logoutAllCharacters()
 
 	return nil
 
@@ -294,4 +296,30 @@ func (g *Game) ValidateCharacterName(name string) error {
 	}
 
 	return nil
+}
+
+// saveAllCharacters saves all active characters
+func (g *Game) saveAllCharacters() {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+
+	for _, character := range g.characters {
+		if character != nil {
+			if err := character.Save(); err != nil {
+				Logger.Error("Error saving character during shutdown", "characterName", character.name, "error", err)
+			}
+		}
+	}
+}
+
+// logoutAllCharacters logs out all active characters
+func (g *Game) logoutAllCharacters() {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+
+	for _, character := range g.characters {
+		if character != nil {
+			character.Stop(character.end)
+		}
+	}
 }

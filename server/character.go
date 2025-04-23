@@ -24,8 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
 )
 
@@ -152,8 +151,8 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 
 	// Load character data from database
 	cd := &CharacterData{}
-	key := map[string]*dynamodb.AttributeValue{
-		"CharacterID": {S: aws.String(characterID.String())},
+	key := map[string]types.AttributeValue{
+		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
 	}
 
 	if err := game.database.Get("characters", key, cd); err != nil {
@@ -222,10 +221,8 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 	}
 
 	// Create the key for DynamoDB deletion
-	key := map[string]*dynamodb.AttributeValue{
-		"CharacterID": {
-			S: aws.String(characterID.String()),
-		},
+	key := map[string]types.AttributeValue{
+		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
 	}
 
 	// Delete the character from the database

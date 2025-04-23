@@ -24,8 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
 )
 
@@ -179,10 +178,8 @@ func LoadItem(id string, k *KeyPair) (*Item, error) {
 	}
 
 	// Create the key for DynamoDB lookup
-	key := map[string]*dynamodb.AttributeValue{
-		"ItemID": {
-			S: aws.String(id),
-		},
+	key := map[string]types.AttributeValue{
+		"ItemID": &types.AttributeValueMemberS{Value: id},
 	}
 
 	// Retrieve item data from DynamoDB
