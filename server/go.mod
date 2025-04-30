@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.44.3
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.47.3
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.52.0
-	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.42.4
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.43.1
 	github.com/aws/smithy-go v1.22.3
 	github.com/bits-and-blooms/bloom/v3 v3.7.0
 	github.com/google/uuid v1.6.0
