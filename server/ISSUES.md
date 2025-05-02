@@ -16,6 +16,7 @@
 ## Recent Progress
 
 The most recent commit (5494d81) addressed a logging issue in the portal code related to:
+
 - Removed potentially insecure default values for configuration
 - Improved error logging formats
 - Simplified authentication error handling
@@ -23,12 +24,14 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
 ## Recommendations
 
 1. **Immediate Priorities**:
+
    - Fix the critical security vulnerabilities in `cognito.go` and `interface_ssh.go`
    - Address the race condition in player management (server.go lines 295-307)
    - Implement proper input validation for player commands
    - Fix UUID generation error handling
 
 2. **Short-term Improvements**:
+
    - Add database query pagination for large datasets
    - Implement proper error handling in player data saving
    - Consolidate player disconnection logic
@@ -42,7 +45,8 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
 
 ## Critical Issues
 
-1. **Insecure Credential Handling (cognito.go)**: 
+1. **Insecure Credential Handling (cognito.go)**:
+
    - Sensitive credentials are passed as plain strings and could be accidentally logged
    - Located in the `Authenticate` function (lines 158-171)
 
@@ -54,39 +58,48 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
 ## High Severity Issues
 
 1. **Race Condition in Player Management (server.go)**:
+
    - Race condition between checking for existing session and adding new one
    - Could lead to security issues or resource leaks
    - Located in `AddPlayer` method (lines 295-307)
 
 2. **Silent Failure in Session Management (server.go)**:
+
    - Method silently ignores failures to send disconnect messages
    - Located in `DuplicatePlayer` method (lines 326-333)
 
 3. **Hidden Error Details (cognito.go)**:
+
    - Error details from Cognito are hidden from caller
    - Located in `SignUpUser` function (around line 70)
 
 4. **No Authentication Rate Limiting (cognito.go)**:
+
    - Limited rate limiting on authentication attempts at application level
    - Makes the system vulnerable to brute force attacks
 
 5. **Memory Issues with Large Datasets (database.go)**:
+
    - All DB query/scan items loaded into memory at once
    - Could cause out-of-memory issues with large datasets
    - Located in `Scan` and `Query` operations
 
 6. **Insufficient Input Validation (player.go)**:
+
    - Insufficient validation/sanitization of player input
    - Could lead to command injection or other security issues
 
 7. **Incomplete Error Handling in Player Data (player.go)**:
+
    - If saving player data fails, execution continues without proper handling
 
 8. **Invalid UUID Handling (character.go)**:
+
    - The `GenerateUUIDv7` function doesn't handle errors from UUID generation
    - Could return nil and cause panics elsewhere
 
 9. **SSH Connection Security (interface_ssh.go)**:
+
    - No validation of SSH connection parameters
    - No proper handling of unusual SSH client behavior
 
