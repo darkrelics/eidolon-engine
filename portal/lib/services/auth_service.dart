@@ -31,9 +31,11 @@ class AppConfig {
     defaultValue: '',
   );
 
-  // Development fallbacks - DO NOT use in production
-  static String get _devUserPoolId => kDebugMode ? 'dev-user-pool-id' : '';
-  static String get _devClientId => kDebugMode ? 'dev-client-id' : '';
+  // Valid format for userPoolId: region_UUID (e.g., us-east-1_abcd1234)
+  static String get _devUserPoolId => kDebugMode ? 'us-east-1_devUserPool' : '';
+  
+  // Valid format for clientId: 26-character alphanumeric string
+  static String get _devClientId => kDebugMode ? '1example2client3id4567890abc' : '';
 
   // Getters with fallbacks for easier runtime access
   static String get userPoolIdWithFallback => 
@@ -46,9 +48,17 @@ class AppConfig {
     final effectiveUserPoolId = userPoolIdWithFallback;
     final effectiveClientId = clientIdWithFallback;
 
-    if (effectiveUserPoolId.isEmpty || effectiveClientId.isEmpty) {
+    // Validate userPoolId format: should be in the format region_poolId
+    if (effectiveUserPoolId.isEmpty || !effectiveUserPoolId.contains('_')) {
       throw ConfigurationException(
-        'Missing required Cognito configuration. Please set USER_POOL_ID and CLIENT_ID environment variables.',
+        'Invalid userPoolId format. It should be in the format "region_poolId".',
+      );
+    }
+
+    // Validate clientId is not empty
+    if (effectiveClientId.isEmpty) {
+      throw ConfigurationException(
+        'Client ID is required.'
       );
     }
 
