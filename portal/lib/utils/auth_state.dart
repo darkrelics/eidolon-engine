@@ -233,8 +233,9 @@ class AuthState extends ChangeNotifier {
 
     if (checkComplexity) {
       // Check for uppercase, lowercase, number, and special character
+      // End anchor $ added to ensure the entire string is validated
       if (!RegExp(
-        r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]',
+        r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$',
       ).hasMatch(password)) {
         _updateMessage(
           'Password must contain uppercase, lowercase, number, and special character',
