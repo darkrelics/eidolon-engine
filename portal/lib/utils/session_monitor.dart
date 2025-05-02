@@ -39,7 +39,7 @@ class SessionMonitor {
     _authState = authState;
     _sessionStartTime = DateTime.now();
     _lastActivityTime = DateTime.now();
-    
+
     // Create a callback that captures Navigator operation
     // This avoids storing the context directly
     _onSessionExpired = () {
@@ -107,27 +107,28 @@ class SessionMonitor {
       // Find the active context using the navigator key
       // This approach avoids storing BuildContext
       final context = GlobalNavigationKey.navigatorKey.currentContext;
-      
+
       if (context != null && context.mounted) {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Session Expired'),
-            content: Text(message),
-            actions: [
-              FilledButton(
-                onPressed: () async {
-                  // Pop using the dialog's context
-                  Navigator.of(dialogContext).pop();
-                  await _authState!.signOut();
-                  // Use callback instead of stored context
-                  _onSessionExpired!();
-                },
-                child: const Text('OK'),
+          builder:
+              (dialogContext) => AlertDialog(
+                title: const Text('Session Expired'),
+                content: Text(message),
+                actions: [
+                  FilledButton(
+                    onPressed: () async {
+                      // Pop using the dialog's context
+                      Navigator.of(dialogContext).pop();
+                      await _authState!.signOut();
+                      // Use callback instead of stored context
+                      _onSessionExpired!();
+                    },
+                    child: const Text('OK'),
+                  ),
+                ],
               ),
-            ],
-          ),
         );
       } else {
         // If no context is available, just sign out silently
@@ -145,11 +146,12 @@ class SessionMonitor {
     final now = DateTime.now();
     final absoluteDuration = now.difference(_sessionStartTime!);
     final inactiveDuration = now.difference(_lastActivityTime!);
-    
+
     // Check if session is valid locally
-    final isLocallyValid = absoluteDuration < _absoluteTimeout &&
+    final isLocallyValid =
+        absoluteDuration < _absoluteTimeout &&
         inactiveDuration < _inactivityTimeout;
-        
+
     // In a production app, also verify with the server
     if (isLocallyValid && _authState != null) {
       // For enhanced security, periodically verify token with server
@@ -159,22 +161,23 @@ class SessionMonitor {
 
     return isLocallyValid;
   }
-  
+
   /// Verifies the current token with the server
   /// This prevents using revoked or invalid tokens
   Future<void> _verifyTokenWithServer() async {
     // Don't verify too frequently to reduce server load
     if (_lastServerVerification != null) {
-      final timeSinceLastVerification = 
-          DateTime.now().difference(_lastServerVerification!);
+      final timeSinceLastVerification = DateTime.now().difference(
+        _lastServerVerification!,
+      );
       if (timeSinceLastVerification < const Duration(minutes: 5)) {
         return; // Skip verification if done recently
       }
     }
-    
+
     // Set last verification time
     _lastServerVerification = DateTime.now();
-    
+
     // In a real implementation, call the backend to verify the token
     // If invalid, sign out the user
     if (_authState != null) {

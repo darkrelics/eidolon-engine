@@ -21,25 +21,22 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// Configuration class for storing Cognito settings
 class AppConfig {
   // Use the fromEnvironment constructor with explicit default values
-  static const String userPoolId = String.fromEnvironment(
-    'USER_POOL_ID',
-  );
+  static const String userPoolId = String.fromEnvironment('USER_POOL_ID');
 
-  static const String clientId = String.fromEnvironment(
-    'CLIENT_ID',
-  );
+  static const String clientId = String.fromEnvironment('CLIENT_ID');
 
   // Valid format for userPoolId: region_UUID (e.g., us-east-1_abcd1234)
   static String get _devUserPoolId => kDebugMode ? 'us-east-1_devUserPool' : '';
-  
+
   // Valid format for clientId: 26-character alphanumeric string
-  static String get _devClientId => kDebugMode ? '1example2client3id4567890abc' : '';
+  static String get _devClientId =>
+      kDebugMode ? '1example2client3id4567890abc' : '';
 
   // Getters with fallbacks for easier runtime access
-  static String get userPoolIdWithFallback => 
+  static String get userPoolIdWithFallback =>
       userPoolId.isNotEmpty ? userPoolId : _devUserPoolId;
-  
-  static String get clientIdWithFallback => 
+
+  static String get clientIdWithFallback =>
       clientId.isNotEmpty ? clientId : _devClientId;
 
   static void validateConfiguration() {
@@ -55,9 +52,7 @@ class AppConfig {
 
     // Validate clientId is not empty
     if (effectiveClientId.isEmpty) {
-      throw ConfigurationException(
-        'Client ID is required.'
-      );
+      throw ConfigurationException('Client ID is required.');
     }
 
     if (kReleaseMode && (userPoolId.isEmpty || clientId.isEmpty)) {
@@ -142,7 +137,7 @@ class AuthService {
       AppConfig.validateConfiguration();
 
       userPool = CognitoUserPool(
-        AppConfig.userPoolIdWithFallback, 
+        AppConfig.userPoolIdWithFallback,
         AppConfig.clientIdWithFallback,
       );
 
@@ -248,7 +243,10 @@ class AuthService {
           _session = null;
           final cleared = await _clearTokens();
           if (!cleared) {
-            _logError('Client sign-out incomplete', 'Failed to clear all tokens');
+            _logError(
+              'Client sign-out incomplete',
+              'Failed to clear all tokens',
+            );
           }
         }
       }
@@ -347,7 +345,10 @@ class AuthService {
       final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
 
       if (email == null || refreshToken == null) {
-        _logError('Missing stored credentials', 'Email or refresh token not found');
+        _logError(
+          'Missing stored credentials',
+          'Email or refresh token not found',
+        );
         return false;
       }
 
@@ -367,7 +368,10 @@ class AuthService {
       // Update stored tokens with new ones
       final tokensPersisted = await _persistTokens(_session!, email);
       if (!tokensPersisted) {
-        _logError('Token persistence failed', 'Unable to save refreshed tokens');
+        _logError(
+          'Token persistence failed',
+          'Unable to save refreshed tokens',
+        );
         // Continue anyway as the session is valid in memory
       }
 
@@ -425,16 +429,15 @@ class AuthService {
       // In debug mode, print to console
       print('$message: $error');
     } else {
-
       debugPrint('Authentication error: ${message.split(':').first}');
     }
-    
+
     // Always log security relevant errors to a secure audit log in production
-    final bool isSecurityRelevant = 
-        message.contains('token') || 
-        message.contains('auth') || 
+    final bool isSecurityRelevant =
+        message.contains('token') ||
+        message.contains('auth') ||
         message.contains('session');
-        
+
     if (isSecurityRelevant && !kDebugMode) {
       // Implement secure audit logging here
       // This should go to a separate, tamper-proof security log

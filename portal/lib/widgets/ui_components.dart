@@ -316,7 +316,9 @@ class BackgroundContainer extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         image: DecorationImage(
-          image: AssetImage(validatedAssetPath ?? 'assets/images/background.jpg'),
+          image: AssetImage(
+            validatedAssetPath ?? 'assets/images/background.jpg',
+          ),
           fit: BoxFit.cover,
           colorFilter: ColorFilter.mode(
             Theme.of(context).colorScheme.surface.withValues(alpha: opacity),
