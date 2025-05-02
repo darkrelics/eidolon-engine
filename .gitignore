@@ -64,3 +64,6 @@ go.work
 **/.dart_tool/
 
 **/*.metadata
+
+CLAUDE.md
+**/.claude/settings.local.json
