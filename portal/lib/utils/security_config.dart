@@ -17,7 +17,6 @@
 // This file contains security configurations for the web application
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 

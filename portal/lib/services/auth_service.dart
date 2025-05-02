@@ -23,12 +23,10 @@ class AppConfig {
   // Use the fromEnvironment constructor with explicit default values
   static const String userPoolId = String.fromEnvironment(
     'USER_POOL_ID',
-    defaultValue: '',
   );
 
   static const String clientId = String.fromEnvironment(
     'CLIENT_ID',
-    defaultValue: '',
   );
 
   // Valid format for userPoolId: region_UUID (e.g., us-east-1_abcd1234)
@@ -427,19 +425,8 @@ class AuthService {
       // In debug mode, print to console
       print('$message: $error');
     } else {
-      // In production mode, we should use a proper logging service
-      // This would ideally send errors to a monitoring service
-      // For now, we'll just guard with a mode check, but this should be replaced
-      // with actual error reporting in production
-      
-      // Potential implementation:
-      // FirebaseCrashlytics.instance.recordError(error, StackTrace.current, reason: message);
-      // or
-      // Sentry.captureException(error, stackTrace: StackTrace.current, hint: message);
-      
-      // As a minimal fallback, we'll still log to console in release mode,
-      // but with less detail to avoid leaking sensitive info
-      print('Authentication error: ${message.split(':').first}');
+
+      debugPrint('Authentication error: ${message.split(':').first}');
     }
     
     // Always log security relevant errors to a secure audit log in production
