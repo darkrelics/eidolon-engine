@@ -51,14 +51,31 @@ class InputSanitizer {
 
   /// Sanitizes file paths to prevent directory traversal
   static String sanitizeFilePath(String path) {
-    // Remove any parent directory traversal
-    String sanitized = path.replaceAll('../', '').replaceAll('..\\', '');
+    if (path.isEmpty) {
+      return '';
+    }
 
-    // Remove any absolute paths
-    sanitized = sanitized.replaceAll(RegExp(r'^[/\\]'), '');
+    // Normalize path separators first
+    String sanitized = path.replaceAll('\\', '/');
 
-    // Remove any path traversal characters
+    // More comprehensive protection against parent directory traversal
+    // Replace all variants of parent directory traversal
+    sanitized = sanitized.replaceAll(RegExp(r'\.\.\/|\.\.\\'), '');
+
+    // Replace consecutive slashes with a single slash
+    sanitized = sanitized.replaceAll(RegExp(r'\/+'), '/');
+
+    // Remove leading slashes and drive letters (Windows) to prevent absolute paths
+    sanitized = sanitized.replaceAll(RegExp(r'^[\/\\][a-zA-Z]:'), '');
+    sanitized = sanitized.replaceAll(RegExp(r'^[\/\\]'), '');
+
+    // Remove all remaining path traversal characters
     sanitized = sanitized.replaceAll(RegExp('[$_pathTraversalChars]'), '');
+
+    // Final check: if the path still contains "..", reject it completely
+    if (sanitized.contains('..')) {
+      return '';
+    }
 
     return sanitized;
   }
@@ -97,13 +114,21 @@ class InputSanitizer {
 
   /// Validates email addresses without allowing malicious content
   static bool validateEmail(String email) {
-    // Basic structure check
-    if (!RegExp(r'^[\w\-\.]+@([\w\-]+\.)+[\w\-]{2,4}$').hasMatch(email)) {
+    // More comprehensive email validation with proper anchors
+    // This regex handles most common email formats while being reasonably restrictive
+    if (!RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    ).hasMatch(email)) {
       return false;
     }
 
     // No XSS characters allowed
     if (RegExp('[$_xssCharacters]').hasMatch(email)) {
+      return false;
+    }
+
+    // Check length limits to prevent buffer attacks
+    if (email.length > 254) {
       return false;
     }
 

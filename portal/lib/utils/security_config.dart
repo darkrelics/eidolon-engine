@@ -16,6 +16,7 @@
 
 // This file contains security configurations for the web application
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 
@@ -35,8 +36,8 @@ class SecurityConfig {
   // Content Security Policy directives
   static const String contentSecurityPolicy = """
     default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval';
-    style-src 'self' 'unsafe-inline';
+    script-src 'self';
+    style-src 'self';
     img-src 'self' data: https:;
     font-src 'self' data:;
     connect-src 'self' https://*.amazonaws.com;
@@ -44,6 +45,7 @@ class SecurityConfig {
     form-action 'self';
     base-uri 'self';
     object-src 'none';
+    upgrade-insecure-requests;
   """;
 
   /// Applies security configurations to the web application
@@ -127,10 +129,15 @@ class SecurityConfig {
 
   /// Generates a cryptographically secure random token
   static String generateSecureToken() {
-    final random = utf8.encode(
-      DateTime.now().millisecondsSinceEpoch.toString(),
-    );
-    final bytes = sha256.convert(random).bytes;
+    // Create a cryptographically secure random number generator
+    final random = Random.secure();
+    // Generate 32 random bytes (256 bits) for strong security
+    final Uint8List values = Uint8List(32);
+    for (var i = 0; i < 32; i++) {
+      values[i] = random.nextInt(256);
+    }
+    // Add additional entropy by combining with SHA-256
+    final bytes = sha256.convert(values).bytes;
     return base64Url.encode(bytes);
   }
 
@@ -204,9 +211,8 @@ class SecurityConfig {
 
   /// Generates a CSRF token for form protection
   static String generateCsrfToken() {
-    final random = DateTime.now().millisecondsSinceEpoch.toString();
-    final hash = sha256.convert(utf8.encode(random));
-    return base64Url.encode(hash.bytes);
+    // Use the same secure generation method as generateSecureToken
+    return generateSecureToken();
   }
 
   /// Validates a CSRF token

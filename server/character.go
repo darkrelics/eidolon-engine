@@ -257,7 +257,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 	character := &Character{
 		game:        p.server.game,
-		id:          uuid.New(),
+		id:          GenerateUUIDv7(),
 		player:      p,
 		name:        name,
 		attributes:  make(map[string]float64),
@@ -501,4 +501,14 @@ func formatCharacterDescription(target *Character, observer *Character) string {
 	}
 
 	return desc.String()
+}
+
+func GenerateUUIDv7() uuid.UUID {
+
+	uuid_type_7, err := uuid.NewV7()
+	if err != nil {
+		Logger.Error("Error generating UUIDv7", "error", err)
+		return uuid.Nil
+	}
+	return uuid_type_7
 }

@@ -20,15 +20,45 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Configuration class for storing Cognito settings
 class AppConfig {
-  // Using String.fromEnvironment without defaultValue since empty string is already the default
+  // Use the fromEnvironment constructor with explicit default values
   static const String userPoolId = String.fromEnvironment('USER_POOL_ID');
 
   static const String clientId = String.fromEnvironment('CLIENT_ID');
 
+  // Valid format for userPoolId: region_UUID (e.g., us-east-1_abcd1234)
+  static String get _devUserPoolId => kDebugMode ? 'us-east-1_devUserPool' : '';
+
+  // Valid format for clientId: 26-character alphanumeric string
+  static String get _devClientId =>
+      kDebugMode ? '1example2client3id4567890abc' : '';
+
+  // Getters with fallbacks for easier runtime access
+  static String get userPoolIdWithFallback =>
+      userPoolId.isNotEmpty ? userPoolId : _devUserPoolId;
+
+  static String get clientIdWithFallback =>
+      clientId.isNotEmpty ? clientId : _devClientId;
+
   static void validateConfiguration() {
-    if (userPoolId.isEmpty || clientId.isEmpty) {
+    final effectiveUserPoolId = userPoolIdWithFallback;
+    final effectiveClientId = clientIdWithFallback;
+
+    // Validate userPoolId format: should be in the format region_poolId
+    if (effectiveUserPoolId.isEmpty || !effectiveUserPoolId.contains('_')) {
       throw ConfigurationException(
-        'Missing required Cognito configuration. Please set USER_POOL_ID and CLIENT_ID environment variables.',
+        'Invalid userPoolId format. It should be in the format "region_poolId".',
+      );
+    }
+
+    // Validate clientId is not empty
+    if (effectiveClientId.isEmpty) {
+      throw ConfigurationException('Client ID is required.');
+    }
+
+    if (kReleaseMode && (userPoolId.isEmpty || clientId.isEmpty)) {
+      throw ConfigurationException(
+        'Production build is missing required environment variables. '
+        'USER_POOL_ID and CLIENT_ID must be set at build time.',
       );
     }
   }
@@ -39,6 +69,16 @@ class ConfigurationException implements Exception {
   final String message;
 
   ConfigurationException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Custom exception for sign-out errors
+class AuthSignOutException implements Exception {
+  final String message;
+
+  AuthSignOutException(this.message);
 
   @override
   String toString() => message;
@@ -96,7 +136,10 @@ class AuthService {
     try {
       AppConfig.validateConfiguration();
 
-      userPool = CognitoUserPool(AppConfig.userPoolId, AppConfig.clientId);
+      userPool = CognitoUserPool(
+        AppConfig.userPoolIdWithFallback,
+        AppConfig.clientIdWithFallback,
+      );
 
       // Attempt to restore previous session
       _restoreSession();
@@ -189,14 +232,29 @@ class AuthService {
   Future<void> signOut() async {
     try {
       if (_currentUser != null) {
-        await _currentUser?.signOut();
-        _currentUser = null;
-        _session = null;
-        await _clearTokens();
+        try {
+          await _currentUser?.signOut();
+        } catch (e) {
+          // Log but don't throw for server-side signout issues
+          _logError('Server sign-out error', e);
+        } finally {
+          // Always clear local state regardless of server communication errors
+          _currentUser = null;
+          _session = null;
+          final cleared = await _clearTokens();
+          if (!cleared) {
+            _logError(
+              'Client sign-out incomplete',
+              'Failed to clear all tokens',
+            );
+          }
+        }
       }
     } catch (e) {
       _logError('SignOut error', e);
-      rethrow;
+      // Don't rethrow, we want signout to always succeed from the user's perspective
+      // Instead, return failure status for internal error handling
+      throw AuthSignOutException('Sign-out failed. Please try again.');
     }
   }
 
@@ -240,7 +298,7 @@ class AuthService {
   }
 
   /// Persists authentication tokens securely
-  Future<void> _persistTokens(CognitoUserSession session, String email) async {
+  Future<bool> _persistTokens(CognitoUserSession session, String email) async {
     try {
       await _secureStorage.write(
         key: _accessTokenKey,
@@ -255,22 +313,28 @@ class AuthService {
         value: session.getRefreshToken()?.getToken(),
       );
       await _secureStorage.write(key: _userEmailKey, value: email);
+      return true;
     } catch (e) {
       _logError('Error persisting tokens', e);
       // Continue without throwing - persistence failure shouldn't block auth
+      // But we'll return false to indicate failure
+      return false;
     }
   }
 
   /// Clears stored tokens
-  Future<void> _clearTokens() async {
+  Future<bool> _clearTokens() async {
     try {
       await _secureStorage.delete(key: _accessTokenKey);
       await _secureStorage.delete(key: _idTokenKey);
       await _secureStorage.delete(key: _refreshTokenKey);
       await _secureStorage.delete(key: _userEmailKey);
+      return true;
     } catch (e) {
       _logError('Error clearing tokens', e);
       // Continue without throwing - clearing failure shouldn't block signout
+      // But return a status for monitoring purposes
+      return false;
     }
   }
 
@@ -280,19 +344,42 @@ class AuthService {
       final email = await _secureStorage.read(key: _userEmailKey);
       final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
 
-      if (email == null || refreshToken == null) return false;
+      if (email == null || refreshToken == null) {
+        _logError(
+          'Missing stored credentials',
+          'Email or refresh token not found',
+        );
+        return false;
+      }
 
       _currentUser = CognitoUser(email, userPool);
       final cognitoRefreshToken = CognitoRefreshToken(refreshToken);
 
-      _session = await _currentUser!.refreshSession(cognitoRefreshToken);
+      try {
+        _session = await _currentUser!.refreshSession(cognitoRefreshToken);
+      } on CognitoClientException catch (e) {
+        // Handle specific Cognito errors
+        _logError('Cognito refresh session error', '${e.code}: ${e.message}');
+        // Clear invalid tokens to prevent future restore attempts with bad tokens
+        await _clearTokens();
+        return false;
+      }
 
       // Update stored tokens with new ones
-      await _persistTokens(_session!, email);
+      final tokensPersisted = await _persistTokens(_session!, email);
+      if (!tokensPersisted) {
+        _logError(
+          'Token persistence failed',
+          'Unable to save refreshed tokens',
+        );
+        // Continue anyway as the session is valid in memory
+      }
 
       return true;
     } catch (e) {
       _logError('Error restoring session', e);
+      // Clear any incomplete data that might have been stored
+      await _clearTokens();
       return false;
     }
   }
@@ -337,9 +424,23 @@ class AuthService {
 
   /// Logs errors (can be replaced with proper logging framework)
   void _logError(String message, dynamic error) {
-    // In production, use a proper logging framework
+    // Log in both debug and release modes, but with different handling
     if (kDebugMode) {
+      // In debug mode, print to console
       print('$message: $error');
+    } else {
+      debugPrint('Authentication error: ${message.split(':').first}');
+    }
+
+    // Always log security relevant errors to a secure audit log in production
+    final bool isSecurityRelevant =
+        message.contains('token') ||
+        message.contains('auth') ||
+        message.contains('session');
+
+    if (isSecurityRelevant && !kDebugMode) {
+      // Implement secure audit logging here
+      // This should go to a separate, tamper-proof security log
     }
   }
 

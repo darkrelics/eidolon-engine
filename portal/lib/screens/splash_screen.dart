@@ -69,7 +69,7 @@ class _SplashScreenState extends State<SplashScreen>
         decoration: BoxDecoration(
           color: colorScheme.surface,
           image: DecorationImage(
-            image: const AssetImage('assets/background.jpg'),
+            image: const AssetImage('assets/images/background.jpg'),
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(
               colorScheme.surface.withValues(alpha: 0.7),

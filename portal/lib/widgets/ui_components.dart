@@ -305,7 +305,7 @@ class BackgroundContainer extends StatelessWidget {
     final validatedAssetPath =
         backgroundAsset != null
             ? InputSanitizer.validateAssetPath(backgroundAsset!)
-            : 'assets/background.jpg';
+            : 'assets/images/background.jpg';
 
     if (validatedAssetPath == null) {
       // Fallback to safe default if path is invalid
@@ -316,7 +316,9 @@ class BackgroundContainer extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         image: DecorationImage(
-          image: AssetImage(validatedAssetPath ?? 'assets/background.jpg'),
+          image: AssetImage(
+            validatedAssetPath ?? 'assets/images/background.jpg',
+          ),
           fit: BoxFit.cover,
           colorFilter: ColorFilter.mode(
             Theme.of(context).colorScheme.surface.withValues(alpha: opacity),
