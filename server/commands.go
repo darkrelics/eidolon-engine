@@ -80,6 +80,13 @@ func (g *Game) initCommands() {
 		description: "Display currently online characters",
 		usage:       "who",
 	}
+
+	g.commands["info"] = CommandInfo{
+		timed:       false,
+		handler:     executeInfoCommand,
+		description: "Display information about your character",
+		usage:       "info",
+	}
 }
 
 // ValidateCommand checks if a command is valid and returns its verb and tokens
@@ -493,5 +500,65 @@ func executeWhoCommand(character *Character, tokens []string) error {
 	msg.WriteString(fmt.Sprintf("Total Characters Online: %d\n\r", len(characterNames)))
 
 	character.player.toPlayer <- msg.String()
+	return nil
+}
+
+// executeInfoCommand displays information about the character
+func executeInfoCommand(character *Character, tokens []string) error {
+	if character == nil || character.player == nil {
+		return errors.New("invalid character state")
+	}
+
+	Logger.Debug("Player requesting character information", "characterName", character.name)
+
+	character.mutex.RLock()
+	defer character.mutex.RUnlock()
+
+	var info strings.Builder
+	info.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_white", character.name)))
+	info.WriteString("----------------\n\r")
+	
+	// Basic character information
+	info.WriteString(fmt.Sprintf("Health: %.1f\n\r", character.health))
+	info.WriteString(fmt.Sprintf("Essence: %.1f\n\r", character.essence))
+	
+	// Attributes
+	if len(character.attributes) > 0 {
+		info.WriteString("\n\rAttributes:\n\r")
+		for attr, value := range character.attributes {
+			info.WriteString(fmt.Sprintf("  %-12s: %.1f\n\r", attr, value))
+		}
+	}
+	
+	// Abilities
+	if len(character.abilities) > 0 {
+		info.WriteString("\n\rAbilities:\n\r")
+		for ability, value := range character.abilities {
+			info.WriteString(fmt.Sprintf("  %-12s: %.1f\n\r", ability, value))
+		}
+	}
+	
+	// Inventory information
+	if len(character.inventory) > 0 {
+		info.WriteString("\n\rInventory:\n\r")
+		for _, item := range character.inventory {
+			if item != nil {
+				if item.isWorn {
+					info.WriteString(fmt.Sprintf("  %s (worn on %s)\n\r", item.name, strings.Join(item.wornOn, ", ")))
+				} else {
+					info.WriteString(fmt.Sprintf("  %s\n\r", item.name))
+				}
+			}
+		}
+	} else {
+		info.WriteString("\n\rYou are not carrying anything.\n\r")
+	}
+	
+	// Current location
+	if character.room != nil {
+		info.WriteString(fmt.Sprintf("\n\rCurrently in: %s\n\r", character.room.title))
+	}
+	
+	character.player.toPlayer <- info.String()
 	return nil
 }

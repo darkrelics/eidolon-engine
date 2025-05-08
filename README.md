@@ -38,7 +38,28 @@ Each interface implements protocol-specific rate limiting and reports metrics to
 
 Player sessions serve as the bridge between the interface and game world, handling essential functions like displaying messages of the day, character management, and console formatting for passwords and other sensitive input. Each session implements anti-abuse rate limiting and maintains clear communication boundaries through channels at both the interface and character layers. When a player creates or selects a character, the player session spawns a character session while maintaining tracking of its associated characters.
 
-Character sessions process commands through a strict parser that accepts only basic letters, numbers, and common special symbols, discarding any unrecognized input. These sessions determine which commands can be handled locally and which need to be elevated to the game routine. They maintain their own I/O buffering with game-defined limits and communicate with the game routine through dedicated channels. The proper cleanup and removal of characters from the game is a critical priority.
+### Command Processing Architecture
+
+The command system is structured in a three-tier hierarchy to efficiently handle different types of player interactions:
+
+1. **Character Tier (Fast, Local)** - Commands processed immediately in the character routine:
+   - Status checks, inventory viewing, equipment status, and character stats
+   - No wait time, providing immediate feedback to players
+   - Entirely local to the character with no external dependencies
+
+2. **Room Tier (Medium, Localized)** - Commands affecting the local environment:
+   - Movement, social interactions, local combat, and room interaction
+   - Moderate wait times based on command complexity
+   - Coordinated through the room to affect all characters present
+
+3. **Game Tier (Slow, Global)** - Commands with wide-ranging effects:
+   - Cross-room effects, global events, weather changes, and server-wide announcements
+   - Longer wait times for complex actions
+   - Coordinated through the game routine for consistency across all rooms
+
+Command processing includes a timeout system similar to Dragon Realms by SimuTronic, where different commands have varying "roundtime" periods during which certain other commands cannot be executed. Character states (standing, sitting, prone) affect command availability, with state-appropriate commands always accessible regardless of timeout status.
+
+Character sessions process commands through a strict parser that accepts only basic letters, numbers, and common special symbols, discarding any unrecognized input. These sessions determine which commands can be handled locally and which need to be elevated to the room or game routine. They maintain their own I/O buffering with game-defined limits and communicate with the game routine through dedicated channels. The proper cleanup and removal of characters from the game is a critical priority.
 
 The game routine serves as the authoritative source for world state, managing all characters, rooms, items, and game mechanics including the passage of time. It handles all database operations through DynamoDB, using RAM caching to minimize database access and prevent blocking operations. While initially designed as a single routine, the architecture supports future scaling to multiple game routines, though this will require additional communication mechanisms.
 
@@ -56,11 +77,14 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [x] Implement a text colorization system.
 - [x] Add Cloudwatch Logs and Metrics.
 - [x] Build an interactive password change system.
+- [ ] Implement the three-tier command architecture.
+- [ ] Develop command timeout systems.
+- [ ] Construct the item system with verb interactions.
+- [ ] Implement movement commands with room state changes.
+- [ ] Develop player communication systems.
 - [ ] Develop a weather and time system.
-- [ ] Construct the item system.
 - [ ] Create a crafting system for items.
-- [ ] Develop game mechanics.
-- [ ] Design an economic framework
+- [ ] Design an economic framework.
 - [ ] Build a direct messaging system.
 - [ ] Develop simple Non-Player Characters (NPCs).
 - [ ] Design and implement a quest system.
@@ -68,8 +92,8 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [ ] Implement a player-to-player trading system.
 - [ ] Implement a party system for cooperative gameplay.
 - [ ] Implement a magic system.
-- [ ] Impliment a quest tracking system.
-- [ ] Impliment a reputation system.
+- [ ] Implement a quest tracking system.
+- [ ] Implement a reputation system.
 - [ ] Develop a conditional room description system.
 - [ ] Implement a world creation system.
 - [ ] Develop more complex Non-Player Characters (NPCs) with basic AI.
@@ -82,6 +106,9 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [x] Add a help command.
 - [x] Add a character list (who) command.
 - [x] Allow users to change their passwords.
+- [ ] Implement the command tier system.
+- [ ] Add state tracking for timeout management.
+- [ ] Implement command queuing system.
 - [ ] Expand the character creation process.
 - [ ] Add take item command.
 - [ ] Add inventory command.
@@ -250,7 +277,9 @@ OTHER:
 ### Character System
 
 - [x] Command parsing system
-- [x] Local vs. game command handling
+- [ ] Three-tier command handling (character, room, game)
+- [ ] Command timeout system with roundtime
+- [ ] Character state tracking (standing, sitting, etc.)
 - [ ] I/O buffering with game-defined limits
 - [x] Character state persistence
 - [x] Character cleanup on disconnect
@@ -259,8 +288,8 @@ OTHER:
 
 - [ ] Room implementation
 - [ ] Exit implementation
-- [ ] Item implementation
-- [ ] Archetype system
+- [ ] Item interaction system with verbs
+- [x] Archetype system
 - [ ] Combat system
 - [ ] Time passage simulation
 
