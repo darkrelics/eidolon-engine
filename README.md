@@ -18,8 +18,6 @@
 
 The goal of this project is to create a commercial-quality multi-user dungeon (MUD) engine that is flexible enough to be used as either a conventional MUD or an interactive fiction game.
 
-The current implementation includes an SSH server for secure authentication and communication between the player and the server. The engine is primarily written in Go. Additionally, there is a user management system stub written in JavaScript and various utility scripts written in Python.
-
 ## Project Overview
 
 The engine is primarily written in Go (version 1.24) with an SSH server for secure authentication and communication between the player and the server. Additionally, there are database utility scripts written in Python (version 3.12) and various deployment scripts.
@@ -32,6 +30,45 @@ Key components:
 - AWS services for database (DynamoDB) and Identity Provider (Cognito)
 - CloudFormation templates for AWS resource management
 
+## Server Architecture
+
+The Eidolon Engine system is built around two primary goroutines - server and game - which form the backbone of the architecture. The server component manages external interfaces, beginning with SSH and designed to later accommodate HTTPS and gRPC. It handles authentication through AWS Cognito, controls all external I/O operations, and tracks active interfaces. When players connect, the server creates individual player sessions through the appropriate interface, with communication managed through dedicated channels for input, output, and errors.
+
+Each interface implements protocol-specific rate limiting and reports metrics to CloudWatch. The interfaces track their active players, with the system designed to support approximately 1000 concurrent players. Rather than using WaitGroups, the system relies on context and channels for coordinating operations and shutdowns between components.
+
+Player sessions serve as the bridge between the interface and game world, handling essential functions like displaying messages of the day, character management, and console formatting for passwords and other sensitive input. Each session implements anti-abuse rate limiting and maintains clear communication boundaries through channels at both the interface and character layers. When a player creates or selects a character, the player session spawns a character session while maintaining tracking of its associated characters.
+
+### Command Processing Architecture
+
+The command system is structured in a three-tier hierarchy to efficiently handle different types of player interactions:
+
+1. **Character Tier (Fast, Local)** - Commands processed immediately in the character routine:
+
+   - Status checks, inventory viewing, equipment status, and character stats
+   - No wait time, providing immediate feedback to players
+   - Entirely local to the character with no external dependencies
+
+2. **Room Tier (Medium, Localized)** - Commands affecting the local environment:
+
+   - Movement, social interactions, local combat, and room interaction
+   - Moderate wait times based on command complexity
+   - Coordinated through the room to affect all characters present
+
+3. **Game Tier (Slow, Global)** - Commands with wide-ranging effects:
+   - Cross-room effects, global events, weather changes, and server-wide announcements
+   - Longer wait times for complex actions
+   - Coordinated through the game routine for consistency across all rooms
+
+Command processing includes a timeout system similar to Dragon Realms by SimuTronic, where different commands have varying "roundtime" periods during which certain other commands cannot be executed. Character states (standing, sitting, prone) affect command availability, with state-appropriate commands always accessible regardless of timeout status.
+
+Character sessions process commands through a strict parser that accepts only basic letters, numbers, and common special symbols, discarding any unrecognized input. These sessions determine which commands can be handled locally and which need to be elevated to the room or game routine. They maintain their own I/O buffering with game-defined limits and communicate with the game routine through dedicated channels. The proper cleanup and removal of characters from the game is a critical priority.
+
+The game routine serves as the authoritative source for world state, managing all characters, rooms, items, and game mechanics including the passage of time. It handles all database operations through DynamoDB, using RAM caching to minimize database access and prevent blocking operations. While initially designed as a single routine, the architecture supports future scaling to multiple game routines, though this will require additional communication mechanisms.
+
+The entire system is organized through a hierarchical context structure. The main package provides a global context that flows down through server and game components. The server context extends to interfaces, players, and characters, while interface contexts flow to players and characters. The game maintains its own context for characters, with each player having a context for their character, and each character maintaining its own context.
+
+Testing will primarily be conducted through live user interaction, with unit tests implemented for functions that don't require network or cloud resources. The architecture heavily leverages AWS services, with CloudWatch handling metrics and logging, Cognito managing authentication, and DynamoDB providing persistence. While the engine can run anywhere, it is optimized for AWS infrastructure. This design emphasizes clean separation of concerns while maintaining efficient communication patterns and supporting future scalability needs.
+
 ## Current Objectives
 
 - [x] Create the SSH server for client connections.
@@ -42,11 +79,14 @@ Key components:
 - [x] Implement a text colorization system.
 - [x] Add Cloudwatch Logs and Metrics.
 - [x] Build an interactive password change system.
+- [ ] Implement the three-tier command architecture.
+- [ ] Develop command timeout systems.
+- [ ] Construct the item system with verb interactions.
+- [ ] Implement movement commands with room state changes.
+- [ ] Develop player communication systems.
 - [ ] Develop a weather and time system.
-- [ ] Construct the item system.
 - [ ] Create a crafting system for items.
-- [ ] Develop game mechanics.
-- [ ] Design an economic framework
+- [ ] Design an economic framework.
 - [ ] Build a direct messaging system.
 - [ ] Develop simple Non-Player Characters (NPCs).
 - [ ] Design and implement a quest system.
@@ -54,8 +94,8 @@ Key components:
 - [ ] Implement a player-to-player trading system.
 - [ ] Implement a party system for cooperative gameplay.
 - [ ] Implement a magic system.
-- [ ] Impliment a quest tracking system.
-- [ ] Impliment a reputation system.
+- [ ] Implement a quest tracking system.
+- [ ] Implement a reputation system.
 - [ ] Develop a conditional room description system.
 - [ ] Implement a world creation system.
 - [ ] Develop more complex Non-Player Characters (NPCs) with basic AI.
@@ -68,6 +108,9 @@ Key components:
 - [x] Add a help command.
 - [x] Add a character list (who) command.
 - [x] Allow users to change their passwords.
+- [ ] Implement the command tier system.
+- [ ] Add state tracking for timeout management.
+- [ ] Implement command queuing system.
 - [ ] Expand the character creation process.
 - [ ] Add take item command.
 - [ ] Add inventory command.
@@ -200,6 +243,204 @@ OTHER:
 - [ ] SEARCH: Search for hidden objects.
 - [ ] UNHIDE: Reveal yourself.
 - [ ] USE: Use an object.
+
+## Implementation Status
+
+### Server Architecture
+
+- [x] Establish two primary goroutines (server and game)
+- [x] Implement context-based coordination rather than WaitGroups
+- [ ] Support 1,000 concurrent players
+
+### Interfaces
+
+- [x] SSH interface implementation
+- [ ] HTTPS interface implementation
+- [ ] gRPC interface implementation
+- [ ] Protocol-specific rate limiting
+- [x] CloudWatch metrics reporting
+
+### Authentication
+
+- [x] AWS Cognito integration
+- [x] User authentication flow
+- [x] Password change functionality
+- [ ] Session management
+
+### Player Management
+
+- [x] Player session handling
+- [x] Character creation
+- [x] Character selection
+- [x] Character deletion
+- [ ] Anti-abuse rate limiting
+- [x] Console formatting for sensitive input
+
+### Character System
+
+- [x] Command parsing system
+- [ ] Three-tier command handling (character, room, game)
+- [ ] Command timeout system with roundtime
+- [ ] Character state tracking (standing, sitting, etc.)
+- [ ] I/O buffering with game-defined limits
+- [x] Character state persistence
+- [x] Character cleanup on disconnect
+
+### Game World
+
+- [ ] Room implementation
+- [ ] Exit implementation
+- [ ] Item interaction system with verbs
+- [x] Archetype system
+- [ ] Combat system
+- [ ] Time passage simulation
+
+### Database
+
+- [x] DynamoDB integration
+- [x] Database operations abstraction
+- [ ] RAM caching to minimize database access
+- [ ] Non-blocking database operations
+
+### AWS Integration
+
+- [x] CloudWatch for metrics and logging
+- [x] Cognito for authentication
+- [x] DynamoDB for persistence
+- [ ] Infrastructure optimization for AWS
+
+### Testing
+
+- [ ] Unit testing for standalone functions
+- [ ] Live user interaction testing
+
+## Known Issues
+
+### Summary
+
+- **Critical Issues**: 2 issues - Security vulnerabilities related to credential handling and password validation
+- **High Severity Issues**: 10 issues - Including race conditions, error handling problems, and memory management concerns
+- **Medium Severity Issues**: 23 issues - Range from concurrency problems to design flaws and performance concerns
+- **Low Severity Issues**: 30 issues - Code quality, logging, and minor design issues
+
+### Primary Concerns
+
+1. **Security vulnerabilities** - Credential handling and password validation still need improvement
+2. **Race conditions and concurrency issues** - Several areas need mutex protection and proper synchronization
+3. **Error handling gaps** - Error propagation and recovery need improvement
+4. **Memory management concerns** - Large dataset handling requires pagination
+5. **Hard-coded values** - Configuration should replace hard-coded values
+
+### Recent Progress
+
+The most recent commit (5494d81) addressed a logging issue in the portal code related to:
+
+- Removed potentially insecure default values for configuration
+- Improved error logging formats
+- Simplified authentication error handling
+
+### Critical Issues
+
+1. **Insecure Credential Handling (cognito.go)**:
+
+   - Sensitive credentials are passed as plain strings and could be accidentally logged
+   - Located in the `Authenticate` function (lines 158-171)
+
+2. **Weak Password Validation (interface_ssh.go)**:
+   - Password validation only checks length (minimum 8 characters)
+   - No requirements for complexity (uppercase, lowercase, numbers, symbols)
+   - Located in `isValidPassword` function (lines 412-419)
+
+### High Severity Issues
+
+1. **Race Condition in Player Management (server.go)**:
+
+   - Race condition between checking for existing session and adding new one
+   - Could lead to security issues or resource leaks
+   - Located in `AddPlayer` method (lines 295-307)
+
+2. **Silent Failure in Session Management (server.go)**:
+
+   - Method silently ignores failures to send disconnect messages
+   - Located in `DuplicatePlayer` method (lines 326-333)
+
+3. **Hidden Error Details (cognito.go)**:
+
+   - Error details from Cognito are hidden from caller
+   - Located in `SignUpUser` function (around line 70)
+
+4. **No Authentication Rate Limiting (cognito.go)**:
+
+   - Limited rate limiting on authentication attempts at application level
+   - Makes the system vulnerable to brute force attacks
+
+5. **Memory Issues with Large Datasets (database.go)**:
+
+   - All DB query/scan items loaded into memory at once
+   - Could cause out-of-memory issues with large datasets
+   - Located in `Scan` and `Query` operations
+
+6. **Insufficient Input Validation (player.go)**:
+
+   - Insufficient validation/sanitization of player input
+   - Could lead to command injection or other security issues
+
+7. **Incomplete Error Handling in Player Data (player.go)**:
+
+   - If saving player data fails, execution continues without proper handling
+
+8. **Invalid UUID Handling (character.go)**:
+
+   - The `GenerateUUIDv7` function doesn't handle errors from UUID generation
+   - Could return nil and cause panics elsewhere
+
+9. **SSH Connection Security (interface_ssh.go)**:
+
+   - No validation of SSH connection parameters
+   - No proper handling of unusual SSH client behavior
+
+10. **Hard-Coded File Paths (game.go)**:
+    - Critical game files use hard-coded paths
+    - Makes deployment and configuration inflexible
+    - Located in lines 36-37
+
+## Action Items & Recommendations
+
+### Immediate Priorities
+
+- Fix the critical security vulnerabilities in `cognito.go` and `interface_ssh.go`
+- Address the race condition in player management (server.go lines 295-307)
+- Implement proper input validation for player commands
+- Fix UUID generation error handling
+
+### Short-term Improvements
+
+- Add database query pagination for large datasets
+- Implement proper error handling in player data saving
+- Consolidate player disconnection logic
+- Move hard-coded values to configuration
+
+### Long-term Refactoring
+
+- Implement comprehensive retry mechanisms with exponential backoff
+- Improve context propagation throughout the codebase
+- Improve concurrency patterns to avoid blocking operations
+- Add versioning for data structures
+
+## Web Portal
+
+A Flutter application for player registration and self-service.
+
+### Portal TODO
+
+- [ ] Add unit tests
+- [ ] Add integration tests
+- [ ] Add widget tests
+- [ ] Improve error messages
+- [ ] Add retry mechanisms for network calls
+- [ ] Add asset preloading
+- [ ] Address client secret issues
+- [ ] Add session timeout
 
 ## Deployment
 

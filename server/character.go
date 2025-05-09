@@ -310,7 +310,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 }
 
 // Run is the main loop that handles player commands.
-// Run is the main loop that handles player commands.
 func (c *Character) Run(done chan bool) {
 	if c == nil || c.player == nil {
 		Logger.Error("Invalid character or player in Run method")
@@ -468,7 +467,7 @@ func (c *Character) Stop(done chan bool) {
 }
 
 // formatCharacterDescription creates a description of a character
-func formatCharacterDescription(target *Character, observer *Character) string {
+func formatCharacterDescription(target *Character, _ *Character) string {
 	target.mutex.RLock()
 	defer target.mutex.RUnlock()
 
