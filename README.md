@@ -107,7 +107,7 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [ ] Implement movement commands with room state changes.
 - [x] Add room persistence flag to Room struct
 - [x] Add scriptID field to Room struct
-- [ ] Implement Room goroutine system.
+- [x] Implement Room goroutine system.
 - [ ] Create Script management system with S3 storage.
 - [ ] Implement room persistence system.
 - [ ] Develop player communication systems.
@@ -176,10 +176,10 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [x] Update database tools to support room persistence flag.
 - [x] Add scriptID field to Room struct for future scripting support.
 - [x] Update database tools to support room scriptID field.
-- [ ] Create room goroutine management.
+- [x] Create room goroutine management.
 - [ ] Implement room script loading from S3.
-- [ ] Add idle room detection and cleanup.
-- [ ] Implement non-persistent item cleanup for empty rooms.
+- [x] Add idle room detection and cleanup.
+- [x] Implement item cleanup for empty rooms.
 
 ## Commands
 
@@ -297,7 +297,7 @@ OTHER:
 - [ ] Script-driven room behaviors
 - [x] Idle room detection and cleanup
 - [x] Room unloading for non-persistent empty rooms
-- [ ] Non-persistent item cleanup
+- [x] Item cleanup for empty rooms
 
 ### Scripting System
 

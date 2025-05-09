@@ -47,6 +47,7 @@ type Item struct {
 	contents    []*Item
 	isWorn      bool
 	canPickUp   bool
+	markedForDeletion bool // Runtime flag for marking items to be deleted during room cleanup
 	metadata    map[string]string
 	mutex       sync.RWMutex
 	lastEdited  time.Time

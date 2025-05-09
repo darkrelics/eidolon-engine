@@ -347,9 +347,12 @@ func (c *Character) Run(done chan bool) {
 		c.room.characters = make(map[uuid.UUID]*Character)
 	}
 	c.room.characters[c.id] = c
-		// Update room activity timestamp
-		c.room.lastActive = time.Now()
+	// Update room activity timestamp
+	c.room.lastActive = time.Now()
 	c.room.mutex.Unlock()
+
+	// Call HandleCharacterEntry to reset idle counter and activate scripts
+	c.room.HandleCharacterEntry()
 
 	// Notify room of arrival (without holding locks)
 	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)

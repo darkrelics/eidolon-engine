@@ -93,6 +93,8 @@ type Room struct {
 	lastEdited     time.Time
 	lastSaved      time.Time
 	lastActive     time.Time             // Timestamp of last activity in the room
+	idleCounter    int                   // Counter for tracking idle time (increments per game tick)
+	scriptActive   bool                  // Flag indicating if room scripts are currently active
 	ctx            context.Context       // Context for room goroutine lifecycle
 	cancel         context.CancelFunc    // Cancel function for room context
 	running        bool                  // Flag indicating if room goroutine is running
@@ -159,6 +161,8 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		lastEdited:     now,
 		lastSaved:      now,
 		lastActive:     now,
+		idleCounter:    0,
+		scriptActive:   scriptID != "", // Initialize script as active if a script is assigned
 		ctx:            roomCtx,
 		cancel:         cancel,
 		running:        false,
@@ -283,6 +287,104 @@ func (r *Room) IsIdle(duration time.Duration) bool {
 	return len(r.characters) == 0 && time.Since(r.lastActive) > duration
 }
 
+// HandleCharacterEntry handles character entering a room, resets idle counter and activates scripts
+func (r *Room) HandleCharacterEntry() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// Reset idle counter
+	r.idleCounter = 0
+
+	// For persistent rooms with scripts assigned, activate scripts
+	if r.persistent && r.scriptID != "" && !r.scriptActive {
+		r.scriptActive = true
+		Logger.Info("Activating scripts for persistent room with character entry", "roomID", r.roomID)
+	}
+}
+
+// IncrementIdleCounter increments the idle counter for an empty room and handles cleanup if threshold is reached
+func (r *Room) IncrementIdleCounter(game *Game) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// Only increment if room is empty
+	if len(r.characters) > 0 {
+		// Reset counter if characters are present
+		r.idleCounter = 0
+		return
+	}
+
+	// Increment the idle counter
+	r.idleCounter++
+
+	// Check if idle threshold has been reached (600 ticks = 10 minutes @ 1 second per tick)
+	if r.idleCounter >= 600 {
+		Logger.Info("Room idle threshold reached", "roomID", r.roomID, "title", r.title, "persistent", r.persistent)
+
+		// Clean up items in the room
+		r.cleanupItems(game)
+
+		// For persistent rooms, deactivate scripts but keep room loaded
+		if r.persistent {
+			r.scriptActive = false
+			Logger.Info("Deactivating scripts for idle persistent room", "roomID", r.roomID)
+		} else {
+			// For non-persistent rooms, unload the room
+			Logger.Info("Unloading non-persistent idle room", "roomID", r.roomID)
+
+			// We must unlock mutex before calling Stop to avoid deadlock
+			r.mutex.Unlock()
+			r.Stop()
+			r.mutex.Lock() // Re-lock for the remainder of the function
+
+			// Remove room from game's room map
+			delete(game.rooms, r.roomID)
+		}
+	}
+}
+
+// HandleCharacterEntry handles character entering a room, resets idle counter and activates scripts
+func (r *Room) HandleCharacterEntry() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// Reset idle counter
+	r.idleCounter = 0
+
+	// For persistent rooms with scripts assigned, activate scripts
+	if r.persistent && r.scriptID != "" && !r.scriptActive {
+		r.scriptActive = true
+		Logger.Info("Activating scripts for persistent room with character entry", "roomID", r.roomID)
+	}
+}
+
+// cleanupItems removes non-persistent items from the room
+func (r *Room) cleanupItems(game *Game) {
+	itemCount := len(r.items)
+
+	// Create temporary list of items to remove
+	var itemsToRemove []uuid.UUID
+
+	for id, item := range r.items {
+		if item != nil && !item.persistent {
+			itemsToRemove = append(itemsToRemove, id)
+		}
+	}
+
+	// Remove the items
+	for _, id := range itemsToRemove {
+		delete(r.items, id)
+		// Also remove from game's items map if needed
+		delete(game.items, id)
+	}
+
+	Logger.Info("Cleaned up non-persistent items from idle room",
+		"roomID", r.roomID,
+		"itemsRemoved", len(itemsToRemove),
+		"totalItemsBefore", itemCount,
+		"totalItemsAfter", len(r.items))
+}
+
 // GetScriptID returns the script ID for the room
 func (r *Room) GetScriptID() string {
 	r.mutex.RLock()
@@ -367,10 +469,9 @@ func (r *Room) Stop() {
 func (r *Room) run(game *Game) {
 	Logger.Info("Room goroutine started", "roomID", r.roomID, "title", r.title)
 
-	// Set up idle room detection timer
-	idleCheckInterval := 1 * time.Minute
-	idleTimer := time.NewTicker(idleCheckInterval)
-	defer idleTimer.Stop()
+	// Set up a 1-second ticker to match game heartbeat
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 
 	// Room processing loop
 	for {
@@ -390,15 +491,89 @@ func (r *Room) run(game *Game) {
 			// Process the command
 			r.processCommand(cmd, game)
 
-		case <-idleTimer.C:
-			// Check if the room is idle (empty and non-persistent)
-			if !r.persistent && r.IsIdle(10*time.Minute) {
-				Logger.Info("Room has been idle, shutting down", "roomID", r.roomID, "title", r.title)
-				r.Stop()
-				return
+		case <-ticker.C:
+			// Increment idle counter if room is empty
+			r.mutex.RLock()
+			isEmpty := len(r.characters) == 0
+			r.mutex.RUnlock()
+
+			if isEmpty {
+				// Increment the idle counter for empty rooms
+				r.IncrementIdleCounter(game)
 			}
 		}
 	}
+}
+
+// IncrementIdleCounter increments the idle counter for an empty room and handles cleanup if threshold is reached
+func (r *Room) IncrementIdleCounter(game *Game) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// Only increment if room is empty
+	if len(r.characters) > 0 {
+		// Reset counter if characters are present
+		r.idleCounter = 0
+		return
+	}
+
+	// Increment the idle counter
+	r.idleCounter++
+
+	// Check if idle threshold has been reached (600 ticks = 10 minutes @ 1 second per tick)
+	if r.idleCounter >= 600 {
+		Logger.Info("Room idle threshold reached", "roomID", r.roomID, "title", r.title, "persistent", r.persistent)
+
+		// Clean up items in the room
+		r.cleanupItems(game)
+
+		// For persistent rooms, deactivate scripts but keep room loaded
+		if r.persistent {
+			r.scriptActive = false
+			Logger.Info("Deactivating scripts for idle persistent room", "roomID", r.roomID)
+		} else {
+			// For non-persistent rooms, unload the room
+			Logger.Info("Unloading non-persistent idle room", "roomID", r.roomID)
+
+			// We must unlock mutex before calling Stop to avoid deadlock
+			r.mutex.Unlock()
+			r.Stop()
+			r.mutex.Lock() // Re-lock for the remainder of the function
+
+			// Remove room from game's room map
+			delete(game.rooms, r.roomID)
+		}
+	}
+}
+
+// cleanupItems marks items for deletion and removes them from the room
+func (r *Room) cleanupItems(game *Game) {
+	itemCount := len(r.items)
+
+	// Create temporary list of items to remove
+	var itemsToRemove []uuid.UUID
+
+	for id, item := range r.items {
+		if item != nil {
+			// Mark the item for deletion
+			item.markedForDeletion = true
+			itemsToRemove = append(itemsToRemove, id)
+		}
+	}
+
+	// Remove the items from the room
+	for _, id := range itemsToRemove {
+		delete(r.items, id)
+
+		// Don't delete from game.items here - the Game should handle garbage collection
+		// of items marked for deletion separately
+	}
+
+	Logger.Info("Marked items for deletion and removed them from idle room",
+		"roomID", r.roomID,
+		"itemsRemoved", len(itemsToRemove),
+		"totalItemsBefore", itemCount,
+		"totalItemsAfter", len(r.items))
 }
 
 // processCommand handles a command request in the room
