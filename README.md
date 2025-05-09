@@ -64,21 +64,26 @@ The command system is structured in a three-tier hierarchy to efficiently handle
    - Status checks, inventory viewing, equipment status, and character stats
    - No wait time, providing immediate feedback to players
    - Entirely local to the character with no external dependencies
+   - Implemented using direct function calls for lowest latency
 
 2. **Room Tier (Medium, Localized)** - Commands affecting the local environment:
 
-   - Movement, social interactions, local combat, and room interaction
+   - Movement, social interactions (say, emote, whisper), local combat, and room interaction
    - Moderate wait times based on command complexity
-   - Coordinated through the room to affect all characters present
+   - Processed asynchronously in room goroutines
+   - Commands and responses flow through structured channels between characters and rooms
+   - Room maintains state for all characters and items present
 
 3. **Game Tier (Slow, Global)** - Commands with wide-ranging effects:
    - Cross-room effects, global events, weather changes, and server-wide announcements
+   - Server-wide communication (shout, announce, who/list)
    - Longer wait times for complex actions
-   - Coordinated through the game routine for consistency across all rooms
+   - Commands are escalated from room goroutines to the central game routine
+   - Uses structured command/response channel communication pattern
 
 Command processing includes a timeout system similar to Dragon Realms by SimuTronic, where different commands have varying "roundtime" periods during which certain other commands cannot be executed. Character states (standing, sitting, prone) affect command availability, with state-appropriate commands always accessible regardless of timeout status.
 
-Character sessions process commands through a strict parser that accepts only basic letters, numbers, and common special symbols, discarding any unrecognized input. These sessions determine which commands can be handled locally and which need to be elevated to the room or game routine. They maintain their own I/O buffering with game-defined limits and communicate with the room routine through dedicated channels, which may further escalate to the game routine as needed. The proper cleanup and removal of characters from the game is a critical priority.
+Character sessions process commands through a strict parser that accepts only basic letters, numbers, and common special symbols, discarding any unrecognized input. Each command is evaluated to determine appropriate tier handling (character, room, or game) and routed accordingly through a structured channel system using CommandRequest and CommandResponse objects. Room commands are processed asynchronously in room-specific goroutines, while game-tier commands are escalated to the central game routine. This tiered approach ensures that only the appropriate components process each command, optimizing performance and ensuring proper state consistency. The proper cleanup and removal of characters from the game is a critical priority.
 
 The game routine serves as the authoritative source for world state, managing all characters, rooms, items, and game mechanics including the passage of time. It handles all database operations through DynamoDB, using RAM caching to minimize database access and prevent blocking operations. While initially designed as a single routine, the architecture supports future scaling to multiple game routines, though this will require additional communication mechanisms.
 
@@ -281,16 +286,17 @@ OTHER:
 - [x] Establish two primary goroutines (server and game)
 - [x] Implement context-based coordination rather than WaitGroups
 - [ ] Support 1,000 concurrent players
-- [ ] Implement room goroutine architecture
+- [x] Implement room goroutine architecture
 
 ### Room System
 
-- [ ] Individual room goroutines
+- [x] Individual room goroutines
 - [x] Room persistence flag implementation
 - [x] Room script ID implementation
 - [x] Room activity tracking mechanism
 - [ ] Script-driven room behaviors
-- [ ] Idle room detection and cleanup
+- [x] Idle room detection and cleanup
+- [x] Room unloading for non-persistent empty rooms
 - [ ] Non-persistent item cleanup
 
 ### Scripting System
@@ -327,7 +333,7 @@ OTHER:
 ### Character System
 
 - [x] Command parsing system
-- [ ] Three-tier command handling (character, room, game)
+- [x] Three-tier command handling (character, room, game)
 - [ ] Command timeout system with roundtime
 - [ ] Character state tracking (standing, sitting, etc.)
 - [ ] I/O buffering with game-defined limits
@@ -372,7 +378,22 @@ OTHER:
 
 The room system has been enhanced with the following components:
 
-1. **Room Persistence Implementation**:
+1. **Command Processing Architecture Implementation**:
+   - Added complete three-tier command processing system (character, room, game)
+   - Implemented consistent channel naming convention for command flow
+   - Created command request/response structures for structured communication
+   - Added routing logic for escalating commands to appropriate processing tier
+   - Implemented room-level command handlers for chat, emotes, and other interactions
+   - Added game-level command handlers for global operations
+
+2. **Room Goroutine Management**:
+   - Implemented individual room goroutines for concurrent command processing
+   - Added context-based coordination for room lifecycle management
+   - Created Start/Stop methods for rooms with proper resource management
+   - Implemented dynamic room goroutine creation when rooms receive commands
+   - Added idle detection for efficient resource management
+
+3. **Room Persistence Implementation**:
    - Added `persistent bool` flag to identify rooms that should remain loaded when empty
    - Added `lastActive time.Time` to track room activity for idle detection
    - Added `UpdateActivity()` method to update the room's activity timestamp

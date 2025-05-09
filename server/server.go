@@ -324,7 +324,7 @@ func (s *Server) DuplicatePlayer(existingPlayer *Player) {
 
 	// Send a message to the existing player
 	select {
-	case existingPlayer.toPlayer <- "\r\nYou are being disconnected because your account has logged in from another location.\r\n":
+	case existingPlayer.commandOut <- "\r\nYou are being disconnected because your account has logged in from another location.\r\n":
 		// Message sent successfully
 	default:
 		// Channel might be full or closed, log and continue
@@ -364,7 +364,7 @@ func (s *Server) BroadcastMessage(message string) {
 	// Send messages outside the lock to avoid deadlocks
 	for _, player := range players {
 		select {
-		case player.toPlayer <- message:
+		case player.commandOut <- message:
 			// Message sent successfully
 		default:
 			Logger.Warn("Failed to send broadcast message to player", "playerID", player.id.String())

@@ -91,8 +91,8 @@ type Player struct {
 	index         uint64
 	id            uuid.UUID // Using uuid.UUID type instead of string
 	email         string    // Field to store email address
-	toPlayer      chan string
-	fromPlayer    chan string
+	commandOut    chan string  // Commands to player
+	commandIn     chan string  // Commands from player
 	playerError   chan error
 	consoleDone   chan bool
 	echo          bool
@@ -200,7 +200,7 @@ func (p *Player) Save() error {
 	err := database.Put("players", playerData)
 	if err != nil {
 		Logger.Error("Error saving player data", "error", err)
-		p.toPlayer <- "Error saving player data. Please contact an administrator.\n"
+		p.commandOut <- "Error saving player data. Please contact an administrator.\n"
 		return fmt.Errorf("error saving player data: %w", err)
 	}
 
@@ -218,8 +218,8 @@ func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfac
 		server:        server,
 		id:            userUUID,    // Using uuid.UUID directly
 		email:         playerEmail, // Store email separately
-		toPlayer:      make(chan string, 10),
-		fromPlayer:    make(chan string, 10),
+		commandOut:    make(chan string, 10),
+		commandIn:     make(chan string, 10),
 		playerError:   make(chan error, 1),
 		consoleDone:   make(chan bool, 1),
 		echo:          true,
@@ -347,8 +347,8 @@ func (p *Player) Stop() {
 		}
 
 		// Close channels after all operations are done
-		close(p.toPlayer)
-		close(p.fromPlayer)
+		close(p.commandOut)
+		close(p.commandIn)
 		close(p.playerError)
 	})
 }
@@ -430,7 +430,7 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				if inputBuffer.Length() > 0 {
 					input := inputBuffer.String()
 					select {
-					case p.fromPlayer <- input:
+					case p.commandIn <- input:
 						if p.echo {
 							p.connection.Write([]byte("\r\n"))
 						}
@@ -481,7 +481,7 @@ func (p *Player) handleOutput(ctx context.Context, done chan error) {
 		case <-ctx.Done():
 			done <- ctx.Err()
 			return
-		case msg, ok := <-p.toPlayer:
+		case msg, ok := <-p.commandOut:
 			if !ok {
 				Logger.Debug("Output channel closed", "player", p.id)
 				done <- nil

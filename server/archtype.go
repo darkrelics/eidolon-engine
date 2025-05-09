@@ -23,6 +23,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type Archetype struct {
@@ -119,8 +122,41 @@ func (c *Character) SelectArchetype() (string, error) {
 	}
 	msg += "Enter the number of your choice: "
 
-	c.fromGame <- msg
-	selection, ok := <-c.toGame
+	c.gameCommandIn <- &CommandResponse{
+		RequestID: uuid.New(),
+		Success:   true,
+		Message:   msg,
+		Timestamp: time.Now(),
+	}
+
+	// Wait for response
+	var selection string
+	var ok bool
+
+	// Create a channel for the response
+	respChan := make(chan string, 1)
+
+	// Start a goroutine to wait for a command
+	go func() {
+		select {
+		case cmd, cmdOk := <-c.gameCommandOut:
+			if cmdOk && cmd != nil {
+				// Extract the first argument as the selection
+				if len(cmd.Args) > 0 {
+					respChan <- cmd.Args[0]
+				} else {
+					respChan <- ""
+				}
+			} else {
+				respChan <- ""
+			}
+		case <-time.After(5 * time.Minute): // Add a timeout
+			respChan <- ""
+		}
+	}()
+
+	// Wait for the response
+	selection, ok = <-respChan
 	if !ok {
 		Logger.Warn("Character input channel closed")
 		return "", fmt.Errorf("character input channel closed")

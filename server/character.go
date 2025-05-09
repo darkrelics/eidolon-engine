@@ -63,12 +63,14 @@ type Character struct {
 	combatRange map[uuid.UUID]float64
 	lastEdited  time.Time
 	lastSaved   time.Time
-	toGame      chan string
-	fromGame    chan string
-	toPlayer    chan string
-	fromPlayer  chan string
-	end         chan bool
-	prompt      string
+	roomCommandOut   chan *CommandRequest    // Commands sent from character to room
+	roomCommandIn    chan *CommandResponse   // Responses from room to character
+	gameCommandOut   chan *CommandRequest    // Commands escalated directly to game
+	gameCommandIn    chan *CommandResponse   // Responses from game to character
+	playerCommandOut chan string             // Messages sent to player
+	playerCommandIn  chan string             // Messages from player
+	end              chan bool               // Channel for shutdown signaling
+	prompt           string                  // Character prompt
 }
 
 // CharacterData for unmarshalling character.
@@ -141,12 +143,14 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		advancing:   false,
 		combatRange: make(map[uuid.UUID]float64),
 		lastEdited:  time.Now(),
-		toGame:      make(chan string, 10),
-		fromGame:    make(chan string, 10),
-		toPlayer:    make(chan string, 10),
-		fromPlayer:  make(chan string, 10),
-		end:         make(chan bool, 5),
-		prompt:      "\n\r> ",
+		roomCommandOut:   make(chan *CommandRequest, 20),
+		roomCommandIn:    make(chan *CommandResponse, 20),
+		gameCommandOut:   make(chan *CommandRequest, 10),
+		gameCommandIn:    make(chan *CommandResponse, 10),
+		playerCommandOut: make(chan string, 20),
+		playerCommandIn:  make(chan string, 20),
+		end:              make(chan bool, 5),
+		prompt:           "\n\r> ",
 	}
 
 	// Load character data from database
@@ -270,10 +274,14 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		facing:      nil,
 		combatRange: make(map[uuid.UUID]float64),
 		lastEdited:  time.Now(),
-		toGame:      make(chan string, 10),
-		fromGame:    make(chan string, 10),
-		end:         make(chan bool, 1),
-		prompt:      "> ",
+		roomCommandOut:   make(chan *CommandRequest, 20),
+		roomCommandIn:    make(chan *CommandResponse, 20),
+		gameCommandOut:   make(chan *CommandRequest, 10),
+		gameCommandIn:    make(chan *CommandResponse, 10),
+		playerCommandOut: make(chan string, 20),
+		playerCommandIn:  make(chan string, 20),
+		end:              make(chan bool, 1),
+		prompt:           "> ",
 	}
 
 	if archetype != "" {
@@ -352,7 +360,7 @@ func (c *Character) Run(done chan bool) {
 	}
 
 	// Send initial prompt
-	c.player.toPlayer <- c.prompt
+	c.playerCommandOut <- c.prompt
 
 	const idleTimeout = 30 * time.Second
 	timer := time.NewTimer(idleTimeout)
@@ -365,7 +373,7 @@ func (c *Character) Run(done chan bool) {
 		timer.Reset(idleTimeout)
 
 		select {
-		case inputLine, ok := <-c.player.fromPlayer:
+		case inputLine, ok := <-c.playerCommandIn:
 			if !ok {
 				Logger.Info("Player input channel closed", "characterName", c.name)
 				return
@@ -382,7 +390,7 @@ func (c *Character) Run(done chan bool) {
 			isQuit, err := ProcessCommand(c, strings.TrimSpace(inputLine))
 			if err != nil {
 				// Send error message to player
-				c.player.toPlayer <- err.Error() + "\n\r"
+				c.playerCommandOut <- err.Error() + "\n\r"
 			} else {
 				// Command processed successfully
 				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
@@ -402,7 +410,7 @@ func (c *Character) Run(done chan bool) {
 			}
 
 			// Always send prompt after processing a command
-			c.player.toPlayer <- c.prompt
+			c.playerCommandOut <- c.prompt
 
 		case <-c.end:
 			Logger.Info("Character end signaled", "characterName", c.name)

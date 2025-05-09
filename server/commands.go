@@ -153,7 +153,7 @@ func tokenizeInput(input string) []string {
 	return tokens
 }
 
-// ProcessCommand determines if a command is timed or untimed and handles it accordingly
+// ProcessCommand determines command tier and routes it appropriately
 func ProcessCommand(character *Character, input string) (bool, error) {
 	// Parse and validate the command
 	verb, tokens, err := ValidateCommand(character, input)
@@ -174,10 +174,16 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 		return false, fmt.Errorf("command '%s' not understood", verb)
 	}
 
-	// Process based on command type
+	// Special case handling for "quit" command - always process immediately
+	if verb == "quit" {
+		err := executeQuitCommand(character, tokens)
+		return true, err
+	}
+
+	// Process based on command tier
 	if !cmdInfo.timed {
-		// Execute untimed commands immediately
-		Logger.Debug("Executing untimed command", "verb", verb, "character", character.name)
+		// Execute untimed commands immediately at character level
+		Logger.Debug("Executing character-tier command", "verb", verb, "character", character.name)
 		start := time.Now()
 
 		err := cmdInfo.handler(character, tokens)
@@ -189,12 +195,79 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 
 		return false, err
 	} else {
-		// For timed commands, send to the game loop for processing
-		Logger.Debug("Queuing timed command for processing", "verb", verb, "character", character.name)
+		// For timed commands, determine the tier and route accordingly
+		var tier CommandTier
 
-		// TODO: Implement timed commands via a command queue in the Game struct
-		Logger.Error("Timed commands not implemented", "character", character.name, "command", verb)
-		return false, errors.New("\n\rTimed commands are not yet implemented.\n\r")
+		// Determine tier based on command properties (simplified for now)
+		// TODO: Implement proper tier determination based on command
+		switch verb {
+		case "say", "look", "emote", "whisper":
+			// Commands that only affect the local room
+			tier = RoomTier
+		case "shout", "weather", "time", "global":
+			// Commands that affect multiple rooms or the entire game
+			tier = GameTier
+		default:
+			// Default to room tier for most commands
+			tier = RoomTier
+		}
+
+		// Create command request
+		cmdReq := &CommandRequest{
+			ID:        GenerateUUIDv7(),
+			Character: character,
+			Verb:      verb,
+			Args:      tokens,
+			Tier:      tier,
+			State:     CommandPending,
+			Timestamp: time.Now(),
+			Response:  make(chan *CommandResponse, 1),
+		}
+
+		// Route command based on tier
+		switch tier {
+		case RoomTier:
+			// Ensure room is running
+			if !character.room.running {
+				character.room.Start(character.game)
+			}
+
+			// Send command to the room
+			Logger.Debug("Routing command to room", "verb", verb, "character", character.name, "roomID", character.room.roomID)
+			select {
+			case character.room.commandIn <- cmdReq:
+				// Command sent successfully to room
+			default:
+				return false, fmt.Errorf("\n\rroom command buffer is full, try again later\n\r")
+			}
+
+		case GameTier:
+			// Send command to the game
+			Logger.Debug("Routing command to game", "verb", verb, "character", character.name)
+			select {
+			case character.gameCommandOut <- cmdReq:
+				// Command sent successfully to game
+			default:
+				return false, fmt.Errorf("\n\rgame command buffer is full, try again later\n\r")
+			}
+
+		default:
+			return false, fmt.Errorf("\n\rinvalid command tier\n\r")
+		}
+
+		// Wait for response or timeout
+		select {
+		case resp := <-cmdReq.Response:
+			if resp.Error != nil {
+				return false, resp.Error
+			}
+			if resp.Message != "" {
+				character.player.commandOut <- resp.Message
+			}
+			return false, nil
+		case <-time.After(5 * time.Second):
+			return false, fmt.Errorf("\n\rcommand timed out\n\r")
+		}
 	}
 }
 
@@ -210,7 +283,7 @@ func executeQuitCommand(character *Character, tokens []string) error {
 	// Notify the player
 	if character.player != nil {
 		select {
-		case character.player.toPlayer <- "\n\rSaving character state...\n\r":
+		case character.player.commandOut <- "\n\rSaving character state...\n\r":
 		default:
 			Logger.Warn("Failed to notify player: ToPlayer channel is full or closed", "characterName", character.name)
 		}
@@ -262,7 +335,7 @@ func executeHelpCommand(character *Character, tokens []string) error {
 
 	helpMsg.WriteString("\n\rType 'help <command>' for more information on a specific command.\n\r")
 
-	character.player.toPlayer <- helpMsg.String()
+	character.player.commandOut <- helpMsg.String()
 	return nil
 }
 
@@ -279,7 +352,7 @@ func showCommandHelp(character *Character, cmdName string) error {
 	character.game.mutex.RUnlock()
 
 	if !exists {
-		character.player.toPlayer <- fmt.Sprintf("\n\rNo help available for '%s'. Command not found.\n\r", cmdName)
+		character.player.commandOut <- fmt.Sprintf("\n\rNo help available for '%s'. Command not found.\n\r", cmdName)
 		return nil
 	}
 
@@ -288,7 +361,7 @@ func showCommandHelp(character *Character, cmdName string) error {
 	msg.WriteString(fmt.Sprintf("Description: %s\n\r", cmdInfo.description))
 	msg.WriteString(fmt.Sprintf("Usage: %s\n\r", cmdInfo.usage))
 
-	character.player.toPlayer <- msg.String()
+	character.player.commandOut <- msg.String()
 	return nil
 }
 
@@ -305,14 +378,14 @@ func executeLookCommand(character *Character, tokens []string) error {
 	if len(tokens) > 1 {
 		target := strings.ToLower(strings.Join(tokens[1:], " "))
 		desc := getLookTarget(character, target)
-		character.player.toPlayer <- desc
+		character.player.commandOut <- desc
 		return nil
 	}
 
 	// Look at room
 	room := character.room
 	if room == nil {
-		character.player.toPlayer <- "\n\rYou are floating in the void.\n\r"
+		character.player.commandOut <- "\n\rYou are floating in the void.\n\r"
 		return nil
 	}
 
@@ -379,7 +452,7 @@ func executeLookCommand(character *Character, tokens []string) error {
 		}
 	}
 
-	character.player.toPlayer <- roomInfo.String()
+	character.player.commandOut <- roomInfo.String()
 	return nil
 }
 
@@ -456,7 +529,7 @@ func executeWhoCommand(character *Character, tokens []string) error {
 
 	// Check if there are any other characters online
 	if len(characterNames) == 0 {
-		character.player.toPlayer <- whoEmpty
+		character.player.commandOut <- whoEmpty
 		return nil
 	}
 
@@ -506,7 +579,7 @@ func executeWhoCommand(character *Character, tokens []string) error {
 	msg.WriteString("\n\r")
 	msg.WriteString(fmt.Sprintf("Total Characters Online: %d\n\r", len(characterNames)))
 
-	character.player.toPlayer <- msg.String()
+	character.player.commandOut <- msg.String()
 	return nil
 }
 
@@ -578,7 +651,7 @@ func executeInfoCommand(character *Character, tokens []string) error {
 		info.WriteString(fmt.Sprintf("\n\rCurrently in: %s\n\r", character.room.title))
 	}
 
-	character.player.toPlayer <- info.String()
+	character.player.commandOut <- info.String()
 	return nil
 }
 
@@ -618,6 +691,6 @@ func executeSkillCommand(character *Character, tokens []string) error {
 		skillInfo.WriteString("  You have not developed any abilities yet.\n\r")
 	}
 
-	character.player.toPlayer <- skillInfo.String()
+	character.player.commandOut <- skillInfo.String()
 	return nil
 }

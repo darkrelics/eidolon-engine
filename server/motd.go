@@ -183,7 +183,7 @@ func DisplayMOTDs(player *Player) error {
 
 	for _, motd := range activeMotDs {
 		if motd != nil && motd.MotdID == defaultMOTDID {
-			player.toPlayer <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
+			player.commandOut <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
 			welcomeDisplayed = true
 			break
 		}
@@ -191,7 +191,7 @@ func DisplayMOTDs(player *Player) error {
 
 	// If no welcome message was found, display a generic one
 	if !welcomeDisplayed {
-		player.toPlayer <- "\n\rWelcome to Eidolon Engine!\n\r"
+		player.commandOut <- "\n\rWelcome to Eidolon Engine!\n\r"
 	}
 
 	return nil
@@ -234,7 +234,7 @@ func DisplayUnseenMOTDs(player *Player) error {
 
 		if !seenMOTD {
 			// Display the MOTD to the player
-			player.toPlayer <- fmt.Sprintf("\n\r--- News ---\n\r%s\n\r", motd.Message)
+			player.commandOut <- fmt.Sprintf("\n\r--- News ---\n\r%s\n\r", motd.Message)
 
 			// Add to the list of newly seen MOTDs
 			newlySeen = append(newlySeen, motd.MotdID)
