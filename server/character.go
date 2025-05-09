@@ -63,6 +63,8 @@ type Character struct {
 	combatRange map[uuid.UUID]float64
 	lastEdited  time.Time
 	lastSaved   time.Time
+	waitUntil   time.Time                  // Time when the character can execute the next command
+	charState   string                      // Current character state (standing, sitting, etc.)
 	roomCommandOut   chan *CommandRequest    // Commands sent from character to room
 	roomCommandIn    chan *CommandResponse   // Responses from room to character
 	gameCommandOut   chan *CommandRequest    // Commands escalated directly to game
@@ -84,6 +86,35 @@ type CharacterData struct {
 	Health        float64            `json:"Health" dynamodbav:"Health"`
 	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
 	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
+}
+
+// CanExecuteCommand checks if character can perform a command based on wait time and state
+func (c *Character) CanExecuteCommand() (bool, string) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	// Check wait time
+	if time.Now().Before(c.waitUntil) {
+		waitTime := c.waitUntil.Sub(time.Now()).Round(time.Second)
+		return false, fmt.Sprintf("You must wait %v before your next action.", waitTime)
+	}
+
+	// Check character state if needed
+	// Currently just check if there's a state set at all
+	if c.charState == "" {
+		// Default state is standing
+		c.charState = "standing"
+	}
+
+	return true, ""
+}
+
+// SetCommandWaitTime sets a wait time for the character's next command
+func (c *Character) SetCommandWaitTime(duration time.Duration) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.waitUntil = time.Now().Add(duration)
 }
 
 func (c *Character) Save() error {
@@ -143,6 +174,8 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		advancing:   false,
 		combatRange: make(map[uuid.UUID]float64),
 		lastEdited:  time.Now(),
+		charState:   "standing",  // Default character state
+		waitUntil:   time.Now(),  // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
 		gameCommandOut:   make(chan *CommandRequest, 10),
@@ -274,6 +307,8 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		facing:      nil,
 		combatRange: make(map[uuid.UUID]float64),
 		lastEdited:  time.Now(),
+		charState:   "standing",  // Default character state
+		waitUntil:   time.Now(),  // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
 		gameCommandOut:   make(chan *CommandRequest, 10),

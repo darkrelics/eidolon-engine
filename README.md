@@ -102,9 +102,9 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [x] Add Cloudwatch Logs and Metrics.
 - [x] Build an interactive password change system.
 - [ ] Implement the three-tier command architecture.
-- [ ] Develop command timeout systems.
+- [x] Develop command timeout systems.
 - [ ] Construct the item system with verb interactions.
-- [ ] Implement movement commands with room state changes.
+- [x] Implement movement commands with room state changes.
 - [x] Add room persistence flag to Room struct
 - [x] Add scriptID field to Room struct
 - [x] Implement Room goroutine system.
@@ -195,7 +195,7 @@ Game Information:
 
 Basic Movement:
 
-- [ ] GO: Move to a new room.
+- [x] GO: Move to a new room.
 - [x] LOOK: Look at the current room.
 - [ ] CLIMB: Climb an object like a tree or ladder.
 - [ ] SWIM: Swim through water.

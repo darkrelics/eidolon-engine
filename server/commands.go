@@ -165,6 +165,16 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 		return false, errors.New("\n\rInvalid character state.\n\r")
 	}
 
+	// Check if the character is waiting for a command timeout
+	canExecute, reason := character.CanExecuteCommand()
+	if !canExecute {
+		// Allow certain commands even when waiting
+		if verb != "look" && verb != "help" && verb != "who" && verb != "quit" {
+			return false, fmt.Errorf("\n\r%s\n\r", reason)
+		}
+		// These commands are allowed during wait time
+	}
+
 	// Retrieve the command info
 	character.game.mutex.RLock()
 	cmdInfo, exists := character.game.commands[verb]

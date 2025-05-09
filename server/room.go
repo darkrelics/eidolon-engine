@@ -1014,11 +1014,118 @@ func (r *Room) handleItemCommand(cmd *CommandRequest) *CommandResponse {
 
 // handleMovementCommand processes room movement commands
 func (r *Room) handleMovementCommand(cmd *CommandRequest) *CommandResponse {
-	// This is a placeholder. Real implementation would handle movement
+	// First check if the character is allowed to move (no wait time)
+	canMove, reason := cmd.Character.CanExecuteCommand()
+	if !canMove {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf(reason),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Get the direction from the command
+	var direction string
+
+	// Handle GO <direction> or direct <direction> commands like "north"
+	if cmd.Verb == "go" {
+		// GO requires a direction argument
+		if len(cmd.Args) < 2 {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("go where?"),
+				Timestamp: time.Now(),
+			}
+		}
+		direction = strings.ToLower(cmd.Args[1])
+	} else {
+		// Direct direction command like "north", "south", etc.
+		direction = strings.ToLower(cmd.Verb)
+	}
+
+	// Lock the room to check exits
+	r.mutex.RLock()
+
+	// Find the exit matching the direction
+	var targetExit *Exit
+	for _, exit := range r.exits {
+		if exit != nil && exit.visible && strings.ToLower(exit.direction) == direction {
+			targetExit = exit
+			break
+		}
+	}
+
+	// If no exit found in that direction
+	if targetExit == nil {
+		r.mutex.RUnlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you can't go %s from here", direction),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if the target room exists
+	if targetExit.targetRoom == nil {
+		r.mutex.RUnlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("that exit leads nowhere"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Store reference to target room
+	targetRoom := targetExit.targetRoom
+	r.mutex.RUnlock()
+
+	// Move the character to the new room
+	err := MoveCharacter(cmd.Character, r, targetRoom, direction)
+	if err != nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     err,
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Prepare the movement success message
+	moveMsg := fmt.Sprintf("\n\rYou move %s.\n\r", direction)
+
+	// Automatically execute a look command in the new room
+	lookCmd := &CommandRequest{
+		ID:        uuid.New(),
+		Character: cmd.Character,
+		Verb:      "look",
+		Args:      []string{"look"},
+		Tier:      RoomTier,
+		State:     CommandPending,
+		Timestamp: time.Now(),
+		Response:  make(chan *CommandResponse, 1),
+	}
+
+	// Process the look command
+	targetRoom.handleRoomCommand(lookCmd)
+
+	// Get the response from the look command
+	lookResponse := <-lookCmd.Response
+	if lookResponse.Success {
+		moveMsg += lookResponse.Message
+	}
+
+	// Set a command wait time for movement (1 second)
+	cmd.Character.SetCommandWaitTime(1 * time.Second)
+
+	// Return success response with movement and look information
 	return &CommandResponse{
 		RequestID: cmd.ID,
-		Success:   false,
-		Error:     fmt.Errorf("movement commands are not implemented yet"),
+		Success:   true,
+		Message:   moveMsg,
 		Timestamp: time.Now(),
 	}
 }
@@ -1042,4 +1149,49 @@ func (r *Room) sendCommandResponse(cmd *CommandRequest, response *CommandRespons
 			Logger.Warn("Failed to send command response to commandOut channel", "roomID", r.roomID, "commandID", cmd.ID)
 		}
 	}
+}
+
+// MoveCharacter handles the process of moving a character from one room to another
+func MoveCharacter(character *Character, fromRoom, toRoom *Room, direction string) error {
+	if character == nil || fromRoom == nil || toRoom == nil {
+		return fmt.Errorf("cannot move character: nil reference provided")
+	}
+
+	// Ensure destination room is running
+	if !toRoom.running {
+		toRoom.Start(character.game)
+	}
+
+	// Remove character from current room
+	fromRoom.mutex.Lock()
+	delete(fromRoom.characters, character.id)
+	fromRoom.lastActive = time.Now() // Update activity timestamp
+	fromRoom.mutex.Unlock()
+
+	// Send departure message
+	if direction != "" {
+		SendRoomMessageExcept(fromRoom, fmt.Sprintf("\n\r%s leaves %s.\n\r", character.name, direction), character)
+	} else {
+		SendRoomMessageExcept(fromRoom, fmt.Sprintf("\n\r%s has left.\n\r", character.name), character)
+	}
+
+	// Add character to destination room
+	toRoom.mutex.Lock()
+	if toRoom.characters == nil {
+		toRoom.characters = make(map[uuid.UUID]*Character)
+	}
+	toRoom.characters[character.id] = character
+	toRoom.lastActive = time.Now() // Update activity timestamp
+	toRoom.mutex.Unlock()
+
+	// Reset idle counter and activate scripts
+	toRoom.HandleCharacterEntry()
+
+	// Update character's room reference
+	character.room = toRoom
+
+	// Send arrival message
+	SendRoomMessageExcept(toRoom, fmt.Sprintf("\n\r%s has arrived.\n\r", character.name), character)
+
+	return nil
 }
