@@ -43,11 +43,13 @@ Player sessions serve as the bridge between the interface and game world, handli
 The command system is structured in a three-tier hierarchy to efficiently handle different types of player interactions:
 
 1. **Character Tier (Fast, Local)** - Commands processed immediately in the character routine:
+
    - Status checks, inventory viewing, equipment status, and character stats
    - No wait time, providing immediate feedback to players
    - Entirely local to the character with no external dependencies
 
 2. **Room Tier (Medium, Localized)** - Commands affecting the local environment:
+
    - Movement, social interactions, local combat, and room interaction
    - Moderate wait times based on command complexity
    - Coordinated through the room to affect all characters present
@@ -340,6 +342,7 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
 ### Critical Issues
 
 1. **Insecure Credential Handling (cognito.go)**:
+
    - Sensitive credentials are passed as plain strings and could be accidentally logged
    - Located in the `Authenticate` function (lines 158-171)
 
@@ -351,39 +354,48 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
 ### High Severity Issues
 
 1. **Race Condition in Player Management (server.go)**:
+
    - Race condition between checking for existing session and adding new one
    - Could lead to security issues or resource leaks
    - Located in `AddPlayer` method (lines 295-307)
 
 2. **Silent Failure in Session Management (server.go)**:
+
    - Method silently ignores failures to send disconnect messages
    - Located in `DuplicatePlayer` method (lines 326-333)
 
 3. **Hidden Error Details (cognito.go)**:
+
    - Error details from Cognito are hidden from caller
    - Located in `SignUpUser` function (around line 70)
 
 4. **No Authentication Rate Limiting (cognito.go)**:
+
    - Limited rate limiting on authentication attempts at application level
    - Makes the system vulnerable to brute force attacks
 
 5. **Memory Issues with Large Datasets (database.go)**:
+
    - All DB query/scan items loaded into memory at once
    - Could cause out-of-memory issues with large datasets
    - Located in `Scan` and `Query` operations
 
 6. **Insufficient Input Validation (player.go)**:
+
    - Insufficient validation/sanitization of player input
    - Could lead to command injection or other security issues
 
 7. **Incomplete Error Handling in Player Data (player.go)**:
+
    - If saving player data fails, execution continues without proper handling
 
 8. **Invalid UUID Handling (character.go)**:
+
    - The `GenerateUUIDv7` function doesn't handle errors from UUID generation
    - Could return nil and cause panics elsewhere
 
 9. **SSH Connection Security (interface_ssh.go)**:
+
    - No validation of SSH connection parameters
    - No proper handling of unusual SSH client behavior
 
