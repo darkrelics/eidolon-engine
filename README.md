@@ -46,10 +46,12 @@ Each active room runs in its own goroutine, handling commands and state for all 
 - **Non-Persistent Rooms**: Unload from memory after being empty for 10 minutes
 
 Items in rooms follow similar persistence rules:
+
 - Items held by characters are persistent
 - Items in empty rooms will be purged if the room remains empty for 10 minutes
 
 Room scripts are managed through a central Script system:
+
 - Scripts are stored in S3 and cached in memory at startup
 - Multiple rooms can share the same script
 - Scripts control room-specific behaviors and interactions
@@ -379,6 +381,7 @@ OTHER:
 The room system has been enhanced with the following components:
 
 1. **Command Processing Architecture Implementation**:
+
    - Added complete three-tier command processing system (character, room, game)
    - Implemented consistent channel naming convention for command flow
    - Created command request/response structures for structured communication
@@ -387,6 +390,7 @@ The room system has been enhanced with the following components:
    - Added game-level command handlers for global operations
 
 2. **Room Goroutine Management**:
+
    - Implemented individual room goroutines for concurrent command processing
    - Added context-based coordination for room lifecycle management
    - Created Start/Stop methods for rooms with proper resource management
@@ -394,19 +398,21 @@ The room system has been enhanced with the following components:
    - Added idle detection for efficient resource management
 
 3. **Room Persistence Implementation**:
+
    - Added `persistent bool` flag to identify rooms that should remain loaded when empty
    - Added `lastActive time.Time` to track room activity for idle detection
    - Added `UpdateActivity()` method to update the room's activity timestamp
    - Added `IsIdle()` method to check if a room has been inactive for a specified duration
    - Room activity is updated when characters enter/leave or when room messages are sent
 
-2. **Script Support Infrastructure**:
+4. **Script Support Infrastructure**:
+
    - Added `scriptID string` field to Room struct to reference associated scripts
    - Added `GetScriptID()` method to safely access the script ID with proper mutex locking
    - Updated the NewRoom constructor to accept a scriptID parameter
    - The default room (room 0, "The Void") is configured with no script
 
-3. **Database Integration**:
+5. **Database Integration**:
    - Updated RoomData struct to include Persistent and ScriptID fields
    - Modified data_loader.py to handle these new fields in room data storage and display
    - Updated LoadRooms function to properly set scriptID when loading rooms
