@@ -36,6 +36,7 @@ type Room struct {
 	characters  map[uuid.UUID]*Character
 	items       map[uuid.UUID]*Item
 	persistent  bool             // Flag indicating if room should remain loaded when empty
+	scriptID    string           // ID of the script that defines room-specific behaviors
 	mutex       sync.RWMutex
 	lastEdited  time.Time
 	lastSaved   time.Time
@@ -51,6 +52,7 @@ type RoomData struct {
 	ExitIDs     []string `json:"exitID" dynamodbav:"ExitID"`
 	ItemIDs     []string `json:"itemID" dynamodbav:"ItemID"`
 	Persistent  bool     `json:"persistent" dynamodbav:"Persistent"`
+	ScriptID    string   `json:"scriptID" dynamodbav:"ScriptID"`
 }
 
 // Exit represents the in-memory structure for an exit
@@ -75,9 +77,9 @@ type ExitData struct {
 
 // Initialize a new room
 
-func NewRoom(roomID int64, area, title, description string, persistent bool) *Room {
+func NewRoom(roomID int64, area, title, description string, persistent bool, scriptID string) *Room {
 
-	Logger.Info("New Room...Initalizing Room...", "roomID", roomID, "persistent", persistent)
+	Logger.Info("New Room...Initalizing Room...", "roomID", roomID, "persistent", persistent, "scriptID", scriptID)
 	
 	now := time.Now()
 	
@@ -90,6 +92,7 @@ func NewRoom(roomID int64, area, title, description string, persistent bool) *Ro
 		characters:  make(map[uuid.UUID]*Character),
 		items:       make(map[uuid.UUID]*Item),
 		persistent:  persistent,
+		scriptID:    scriptID,
 		mutex:       sync.RWMutex{},
 		lastEdited:  now,
 		lastSaved:   now,
@@ -163,6 +166,7 @@ func (g *Game) LoadRooms() error {
 			roomData.Title, 
 			roomData.Description,
 			roomData.Persistent,
+			roomData.ScriptID,
 		)
 	}
 
@@ -207,6 +211,14 @@ func (r *Room) IsIdle(duration time.Duration) bool {
 	defer r.mutex.RUnlock()
 	
 	return len(r.characters) == 0 && time.Since(r.lastActive) > duration
+}
+
+// GetScriptID returns the script ID for the room
+func (r *Room) GetScriptID() string {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	
+	return r.scriptID
 }
 
 // SendRoomMessageExcept sends a message to all characters in a room except one

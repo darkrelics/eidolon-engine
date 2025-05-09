@@ -107,6 +107,7 @@ def store_rooms(dynamodb, rooms_data):
                     "ExitID": room["ExitID"],
                     "ItemID": room.get("ItemID", []),
                     "Persistent": room.get("Persistent", False),  # Default to False if not specified
+                    "ScriptID": room.get("ScriptID", ""),  # Default to empty string if not specified
                 }
                 rooms_batch.put_item(Item=convert_to_dynamodb_format(room_item))
         print("Room data stored in DynamoDB successfully")
@@ -296,6 +297,7 @@ def display_rooms(rooms):
         print(f"  Exits: {', '.join(room.get('ExitID', []))}")
         print(f"  Items: {', '.join(room.get('ItemID', []))}")
         print(f"  Persistent: {room.get('Persistent', False)}")
+        print(f"  ScriptID: {room.get('ScriptID', '')}")
         print()
 
 

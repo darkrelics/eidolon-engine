@@ -100,6 +100,8 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [ ] Develop command timeout systems.
 - [ ] Construct the item system with verb interactions.
 - [ ] Implement movement commands with room state changes.
+- [x] Add room persistence flag to Room struct
+- [x] Add scriptID field to Room struct
 - [ ] Implement Room goroutine system.
 - [ ] Create Script management system with S3 storage.
 - [ ] Implement room persistence system.
@@ -165,7 +167,10 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [ ] Add Session Timeout.
 - [ ] Add log rotation for by Cloudwatch Stream.
 - [ ] Add batching for Cloudwatch log writes.
-- [ ] Implement room persistence flag system.
+- [x] Implement room persistence flag system.
+- [x] Update database tools to support room persistence flag.
+- [x] Add scriptID field to Room struct for future scripting support.
+- [x] Update database tools to support room scriptID field.
 - [ ] Create room goroutine management.
 - [ ] Implement room script loading from S3.
 - [ ] Add idle room detection and cleanup.
@@ -281,7 +286,9 @@ OTHER:
 ### Room System
 
 - [ ] Individual room goroutines
-- [ ] Room persistence flag implementation
+- [x] Room persistence flag implementation
+- [x] Room script ID implementation
+- [x] Room activity tracking mechanism
 - [ ] Script-driven room behaviors
 - [ ] Idle room detection and cleanup
 - [ ] Non-persistent item cleanup
@@ -329,7 +336,8 @@ OTHER:
 
 ### Game World
 
-- [ ] Room implementation
+- [x] Basic room implementation
+- [x] Room activity tracking
 - [ ] Exit implementation
 - [ ] Item interaction system with verbs
 - [x] Archetype system
@@ -340,6 +348,8 @@ OTHER:
 
 - [x] DynamoDB integration
 - [x] Database operations abstraction
+- [x] Support for room persistence in database tools
+- [x] Support for room script IDs in database tools
 - [ ] RAM caching to minimize database access
 - [ ] Non-blocking database operations
 
@@ -355,6 +365,32 @@ OTHER:
 
 - [ ] Unit testing for standalone functions
 - [ ] Live user interaction testing
+
+## Recent Changes
+
+### Room System Enhancements
+
+The room system has been enhanced with the following components:
+
+1. **Room Persistence Implementation**:
+   - Added `persistent bool` flag to identify rooms that should remain loaded when empty
+   - Added `lastActive time.Time` to track room activity for idle detection
+   - Added `UpdateActivity()` method to update the room's activity timestamp
+   - Added `IsIdle()` method to check if a room has been inactive for a specified duration
+   - Room activity is updated when characters enter/leave or when room messages are sent
+
+2. **Script Support Infrastructure**:
+   - Added `scriptID string` field to Room struct to reference associated scripts
+   - Added `GetScriptID()` method to safely access the script ID with proper mutex locking
+   - Updated the NewRoom constructor to accept a scriptID parameter
+   - The default room (room 0, "The Void") is configured with no script
+
+3. **Database Integration**:
+   - Updated RoomData struct to include Persistent and ScriptID fields
+   - Modified data_loader.py to handle these new fields in room data storage and display
+   - Updated LoadRooms function to properly set scriptID when loading rooms
+
+These enhancements form the foundation for both the room lifecycle management system and the future scripting system, allowing non-persistent empty rooms to be unloaded from memory after a period of inactivity and providing the structure needed for room-specific script behaviors.
 
 ## Known Issues
 
@@ -463,7 +499,7 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
 - Implement proper error handling in player data saving
 - Consolidate player disconnection logic
 - Move hard-coded values to configuration
-- Implement room persistence system
+- Continue room persistence system implementation
 - Set up S3 script storage and loading
 
 ### Long-term Refactoring
