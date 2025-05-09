@@ -2,7 +2,7 @@
 jupyter==1.1.1
 matplotlib==3.10.1
 networkx==3.4.2
-notebook==7.3.3
+notebook==7.4.2
 numpy==2.2.4
 pyyaml==6.0.2
 voila==0.5.8
@@ -53,7 +53,7 @@ jupyter-events==0.12.0
 jupyter-lsp==2.2.5
 jupyter-server==2.15.0
 jupyter-server-terminals==0.5.3
-jupyterlab==4.3.6
+jupyterlab==4.4.1
 jupyterlab-pygments==0.3.0
 jupyterlab-server==2.27.3
 jupyterlab-widgets==3.0.14
@@ -73,7 +73,7 @@ parso==0.8.4
 pillow==11.2.1
 platformdirs==4.3.7
 prometheus-client==0.21.1
-prompt-toolkit==3.0.50
+prompt-toolkit==3.0.51
 psutil==7.0.0
 pure-eval==0.2.3
 pycparser==2.22
