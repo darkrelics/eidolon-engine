@@ -339,6 +339,8 @@ func (c *Character) Run(done chan bool) {
 		c.room.characters = make(map[uuid.UUID]*Character)
 	}
 	c.room.characters[c.id] = c
+		// Update room activity timestamp
+		c.room.lastActive = time.Now()
 	c.room.mutex.Unlock()
 
 	// Notify room of arrival (without holding locks)
@@ -429,10 +431,11 @@ func (c *Character) Stop(done chan bool) {
 		SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has left.\n\r", c.name), c)
 	}
 
-	// Remove character from room
+	// Remove character from room and update room activity timestamp
 	if c.room != nil {
 		c.room.mutex.Lock()
 		delete(c.room.characters, c.id)
+		c.room.lastActive = time.Now() // Update the timestamp when character leaves
 		c.room.mutex.Unlock()
 	}
 

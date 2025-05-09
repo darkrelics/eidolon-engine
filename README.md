@@ -27,16 +27,33 @@ Key components:
 - Go server (v1.24) for game logic and player interactions
 - Python (v3.12) scripts for database management and deployment
 - Flutter (v3.29) for the portal interface
-- AWS services for database (DynamoDB) and Identity Provider (Cognito)
+- AWS services for database (DynamoDB), Identity Provider (Cognito), and S3 for scripts
 - CloudFormation templates for AWS resource management
 
 ## Server Architecture
 
-The Eidolon Engine system is built around two primary goroutines - server and game - which form the backbone of the architecture. The server component manages external interfaces, beginning with SSH and designed to later accommodate HTTPS and gRPC. It handles authentication through AWS Cognito, controls all external I/O operations, and tracks active interfaces. When players connect, the server creates individual player sessions through the appropriate interface, with communication managed through dedicated channels for input, output, and errors.
+The Eidolon Engine system is built around three primary goroutine types - server, game, and room - which form the backbone of the architecture. The server component manages external interfaces, beginning with SSH and designed to later accommodate HTTPS and gRPC. It handles authentication through AWS Cognito, controls all external I/O operations, and tracks active interfaces. When players connect, the server creates individual player sessions through the appropriate interface, with communication managed through dedicated channels for input, output, and errors.
 
 Each interface implements protocol-specific rate limiting and reports metrics to CloudWatch. The interfaces track their active players, with the system designed to support approximately 1000 concurrent players. Rather than using WaitGroups, the system relies on context and channels for coordinating operations and shutdowns between components.
 
 Player sessions serve as the bridge between the interface and game world, handling essential functions like displaying messages of the day, character management, and console formatting for passwords and other sensitive input. Each session implements anti-abuse rate limiting and maintains clear communication boundaries through channels at both the interface and character layers. When a player creates or selects a character, the player session spawns a character session while maintaining tracking of its associated characters.
+
+### Room System
+
+Each active room runs in its own goroutine, handling commands and state for all characters and items within it. Rooms can be marked as persistent or non-persistent:
+
+- **Persistent Rooms**: Remain loaded in memory even when empty
+- **Non-Persistent Rooms**: Unload from memory after being empty for 10 minutes
+
+Items in rooms follow similar persistence rules:
+- Items held by characters are persistent
+- Items in empty rooms will be purged if the room remains empty for 10 minutes
+
+Room scripts are managed through a central Script system:
+- Scripts are stored in S3 and cached in memory at startup
+- Multiple rooms can share the same script
+- Scripts control room-specific behaviors and interactions
+- The same scripting system is used for both rooms and items
 
 ### Command Processing Architecture
 
@@ -61,13 +78,13 @@ The command system is structured in a three-tier hierarchy to efficiently handle
 
 Command processing includes a timeout system similar to Dragon Realms by SimuTronic, where different commands have varying "roundtime" periods during which certain other commands cannot be executed. Character states (standing, sitting, prone) affect command availability, with state-appropriate commands always accessible regardless of timeout status.
 
-Character sessions process commands through a strict parser that accepts only basic letters, numbers, and common special symbols, discarding any unrecognized input. These sessions determine which commands can be handled locally and which need to be elevated to the room or game routine. They maintain their own I/O buffering with game-defined limits and communicate with the game routine through dedicated channels. The proper cleanup and removal of characters from the game is a critical priority.
+Character sessions process commands through a strict parser that accepts only basic letters, numbers, and common special symbols, discarding any unrecognized input. These sessions determine which commands can be handled locally and which need to be elevated to the room or game routine. They maintain their own I/O buffering with game-defined limits and communicate with the room routine through dedicated channels, which may further escalate to the game routine as needed. The proper cleanup and removal of characters from the game is a critical priority.
 
 The game routine serves as the authoritative source for world state, managing all characters, rooms, items, and game mechanics including the passage of time. It handles all database operations through DynamoDB, using RAM caching to minimize database access and prevent blocking operations. While initially designed as a single routine, the architecture supports future scaling to multiple game routines, though this will require additional communication mechanisms.
 
 The entire system is organized through a hierarchical context structure. The main package provides a global context that flows down through server and game components. The server context extends to interfaces, players, and characters, while interface contexts flow to players and characters. The game maintains its own context for characters, with each player having a context for their character, and each character maintaining its own context.
 
-Testing will primarily be conducted through live user interaction, with unit tests implemented for functions that don't require network or cloud resources. The architecture heavily leverages AWS services, with CloudWatch handling metrics and logging, Cognito managing authentication, and DynamoDB providing persistence. While the engine can run anywhere, it is optimized for AWS infrastructure. This design emphasizes clean separation of concerns while maintaining efficient communication patterns and supporting future scalability needs.
+Testing will primarily be conducted through live user interaction, with unit tests implemented for functions that don't require network or cloud resources. The architecture heavily leverages AWS services, with CloudWatch handling metrics and logging, Cognito managing authentication, DynamoDB providing persistence, and S3 storing scripts. While the engine can run anywhere, it is optimized for AWS infrastructure. This design emphasizes clean separation of concerns while maintaining efficient communication patterns and supporting future scalability needs.
 
 ## Current Objectives
 
@@ -83,6 +100,9 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [ ] Develop command timeout systems.
 - [ ] Construct the item system with verb interactions.
 - [ ] Implement movement commands with room state changes.
+- [ ] Implement Room goroutine system.
+- [ ] Create Script management system with S3 storage.
+- [ ] Implement room persistence system.
 - [ ] Develop player communication systems.
 - [ ] Develop a weather and time system.
 - [ ] Create a crafting system for items.
@@ -145,6 +165,11 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [ ] Add Session Timeout.
 - [ ] Add log rotation for by Cloudwatch Stream.
 - [ ] Add batching for Cloudwatch log writes.
+- [ ] Implement room persistence flag system.
+- [ ] Create room goroutine management.
+- [ ] Implement room script loading from S3.
+- [ ] Add idle room detection and cleanup.
+- [ ] Implement non-persistent item cleanup for empty rooms.
 
 ## Commands
 
@@ -251,6 +276,22 @@ OTHER:
 - [x] Establish two primary goroutines (server and game)
 - [x] Implement context-based coordination rather than WaitGroups
 - [ ] Support 1,000 concurrent players
+- [ ] Implement room goroutine architecture
+
+### Room System
+
+- [ ] Individual room goroutines
+- [ ] Room persistence flag implementation
+- [ ] Script-driven room behaviors
+- [ ] Idle room detection and cleanup
+- [ ] Non-persistent item cleanup
+
+### Scripting System
+
+- [ ] Script struct implementation
+- [ ] S3-based script storage
+- [ ] In-memory script caching
+- [ ] Lua integration for room and item scripts
 
 ### Interfaces
 
@@ -307,6 +348,7 @@ OTHER:
 - [x] CloudWatch for metrics and logging
 - [x] Cognito for authentication
 - [x] DynamoDB for persistence
+- [ ] S3 for script storage
 - [ ] Infrastructure optimization for AWS
 
 ### Testing
@@ -412,6 +454,8 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
 - Address the race condition in player management (server.go lines 295-307)
 - Implement proper input validation for player commands
 - Fix UUID generation error handling
+- Begin implementation of room goroutine system
+- Create script management structure
 
 ### Short-term Improvements
 
@@ -419,6 +463,8 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
 - Implement proper error handling in player data saving
 - Consolidate player disconnection logic
 - Move hard-coded values to configuration
+- Implement room persistence system
+- Set up S3 script storage and loading
 
 ### Long-term Refactoring
 
@@ -426,6 +472,7 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
 - Improve context propagation throughout the codebase
 - Improve concurrency patterns to avoid blocking operations
 - Add versioning for data structures
+- Enhance room scripting capabilities
 
 ## Web Portal
 

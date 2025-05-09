@@ -66,4 +66,4 @@ go.work
 **/*.metadata
 
 CLAUDE.md
-**/.claude/settings.local.json
+**/.claude/*

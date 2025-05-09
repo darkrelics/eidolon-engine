@@ -35,9 +35,11 @@ type Room struct {
 	exits       map[uuid.UUID]*Exit
 	characters  map[uuid.UUID]*Character
 	items       map[uuid.UUID]*Item
+	persistent  bool             // Flag indicating if room should remain loaded when empty
 	mutex       sync.RWMutex
 	lastEdited  time.Time
 	lastSaved   time.Time
+	lastActive  time.Time        // Timestamp of last activity in the room
 }
 
 // RoomData represents the structure for storing room data in DynamoDB
@@ -48,6 +50,7 @@ type RoomData struct {
 	Description string   `json:"description" dynamodbav:"Description"`
 	ExitIDs     []string `json:"exitID" dynamodbav:"ExitID"`
 	ItemIDs     []string `json:"itemID" dynamodbav:"ItemID"`
+	Persistent  bool     `json:"persistent" dynamodbav:"Persistent"`
 }
 
 // Exit represents the in-memory structure for an exit
@@ -72,10 +75,12 @@ type ExitData struct {
 
 // Initialize a new room
 
-func NewRoom(roomID int64, area, title, description string) *Room {
+func NewRoom(roomID int64, area, title, description string, persistent bool) *Room {
 
-	Logger.Info("New Room...Initalizing Room...")
-
+	Logger.Info("New Room...Initalizing Room...", "roomID", roomID, "persistent", persistent)
+	
+	now := time.Now()
+	
 	return &Room{
 		roomID:      roomID,
 		area:        area,
@@ -84,9 +89,11 @@ func NewRoom(roomID int64, area, title, description string) *Room {
 		exits:       make(map[uuid.UUID]*Exit),
 		characters:  make(map[uuid.UUID]*Character),
 		items:       make(map[uuid.UUID]*Item),
+		persistent:  persistent,
 		mutex:       sync.RWMutex{},
-		lastEdited:  time.Now(),
-		lastSaved:   time.Now(),
+		lastEdited:  now,
+		lastSaved:   now,
+		lastActive:  now,
 	}
 }
 
@@ -150,8 +157,13 @@ func (g *Game) LoadRooms() error {
 	// Populate all rooms
 
 	for _, roomData := range roomsData {
-		g.rooms[roomData.RoomID] = NewRoom(roomData.RoomID, roomData.Area, roomData.Title, roomData.Description)
-
+		g.rooms[roomData.RoomID] = NewRoom(
+			roomData.RoomID, 
+			roomData.Area, 
+			roomData.Title, 
+			roomData.Description,
+			roomData.Persistent,
+		)
 	}
 
 	// Load exit data
@@ -180,11 +192,31 @@ func (g *Game) LoadRooms() error {
 
 }
 
+// UpdateActivity updates the lastActive timestamp for a room
+func (r *Room) UpdateActivity() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	
+	r.lastActive = time.Now()
+	r.lastEdited = r.lastActive
+}
+
+// IsIdle checks if a room has been idle for the specified duration
+func (r *Room) IsIdle(duration time.Duration) bool {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	
+	return len(r.characters) == 0 && time.Since(r.lastActive) > duration
+}
+
 // SendRoomMessageExcept sends a message to all characters in a room except one
 func SendRoomMessageExcept(room *Room, message string, except *Character) {
 	if room == nil {
 		return
 	}
+	
+	// Update room activity before acquiring lock to avoid concurrency issues
+	room.UpdateActivity()
 
 	room.mutex.RLock()
 	defer room.mutex.RUnlock()

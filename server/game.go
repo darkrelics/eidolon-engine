@@ -123,7 +123,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	// Create Default Room
 
-	game.rooms[0] = NewRoom(0, "The Void", "The Void", "Default void room.")
+	game.rooms[0] = NewRoom(0, "The Void", "The Void", "Default void room.", true) // Default room is always persistent
 
 	// Load Rooms
 

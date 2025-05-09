@@ -6,7 +6,17 @@
       "Title": "Whispering Glade",
       "Description": "Amidst the Verdant Forest, sunlight pierces the leafy canopy, illuminating moss-covered trees. Birds chirp melodically, blending with rustling leaves. The air, rich with pine, invigorates. A tranquil, timeless haven.",
       "ExitID": ["b47ac10b-58cc-4372-a567-0e02b2c3d496"],
-      "ItemID": []
+      "ItemID": [],
+      "Persistent": false
+    },
+    {
+      "RoomID": 12,
+      "Area": "The Vedant Forest",
+      "Title": "Forest Shrine",
+      "Description": "A small stone shrine stands in a beam of sunlight, moss adorning its ancient surfaces. Offerings of flowers and trinkets hint at regular visitors, though none are present now. The air here feels unusually still, as if time itself respects this sacred space.",
+      "ExitID": ["c47ac10b-58cc-4372-a567-0e02b2c3d497"],
+      "ItemID": [],
+      "Persistent": true
     }
   ]
 }
