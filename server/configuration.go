@@ -106,7 +106,6 @@ func validateConfiguration(config *Configuration) error {
 		return fmt.Errorf("cognito userPoolClientId is required")
 	}
 
-
 	if config.Game.StartingHealth <= 0 {
 		return fmt.Errorf("game startingHealth must be greater than 0")
 	}
