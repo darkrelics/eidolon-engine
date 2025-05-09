@@ -21,7 +21,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -343,22 +342,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 	}
 }
 
-// HandleCharacterEntry handles character entering a room, resets idle counter and activates scripts
-func (r *Room) HandleCharacterEntry() {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	// Reset idle counter
-	r.idleCounter = 0
-
-	// For persistent rooms with scripts assigned, activate scripts
-	if r.persistent && r.scriptID != "" && !r.scriptActive {
-		r.scriptActive = true
-		Logger.Info("Activating scripts for persistent room with character entry", "roomID", r.roomID)
-	}
-}
-
-// cleanupItems removes non-persistent items from the room
+// cleanupItems removes items that are marked for deletion from the room
 func (r *Room) cleanupItems(game *Game) {
 	itemCount := len(r.items)
 
@@ -366,7 +350,7 @@ func (r *Room) cleanupItems(game *Game) {
 	var itemsToRemove []uuid.UUID
 
 	for id, item := range r.items {
-		if item != nil && !item.persistent {
+		if item != nil && item.markedForDeletion {
 			itemsToRemove = append(itemsToRemove, id)
 		}
 	}
@@ -378,7 +362,7 @@ func (r *Room) cleanupItems(game *Game) {
 		delete(game.items, id)
 	}
 
-	Logger.Info("Cleaned up non-persistent items from idle room",
+	Logger.Info("Cleaned up marked items from idle room",
 		"roomID", r.roomID,
 		"itemsRemoved", len(itemsToRemove),
 		"totalItemsBefore", itemCount,
@@ -505,500 +489,220 @@ func (r *Room) run(game *Game) {
 	}
 }
 
-// IncrementIdleCounter increments the idle counter for an empty room and handles cleanup if threshold is reached
-func (r *Room) IncrementIdleCounter(game *Game) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	// Only increment if room is empty
-	if len(r.characters) > 0 {
-		// Reset counter if characters are present
-		r.idleCounter = 0
-		return
-	}
-
-	// Increment the idle counter
-	r.idleCounter++
-
-	// Check if idle threshold has been reached (600 ticks = 10 minutes @ 1 second per tick)
-	if r.idleCounter >= 600 {
-		Logger.Info("Room idle threshold reached", "roomID", r.roomID, "title", r.title, "persistent", r.persistent)
-
-		// Clean up items in the room
-		r.cleanupItems(game)
-
-		// For persistent rooms, deactivate scripts but keep room loaded
-		if r.persistent {
-			r.scriptActive = false
-			Logger.Info("Deactivating scripts for idle persistent room", "roomID", r.roomID)
-		} else {
-			// For non-persistent rooms, unload the room
-			Logger.Info("Unloading non-persistent idle room", "roomID", r.roomID)
-
-			// We must unlock mutex before calling Stop to avoid deadlock
-			r.mutex.Unlock()
-			r.Stop()
-			r.mutex.Lock() // Re-lock for the remainder of the function
-
-			// Remove room from game's room map
-			delete(game.rooms, r.roomID)
-		}
-	}
-}
-
-// cleanupItems marks items for deletion and removes them from the room
-func (r *Room) cleanupItems(game *Game) {
-	itemCount := len(r.items)
-
-	// Create temporary list of items to remove
-	var itemsToRemove []uuid.UUID
-
-	for id, item := range r.items {
-		if item != nil {
-			// Mark the item for deletion
-			item.markedForDeletion = true
-			itemsToRemove = append(itemsToRemove, id)
-		}
-	}
-
-	// Remove the items from the room
-	for _, id := range itemsToRemove {
-		delete(r.items, id)
-
-		// Don't delete from game.items here - the Game should handle garbage collection
-		// of items marked for deletion separately
-	}
-
-	Logger.Info("Marked items for deletion and removed them from idle room",
-		"roomID", r.roomID,
-		"itemsRemoved", len(itemsToRemove),
-		"totalItemsBefore", itemCount,
-		"totalItemsAfter", len(r.items))
-}
-
-// processCommand handles a command request in the room
+// processCommand handles a command request within the room context
 func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 	if cmd == nil {
-		Logger.Error("Received nil command request", "roomID", r.roomID)
+		Logger.Error("Received nil command in room", "roomID", r.roomID)
 		return
 	}
 
-	Logger.Debug("Processing room command", "roomID", r.roomID, "verb", cmd.Verb, "gameState", game.characterCount.Load())
+	Logger.Debug("Processing room command",
+		"roomID", r.roomID,
+		"verb", cmd.Verb,
+		"character", cmd.Character.name)
 
-	// Update the command state
-	cmd.State = CommandProcessing
-
-	// Update room activity timestamp
-	r.UpdateActivity()
-
-	// Handle command based on its type
-	switch cmd.Tier {
-	case RoomTier:
-		// Process room-level command
-		r.handleRoomCommand(cmd)
-
-	case GameTier:
-		// Forward command to game tier
-		Logger.Debug("Escalating command to game tier", "roomID", r.roomID, "verb", cmd.Verb)
-
-		// Set the game reference for possible callbacks
-		cmd.Character.game = game
-
-		select {
-		case r.gameCommandOut <- cmd:
-			// Successfully forwarded
-		default:
-			// Channel full or closed, return error
-			response := &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("unable to forward command to game: channel full or closed"),
-				Timestamp: time.Now(),
-			}
-			r.sendCommandResponse(cmd, response)
-		}
-
-	default:
-		// Invalid tier for room processing
-		Logger.Warn("Room received command with invalid tier", "roomID", r.roomID, "verb", cmd.Verb, "tier", cmd.Tier)
-		response := &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid command tier for room processing"),
-			Timestamp: time.Now(),
-		}
-		r.sendCommandResponse(cmd, response)
-	}
-}
-
-// handleRoomCommand processes room-level commands
-func (r *Room) handleRoomCommand(cmd *CommandRequest) {
-	// Handle different room commands based on verb
-	var response *CommandResponse
-
-	switch cmd.Verb {
-	case "say", "talk":
-		// Handle in-room chat
-		response = r.handleSayCommand(cmd)
-	case "emote", "me":
-		// Handle emotes
-		response = r.handleEmoteCommand(cmd)
-	case "look":
-		// Handle looking at room or objects in room
-		response = r.handleLookCommand(cmd)
-	case "whisper":
-		// Handle private communication in room
-		response = r.handleWhisperCommand(cmd)
-	case "get", "take", "drop", "put":
-		// Handle item manipulation
-		response = r.handleItemCommand(cmd)
-	case "north", "south", "east", "west", "up", "down", "go":
-		// Handle movement
-		response = r.handleMovementCommand(cmd)
-	default:
-		// Command not recognized at room level
-		response = &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("command not recognized at room level: %s", cmd.Verb),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Send the response
-	r.sendCommandResponse(cmd, response)
-}
-
-// handleSayCommand processes the "say" command
-func (r *Room) handleSayCommand(cmd *CommandRequest) *CommandResponse {
-	// Check if there's a message to say
-	if len(cmd.Args) < 2 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("what do you want to say?"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Extract the message
-	message := strings.Join(cmd.Args[1:], " ")
-
-	// Format the message for the speaker and others
-	selfMsg := fmt.Sprintf("\n\rYou say: %s\n\r", message)
-	othersMsg := fmt.Sprintf("\n\r%s says: %s\n\r", cmd.Character.name, message)
-
-	// Send to everyone in the room except the speaker
-	for _, c := range r.characters {
-		if c != nil && c != cmd.Character && c.player != nil {
-			select {
-			case c.player.commandOut <- othersMsg:
-				// Message sent successfully
-				select {
-				case c.player.commandOut <- c.prompt:
-					// Prompt sent successfully
-				default:
-					Logger.Warn("Failed to send prompt after say command", "recipient", c.name)
-				}
-			default:
-				Logger.Warn("Failed to send say message to player",
-					"recipient", c.name,
-					"speaker", cmd.Character.name)
-			}
-		}
-	}
-
-	// Return the message for the speaker
-	return &CommandResponse{
+	// Create default response
+	response := &CommandResponse{
 		RequestID: cmd.ID,
-		Success:   true,
-		Message:   selfMsg,
+		Success:   false,
 		Timestamp: time.Now(),
 	}
+
+	// Process command based on verb
+	switch strings.ToLower(cmd.Verb) {
+	case "say", "\"", "'": // Handle speech commands
+		// TODO: Implement say command handling
+		response.Error = fmt.Errorf("say command not implemented yet")
+
+	case "look", "l": // Handle look command (additional room-based look processing)
+		// This is typically handled at the character level, but might have room-level effects
+		response.Success = true
+		// No message/error for success since character handler already showed the room
+
+	case "north", "south", "east", "west", "up", "down", "n", "s", "e", "w", "u", "d":
+		// Handle direct movement commands
+		direction := cmd.Verb
+		// Expand shortened directions
+		switch direction {
+		case "n":
+			direction = "north"
+		case "s":
+			direction = "south"
+		case "e":
+			direction = "east"
+		case "w":
+			direction = "west"
+		case "u":
+			direction = "up"
+		case "d":
+			direction = "down"
+		}
+
+		// Add the direction as an argument to the command
+		movementCmd := &CommandRequest{
+			ID:        cmd.ID,
+			Character: cmd.Character,
+			Verb:      "move",
+			Args:      []string{"move", direction},
+			Tier:      cmd.Tier,
+			State:     cmd.State,
+			Timestamp: cmd.Timestamp,
+			Response:  cmd.Response,
+		}
+
+		resp := r.handleMovementCommand(movementCmd)
+
+		// Copy response fields
+		response.Success = resp.Success
+		response.Message = resp.Message
+		response.Error = resp.Error
+
+	case "go", "move": // Handle explicit movement commands with direction argument
+		// Check if a direction was provided
+		if len(cmd.Args) < 2 {
+			response.Error = fmt.Errorf(msgNoDirection)
+			break
+		}
+
+		resp := r.handleMovementCommand(cmd)
+
+		// Copy response fields
+		response.Success = resp.Success
+		response.Message = resp.Message
+		response.Error = resp.Error
+
+	case "get", "take", "drop", "put": // Handle item commands
+		resp := r.handleItemCommand(cmd)
+
+		// Copy response fields
+		response.Success = resp.Success
+		response.Message = resp.Message
+		response.Error = resp.Error
+
+	default:
+		// Unknown command at room level
+		Logger.Warn("Unhandled room command", "verb", cmd.Verb, "roomID", r.roomID)
+		response.Error = fmt.Errorf("unknown room command: %s", cmd.Verb)
+	}
+
+	// Send response back to character
+	select {
+	case cmd.Response <- response:
+		// Response sent successfully
+	default:
+		Logger.Error("Failed to send command response",
+			"verb", cmd.Verb,
+			"characterName", cmd.Character.name,
+			"roomID", r.roomID)
+	}
 }
 
-// handleEmoteCommand processes the "emote" command
-func (r *Room) handleEmoteCommand(cmd *CommandRequest) *CommandResponse {
-	// Check if there's an emote to perform
-	if len(cmd.Args) < 2 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("what do you want to do?"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Extract the emote action
-	action := strings.Join(cmd.Args[1:], " ")
-
-	// Format the emote message
-	emoteMsg := fmt.Sprintf("\n\r%s %s\n\r", cmd.Character.name, action)
-
-	// Send to everyone in the room including the actor
-	for _, c := range r.characters {
-		if c != nil && c != cmd.Character && c.player != nil {
-			select {
-			case c.player.commandOut <- emoteMsg:
-				// Message sent successfully
-				select {
-				case c.player.commandOut <- c.prompt:
-					// Prompt sent successfully
-				default:
-					Logger.Warn("Failed to send prompt after emote", "recipient", c.name)
-				}
-			default:
-				Logger.Warn("Failed to send emote to player",
-					"recipient", c.name,
-					"actor", cmd.Character.name)
-			}
-		}
-	}
-
-	// Return the message for the actor
-	return &CommandResponse{
+// handleMovementCommand processes room movement commands
+func (r *Room) handleMovementCommand(cmd *CommandRequest) *CommandResponse {
+	// Create the response structure
+	response := &CommandResponse{
 		RequestID: cmd.ID,
-		Success:   true,
-		Message:   emoteMsg,
+		Success:   false,
 		Timestamp: time.Now(),
 	}
-}
 
-// handleLookCommand processes the "look" command within the room
-func (r *Room) handleLookCommand(cmd *CommandRequest) *CommandResponse {
-	// Format depends on whether looking at room or specific object
-	var lookMsg string
+	// First check if the character is allowed to move (no wait time)
+	canMove, reason := cmd.Character.CanExecuteCommand()
+	if !canMove {
+		response.Error = fmt.Errorf("%s", reason)
+		return response
+	}
 
-	if len(cmd.Args) < 2 {
-		// Looking at the room itself
-		r.mutex.RLock()
-		lookMsg = fmt.Sprintf("\n\r[%s]\n\r%s\n\r", r.title, r.description)
-
-		// Add exits
-		var exits []string
-		for _, exit := range r.exits {
-			if exit != nil && exit.visible {
-				exits = append(exits, exit.direction)
-			}
+	// Get the direction from the command
+	var direction string
+	if cmd.Verb == "go" || cmd.Verb == "move" {
+		// Using the "go" or "move" command with a direction argument
+		if len(cmd.Args) < 2 {
+			response.Error = fmt.Errorf(msgNoDirection)
+			return response
 		}
-
-		if len(exits) == 0 {
-			lookMsg += "There are no visible exits.\n\r"
-		} else {
-			sort.Strings(exits)
-			lookMsg += "Obvious exits: " + strings.Join(exits, ", ") + "\n\r"
-		}
-
-		// Add characters
-		var chars []string
-		for _, c := range r.characters {
-			if c != nil && c != cmd.Character {
-				chars = append(chars, c.name)
-			}
-		}
-
-		if len(chars) == 0 {
-			lookMsg += "You are alone.\n\r"
-		} else {
-			lookMsg += "Also here: " + strings.Join(chars, ", ") + "\n\r"
-		}
-
-		// Add items
-		var items []string
-		for _, item := range r.items {
-			if item != nil {
-				items = append(items, item.name)
-			}
-		}
-
-		if len(items) > 0 {
-			lookMsg += "Items in the room:\n\r"
-			for _, item := range items {
-				lookMsg += fmt.Sprintf("- %s\n\r", item)
-			}
-		}
-		r.mutex.RUnlock()
+		direction = strings.ToLower(cmd.Args[1])
 	} else {
-		// Looking at a specific object in the room
-		target := strings.ToLower(strings.Join(cmd.Args[1:], " "))
-
-		// Check for special targets
-		switch target {
-		case "room", "here":
-			// Recursive call to look at the room
-			return r.handleLookCommand(&CommandRequest{
-				ID:        cmd.ID,
-				Character: cmd.Character,
-				Verb:      "look",
-				Args:      []string{"look"},
-				Response:  cmd.Response,
-			})
-		case "self", "me", "myself":
-			// Look at self
-			lookMsg = fmt.Sprintf("\n\rYou see yourself, %s.\n\r", cmd.Character.name)
-		default:
-			// Look for a character in the room
-			r.mutex.RLock()
-			foundTarget := false
-
-			// Check characters
-			for _, c := range r.characters {
-				if c != nil && strings.Contains(strings.ToLower(c.name), target) {
-					if c == cmd.Character {
-						lookMsg = fmt.Sprintf("\n\rYou see yourself, %s.\n\r", cmd.Character.name)
-					} else {
-						lookMsg = fmt.Sprintf("\n\r%s is here.\n\r", c.name)
-					}
-					foundTarget = true
-					break
-				}
-			}
-
-			// Check exits if no character found
-			if !foundTarget {
-				for _, exit := range r.exits {
-					if exit != nil && exit.visible && strings.Contains(strings.ToLower(exit.direction), target) {
-						if exit.description != "" {
-							lookMsg = fmt.Sprintf("\n\r%s\n\r", exit.description)
-						} else {
-							lookMsg = fmt.Sprintf("\n\rYou see an exit leading %s.\n\r", exit.direction)
-						}
-						foundTarget = true
-						break
-					}
-				}
-			}
-
-			// Check items if still not found
-			if !foundTarget {
-				for _, item := range r.items {
-					if item != nil && strings.Contains(strings.ToLower(item.name), target) {
-						lookMsg = fmt.Sprintf("\n\rYou see %s.\n\r", item.name)
-						if item.description != "" {
-							lookMsg += item.description + "\n\r"
-						}
-						foundTarget = true
-						break
-					}
-				}
-			}
-			r.mutex.RUnlock()
-
-			// If nothing found
-			if !foundTarget {
-				lookMsg = fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
-			}
-		}
+		// Using a direction as the command itself
+		direction = strings.ToLower(cmd.Verb)
 	}
 
-	// Update room activity timestamp
-	r.UpdateActivity()
+	// Check if character is trying to leave combat
+	// TODO: Implement combat system check here
 
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   lookMsg,
-		Timestamp: time.Now(),
-	}
-}
-
-// handleWhisperCommand processes the "whisper" command
-func (r *Room) handleWhisperCommand(cmd *CommandRequest) *CommandResponse {
-	// Check for valid arguments: whisper <target> <message>
-	if len(cmd.Args) < 3 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("whisper to whom what?"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Get target name and message
-	targetName := cmd.Args[1]
-	message := strings.Join(cmd.Args[2:], " ")
-
-	// Find the target character in the room
+	// Check if there's an exit in the specified direction
 	r.mutex.RLock()
-	var targetChar *Character
-	for _, c := range r.characters {
-		if c != nil && strings.HasPrefix(strings.ToLower(c.name), strings.ToLower(targetName)) {
-			targetChar = c
+	var targetExit *Exit
+
+	// Find the exit by direction
+	for _, exit := range r.exits {
+		if exit != nil && strings.EqualFold(exit.direction, direction) && exit.visible {
+			targetExit = exit
 			break
 		}
 	}
 	r.mutex.RUnlock()
 
-	// Check if target was found
-	if targetChar == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you don't see %s here", targetName),
-			Timestamp: time.Now(),
-		}
+	// If no exit is found
+	if targetExit == nil {
+		response.Error = fmt.Errorf(msgInvalidDir)
+		return response
 	}
 
-	// Cannot whisper to yourself
-	if targetChar == cmd.Character {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you can't whisper to yourself"),
-			Timestamp: time.Now(),
-		}
+	// If exit has no target room
+	if targetExit.targetRoom == nil {
+		response.Error = fmt.Errorf(msgPathNowhere)
+		return response
 	}
 
-	// Format messages
-	senderMsg := fmt.Sprintf("\n\rYou whisper to %s: %s\n\r", targetChar.name, message)
-	targetMsg := fmt.Sprintf("\n\r%s whispers to you: %s\n\r", cmd.Character.name, message)
-	othersMsg := fmt.Sprintf("\n\r%s whispers something to %s.\n\r", cmd.Character.name, targetChar.name)
+	// Perform the movement
+	sourceRoom := r.roomID
+	targetRoom := targetExit.targetRoom
+	character := cmd.Character
 
-	// Send to target
-	if targetChar.player != nil {
-		select {
-		case targetChar.player.commandOut <- targetMsg:
-			// Message sent successfully
-			select {
-			case targetChar.player.commandOut <- targetChar.prompt:
-				// Prompt sent successfully
-			default:
-				Logger.Warn("Failed to send prompt after whisper", "recipient", targetChar.name)
-			}
-		default:
-			Logger.Warn("Failed to send whisper to target",
-				"recipient", targetChar.name,
-				"sender", cmd.Character.name)
-		}
-	}
+	// Remove character from current room
+	r.mutex.Lock()
+	delete(r.characters, character.id)
+	r.mutex.Unlock()
 
-	// Send message to others in the room (they just see that whispering happened)
-	r.mutex.RLock()
-	for _, c := range r.characters {
-		if c != nil && c != cmd.Character && c != targetChar && c.player != nil {
-			select {
-			case c.player.commandOut <- othersMsg:
-				// Message sent successfully
-				select {
-				case c.player.commandOut <- c.prompt:
-					// Prompt sent successfully
-				default:
-					Logger.Warn("Failed to send prompt after whisper notification", "recipient", c.name)
-				}
-			default:
-				// Not critical if others don't see the notification
-			}
-		}
-	}
-	r.mutex.RUnlock()
+	// Add character to new room
+	targetRoom.mutex.Lock()
+	targetRoom.characters[character.id] = character
+	// Update room activity
+	targetRoom.lastActive = time.Now()
+	targetRoom.mutex.Unlock()
 
-	// Return message to sender
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   senderMsg,
-		Timestamp: time.Now(),
-	}
+	// Update character's room reference
+	character.mutex.Lock()
+	character.room = targetRoom
+	character.mutex.Unlock()
+
+	// Handle room entry effects
+	targetRoom.HandleCharacterEntry()
+
+	// Notify the original room that character has left
+	leaveMsg := fmt.Sprintf("\n\r%s leaves %s.\n\r", character.name, direction)
+	SendRoomMessageExcept(r, leaveMsg, character)
+
+	// Notify the new room that character has arrived
+	enterMsg := fmt.Sprintf("\n\r%s arrives from the %s.\n\r", character.name, getOppositeDirection(direction))
+	SendRoomMessageExcept(targetRoom, enterMsg, character)
+
+	// Show the new room to the character
+	executeLookCommand(character, []string{"look"})
+
+	// Set a wait time for the movement action
+	character.SetCommandWaitTime(1 * time.Second)
+
+	// Log the movement
+	Logger.Info("Character moved",
+		"character", character.name,
+		"from", sourceRoom,
+		"to", targetRoom.roomID,
+		"direction", direction)
+
+	response.Success = true
+	return response
 }
 
 // handleItemCommand processes item-related commands like get, take, drop, etc.
@@ -1012,186 +716,26 @@ func (r *Room) handleItemCommand(cmd *CommandRequest) *CommandResponse {
 	}
 }
 
-// handleMovementCommand processes room movement commands
-func (r *Room) handleMovementCommand(cmd *CommandRequest) *CommandResponse {
-	// First check if the character is allowed to move (no wait time)
-	canMove, reason := cmd.Character.CanExecuteCommand()
-	if !canMove {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf(reason),
-			Timestamp: time.Now(),
-		}
+// getOppositeDirection returns the opposite direction
+func getOppositeDirection(direction string) string {
+	switch strings.ToLower(direction) {
+	case "north":
+		return "south"
+	case "south":
+		return "north"
+	case "east":
+		return "west"
+	case "west":
+		return "east"
+	case "up":
+		return "down"
+	case "down":
+		return "up"
+	case "in":
+		return "out"
+	case "out":
+		return "in"
+	default:
+		return "somewhere"
 	}
-
-	// Get the direction from the command
-	var direction string
-
-	// Handle GO <direction> or direct <direction> commands like "north"
-	if cmd.Verb == "go" {
-		// GO requires a direction argument
-		if len(cmd.Args) < 2 {
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("go where?"),
-				Timestamp: time.Now(),
-			}
-		}
-		direction = strings.ToLower(cmd.Args[1])
-	} else {
-		// Direct direction command like "north", "south", etc.
-		direction = strings.ToLower(cmd.Verb)
-	}
-
-	// Lock the room to check exits
-	r.mutex.RLock()
-
-	// Find the exit matching the direction
-	var targetExit *Exit
-	for _, exit := range r.exits {
-		if exit != nil && exit.visible && strings.ToLower(exit.direction) == direction {
-			targetExit = exit
-			break
-		}
-	}
-
-	// If no exit found in that direction
-	if targetExit == nil {
-		r.mutex.RUnlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you can't go %s from here", direction),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if the target room exists
-	if targetExit.targetRoom == nil {
-		r.mutex.RUnlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("that exit leads nowhere"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Store reference to target room
-	targetRoom := targetExit.targetRoom
-	r.mutex.RUnlock()
-
-	// Move the character to the new room
-	err := MoveCharacter(cmd.Character, r, targetRoom, direction)
-	if err != nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     err,
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Prepare the movement success message
-	moveMsg := fmt.Sprintf("\n\rYou move %s.\n\r", direction)
-
-	// Automatically execute a look command in the new room
-	lookCmd := &CommandRequest{
-		ID:        uuid.New(),
-		Character: cmd.Character,
-		Verb:      "look",
-		Args:      []string{"look"},
-		Tier:      RoomTier,
-		State:     CommandPending,
-		Timestamp: time.Now(),
-		Response:  make(chan *CommandResponse, 1),
-	}
-
-	// Process the look command
-	targetRoom.handleRoomCommand(lookCmd)
-
-	// Get the response from the look command
-	lookResponse := <-lookCmd.Response
-	if lookResponse.Success {
-		moveMsg += lookResponse.Message
-	}
-
-	// Set a command wait time for movement (1 second)
-	cmd.Character.SetCommandWaitTime(1 * time.Second)
-
-	// Return success response with movement and look information
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   moveMsg,
-		Timestamp: time.Now(),
-	}
-}
-
-// sendCommandResponse sends a response to a command
-func (r *Room) sendCommandResponse(cmd *CommandRequest, response *CommandResponse) {
-	if cmd.Response != nil {
-		// Send direct response if channel provided
-		select {
-		case cmd.Response <- response:
-			// Response sent successfully
-		default:
-			Logger.Warn("Failed to send direct command response", "roomID", r.roomID, "commandID", cmd.ID)
-		}
-	} else {
-		// Send to commandOut channel
-		select {
-		case r.commandOut <- response:
-			// Response sent to commandOut channel
-		default:
-			Logger.Warn("Failed to send command response to commandOut channel", "roomID", r.roomID, "commandID", cmd.ID)
-		}
-	}
-}
-
-// MoveCharacter handles the process of moving a character from one room to another
-func MoveCharacter(character *Character, fromRoom, toRoom *Room, direction string) error {
-	if character == nil || fromRoom == nil || toRoom == nil {
-		return fmt.Errorf("cannot move character: nil reference provided")
-	}
-
-	// Ensure destination room is running
-	if !toRoom.running {
-		toRoom.Start(character.game)
-	}
-
-	// Remove character from current room
-	fromRoom.mutex.Lock()
-	delete(fromRoom.characters, character.id)
-	fromRoom.lastActive = time.Now() // Update activity timestamp
-	fromRoom.mutex.Unlock()
-
-	// Send departure message
-	if direction != "" {
-		SendRoomMessageExcept(fromRoom, fmt.Sprintf("\n\r%s leaves %s.\n\r", character.name, direction), character)
-	} else {
-		SendRoomMessageExcept(fromRoom, fmt.Sprintf("\n\r%s has left.\n\r", character.name), character)
-	}
-
-	// Add character to destination room
-	toRoom.mutex.Lock()
-	if toRoom.characters == nil {
-		toRoom.characters = make(map[uuid.UUID]*Character)
-	}
-	toRoom.characters[character.id] = character
-	toRoom.lastActive = time.Now() // Update activity timestamp
-	toRoom.mutex.Unlock()
-
-	// Reset idle counter and activate scripts
-	toRoom.HandleCharacterEntry()
-
-	// Update character's room reference
-	character.room = toRoom
-
-	// Send arrival message
-	SendRoomMessageExcept(toRoom, fmt.Sprintf("\n\r%s has arrived.\n\r", character.name), character)
-
-	return nil
 }

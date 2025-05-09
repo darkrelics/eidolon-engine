@@ -94,6 +94,107 @@ func (g *Game) initCommands() {
 		description: "Display your character's abilities",
 		usage:       "skill",
 	}
+
+	// Register movement commands
+	g.commands["north"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move north",
+		usage:       "north",
+	}
+
+	g.commands["south"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move south",
+		usage:       "south",
+	}
+
+	g.commands["east"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move east",
+		usage:       "east",
+	}
+
+	g.commands["west"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move west",
+		usage:       "west",
+	}
+
+	g.commands["up"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move up",
+		usage:       "up",
+	}
+
+	g.commands["down"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move down",
+		usage:       "down",
+	}
+
+	// Register shorthand movement commands
+	g.commands["n"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move north (shorthand)",
+		usage:       "n",
+	}
+
+	g.commands["s"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move south (shorthand)",
+		usage:       "s",
+	}
+
+	g.commands["e"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move east (shorthand)",
+		usage:       "e",
+	}
+
+	g.commands["w"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move west (shorthand)",
+		usage:       "w",
+	}
+
+	g.commands["u"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move up (shorthand)",
+		usage:       "u",
+	}
+
+	g.commands["d"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move down (shorthand)",
+		usage:       "d",
+	}
+
+	// Register explicit movement commands
+	g.commands["go"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move in the specified direction",
+		usage:       "go <direction>",
+	}
+
+	g.commands["move"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Move in the specified direction",
+		usage:       "move <direction>",
+	}
 }
 
 // ValidateCommand checks if a command is valid and returns its verb and tokens
@@ -208,8 +309,7 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 		// For timed commands, determine the tier and route accordingly
 		var tier CommandTier
 
-		// Determine tier based on command properties (simplified for now)
-		// TODO: Implement proper tier determination based on command
+		// Determine tier based on command properties
 		switch verb {
 		case "say", "look", "emote", "whisper":
 			// Commands that only affect the local room
@@ -217,6 +317,10 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 		case "shout", "weather", "time", "global":
 			// Commands that affect multiple rooms or the entire game
 			tier = GameTier
+		case "north", "south", "east", "west", "up", "down",
+			"n", "s", "e", "w", "u", "d", "go", "move":
+			// Movement commands are processed at room level
+			tier = RoomTier
 		default:
 			// Default to room tier for most commands
 			tier = RoomTier

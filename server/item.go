@@ -29,29 +29,29 @@ import (
 )
 
 type Item struct {
-	id          uuid.UUID
-	prototypeID uuid.UUID
-	name        string
-	description string
-	mass        float64
-	value       uint64
-	stackable   bool
-	maxStack    uint32
-	quantity    uint32
-	wearable    bool
-	wornOn      []string
-	verbs       map[string]string
-	overrides   map[string]string
-	traitMods   map[string]int8
-	container   bool
-	contents    []*Item
-	isWorn      bool
-	canPickUp   bool
+	id                uuid.UUID
+	prototypeID       uuid.UUID
+	name              string
+	description       string
+	mass              float64
+	value             uint64
+	stackable         bool
+	maxStack          uint32
+	quantity          uint32
+	wearable          bool
+	wornOn            []string
+	verbs             map[string]string
+	overrides         map[string]string
+	traitMods         map[string]int8
+	container         bool
+	contents          []*Item
+	isWorn            bool
+	canPickUp         bool
 	markedForDeletion bool // Runtime flag for marking items to be deleted during room cleanup
-	metadata    map[string]string
-	mutex       sync.RWMutex
-	lastEdited  time.Time
-	lastSaved   time.Time
+	metadata          map[string]string
+	mutex             sync.RWMutex
+	lastEdited        time.Time
+	lastSaved         time.Time
 }
 
 type ItemData struct {

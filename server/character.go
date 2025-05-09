@@ -47,32 +47,32 @@ var WearLocations = map[string]bool{
 }
 
 type Character struct {
-	game        *Game
-	id          uuid.UUID
-	player      *Player
-	name        string
-	attributes  map[string]float64
-	abilities   map[string]float64
-	essence     float64
-	health      float64
-	room        *Room
-	inventory   map[string]*Item
-	mutex       sync.RWMutex
-	facing      *Character
-	advancing   bool
-	combatRange map[uuid.UUID]float64
-	lastEdited  time.Time
-	lastSaved   time.Time
-	waitUntil   time.Time                  // Time when the character can execute the next command
-	charState   string                      // Current character state (standing, sitting, etc.)
-	roomCommandOut   chan *CommandRequest    // Commands sent from character to room
-	roomCommandIn    chan *CommandResponse   // Responses from room to character
-	gameCommandOut   chan *CommandRequest    // Commands escalated directly to game
-	gameCommandIn    chan *CommandResponse   // Responses from game to character
-	playerCommandOut chan string             // Messages sent to player
-	playerCommandIn  chan string             // Messages from player
-	end              chan bool               // Channel for shutdown signaling
-	prompt           string                  // Character prompt
+	game             *Game
+	id               uuid.UUID
+	player           *Player
+	name             string
+	attributes       map[string]float64
+	abilities        map[string]float64
+	essence          float64
+	health           float64
+	room             *Room
+	inventory        map[string]*Item
+	mutex            sync.RWMutex
+	facing           *Character
+	advancing        bool
+	combatRange      map[uuid.UUID]float64
+	lastEdited       time.Time
+	lastSaved        time.Time
+	waitUntil        time.Time             // Time when the character can execute the next command
+	charState        string                // Current character state (standing, sitting, etc.)
+	roomCommandOut   chan *CommandRequest  // Commands sent from character to room
+	roomCommandIn    chan *CommandResponse // Responses from room to character
+	gameCommandOut   chan *CommandRequest  // Commands escalated directly to game
+	gameCommandIn    chan *CommandResponse // Responses from game to character
+	playerCommandOut chan string           // Messages sent to player
+	playerCommandIn  chan string           // Messages from player
+	end              chan bool             // Channel for shutdown signaling
+	prompt           string                // Character prompt
 }
 
 // CharacterData for unmarshalling character.
@@ -163,19 +163,19 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 
 	// Initialize new character with default values
 	character := &Character{
-		game:        game,
-		id:          characterID,
-		player:      player,
-		attributes:  make(map[string]float64),
-		abilities:   make(map[string]float64),
-		inventory:   make(map[string]*Item),
-		mutex:       sync.RWMutex{},
-		facing:      nil,
-		advancing:   false,
-		combatRange: make(map[uuid.UUID]float64),
-		lastEdited:  time.Now(),
-		charState:   "standing",  // Default character state
-		waitUntil:   time.Now(),  // No initial wait time
+		game:             game,
+		id:               characterID,
+		player:           player,
+		attributes:       make(map[string]float64),
+		abilities:        make(map[string]float64),
+		inventory:        make(map[string]*Item),
+		mutex:            sync.RWMutex{},
+		facing:           nil,
+		advancing:        false,
+		combatRange:      make(map[uuid.UUID]float64),
+		lastEdited:       time.Now(),
+		charState:        "standing", // Default character state
+		waitUntil:        time.Now(), // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
 		gameCommandOut:   make(chan *CommandRequest, 10),
@@ -293,22 +293,22 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 	// Create Character
 
 	character := &Character{
-		game:        p.server.game,
-		id:          GenerateUUIDv7(),
-		player:      p,
-		name:        name,
-		attributes:  make(map[string]float64),
-		abilities:   make(map[string]float64),
-		essence:     float64(p.server.game.startingEssence),
-		health:      float64(p.server.game.startingHealth),
-		inventory:   make(map[string]*Item),
-		mutex:       sync.RWMutex{},
-		advancing:   false,
-		facing:      nil,
-		combatRange: make(map[uuid.UUID]float64),
-		lastEdited:  time.Now(),
-		charState:   "standing",  // Default character state
-		waitUntil:   time.Now(),  // No initial wait time
+		game:             p.server.game,
+		id:               GenerateUUIDv7(),
+		player:           p,
+		name:             name,
+		attributes:       make(map[string]float64),
+		abilities:        make(map[string]float64),
+		essence:          float64(p.server.game.startingEssence),
+		health:           float64(p.server.game.startingHealth),
+		inventory:        make(map[string]*Item),
+		mutex:            sync.RWMutex{},
+		advancing:        false,
+		facing:           nil,
+		combatRange:      make(map[uuid.UUID]float64),
+		lastEdited:       time.Now(),
+		charState:        "standing", // Default character state
+		waitUntil:        time.Now(), // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
 		gameCommandOut:   make(chan *CommandRequest, 10),

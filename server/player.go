@@ -89,10 +89,10 @@ type Player struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	index         uint64
-	id            uuid.UUID // Using uuid.UUID type instead of string
-	email         string    // Field to store email address
-	commandOut    chan string  // Commands to player
-	commandIn     chan string  // Commands from player
+	id            uuid.UUID   // Using uuid.UUID type instead of string
+	email         string      // Field to store email address
+	commandOut    chan string // Commands to player
+	commandIn     chan string // Commands from player
 	playerError   chan error
 	consoleDone   chan bool
 	echo          bool
