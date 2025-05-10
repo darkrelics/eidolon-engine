@@ -65,5 +65,11 @@ go.work
 
 **/*.metadata
 
+# Claude Code specific files
 CLAUDE.md
-**/.claude/*
+.claude/
+**/.claude/
+.claude_history
+**/claude_logs/
+.cache/
+**/claude_cache/
