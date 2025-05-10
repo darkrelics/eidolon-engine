@@ -20,13 +20,15 @@ import 'package:provider/provider.dart';
 import '../utils/auth_state.dart';
 import '../widgets/ui_components.dart';
 import '../utils/input_sanitizer.dart';
-import '../utils/form_utils.dart';
+import '../utils/form_state_provider.dart';
 
 class LoginScreen extends StatelessWidget {
   final String? redirectRoute;
   final Object? redirectArgs;
 
   const LoginScreen({super.key, this.redirectRoute, this.redirectArgs});
+
+  static final _formKey = GlobalKey<FormState>();
 
   @override
   Widget build(BuildContext context) {
@@ -45,8 +47,8 @@ class LoginScreen extends StatelessWidget {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              return Form(
-                autovalidateMode: AutovalidateMode.onUserInteraction,
+              return FormStateProvider(
+                formKey: _formKey,
                 child: AutofillGroup(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -77,7 +79,7 @@ class LoginScreen extends StatelessWidget {
                       LoadingButton(
                         isLoading: authState.isLoading,
                         onPressed: () async {
-                          if (FormUtils.validateForm(context)) {
+                          if (FormStateUtil.validateForm(_formKey)) {
                             await authState.signIn();
                             if (authState.isAuthenticated && context.mounted) {
                               _handleNavigation(

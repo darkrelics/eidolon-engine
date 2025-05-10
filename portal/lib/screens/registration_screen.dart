@@ -20,10 +20,13 @@ import 'package:provider/provider.dart';
 import '../utils/auth_state.dart';
 import '../widgets/ui_components.dart';
 import '../utils/input_sanitizer.dart';
-import '../utils/form_utils.dart';
+import '../utils/form_state_provider.dart';
 
 class RegistrationScreen extends StatelessWidget {
   const RegistrationScreen({super.key});
+
+  static final _formKey = GlobalKey<FormState>();
+  static final _verificationFormKey = GlobalKey<FormState>();
 
   @override
   Widget build(BuildContext context) {
@@ -51,8 +54,13 @@ class RegistrationScreen extends StatelessWidget {
                 });
               }
 
-              return Form(
-                autovalidateMode: AutovalidateMode.onUserInteraction,
+              final currentFormKey =
+                  authState.isVerificationMode
+                      ? _verificationFormKey
+                      : _formKey;
+
+              return FormStateProvider(
+                formKey: currentFormKey,
                 child: AutofillGroup(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -91,7 +99,7 @@ class RegistrationScreen extends StatelessWidget {
                         LoadingButton(
                           isLoading: authState.isLoading,
                           onPressed: () async {
-                            if (FormUtils.validateForm(context)) {
+                            if (FormStateUtil.validateForm(_formKey)) {
                               await authState.signUp();
                             }
                           },
@@ -141,7 +149,9 @@ class RegistrationScreen extends StatelessWidget {
                         LoadingButton(
                           isLoading: authState.isLoading,
                           onPressed: () async {
-                            if (FormUtils.validateForm(context)) {
+                            if (FormStateUtil.validateForm(
+                              _verificationFormKey,
+                            )) {
                               await authState.confirmRegistration();
                               if (!authState.isVerificationMode &&
                                   context.mounted) {
