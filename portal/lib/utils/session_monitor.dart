@@ -122,11 +122,11 @@ class SessionMonitor {
                       // Pop using the dialog's context
                       Navigator.of(dialogContext).pop();
                       if (_authState != null) {
-                        await _authState.signOut();
+                        await _authState?.signOut();
                       }
                       // Use callback instead of stored context
                       if (_onSessionExpired != null) {
-                        _onSessionExpired();
+                        _onSessionExpired!();
                       }
                     },
                     child: const Text('OK'),
@@ -137,7 +137,7 @@ class SessionMonitor {
       } else {
         // If no context is available, just sign out silently
         if (_authState != null) {
-          _authState.signOut();
+          _authState?.signOut();
         }
       }
     }
@@ -204,7 +204,7 @@ class SessionMonitor {
     if (_sessionStartTime == null) return Duration.zero;
 
     final now = DateTime.now();
-    final absoluteDuration = now.difference(_sessionStartTime);
+    final absoluteDuration = now.difference(_sessionStartTime!);
     return _absoluteTimeout - absoluteDuration;
   }
 }

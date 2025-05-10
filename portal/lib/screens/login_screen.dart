@@ -77,7 +77,7 @@ class LoginScreen extends StatelessWidget {
                         isLoading: authState.isLoading,
                         onPressed: () async {
                           final formState = Form.of(context);
-                          if (formState != null && formState.validate()) {
+                          if (formState.validate()) {
                             await authState.signIn();
                             if (authState.isAuthenticated && context.mounted) {
                               _handleNavigation(
