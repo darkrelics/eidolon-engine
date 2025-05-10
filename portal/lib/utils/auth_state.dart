@@ -108,24 +108,34 @@ class AuthState extends ChangeNotifier {
 
     _setLoading(true);
     try {
+      debugPrint('Attempting to sign up user: ${_emailController.text.trim()}');
+
       final signUpResult = await _authService.signUp(
         _emailController.text.trim(),
         _passwordController.text,
       );
 
+      debugPrint(
+        'Sign-up response received: userConfirmed=${signUpResult.userConfirmed}',
+      );
+
       if (signUpResult.userConfirmed ?? false) {
+        debugPrint('User was automatically confirmed');
         _updateMessage('Registration successful. Please sign in.');
         _isSignUpMode = false;
         // Don't clear password to allow immediate sign in
         _verificationCodeController.clear();
       } else {
+        debugPrint('User requires verification - showing verification screen');
         _updateMessage('Please check your email for a verification code.');
         _isVerificationMode = true;
       }
     } on CognitoClientException catch (e) {
       // Authentication-specific errors already formatted by AuthService
+      debugPrint('Cognito exception during sign-up: ${e.message}');
       _updateMessage(e.message ?? 'Registration failed');
     } catch (e) {
+      debugPrint('Unexpected error during sign-up: $e');
       _updateMessage('An unexpected error occurred. Please try again.');
     } finally {
       _setLoading(false);
@@ -146,20 +156,26 @@ class AuthState extends ChangeNotifier {
       return;
     }
 
+    final email = _emailController.text.trim();
+    debugPrint(
+      'Attempting to confirm registration for email: $email with code: $code',
+    );
+
     _setLoading(true);
     try {
-      await _authService.confirmRegistration(
-        _emailController.text.trim(),
-        code,
-      );
+      final result = await _authService.confirmRegistration(email, code);
+
+      debugPrint('Confirmation result: $result');
       _updateMessage('Email verified successfully. Please sign in.');
       _isVerificationMode = false;
       _isSignUpMode = false;
       _verificationCodeController.clear();
     } on CognitoClientException catch (e) {
       // Authentication-specific errors already formatted by AuthService
+      debugPrint('Cognito exception during confirmation: ${e.message}');
       _updateMessage(e.message ?? 'Verification failed');
     } catch (e) {
+      debugPrint('Unexpected error during confirmation: $e');
       _updateMessage('An unexpected error occurred. Please try again.');
     } finally {
       _setLoading(false);

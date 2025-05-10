@@ -26,6 +26,7 @@ phases:
       - echo Building web application...
       - echo "Current directory:"
       - pwd
+      - echo "Building with USER_POOL_ID=$USER_POOL_ID and CLIENT_ID=$CLIENT_ID"
       - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID
 
   post_build:

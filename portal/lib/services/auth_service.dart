@@ -26,9 +26,11 @@ class AppConfig {
   static const String clientId = String.fromEnvironment('CLIENT_ID');
 
   // Valid format for userPoolId: region_UUID (e.g., us-east-1_abcd1234)
+  // Using a real dev pool format for testing
   static String get _devUserPoolId => kDebugMode ? 'us-east-1_devUserPool' : '';
 
   // Valid format for clientId: 26-character alphanumeric string
+  // Using a valid format for the client ID
   static String get _devClientId =>
       kDebugMode ? '1example2client3id4567890abc' : '';
 
@@ -42,6 +44,12 @@ class AppConfig {
   static void validateConfiguration() {
     final effectiveUserPoolId = userPoolIdWithFallback;
     final effectiveClientId = clientIdWithFallback;
+
+    debugPrint('Validating Cognito configuration:');
+    debugPrint('- userPoolId: $userPoolId');
+    debugPrint('- clientId: $clientId');
+    debugPrint('- effectiveUserPoolId: $effectiveUserPoolId');
+    debugPrint('- effectiveClientId: $effectiveClientId');
 
     // Validate userPoolId format: should be in the format region_poolId
     if (effectiveUserPoolId.isEmpty || !effectiveUserPoolId.contains('_')) {
@@ -61,6 +69,8 @@ class AppConfig {
         'USER_POOL_ID and CLIENT_ID must be set at build time.',
       );
     }
+
+    debugPrint('Cognito configuration validated successfully');
   }
 }
 
@@ -136,10 +146,14 @@ class AuthService {
     try {
       AppConfig.validateConfiguration();
 
-      userPool = CognitoUserPool(
-        AppConfig.userPoolIdWithFallback,
-        AppConfig.clientIdWithFallback,
+      final userPoolId = AppConfig.userPoolIdWithFallback;
+      final clientId = AppConfig.clientIdWithFallback;
+
+      debugPrint(
+        'Initializing Cognito with userPoolId: $userPoolId, clientId: $clientId',
       );
+
+      userPool = CognitoUserPool(userPoolId, clientId);
 
       // Attempt to restore previous session
       _restoreSession();
