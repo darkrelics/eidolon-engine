@@ -102,7 +102,9 @@ Testing will primarily be conducted through live user interaction, with unit tes
 ## Development Roadmap
 
 ### Completed Tasks
+
 - [x] Core Server and Infrastructure
+
   - [x] Create the SSH server for client connections
   - [x] Implement a text parser for user input
   - [x] Add Cloudwatch Logs and Metrics integration
@@ -112,6 +114,7 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Implement persistent logging
 
 - [x] Player and Character Management
+
   - [x] Implement player authentication system
   - [x] Create character creation and selection system
   - [x] Build interactive password change system
@@ -122,6 +125,7 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Display Message of the Day (MOTD)
 
 - [x] Command System
+
   - [x] Implement the three-tier command architecture
   - [x] Develop command timeout systems
   - [x] Add help command
@@ -141,7 +145,9 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Update database tools to support room flags and scripts
 
 ### Upcoming Tasks
+
 - [ ] Item System
+
   - [ ] Construct the item system with verb interactions
   - [ ] Load item prototypes at start
   - [ ] Create item prototype factory function
@@ -149,22 +155,26 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [ ] Add wear, remove, examine commands
 
 - [ ] Command System Enhancements
+
   - [ ] Add state tracking for timeout management
   - [ ] Implement command queuing system
   - [ ] Add look at item command
 
 - [ ] Room System Extension
+
   - [ ] Create Script management system with S3 storage
   - [ ] Implement room script loading from S3
   - [ ] Validate graph of loaded rooms and exits
 
 - [ ] Player Features
+
   - [ ] Expand the character creation process
   - [ ] Develop player communication systems (whisper, shout)
   - [ ] Implement an obscenity filter
   - [ ] Improve input filters
 
 - [ ] Administration Tools
+
   - [ ] Create administrative interface
   - [ ] Force password resets when needed
   - [ ] Add account deletion, ban, and mute capabilities
