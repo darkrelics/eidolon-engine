@@ -157,6 +157,8 @@ class AuthState extends ChangeNotifier {
     }
 
     final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
     debugPrint(
       'Attempting to confirm registration for email: $email with code: $code',
     );
@@ -166,10 +168,43 @@ class AuthState extends ChangeNotifier {
       final result = await _authService.confirmRegistration(email, code);
 
       debugPrint('Confirmation result: $result');
-      _updateMessage('Email verified successfully. Please sign in.');
+
+      // Store credentials temporarily for sign-in attempt
+      final tempEmail = email;
+      final tempPassword = password;
+
+      // Clear verification mode and related UI state
       _isVerificationMode = false;
       _isSignUpMode = false;
       _verificationCodeController.clear();
+
+      if (result) {
+        debugPrint('Verification successful, attempting automatic sign-in');
+
+        // Important: Clear credentials first to ensure we don't have stale state
+        await _authService.signOut();
+
+        try {
+          // Attempt automatic sign-in after verification
+          await _authService.signIn(tempEmail, tempPassword);
+          _isAuthenticated = true;
+          _updateMessage('Account verified and logged in successfully.');
+          debugPrint('Automatic sign-in successful after verification');
+          clearInputs(); // Clear sensitive data after successful login
+        } catch (signInError) {
+          debugPrint(
+            'Automatic sign-in failed after verification: $signInError',
+          );
+          _updateMessage(
+            'Email verified successfully. Please sign in manually.',
+          );
+          // Don't clear email to make manual sign-in easier
+          _emailController.text = tempEmail;
+          _passwordController.text = '';
+        }
+      } else {
+        _updateMessage('Verification process completed. Please sign in.');
+      }
     } on CognitoClientException catch (e) {
       // Authentication-specific errors already formatted by AuthService
       debugPrint('Cognito exception during confirmation: ${e.message}');

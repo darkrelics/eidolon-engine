@@ -153,9 +153,23 @@ class RegistrationScreen extends StatelessWidget {
                               _verificationFormKey,
                             )) {
                               await authState.confirmRegistration();
-                              if (!authState.isVerificationMode &&
+
+                              // Check if user was verified and automatically logged in
+                              if (authState.isAuthenticated &&
                                   context.mounted) {
-                                authState.clearInputs();
+                                debugPrint(
+                                  'Auto-login successful, navigating to character management',
+                                );
+                                Navigator.of(
+                                  context,
+                                ).pushReplacementNamed('/character-management');
+                              }
+                              // If verification completed but not logged in, go to login screen
+                              else if (!authState.isVerificationMode &&
+                                  context.mounted) {
+                                debugPrint(
+                                  'Verification completed, redirecting to login screen',
+                                );
                                 Navigator.of(
                                   context,
                                 ).pushReplacementNamed('/login');

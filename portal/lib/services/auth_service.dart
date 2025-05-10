@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'dart:math';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -216,7 +217,25 @@ class AuthService {
   Future<CognitoUser> signIn(String email, String password) async {
     try {
       if (!_validateEmail(email)) {
+        debugPrint('Invalid email format: $email');
         throw CognitoClientException('Invalid email format');
+      }
+
+      debugPrint(
+        'Attempting sign-in for user: ${email.substring(0, min(3, email.length))}***',
+      );
+
+      // Clear any existing session first to prevent state conflicts
+      if (_currentUser != null) {
+        debugPrint('Clearing existing user session before sign-in');
+        try {
+          await _currentUser?.globalSignOut();
+        } catch (e) {
+          debugPrint('Error during global sign-out: $e');
+          // Continue with sign-in despite error
+        }
+        _currentUser = null;
+        _session = null;
       }
 
       final user = CognitoUser(email, userPool);
@@ -225,14 +244,25 @@ class AuthService {
         password: password,
       );
 
+      debugPrint('Authenticating user with Cognito');
       _session = await user.authenticateUser(authDetails);
       _currentUser = user;
 
+      debugPrint('Authentication successful, storing tokens');
       // Store tokens securely
-      await _persistTokens(_session!, email);
+      final storedSuccessfully = await _persistTokens(_session!, email);
+
+      if (!storedSuccessfully) {
+        debugPrint(
+          'Warning: Token storage failed, session may not persist after app restart',
+        );
+      } else {
+        debugPrint('Tokens stored successfully');
+      }
 
       return user;
     } on CognitoClientException catch (e) {
+      debugPrint('Cognito sign-in error: ${e.code}: ${e.message}');
       throw CognitoClientException(
         AuthExceptionMapper.mapToUserFriendlyMessage(e),
       );
@@ -245,30 +275,48 @@ class AuthService {
   /// Signs out the current user
   Future<void> signOut() async {
     try {
+      debugPrint('Signing out user');
       if (_currentUser != null) {
         try {
-          await _currentUser?.signOut();
+          // Try global sign-out first for better security (invalidates all sessions)
+          debugPrint('Attempting global sign-out');
+          try {
+            await _currentUser?.globalSignOut();
+            debugPrint('Global sign-out successful');
+          } catch (e) {
+            debugPrint(
+              'Global sign-out failed: $e, falling back to regular sign-out',
+            );
+            // Fall back to regular sign-out
+            await _currentUser?.signOut();
+          }
         } catch (e) {
           // Log but don't throw for server-side signout issues
           _logError('Server sign-out error', e);
-        } finally {
-          // Always clear local state regardless of server communication errors
-          _currentUser = null;
-          _session = null;
-          final cleared = await _clearTokens();
-          if (!cleared) {
-            _logError(
-              'Client sign-out incomplete',
-              'Failed to clear all tokens',
-            );
-          }
+          debugPrint('Server-side sign-out failed: $e');
         }
+      } else {
+        debugPrint('No active user session to sign out');
       }
     } catch (e) {
       _logError('SignOut error', e);
+      debugPrint('Error during sign-out process: $e');
       // Don't rethrow, we want signout to always succeed from the user's perspective
-      // Instead, return failure status for internal error handling
-      throw AuthSignOutException('Sign-out failed. Please try again.');
+    } finally {
+      // Always clear local state regardless of server communication errors
+      debugPrint('Clearing local session state and tokens');
+      _currentUser = null;
+      _session = null;
+      final cleared = await _clearTokens();
+      if (!cleared) {
+        _logError('Client sign-out incomplete', 'Failed to clear all tokens');
+        debugPrint('Failed to clear all tokens during sign-out');
+        throw AuthSignOutException(
+          'Sign-out partially failed. Some data may not be cleared.',
+        );
+      } else {
+        debugPrint('Local sign-out completed successfully');
+      }
     }
   }
 
@@ -339,13 +387,87 @@ class AuthService {
   /// Clears stored tokens
   Future<bool> _clearTokens() async {
     try {
-      await _secureStorage.delete(key: _accessTokenKey);
-      await _secureStorage.delete(key: _idTokenKey);
-      await _secureStorage.delete(key: _refreshTokenKey);
-      await _secureStorage.delete(key: _userEmailKey);
-      return true;
+      debugPrint('Clearing stored authentication tokens');
+
+      // Track which tokens were successfully cleared
+      final results = await Future.wait([
+        _secureStorage
+            .delete(key: _accessTokenKey)
+            .then((_) => true)
+            .catchError((e) {
+              debugPrint('Failed to clear access token: $e');
+              return false;
+            }),
+        _secureStorage.delete(key: _idTokenKey).then((_) => true).catchError((
+          e,
+        ) {
+          debugPrint('Failed to clear ID token: $e');
+          return false;
+        }),
+        _secureStorage
+            .delete(key: _refreshTokenKey)
+            .then((_) => true)
+            .catchError((e) {
+              debugPrint('Failed to clear refresh token: $e');
+              return false;
+            }),
+        _secureStorage.delete(key: _userEmailKey).then((_) => true).catchError((
+          e,
+        ) {
+          debugPrint('Failed to clear user email: $e');
+          return false;
+        }),
+      ]);
+
+      // Verify all tokens were cleared successfully
+      final allCleared = results.every((success) => success);
+      debugPrint(
+        'Initial token clearing ${allCleared ? 'succeeded' : 'had some failures'}',
+      );
+
+      // For extra precaution, verify tokens are actually gone
+      final accessTokenValue = await _secureStorage.read(key: _accessTokenKey);
+      final idTokenValue = await _secureStorage.read(key: _idTokenKey);
+      final refreshTokenValue = await _secureStorage.read(
+        key: _refreshTokenKey,
+      );
+      final emailValue = await _secureStorage.read(key: _userEmailKey);
+
+      final allNull =
+          accessTokenValue == null &&
+          idTokenValue == null &&
+          refreshTokenValue == null &&
+          emailValue == null;
+
+      if (!allNull) {
+        debugPrint('Warning: Some tokens still exist after clearing attempt');
+
+        // Make one more attempt to clear any remaining tokens
+        if (accessTokenValue != null)
+          await _secureStorage.delete(key: _accessTokenKey);
+        if (idTokenValue != null) await _secureStorage.delete(key: _idTokenKey);
+        if (refreshTokenValue != null)
+          await _secureStorage.delete(key: _refreshTokenKey);
+        if (emailValue != null) await _secureStorage.delete(key: _userEmailKey);
+      }
+
+      // Final verification
+      final finalCheck =
+          (await _secureStorage.read(key: _accessTokenKey) == null) &&
+          (await _secureStorage.read(key: _idTokenKey) == null) &&
+          (await _secureStorage.read(key: _refreshTokenKey) == null) &&
+          (await _secureStorage.read(key: _userEmailKey) == null);
+
+      if (finalCheck) {
+        debugPrint('All tokens cleared successfully');
+      } else {
+        debugPrint('Failed to clear all tokens even after retry');
+      }
+
+      return finalCheck;
     } catch (e) {
       _logError('Error clearing tokens', e);
+      debugPrint('Unexpected error while clearing tokens: $e');
       // Continue without throwing - clearing failure shouldn't block signout
       // But return a status for monitoring purposes
       return false;
