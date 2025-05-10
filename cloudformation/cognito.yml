@@ -28,9 +28,6 @@ Resources:
         - email
       EmailConfiguration:
         EmailSendingAccount: COGNITO_DEFAULT
-        SourceArn: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${ReplyEmailAddress}"
-        From: !Ref ReplyEmailAddress
-        ReplyToEmailAddress: !Ref ReplyEmailAddress
       Policies:
         PasswordPolicy:
           MinimumLength: 8
