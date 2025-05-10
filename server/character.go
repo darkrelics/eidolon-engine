@@ -20,70 +20,44 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
 )
 
-// WearLocations defines all possible locations where an item can be worn
-var WearLocations = map[string]bool{
-	"head":         true,
-	"neck":         true,
-	"shoulders":    true,
-	"chest":        true,
-	"back":         true,
-	"arms":         true,
-	"hands":        true,
-	"waist":        true,
-	"legs":         true,
-	"feet":         true,
-	"left_finger":  true,
-	"right_finger": true,
-	"left_wrist":   true,
-	"right_wrist":  true,
+// CanExecuteCommand checks if character can perform a command based on wait time and state
+func (c *Character) CanExecuteCommand() (bool, string) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	// Check wait time
+	if time.Now().Before(c.waitUntil) {
+		waitTime := time.Until(c.waitUntil).Round(time.Second)
+		return false, fmt.Sprintf("You must wait %v before your next action.", waitTime)
+	}
+
+	// Check character state if needed
+	// Currently just check if there's a state set at all
+	if c.charState == "" {
+		// Default state is standing
+		c.charState = "standing"
+	}
+
+	return true, ""
 }
 
-type Character struct {
-	game        *Game
-	id          uuid.UUID
-	player      *Player
-	name        string
-	attributes  map[string]float64
-	abilities   map[string]float64
-	essence     float64
-	health      float64
-	room        *Room
-	inventory   map[string]*Item
-	mutex       sync.RWMutex
-	facing      *Character
-	advancing   bool
-	combatRange map[uuid.UUID]float64
-	lastEdited  time.Time
-	lastSaved   time.Time
-	toGame      chan string
-	fromGame    chan string
-	toPlayer    chan string
-	fromPlayer  chan string
-	end         chan bool
-	prompt      string
+// SetCommandWaitTime sets a wait time for the character's next command
+func (c *Character) SetCommandWaitTime(duration time.Duration) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.waitUntil = time.Now().Add(duration)
 }
 
-// CharacterData for unmarshalling character.
-type CharacterData struct {
-	CharacterID   string             `json:"CharacterID" dynamodbav:"CharacterID"`
-	PlayerID      string             `json:"PlayerID" dynamodbav:"PlayerID"`
-	CharacterName string             `json:"Name" dynamodbav:"Name"`
-	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
-	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"Abilities"`
-	Essence       float64            `json:"Essence" dynamodbav:"Essence"`
-	Health        float64            `json:"Health" dynamodbav:"Health"`
-	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
-	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
-}
-
+// Save saves the character to the database
 func (c *Character) Save() error {
 
 	Logger.Debug("Saving character", "characterName", c.name)
@@ -123,121 +97,7 @@ func (c *Character) Save() error {
 	return nil
 }
 
-func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
-	Logger.Debug("Loading character", "characterID", characterID)
-
-	game := player.server.game
-
-	// Initialize new character with default values
-	character := &Character{
-		game:        game,
-		id:          characterID,
-		player:      player,
-		attributes:  make(map[string]float64),
-		abilities:   make(map[string]float64),
-		inventory:   make(map[string]*Item),
-		mutex:       sync.RWMutex{},
-		facing:      nil,
-		advancing:   false,
-		combatRange: make(map[uuid.UUID]float64),
-		lastEdited:  time.Now(),
-		toGame:      make(chan string, 10),
-		fromGame:    make(chan string, 10),
-		toPlayer:    make(chan string, 10),
-		fromPlayer:  make(chan string, 10),
-		end:         make(chan bool, 5),
-		prompt:      "\n\r> ",
-	}
-
-	// Load character data from database
-	cd := &CharacterData{}
-	key := map[string]types.AttributeValue{
-		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
-	}
-
-	if err := game.database.Get("characters", key, cd); err != nil {
-		return nil, fmt.Errorf("error loading character data: %w", err)
-	}
-
-	// Populate character from data
-	var err error
-	character.id, err = uuid.Parse(cd.CharacterID)
-	if err != nil {
-		return nil, fmt.Errorf("parse character ID: %w", err)
-	}
-	character.name = cd.CharacterName
-	character.attributes = cd.Attributes
-	character.abilities = cd.Abilities
-	character.essence = cd.Essence
-	character.health = cd.Health
-
-	// Set character room
-	room, exists := game.rooms[cd.RoomID]
-	if !exists {
-		Logger.Warn("Room not found, defaulting to room ID 0", "roomID", cd.RoomID)
-		room, exists = game.rooms[0]
-		if !exists {
-			return nil, fmt.Errorf("default room not found")
-		}
-	}
-	character.room = room
-
-	// Load inventory items
-	for name, itemIDStr := range cd.Inventory {
-		itemID, err := uuid.Parse(itemIDStr)
-		if err != nil {
-			Logger.Error("Error parsing item UUID", "itemID", itemIDStr, "error", err)
-			continue
-		}
-		item, err := LoadItem(itemID.String(), game.database)
-		if err != nil {
-			Logger.Error("Error loading item for character", "itemID", itemID, "characterName", character.name, "error", err)
-			continue
-		}
-		character.inventory[name] = item
-	}
-
-	// Add character to game state
-	game.mutex.Lock()
-	game.characters[character.id] = character
-	game.mutex.Unlock()
-
-	return character, nil
-}
-
-// Removes a character from the database by its ID
-func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
-	Logger.Info("Deleting character from database", "characterID", characterID)
-
-	// Check if character is currently active in the game
-	p.server.game.mutex.RLock()
-	activeChar, isActive := p.server.game.characters[characterID]
-	p.server.game.mutex.RUnlock()
-
-	// If character is active, stop it first
-	if isActive && activeChar != nil {
-		Logger.Info("Stopping active character before deletion", "characterName", activeChar.name)
-		activeChar.Stop(activeChar.end)
-	}
-
-	// Create the key for DynamoDB deletion
-	key := map[string]types.AttributeValue{
-		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
-	}
-
-	// Delete the character from the database
-	err := p.server.database.Delete("characters", key)
-	if err != nil {
-		Logger.Error("Failed to delete character", "characterID", characterID, "error", err)
-		return fmt.Errorf("failed to delete character: %w", err)
-	}
-
-	Logger.Info("Character deleted successfully", "characterID", characterID)
-	return nil
-}
-
 // CreateCharacter creates a new character for the player.
-
 func (p *Player) CreateCharacter(name string, archetype string) (*Character, error) {
 
 	Logger.Debug("Creating character", "name", name)
@@ -254,26 +114,31 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 	p.server.game.characterBloomFilter.AddString(strings.ToLower(name))
 
 	// Create Character
-
 	character := &Character{
-		game:        p.server.game,
-		id:          GenerateUUIDv7(),
-		player:      p,
-		name:        name,
-		attributes:  make(map[string]float64),
-		abilities:   make(map[string]float64),
-		essence:     float64(p.server.game.startingEssence),
-		health:      float64(p.server.game.startingHealth),
-		inventory:   make(map[string]*Item),
-		mutex:       sync.RWMutex{},
-		advancing:   false,
-		facing:      nil,
-		combatRange: make(map[uuid.UUID]float64),
-		lastEdited:  time.Now(),
-		toGame:      make(chan string, 10),
-		fromGame:    make(chan string, 10),
-		end:         make(chan bool, 1),
-		prompt:      "> ",
+		game:             p.server.game,
+		id:               GenerateUUIDv7(),
+		player:           p,
+		name:             name,
+		attributes:       make(map[string]float64),
+		abilities:        make(map[string]float64),
+		essence:          float64(p.server.game.startingEssence),
+		health:           float64(p.server.game.startingHealth),
+		inventory:        make(map[string]*Item),
+		mutex:            sync.RWMutex{},
+		advancing:        false,
+		facing:           nil,
+		combatRange:      make(map[uuid.UUID]float64),
+		lastEdited:       time.Now(),
+		charState:        "standing", // Default character state
+		waitUntil:        time.Now(), // No initial wait time
+		roomCommandOut:   make(chan *CommandRequest, 20),
+		roomCommandIn:    make(chan *CommandResponse, 20),
+		gameCommandOut:   make(chan *CommandRequest, 10),
+		gameCommandIn:    make(chan *CommandResponse, 10),
+		playerCommandOut: make(chan string, 20),
+		playerCommandIn:  make(chan string, 20),
+		end:              make(chan bool, 1),
+		prompt:           "> ",
 	}
 
 	if archetype != "" {
@@ -306,7 +171,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 	}
 
 	return character, nil
-
 }
 
 // Run is the main loop that handles player commands.
@@ -339,7 +203,12 @@ func (c *Character) Run(done chan bool) {
 		c.room.characters = make(map[uuid.UUID]*Character)
 	}
 	c.room.characters[c.id] = c
+	// Update room activity timestamp
+	c.room.lastActive = time.Now()
 	c.room.mutex.Unlock()
+
+	// Call HandleCharacterEntry to reset idle counter and activate scripts
+	c.room.HandleCharacterEntry()
 
 	// Notify room of arrival (without holding locks)
 	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
@@ -350,7 +219,7 @@ func (c *Character) Run(done chan bool) {
 	}
 
 	// Send initial prompt
-	c.player.toPlayer <- c.prompt
+	c.playerCommandOut <- c.prompt
 
 	const idleTimeout = 30 * time.Second
 	timer := time.NewTimer(idleTimeout)
@@ -363,7 +232,7 @@ func (c *Character) Run(done chan bool) {
 		timer.Reset(idleTimeout)
 
 		select {
-		case inputLine, ok := <-c.player.fromPlayer:
+		case inputLine, ok := <-c.playerCommandIn:
 			if !ok {
 				Logger.Info("Player input channel closed", "characterName", c.name)
 				return
@@ -380,7 +249,7 @@ func (c *Character) Run(done chan bool) {
 			isQuit, err := ProcessCommand(c, strings.TrimSpace(inputLine))
 			if err != nil {
 				// Send error message to player
-				c.player.toPlayer <- err.Error() + "\n\r"
+				c.playerCommandOut <- err.Error() + "\n\r"
 			} else {
 				// Command processed successfully
 				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
@@ -400,7 +269,7 @@ func (c *Character) Run(done chan bool) {
 			}
 
 			// Always send prompt after processing a command
-			c.player.toPlayer <- c.prompt
+			c.playerCommandOut <- c.prompt
 
 		case <-c.end:
 			Logger.Info("Character end signaled", "characterName", c.name)
@@ -429,10 +298,11 @@ func (c *Character) Stop(done chan bool) {
 		SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has left.\n\r", c.name), c)
 	}
 
-	// Remove character from room
+	// Remove character from room and update room activity timestamp
 	if c.room != nil {
 		c.room.mutex.Lock()
 		delete(c.room.characters, c.id)
+		c.room.lastActive = time.Now() // Update the timestamp when character leaves
 		c.room.mutex.Unlock()
 	}
 
@@ -462,12 +332,180 @@ func (c *Character) Stop(done chan bool) {
 	if player != nil {
 		// Reset the player's character reference
 		player.character = nil
-
 	}
 }
 
-// formatCharacterDescription creates a description of a character
-func formatCharacterDescription(target *Character, _ *Character) string {
+// GetCharacterInfo returns a formatted string with character information
+func (c *Character) GetCharacterInfo() string {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	var info strings.Builder
+	info.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_white", c.name)))
+	info.WriteString("----------------\n\r")
+
+	// Basic character information
+	info.WriteString(fmt.Sprintf("Health: %d\n\r", int(c.health)))
+	info.WriteString(fmt.Sprintf("Essence: %d\n\r", int(c.essence)))
+
+	// Attributes
+	if len(c.attributes) > 0 {
+		info.WriteString("\n\rAttributes:\n\r")
+		for attr, value := range c.attributes {
+			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", attr, int(value)))
+		}
+	}
+
+	// Abilities - only show those above zero
+	var abilitiesAboveZero []string
+	for ability, value := range c.abilities {
+		if value > 0 {
+			abilitiesAboveZero = append(abilitiesAboveZero, ability)
+		}
+	}
+
+	if len(abilitiesAboveZero) > 0 {
+		info.WriteString("\n\rAbilities:\n\r")
+		// Sort abilities for consistent display
+		sort.Strings(abilitiesAboveZero)
+
+		// Display each ability with value > 0
+		for _, ability := range abilitiesAboveZero {
+			value := c.abilities[ability]
+			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", ability, int(value)))
+		}
+	}
+
+	// Inventory information
+	if len(c.inventory) > 0 {
+		info.WriteString("\n\rInventory:\n\r")
+		for _, item := range c.inventory {
+			if item != nil {
+				if item.isWorn {
+					info.WriteString(fmt.Sprintf("  %s (worn on %s)\n\r", item.name, strings.Join(item.wornOn, ", ")))
+				} else {
+					info.WriteString(fmt.Sprintf("  %s\n\r", item.name))
+				}
+			}
+		}
+	} else {
+		info.WriteString("\n\rYou are not carrying anything.\n\r")
+	}
+
+	// Current location
+	if c.room != nil {
+		info.WriteString(fmt.Sprintf("\n\rCurrently in: %s\n\r", c.room.title))
+	}
+
+	return info.String()
+}
+
+// GetSkillInfo returns a formatted string with character abilities
+func (c *Character) GetSkillInfo() string {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	var skillInfo strings.Builder
+	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Abilities\n\r", ApplyColor("bright_cyan", c.name)))
+	skillInfo.WriteString("----------------\n\r")
+
+	// Abilities - only show those above zero
+	var abilitiesAboveZero []string
+	for ability, value := range c.abilities {
+		if value > 0 {
+			abilitiesAboveZero = append(abilitiesAboveZero, ability)
+		}
+	}
+
+	if len(abilitiesAboveZero) > 0 {
+		// Sort abilities for consistent display
+		sort.Strings(abilitiesAboveZero)
+
+		// Display each ability with value > 0
+		for _, ability := range abilitiesAboveZero {
+			value := c.abilities[ability]
+			skillInfo.WriteString(fmt.Sprintf("  %-15s: %d\n\r", ability, int(value)))
+		}
+	} else {
+		skillInfo.WriteString("  You have not developed any abilities yet.\n\r")
+	}
+
+	return skillInfo.String()
+}
+
+// LookAtTarget handles examining specific targets
+func (c *Character) LookAtTarget(target string) error {
+	// First check if target is in the room
+	desc := c.LookAtRoomTarget(target)
+	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
+		c.player.commandOut <- desc
+		return nil
+	}
+
+	// Then check if it's in inventory
+	desc = c.LookAtInventoryItem(target)
+	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
+		c.player.commandOut <- desc
+		return nil
+	}
+
+	// Not found anywhere
+	c.player.commandOut <- fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+	return nil
+}
+
+// LookAtRoomTarget looks for a target in the room (character or item)
+func (c *Character) LookAtRoomTarget(target string) string {
+	// Check if looking at a character in the room
+	if c.room != nil {
+		c.room.mutex.RLock()
+		for _, char := range c.room.characters {
+			if char != nil && strings.Contains(strings.ToLower(char.name), target) {
+				c.room.mutex.RUnlock()
+				return FormatCharacterDescription(char, c)
+			}
+		}
+
+		// Check if looking at an item in the room
+		for _, item := range c.room.items {
+			if item != nil && strings.Contains(strings.ToLower(item.name), target) {
+				c.room.mutex.RUnlock()
+				return formatItemDescription(item)
+			}
+		}
+
+		// Check for directions/exits
+		for direction, exit := range c.room.exits {
+			if strings.Contains(exit.direction, target) && exit != nil && exit.visible {
+				c.room.mutex.RUnlock()
+				if exit.description != "" {
+					return fmt.Sprintf("\n\r%s\n\r", exit.description)
+				}
+				return fmt.Sprintf("\n\rYou see an exit leading %s.\n\r", direction)
+			}
+		}
+		c.room.mutex.RUnlock()
+	}
+
+	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+}
+
+// LookAtInventoryItem looks for an item in the character's inventory
+func (c *Character) LookAtInventoryItem(target string) string {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	for _, item := range c.inventory {
+		if item != nil && strings.Contains(strings.ToLower(item.name), target) {
+			return formatItemDescription(item)
+		}
+	}
+
+	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+}
+
+// FormatCharacterDescription creates a description of a character for look command
+func FormatCharacterDescription(target *Character, viewer *Character) string {
 	target.mutex.RLock()
 	defer target.mutex.RUnlock()
 
@@ -500,14 +538,4 @@ func formatCharacterDescription(target *Character, _ *Character) string {
 	}
 
 	return desc.String()
-}
-
-func GenerateUUIDv7() uuid.UUID {
-
-	uuid_type_7, err := uuid.NewV7()
-	if err != nil {
-		Logger.Error("Error generating UUIDv7", "error", err)
-		return uuid.Nil
-	}
-	return uuid_type_7
 }

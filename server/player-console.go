@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -37,25 +38,25 @@ func (p *Player) Console(done chan bool) {
 		default:
 			characterCount := len(p.characterList)
 
-			p.toPlayer <- "\n=====Console=====\n"
-			p.toPlayer <- "1) Change Password\n"
-			p.toPlayer <- "2) View Messages\n"
-			p.toPlayer <- "3) Create Character\n"
+			p.commandOut <- "\n=====Console=====\n"
+			p.commandOut <- "1) Change Password\n"
+			p.commandOut <- "2) View Messages\n"
+			p.commandOut <- "3) Create Character\n"
 
 			if characterCount == 0 {
-				p.toPlayer <- "9) Quit\n"
+				p.commandOut <- "9) Quit\n"
 			} else {
-				p.toPlayer <- "4) Select Character\n"
-				p.toPlayer <- "5) Delete Character\n"
-				p.toPlayer <- "9) Quit\n"
+				p.commandOut <- "4) Select Character\n"
+				p.commandOut <- "5) Delete Character\n"
+				p.commandOut <- "9) Quit\n"
 			}
-			p.toPlayer <- "\nEnter your choice: "
+			p.commandOut <- "\nEnter your choice: "
 
 			select {
 			case <-p.ctx.Done():
 				done <- true
 				return
-			case choice := <-p.fromPlayer:
+			case choice := <-p.commandIn:
 				switch strings.TrimSpace(choice) {
 				case "1":
 					p.HandlePasswordChange()
@@ -70,24 +71,24 @@ func (p *Player) Console(done chan bool) {
 					if characterCount > 0 {
 						p.HandleCharacterSelection()
 					} else {
-						p.toPlayer <- "Invalid choice. Please try again.\n"
+						p.commandOut <- "Invalid choice. Please try again.\n"
 					}
 
 				case "5":
 					if characterCount > 0 {
 						p.HandleCharacterDeletion()
 					} else {
-						p.toPlayer <- "Invalid choice. Please try again.\n"
+						p.commandOut <- "Invalid choice. Please try again.\n"
 					}
 
 				case "9":
-					p.toPlayer <- "\nGoodbye!\n"
+					p.commandOut <- "\nGoodbye!\n"
 					p.Stop()
 					done <- true
 					return
 
 				default:
-					p.toPlayer <- "Invalid choice. Please try again.\n"
+					p.commandOut <- "Invalid choice. Please try again.\n"
 				}
 			}
 		}
@@ -111,87 +112,87 @@ func (p *Player) HandlePasswordChange() {
 	hasNumber := regexp.MustCompile(`[0-9]`)
 	hasSpecialChar := regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`)
 
-	p.toPlayer <- "\nPassword must:\n" +
+	p.commandOut <- "\nPassword must:\n" +
 		"- Be at least 8 characters long\n" +
 		"- Contain at least one uppercase letter\n" +
 		"- Contain at least one lowercase letter\n" +
 		"- Contain at least one number\n" +
 		"- Contain at least one special character\n\n"
 
-	p.toPlayer <- "Enter your current password (or 'exit' to cancel): "
-	currentPassword := <-p.fromPlayer
-	p.toPlayer <- "\n"
+	p.commandOut <- "Enter your current password (or 'exit' to cancel): "
+	currentPassword := <-p.commandIn
+	p.commandOut <- "\n"
 
 	if strings.ToLower(strings.TrimSpace(currentPassword)) == "exit" {
-		p.toPlayer <- "Password change cancelled.\n"
+		p.commandOut <- "Password change cancelled.\n"
 		return
 	}
 
 	for {
-		p.toPlayer <- "Enter your new password (or 'exit' to cancel): "
-		newPassword := <-p.fromPlayer
-		p.toPlayer <- "\n"
+		p.commandOut <- "Enter your new password (or 'exit' to cancel): "
+		newPassword := <-p.commandIn
+		p.commandOut <- "\n"
 
 		if strings.ToLower(strings.TrimSpace(newPassword)) == "exit" {
-			p.toPlayer <- "Password change cancelled.\n"
+			p.commandOut <- "Password change cancelled.\n"
 			return
 		}
 
 		if len(newPassword) < 8 {
-			p.toPlayer <- "Password must be at least 8 characters long. Please try again.\n"
+			p.commandOut <- "Password must be at least 8 characters long. Please try again.\n"
 			continue
 		}
 
 		if !hasUpperCase.MatchString(newPassword) {
-			p.toPlayer <- "Password must contain at least one uppercase letter. Please try again.\n"
+			p.commandOut <- "Password must contain at least one uppercase letter. Please try again.\n"
 			continue
 		}
 
 		if !hasLowerCase.MatchString(newPassword) {
-			p.toPlayer <- "Password must contain at least one lowercase letter. Please try again.\n"
+			p.commandOut <- "Password must contain at least one lowercase letter. Please try again.\n"
 			continue
 		}
 
 		if !hasNumber.MatchString(newPassword) {
-			p.toPlayer <- "Password must contain at least one number. Please try again.\n"
+			p.commandOut <- "Password must contain at least one number. Please try again.\n"
 			continue
 		}
 
 		if !hasSpecialChar.MatchString(newPassword) {
-			p.toPlayer <- "Password must contain at least one special character. Please try again.\n"
+			p.commandOut <- "Password must contain at least one special character. Please try again.\n"
 			continue
 		}
 
-		p.toPlayer <- "Confirm your new password: "
-		confirmPassword := <-p.fromPlayer
-		p.toPlayer <- "\n"
+		p.commandOut <- "Confirm your new password: "
+		confirmPassword := <-p.commandIn
+		p.commandOut <- "\n"
 
 		if strings.ToLower(strings.TrimSpace(confirmPassword)) == "exit" {
-			p.toPlayer <- "Password change cancelled.\n"
+			p.commandOut <- "Password change cancelled.\n"
 			return
 		}
 
 		if newPassword != confirmPassword {
-			p.toPlayer <- "Passwords do not match. Please try again.\n"
+			p.commandOut <- "Passwords do not match. Please try again.\n"
 			continue
 		}
 
 		err := p.server.ChangePassword(p, currentPassword, newPassword)
 		if err != nil {
 			// TODO: Provide more verbose feedback based on the error
-			p.toPlayer <- "Password change failed. Please try again.\n"
+			p.commandOut <- "Password change failed. Please try again.\n"
 			continue
 		}
 
-		p.toPlayer <- "Password successfully changed.\n"
+		p.commandOut <- "Password successfully changed.\n"
 		return
 	}
 }
 
 func (p *Player) HandleCharacterCreation() {
 	// Get character name
-	p.toPlayer <- "\nEnter character name (3-15 letters only): "
-	name, ok := <-p.fromPlayer
+	p.commandOut <- "\nEnter character name (3-15 letters only): "
+	name, ok := <-p.commandIn
 	if !ok {
 		Logger.Warn("Player input channel closed")
 		return
@@ -201,25 +202,25 @@ func (p *Player) HandleCharacterCreation() {
 
 	// Validate character name
 	if err := p.validateCharacterName(name); err != nil {
-		p.toPlayer <- fmt.Sprintf("Invalid name: %s\n", err.Error())
+		p.commandOut <- fmt.Sprintf("Invalid name: %s\n", err.Error())
 		return
 	}
 
 	// Select archetype
 	archetypeName, err := p.selectArchetype()
 	if err != nil {
-		p.toPlayer <- fmt.Sprintf("Archetype selection failed: %s\n", err.Error())
+		p.commandOut <- fmt.Sprintf("Archetype selection failed: %s\n", err.Error())
 		return
 	}
 
 	// Create character
 	character, err := p.CreateCharacter(name, archetypeName)
 	if err != nil {
-		p.toPlayer <- fmt.Sprintf("Character creation failed: %s\n", err.Error())
+		p.commandOut <- fmt.Sprintf("Character creation failed: %s\n", err.Error())
 		return
 	}
 
-	p.toPlayer <- fmt.Sprintf("\nCharacter '%s' created successfully!\n", name)
+	p.commandOut <- fmt.Sprintf("\nCharacter '%s' created successfully!\n", name)
 
 	// Save the character to the player's character list
 	p.mutex.Lock()
@@ -232,7 +233,7 @@ func (p *Player) HandleCharacterCreation() {
 	// Save player data
 	err = p.Save()
 	if err != nil {
-		p.toPlayer <- "Warning: Failed to save player data. Your character may not appear in your character list next time you log in.\n"
+		p.commandOut <- "Warning: Failed to save player data. Your character may not appear in your character list next time you log in.\n"
 		Logger.Error("Failed to save player data after character creation", "player", p.id, "error", err)
 	}
 }
@@ -271,10 +272,38 @@ func (p *Player) selectArchetype() (string, error) {
 
 	// Create a character instance to use SelectArchetype method
 	tempChar := &Character{
-		game:     p.server.game,
-		fromGame: p.toPlayer,   // Route game messages to player
-		toGame:   p.fromPlayer, // Route player input to game
+		game: p.server.game,
 	}
+
+	// Create adapter channels to convert between string and structured commands
+	commandInAdapter := make(chan *CommandResponse, 10)
+	commandOutAdapter := make(chan *CommandRequest, 10)
+
+	// Set up the character channels
+	tempChar.gameCommandIn = commandInAdapter
+	tempChar.gameCommandOut = commandOutAdapter
+
+	// Start goroutines to handle channel adaptation
+	go func() {
+		// Forward string messages to player
+		for resp := range commandInAdapter {
+			if resp != nil && resp.Message != "" {
+				p.commandOut <- resp.Message
+			}
+		}
+	}()
+
+	go func() {
+		// Convert player input to command requests
+		for input := range p.commandIn {
+			commandOutAdapter <- &CommandRequest{
+				ID:        uuid.New(),
+				Character: tempChar,
+				Args:      []string{input},
+				Timestamp: time.Now(),
+			}
+		}
+	}()
 
 	return tempChar.SelectArchetype()
 }
@@ -282,13 +311,13 @@ func (p *Player) selectArchetype() (string, error) {
 func (p *Player) HandleCharacterSelection() {
 	options := p.buildCharacterOptions()
 	if len(options) == 0 {
-		p.toPlayer <- "No characters available.\n"
+		p.commandOut <- "No characters available.\n"
 		return
 	}
 
 	p.displayCharacterOptions(options)
 
-	choice, ok := <-p.fromPlayer
+	choice, ok := <-p.commandIn
 	if !ok {
 		Logger.Warn("Player input channel closed")
 		return
@@ -296,7 +325,7 @@ func (p *Player) HandleCharacterSelection() {
 
 	num, err := strconv.Atoi(strings.TrimSpace(choice))
 	if err != nil || num < 1 || num > len(options) {
-		p.toPlayer <- "Invalid selection.\n"
+		p.commandOut <- "Invalid selection.\n"
 		return
 	}
 
@@ -309,12 +338,12 @@ func (p *Player) HandleCharacterSelection() {
 	// Load the character
 	character, err := LoadCharacter(p, characterID)
 	if err != nil {
-		p.toPlayer <- fmt.Sprintf("Failed to load character: %s\n", err.Error())
+		p.commandOut <- fmt.Sprintf("Failed to load character: %s\n", err.Error())
 		return
 	}
 
 	p.character = character
-	p.toPlayer <- fmt.Sprintf("\nYou are now playing as %s.\n", characterName)
+	p.commandOut <- fmt.Sprintf("\nYou are now playing as %s.\n", characterName)
 
 	p.PlayCharacter()
 }
@@ -332,27 +361,27 @@ func (p *Player) buildCharacterOptions() []string {
 }
 
 func (p *Player) displayCharacterOptions(options []string) {
-	p.toPlayer <- "\nSelect a character:\n"
+	p.commandOut <- "\nSelect a character:\n"
 	for i, name := range options {
-		p.toPlayer <- fmt.Sprintf("%d) %s\n", i+1, name)
+		p.commandOut <- fmt.Sprintf("%d) %s\n", i+1, name)
 	}
-	p.toPlayer <- "\nEnter your choice: "
+	p.commandOut <- "\nEnter your choice: "
 }
 
 func (p *Player) HandleCharacterDeletion() {
 	options := p.buildCharacterOptions()
 	if len(options) == 0 {
-		p.toPlayer <- "No characters available to delete.\n"
+		p.commandOut <- "No characters available to delete.\n"
 		return
 	}
 
-	p.toPlayer <- "\nSelect a character to delete:\n"
+	p.commandOut <- "\nSelect a character to delete:\n"
 	for i, name := range options {
-		p.toPlayer <- fmt.Sprintf("%d) %s\n", i+1, name)
+		p.commandOut <- fmt.Sprintf("%d) %s\n", i+1, name)
 	}
-	p.toPlayer <- "\nEnter your choice (or 0 to cancel): "
+	p.commandOut <- "\nEnter your choice (or 0 to cancel): "
 
-	choice, ok := <-p.fromPlayer
+	choice, ok := <-p.commandIn
 	if !ok {
 		Logger.Warn("Player input channel closed")
 		return
@@ -360,19 +389,19 @@ func (p *Player) HandleCharacterDeletion() {
 
 	num, err := strconv.Atoi(strings.TrimSpace(choice))
 	if err != nil {
-		p.toPlayer <- "Invalid selection.\n"
+		p.commandOut <- "Invalid selection.\n"
 		return
 	}
 
 	// Check for cancel option
 	if num == 0 {
-		p.toPlayer <- "Character deletion cancelled.\n"
+		p.commandOut <- "Character deletion cancelled.\n"
 		return
 	}
 
 	// Validate selection
 	if num < 1 || num > len(options) {
-		p.toPlayer <- "Invalid selection.\n"
+		p.commandOut <- "Invalid selection.\n"
 		return
 	}
 
@@ -383,23 +412,23 @@ func (p *Player) HandleCharacterDeletion() {
 	p.mutex.RUnlock()
 
 	// Confirm deletion
-	p.toPlayer <- fmt.Sprintf("\nAre you sure you want to delete '%s'? This cannot be undone.\nType 'DELETE' to confirm: ", characterName)
+	p.commandOut <- fmt.Sprintf("\nAre you sure you want to delete '%s'? This cannot be undone.\nType 'DELETE' to confirm: ", characterName)
 
-	confirmation, ok := <-p.fromPlayer
+	confirmation, ok := <-p.commandIn
 	if !ok {
 		Logger.Warn("Player input channel closed")
 		return
 	}
 
 	if strings.TrimSpace(confirmation) != "DELETE" {
-		p.toPlayer <- "Character deletion cancelled.\n"
+		p.commandOut <- "Character deletion cancelled.\n"
 		return
 	}
 
 	// Delete the character from database
 	err = p.DeleteCharacter(characterID)
 	if err != nil {
-		p.toPlayer <- fmt.Sprintf("Failed to delete character: %s\n", err.Error())
+		p.commandOut <- fmt.Sprintf("Failed to delete character: %s\n", err.Error())
 		return
 	}
 
@@ -411,16 +440,16 @@ func (p *Player) HandleCharacterDeletion() {
 	// Save player data
 	err = p.Save()
 	if err != nil {
-		p.toPlayer <- "Warning: Failed to update player data after character deletion.\n"
+		p.commandOut <- "Warning: Failed to update player data after character deletion.\n"
 		Logger.Error("Failed to save player data after character deletion", "player", p.id, "error", err)
 	}
 
-	p.toPlayer <- fmt.Sprintf("\nCharacter '%s' has been deleted.\n", characterName)
+	p.commandOut <- fmt.Sprintf("\nCharacter '%s' has been deleted.\n", characterName)
 }
 
 func (p *Player) PlayCharacter() {
 	if p.character == nil {
-		p.toPlayer <- "No character selected.\n"
+		p.commandOut <- "No character selected.\n"
 		return
 	}
 
@@ -436,18 +465,18 @@ func (p *Player) PlayCharacter() {
 	p.character = nil
 
 	// Ensure we're fully back to console mode
-	p.toPlayer <- "\n\rReturning to console.\n\r"
+	p.commandOut <- "\n\rReturning to console.\n\r"
 }
 
 func (p *Player) HandleViewMOTDs() {
-	p.toPlayer <- "\n\r=== Active Messages ===\n\r"
+	p.commandOut <- "\n\r=== Active Messages ===\n\r"
 
 	p.mutex.RLock()
 	activeMotDs := p.server.activeMotDs
 	p.mutex.RUnlock()
 
 	if len(activeMotDs) == 0 {
-		p.toPlayer <- "No messages to display.\n\r"
+		p.commandOut <- "No messages to display.\n\r"
 		return
 	}
 
@@ -463,9 +492,9 @@ func (p *Player) HandleViewMOTDs() {
 		// Default MOTD has no date displayed
 		defaultMOTDID, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
 		if motd.MotdID == defaultMOTDID {
-			p.toPlayer <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
+			p.commandOut <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
 		} else {
-			p.toPlayer <- fmt.Sprintf("\n\r[%s]\n\r%s\n\r", dateStr, motd.Message)
+			p.commandOut <- fmt.Sprintf("\n\r[%s]\n\r%s\n\r", dateStr, motd.Message)
 		}
 	}
 }

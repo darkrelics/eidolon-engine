@@ -21,24 +21,8 @@ package main
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
-)
-
-// Command messages
-const (
-	msgNoExits     = "There are no visible exits.\n\r"
-	msgAlone       = "You are alone.\n\r"
-	msgAlsoHere    = "Also here: "
-	msgItems       = "Items in the room:\n\r"
-	msgNoDirection = "\n\rWhich direction do you want to go?\n\r"
-	msgCantEscape  = "\n\rYou can't escape!\n\r"
-	msgNoRoom      = "\n\rYou are not in any room to move from.\n\r"
-	msgInvalidDir  = "\n\rYou cannot go that way.\n\r"
-	msgPathNowhere = "\n\rThe path leads nowhere.\n\r"
-	whoHeader      = "\n\rOnline Characters\n\r"
-	whoEmpty       = "\n\rNo other players online.\n\r"
 )
 
 // CommandInfo stores metadata about each command
@@ -93,6 +77,45 @@ func (g *Game) initCommands() {
 		handler:     executeSkillCommand,
 		description: "Display your character's abilities",
 		usage:       "skill",
+	}
+
+	// Movement commands will be implemented using an alternative method
+
+	// Speech commands
+	g.commands["say"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Say something to everyone in the room",
+		usage:       "say <message>",
+	}
+
+	g.commands["emote"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Express an action or emotion in the room",
+		usage:       "emote <action>",
+	}
+
+	// Item commands
+	g.commands["get"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Pick up an item",
+		usage:       "get <item>",
+	}
+
+	g.commands["take"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Pick up an item",
+		usage:       "take <item>",
+	}
+
+	g.commands["drop"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Drop an item from your inventory",
+		usage:       "drop <item>",
 	}
 }
 
@@ -153,7 +176,7 @@ func tokenizeInput(input string) []string {
 	return tokens
 }
 
-// ProcessCommand determines if a command is timed or untimed and handles it accordingly
+// ProcessCommand determines command tier and routes it appropriately
 func ProcessCommand(character *Character, input string) (bool, error) {
 	// Parse and validate the command
 	verb, tokens, err := ValidateCommand(character, input)
@@ -165,6 +188,16 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 		return false, errors.New("\n\rInvalid character state.\n\r")
 	}
 
+	// Check if the character is waiting for a command timeout
+	canExecute, reason := character.CanExecuteCommand()
+	if !canExecute {
+		// Allow certain commands even when waiting
+		if verb != "look" && verb != "help" && verb != "who" && verb != "quit" {
+			return false, fmt.Errorf("\n\r%s\n\r", reason)
+		}
+		// These commands are allowed during wait time
+	}
+
 	// Retrieve the command info
 	character.game.mutex.RLock()
 	cmdInfo, exists := character.game.commands[verb]
@@ -174,450 +207,89 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 		return false, fmt.Errorf("command '%s' not understood", verb)
 	}
 
-	// Process based on command type
+	// Special case handling for "quit" command - always process immediately
+	if verb == "quit" {
+		err := executeQuitCommand(character, tokens)
+		return true, err
+	}
+
+	// Process based on command tier
 	if !cmdInfo.timed {
-		// Execute untimed commands immediately
-		Logger.Debug("Executing untimed command", "verb", verb, "character", character.name)
-		start := time.Now()
-
-		err := cmdInfo.handler(character, tokens)
-
-		elapsed := time.Since(start)
-		if elapsed > 100*time.Millisecond {
-			Logger.Warn("Slow command execution", "verb", verb, "duration", elapsed, "character", character.name)
-		}
-
-		return false, err
+		// Execute untimed commands immediately at character level
+		Logger.Debug("Executing character-tier command", "verb", verb, "character", character.name)
+		return false, cmdInfo.handler(character, tokens)
 	} else {
-		// For timed commands, send to the game loop for processing
-		Logger.Debug("Queuing timed command for processing", "verb", verb, "character", character.name)
+		// For timed commands, determine the tier and route accordingly
+		var tier CommandTier
 
-		// TODO: Implement timed commands via a command queue in the Game struct
-		Logger.Error("Timed commands not implemented", "character", character.name, "command", verb)
-		return false, errors.New("\n\rTimed commands are not yet implemented.\n\r")
-	}
-}
-
-// executeQuitCommand handles the quit command
-func executeQuitCommand(character *Character, tokens []string) error {
-	if character == nil {
-		Logger.Error("Attempted to quit with nil character")
-		return errors.New("invalid character state")
-	}
-
-	Logger.Info("Player initiating quit", "characterName", character.name)
-
-	// Notify the player
-	if character.player != nil {
-		select {
-		case character.player.toPlayer <- "\n\rSaving character state...\n\r":
+		// Determine tier based on command properties
+		switch verb {
+		case "say", "emote", "whisper", "get", "take", "drop":
+			// Commands that only affect the local room
+			tier = RoomTier
+		case "shout", "weather", "time", "global":
+			// Commands that affect multiple rooms or the entire game
+			tier = GameTier
 		default:
-			Logger.Warn("Failed to notify player: ToPlayer channel is full or closed", "characterName", character.name)
+			// Default to room tier for most commands
+			tier = RoomTier
 		}
-	}
 
-	// Signal the end of character's lifecycle
-	character.Stop(character.end)
-	return nil
-}
-
-// executeHelpCommand handles the help command
-func executeHelpCommand(character *Character, tokens []string) error {
-	if character == nil || character.player == nil || character.game == nil {
-		return errors.New("invalid character state")
-	}
-
-	Logger.Debug("Player requesting help", "characterName", character.name)
-
-	// Check if help was requested for a specific command
-	if len(tokens) > 1 {
-		return showCommandHelp(character, tokens[1])
-	}
-
-	// Collect all commands
-	character.game.mutex.RLock()
-
-	var commandNames []string
-	for name := range character.game.commands {
-		commandNames = append(commandNames, name)
-	}
-
-	character.game.mutex.RUnlock()
-
-	// Sort commands alphabetically
-	sort.Strings(commandNames)
-
-	// Build help message
-	var helpMsg strings.Builder
-	helpMsg.WriteString("\n\rAvailable Commands:\n\r\n\r")
-
-	character.game.mutex.RLock()
-
-	for _, cmd := range commandNames {
-		info := character.game.commands[cmd]
-		helpMsg.WriteString(fmt.Sprintf("  %-12s - %s\n\r", cmd, info.description))
-	}
-
-	character.game.mutex.RUnlock()
-
-	helpMsg.WriteString("\n\rType 'help <command>' for more information on a specific command.\n\r")
-
-	character.player.toPlayer <- helpMsg.String()
-	return nil
-}
-
-// showCommandHelp displays help for a specific command
-func showCommandHelp(character *Character, cmdName string) error {
-	if character == nil || character.player == nil || character.game == nil {
-		return errors.New("invalid character state")
-	}
-
-	cmdName = strings.ToLower(cmdName)
-
-	character.game.mutex.RLock()
-	cmdInfo, exists := character.game.commands[cmdName]
-	character.game.mutex.RUnlock()
-
-	if !exists {
-		character.player.toPlayer <- fmt.Sprintf("\n\rNo help available for '%s'. Command not found.\n\r", cmdName)
-		return nil
-	}
-
-	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("\n\rCommand: %s\n\r", cmdName))
-	msg.WriteString(fmt.Sprintf("Description: %s\n\r", cmdInfo.description))
-	msg.WriteString(fmt.Sprintf("Usage: %s\n\r", cmdInfo.usage))
-
-	character.player.toPlayer <- msg.String()
-	return nil
-}
-
-// executeLookCommand handles the look command
-func executeLookCommand(character *Character, tokens []string) error {
-	if character == nil {
-		Logger.Error("Attempted to look with nil character")
-		return errors.New("invalid character state")
-	}
-
-	Logger.Debug("Player is looking", "characterName", character.name)
-
-	// Handle looking at specific targets if provided
-	if len(tokens) > 1 {
-		target := strings.ToLower(strings.Join(tokens[1:], " "))
-		desc := getLookTarget(character, target)
-		character.player.toPlayer <- desc
-		return nil
-	}
-
-	// Look at room
-	room := character.room
-	if room == nil {
-		character.player.toPlayer <- "\n\rYou are floating in the void.\n\r"
-		return nil
-	}
-
-	room.mutex.RLock()
-	defer room.mutex.RUnlock()
-
-	var roomInfo strings.Builder
-	roomInfo.Grow(1024) // Pre-allocate reasonable buffer
-
-	// Room Title and Description
-	roomInfo.WriteString("\n\r[")
-	roomInfo.WriteString(ApplyColor("bright_white", room.title))
-	roomInfo.WriteString("]\n\r")
-	roomInfo.WriteString(room.description)
-	roomInfo.WriteString("\n\r")
-
-	// Exits - collect while under lock
-	exits := make([]string, 0, len(room.exits))
-	for _, exit := range room.exits {
-		if exit != nil && exit.visible {
-			exits = append(exits, exit.direction)
+		// Create command request
+		cmdReq := &CommandRequest{
+			ID:        GenerateUUIDv7(),
+			Character: character,
+			Verb:      verb,
+			Args:      tokens,
+			Tier:      tier,
+			State:     CommandPending,
+			Timestamp: time.Now(),
+			Response:  make(chan *CommandResponse, 1),
 		}
-	}
 
-	if len(exits) == 0 {
-		roomInfo.WriteString(msgNoExits)
-	} else {
-		sort.Strings(exits)
-		roomInfo.WriteString("Obvious exits: ")
-		roomInfo.WriteString(strings.Join(exits, ", "))
-		roomInfo.WriteString("\n\r")
-	}
-
-	// Characters - collect while under lock
-	chars := make([]string, 0, len(room.characters))
-	for _, c := range room.characters {
-		if c != nil && c != character {
-			chars = append(chars, c.name)
-		}
-	}
-
-	if len(chars) == 0 {
-		roomInfo.WriteString(msgAlone)
-	} else {
-		roomInfo.WriteString(msgAlsoHere)
-		roomInfo.WriteString(strings.Join(chars, ", "))
-		roomInfo.WriteString("\n\r")
-	}
-
-	// Items - collect while under lock
-	items := make([]string, 0, len(room.items))
-	for _, item := range room.items {
-		if item != nil && item.canPickUp {
-			items = append(items, item.name)
-		}
-	}
-
-	if len(items) > 0 {
-		roomInfo.WriteString(msgItems)
-		for _, item := range items {
-			roomInfo.WriteString("- ")
-			roomInfo.WriteString(item)
-			roomInfo.WriteString("\n\r")
-		}
-	}
-
-	character.player.toPlayer <- roomInfo.String()
-	return nil
-}
-
-// getLookTarget handles looking at specific targets (characters, items, etc.)
-func getLookTarget(character *Character, target string) string {
-	// Check if looking at a character in the room
-	if character.room != nil {
-		character.room.mutex.RLock()
-		for _, c := range character.room.characters {
-			if c != nil && strings.Contains(strings.ToLower(c.name), target) {
-				character.room.mutex.RUnlock()
-				return formatCharacterDescription(c, character)
+		// Route command based on tier
+		switch tier {
+		case RoomTier:
+			// Ensure room is running
+			if !character.room.running {
+				character.room.Start(character.game)
 			}
-		}
 
-		// Check if looking at an item in the room
-		for _, item := range character.room.items {
-			if item != nil && strings.Contains(strings.ToLower(item.name), target) {
-				character.room.mutex.RUnlock()
-				return formatItemDescription(item)
+			// Send command to the room
+			Logger.Debug("Routing command to room", "verb", verb, "character", character.name, "roomID", character.room.roomID)
+			select {
+			case character.room.commandIn <- cmdReq:
+				// Command sent successfully to room
+			default:
+				return false, fmt.Errorf("\n\rroom command buffer is full, try again later\n\r")
 			}
-		}
-		character.room.mutex.RUnlock()
-	}
 
-	// Check if looking at an item in inventory
-	character.mutex.RLock()
-	defer character.mutex.RUnlock()
-
-	for _, item := range character.inventory {
-		if item != nil && strings.Contains(strings.ToLower(item.name), target) {
-			return formatItemDescription(item)
-		}
-	}
-
-	// Check for directions/exits
-	if character.room != nil {
-		character.room.mutex.RLock()
-		defer character.room.mutex.RUnlock()
-
-		for direction, exit := range character.room.exits {
-			if strings.Contains(exit.direction, target) && exit != nil && exit.visible {
-				if exit.description != "" {
-					return fmt.Sprintf("\n\r%s\n\r", exit.description)
-				}
-				return fmt.Sprintf("\n\rYou see an exit leading %s.\n\r", direction)
+		case GameTier:
+			// Send command to the game
+			Logger.Debug("Routing command to game", "verb", verb, "character", character.name)
+			select {
+			case character.gameCommandOut <- cmdReq:
+				// Command sent successfully to game
+			default:
+				return false, fmt.Errorf("\n\rgame command buffer is full, try again later\n\r")
 			}
-		}
-	}
 
-	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
-}
-
-// executeWhoCommand handles the who command, displaying all online characters
-func executeWhoCommand(character *Character, tokens []string) error {
-	if character == nil || character.player == nil || character.game == nil {
-		return errors.New("invalid character state")
-	}
-
-	Logger.Debug("Player checking who is online", "characterName", character.name)
-
-	// Get all active characters from the game
-	character.game.mutex.RLock()
-	var characterNames []string
-	for _, c := range character.game.characters {
-		if c != nil && c.name != "" {
-			characterNames = append(characterNames, c.name)
-		}
-	}
-	character.game.mutex.RUnlock()
-
-	// Sort names alphabetically
-	sort.Strings(characterNames)
-
-	// Check if there are any other characters online
-	if len(characterNames) == 0 {
-		character.player.toPlayer <- whoEmpty
-		return nil
-	}
-
-	// Build message with character list
-	var msg strings.Builder
-	msg.WriteString(whoHeader)
-	msg.WriteString("----------------\n\r")
-
-	// Determine column count based on console width and character count
-	consoleWidth := 80 // Default
-	if character.player.consoleWidth > 0 {
-		consoleWidth = character.player.consoleWidth
-	}
-
-	// Column width is 16 characters (as specified)
-	const colWidth = 16
-	maxCols := consoleWidth / colWidth
-
-	// If fewer than 20 characters, use single column layout as specified
-	if len(characterNames) < 20 {
-		// Single column layout
-		for _, name := range characterNames {
-			msg.WriteString(fmt.Sprintf("%-16s\n\r", name))
-		}
-	} else {
-		// Multi-column layout
-		cols := maxCols
-		if cols < 1 {
-			cols = 1 // Ensure at least one column
+		default:
+			return false, fmt.Errorf("\n\rinvalid command tier\n\r")
 		}
 
-		// Calculate rows needed
-		rows := (len(characterNames) + cols - 1) / cols // Ceiling division
-
-		// Display characters in column-first order
-		for r := 0; r < rows; r++ {
-			for c := 0; c < cols; c++ {
-				idx := c*rows + r
-				if idx < len(characterNames) {
-					msg.WriteString(fmt.Sprintf("%-16s", characterNames[idx]))
-				}
+		// Wait for response or timeout
+		select {
+		case resp := <-cmdReq.Response:
+			if resp.Error != nil {
+				return false, resp.Error
 			}
-			msg.WriteString("\n\r")
-		}
-	}
-
-	msg.WriteString("\n\r")
-	msg.WriteString(fmt.Sprintf("Total Characters Online: %d\n\r", len(characterNames)))
-
-	character.player.toPlayer <- msg.String()
-	return nil
-}
-
-// executeInfoCommand displays information about the character
-func executeInfoCommand(character *Character, tokens []string) error {
-	if character == nil || character.player == nil {
-		return errors.New("invalid character state")
-	}
-
-	Logger.Debug("Player requesting character information", "characterName", character.name)
-
-	character.mutex.RLock()
-	defer character.mutex.RUnlock()
-
-	var info strings.Builder
-	info.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_white", character.name)))
-	info.WriteString("----------------\n\r")
-
-	// Basic character information
-	info.WriteString(fmt.Sprintf("Health: %d\n\r", int(character.health)))
-	info.WriteString(fmt.Sprintf("Essence: %d\n\r", int(character.essence)))
-
-	// Attributes
-	if len(character.attributes) > 0 {
-		info.WriteString("\n\rAttributes:\n\r")
-		for attr, value := range character.attributes {
-			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", attr, int(value)))
-		}
-	}
-
-	// Abilities - only show those above zero
-	var abilitiesAboveZero []string
-	for ability, value := range character.abilities {
-		if value > 0 {
-			abilitiesAboveZero = append(abilitiesAboveZero, ability)
-		}
-	}
-
-	if len(abilitiesAboveZero) > 0 {
-		info.WriteString("\n\rAbilities:\n\r")
-		// Sort abilities for consistent display
-		sort.Strings(abilitiesAboveZero)
-
-		// Display each ability with value > 0
-		for _, ability := range abilitiesAboveZero {
-			value := character.abilities[ability]
-			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", ability, int(value)))
-		}
-	}
-
-	// Inventory information
-	if len(character.inventory) > 0 {
-		info.WriteString("\n\rInventory:\n\r")
-		for _, item := range character.inventory {
-			if item != nil {
-				if item.isWorn {
-					info.WriteString(fmt.Sprintf("  %s (worn on %s)\n\r", item.name, strings.Join(item.wornOn, ", ")))
-				} else {
-					info.WriteString(fmt.Sprintf("  %s\n\r", item.name))
-				}
+			if resp.Message != "" {
+				character.player.commandOut <- resp.Message
 			}
-		}
-	} else {
-		info.WriteString("\n\rYou are not carrying anything.\n\r")
-	}
-
-	// Current location
-	if character.room != nil {
-		info.WriteString(fmt.Sprintf("\n\rCurrently in: %s\n\r", character.room.title))
-	}
-
-	character.player.toPlayer <- info.String()
-	return nil
-}
-
-// executeSkillCommand displays only the character's abilities
-func executeSkillCommand(character *Character, tokens []string) error {
-	if character == nil || character.player == nil {
-		return errors.New("invalid character state")
-	}
-
-	Logger.Debug("Player requesting skill information", "characterName", character.name)
-
-	character.mutex.RLock()
-	defer character.mutex.RUnlock()
-
-	var skillInfo strings.Builder
-	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Abilities\n\r", ApplyColor("bright_cyan", character.name)))
-	skillInfo.WriteString("----------------\n\r")
-
-	// Abilities - only show those above zero
-	var abilitiesAboveZero []string
-	for ability, value := range character.abilities {
-		if value > 0 {
-			abilitiesAboveZero = append(abilitiesAboveZero, ability)
+			return false, nil
+		case <-time.After(5 * time.Second):
+			return false, fmt.Errorf("\n\rcommand timed out\n\r")
 		}
 	}
-
-	if len(abilitiesAboveZero) > 0 {
-		// Sort abilities for consistent display
-		sort.Strings(abilitiesAboveZero)
-
-		// Display each ability with value > 0
-		for _, ability := range abilitiesAboveZero {
-			value := character.abilities[ability]
-			skillInfo.WriteString(fmt.Sprintf("  %-15s: %d\n\r", ability, int(value)))
-		}
-	} else {
-		skillInfo.WriteString("  You have not developed any abilities yet.\n\r")
-	}
-
-	character.player.toPlayer <- skillInfo.String()
-	return nil
 }

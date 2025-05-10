@@ -23,6 +23,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type Archetype struct {
@@ -61,7 +64,6 @@ func (g *Game) LoadArchetypes() error {
 
 	for _, archetype := range archetypes {
 
-		// Normalize map keys once during load
 		for k, v := range archetype.Attributes {
 			lowerKey := strings.ToLower(k)
 			if lowerKey != k {
@@ -108,7 +110,7 @@ func (g *Game) BuildArchetypeOptions() error {
 func (c *Character) SelectArchetype() (string, error) {
 
 	if len(c.game.archetypeOptions) == 0 {
-		return "", nil // No archetypes available.
+		return "", nil
 	}
 
 	options := c.game.archetypeOptions
@@ -119,11 +121,31 @@ func (c *Character) SelectArchetype() (string, error) {
 	}
 	msg += "Enter the number of your choice: "
 
-	c.fromGame <- msg
-	selection, ok := <-c.toGame
+	c.gameCommandIn <- &CommandResponse{
+		RequestID: uuid.New(),
+		Success:   true,
+		Message:   msg,
+		Timestamp: time.Now(),
+	}
+
+	// Wait for response from the player
+	var selection string
+
+	cmd, ok := <-c.gameCommandOut
 	if !ok {
 		Logger.Warn("Character input channel closed")
 		return "", fmt.Errorf("character input channel closed")
+	}
+
+	if cmd == nil {
+		return "", fmt.Errorf("received nil command")
+	}
+
+	// Extract the first argument as the selection
+	if len(cmd.Args) > 0 {
+		selection = cmd.Args[0]
+	} else {
+		return "", fmt.Errorf("no selection provided")
 	}
 
 	num, err := strconv.Atoi(strings.TrimSpace(selection))

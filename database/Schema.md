@@ -60,14 +60,12 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 | `Title`       | `STRING` | Title or name of the room.                      |
 | `Description` | `STRING` | Text description of the room.                   |
 | `ExitID`      | `LIST`   | Map of exit directions to exit UUIDs.           |
-| `ItemID`      | `LIST`   | List of item UUIDs present in the room.         |
 
 - **`RoomID`**: Serves as the primary key for the room.
 - **`Area`**: The broader area or zone where the room is located.
 - **`Title`**: A short name or title for the room.
 - **`Description`**: A detailed description that players see upon entering.
 - **`ExitID`**: A list of UUIDs representing exits from the room.
-- **`ItemID`**: A list of UUIDs of items that are in the room.
 
 ---
 

@@ -29,28 +29,29 @@ import (
 )
 
 type Item struct {
-	id          uuid.UUID
-	prototypeID uuid.UUID
-	name        string
-	description string
-	mass        float64
-	value       uint64
-	stackable   bool
-	maxStack    uint32
-	quantity    uint32
-	wearable    bool
-	wornOn      []string
-	verbs       map[string]string
-	overrides   map[string]string
-	traitMods   map[string]int8
-	container   bool
-	contents    []*Item
-	isWorn      bool
-	canPickUp   bool
-	metadata    map[string]string
-	mutex       sync.RWMutex
-	lastEdited  time.Time
-	lastSaved   time.Time
+	id                uuid.UUID
+	prototypeID       uuid.UUID
+	name              string
+	description       string
+	mass              float64
+	value             uint64
+	stackable         bool
+	maxStack          uint32
+	quantity          uint32
+	wearable          bool
+	wornOn            []string
+	verbs             map[string]string
+	overrides         map[string]string
+	traitMods         map[string]int8
+	container         bool
+	contents          []*Item
+	isWorn            bool
+	canPickUp         bool
+	markedForDeletion bool // Runtime flag for marking items to be deleted during room cleanup
+	metadata          map[string]string
+	mutex             sync.RWMutex
+	lastEdited        time.Time
+	lastSaved         time.Time
 }
 
 type ItemData struct {
@@ -116,6 +117,24 @@ type PrototypeData struct {
 	Contents    []string          `json:"contents" dynamodbav:"contents"`
 	CanPickUp   bool              `json:"can_pick_up" dynamodbav:"can_pick_up"`
 	Metadata    map[string]string `json:"metadata" dynamodbav:"metadata"`
+}
+
+// WearLocations defines all possible locations where an item can be worn
+var WearLocations = map[string]bool{
+	"head":         true,
+	"neck":         true,
+	"shoulders":    true,
+	"chest":        true,
+	"back":         true,
+	"arms":         true,
+	"hands":        true,
+	"waist":        true,
+	"legs":         true,
+	"feet":         true,
+	"left_finger":  true,
+	"right_finger": true,
+	"left_wrist":   true,
+	"right_wrist":  true,
 }
 
 // formatItemDescription creates a description of an item

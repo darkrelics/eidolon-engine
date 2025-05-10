@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -123,7 +124,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	// Create Default Room
 
-	game.rooms[0] = NewRoom(0, "The Void", "The Void", "Default void room.")
+	game.rooms[0] = NewRoom(ctx, 0, "The Void", "The Void", "Default void room.", true, "") // Default room is always persistent, no script
 
 	// Load Rooms
 
@@ -276,9 +277,219 @@ func (g *Game) Run(errChan chan error) error {
 // Game heart beat
 
 func (g *Game) tick() error {
+	// Process any pending game-tier commands
+	g.processGameCommands()
 
-	// Run game logic
+	// Run other game logic
 	return nil
+}
+
+// processGameCommands processes any commands that have been escalated to game tier
+func (g *Game) processGameCommands() {
+	// Process commands from all active rooms
+	g.mutex.RLock()
+	for _, room := range g.rooms {
+		if room != nil && room.running {
+			// Non-blocking check for commands from this room
+			select {
+			case cmd, ok := <-room.gameCommandOut:
+				if !ok {
+					// Channel closed, skip this room
+					continue
+				}
+				// Handle the command asynchronously
+				go g.handleGameCommand(cmd)
+			default:
+				// No command waiting, continue to next room
+				continue
+			}
+		}
+	}
+
+	// Process commands from characters directly
+	for _, character := range g.characters {
+		if character != nil {
+			// Non-blocking check for commands from this character
+			select {
+			case cmd, ok := <-character.gameCommandOut:
+				if !ok {
+					// Channel closed, skip this character
+					continue
+				}
+				// Handle the command asynchronously
+				go g.handleGameCommand(cmd)
+			default:
+				// No command waiting, continue to next character
+				continue
+			}
+		}
+	}
+	g.mutex.RUnlock()
+}
+
+// handleGameCommand processes a command at the game tier
+func (g *Game) handleGameCommand(cmd *CommandRequest) {
+	if cmd == nil {
+		Logger.Error("Received nil command request in game handler")
+		return
+	}
+
+	Logger.Debug("Processing game-tier command", "verb", cmd.Verb, "character", cmd.Character.name)
+
+	// Update command state
+	cmd.State = CommandProcessing
+
+	// Process the command using our game command handler
+	response := g.ProcessGameCommand(cmd)
+
+	// Send response
+	g.sendCommandResponse(cmd, response)
+}
+
+// handleWhoCommand processes the "who" command at game tier
+func (g *Game) handleWhoCommand(cmd *CommandRequest) *CommandResponse {
+	// Get a list of all players
+	g.mutex.RLock()
+	var players []string
+	for _, c := range g.characters {
+		if c != nil && c.name != "" {
+			players = append(players, c.name)
+		}
+	}
+	g.mutex.RUnlock()
+
+	// Sort the names
+	sort.Strings(players)
+
+	// Build message
+	var msg strings.Builder
+	msg.WriteString("\n\rPlayers Online:\n\r")
+	msg.WriteString("----------------\n\r")
+
+	if len(players) == 0 {
+		msg.WriteString("No players online.\n\r")
+	} else {
+		for _, name := range players {
+			msg.WriteString(fmt.Sprintf("%s\n\r", name))
+		}
+		msg.WriteString(fmt.Sprintf("\n\rTotal: %d player(s)\n\r", len(players)))
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   msg.String(),
+		Timestamp: time.Now(),
+	}
+}
+
+// handleEnvironmentCommand processes environment-related commands
+func (g *Game) handleEnvironmentCommand(cmd *CommandRequest) *CommandResponse {
+	var msg string
+
+	switch cmd.Verb {
+	case "time":
+		// Report game time
+		gameTime := time.Now() // Placeholder for actual game time
+		msg = fmt.Sprintf("\n\rCurrent game time: %s\n\r", gameTime.Format("15:04:05"))
+	case "weather":
+		// Report game weather
+		msg = "\n\rThe weather is clear and pleasant.\n\r" // Placeholder for actual weather system
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   msg,
+		Timestamp: time.Now(),
+	}
+}
+
+// handleGlobalCommunicationCommand processes global communication commands
+func (g *Game) handleGlobalCommunicationCommand(cmd *CommandRequest) *CommandResponse {
+	if len(cmd.Args) < 2 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("what do you want to %s?", cmd.Verb),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Extract the message
+	message := strings.Join(cmd.Args[1:], " ")
+
+	// Format based on command type
+	var broadcastMsg string
+	switch cmd.Verb {
+	case "shout":
+		broadcastMsg = fmt.Sprintf("\n\r%s shouts: %s\n\r", cmd.Character.name, message)
+	case "announce":
+		broadcastMsg = fmt.Sprintf("\n\r[Announcement] %s: %s\n\r", cmd.Character.name, message)
+	}
+
+	// Broadcast to all characters
+	g.mutex.RLock()
+	for _, c := range g.characters {
+		if c != nil && c != cmd.Character && c.player != nil {
+			select {
+			case c.player.commandOut <- broadcastMsg:
+				// Message sent successfully
+				select {
+				case c.player.commandOut <- c.prompt:
+					// Prompt sent successfully
+				default:
+					// Could not send prompt, but that's ok
+				}
+			default:
+				// Could not send message, character's buffer might be full
+				Logger.Warn("Failed to send global message to player",
+					"recipient", c.name,
+					"sender", cmd.Character.name)
+			}
+		}
+	}
+	g.mutex.RUnlock()
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   broadcastMsg, // Also send to the originating character
+		Timestamp: time.Now(),
+	}
+}
+
+// sendCommandResponse sends a response to a command request
+func (g *Game) sendCommandResponse(cmd *CommandRequest, response *CommandResponse) {
+	if cmd == nil || response == nil {
+		return
+	}
+
+	// If direct response channel is provided, use it
+	if cmd.Response != nil {
+		select {
+		case cmd.Response <- response:
+			// Response sent successfully
+			return
+		default:
+			Logger.Warn("Failed to send direct command response",
+				"characterName", cmd.Character.name,
+				"commandID", cmd.ID)
+			// Fall through to try character's gameCommandIn channel
+		}
+	}
+
+	// Otherwise, send through character's gameCommandIn channel
+	if cmd.Character != nil && cmd.Character.gameCommandIn != nil {
+		select {
+		case cmd.Character.gameCommandIn <- response:
+			// Response sent successfully
+		default:
+			Logger.Warn("Failed to send command response to character",
+				"characterName", cmd.Character.name,
+				"commandID", cmd.ID)
+		}
+	}
 }
 
 func (g *Game) ValidateCharacterName(name string) error {
