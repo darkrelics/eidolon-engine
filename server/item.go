@@ -119,6 +119,24 @@ type PrototypeData struct {
 	Metadata    map[string]string `json:"metadata" dynamodbav:"metadata"`
 }
 
+// WearLocations defines all possible locations where an item can be worn
+var WearLocations = map[string]bool{
+	"head":         true,
+	"neck":         true,
+	"shoulders":    true,
+	"chest":        true,
+	"back":         true,
+	"arms":         true,
+	"hands":        true,
+	"waist":        true,
+	"legs":         true,
+	"feet":         true,
+	"left_finger":  true,
+	"right_finger": true,
+	"left_wrist":   true,
+	"right_wrist":  true,
+}
+
 // formatItemDescription creates a description of an item
 func formatItemDescription(item *Item) string {
 	var desc strings.Builder

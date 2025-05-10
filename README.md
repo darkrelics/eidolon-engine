@@ -83,7 +83,7 @@ The command system is structured in a three-tier hierarchy to efficiently handle
    - Commands are escalated from room goroutines to the central game routine
    - Uses structured command/response channel communication pattern
 
-Command processing includes a timeout system similar to Dragon Realms by SimuTronic, where different commands have varying "roundtime" periods during which certain other commands cannot be executed. Character states (standing, sitting, prone) affect command availability, with state-appropriate commands always accessible regardless of timeout status.
+Command processing includes a timeout system where different commands have varying "wait periods" during which certain other commands cannot be executed. Character states (standing, sitting, prone, dead) affect command availability, with state-appropriate commands always accessible regardless of timeout status. The system currently implements a basic "standing" state by default, with plans to expand to sitting, prone, and dead states to influence command availability and character interactions.
 
 Character sessions process commands through a strict parser that accepts only basic letters, numbers, and common special symbols, discarding any unrecognized input. Each command is evaluated to determine appropriate tier handling (character, room, or game) and routed accordingly through a structured channel system using CommandRequest and CommandResponse objects. Room commands are processed asynchronously in room-specific goroutines, while game-tier commands are escalated to the central game routine. This tiered approach ensures that only the appropriate components process each command, optimizing performance and ensuring proper state consistency. The proper cleanup and removal of characters from the game is a critical priority.
 
@@ -337,7 +337,8 @@ OTHER:
 - [x] Command parsing system
 - [x] Three-tier command handling (character, room, game)
 - [ ] Command timeout system with roundtime
-- [ ] Character state tracking (standing, sitting, etc.)
+- [x] Basic character state tracking (standing)
+- [ ] Advanced character states (sitting, prone, dead)
 - [ ] I/O buffering with game-defined limits
 - [x] Character state persistence
 - [x] Character cleanup on disconnect

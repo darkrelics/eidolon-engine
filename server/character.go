@@ -24,69 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
 )
-
-// WearLocations defines all possible locations where an item can be worn
-var WearLocations = map[string]bool{
-	"head":         true,
-	"neck":         true,
-	"shoulders":    true,
-	"chest":        true,
-	"back":         true,
-	"arms":         true,
-	"hands":        true,
-	"waist":        true,
-	"legs":         true,
-	"feet":         true,
-	"left_finger":  true,
-	"right_finger": true,
-	"left_wrist":   true,
-	"right_wrist":  true,
-}
-
-type Character struct {
-	game             *Game
-	id               uuid.UUID
-	player           *Player
-	name             string
-	attributes       map[string]float64
-	abilities        map[string]float64
-	essence          float64
-	health           float64
-	room             *Room
-	inventory        map[string]*Item
-	mutex            sync.RWMutex
-	facing           *Character
-	advancing        bool
-	combatRange      map[uuid.UUID]float64
-	lastEdited       time.Time
-	lastSaved        time.Time
-	waitUntil        time.Time             // Time when the character can execute the next command
-	charState        string                // Current character state (standing, sitting, etc.)
-	roomCommandOut   chan *CommandRequest  // Commands sent from character to room
-	roomCommandIn    chan *CommandResponse // Responses from room to character
-	gameCommandOut   chan *CommandRequest  // Commands escalated directly to game
-	gameCommandIn    chan *CommandResponse // Responses from game to character
-	playerCommandOut chan string           // Messages sent to player
-	playerCommandIn  chan string           // Messages from player
-	end              chan bool             // Channel for shutdown signaling
-	prompt           string                // Character prompt
-}
-
-// CharacterData for unmarshalling character.
-type CharacterData struct {
-	CharacterID   string             `json:"CharacterID" dynamodbav:"CharacterID"`
-	PlayerID      string             `json:"PlayerID" dynamodbav:"PlayerID"`
-	CharacterName string             `json:"Name" dynamodbav:"Name"`
-	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
-	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"Abilities"`
-	Essence       float64            `json:"Essence" dynamodbav:"Essence"`
-	Health        float64            `json:"Health" dynamodbav:"Health"`
-	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
-	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
-}
 
 // CanExecuteCommand checks if character can perform a command based on wait time and state
 func (c *Character) CanExecuteCommand() (bool, string) {
@@ -95,7 +34,7 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 
 	// Check wait time
 	if time.Now().Before(c.waitUntil) {
-		waitTime := c.waitUntil.Sub(time.Now()).Round(time.Second)
+		waitTime := time.Until(c.waitUntil).Round(time.Second)
 		return false, fmt.Sprintf("You must wait %v before your next action.", waitTime)
 	}
 
@@ -153,123 +92,6 @@ func (c *Character) Save() error {
 
 	c.lastSaved = time.Now()
 
-	return nil
-}
-
-func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
-	Logger.Debug("Loading character", "characterID", characterID)
-
-	game := player.server.game
-
-	// Initialize new character with default values
-	character := &Character{
-		game:             game,
-		id:               characterID,
-		player:           player,
-		attributes:       make(map[string]float64),
-		abilities:        make(map[string]float64),
-		inventory:        make(map[string]*Item),
-		mutex:            sync.RWMutex{},
-		facing:           nil,
-		advancing:        false,
-		combatRange:      make(map[uuid.UUID]float64),
-		lastEdited:       time.Now(),
-		charState:        "standing", // Default character state
-		waitUntil:        time.Now(), // No initial wait time
-		roomCommandOut:   make(chan *CommandRequest, 20),
-		roomCommandIn:    make(chan *CommandResponse, 20),
-		gameCommandOut:   make(chan *CommandRequest, 10),
-		gameCommandIn:    make(chan *CommandResponse, 10),
-		playerCommandOut: make(chan string, 20),
-		playerCommandIn:  make(chan string, 20),
-		end:              make(chan bool, 5),
-		prompt:           "\n\r> ",
-	}
-
-	// Load character data from database
-	cd := &CharacterData{}
-	key := map[string]types.AttributeValue{
-		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
-	}
-
-	if err := game.database.Get("characters", key, cd); err != nil {
-		return nil, fmt.Errorf("error loading character data: %w", err)
-	}
-
-	// Populate character from data
-	var err error
-	character.id, err = uuid.Parse(cd.CharacterID)
-	if err != nil {
-		return nil, fmt.Errorf("parse character ID: %w", err)
-	}
-	character.name = cd.CharacterName
-	character.attributes = cd.Attributes
-	character.abilities = cd.Abilities
-	character.essence = cd.Essence
-	character.health = cd.Health
-
-	// Set character room
-	room, exists := game.rooms[cd.RoomID]
-	if !exists {
-		Logger.Warn("Room not found, defaulting to room ID 0", "roomID", cd.RoomID)
-		room, exists = game.rooms[0]
-		if !exists {
-			return nil, fmt.Errorf("default room not found")
-		}
-	}
-	character.room = room
-
-	// Load inventory items
-	for name, itemIDStr := range cd.Inventory {
-		itemID, err := uuid.Parse(itemIDStr)
-		if err != nil {
-			Logger.Error("Error parsing item UUID", "itemID", itemIDStr, "error", err)
-			continue
-		}
-		item, err := LoadItem(itemID.String(), game.database)
-		if err != nil {
-			Logger.Error("Error loading item for character", "itemID", itemID, "characterName", character.name, "error", err)
-			continue
-		}
-		character.inventory[name] = item
-	}
-
-	// Add character to game state
-	game.mutex.Lock()
-	game.characters[character.id] = character
-	game.mutex.Unlock()
-
-	return character, nil
-}
-
-// Removes a character from the database by its ID
-func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
-	Logger.Info("Deleting character from database", "characterID", characterID)
-
-	// Check if character is currently active in the game
-	p.server.game.mutex.RLock()
-	activeChar, isActive := p.server.game.characters[characterID]
-	p.server.game.mutex.RUnlock()
-
-	// If character is active, stop it first
-	if isActive && activeChar != nil {
-		Logger.Info("Stopping active character before deletion", "characterName", activeChar.name)
-		activeChar.Stop(activeChar.end)
-	}
-
-	// Create the key for DynamoDB deletion
-	key := map[string]types.AttributeValue{
-		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
-	}
-
-	// Delete the character from the database
-	err := p.server.database.Delete("characters", key)
-	if err != nil {
-		Logger.Error("Failed to delete character", "characterID", characterID, "error", err)
-		return fmt.Errorf("failed to delete character: %w", err)
-	}
-
-	Logger.Info("Character deleted successfully", "characterID", characterID)
 	return nil
 }
 
@@ -549,14 +371,4 @@ func formatCharacterDescription(target *Character, _ *Character) string {
 	}
 
 	return desc.String()
-}
-
-func GenerateUUIDv7() uuid.UUID {
-
-	uuid_type_7, err := uuid.NewV7()
-	if err != nil {
-		Logger.Error("Error generating UUIDv7", "error", err)
-		return uuid.Nil
-	}
-	return uuid_type_7
 }
