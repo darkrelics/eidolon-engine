@@ -110,7 +110,6 @@ type RoomData struct {
 	Title       string   `json:"title" dynamodbav:"Title"`
 	Description string   `json:"description" dynamodbav:"Description"`
 	ExitIDs     []string `json:"exitID" dynamodbav:"ExitID"`
-	ItemIDs     []string `json:"itemID" dynamodbav:"ItemID"`
 	Persistent  bool     `json:"persistent" dynamodbav:"Persistent"`
 	ScriptID    string   `json:"scriptID" dynamodbav:"ScriptID"`
 }

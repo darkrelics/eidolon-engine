@@ -105,7 +105,6 @@ def store_rooms(dynamodb, rooms_data):
                     "Title": room["Title"],
                     "Description": room["Description"],
                     "ExitID": room["ExitID"],
-                    "ItemID": room.get("ItemID", []),
                     "Persistent": room.get("Persistent", False),  # Default to False if not specified
                     "ScriptID": room.get("ScriptID", ""),  # Default to empty string if not specified
                 }
@@ -295,7 +294,6 @@ def display_rooms(rooms):
         print(f"  Area: {room.get('Area', 'Unknown')}")
         print(f"  Description: {room.get('Description', 'No description')}")
         print(f"  Exits: {', '.join(room.get('ExitID', []))}")
-        print(f"  Items: {', '.join(room.get('ItemID', []))}")
         print(f"  Persistent: {room.get('Persistent', False)}")
         print(f"  ScriptID: {room.get('ScriptID', '')}")
         print()
