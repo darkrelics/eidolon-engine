@@ -16,8 +16,19 @@
 
 import 'package:flutter/material.dart';
 
-/// Global navigation key for accessing navigation from anywhere
-class GlobalNavigationKey {
-  static final GlobalKey<NavigatorState> navigatorKey =
-      GlobalKey<NavigatorState>();
+/// Utilities for form handling with better null safety
+class FormUtils {
+  // Prevent instantiation
+  FormUtils._();
+
+  /// Safely validates a form, handling null cases
+  static bool validateForm(BuildContext context) {
+    try {
+      final formState = Form.of(context);
+      return formState.validate();
+    } catch (e) {
+      debugPrint('Error validating form: $e');
+      return false;
+    }
+  }
 }

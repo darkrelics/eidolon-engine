@@ -20,6 +20,7 @@ import 'package:provider/provider.dart';
 import '../utils/auth_state.dart';
 import '../widgets/ui_components.dart';
 import '../utils/input_sanitizer.dart';
+import '../utils/form_utils.dart';
 
 class LoginScreen extends StatelessWidget {
   final String? redirectRoute;
@@ -76,8 +77,7 @@ class LoginScreen extends StatelessWidget {
                       LoadingButton(
                         isLoading: authState.isLoading,
                         onPressed: () async {
-                          final formState = Form.of(context);
-                          if (formState.validate()) {
+                          if (FormUtils.validateForm(context)) {
                             await authState.signIn();
                             if (authState.isAuthenticated && context.mounted) {
                               _handleNavigation(
