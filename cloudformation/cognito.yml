@@ -12,6 +12,11 @@ Parameters:
     Description: Name of the app client
     Default: eidolon-app-client
 
+  ReplyEmailAddress:
+    Type: String
+    Description: Email address to send notifications from
+    Default: contact@darkrelics.net
+
 Resources:
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
@@ -23,6 +28,9 @@ Resources:
         - email
       EmailConfiguration:
         EmailSendingAccount: COGNITO_DEFAULT
+        SourceArn: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${ReplyEmailAddress}"
+        From: !Ref ReplyEmailAddress
+        ReplyToEmailAddress: !Ref ReplyEmailAddress
       Policies:
         PasswordPolicy:
           MinimumLength: 8
