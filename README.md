@@ -59,29 +59,35 @@ Room scripts are managed through a central Script system:
 
 ### Command Processing Architecture
 
-The command system is structured in a three-tier hierarchy to efficiently handle different types of player interactions:
+The command system is structured in a three-tier hierarchy to efficiently handle different types of player interactions. Each tier is now implemented in a dedicated file to maintain clear separation of concerns:
 
-1. **Character Tier (Fast, Local)** - Commands processed immediately in the character routine:
+1. **Character Tier (Fast, Local)** - In `character-commands.go`:
 
    - Status checks, inventory viewing, equipment status, and character stats
    - No wait time, providing immediate feedback to players
    - Entirely local to the character with no external dependencies
    - Implemented using direct function calls for lowest latency
+   - Commands like: help, info, skill, who, look (when not targeting a specific object)
+   - Self-contained with no external dependencies beyond the character object itself
 
-2. **Room Tier (Medium, Localized)** - Commands affecting the local environment:
+2. **Room Tier (Medium, Localized)** - In `room-commands.go`:
 
-   - Movement, social interactions (say, emote, whisper), local combat, and room interaction
+   - Social interactions (say, emote, whisper), local interactions, and item manipulation
    - Moderate wait times based on command complexity
    - Processed asynchronously in room goroutines
    - Commands and responses flow through structured channels between characters and rooms
    - Room maintains state for all characters and items present
+   - Robust nil reference checking to prevent crashes
 
-3. **Game Tier (Slow, Global)** - Commands with wide-ranging effects:
+3. **Game Tier (Slow, Global)** - In `game-commands.go`:
    - Cross-room effects, global events, weather changes, and server-wide announcements
    - Server-wide communication (shout, announce, who/list)
    - Longer wait times for complex actions
    - Commands are escalated from room goroutines to the central game routine
    - Uses structured command/response channel communication pattern
+   - Returns "command not recognized" messages for unsupported commands
+
+The main `commands.go` file now serves as the command registration and routing system, determining which tier should handle a given command and directing it appropriately. Direction commands have been removed as they will be implemented using an alternative method in the future.
 
 Command processing includes a timeout system where different commands have varying "wait periods" during which certain other commands cannot be executed. Character states (standing, sitting, prone, dead) affect command availability, with state-appropriate commands always accessible regardless of timeout status. The system currently implements a basic "standing" state by default, with plans to expand to sitting, prone, and dead states to influence command availability and character interactions.
 
@@ -93,95 +99,90 @@ The entire system is organized through a hierarchical context structure. The mai
 
 Testing will primarily be conducted through live user interaction, with unit tests implemented for functions that don't require network or cloud resources. The architecture heavily leverages AWS services, with CloudWatch handling metrics and logging, Cognito managing authentication, DynamoDB providing persistence, and S3 storing scripts. While the engine can run anywhere, it is optimized for AWS infrastructure. This design emphasizes clean separation of concerns while maintaining efficient communication patterns and supporting future scalability needs.
 
-## Current Objectives
+## Development Roadmap
 
-- [x] Create the SSH server for client connections.
-- [x] Create a text parser for user input.
-- [x] Implement a player authentication system.
-- [x] Implement a database for the game.
-- [x] Implement a character creation system.
-- [x] Implement a text colorization system.
-- [x] Add Cloudwatch Logs and Metrics.
-- [x] Build an interactive password change system.
-- [ ] Implement the three-tier command architecture.
-- [x] Develop command timeout systems.
-- [ ] Construct the item system with verb interactions.
-- [x] Implement movement commands with room state changes.
-- [x] Add room persistence flag to Room struct
-- [x] Add scriptID field to Room struct
-- [x] Implement Room goroutine system.
-- [ ] Create Script management system with S3 storage.
-- [ ] Implement room persistence system.
-- [ ] Develop player communication systems.
-- [ ] Develop a weather and time system.
-- [ ] Create a crafting system for items.
-- [ ] Design an economic framework.
-- [ ] Build a direct messaging system.
-- [ ] Develop simple Non-Player Characters (NPCs).
-- [ ] Design and implement a quest system.
-- [ ] Implement a dynamic content updating system.
-- [ ] Implement a player-to-player trading system.
-- [ ] Implement a party system for cooperative gameplay.
-- [ ] Implement a magic system.
-- [ ] Implement a quest tracking system.
-- [ ] Implement a reputation system.
-- [ ] Develop a conditional room description system.
-- [ ] Implement a world creation system.
-- [ ] Develop more complex Non-Player Characters (NPCs) with basic AI.
+### Completed Tasks
+- [x] Core Server and Infrastructure
+  - [x] Create the SSH server for client connections
+  - [x] Implement a text parser for user input
+  - [x] Add Cloudwatch Logs and Metrics integration
+  - [x] Implement database with DynamoDB
+  - [x] Set up AWS Cognito authentication
+  - [x] Display connection IP address and port information
+  - [x] Implement persistent logging
 
-## TODO
+- [x] Player and Character Management
+  - [x] Implement player authentication system
+  - [x] Create character creation and selection system
+  - [x] Build interactive password change system
+  - [x] Add character list (who) command
+  - [x] Add Bloom Filter to check for existing character names
+  - [x] Allow character deletion
+  - [x] Handle unplanned disconnections
+  - [x] Display Message of the Day (MOTD)
 
-- [x] Fix output formatting for the client.
-- [x] Allow players to enter their name.
-- [x] Display the incoming IP address and Port on the server.
-- [x] Add a help command.
-- [x] Add a character list (who) command.
-- [x] Allow users to change their passwords.
-- [ ] Implement the command tier system.
-- [ ] Add state tracking for timeout management.
-- [ ] Implement command queuing system.
-- [ ] Expand the character creation process.
-- [ ] Add take item command.
-- [ ] Add inventory command.
-- [ ] Add drop item command.
-- [ ] Add wear item command.
-- [ ] Add remove item command.
-- [ ] Add examine item command.
-- [x] Implement Persistent Logging.
-- [ ] Load item prototypes at start.
-- [ ] Create function for creating items from prototypes.
-- [x] Ensure that a message is passed when a character is added to the game.
-- [x] Add a Message of the Day (MOTD) command.
-- [x] Add Bloom Filter to check for existing characters names being used.
-- [x] Add the ability to delete characters.
-- [x] Allow starting room to be set by Archetype.
-- [ ] Improve the input filters
-- [x] Handle unplanned disconnections.
-- [ ] Limit Auto Save to updated objects.
-- [x] Improve the say command.
-- [ ] Add look at item command.
-- [ ] Implement an obscenity filter.
-- [ ] Validate graph of loaded rooms and exits.
-- [ ] Create administrative interface.
-- [ ] Force Password Resets when needed.
-- [ ] Add the ability to delete accounts.
-- [ ] Add the ability to ban accounts.
-- [ ] Add the ability to mute accounts.
-- [ ] Improve error handling.
-- [ ] Perform data validation for base data.
-- [ ] Add rate limiting to the server.
-- [ ] Expand error handling.
-- [ ] Add Session Timeout.
-- [ ] Add log rotation for by Cloudwatch Stream.
-- [ ] Add batching for Cloudwatch log writes.
-- [x] Implement room persistence flag system.
-- [x] Update database tools to support room persistence flag.
-- [x] Add scriptID field to Room struct for future scripting support.
-- [x] Update database tools to support room scriptID field.
-- [x] Create room goroutine management.
-- [ ] Implement room script loading from S3.
-- [x] Add idle room detection and cleanup.
-- [x] Implement item cleanup for empty rooms.
+- [x] Command System
+  - [x] Implement the three-tier command architecture
+  - [x] Develop command timeout systems
+  - [x] Add help command
+  - [x] Add quit command
+  - [x] Create character-commands.go, room-commands.go, game-commands.go modules
+  - [x] Improve the say command
+
+- [x] Room System
+  - [x] Implement movement commands with room state changes
+  - [x] Add room persistence flag to Room struct
+  - [x] Add scriptID field to Room struct
+  - [x] Implement Room goroutine system
+  - [x] Create room goroutine management
+  - [x] Add idle room detection and cleanup
+  - [x] Implement item cleanup for empty rooms
+  - [x] Allow starting room to be set by Archetype
+  - [x] Update database tools to support room flags and scripts
+
+### Upcoming Tasks
+- [ ] Item System
+  - [ ] Construct the item system with verb interactions
+  - [ ] Load item prototypes at start
+  - [ ] Create item prototype factory function
+  - [ ] Add inventory, get, take, drop commands
+  - [ ] Add wear, remove, examine commands
+
+- [ ] Command System Enhancements
+  - [ ] Add state tracking for timeout management
+  - [ ] Implement command queuing system
+  - [ ] Add look at item command
+
+- [ ] Room System Extension
+  - [ ] Create Script management system with S3 storage
+  - [ ] Implement room script loading from S3
+  - [ ] Validate graph of loaded rooms and exits
+
+- [ ] Player Features
+  - [ ] Expand the character creation process
+  - [ ] Develop player communication systems (whisper, shout)
+  - [ ] Implement an obscenity filter
+  - [ ] Improve input filters
+
+- [ ] Administration Tools
+  - [ ] Create administrative interface
+  - [ ] Force password resets when needed
+  - [ ] Add account deletion, ban, and mute capabilities
+  - [ ] Limit auto-save to updated objects
+  - [ ] Add rate limiting to the server
+  - [ ] Add session timeout
+
+- [ ] Advanced Features (Long-term)
+  - [ ] Develop a weather and time system
+  - [ ] Create a crafting system for items
+  - [ ] Design an economic framework
+  - [ ] Build a direct messaging system
+  - [ ] Develop Non-Player Characters (NPCs)
+  - [ ] Design and implement a quest system
+  - [ ] Implement a party system for cooperative gameplay
+  - [ ] Implement a magic system
+  - [ ] Implement a reputation system
+  - [ ] Develop a conditional room description system
 
 ## Commands
 
@@ -335,7 +336,10 @@ OTHER:
 ### Character System
 
 - [x] Command parsing system
-- [x] Three-tier command handling (character, room, game)
+- [x] Three-tier command architecture
+  - [x] Modular file organization (character-commands.go, room-commands.go, game-commands.go)
+  - [x] Command routing and tier determination
+  - [x] Command error handling and validation
 - [ ] Command timeout system with roundtime
 - [x] Basic character state tracking (standing)
 - [ ] Advanced character states (sitting, prone, dead)
@@ -377,48 +381,30 @@ OTHER:
 
 ## Recent Changes
 
-### Room System Enhancements
+### Core System Improvements
 
-The room system has been enhanced with the following components:
+1. **Command System Restructuring**:
 
-1. **Command Processing Architecture Implementation**:
+   - **Modular Architecture**: Separated command handling into three dedicated files:
+     - `character-commands.go`: Fast, local character commands (help, info, skills, etc.)
+     - `room-commands.go`: Room-level social and interactive commands (say, look, etc.)
+     - `game-commands.go`: Global commands affecting the world (weather, who, etc.)
+   - **Code Quality**: Enhanced error handling, fixed Printf-style function usage, removed unused methods
+   - **Architectural Improvements**:
+     - Removed direction commands (to be implemented differently)
+     - Added fallback "command not recognized" responses
+     - Simplified command tier determination
+     - Streamlined `commands.go` to focus solely on command registration and routing
 
-   - Added complete three-tier command processing system (character, room, game)
-   - Implemented consistent channel naming convention for command flow
-   - Created command request/response structures for structured communication
-   - Added routing logic for escalating commands to appropriate processing tier
-   - Implemented room-level command handlers for chat, emotes, and other interactions
-   - Added game-level command handlers for global operations
+2. **Room System Enhancements**:
 
-2. **Room Goroutine Management**:
+   - **Goroutine Management**: Implemented individual room goroutines with proper lifecycle methods
+   - **Persistence System**: Added room persistence flags and activity tracking
+   - **Resource Management**: Created idle room detection and cleanup mechanism
+   - **Script Infrastructure**: Added scriptID field and supporting methods
+   - **Database Integration**: Updated storage layer to support new room properties
 
-   - Implemented individual room goroutines for concurrent command processing
-   - Added context-based coordination for room lifecycle management
-   - Created Start/Stop methods for rooms with proper resource management
-   - Implemented dynamic room goroutine creation when rooms receive commands
-   - Added idle detection for efficient resource management
-
-3. **Room Persistence Implementation**:
-
-   - Added `persistent bool` flag to identify rooms that should remain loaded when empty
-   - Added `lastActive time.Time` to track room activity for idle detection
-   - Added `UpdateActivity()` method to update the room's activity timestamp
-   - Added `IsIdle()` method to check if a room has been inactive for a specified duration
-   - Room activity is updated when characters enter/leave or when room messages are sent
-
-4. **Script Support Infrastructure**:
-
-   - Added `scriptID string` field to Room struct to reference associated scripts
-   - Added `GetScriptID()` method to safely access the script ID with proper mutex locking
-   - Updated the NewRoom constructor to accept a scriptID parameter
-   - The default room (room 0, "The Void") is configured with no script
-
-5. **Database Integration**:
-   - Updated RoomData struct to include Persistent and ScriptID fields
-   - Modified data_loader.py to handle these new fields in room data storage and display
-   - Updated LoadRooms function to properly set scriptID when loading rooms
-
-These enhancements form the foundation for both the room lifecycle management system and the future scripting system, allowing non-persistent empty rooms to be unloaded from memory after a period of inactivity and providing the structure needed for room-specific script behaviors.
+These changes have significantly improved code organization, error handling, and system architecture while preparing for future scripting capabilities and ensuring efficient resource usage through proper room lifecycle management.
 
 ## Known Issues
 
