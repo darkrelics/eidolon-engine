@@ -90,7 +90,8 @@ class RegistrationScreen extends StatelessWidget {
                         LoadingButton(
                           isLoading: authState.isLoading,
                           onPressed: () async {
-                            if (Form.of(context).validate()) {
+                            final formState = Form.of(context);
+                            if (formState != null && formState.validate()) {
                               await authState.signUp();
                             }
                           },
@@ -140,7 +141,8 @@ class RegistrationScreen extends StatelessWidget {
                         LoadingButton(
                           isLoading: authState.isLoading,
                           onPressed: () async {
-                            if (Form.of(context).validate()) {
+                            final formState = Form.of(context);
+                            if (formState != null && formState.validate()) {
                               await authState.confirmRegistration();
                               if (!authState.isVerificationMode &&
                                   context.mounted) {
