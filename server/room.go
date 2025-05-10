@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -135,7 +136,6 @@ type ExitData struct {
 }
 
 // Initialize a new room
-
 func NewRoom(ctx context.Context, roomID int64, area, title, description string, persistent bool, scriptID string) *Room {
 
 	Logger.Info("New Room...Initalizing Room...", "roomID", roomID, "persistent", persistent, "scriptID", scriptID)
@@ -172,7 +172,6 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 }
 
 // Initialize a new exit
-
 func NewExit(exitID uuid.UUID, direction string, description string, targetRoom *Room, visible bool) *Exit {
 
 	Logger.Info("New Exit...Initalizing Exit...")
@@ -189,7 +188,6 @@ func NewExit(exitID uuid.UUID, direction string, description string, targetRoom 
 }
 
 // Load exit data from DynamoDB
-
 func (g *Game) LoadExits() error {
 
 	Logger.Info("Load Exits...Loading Exits...")
@@ -215,7 +213,6 @@ func (g *Game) LoadExits() error {
 }
 
 // Load room data from DynamoDB
-
 func (g *Game) LoadRooms() error {
 
 	Logger.Info("Load Rooms...Loading Rooms...")
@@ -229,7 +226,6 @@ func (g *Game) LoadRooms() error {
 	}
 
 	// Populate all rooms
-
 	for _, roomData := range roomsData {
 		g.rooms[roomData.RoomID] = NewRoom(
 			g.ctx,
@@ -243,14 +239,12 @@ func (g *Game) LoadRooms() error {
 	}
 
 	// Load exit data
-
 	err = g.LoadExits()
 	if err != nil {
 		Logger.Warn("Error loading exits", "error", err)
 	}
 
 	// Assocate exits with rooms
-
 	for _, roomData := range roomsData {
 		for _, exitID := range roomData.ExitIDs {
 			exitUUID, err := uuid.Parse(exitID)
@@ -263,9 +257,7 @@ func (g *Game) LoadRooms() error {
 	}
 
 	// Load item data
-
 	return nil
-
 }
 
 // UpdateActivity updates the lastActive timestamp for a room
@@ -495,94 +487,8 @@ func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 		return
 	}
 
-	Logger.Debug("Processing room command",
-		"roomID", r.roomID,
-		"verb", cmd.Verb,
-		"character", cmd.Character.name)
-
-	// Create default response
-	response := &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   false,
-		Timestamp: time.Now(),
-	}
-
-	// Process command based on verb
-	switch strings.ToLower(cmd.Verb) {
-	case "say", "\"", "'": // Handle speech commands
-		// TODO: Implement say command handling
-		response.Error = fmt.Errorf("say command not implemented yet")
-
-	case "look", "l": // Handle look command (additional room-based look processing)
-		// This is typically handled at the character level, but might have room-level effects
-		response.Success = true
-		// No message/error for success since character handler already showed the room
-
-	case "north", "south", "east", "west", "up", "down", "n", "s", "e", "w", "u", "d":
-		// Handle direct movement commands
-		direction := cmd.Verb
-		// Expand shortened directions
-		switch direction {
-		case "n":
-			direction = "north"
-		case "s":
-			direction = "south"
-		case "e":
-			direction = "east"
-		case "w":
-			direction = "west"
-		case "u":
-			direction = "up"
-		case "d":
-			direction = "down"
-		}
-
-		// Add the direction as an argument to the command
-		movementCmd := &CommandRequest{
-			ID:        cmd.ID,
-			Character: cmd.Character,
-			Verb:      "move",
-			Args:      []string{"move", direction},
-			Tier:      cmd.Tier,
-			State:     cmd.State,
-			Timestamp: cmd.Timestamp,
-			Response:  cmd.Response,
-		}
-
-		resp := r.handleMovementCommand(movementCmd)
-
-		// Copy response fields
-		response.Success = resp.Success
-		response.Message = resp.Message
-		response.Error = resp.Error
-
-	case "go", "move": // Handle explicit movement commands with direction argument
-		// Check if a direction was provided
-		if len(cmd.Args) < 2 {
-			response.Error = fmt.Errorf(msgNoDirection)
-			break
-		}
-
-		resp := r.handleMovementCommand(cmd)
-
-		// Copy response fields
-		response.Success = resp.Success
-		response.Message = resp.Message
-		response.Error = resp.Error
-
-	case "get", "take", "drop", "put": // Handle item commands
-		resp := r.handleItemCommand(cmd)
-
-		// Copy response fields
-		response.Success = resp.Success
-		response.Message = resp.Message
-		response.Error = resp.Error
-
-	default:
-		// Unknown command at room level
-		Logger.Warn("Unhandled room command", "verb", cmd.Verb, "roomID", r.roomID)
-		response.Error = fmt.Errorf("unknown room command: %s", cmd.Verb)
-	}
+	// Process the command using the room command handler
+	response := r.ProcessRoomCommand(cmd, game)
 
 	// Send response back to character
 	select {
@@ -596,145 +502,70 @@ func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 	}
 }
 
-// handleMovementCommand processes room movement commands
-func (r *Room) handleMovementCommand(cmd *CommandRequest) *CommandResponse {
-	// Create the response structure
-	response := &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   false,
-		Timestamp: time.Now(),
-	}
-
-	// First check if the character is allowed to move (no wait time)
-	canMove, reason := cmd.Character.CanExecuteCommand()
-	if !canMove {
-		response.Error = fmt.Errorf("%s", reason)
-		return response
-	}
-
-	// Get the direction from the command
-	var direction string
-	if cmd.Verb == "go" || cmd.Verb == "move" {
-		// Using the "go" or "move" command with a direction argument
-		if len(cmd.Args) < 2 {
-			response.Error = fmt.Errorf(msgNoDirection)
-			return response
-		}
-		direction = strings.ToLower(cmd.Args[1])
-	} else {
-		// Using a direction as the command itself
-		direction = strings.ToLower(cmd.Verb)
-	}
-
-	// Check if character is trying to leave combat
-	// TODO: Implement combat system check here
-
-	// Check if there's an exit in the specified direction
+// GetDescription returns a formatted string description of the room
+func (r *Room) GetDescription(character *Character) string {
 	r.mutex.RLock()
-	var targetExit *Exit
+	defer r.mutex.RUnlock()
 
-	// Find the exit by direction
+	var roomInfo strings.Builder
+	roomInfo.Grow(1024) // Pre-allocate reasonable buffer
+
+	// Room Title and Description
+	roomInfo.WriteString("\n\r[")
+	roomInfo.WriteString(ApplyColor("bright_white", r.title))
+	roomInfo.WriteString("]\n\r")
+	roomInfo.WriteString(r.description)
+	roomInfo.WriteString("\n\r")
+
+	// Exits - collect while under lock
+	exits := make([]string, 0, len(r.exits))
 	for _, exit := range r.exits {
-		if exit != nil && strings.EqualFold(exit.direction, direction) && exit.visible {
-			targetExit = exit
-			break
+		if exit != nil && exit.visible {
+			exits = append(exits, exit.direction)
 		}
 	}
-	r.mutex.RUnlock()
 
-	// If no exit is found
-	if targetExit == nil {
-		response.Error = fmt.Errorf(msgInvalidDir)
-		return response
+	if len(exits) == 0 {
+		roomInfo.WriteString(msgNoExits)
+	} else {
+		sort.Strings(exits)
+		roomInfo.WriteString("Obvious exits: ")
+		roomInfo.WriteString(strings.Join(exits, ", "))
+		roomInfo.WriteString("\n\r")
 	}
 
-	// If exit has no target room
-	if targetExit.targetRoom == nil {
-		response.Error = fmt.Errorf(msgPathNowhere)
-		return response
+	// Characters - collect while under lock
+	chars := make([]string, 0, len(r.characters))
+	for _, c := range r.characters {
+		if c != nil && c != character {
+			chars = append(chars, c.name)
+		}
 	}
 
-	// Perform the movement
-	sourceRoom := r.roomID
-	targetRoom := targetExit.targetRoom
-	character := cmd.Character
-
-	// Remove character from current room
-	r.mutex.Lock()
-	delete(r.characters, character.id)
-	r.mutex.Unlock()
-
-	// Add character to new room
-	targetRoom.mutex.Lock()
-	targetRoom.characters[character.id] = character
-	// Update room activity
-	targetRoom.lastActive = time.Now()
-	targetRoom.mutex.Unlock()
-
-	// Update character's room reference
-	character.mutex.Lock()
-	character.room = targetRoom
-	character.mutex.Unlock()
-
-	// Handle room entry effects
-	targetRoom.HandleCharacterEntry()
-
-	// Notify the original room that character has left
-	leaveMsg := fmt.Sprintf("\n\r%s leaves %s.\n\r", character.name, direction)
-	SendRoomMessageExcept(r, leaveMsg, character)
-
-	// Notify the new room that character has arrived
-	enterMsg := fmt.Sprintf("\n\r%s arrives from the %s.\n\r", character.name, getOppositeDirection(direction))
-	SendRoomMessageExcept(targetRoom, enterMsg, character)
-
-	// Show the new room to the character
-	executeLookCommand(character, []string{"look"})
-
-	// Set a wait time for the movement action
-	character.SetCommandWaitTime(1 * time.Second)
-
-	// Log the movement
-	Logger.Info("Character moved",
-		"character", character.name,
-		"from", sourceRoom,
-		"to", targetRoom.roomID,
-		"direction", direction)
-
-	response.Success = true
-	return response
-}
-
-// handleItemCommand processes item-related commands like get, take, drop, etc.
-func (r *Room) handleItemCommand(cmd *CommandRequest) *CommandResponse {
-	// This is a placeholder. Real implementation would handle items
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   false,
-		Error:     fmt.Errorf("item commands are not implemented yet"),
-		Timestamp: time.Now(),
+	if len(chars) == 0 {
+		roomInfo.WriteString(msgAlone)
+	} else {
+		roomInfo.WriteString(msgAlsoHere)
+		roomInfo.WriteString(strings.Join(chars, ", "))
+		roomInfo.WriteString("\n\r")
 	}
-}
 
-// getOppositeDirection returns the opposite direction
-func getOppositeDirection(direction string) string {
-	switch strings.ToLower(direction) {
-	case "north":
-		return "south"
-	case "south":
-		return "north"
-	case "east":
-		return "west"
-	case "west":
-		return "east"
-	case "up":
-		return "down"
-	case "down":
-		return "up"
-	case "in":
-		return "out"
-	case "out":
-		return "in"
-	default:
-		return "somewhere"
+	// Items - collect while under lock
+	items := make([]string, 0, len(r.items))
+	for _, item := range r.items {
+		if item != nil && item.canPickUp {
+			items = append(items, item.name)
+		}
 	}
+
+	if len(items) > 0 {
+		roomInfo.WriteString(msgItems)
+		for _, item := range items {
+			roomInfo.WriteString("- ")
+			roomInfo.WriteString(item)
+			roomInfo.WriteString("\n\r")
+		}
+	}
+
+	return roomInfo.String()
 }

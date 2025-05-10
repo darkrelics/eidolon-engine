@@ -339,29 +339,8 @@ func (g *Game) handleGameCommand(cmd *CommandRequest) {
 	// Update command state
 	cmd.State = CommandProcessing
 
-	// Process command based on verb
-	// For now, implementation is minimal
-	var response *CommandResponse
-
-	switch cmd.Verb {
-	case "who", "list":
-		// List all online players
-		response = g.handleWhoCommand(cmd)
-	case "weather", "time":
-		// Global environmental commands
-		response = g.handleEnvironmentCommand(cmd)
-	case "shout", "announce":
-		// Global communication commands
-		response = g.handleGlobalCommunicationCommand(cmd)
-	default:
-		// Command not recognized at game level
-		response = &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("command not recognized at game level: %s", cmd.Verb),
-			Timestamp: time.Now(),
-		}
-	}
+	// Process the command using our game command handler
+	response := g.ProcessGameCommand(cmd)
 
 	// Send response
 	g.sendCommandResponse(cmd, response)

@@ -20,6 +20,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +57,7 @@ func (c *Character) SetCommandWaitTime(duration time.Duration) {
 	c.waitUntil = time.Now().Add(duration)
 }
 
+// Save saves the character to the database
 func (c *Character) Save() error {
 
 	Logger.Debug("Saving character", "characterName", c.name)
@@ -96,7 +98,6 @@ func (c *Character) Save() error {
 }
 
 // CreateCharacter creates a new character for the player.
-
 func (p *Player) CreateCharacter(name string, archetype string) (*Character, error) {
 
 	Logger.Debug("Creating character", "name", name)
@@ -113,7 +114,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 	p.server.game.characterBloomFilter.AddString(strings.ToLower(name))
 
 	// Create Character
-
 	character := &Character{
 		game:             p.server.game,
 		id:               GenerateUUIDv7(),
@@ -171,7 +171,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 	}
 
 	return character, nil
-
 }
 
 // Run is the main loop that handles player commands.
@@ -333,12 +332,180 @@ func (c *Character) Stop(done chan bool) {
 	if player != nil {
 		// Reset the player's character reference
 		player.character = nil
-
 	}
 }
 
-// formatCharacterDescription creates a description of a character
-func formatCharacterDescription(target *Character, _ *Character) string {
+// GetCharacterInfo returns a formatted string with character information
+func (c *Character) GetCharacterInfo() string {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	var info strings.Builder
+	info.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_white", c.name)))
+	info.WriteString("----------------\n\r")
+
+	// Basic character information
+	info.WriteString(fmt.Sprintf("Health: %d\n\r", int(c.health)))
+	info.WriteString(fmt.Sprintf("Essence: %d\n\r", int(c.essence)))
+
+	// Attributes
+	if len(c.attributes) > 0 {
+		info.WriteString("\n\rAttributes:\n\r")
+		for attr, value := range c.attributes {
+			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", attr, int(value)))
+		}
+	}
+
+	// Abilities - only show those above zero
+	var abilitiesAboveZero []string
+	for ability, value := range c.abilities {
+		if value > 0 {
+			abilitiesAboveZero = append(abilitiesAboveZero, ability)
+		}
+	}
+
+	if len(abilitiesAboveZero) > 0 {
+		info.WriteString("\n\rAbilities:\n\r")
+		// Sort abilities for consistent display
+		sort.Strings(abilitiesAboveZero)
+
+		// Display each ability with value > 0
+		for _, ability := range abilitiesAboveZero {
+			value := c.abilities[ability]
+			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", ability, int(value)))
+		}
+	}
+
+	// Inventory information
+	if len(c.inventory) > 0 {
+		info.WriteString("\n\rInventory:\n\r")
+		for _, item := range c.inventory {
+			if item != nil {
+				if item.isWorn {
+					info.WriteString(fmt.Sprintf("  %s (worn on %s)\n\r", item.name, strings.Join(item.wornOn, ", ")))
+				} else {
+					info.WriteString(fmt.Sprintf("  %s\n\r", item.name))
+				}
+			}
+		}
+	} else {
+		info.WriteString("\n\rYou are not carrying anything.\n\r")
+	}
+
+	// Current location
+	if c.room != nil {
+		info.WriteString(fmt.Sprintf("\n\rCurrently in: %s\n\r", c.room.title))
+	}
+
+	return info.String()
+}
+
+// GetSkillInfo returns a formatted string with character abilities
+func (c *Character) GetSkillInfo() string {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	var skillInfo strings.Builder
+	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Abilities\n\r", ApplyColor("bright_cyan", c.name)))
+	skillInfo.WriteString("----------------\n\r")
+
+	// Abilities - only show those above zero
+	var abilitiesAboveZero []string
+	for ability, value := range c.abilities {
+		if value > 0 {
+			abilitiesAboveZero = append(abilitiesAboveZero, ability)
+		}
+	}
+
+	if len(abilitiesAboveZero) > 0 {
+		// Sort abilities for consistent display
+		sort.Strings(abilitiesAboveZero)
+
+		// Display each ability with value > 0
+		for _, ability := range abilitiesAboveZero {
+			value := c.abilities[ability]
+			skillInfo.WriteString(fmt.Sprintf("  %-15s: %d\n\r", ability, int(value)))
+		}
+	} else {
+		skillInfo.WriteString("  You have not developed any abilities yet.\n\r")
+	}
+
+	return skillInfo.String()
+}
+
+// LookAtTarget handles examining specific targets
+func (c *Character) LookAtTarget(target string) error {
+	// First check if target is in the room
+	desc := c.LookAtRoomTarget(target)
+	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
+		c.player.commandOut <- desc
+		return nil
+	}
+
+	// Then check if it's in inventory
+	desc = c.LookAtInventoryItem(target)
+	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
+		c.player.commandOut <- desc
+		return nil
+	}
+
+	// Not found anywhere
+	c.player.commandOut <- fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+	return nil
+}
+
+// LookAtRoomTarget looks for a target in the room (character or item)
+func (c *Character) LookAtRoomTarget(target string) string {
+	// Check if looking at a character in the room
+	if c.room != nil {
+		c.room.mutex.RLock()
+		for _, char := range c.room.characters {
+			if char != nil && strings.Contains(strings.ToLower(char.name), target) {
+				c.room.mutex.RUnlock()
+				return FormatCharacterDescription(char, c)
+			}
+		}
+
+		// Check if looking at an item in the room
+		for _, item := range c.room.items {
+			if item != nil && strings.Contains(strings.ToLower(item.name), target) {
+				c.room.mutex.RUnlock()
+				return formatItemDescription(item)
+			}
+		}
+
+		// Check for directions/exits
+		for direction, exit := range c.room.exits {
+			if strings.Contains(exit.direction, target) && exit != nil && exit.visible {
+				c.room.mutex.RUnlock()
+				if exit.description != "" {
+					return fmt.Sprintf("\n\r%s\n\r", exit.description)
+				}
+				return fmt.Sprintf("\n\rYou see an exit leading %s.\n\r", direction)
+			}
+		}
+		c.room.mutex.RUnlock()
+	}
+
+	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+}
+
+// LookAtInventoryItem looks for an item in the character's inventory
+func (c *Character) LookAtInventoryItem(target string) string {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	for _, item := range c.inventory {
+		if item != nil && strings.Contains(strings.ToLower(item.name), target) {
+			return formatItemDescription(item)
+		}
+	}
+
+	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+}
+
+// FormatCharacterDescription creates a description of a character for look command
+func FormatCharacterDescription(target *Character, viewer *Character) string {
 	target.mutex.RLock()
 	defer target.mutex.RUnlock()
 
