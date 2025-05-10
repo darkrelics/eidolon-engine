@@ -16,8 +16,8 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../main.dart';
 import 'auth_state.dart';
+import 'navigation.dart';
 
 /// Monitors user sessions for security
 class SessionMonitor {

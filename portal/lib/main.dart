@@ -28,6 +28,7 @@ import 'screens/character_management_screen.dart';
 import 'utils/security_config.dart';
 import 'utils/route_guard.dart';
 import 'utils/session_monitor.dart';
+import 'utils/navigation.dart';
 
 void main() {
   // Enable proper error handling for the app
@@ -149,11 +150,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// Global navigation key for accessing navigation from anywhere
-class GlobalNavigationKey {
-  static final GlobalKey<NavigatorState> navigatorKey =
-      GlobalKey<NavigatorState>();
-}
 
 /// Error screen for unknown routes or errors
 class ErrorScreen extends StatelessWidget {

@@ -418,7 +418,7 @@ class AuthService {
 
     // Check for at least one uppercase, one lowercase, one number and one special character
     return RegExp(
-      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]',
+      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$',
     ).hasMatch(password);
   }
 
