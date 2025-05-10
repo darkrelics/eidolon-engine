@@ -92,7 +92,7 @@ class MyApp extends StatelessWidget {
           builder: (context, child) {
             return ActivityMonitor(
               sessionMonitor: sessionMonitor,
-              child: child!,
+              child: child ?? const SizedBox.shrink(),
             );
           },
         );

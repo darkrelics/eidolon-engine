@@ -180,7 +180,7 @@ class _LoadingButtonState extends State<LoadingButton>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (widget.icon != null) ...[
-                    widget.icon!,
+                    widget.icon,
                     const SizedBox(width: 8),
                   ],
                   Text(
