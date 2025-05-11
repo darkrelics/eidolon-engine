@@ -279,13 +279,13 @@ def display_exits(exits):
     for exit_id, exit_data in exits.items():
         print(f"Exit ID: {exit_id}")
         print(f"  Direction: {exit_data['Direction']}")
-        if exit_data.get('Description'):
+        if exit_data.get("Description"):
             print(f"  Description: {exit_data['Description']}")
         print(f"  Target Room: {exit_data['TargetRoom']}")
-        if exit_data.get('ArrivalText'):
+        if exit_data.get("ArrivalText"):
             print(f"  Arrival Text: {exit_data['ArrivalText']}")
         print(f"  Visible: {exit_data['Visible']}")
-        if exit_data.get('ScriptID'):
+        if exit_data.get("ScriptID"):
             print(f"  Script ID: {exit_data['ScriptID']}")
         print()
 
