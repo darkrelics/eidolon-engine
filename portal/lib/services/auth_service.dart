@@ -244,8 +244,33 @@ class AuthService {
         password: password,
       );
 
-      debugPrint('Authenticating user with Cognito');
-      _session = await user.authenticateUser(authDetails);
+      debugPrint('Authenticating user with Cognito using SRP');
+      try {
+        _session = await user.authenticateUser(authDetails);
+      } catch (e) {
+        if (e is CognitoClientException &&
+            e.code == 'InvalidParameterException' &&
+            e.message?.contains('USER_SRP_AUTH is not enabled') == true) {
+          // Fallback to USER_PASSWORD_AUTH if SRP is not supported
+          debugPrint(
+            'SRP auth not supported, falling back to direct password auth',
+          );
+
+          // Need to set auth flow type on the user object before authentication
+          user.setAuthenticationFlowType('USER_PASSWORD_AUTH');
+
+          // Simple authentication details without extra parameters
+          final passwordAuth = AuthenticationDetails(
+            username: email,
+            password: password,
+          );
+
+          _session = await user.authenticateUser(passwordAuth);
+        } else {
+          // Re-throw if it's not the SRP-specific error
+          rethrow;
+        }
+      }
       _currentUser = user;
 
       debugPrint('Authentication successful, storing tokens');
@@ -443,12 +468,18 @@ class AuthService {
         debugPrint('Warning: Some tokens still exist after clearing attempt');
 
         // Make one more attempt to clear any remaining tokens
-        if (accessTokenValue != null)
+        if (accessTokenValue != null) {
           await _secureStorage.delete(key: _accessTokenKey);
-        if (idTokenValue != null) await _secureStorage.delete(key: _idTokenKey);
-        if (refreshTokenValue != null)
+        }
+        if (idTokenValue != null) {
+          await _secureStorage.delete(key: _idTokenKey);
+        }
+        if (refreshTokenValue != null) {
           await _secureStorage.delete(key: _refreshTokenKey);
-        if (emailValue != null) await _secureStorage.delete(key: _userEmailKey);
+        }
+        if (emailValue != null) {
+          await _secureStorage.delete(key: _userEmailKey);
+        }
       }
 
       // Final verification
