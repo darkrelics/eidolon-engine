@@ -26,12 +26,13 @@ phases:
       - echo Building web application...
       - echo "Current directory:"
       - pwd
+      - echo "Building with USER_POOL_ID=$USER_POOL_ID and CLIENT_ID=$CLIENT_ID"
       - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID
 
   post_build:
     commands:
       - echo Uploading to S3...
-      - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive --cache-control "max-age=31536000"
+      - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive --cache-control "max-age=86400"
 
 artifacts:
   base-directory: portal/build/web

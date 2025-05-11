@@ -28,6 +28,8 @@ import 'screens/character_management_screen.dart';
 import 'utils/security_config.dart';
 import 'utils/route_guard.dart';
 import 'utils/session_monitor.dart';
+import 'utils/navigation.dart';
+import 'utils/global_error_handler.dart';
 
 void main() {
   // Enable proper error handling for the app
@@ -43,13 +45,8 @@ void main() {
     }
   }
 
-  // Set up error reporting (in production, use a proper error reporting service)
-  FlutterError.onError = (FlutterErrorDetails details) {
-    if (kDebugMode) {
-      FlutterError.presentError(details);
-    }
-    // In production, send to error reporting service
-  };
+  // Initialize global error handler
+  GlobalErrorHandler.initialize();
 
   final authService = AuthService();
   final sessionMonitor = SessionMonitor();
@@ -91,7 +88,7 @@ class MyApp extends StatelessWidget {
           builder: (context, child) {
             return ActivityMonitor(
               sessionMonitor: sessionMonitor,
-              child: child!,
+              child: child ?? const SizedBox.shrink(),
             );
           },
         );
@@ -147,12 +144,6 @@ class MyApp extends StatelessWidget {
         );
     }
   }
-}
-
-/// Global navigation key for accessing navigation from anywhere
-class GlobalNavigationKey {
-  static final GlobalKey<NavigatorState> navigatorKey =
-      GlobalKey<NavigatorState>();
 }
 
 /// Error screen for unknown routes or errors

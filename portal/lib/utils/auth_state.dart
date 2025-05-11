@@ -146,16 +146,43 @@ class AuthState extends ChangeNotifier {
       return;
     }
 
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
     _setLoading(true);
     try {
-      await _authService.confirmRegistration(
-        _emailController.text.trim(),
-        code,
-      );
-      _updateMessage('Email verified successfully. Please sign in.');
+      final result = await _authService.confirmRegistration(email, code);
+
+      // Store credentials temporarily for sign-in attempt
+      final tempEmail = email;
+      final tempPassword = password;
+
+      // Clear verification mode and related UI state
       _isVerificationMode = false;
       _isSignUpMode = false;
       _verificationCodeController.clear();
+
+      if (result) {
+        // Important: Clear credentials first to ensure we don't have stale state
+        await _authService.signOut();
+
+        try {
+          // Attempt automatic sign-in after verification
+          await _authService.signIn(tempEmail, tempPassword);
+          _isAuthenticated = true;
+          _updateMessage('Account verified and logged in successfully.');
+          clearInputs(); // Clear sensitive data after successful login
+        } catch (signInError) {
+          _updateMessage(
+            'Email verified successfully. Please sign in manually.',
+          );
+          // Don't clear email to make manual sign-in easier
+          _emailController.text = tempEmail;
+          _passwordController.text = '';
+        }
+      } else {
+        _updateMessage('Verification process completed. Please sign in.');
+      }
     } on CognitoClientException catch (e) {
       // Authentication-specific errors already formatted by AuthService
       _updateMessage(e.message ?? 'Verification failed');

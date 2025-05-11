@@ -26,9 +26,11 @@ class AppConfig {
   static const String clientId = String.fromEnvironment('CLIENT_ID');
 
   // Valid format for userPoolId: region_UUID (e.g., us-east-1_abcd1234)
+  // Using a real dev pool format for testing
   static String get _devUserPoolId => kDebugMode ? 'us-east-1_devUserPool' : '';
 
   // Valid format for clientId: 26-character alphanumeric string
+  // Using a valid format for the client ID
   static String get _devClientId =>
       kDebugMode ? '1example2client3id4567890abc' : '';
 
@@ -45,20 +47,17 @@ class AppConfig {
 
     // Validate userPoolId format: should be in the format region_poolId
     if (effectiveUserPoolId.isEmpty || !effectiveUserPoolId.contains('_')) {
-      throw ConfigurationException(
-        'Invalid userPoolId format. It should be in the format "region_poolId".',
-      );
+      throw ConfigurationException('Invalid identity provider configuration.');
     }
 
     // Validate clientId is not empty
     if (effectiveClientId.isEmpty) {
-      throw ConfigurationException('Client ID is required.');
+      throw ConfigurationException('Client configuration is incomplete.');
     }
 
     if (kReleaseMode && (userPoolId.isEmpty || clientId.isEmpty)) {
       throw ConfigurationException(
-        'Production build is missing required environment variables. '
-        'USER_POOL_ID and CLIENT_ID must be set at build time.',
+        'Production build is missing required environment variables.',
       );
     }
   }
@@ -131,20 +130,20 @@ class AuthService {
     _initializeCognito();
   }
 
-  /// Initializes Cognito configuration
+  /// Initializes authentication configuration
   void _initializeCognito() {
     try {
       AppConfig.validateConfiguration();
 
-      userPool = CognitoUserPool(
-        AppConfig.userPoolIdWithFallback,
-        AppConfig.clientIdWithFallback,
-      );
+      final userPoolId = AppConfig.userPoolIdWithFallback;
+      final clientId = AppConfig.clientIdWithFallback;
+
+      userPool = CognitoUserPool(userPoolId, clientId);
 
       // Attempt to restore previous session
       _restoreSession();
     } catch (e) {
-      _logError('Error initializing Cognito', e);
+      _logError('Authentication initialization error');
       rethrow;
     }
   }
@@ -174,7 +173,7 @@ class AuthService {
         AuthExceptionMapper.mapToUserFriendlyMessage(e),
       );
     } catch (e) {
-      _logError('Unexpected error during signup', e);
+      _logError('Account creation failed');
       rethrow;
     }
   }
@@ -193,7 +192,7 @@ class AuthService {
         AuthExceptionMapper.mapToUserFriendlyMessage(e),
       );
     } catch (e) {
-      _logError('Unexpected error during confirmation', e);
+      _logError('Account verification failed');
       rethrow;
     }
   }
@@ -205,13 +204,43 @@ class AuthService {
         throw CognitoClientException('Invalid email format');
       }
 
+      // Clear any existing session first to prevent state conflicts
+      if (_currentUser != null) {
+        try {
+          await _currentUser?.globalSignOut();
+        } catch (e) {
+          // Continue with sign-in despite error
+        }
+        _currentUser = null;
+        _session = null;
+      }
+
       final user = CognitoUser(email, userPool);
       final authDetails = AuthenticationDetails(
         username: email,
         password: password,
       );
 
-      _session = await user.authenticateUser(authDetails);
+      try {
+        _session = await user.authenticateUser(authDetails);
+      } catch (e) {
+        if (e is CognitoClientException &&
+            e.code == 'InvalidParameterException' &&
+            e.message?.contains('USER_SRP_AUTH is not enabled') == true) {
+          // Fallback to USER_PASSWORD_AUTH if SRP is not supported
+          user.setAuthenticationFlowType('USER_PASSWORD_AUTH');
+
+          final passwordAuth = AuthenticationDetails(
+            username: email,
+            password: password,
+          );
+
+          _session = await user.authenticateUser(passwordAuth);
+        } else {
+          // Re-throw if it's not the SRP-specific error
+          rethrow;
+        }
+      }
       _currentUser = user;
 
       // Store tokens securely
@@ -223,7 +252,7 @@ class AuthService {
         AuthExceptionMapper.mapToUserFriendlyMessage(e),
       );
     } catch (e) {
-      _logError('Unexpected error during signin', e);
+      _logError('Sign in failed');
       rethrow;
     }
   }
@@ -233,28 +262,29 @@ class AuthService {
     try {
       if (_currentUser != null) {
         try {
-          await _currentUser?.signOut();
-        } catch (e) {
-          // Log but don't throw for server-side signout issues
-          _logError('Server sign-out error', e);
-        } finally {
-          // Always clear local state regardless of server communication errors
-          _currentUser = null;
-          _session = null;
-          final cleared = await _clearTokens();
-          if (!cleared) {
-            _logError(
-              'Client sign-out incomplete',
-              'Failed to clear all tokens',
-            );
+          // Try global sign-out first for better security (invalidates all sessions)
+          try {
+            await _currentUser?.globalSignOut();
+          } catch (e) {
+            // Fall back to regular sign-out
+            await _currentUser?.signOut();
           }
+        } catch (e) {
+          // Continue with local sign-out
         }
       }
     } catch (e) {
-      _logError('SignOut error', e);
       // Don't rethrow, we want signout to always succeed from the user's perspective
-      // Instead, return failure status for internal error handling
-      throw AuthSignOutException('Sign-out failed. Please try again.');
+    } finally {
+      // Always clear local state regardless of server communication errors
+      _currentUser = null;
+      _session = null;
+      final cleared = await _clearTokens();
+      if (!cleared) {
+        throw AuthSignOutException(
+          'Sign-out partially failed. Please try again.',
+        );
+      }
     }
   }
 
@@ -277,7 +307,7 @@ class AuthService {
 
       return true;
     } catch (e) {
-      _logError('Authentication check error', e);
+      _logError('Session validation failed');
       return false;
     }
   }
@@ -292,7 +322,7 @@ class AuthService {
         AuthExceptionMapper.mapToUserFriendlyMessage(e),
       );
     } catch (e) {
-      _logError('Resend confirmation code error', e);
+      _logError('Failed to send verification code');
       rethrow;
     }
   }
@@ -315,7 +345,7 @@ class AuthService {
       await _secureStorage.write(key: _userEmailKey, value: email);
       return true;
     } catch (e) {
-      _logError('Error persisting tokens', e);
+      _logError('Session storage issue');
       // Continue without throwing - persistence failure shouldn't block auth
       // But we'll return false to indicate failure
       return false;
@@ -325,15 +355,54 @@ class AuthService {
   /// Clears stored tokens
   Future<bool> _clearTokens() async {
     try {
-      await _secureStorage.delete(key: _accessTokenKey);
-      await _secureStorage.delete(key: _idTokenKey);
-      await _secureStorage.delete(key: _refreshTokenKey);
-      await _secureStorage.delete(key: _userEmailKey);
-      return true;
+      // Delete all stored tokens
+      await Future.wait([
+        _secureStorage.delete(key: _accessTokenKey),
+        _secureStorage.delete(key: _idTokenKey),
+        _secureStorage.delete(key: _refreshTokenKey),
+        _secureStorage.delete(key: _userEmailKey),
+      ]);
+
+      // Verify tokens are actually gone
+      final accessTokenValue = await _secureStorage.read(key: _accessTokenKey);
+      final idTokenValue = await _secureStorage.read(key: _idTokenKey);
+      final refreshTokenValue = await _secureStorage.read(
+        key: _refreshTokenKey,
+      );
+      final emailValue = await _secureStorage.read(key: _userEmailKey);
+
+      final allNull =
+          accessTokenValue == null &&
+          idTokenValue == null &&
+          refreshTokenValue == null &&
+          emailValue == null;
+
+      if (!allNull) {
+        // Make one more attempt to clear any remaining tokens
+        if (accessTokenValue != null) {
+          await _secureStorage.delete(key: _accessTokenKey);
+        }
+        if (idTokenValue != null) {
+          await _secureStorage.delete(key: _idTokenKey);
+        }
+        if (refreshTokenValue != null) {
+          await _secureStorage.delete(key: _refreshTokenKey);
+        }
+        if (emailValue != null) {
+          await _secureStorage.delete(key: _userEmailKey);
+        }
+      }
+
+      // Final verification
+      final finalCheck =
+          (await _secureStorage.read(key: _accessTokenKey) == null) &&
+          (await _secureStorage.read(key: _idTokenKey) == null) &&
+          (await _secureStorage.read(key: _refreshTokenKey) == null) &&
+          (await _secureStorage.read(key: _userEmailKey) == null);
+
+      return finalCheck;
     } catch (e) {
-      _logError('Error clearing tokens', e);
-      // Continue without throwing - clearing failure shouldn't block signout
-      // But return a status for monitoring purposes
+      _logError('Session cleanup issue');
       return false;
     }
   }
@@ -345,10 +414,7 @@ class AuthService {
       final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
 
       if (email == null || refreshToken == null) {
-        _logError(
-          'Missing stored credentials',
-          'Email or refresh token not found',
-        );
+        _logError('No stored session found');
         return false;
       }
 
@@ -357,9 +423,9 @@ class AuthService {
 
       try {
         _session = await _currentUser!.refreshSession(cognitoRefreshToken);
-      } on CognitoClientException catch (e) {
-        // Handle specific Cognito errors
-        _logError('Cognito refresh session error', '${e.code}: ${e.message}');
+      } on CognitoClientException {
+        // Handle refresh session errors
+        _logError('Session refresh failed');
         // Clear invalid tokens to prevent future restore attempts with bad tokens
         await _clearTokens();
         return false;
@@ -368,16 +434,13 @@ class AuthService {
       // Update stored tokens with new ones
       final tokensPersisted = await _persistTokens(_session!, email);
       if (!tokensPersisted) {
-        _logError(
-          'Token persistence failed',
-          'Unable to save refreshed tokens',
-        );
+        _logError('Session persistence issue');
         // Continue anyway as the session is valid in memory
       }
 
       return true;
     } catch (e) {
-      _logError('Error restoring session', e);
+      _logError('Session restoration failed');
       // Clear any incomplete data that might have been stored
       await _clearTokens();
       return false;
@@ -402,7 +465,7 @@ class AuthService {
 
       return true;
     } catch (e) {
-      _logError('Error refreshing session', e);
+      _logError('Session refresh failed');
       return false;
     }
   }
@@ -418,30 +481,20 @@ class AuthService {
 
     // Check for at least one uppercase, one lowercase, one number and one special character
     return RegExp(
-      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]',
+      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$',
     ).hasMatch(password);
   }
 
-  /// Logs errors (can be replaced with proper logging framework)
-  void _logError(String message, dynamic error) {
-    // Log in both debug and release modes, but with different handling
+  /// Logs errors in a secure way without exposing sensitive information
+  void _logError(String message) {
+    // For debugging only - minimal info in development, nothing in production
     if (kDebugMode) {
-      // In debug mode, print to console
-      print('$message: $error');
-    } else {
-      debugPrint('Authentication error: ${message.split(':').first}');
+      // In debug mode, print simplified message
+      debugPrint('Auth: $message');
     }
 
-    // Always log security relevant errors to a secure audit log in production
-    final bool isSecurityRelevant =
-        message.contains('token') ||
-        message.contains('auth') ||
-        message.contains('session');
-
-    if (isSecurityRelevant && !kDebugMode) {
-      // Implement secure audit logging here
-      // This should go to a separate, tamper-proof security log
-    }
+    // In a production environment, this would send to a secure logging system
+    // with proper PII protection and security controls
   }
 
   /// Gets the current user

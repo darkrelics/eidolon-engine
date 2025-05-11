@@ -389,41 +389,7 @@ OTHER:
 - [ ] Unit testing for standalone functions
 - [ ] Live user interaction testing
 
-## Recent Changes
-
-### Core System Improvements
-
-1. **Command System Restructuring**:
-
-   - **Modular Architecture**: Separated command handling into three dedicated files:
-     - `character-commands.go`: Fast, local character commands (help, info, skills, etc.)
-     - `room-commands.go`: Room-level social and interactive commands (say, look, etc.)
-     - `game-commands.go`: Global commands affecting the world (weather, who, etc.)
-   - **Code Quality**: Enhanced error handling, fixed Printf-style function usage, removed unused methods
-   - **Architectural Improvements**:
-     - Removed direction commands (to be implemented differently)
-     - Added fallback "command not recognized" responses
-     - Simplified command tier determination
-     - Streamlined `commands.go` to focus solely on command registration and routing
-
-2. **Room System Enhancements**:
-
-   - **Goroutine Management**: Implemented individual room goroutines with proper lifecycle methods
-   - **Persistence System**: Added room persistence flags and activity tracking
-   - **Resource Management**: Created idle room detection and cleanup mechanism
-   - **Script Infrastructure**: Added scriptID field and supporting methods
-   - **Database Integration**: Updated storage layer to support new room properties
-
-These changes have significantly improved code organization, error handling, and system architecture while preparing for future scripting capabilities and ensuring efficient resource usage through proper room lifecycle management.
-
 ## Known Issues
-
-### Summary
-
-- **Critical Issues**: 2 issues - Security vulnerabilities related to credential handling and password validation
-- **High Severity Issues**: 10 issues - Including race conditions, error handling problems, and memory management concerns
-- **Medium Severity Issues**: 23 issues - Range from concurrency problems to design flaws and performance concerns
-- **Low Severity Issues**: 30 issues - Code quality, logging, and minor design issues
 
 ### Primary Concerns
 
@@ -443,12 +409,7 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
 
 ### Critical Issues
 
-1. **Insecure Credential Handling (cognito.go)**:
-
-   - Sensitive credentials are passed as plain strings and could be accidentally logged
-   - Located in the `Authenticate` function (lines 158-171)
-
-2. **Weak Password Validation (interface_ssh.go)**:
+1. **Weak Password Validation (interface_ssh.go)**:
    - Password validation only checks length (minimum 8 characters)
    - No requirements for complexity (uppercase, lowercase, numbers, symbols)
    - Located in `isValidPassword` function (lines 412-419)
@@ -466,88 +427,29 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
    - Method silently ignores failures to send disconnect messages
    - Located in `DuplicatePlayer` method (lines 326-333)
 
-3. **Hidden Error Details (cognito.go)**:
-
-   - Error details from Cognito are hidden from caller
-   - Located in `SignUpUser` function (around line 70)
-
-4. **No Authentication Rate Limiting (cognito.go)**:
+3. **No Authentication Rate Limiting (cognito.go)**:
 
    - Limited rate limiting on authentication attempts at application level
    - Makes the system vulnerable to brute force attacks
 
-5. **Memory Issues with Large Datasets (database.go)**:
-
-   - All DB query/scan items loaded into memory at once
-   - Could cause out-of-memory issues with large datasets
-   - Located in `Scan` and `Query` operations
-
-6. **Insufficient Input Validation (player.go)**:
+4. **Insufficient Input Validation (player.go)**:
 
    - Insufficient validation/sanitization of player input
    - Could lead to command injection or other security issues
 
-7. **Incomplete Error Handling in Player Data (player.go)**:
-
-   - If saving player data fails, execution continues without proper handling
-
-8. **Invalid UUID Handling (character.go)**:
-
-   - The `GenerateUUIDv7` function doesn't handle errors from UUID generation
-   - Could return nil and cause panics elsewhere
-
-9. **SSH Connection Security (interface_ssh.go)**:
+5. **SSH Connection Security (interface_ssh.go)**:
 
    - No validation of SSH connection parameters
    - No proper handling of unusual SSH client behavior
 
-10. **Hard-Coded File Paths (game.go)**:
-    - Critical game files use hard-coded paths
-    - Makes deployment and configuration inflexible
-    - Located in lines 36-37
-
-## Action Items & Recommendations
-
-### Immediate Priorities
-
-- Fix the critical security vulnerabilities in `cognito.go` and `interface_ssh.go`
-- Address the race condition in player management (server.go lines 295-307)
-- Implement proper input validation for player commands
-- Fix UUID generation error handling
-- Begin implementation of room goroutine system
-- Create script management structure
-
-### Short-term Improvements
-
-- Add database query pagination for large datasets
-- Implement proper error handling in player data saving
-- Consolidate player disconnection logic
-- Move hard-coded values to configuration
-- Continue room persistence system implementation
-- Set up S3 script storage and loading
-
-### Long-term Refactoring
-
-- Implement comprehensive retry mechanisms with exponential backoff
-- Improve context propagation throughout the codebase
-- Improve concurrency patterns to avoid blocking operations
-- Add versioning for data structures
-- Enhance room scripting capabilities
+6. **Hard-Coded File Paths (game.go)**:
+   - Critical game files use hard-coded paths
+   - Makes deployment and configuration inflexible
+   - Located in lines 36-37
 
 ## Web Portal
 
 A Flutter application for player registration and self-service.
-
-### Portal TODO
-
-- [ ] Add unit tests
-- [ ] Add integration tests
-- [ ] Add widget tests
-- [ ] Improve error messages
-- [ ] Add retry mechanisms for network calls
-- [ ] Add asset preloading
-- [ ] Address client secret issues
-- [ ] Add session timeout
 
 ## Deployment
 

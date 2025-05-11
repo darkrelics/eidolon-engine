@@ -42,7 +42,7 @@
       window._flutter = {
         buildConfig: {
           locale: "en",
-          serviceWorkerVersion: "{{flutter_service_worker_version}}",
+          serviceWorkerVersion: null,
         },
       };
     </script>
@@ -57,7 +57,7 @@
         _flutter.loader
           .loadEntrypoint({
             serviceWorker: {
-              serviceWorkerVersion: "{{flutter_service_worker_version}}",
+              serviceWorkerVersion: null,
             },
             onEntrypointLoaded: async function (engineInitializer) {
               loading.textContent = "Initializing Eidolon Engine...";

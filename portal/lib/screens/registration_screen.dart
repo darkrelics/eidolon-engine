@@ -20,9 +20,13 @@ import 'package:provider/provider.dart';
 import '../utils/auth_state.dart';
 import '../widgets/ui_components.dart';
 import '../utils/input_sanitizer.dart';
+import '../utils/form_state_provider.dart';
 
 class RegistrationScreen extends StatelessWidget {
   const RegistrationScreen({super.key});
+
+  static final _formKey = GlobalKey<FormState>();
+  static final _verificationFormKey = GlobalKey<FormState>();
 
   @override
   Widget build(BuildContext context) {
@@ -50,8 +54,13 @@ class RegistrationScreen extends StatelessWidget {
                 });
               }
 
-              return Form(
-                autovalidateMode: AutovalidateMode.onUserInteraction,
+              final currentFormKey =
+                  authState.isVerificationMode
+                      ? _verificationFormKey
+                      : _formKey;
+
+              return FormStateProvider(
+                formKey: currentFormKey,
                 child: AutofillGroup(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -90,7 +99,7 @@ class RegistrationScreen extends StatelessWidget {
                         LoadingButton(
                           isLoading: authState.isLoading,
                           onPressed: () async {
-                            if (Form.of(context).validate()) {
+                            if (FormStateUtil.validateForm(_formKey)) {
                               await authState.signUp();
                             }
                           },
@@ -140,11 +149,21 @@ class RegistrationScreen extends StatelessWidget {
                         LoadingButton(
                           isLoading: authState.isLoading,
                           onPressed: () async {
-                            if (Form.of(context).validate()) {
+                            if (FormStateUtil.validateForm(
+                              _verificationFormKey,
+                            )) {
                               await authState.confirmRegistration();
-                              if (!authState.isVerificationMode &&
+
+                              // Check if user was verified and automatically logged in
+                              if (authState.isAuthenticated &&
                                   context.mounted) {
-                                authState.clearInputs();
+                                Navigator.of(
+                                  context,
+                                ).pushReplacementNamed('/character-management');
+                              }
+                              // If verification completed but not logged in, go to login screen
+                              else if (!authState.isVerificationMode &&
+                                  context.mounted) {
                                 Navigator.of(
                                   context,
                                 ).pushReplacementNamed('/login');
