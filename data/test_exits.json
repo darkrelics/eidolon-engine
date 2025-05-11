@@ -3,105 +3,173 @@
     {
       "ExitID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       "Direction": "out",
+      "Description": "a wooden door",
       "TargetRoom": 2,
-      "Visible": true
+      "ArrivalText": "enters through a wooden door",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
-      "RoomID": 2,
       "Direction": "northeast",
+      "Description": "a narrow path",
       "TargetRoom": 3,
-      "Visible": true
+      "ArrivalText": "arrives from the southwest along a narrow path",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
       "Direction": "west",
+      "Description": "",
       "TargetRoom": 6,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
       "Direction": "down",
+      "Description": "a winding staircase",
       "TargetRoom": 9,
-      "Visible": true
+      "ArrivalText": "comes down the winding staircase",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
       "Direction": "north",
+      "Description": "",
       "TargetRoom": 4,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
       "Direction": "southwest",
+      "Description": "",
       "TargetRoom": 2,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
       "Direction": "south",
+      "Description": "",
       "TargetRoom": 3,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "847ac10b-58cc-4372-a567-0e02b2c3d486",
       "Direction": "west",
+      "Description": "",
       "TargetRoom": 9,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "747ac10b-58cc-4372-a567-0e02b2c3d487",
       "Direction": "east",
+      "Description": "",
       "TargetRoom": 7,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "647ac10b-58cc-4372-a567-0e02b2c3d488",
       "Direction": "east",
+      "Description": "",
       "TargetRoom": 2,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "547ac10b-58cc-4372-a567-0e02b2c3d489",
       "Direction": "west",
+      "Description": "",
       "TargetRoom": 5,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "447ac10b-58cc-4372-a567-0e02b2c3d490",
       "Direction": "north",
+      "Description": "",
       "TargetRoom": 8,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "347ac10b-58cc-4372-a567-0e02b2c3d491",
       "Direction": "south",
+      "Description": "",
       "TargetRoom": 7,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "247ac10b-58cc-4372-a567-0e02b2c3d492",
       "Direction": "north",
+      "Description": "",
       "TargetRoom": 10,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "147ac10b-58cc-4372-a567-0e02b2c3d493",
       "Direction": "up",
+      "Description": "a winding staircase",
       "TargetRoom": 2,
-      "Visible": true
+      "ArrivalText": "comes up the winding staircase",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "047ac10b-58cc-4372-a567-0e02b2c3d494",
       "Direction": "east",
+      "Description": "",
       "TargetRoom": 5,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
     },
     {
       "ExitID": "f37ac10b-58cc-4372-a567-0e02b2c3d495",
       "Direction": "south",
+      "Description": "",
       "TargetRoom": 8,
-      "Visible": true
+      "ArrivalText": "",
+      "Visible": true,
+      "ScriptID": ""
+    },
+    {
+      "ExitID": "e37ac10b-58cc-4372-a567-0e02b2c3d496",
+      "Direction": "trapdoor",
+      "Description": "a hidden trapdoor in the floor",
+      "TargetRoom": 8,
+      "ArrivalText": "drops in through a trapdoor in the ceiling",
+      "Visible": false,
+      "ScriptID": "trapdoor_reveal"
+    },
+    {
+      "ExitID": "d37ac10b-58cc-4372-a567-0e02b2c3d497",
+      "Direction": "portal",
+      "Description": "a shimmering portal",
+      "TargetRoom": 10,
+      "ArrivalText": "steps out of a shimmering portal",
+      "Visible": true,
+      "ScriptID": "teleport_fx"
     }
   ]
 }

@@ -87,7 +87,7 @@ The command system is structured in a three-tier hierarchy to efficiently handle
    - Uses structured command/response channel communication pattern
    - Returns "command not recognized" messages for unsupported commands
 
-The main `commands.go` file now serves as the command registration and routing system, determining which tier should handle a given command and directing it appropriately. Direction commands have been removed as they will be implemented using an alternative method in the future.
+The main `commands.go` file now serves as the command registration and routing system, determining which tier should handle a given command and directing it appropriately. Movement commands (GO and MOVE) have been implemented as timed actions that respect character state, with support for both cardinal directions and named exits.
 
 Command processing includes a timeout system where different commands have varying "wait periods" during which certain other commands cannot be executed. Character states (standing, sitting, prone, dead) affect command availability, with state-appropriate commands always accessible regardless of timeout status. The system currently implements a basic "standing" state by default, with plans to expand to sitting, prone, and dead states to influence command availability and character interactions.
 
@@ -135,6 +135,9 @@ Testing will primarily be conducted through live user interaction, with unit tes
 
 - [x] Room System
   - [x] Implement movement commands with room state changes
+  - [x] GO and MOVE commands for character movement
+  - [x] Support for both cardinal directions and object-based exits
+  - [x] Character state verification for movement
   - [x] Add room persistence flag to Room struct
   - [x] Add scriptID field to Room struct
   - [x] Implement Room goroutine system
@@ -160,8 +163,12 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [ ] Implement command queuing system
   - [ ] Add look at item command
 
-- [ ] Room System Extension
+- [x] Room System Extension
 
+  - [x] Enhanced exit system with descriptive exits
+  - [x] Support for non-cardinal direction exits (doors, portals, stairs)
+  - [x] Custom arrival/departure messaging for player movement
+  - [x] Exit visibility controls for hidden paths
   - [ ] Create Script management system with S3 storage
   - [ ] Implement room script loading from S3
   - [ ] Validate graph of loaded rooms and exits
@@ -208,7 +215,8 @@ Game Information:
 
 Basic Movement:
 
-- [x] GO: Move to a new room.
+- [x] GO: Move to a new room using cardinal directions or named exits.
+- [x] MOVE: Alias for GO command.
 - [x] LOOK: Look at the current room.
 - [ ] CLIMB: Climb an object like a tree or ladder.
 - [ ] SWIM: Swim through water.
@@ -361,7 +369,11 @@ OTHER:
 
 - [x] Basic room implementation
 - [x] Room activity tracking
-- [ ] Exit implementation
+- [x] Exit implementation
+  - [x] Directional and object-based exits (e.g., "north", "stairs", "portal")
+  - [x] Custom exit descriptions and arrival messages
+  - [x] Support for hidden/visible exits
+  - [x] Script hooks for exit-triggered events
 - [ ] Item interaction system with verbs
 - [x] Archetype system
 - [ ] Combat system
