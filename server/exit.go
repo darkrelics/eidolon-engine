@@ -27,45 +27,42 @@ import (
 
 // Exit represents the in-memory structure for an exit
 type Exit struct {
-	exitID       uuid.UUID
-	sourceRoomID int64
-	direction    string
-	description  string
-	targetRoom   *Room
-	arrivalText  string
-	visible      bool
-	scriptID     string
-	lastEdited   time.Time
-	lastSaved    time.Time
+	exitID      uuid.UUID
+	direction   string
+	description string
+	targetRoom  *Room
+	arrivalText string
+	visible     bool
+	scriptID    string
+	lastEdited  time.Time
+	lastSaved   time.Time
 }
 
 // ExitData represents the structure for storing exit data in DynamoDB
 type ExitData struct {
-	ExitID       string `json:"ExitID" dynamodbav:"ExitID"`
-	SourceRoomID int64  `json:"SourceRoomID" dynamodbav:"SourceRoomID"`
-	Direction    string `json:"Direction" dynamodbav:"Direction"`
-	Description  string `json:"Description" dynamodbav:"Description"`
-	TargetRoom   int64  `json:"TargetRoom" dynamodbav:"TargetRoom"`
-	ArrivalText  string `json:"ArrivalText" dynamodbav:"ArrivalText"`
-	Visible      bool   `json:"Visible" dynamodbav:"Visible"`
-	ScriptID     string `json:"ScriptID" dynamodbav:"ScriptID"`
+	ExitID      string `json:"ExitID" dynamodbav:"ExitID"`
+	Direction   string `json:"Direction" dynamodbav:"Direction"`
+	Description string `json:"Description" dynamodbav:"Description"`
+	TargetRoom  int64  `json:"TargetRoom" dynamodbav:"TargetRoom"`
+	ArrivalText string `json:"ArrivalText" dynamodbav:"ArrivalText"`
+	Visible     bool   `json:"Visible" dynamodbav:"Visible"`
+	ScriptID    string `json:"ScriptID" dynamodbav:"ScriptID"`
 }
 
 // NewExit initializes a new exit
-func NewExit(exitID uuid.UUID, sourceRoomID int64, direction string, description string, targetRoom *Room, arrivalText string, visible bool, scriptID string) *Exit {
+func NewExit(exitID uuid.UUID, direction string, description string, targetRoom *Room, arrivalText string, visible bool, scriptID string) *Exit {
 	Logger.Info("New Exit...Initializing Exit...")
 
 	return &Exit{
-		exitID:       exitID,
-		sourceRoomID: sourceRoomID,
-		direction:    direction,
-		description:  description,
-		targetRoom:   targetRoom,
-		arrivalText:  arrivalText,
-		visible:      visible,
-		scriptID:     scriptID,
-		lastEdited:   time.Now(),
-		lastSaved:    time.Now(),
+		exitID:      exitID,
+		direction:   direction,
+		description: description,
+		targetRoom:  targetRoom,
+		arrivalText: arrivalText,
+		visible:     visible,
+		scriptID:    scriptID,
+		lastEdited:  time.Now(),
+		lastSaved:   time.Now(),
 	}
 }
 
@@ -88,13 +85,6 @@ func (g *Game) LoadExits() error {
 			continue
 		}
 
-		// Use default sourceRoomID of 0 if not specified for backward compatibility
-		sourceRoomID := exitData.SourceRoomID
-		if sourceRoomID == 0 && exitData.TargetRoom != 0 {
-			// Log a warning for exits without a source room ID
-			Logger.Warn("Exit without source room ID", "exitID", exitData.ExitID)
-		}
-
 		// Default arrival text if not provided
 		arrivalText := exitData.ArrivalText
 		if arrivalText == "" {
@@ -104,7 +94,6 @@ func (g *Game) LoadExits() error {
 
 		g.exits[exitID] = NewExit(
 			exitID,
-			sourceRoomID,
 			exitData.Direction,
 			exitData.Description,
 			g.rooms[exitData.TargetRoom],
