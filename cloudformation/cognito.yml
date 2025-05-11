@@ -28,6 +28,7 @@ Resources:
         - email
       EmailConfiguration:
         EmailSendingAccount: COGNITO_DEFAULT
+        ReplyToEmailAddress: !Ref ReplyEmailAddress
       Policies:
         PasswordPolicy:
           MinimumLength: 8
