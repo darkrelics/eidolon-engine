@@ -443,9 +443,9 @@ The most recent commit (5494d81) addressed a logging issue in the portal code re
    - No proper handling of unusual SSH client behavior
 
 6. **Hard-Coded File Paths (game.go)**:
-    - Critical game files use hard-coded paths
-    - Makes deployment and configuration inflexible
-    - Located in lines 36-37
+   - Critical game files use hard-coded paths
+   - Makes deployment and configuration inflexible
+   - Located in lines 36-37
 
 ## Web Portal
 
