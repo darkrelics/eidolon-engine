@@ -108,34 +108,24 @@ class AuthState extends ChangeNotifier {
 
     _setLoading(true);
     try {
-      debugPrint('Attempting to sign up user: ${_emailController.text.trim()}');
-
       final signUpResult = await _authService.signUp(
         _emailController.text.trim(),
         _passwordController.text,
       );
 
-      debugPrint(
-        'Sign-up response received: userConfirmed=${signUpResult.userConfirmed}',
-      );
-
       if (signUpResult.userConfirmed ?? false) {
-        debugPrint('User was automatically confirmed');
         _updateMessage('Registration successful. Please sign in.');
         _isSignUpMode = false;
         // Don't clear password to allow immediate sign in
         _verificationCodeController.clear();
       } else {
-        debugPrint('User requires verification - showing verification screen');
         _updateMessage('Please check your email for a verification code.');
         _isVerificationMode = true;
       }
     } on CognitoClientException catch (e) {
       // Authentication-specific errors already formatted by AuthService
-      debugPrint('Cognito exception during sign-up: ${e.message}');
       _updateMessage(e.message ?? 'Registration failed');
     } catch (e) {
-      debugPrint('Unexpected error during sign-up: $e');
       _updateMessage('An unexpected error occurred. Please try again.');
     } finally {
       _setLoading(false);
@@ -159,15 +149,9 @@ class AuthState extends ChangeNotifier {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    debugPrint(
-      'Attempting to confirm registration for email: $email with code: $code',
-    );
-
     _setLoading(true);
     try {
       final result = await _authService.confirmRegistration(email, code);
-
-      debugPrint('Confirmation result: $result');
 
       // Store credentials temporarily for sign-in attempt
       final tempEmail = email;
@@ -179,8 +163,6 @@ class AuthState extends ChangeNotifier {
       _verificationCodeController.clear();
 
       if (result) {
-        debugPrint('Verification successful, attempting automatic sign-in');
-
         // Important: Clear credentials first to ensure we don't have stale state
         await _authService.signOut();
 
@@ -189,12 +171,8 @@ class AuthState extends ChangeNotifier {
           await _authService.signIn(tempEmail, tempPassword);
           _isAuthenticated = true;
           _updateMessage('Account verified and logged in successfully.');
-          debugPrint('Automatic sign-in successful after verification');
           clearInputs(); // Clear sensitive data after successful login
         } catch (signInError) {
-          debugPrint(
-            'Automatic sign-in failed after verification: $signInError',
-          );
           _updateMessage(
             'Email verified successfully. Please sign in manually.',
           );
@@ -207,10 +185,8 @@ class AuthState extends ChangeNotifier {
       }
     } on CognitoClientException catch (e) {
       // Authentication-specific errors already formatted by AuthService
-      debugPrint('Cognito exception during confirmation: ${e.message}');
       _updateMessage(e.message ?? 'Verification failed');
     } catch (e) {
-      debugPrint('Unexpected error during confirmation: $e');
       _updateMessage('An unexpected error occurred. Please try again.');
     } finally {
       _setLoading(false);
