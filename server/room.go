@@ -115,26 +115,6 @@ type RoomData struct {
 	ScriptID    string   `json:"scriptID" dynamodbav:"ScriptID"`
 }
 
-// Exit represents the in-memory structure for an exit
-type Exit struct {
-	exitID      uuid.UUID
-	direction   string
-	description string
-	targetRoom  *Room
-	visible     bool
-	lastEdited  time.Time
-	lastSaved   time.Time
-}
-
-// ExitData represents the structure for storing exit data in DynamoDB
-type ExitData struct {
-	ExitID      string `json:"ExitID" dynamodbav:"ExitID"`
-	Direction   string `json:"Direction" dynamodbav:"Direction"`
-	Description string `json:"Description" dynamodbav:"Description"`
-	TargetRoom  int64  `json:"TargetRoom" dynamodbav:"TargetRoom"`
-	Visible     bool   `json:"Visible" dynamodbav:"Visible"`
-}
-
 // Initialize a new room
 func NewRoom(ctx context.Context, roomID int64, area, title, description string, persistent bool, scriptID string) *Room {
 
@@ -169,47 +149,6 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		gameCommandOut: make(chan *CommandRequest, 10),  // Buffer for commands to game
 		gameCommandIn:  make(chan *CommandResponse, 10), // Buffer for responses from game
 	}
-}
-
-// Initialize a new exit
-func NewExit(exitID uuid.UUID, direction string, description string, targetRoom *Room, visible bool) *Exit {
-
-	Logger.Info("New Exit...Initalizing Exit...")
-
-	return &Exit{
-		exitID:      exitID,
-		direction:   direction,
-		description: description,
-		targetRoom:  targetRoom,
-		visible:     visible,
-		lastEdited:  time.Now(),
-		lastSaved:   time.Now(),
-	}
-}
-
-// Load exit data from DynamoDB
-func (g *Game) LoadExits() error {
-
-	Logger.Info("Load Exits...Loading Exits...")
-
-	var exitsData []ExitData
-
-	err := g.database.Scan("exits", &exitsData)
-	if err != nil {
-		Logger.Error("Error scanning exits table", "error", err)
-		return nil
-	}
-
-	for _, exitData := range exitsData {
-		exitID, err := uuid.Parse(exitData.ExitID)
-		if err != nil {
-			Logger.Warn("Error parsing exit ID", "error", err)
-		}
-
-		g.exits[exitID] = NewExit(exitID, exitData.Direction, exitData.Description, g.rooms[exitData.TargetRoom], exitData.Visible)
-	}
-
-	return nil
 }
 
 // Load room data from DynamoDB
@@ -521,7 +460,12 @@ func (r *Room) GetDescription(character *Character) string {
 	exits := make([]string, 0, len(r.exits))
 	for _, exit := range r.exits {
 		if exit != nil && exit.visible {
-			exits = append(exits, exit.direction)
+			// Include exit description if available
+			if exit.description != "" {
+				exits = append(exits, fmt.Sprintf("%s (%s)", exit.direction, exit.description))
+			} else {
+				exits = append(exits, exit.direction)
+			}
 		}
 	}
 
