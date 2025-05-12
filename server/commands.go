@@ -130,6 +130,27 @@ func (g *Game) initCommands() {
 		description: "Drop an item from your inventory",
 		usage:       "drop <item>",
 	}
+
+	g.commands["inventory"] = CommandInfo{
+		timed:       false,
+		handler:     executeInventoryCommand,
+		description: "Show your inventory",
+		usage:       "inventory",
+	}
+
+	g.commands["inv"] = CommandInfo{
+		timed:       false,
+		handler:     executeInventoryCommand, // Alias for inventory
+		description: "Show your inventory",
+		usage:       "inv",
+	}
+
+	g.commands["i"] = CommandInfo{
+		timed:       false,
+		handler:     executeInventoryCommand, // Alias for inventory
+		description: "Show your inventory",
+		usage:       "i",
+	}
 }
 
 // ValidateCommand checks if a command is valid and returns its verb and tokens

@@ -229,6 +229,61 @@ func executeSkillCommand(character *Character, tokens []string) error {
 	return nil
 }
 
+// executeInventoryCommand displays the character's inventory
+func executeInventoryCommand(character *Character, tokens []string) error {
+	if character == nil || character.player == nil {
+		return errors.New("invalid character state")
+	}
+
+	Logger.Debug("Player checking inventory", "characterName", character.name)
+
+	// Lock the character's inventory while we read it
+	character.mutex.RLock()
+	defer character.mutex.RUnlock()
+
+	var invDisplay strings.Builder
+	invDisplay.WriteString("\n\rInventory:\n\r")
+	invDisplay.WriteString("----------------\n\r")
+
+	if len(character.inventory) == 0 {
+		invDisplay.WriteString("You are not carrying anything.\n\r")
+	} else {
+		// Separate worn and carried items
+		var wornItems, carriedItems []*Item
+
+		for _, item := range character.inventory {
+			if item == nil {
+				continue
+			}
+
+			if item.isWorn {
+				wornItems = append(wornItems, item)
+			} else {
+				carriedItems = append(carriedItems, item)
+			}
+		}
+
+		// Display worn items first
+		if len(wornItems) > 0 {
+			invDisplay.WriteString("\n\rYou are wearing:\n\r")
+			for _, item := range wornItems {
+				invDisplay.WriteString(formatWornItem(item))
+			}
+		}
+
+		// Then display carried items
+		if len(carriedItems) > 0 {
+			invDisplay.WriteString("\n\rYou are carrying:\n\r")
+			for _, item := range carriedItems {
+				invDisplay.WriteString(formatCarriedItem(item))
+			}
+		}
+	}
+
+	character.player.commandOut <- invDisplay.String()
+	return nil
+}
+
 // executeGoCommand handles movement between rooms
 func executeGoCommand(character *Character, tokens []string) error {
 	if character == nil || character.player == nil || character.room == nil {

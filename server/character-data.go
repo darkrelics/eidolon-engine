@@ -133,19 +133,20 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	character.room = room
 
 	// Load inventory items
-	for name, itemIDStr := range cd.Inventory {
-		itemID, err := uuid.Parse(itemIDStr)
-		if err != nil {
-			Logger.Error("Error parsing item UUID", "itemID", itemIDStr, "error", err)
-			continue
-		}
-		item, err := LoadItem(itemID.String(), game.database)
-		if err != nil {
-			Logger.Error("Error loading item for character", "itemID", itemID, "characterName", character.name, "error", err)
-			continue
-		}
-		character.inventory[name] = item
+	inventory, err := LoadItemsForCharacter(cd.Inventory, game.database)
+	if err != nil {
+		Logger.Warn("Error loading character inventory", "characterID", characterID, "error", err)
 	}
+	character.inventory = inventory
+
+	// Add loaded items to game's item tracking
+	game.mutex.Lock()
+	for _, item := range character.inventory {
+		if item != nil {
+			game.items[item.id] = item
+		}
+	}
+	game.mutex.Unlock()
 
 	// Add character to game state
 	game.mutex.Lock()

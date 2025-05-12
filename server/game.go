@@ -132,6 +132,15 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Error("Error loading rooms", "error", err)
 	}
 
+	// Load Item Prototypes
+
+	prototypes, err := LoadPrototypes(game.database)
+	if err != nil {
+		Logger.Warn("Error loading item prototypes", "error", err)
+	} else {
+		game.prototypes = prototypes
+	}
+
 	game.initCommands()
 
 	return game, nil

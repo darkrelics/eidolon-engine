@@ -195,7 +195,15 @@ func (g *Game) LoadRooms() error {
 		}
 	}
 
-	// Load item data
+	// Load prototypes and items
+	if err := g.LoadPrototypes(); err != nil {
+		Logger.Warn("Error loading prototypes", "error", err)
+	}
+
+	if err := g.LoadItems(); err != nil {
+		Logger.Warn("Error loading items", "error", err)
+	}
+
 	return nil
 }
 

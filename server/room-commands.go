@@ -91,11 +91,169 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 
 // handleItemCommand processes item-related commands like get, take, drop, etc.
 func handleItemCommand(cmd *CommandRequest) *CommandResponse {
-	// This is a placeholder. Real implementation would handle items
+	if len(cmd.Args) < 2 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("what do you want to %s?", cmd.Verb),
+			Timestamp: time.Now(),
+		}
+	}
+
+	targetName := strings.ToLower(strings.Join(cmd.Args[1:], " "))
+
+	switch cmd.Verb {
+	case "get", "take":
+		return handleGetCommand(cmd, targetName)
+	case "drop":
+		return handleDropCommand(cmd, targetName)
+	default:
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid item command: %s", cmd.Verb),
+			Timestamp: time.Now(),
+		}
+	}
+}
+
+// handleGetCommand processes the get/take command
+func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
+	character := cmd.Character
+	room := character.room
+
+	// Check if room or character is valid
+	if room == nil || character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid room or character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Acquire room lock to search for the item
+	room.mutex.Lock()
+	defer room.mutex.Unlock()
+
+	// Find the item in the room
+	var targetItem *Item
+	var targetItemID uuid.UUID
+
+	for id, item := range room.items {
+		if item != nil && strings.Contains(strings.ToLower(item.name), targetName) {
+			if !item.canPickUp {
+				return &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Error:     fmt.Errorf("you cannot pick that up"),
+					Timestamp: time.Now(),
+				}
+			}
+			targetItem = item
+			targetItemID = id
+			break
+		}
+	}
+
+	if targetItem == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you don't see that here"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Remove from room
+	delete(room.items, targetItemID)
+
+	// Add to character's inventory
+	character.mutex.Lock()
+	slotName := targetItem.name // Use the item name as the slot name
+	character.inventory[slotName] = targetItem
+	character.mutex.Unlock()
+
+	// Create success message
+	message := fmt.Sprintf("\n\rYou pick up %s.\n\r", targetItem.name)
+
+	// Notify the room
+	SendRoomMessageExcept(room, fmt.Sprintf("\n\r%s picks up %s.\n\r", character.name, targetItem.name), character)
+
 	return &CommandResponse{
 		RequestID: cmd.ID,
-		Success:   false,
-		Error:     fmt.Errorf("item commands are not implemented yet"),
+		Success:   true,
+		Message:   message,
+		Timestamp: time.Now(),
+	}
+}
+
+// handleDropCommand processes the drop command
+func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse {
+	character := cmd.Character
+	room := character.room
+
+	// Check if room or character is valid
+	if room == nil || character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid room or character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Find the item in the character's inventory
+	character.mutex.Lock()
+	var itemToRemove *Item
+	var slotToRemove string
+
+	for slot, item := range character.inventory {
+		if item != nil && strings.Contains(strings.ToLower(item.name), targetName) {
+			if item.isWorn {
+				character.mutex.Unlock()
+				return &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Error:     fmt.Errorf("you need to remove that first"),
+					Timestamp: time.Now(),
+				}
+			}
+			itemToRemove = item
+			slotToRemove = slot
+			break
+		}
+	}
+
+	if itemToRemove == nil {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you don't have that"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Remove from inventory
+	delete(character.inventory, slotToRemove)
+	character.mutex.Unlock()
+
+	// Add to room
+	room.mutex.Lock()
+	room.items[itemToRemove.id] = itemToRemove
+	room.mutex.Unlock()
+
+	// Create success message
+	message := fmt.Sprintf("\n\rYou drop %s.\n\r", itemToRemove.name)
+
+	// Notify the room
+	SendRoomMessageExcept(room, fmt.Sprintf("\n\r%s drops %s.\n\r", character.name, itemToRemove.name), character)
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   message,
 		Timestamp: time.Now(),
 	}
 }
