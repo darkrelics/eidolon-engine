@@ -139,11 +139,16 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	}
 	character.inventory = inventory
 
-	// Add loaded items to game's item tracking
+	// Add loaded items to game's item tracking and apply trait mods for worn items
 	game.mutex.Lock()
 	for _, item := range character.inventory {
 		if item != nil {
 			game.items[item.id] = item
+
+			// Apply trait modifications for worn items
+			if item.isWorn && len(item.traitMods) > 0 {
+				character.ApplyItemTraitMods(item)
+			}
 		}
 	}
 	game.mutex.Unlock()
@@ -185,4 +190,92 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 
 	Logger.Info("Character deleted successfully", "characterID", characterID)
 	return nil
+}
+
+// ApplyItemTraitMods applies trait modifications from an item to the character
+func (c *Character) ApplyItemTraitMods(item *Item) {
+	if item == nil || len(item.traitMods) == 0 {
+		return
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	Logger.Debug("Applying trait mods to character",
+		"characterName", c.name,
+		"itemName", item.name,
+		"mods", item.traitMods)
+
+	// Apply each trait modification
+	for trait, mod := range item.traitMods {
+		// For attributes
+		if _, exists := c.attributes[trait]; exists {
+			c.attributes[trait] += float64(mod)
+			Logger.Debug("Applied attribute mod",
+				"character", c.name,
+				"attribute", trait,
+				"mod", mod,
+				"newValue", c.attributes[trait])
+		}
+		// For abilities
+		if _, exists := c.abilities[trait]; exists {
+			c.abilities[trait] += float64(mod)
+			Logger.Debug("Applied ability mod",
+				"character", c.name,
+				"ability", trait,
+				"mod", mod,
+				"newValue", c.abilities[trait])
+		}
+		// Special case handling
+		switch trait {
+		case "health":
+			c.health += float64(mod)
+		case "essence":
+			c.essence += float64(mod)
+		}
+	}
+}
+
+// RemoveItemTraitMods removes trait modifications from an item from the character
+func (c *Character) RemoveItemTraitMods(item *Item) {
+	if item == nil || len(item.traitMods) == 0 {
+		return
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	Logger.Debug("Removing trait mods from character",
+		"characterName", c.name,
+		"itemName", item.name,
+		"mods", item.traitMods)
+
+	// Remove each trait modification (apply the inverse)
+	for trait, mod := range item.traitMods {
+		// For attributes
+		if _, exists := c.attributes[trait]; exists {
+			c.attributes[trait] -= float64(mod)
+			Logger.Debug("Removed attribute mod",
+				"character", c.name,
+				"attribute", trait,
+				"mod", -mod,
+				"newValue", c.attributes[trait])
+		}
+		// For abilities
+		if _, exists := c.abilities[trait]; exists {
+			c.abilities[trait] -= float64(mod)
+			Logger.Debug("Removed ability mod",
+				"character", c.name,
+				"ability", trait,
+				"mod", -mod,
+				"newValue", c.abilities[trait])
+		}
+		// Special case handling
+		switch trait {
+		case "health":
+			c.health -= float64(mod)
+		case "essence":
+			c.essence -= float64(mod)
+		}
+	}
 }

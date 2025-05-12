@@ -151,6 +151,35 @@ func (g *Game) initCommands() {
 		description: "Show your inventory",
 		usage:       "i",
 	}
+
+	// Equipment commands
+	g.commands["wear"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Wear or equip an item",
+		usage:       "wear <item>",
+	}
+
+	g.commands["remove"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Handled by room level
+		description: "Remove a worn item",
+		usage:       "remove <item>",
+	}
+
+	g.commands["equipment"] = CommandInfo{
+		timed:       false,
+		handler:     executeEquipmentCommand,
+		description: "Show your equipped items",
+		usage:       "equipment",
+	}
+
+	g.commands["eq"] = CommandInfo{
+		timed:       false,
+		handler:     executeEquipmentCommand, // Alias for equipment
+		description: "Show your equipped items",
+		usage:       "eq",
+	}
 }
 
 // ValidateCommand checks if a command is valid and returns its verb and tokens

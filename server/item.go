@@ -77,27 +77,31 @@ type ItemData struct {
 }
 
 // Prototype represents an item template that can be instantiated
+// The unused directive is necessary because this struct is primarily used
+// for data storage and these fields are referenced in the CreateItemFromPrototype function
+//
+//nolint:staticcheck
 type Prototype struct {
-	id          uuid.UUID     // nolint:unused
-	name        string        // nolint:unused
-	description string        // nolint:unused
-	mass        float64       // nolint:unused
-	value       uint64        // nolint:unused
-	stackable   bool          // nolint:unused
-	maxStack    uint32        // nolint:unused
-	quantity    uint32        // nolint:unused
-	wearable    bool          // nolint:unused
-	wornOn      []string      // nolint:unused
-	verbs       map[string]string // nolint:unused
-	overrides   map[string]string // nolint:unused
-	traitMods   map[string]int8   // nolint:unused
-	container   bool          // nolint:unused
-	contents    []uuid.UUID   // nolint:unused
-	canPickUp   bool          // nolint:unused
-	metadata    map[string]string // nolint:unused
-	mutex       sync.RWMutex  // nolint:unused
-	lastEdited  time.Time     // nolint:unused
-	lastSaved   time.Time     // nolint:unused
+	id          uuid.UUID
+	name        string
+	description string
+	mass        float64
+	value       uint64
+	stackable   bool
+	maxStack    uint32
+	quantity    uint32
+	wearable    bool
+	wornOn      []string
+	verbs       map[string]string
+	overrides   map[string]string
+	traitMods   map[string]int8
+	container   bool
+	contents    []uuid.UUID
+	canPickUp   bool
+	metadata    map[string]string
+	mutex       sync.RWMutex
+	lastEdited  time.Time
+	lastSaved   time.Time
 }
 
 // GetInfo returns a formatted string with the prototype's information

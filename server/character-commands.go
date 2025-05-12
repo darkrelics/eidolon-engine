@@ -284,6 +284,80 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 	return nil
 }
 
+// executeEquipmentCommand displays only the character's equipped items
+func executeEquipmentCommand(character *Character, tokens []string) error {
+	if character == nil || character.player == nil {
+		return errors.New("invalid character state")
+	}
+
+	Logger.Debug("Player checking equipment", "characterName", character.name)
+
+	// Lock the character's inventory while we read it
+	character.mutex.RLock()
+	defer character.mutex.RUnlock()
+
+	var eqDisplay strings.Builder
+	eqDisplay.WriteString("\n\rEquipment:\n\r")
+	eqDisplay.WriteString("----------------\n\r")
+
+	// Check if character has any equipment
+	var wornItems []*Item
+	for _, item := range character.inventory {
+		if item != nil && item.isWorn {
+			wornItems = append(wornItems, item)
+		}
+	}
+
+	if len(wornItems) == 0 {
+		eqDisplay.WriteString("You are not wearing anything.\n\r")
+	} else {
+		// Organize items by wear location
+		wearSlots := make(map[string][]*Item)
+		for _, item := range wornItems {
+			for _, location := range item.wornOn {
+				wearSlots[location] = append(wearSlots[location], item)
+			}
+		}
+
+		// Display items by location
+		var locations []string
+		for location := range wearSlots {
+			locations = append(locations, location)
+		}
+		sort.Strings(locations)
+
+		for _, location := range locations {
+			items := wearSlots[location]
+			eqDisplay.WriteString(fmt.Sprintf("\n\r%s:\n\r", location))
+			for _, item := range items {
+				eqDisplay.WriteString(fmt.Sprintf("  %s\n\r", item.name))
+			}
+		}
+
+		// Display trait modifications if any
+		var totalMods = make(map[string]int8)
+		for _, item := range wornItems {
+			for trait, mod := range item.traitMods {
+				totalMods[trait] += mod
+			}
+		}
+
+		if len(totalMods) > 0 {
+			eqDisplay.WriteString("\n\rAttribute Modifiers:\n\r")
+			for trait, mod := range totalMods {
+				sign := "+"
+				if mod < 0 {
+					sign = ""
+				}
+				eqDisplay.WriteString(fmt.Sprintf("  %s: %s%d\n\r", trait, sign, mod))
+			}
+		}
+	}
+
+	character.player.commandOut <- eqDisplay.String()
+	return nil
+}
+
 // executeGoCommand handles movement between rooms
 func executeGoCommand(character *Character, tokens []string) error {
 	if character == nil || character.player == nil || character.room == nil {
