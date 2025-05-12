@@ -195,13 +195,14 @@ func (g *Game) LoadRooms() error {
 		}
 	}
 
-	// Load prototypes and items
-	if err := g.LoadPrototypes(); err != nil {
+	// Load item prototypes
+	prototypes, err := LoadPrototypes(g.database)
+	if err != nil {
 		Logger.Warn("Error loading prototypes", "error", err)
-	}
-
-	if err := g.LoadItems(); err != nil {
-		Logger.Warn("Error loading items", "error", err)
+	} else {
+		g.mutex.Lock()
+		g.prototypes = prototypes
+		g.mutex.Unlock()
 	}
 
 	return nil
