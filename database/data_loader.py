@@ -326,7 +326,7 @@ def display_archetypes(archetypes):
         print("  Abilities:")
         for ability, value in archetype.get("Abilities", {}).items():
             print(f"    {ability}: {value}")
-        
+
         # Add starting items information
         starting_items = archetype.get("StartingItems", [])
         if starting_items:
