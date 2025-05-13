@@ -79,7 +79,20 @@ func (g *Game) initCommands() {
 		usage:       "skill",
 	}
 
-	// Movement commands will be implemented using an alternative method
+	// Movement commands
+	g.commands["go"] = CommandInfo{
+		timed:       true,
+		handler:     executeGoCommand,
+		description: "Move in a direction or through an exit",
+		usage:       "go <direction|exit>",
+	}
+
+	g.commands["move"] = CommandInfo{
+		timed:       true,
+		handler:     executeGoCommand, // Alias to go
+		description: "Move in a direction or through an exit",
+		usage:       "move <direction|exit>",
+	}
 
 	// Speech commands
 	g.commands["say"] = CommandInfo{
