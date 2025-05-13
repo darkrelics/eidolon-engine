@@ -68,65 +68,10 @@ func executeHelpCommand(character *Character, tokens []string) error {
 
 	// Check if help was requested for a specific command
 	if len(tokens) > 1 {
-		return showCommandHelp(character, tokens[1])
+		return character.DisplayHelp(tokens[1])
 	}
 
-	// Collect all commands
-	character.game.mutex.RLock()
-
-	var commandNames []string
-	for name := range character.game.commands {
-		commandNames = append(commandNames, name)
-	}
-
-	character.game.mutex.RUnlock()
-
-	// Sort commands alphabetically
-	sort.Strings(commandNames)
-
-	// Build help message
-	var helpMsg strings.Builder
-	helpMsg.WriteString("\n\rAvailable Commands:\n\r\n\r")
-
-	character.game.mutex.RLock()
-
-	for _, cmd := range commandNames {
-		info := character.game.commands[cmd]
-		helpMsg.WriteString(fmt.Sprintf("  %-12s - %s\n\r", cmd, info.description))
-	}
-
-	character.game.mutex.RUnlock()
-
-	helpMsg.WriteString("\n\rType 'help <command>' for more information on a specific command.\n\r")
-
-	character.player.commandOut <- helpMsg.String()
-	return nil
-}
-
-// showCommandHelp displays help for a specific command
-func showCommandHelp(character *Character, cmdName string) error {
-	if character == nil || character.player == nil || character.game == nil {
-		return errors.New("invalid character state")
-	}
-
-	cmdName = strings.ToLower(cmdName)
-
-	character.game.mutex.RLock()
-	cmdInfo, exists := character.game.commands[cmdName]
-	character.game.mutex.RUnlock()
-
-	if !exists {
-		character.player.commandOut <- fmt.Sprintf("\n\rNo help available for '%s'. Command not found.\n\r", cmdName)
-		return nil
-	}
-
-	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("\n\rCommand: %s\n\r", cmdName))
-	msg.WriteString(fmt.Sprintf("Description: %s\n\r", cmdInfo.description))
-	msg.WriteString(fmt.Sprintf("Usage: %s\n\r", cmdInfo.usage))
-
-	character.player.commandOut <- msg.String()
-	return nil
+	return character.DisplayHelp("")
 }
 
 // executeLookCommand handles the look command
@@ -154,6 +99,9 @@ func executeLookCommand(character *Character, tokens []string) error {
 	// Get room description
 	description := character.room.GetDescription(character)
 	character.player.commandOut <- description
+
+	// Always send prompt after room description
+	character.SendPrompt()
 	return nil
 }
 
