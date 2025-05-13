@@ -154,7 +154,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
 				character.room = startRoom
 			}
-			
+
 			// Create starting items from prototypes
 			if len(archetypeObj.StartingItems) > 0 {
 				for _, startingItem := range archetypeObj.StartingItems {
@@ -164,7 +164,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 						Logger.Warn("Invalid prototype ID in archetype", "archetype", archetype, "prototypeID", startingItem.PrototypeID, "error", err)
 						continue
 					}
-					
+
 					// Find prototype in game's prototypes
 					p.server.game.mutex.RLock()
 					prototype, ok := p.server.game.prototypes[prototypeIDUUID]
@@ -173,24 +173,24 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 						Logger.Warn("Prototype not found", "archetype", archetype, "prototypeID", startingItem.PrototypeID)
 						continue
 					}
-					
+
 					// Create item from prototype
 					item, err := CreateItemFromPrototype(prototype, p.server.game)
 					if err != nil {
 						Logger.Error("Failed to create item from prototype", "prototypeID", startingItem.PrototypeID, "error", err)
 						continue
 					}
-					
+
 					// Set worn state if specified
 					if startingItem.IsWorn && item.wearable {
 						item.isWorn = true
-						
+
 						// Apply trait mods if item is worn
 						if len(item.traitMods) > 0 {
 							character.ApplyItemTraitMods(item)
 						}
 					}
-					
+
 					// Add to character's inventory
 					character.inventory[startingItem.Slot] = item
 					Logger.Debug("Added starting item to character", "characterName", character.name, "itemName", item.name, "slot", startingItem.Slot)
