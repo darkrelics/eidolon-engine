@@ -142,17 +142,59 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 	}
 
 	if archetype != "" {
-		if archetype, ok := p.server.game.archetypes[archetype]; ok {
-			for attr, value := range archetype.Attributes {
+		if archetypeObj, ok := p.server.game.archetypes[archetype]; ok {
+			for attr, value := range archetypeObj.Attributes {
 				character.attributes[attr] = value
 			}
 
-			for ability, value := range archetype.Abilities {
+			for ability, value := range archetypeObj.Abilities {
 				character.abilities[ability] = value
 			}
 
-			if startRoom, ok := p.server.game.rooms[archetype.StartRoom]; ok {
+			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
 				character.room = startRoom
+			}
+			
+			// Create starting items from prototypes
+			if len(archetypeObj.StartingItems) > 0 {
+				for _, startingItem := range archetypeObj.StartingItems {
+					// Find prototype by ID
+					prototypeIDUUID, err := uuid.Parse(startingItem.PrototypeID)
+					if err != nil {
+						Logger.Warn("Invalid prototype ID in archetype", "archetype", archetype, "prototypeID", startingItem.PrototypeID, "error", err)
+						continue
+					}
+					
+					// Find prototype in game's prototypes
+					p.server.game.mutex.RLock()
+					prototype, ok := p.server.game.prototypes[prototypeIDUUID]
+					p.server.game.mutex.RUnlock()
+					if !ok {
+						Logger.Warn("Prototype not found", "archetype", archetype, "prototypeID", startingItem.PrototypeID)
+						continue
+					}
+					
+					// Create item from prototype
+					item, err := CreateItemFromPrototype(prototype, p.server.game)
+					if err != nil {
+						Logger.Error("Failed to create item from prototype", "prototypeID", startingItem.PrototypeID, "error", err)
+						continue
+					}
+					
+					// Set worn state if specified
+					if startingItem.IsWorn && item.wearable {
+						item.isWorn = true
+						
+						// Apply trait mods if item is worn
+						if len(item.traitMods) > 0 {
+							character.ApplyItemTraitMods(item)
+						}
+					}
+					
+					// Add to character's inventory
+					character.inventory[startingItem.Slot] = item
+					Logger.Debug("Added starting item to character", "characterName", character.name, "itemName", item.name, "slot", startingItem.Slot)
+				}
 			}
 		} else {
 			Logger.Warn("Invalid archetype", "archetype", archetype)

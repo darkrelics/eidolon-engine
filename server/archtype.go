@@ -28,12 +28,19 @@ import (
 	"github.com/google/uuid"
 )
 
+type ArchetypeItem struct {
+	PrototypeID string `json:"PrototypeID" dynamodbav:"prototypeID"`
+	Slot        string `json:"Slot" dynamodbav:"slot"`
+	IsWorn      bool   `json:"IsWorn" dynamodbav:"isWorn"`
+}
+
 type Archetype struct {
 	ArchetypeName string             `json:"ArchetypeName" dynamodbav:"archetypeName"`
 	Description   string             `json:"Description" dynamodbav:"description"`
 	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"attributes"`
 	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"abilities"`
 	StartRoom     int64              `json:"StartRoom" dynamodbav:"startRoom"`
+	StartingItems []ArchetypeItem    `json:"StartingItems" dynamodbav:"startingItems"`
 }
 
 // Display Archetypes for debugging purposes.

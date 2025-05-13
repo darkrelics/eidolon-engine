@@ -142,6 +142,7 @@ def store_archetypes(dynamodb, archetypes_data):
                     "Attributes": attributes,
                     "Abilities": abilities,
                     "StartRoom": archetype.get("StartRoom", 0),
+                    "StartingItems": archetype.get("StartingItems", []),
                 }
                 batch.put_item(Item=convert_to_dynamodb_format(archetype_item))
         print("Archetype data stored in DynamoDB successfully")
@@ -325,6 +326,15 @@ def display_archetypes(archetypes):
         print("  Abilities:")
         for ability, value in archetype.get("Abilities", {}).items():
             print(f"    {ability}: {value}")
+        
+        # Add starting items information
+        starting_items = archetype.get("StartingItems", [])
+        if starting_items:
+            print("  Starting Items:")
+            for item in starting_items:
+                print(f"    Prototype: {item.get('PrototypeID', 'Unknown')}")
+                print(f"      Slot: {item.get('Slot', 'Unspecified')}")
+                print(f"      Worn: {item.get('IsWorn', False)}")
         print()
 
 

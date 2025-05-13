@@ -94,43 +94,6 @@ func (g *Game) initCommands() {
 		usage:       "move <direction|exit>",
 	}
 
-	// Speech commands
-	g.commands["say"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Say something to everyone in the room",
-		usage:       "say <message>",
-	}
-
-	g.commands["emote"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Express an action or emotion in the room",
-		usage:       "emote <action>",
-	}
-
-	// Item commands
-	g.commands["get"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Pick up an item",
-		usage:       "get <item>",
-	}
-
-	g.commands["take"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Pick up an item",
-		usage:       "take <item>",
-	}
-
-	g.commands["drop"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Drop an item from your inventory",
-		usage:       "drop <item>",
-	}
-
 	g.commands["inventory"] = CommandInfo{
 		timed:       false,
 		handler:     executeInventoryCommand,
@@ -150,21 +113,6 @@ func (g *Game) initCommands() {
 		handler:     executeInventoryCommand, // Alias for inventory
 		description: "Show your inventory",
 		usage:       "i",
-	}
-
-	// Equipment commands
-	g.commands["wear"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Wear or equip an item",
-		usage:       "wear <item>",
-	}
-
-	g.commands["remove"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Remove a worn item",
-		usage:       "remove <item>",
 	}
 
 	g.commands["equipment"] = CommandInfo{
