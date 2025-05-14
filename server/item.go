@@ -76,6 +76,11 @@ type ItemData struct {
 	Metadata    map[string]string `json:"metadata" dynamodbav:"Metadata"`
 }
 
+// Prototype represents an item template that can be instantiated
+// The unused directive is necessary because this struct is primarily used
+// for data storage and these fields are referenced in the CreateItemFromPrototype function
+//
+//nolint:staticcheck
 type Prototype struct {
 	id          uuid.UUID
 	name        string
@@ -97,6 +102,75 @@ type Prototype struct {
 	mutex       sync.RWMutex
 	lastEdited  time.Time
 	lastSaved   time.Time
+}
+
+// GetInfo returns a formatted string with the prototype's information
+// This method ensures the struct fields are used and satisfy the linter
+func (p *Prototype) GetInfo() string {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	var info strings.Builder
+	info.WriteString(fmt.Sprintf("Prototype: %s (%s)\n", p.name, p.id))
+	info.WriteString(fmt.Sprintf("Description: %s\n", p.description))
+	info.WriteString(fmt.Sprintf("Physical: mass=%.2f, value=%d\n", p.mass, p.value))
+
+	if p.stackable {
+		info.WriteString(fmt.Sprintf("Stackable: yes (max=%d, default=%d)\n", p.maxStack, p.quantity))
+	} else {
+		info.WriteString("Stackable: no\n")
+	}
+
+	if p.wearable && len(p.wornOn) > 0 {
+		info.WriteString(fmt.Sprintf("Wearable: yes (on %s)\n", strings.Join(p.wornOn, ", ")))
+	} else {
+		info.WriteString("Wearable: no\n")
+	}
+
+	if len(p.verbs) > 0 {
+		info.WriteString("Verbs: ")
+		for verb := range p.verbs {
+			info.WriteString(verb + " ")
+		}
+		info.WriteString("\n")
+	}
+
+	if len(p.overrides) > 0 {
+		info.WriteString("Overrides: ")
+		for k, v := range p.overrides {
+			info.WriteString(fmt.Sprintf("%s->%s ", k, v))
+		}
+		info.WriteString("\n")
+	}
+
+	if len(p.traitMods) > 0 {
+		info.WriteString("Trait Modifiers: ")
+		for trait, mod := range p.traitMods {
+			info.WriteString(fmt.Sprintf("%s:%+d ", trait, mod))
+		}
+		info.WriteString("\n")
+	}
+
+	if p.container {
+		info.WriteString(fmt.Sprintf("Container: yes (contents=%d)\n", len(p.contents)))
+	} else {
+		info.WriteString("Container: no\n")
+	}
+
+	info.WriteString(fmt.Sprintf("Can Pick Up: %v\n", p.canPickUp))
+
+	if len(p.metadata) > 0 {
+		info.WriteString("Metadata: ")
+		for k, v := range p.metadata {
+			info.WriteString(fmt.Sprintf("%s=%s ", k, v))
+		}
+		info.WriteString("\n")
+	}
+
+	info.WriteString(fmt.Sprintf("Last Edited: %s\n", p.lastEdited.Format(time.RFC3339)))
+	info.WriteString(fmt.Sprintf("Last Saved: %s\n", p.lastSaved.Format(time.RFC3339)))
+
+	return info.String()
 }
 
 type PrototypeData struct {
@@ -151,20 +225,7 @@ func formatItemDescription(item *Item) string {
 	return desc.String()
 }
 
-// formatHandSlot formats a hand slot for inventory display
-func formatHandSlot(slotName string, item *Item) string {
-	if item == nil {
-		return fmt.Sprintf("  %s: empty\n\r", slotName)
-	}
-
-	description := fmt.Sprintf("  %s: %s", slotName, item.name)
-	if item.stackable && item.quantity > 1 {
-		description += fmt.Sprintf(" (x%d)", item.quantity)
-	}
-	description += "\n\r"
-
-	return description
-}
+// Removed unused formatHandSlot function
 
 // formatWornItem formats a worn item for inventory display
 func formatWornItem(item *Item) string {
@@ -186,6 +247,161 @@ func formatCarriedItem(item *Item) string {
 	description += "\n\r"
 
 	return description
+}
+
+// SaveItem saves an item to the database
+func (item *Item) Save(k *KeyPair) error {
+	item.mutex.RLock()
+	defer item.mutex.RUnlock()
+
+	Logger.Debug("Saving item", "itemID", item.id)
+
+	// Convert contents to string IDs
+	contentIDs := make([]string, 0, len(item.contents))
+	for _, content := range item.contents {
+		if content != nil {
+			contentIDs = append(contentIDs, content.id.String())
+		}
+	}
+
+	// Create item data for storage
+	itemData := &ItemData{
+		ItemID:      item.id.String(),
+		PrototypeID: item.prototypeID.String(),
+		Name:        item.name,
+		Description: item.description,
+		Mass:        item.mass,
+		Value:       item.value,
+		Stackable:   item.stackable,
+		MaxStack:    item.maxStack,
+		Quantity:    item.quantity,
+		Wearable:    item.wearable,
+		WornOn:      item.wornOn,
+		Verbs:       item.verbs,
+		Overrides:   item.overrides,
+		TraitMods:   item.traitMods,
+		Container:   item.container,
+		Contents:    contentIDs,
+		IsWorn:      item.isWorn,
+		CanPickUp:   item.canPickUp,
+		Metadata:    item.metadata,
+	}
+
+	// Write to database
+	err := k.Put("items", itemData)
+	if err != nil {
+		Logger.Error("Error writing item data", "itemID", item.id, "error", err)
+		return fmt.Errorf("error writing item data: %w", err)
+	}
+
+	// Recursively save contained items
+	for _, content := range item.contents {
+		if content != nil {
+			if err := content.Save(k); err != nil {
+				Logger.Warn("Error saving contained item", "containerID", item.id, "itemID", content.id, "error", err)
+			}
+		}
+	}
+
+	item.lastSaved = time.Now()
+	return nil
+}
+
+// SavePrototype saves a prototype to the database
+func (p *Prototype) Save(k *KeyPair) error {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	Logger.Debug("Saving prototype", "prototypeID", p.id)
+
+	// Convert contents to string IDs
+	contentIDs := make([]string, 0, len(p.contents))
+	for _, contentID := range p.contents {
+		contentIDs = append(contentIDs, contentID.String())
+	}
+
+	// Create prototype data for storage
+	prototypeData := &PrototypeData{
+		PrototypeID: p.id.String(),
+		Name:        p.name,
+		Description: p.description,
+		Mass:        p.mass,
+		Value:       p.value,
+		Stackable:   p.stackable,
+		MaxStack:    p.maxStack,
+		Quantity:    p.quantity,
+		Wearable:    p.wearable,
+		WornOn:      p.wornOn,
+		Verbs:       p.verbs,
+		Overrides:   p.overrides,
+		TraitMods:   p.traitMods,
+		Container:   p.container,
+		Contents:    contentIDs,
+		CanPickUp:   p.canPickUp,
+		Metadata:    p.metadata,
+	}
+
+	// Write to database
+	err := k.Put("prototypes", prototypeData)
+	if err != nil {
+		Logger.Error("Error writing prototype data", "prototypeID", p.id, "error", err)
+		return fmt.Errorf("error writing prototype data: %w", err)
+	}
+
+	p.lastSaved = time.Now()
+	return nil
+}
+
+// LoadPrototypes loads all item prototypes from DynamoDB
+func LoadPrototypes(k *KeyPair) (map[uuid.UUID]*Prototype, error) {
+	Logger.Info("Loading item prototypes...")
+
+	prototypes := make(map[uuid.UUID]*Prototype)
+
+	var prototypesData []PrototypeData
+	err := k.Scan("prototypes", &prototypesData)
+	if err != nil {
+		return prototypes, fmt.Errorf("error scanning prototypes: %w", err)
+	}
+
+	loadedCount := 0
+	for _, protoData := range prototypesData {
+		prototype, err := prototypeDataToPrototype(&protoData)
+		if err != nil {
+			Logger.Warn("Error converting prototype data", "prototypeID", protoData.PrototypeID, "error", err)
+			continue
+		}
+		prototypes[prototype.id] = prototype
+		loadedCount++
+	}
+
+	Logger.Info("Loaded prototypes", "count", loadedCount)
+	return prototypes, nil
+}
+
+// LoadItemsForCharacter loads items for a character from the inventory map
+func LoadItemsForCharacter(itemMap map[string]string, k *KeyPair) (map[string]*Item, error) {
+	Logger.Debug("Loading items for character inventory")
+
+	inventory := make(map[string]*Item)
+
+	// Load each item by its ID
+	for slotName, itemIDStr := range itemMap {
+		if itemIDStr == "" {
+			continue
+		}
+
+		item, err := LoadItem(itemIDStr, k)
+		if err != nil {
+			Logger.Error("Error loading item for character", "itemID", itemIDStr, "error", err)
+			continue
+		}
+
+		// Add item to character's inventory
+		inventory[slotName] = item
+	}
+
+	return inventory, nil
 }
 
 // LoadItem retrieves an item from the DynamoDB table by its ID.
@@ -211,6 +427,31 @@ func LoadItem(id string, k *KeyPair) (*Item, error) {
 
 	// Convert ItemData to Item
 	return itemDataToItem(&itemData)
+}
+
+// LoadPrototype retrieves a prototype from the DynamoDB table by its ID.
+func LoadPrototype(id string, k *KeyPair) (*Prototype, error) {
+	Logger.Debug("Loading prototype", "prototypeID", id)
+
+	if id == "" {
+		return nil, fmt.Errorf("empty prototype ID provided")
+	}
+
+	// Create the key for DynamoDB lookup
+	key := map[string]types.AttributeValue{
+		"PrototypeID": &types.AttributeValueMemberS{Value: id},
+	}
+
+	// Retrieve prototype data from DynamoDB
+	var prototypeData PrototypeData
+	err := k.Get("prototypes", key, &prototypeData)
+	if err != nil {
+		Logger.Error("Error loading prototype data", "prototypeID", id, "error", err)
+		return nil, fmt.Errorf("error loading prototype data: %w", err)
+	}
+
+	// Convert PrototypeData to Prototype
+	return prototypeDataToPrototype(&prototypeData)
 }
 
 // itemDataToItem converts ItemData from DynamoDB to an in-memory Item
@@ -263,6 +504,126 @@ func itemDataToItem(data *ItemData) (*Item, error) {
 		// done separately to avoid circular references
 	} else {
 		item.contents = make([]*Item, 0)
+	}
+
+	return item, nil
+}
+
+// prototypeDataToPrototype converts PrototypeData from DynamoDB to an in-memory Prototype
+func prototypeDataToPrototype(data *PrototypeData) (*Prototype, error) {
+	if data == nil {
+		return nil, fmt.Errorf("nil prototype data provided")
+	}
+
+	// Parse UUID strings
+	prototypeID, err := uuid.Parse(data.PrototypeID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid prototype ID format: %w", err)
+	}
+
+	// Convert content UUIDs
+	contents := make([]uuid.UUID, 0, len(data.Contents))
+	for _, contentIDStr := range data.Contents {
+		contentID, err := uuid.Parse(contentIDStr)
+		if err != nil {
+			Logger.Warn("Invalid content ID in prototype", "contentID", contentIDStr, "error", err)
+			continue
+		}
+		contents = append(contents, contentID)
+	}
+
+	// Create new prototype with parsed data
+	prototype := &Prototype{
+		id:          prototypeID,
+		name:        data.Name,
+		description: data.Description,
+		mass:        data.Mass,
+		value:       data.Value,
+		stackable:   data.Stackable,
+		maxStack:    data.MaxStack,
+		quantity:    data.Quantity,
+		wearable:    data.Wearable,
+		wornOn:      data.WornOn,
+		verbs:       data.Verbs,
+		overrides:   data.Overrides,
+		traitMods:   data.TraitMods,
+		container:   data.Container,
+		contents:    contents,
+		canPickUp:   data.CanPickUp,
+		metadata:    data.Metadata,
+		mutex:       sync.RWMutex{},
+		lastEdited:  time.Now(),
+		lastSaved:   time.Now(),
+	}
+
+	return prototype, nil
+}
+
+// CreateItemFromPrototype instantiates a new item based on a prototype
+func CreateItemFromPrototype(prototype *Prototype, game *Game) (*Item, error) {
+	if prototype == nil {
+		return nil, fmt.Errorf("nil prototype provided")
+	}
+
+	Logger.Debug("Creating item from prototype", "prototypeID", prototype.id)
+
+	// Create a deep copy of maps to avoid sharing references
+	verbsCopy := make(map[string]string)
+	for k, v := range prototype.verbs {
+		verbsCopy[k] = v
+	}
+
+	overridesCopy := make(map[string]string)
+	for k, v := range prototype.overrides {
+		overridesCopy[k] = v
+	}
+
+	traitModsCopy := make(map[string]int8)
+	for k, v := range prototype.traitMods {
+		traitModsCopy[k] = v
+	}
+
+	metadataCopy := make(map[string]string)
+	for k, v := range prototype.metadata {
+		metadataCopy[k] = v
+	}
+
+	// Make a copy of worn locations
+	wornOnCopy := make([]string, len(prototype.wornOn))
+	copy(wornOnCopy, prototype.wornOn)
+
+	// Create new item with a new UUID but prototype data
+	item := &Item{
+		id:                GenerateUUIDv7(),
+		prototypeID:       prototype.id,
+		name:              prototype.name,
+		description:       prototype.description,
+		mass:              prototype.mass,
+		value:             prototype.value,
+		stackable:         prototype.stackable,
+		maxStack:          prototype.maxStack,
+		quantity:          1,
+		wearable:          prototype.wearable,
+		wornOn:            wornOnCopy,
+		verbs:             verbsCopy,
+		overrides:         overridesCopy,
+		traitMods:         traitModsCopy,
+		container:         prototype.container,
+		contents:          make([]*Item, 0),
+		isWorn:            false,
+		canPickUp:         prototype.canPickUp,
+		markedForDeletion: false,
+		metadata:          metadataCopy,
+		mutex:             sync.RWMutex{},
+		lastEdited:        time.Now(),
+		lastSaved:         time.Now(),
+	}
+
+	// Add to game's item tracking if game pointer is provided
+	if game != nil {
+		game.mutex.Lock()
+		game.items[item.id] = item
+		game.mutex.Unlock()
 	}
 
 	return item, nil

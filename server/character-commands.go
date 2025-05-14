@@ -68,65 +68,10 @@ func executeHelpCommand(character *Character, tokens []string) error {
 
 	// Check if help was requested for a specific command
 	if len(tokens) > 1 {
-		return showCommandHelp(character, tokens[1])
+		return character.DisplayHelp(tokens[1])
 	}
 
-	// Collect all commands
-	character.game.mutex.RLock()
-
-	var commandNames []string
-	for name := range character.game.commands {
-		commandNames = append(commandNames, name)
-	}
-
-	character.game.mutex.RUnlock()
-
-	// Sort commands alphabetically
-	sort.Strings(commandNames)
-
-	// Build help message
-	var helpMsg strings.Builder
-	helpMsg.WriteString("\n\rAvailable Commands:\n\r\n\r")
-
-	character.game.mutex.RLock()
-
-	for _, cmd := range commandNames {
-		info := character.game.commands[cmd]
-		helpMsg.WriteString(fmt.Sprintf("  %-12s - %s\n\r", cmd, info.description))
-	}
-
-	character.game.mutex.RUnlock()
-
-	helpMsg.WriteString("\n\rType 'help <command>' for more information on a specific command.\n\r")
-
-	character.player.commandOut <- helpMsg.String()
-	return nil
-}
-
-// showCommandHelp displays help for a specific command
-func showCommandHelp(character *Character, cmdName string) error {
-	if character == nil || character.player == nil || character.game == nil {
-		return errors.New("invalid character state")
-	}
-
-	cmdName = strings.ToLower(cmdName)
-
-	character.game.mutex.RLock()
-	cmdInfo, exists := character.game.commands[cmdName]
-	character.game.mutex.RUnlock()
-
-	if !exists {
-		character.player.commandOut <- fmt.Sprintf("\n\rNo help available for '%s'. Command not found.\n\r", cmdName)
-		return nil
-	}
-
-	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("\n\rCommand: %s\n\r", cmdName))
-	msg.WriteString(fmt.Sprintf("Description: %s\n\r", cmdInfo.description))
-	msg.WriteString(fmt.Sprintf("Usage: %s\n\r", cmdInfo.usage))
-
-	character.player.commandOut <- msg.String()
-	return nil
+	return character.DisplayHelp("")
 }
 
 // executeLookCommand handles the look command
@@ -154,6 +99,9 @@ func executeLookCommand(character *Character, tokens []string) error {
 	// Get room description
 	description := character.room.GetDescription(character)
 	character.player.commandOut <- description
+
+	// Always send prompt after room description
+	character.SendPrompt()
 	return nil
 }
 
@@ -226,6 +174,135 @@ func executeSkillCommand(character *Character, tokens []string) error {
 	// Get skill display from character method
 	skillInfo := character.GetSkillInfo()
 	character.player.commandOut <- skillInfo
+	return nil
+}
+
+// executeInventoryCommand displays the character's inventory
+func executeInventoryCommand(character *Character, tokens []string) error {
+	if character == nil || character.player == nil {
+		return errors.New("invalid character state")
+	}
+
+	Logger.Debug("Player checking inventory", "characterName", character.name)
+
+	// Lock the character's inventory while we read it
+	character.mutex.RLock()
+	defer character.mutex.RUnlock()
+
+	var invDisplay strings.Builder
+	invDisplay.WriteString("\n\rInventory:\n\r")
+	invDisplay.WriteString("----------------\n\r")
+
+	if len(character.inventory) == 0 {
+		invDisplay.WriteString("You are not carrying anything.\n\r")
+	} else {
+		// Separate worn and carried items
+		var wornItems, carriedItems []*Item
+
+		for _, item := range character.inventory {
+			if item == nil {
+				continue
+			}
+
+			if item.isWorn {
+				wornItems = append(wornItems, item)
+			} else {
+				carriedItems = append(carriedItems, item)
+			}
+		}
+
+		// Display worn items first
+		if len(wornItems) > 0 {
+			invDisplay.WriteString("\n\rYou are wearing:\n\r")
+			for _, item := range wornItems {
+				invDisplay.WriteString(formatWornItem(item))
+			}
+		}
+
+		// Then display carried items
+		if len(carriedItems) > 0 {
+			invDisplay.WriteString("\n\rYou are carrying:\n\r")
+			for _, item := range carriedItems {
+				invDisplay.WriteString(formatCarriedItem(item))
+			}
+		}
+	}
+
+	character.player.commandOut <- invDisplay.String()
+	return nil
+}
+
+// executeEquipmentCommand displays only the character's equipped items
+func executeEquipmentCommand(character *Character, tokens []string) error {
+	if character == nil || character.player == nil {
+		return errors.New("invalid character state")
+	}
+
+	Logger.Debug("Player checking equipment", "characterName", character.name)
+
+	// Lock the character's inventory while we read it
+	character.mutex.RLock()
+	defer character.mutex.RUnlock()
+
+	var eqDisplay strings.Builder
+	eqDisplay.WriteString("\n\rEquipment:\n\r")
+	eqDisplay.WriteString("----------------\n\r")
+
+	// Check if character has any equipment
+	var wornItems []*Item
+	for _, item := range character.inventory {
+		if item != nil && item.isWorn {
+			wornItems = append(wornItems, item)
+		}
+	}
+
+	if len(wornItems) == 0 {
+		eqDisplay.WriteString("You are not wearing anything.\n\r")
+	} else {
+		// Organize items by wear location
+		wearSlots := make(map[string][]*Item)
+		for _, item := range wornItems {
+			for _, location := range item.wornOn {
+				wearSlots[location] = append(wearSlots[location], item)
+			}
+		}
+
+		// Display items by location
+		var locations []string
+		for location := range wearSlots {
+			locations = append(locations, location)
+		}
+		sort.Strings(locations)
+
+		for _, location := range locations {
+			items := wearSlots[location]
+			eqDisplay.WriteString(fmt.Sprintf("\n\r%s:\n\r", location))
+			for _, item := range items {
+				eqDisplay.WriteString(fmt.Sprintf("  %s\n\r", item.name))
+			}
+		}
+
+		// Display trait modifications if any
+		var totalMods = make(map[string]int8)
+		for _, item := range wornItems {
+			for trait, mod := range item.traitMods {
+				totalMods[trait] += mod
+			}
+		}
+
+		if len(totalMods) > 0 {
+			eqDisplay.WriteString("\n\rAttribute Modifiers:\n\r")
+			for trait, mod := range totalMods {
+				sign := "+"
+				if mod < 0 {
+					sign = ""
+				}
+				eqDisplay.WriteString(fmt.Sprintf("  %s: %s%d\n\r", trait, sign, mod))
+			}
+		}
+	}
+
+	character.player.commandOut <- eqDisplay.String()
 	return nil
 }
 

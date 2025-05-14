@@ -19,6 +19,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -458,10 +459,43 @@ func (p *Player) PlayCharacter() {
 		p.character.end = make(chan bool, 5)
 	}
 
-	// Run the character's lifecycle (this blocks until character session ends)
+	// Create a context for the forwarding goroutine
+	ctx, cancel := context.WithCancel(p.ctx)
+	defer cancel()
+
+	// Start a goroutine to forward player input to character
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				Logger.Warn("Recovered in command forwarding", "player", p.id, "recover", r)
+			}
+		}()
+
+		for {
+			select {
+			case input, ok := <-p.commandIn:
+				if !ok {
+					return
+				}
+				// Forward the input to character
+				select {
+				case p.character.playerCommandIn <- input:
+					// Successfully forwarded
+				case <-ctx.Done():
+					return
+				}
+			case <-p.character.end:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Run the character's lifecycle (blocks until character session ends)
 	p.character.Run(p.character.end)
 
-	// Character Run has completed (due to quit command or other exit condition)
+	// Character Run has completed
 	p.character = nil
 
 	// Ensure we're fully back to console mode

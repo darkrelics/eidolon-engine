@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Room command messages
@@ -91,11 +93,355 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 
 // handleItemCommand processes item-related commands like get, take, drop, etc.
 func handleItemCommand(cmd *CommandRequest) *CommandResponse {
-	// This is a placeholder. Real implementation would handle items
+	if len(cmd.Args) < 2 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("what do you want to %s?", cmd.Verb),
+			Timestamp: time.Now(),
+		}
+	}
+
+	targetName := strings.ToLower(strings.Join(cmd.Args[1:], " "))
+
+	switch cmd.Verb {
+	case "get", "take":
+		return handleGetCommand(cmd, targetName)
+	case "drop":
+		return handleDropCommand(cmd, targetName)
+	case "wear", "wield", "equip":
+		return handleWearCommand(cmd, targetName)
+	case "remove", "unwear", "unequip":
+		return handleRemoveCommand(cmd, targetName)
+	default:
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid item command: %s", cmd.Verb),
+			Timestamp: time.Now(),
+		}
+	}
+}
+
+// handleGetCommand processes the get/take command
+func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
+	character := cmd.Character
+	room := character.room
+
+	// Check if room or character is valid
+	if room == nil || character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid room or character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Acquire room lock to search for the item
+	room.mutex.Lock()
+	defer room.mutex.Unlock()
+
+	// Find the item in the room
+	var targetItem *Item
+	var targetItemID uuid.UUID
+
+	for id, item := range room.items {
+		if item != nil && strings.Contains(strings.ToLower(item.name), targetName) {
+			if !item.canPickUp {
+				return &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Error:     fmt.Errorf("you cannot pick that up"),
+					Timestamp: time.Now(),
+				}
+			}
+			targetItem = item
+			targetItemID = id
+			break
+		}
+	}
+
+	if targetItem == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you don't see that here"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Remove from room
+	delete(room.items, targetItemID)
+
+	// Add to character's inventory
+	character.mutex.Lock()
+	slotName := targetItem.name // Use the item name as the slot name
+	character.inventory[slotName] = targetItem
+	character.mutex.Unlock()
+
+	// Create success message
+	message := fmt.Sprintf("\n\rYou pick up %s.\n\r", targetItem.name)
+
+	// Notify the room
+	SendRoomMessageExcept(room, fmt.Sprintf("\n\r%s picks up %s.\n\r", character.name, targetItem.name), character)
+
 	return &CommandResponse{
 		RequestID: cmd.ID,
-		Success:   false,
-		Error:     fmt.Errorf("item commands are not implemented yet"),
+		Success:   true,
+		Message:   message,
+		Timestamp: time.Now(),
+	}
+}
+
+// handleDropCommand processes the drop command
+func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse {
+	character := cmd.Character
+	room := character.room
+
+	// Check if room or character is valid
+	if room == nil || character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid room or character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Find the item in the character's inventory
+	character.mutex.Lock()
+	var itemToRemove *Item
+	var slotToRemove string
+
+	for slot, item := range character.inventory {
+		if item != nil && strings.Contains(strings.ToLower(item.name), targetName) {
+			if item.isWorn {
+				character.mutex.Unlock()
+				return &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Error:     fmt.Errorf("you need to remove that first"),
+					Timestamp: time.Now(),
+				}
+			}
+			itemToRemove = item
+			slotToRemove = slot
+			break
+		}
+	}
+
+	if itemToRemove == nil {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you don't have that"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Remove from inventory
+	delete(character.inventory, slotToRemove)
+	character.mutex.Unlock()
+
+	// Add to room
+	room.mutex.Lock()
+	room.items[itemToRemove.id] = itemToRemove
+	room.mutex.Unlock()
+
+	// Create success message
+	message := fmt.Sprintf("\n\rYou drop %s.\n\r", itemToRemove.name)
+
+	// Notify the room
+	SendRoomMessageExcept(room, fmt.Sprintf("\n\r%s drops %s.\n\r", character.name, itemToRemove.name), character)
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   message,
+		Timestamp: time.Now(),
+	}
+}
+
+// handleWearCommand processes the wear/equip command
+func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse {
+	character := cmd.Character
+
+	// Check if character is valid
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Find the item in the character's inventory
+	character.mutex.Lock()
+	defer character.mutex.Unlock()
+
+	var itemToWear *Item
+
+	for _, item := range character.inventory {
+		if item != nil && strings.Contains(strings.ToLower(item.name), targetName) {
+			itemToWear = item
+			break
+		}
+	}
+
+	// Check if item exists
+	if itemToWear == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you don't have that"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if item is already worn
+	if itemToWear.isWorn {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you're already wearing that"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if item is wearable
+	if !itemToWear.wearable || len(itemToWear.wornOn) == 0 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you can't wear that"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Validate that the wear locations are valid
+	for _, location := range itemToWear.wornOn {
+		if !WearLocations[location] {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("invalid wear location: %s", location),
+				Timestamp: time.Now(),
+			}
+		}
+	}
+
+	// Check if wear locations are already occupied
+	// Build a map of worn locations
+	wornLocations := make(map[string]bool)
+	for _, item := range character.inventory {
+		if item != nil && item.isWorn {
+			for _, loc := range item.wornOn {
+				wornLocations[loc] = true
+			}
+		}
+	}
+
+	// Check if any locations conflict
+	for _, location := range itemToWear.wornOn {
+		if wornLocations[location] {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("you're already wearing something on your %s", location),
+				Timestamp: time.Now(),
+			}
+		}
+	}
+
+	// Mark item as worn
+	itemToWear.isWorn = true
+
+	// Apply trait modifications
+	if len(itemToWear.traitMods) > 0 {
+		character.ApplyItemTraitMods(itemToWear)
+	}
+
+	// Create success message
+	wearLocations := strings.Join(itemToWear.wornOn, " and ")
+	message := fmt.Sprintf("\n\rYou wear %s on your %s.\n\r", itemToWear.name, wearLocations)
+
+	// Notify the room
+	if character.room != nil {
+		SendRoomMessageExcept(character.room,
+			fmt.Sprintf("\n\r%s wears %s.\n\r", character.name, itemToWear.name),
+			character)
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   message,
+		Timestamp: time.Now(),
+	}
+}
+
+// handleRemoveCommand processes the remove/unwear command
+func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandResponse {
+	character := cmd.Character
+
+	// Check if character is valid
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Find the item in the character's inventory
+	character.mutex.Lock()
+	defer character.mutex.Unlock()
+
+	var itemToRemove *Item
+
+	for _, item := range character.inventory {
+		if item != nil && item.isWorn && strings.Contains(strings.ToLower(item.name), targetName) {
+			itemToRemove = item
+			break
+		}
+	}
+
+	// Check if item exists
+	if itemToRemove == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you're not wearing that"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Mark item as not worn
+	itemToRemove.isWorn = false
+
+	// Remove trait modifications
+	if len(itemToRemove.traitMods) > 0 {
+		character.RemoveItemTraitMods(itemToRemove)
+	}
+
+	// Create success message
+	message := fmt.Sprintf("\n\rYou remove %s.\n\r", itemToRemove.name)
+
+	// Notify the room
+	if character.room != nil {
+		SendRoomMessageExcept(character.room,
+			fmt.Sprintf("\n\r%s removes %s.\n\r", character.name, itemToRemove.name),
+			character)
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   message,
 		Timestamp: time.Now(),
 	}
 }

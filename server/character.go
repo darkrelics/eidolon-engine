@@ -142,17 +142,59 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 	}
 
 	if archetype != "" {
-		if archetype, ok := p.server.game.archetypes[archetype]; ok {
-			for attr, value := range archetype.Attributes {
+		if archetypeObj, ok := p.server.game.archetypes[archetype]; ok {
+			for attr, value := range archetypeObj.Attributes {
 				character.attributes[attr] = value
 			}
 
-			for ability, value := range archetype.Abilities {
+			for ability, value := range archetypeObj.Abilities {
 				character.abilities[ability] = value
 			}
 
-			if startRoom, ok := p.server.game.rooms[archetype.StartRoom]; ok {
+			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
 				character.room = startRoom
+			}
+
+			// Create starting items from prototypes
+			if len(archetypeObj.StartingItems) > 0 {
+				for _, startingItem := range archetypeObj.StartingItems {
+					// Find prototype by ID
+					prototypeIDUUID, err := uuid.Parse(startingItem.PrototypeID)
+					if err != nil {
+						Logger.Warn("Invalid prototype ID in archetype", "archetype", archetype, "prototypeID", startingItem.PrototypeID, "error", err)
+						continue
+					}
+
+					// Find prototype in game's prototypes
+					p.server.game.mutex.RLock()
+					prototype, ok := p.server.game.prototypes[prototypeIDUUID]
+					p.server.game.mutex.RUnlock()
+					if !ok {
+						Logger.Warn("Prototype not found", "archetype", archetype, "prototypeID", startingItem.PrototypeID)
+						continue
+					}
+
+					// Create item from prototype
+					item, err := CreateItemFromPrototype(prototype, p.server.game)
+					if err != nil {
+						Logger.Error("Failed to create item from prototype", "prototypeID", startingItem.PrototypeID, "error", err)
+						continue
+					}
+
+					// Set worn state if specified
+					if startingItem.IsWorn && item.wearable {
+						item.isWorn = true
+
+						// Apply trait mods if item is worn
+						if len(item.traitMods) > 0 {
+							character.ApplyItemTraitMods(item)
+						}
+					}
+
+					// Add to character's inventory
+					character.inventory[startingItem.Slot] = item
+					Logger.Debug("Added starting item to character", "characterName", character.name, "itemName", item.name, "slot", startingItem.Slot)
+				}
 			}
 		} else {
 			Logger.Warn("Invalid archetype", "archetype", archetype)
@@ -174,114 +216,10 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 }
 
 // Run is the main loop that handles player commands.
+// This is now a simple wrapper around RunConsole for backward compatibility
 func (c *Character) Run(done chan bool) {
-	if c == nil || c.player == nil {
-		Logger.Error("Invalid character or player in Run method")
-		done <- true
-		return
-	}
-
-	// Ensure character is properly stopped when the function exits
-	defer c.Stop(done)
-
 	Logger.Debug("Starting character run", "characterName", c.name)
-
-	// If the room is nil, move the character to room 0
-	if c.room == nil {
-		Logger.Warn("Character room is nil, defaulting to room ID 0", "characterName", c.name)
-		c.room = c.game.rooms[0]
-	}
-
-	// Add character to game's active characters
-	c.game.mutex.Lock()
-	c.game.characters[c.id] = c
-	c.game.mutex.Unlock()
-
-	// Add character to the room
-	c.room.mutex.Lock()
-	if c.room.characters == nil {
-		c.room.characters = make(map[uuid.UUID]*Character)
-	}
-	c.room.characters[c.id] = c
-	// Update room activity timestamp
-	c.room.lastActive = time.Now()
-	c.room.mutex.Unlock()
-
-	// Call HandleCharacterEntry to reset idle counter and activate scripts
-	c.room.HandleCharacterEntry()
-
-	// Notify room of arrival (without holding locks)
-	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
-
-	// Show initial room description
-	if err := executeLookCommand(c, []string{"look"}); err != nil {
-		Logger.Warn("Failed to show initial room", "characterName", c.name, "error", err)
-	}
-
-	// Send initial prompt
-	c.playerCommandOut <- c.prompt
-
-	const idleTimeout = 30 * time.Second
-	timer := time.NewTimer(idleTimeout)
-	defer timer.Stop()
-
-	// Channel to track when a command is processing
-	commandProcessing := make(chan struct{}, 1)
-
-	for {
-		timer.Reset(idleTimeout)
-
-		select {
-		case inputLine, ok := <-c.playerCommandIn:
-			if !ok {
-				Logger.Info("Player input channel closed", "characterName", c.name)
-				return
-			}
-
-			// Signal that a command is processing
-			select {
-			case commandProcessing <- struct{}{}:
-			default:
-				// Channel already has a value, which is fine
-			}
-
-			// Process the command
-			isQuit, err := ProcessCommand(c, strings.TrimSpace(inputLine))
-			if err != nil {
-				// Send error message to player
-				c.playerCommandOut <- err.Error() + "\n\r"
-			} else {
-				// Command processed successfully
-				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
-			}
-
-			// If the quit command was processed, exit the loop
-			if isQuit {
-				Logger.Info("Quit command processed, exiting character loop", "characterName", c.name)
-				return
-			}
-
-			// Clear the processing signal
-			select {
-			case <-commandProcessing:
-			default:
-				// Channel already empty, which is fine
-			}
-
-			// Always send prompt after processing a command
-			c.playerCommandOut <- c.prompt
-
-		case <-c.end:
-			Logger.Info("Character end signaled", "characterName", c.name)
-			return
-
-		case <-timer.C:
-			if c.player == nil {
-				Logger.Warn("Player connection lost", "characterName", c.name)
-				return
-			}
-		}
-	}
+	c.RunConsole(done)
 }
 
 // Stop cleanly shuts down the character session

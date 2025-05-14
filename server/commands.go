@@ -94,41 +94,39 @@ func (g *Game) initCommands() {
 		usage:       "move <direction|exit>",
 	}
 
-	// Speech commands
-	g.commands["say"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Say something to everyone in the room",
-		usage:       "say <message>",
+	g.commands["inventory"] = CommandInfo{
+		timed:       false,
+		handler:     executeInventoryCommand,
+		description: "Show your inventory",
+		usage:       "inventory",
 	}
 
-	g.commands["emote"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Express an action or emotion in the room",
-		usage:       "emote <action>",
+	g.commands["inv"] = CommandInfo{
+		timed:       false,
+		handler:     executeInventoryCommand, // Alias for inventory
+		description: "Show your inventory",
+		usage:       "inv",
 	}
 
-	// Item commands
-	g.commands["get"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Pick up an item",
-		usage:       "get <item>",
+	g.commands["i"] = CommandInfo{
+		timed:       false,
+		handler:     executeInventoryCommand, // Alias for inventory
+		description: "Show your inventory",
+		usage:       "i",
 	}
 
-	g.commands["take"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Pick up an item",
-		usage:       "take <item>",
+	g.commands["equipment"] = CommandInfo{
+		timed:       false,
+		handler:     executeEquipmentCommand,
+		description: "Show your equipped items",
+		usage:       "equipment",
 	}
 
-	g.commands["drop"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Handled by room level
-		description: "Drop an item from your inventory",
-		usage:       "drop <item>",
+	g.commands["eq"] = CommandInfo{
+		timed:       false,
+		handler:     executeEquipmentCommand, // Alias for equipment
+		description: "Show your equipped items",
+		usage:       "eq",
 	}
 }
 

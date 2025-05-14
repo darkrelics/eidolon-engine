@@ -132,7 +132,7 @@ def get_stack_outputs(client, stack_name) -> dict:
         return {}
 
 
-def update_configuration_file(config_updates) -> None:
+def update_configuration_file(config_updates, user_pool_name=None) -> None:
     try:
         config: dict = load_config()
 
@@ -167,11 +167,22 @@ def update_configuration_file(config_updates) -> None:
 
         # Update Cognito configuration
         cognito_updates = config_updates.get("Cognito", {})
+
+        # Generate UserPoolDomain from UserPoolId if not explicitly provided
+        user_pool_id = cognito_updates.get("UserPoolId", "")
+        user_pool_domain = ""
+        if user_pool_id:
+            # Extract region from the UserPoolId (format: region_xxxxx)
+            region_prefix = user_pool_id.split("_")[0]
+            # Create domain name using the user pool name if provided
+            if user_pool_name:
+                user_pool_domain = f"{region_prefix}-{user_pool_name}"
+
         config["Cognito"].update(
             {
-                "UserPoolId": cognito_updates.get("UserPoolId", ""),
-                "UserPoolClientSecret": cognito_updates.get("UserPoolClientSecret", ""),
-                "UserPoolDomain": cognito_updates.get("UserPoolDomain", ""),
+                "UserPoolId": user_pool_id,
+                "UserPoolClientId": cognito_updates.get("UserPoolClientId", ""),
+                "UserPoolDomain": user_pool_domain,
                 "UserPoolArn": cognito_updates.get("UserPoolArn", ""),
             }
         )
@@ -316,7 +327,7 @@ def main() -> None:
             "CodeBuild": codebuild_outputs,
             "CloudWatch": cloudwatch_outputs,
         }
-        update_configuration_file(config_updates)
+        update_configuration_file(config_updates, all_parameters["cognito"]["UserPoolName"])
 
         # Generate .env file for local Flutter development
         generate_env_file(config_updates)
