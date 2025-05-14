@@ -464,36 +464,52 @@ func (p *Player) PlayCharacter() {
 	defer cancel()
 
 	// Start a goroutine to forward player input to character
+	inputForwarder := make(chan bool, 1)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				Logger.Warn("Recovered in command forwarding", "player", p.id, "recover", r)
 			}
+			close(inputForwarder)
 		}()
 
+		Logger.Debug("Starting input forwarding for character", "characterName", p.character.name)
 		for {
 			select {
 			case input, ok := <-p.commandIn:
 				if !ok {
+					Logger.Warn("Player command input channel closed unexpectedly")
 					return
 				}
+				Logger.Debug("Forwarding input to character", "input", input, "characterName", p.character.name)
 				// Forward the input to character
 				select {
 				case p.character.playerCommandIn <- input:
-					// Successfully forwarded
+					Logger.Debug("Successfully forwarded input to character", "characterName", p.character.name)
 				case <-ctx.Done():
+					Logger.Debug("Context cancelled during input forwarding", "characterName", p.character.name)
 					return
 				}
 			case <-p.character.end:
+				Logger.Debug("Character end signal received, stopping input forwarding", "characterName", p.character.name)
 				return
 			case <-ctx.Done():
+				Logger.Debug("Context cancelled, stopping input forwarding", "characterName", p.character.name)
 				return
 			}
 		}
 	}()
 
 	// Run the character's lifecycle (blocks until character session ends)
+	Logger.Info("Starting character session", "characterName", p.character.name)
 	p.character.Run(p.character.end)
+	Logger.Info("Character session ended", "characterName", p.character.name)
+
+	// Signal input forwarder to stop
+	cancel()
+	
+	// Wait for input forwarder to complete
+	<-inputForwarder
 
 	// Character Run has completed
 	p.character = nil
