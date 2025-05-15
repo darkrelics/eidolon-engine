@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/time/rate"
 )
@@ -210,7 +210,7 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 	}
 
 	// Parse the UUID string
-	userUUID, err := uuid.Parse(userUUIDStr)
+	userUUID, err := uuid.FromString(userUUIDStr)
 	if err != nil {
 		Logger.Error("Failed to parse UUID", "uuid_string", userUUIDStr, "error", err)
 		return

@@ -28,7 +28,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type Server struct {

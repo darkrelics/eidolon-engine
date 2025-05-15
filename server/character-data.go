@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type Character struct {
@@ -111,7 +111,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 
 	// Populate character from data
 	var err error
-	character.id, err = uuid.Parse(cd.CharacterID)
+	character.id, err = uuid.FromString(cd.CharacterID)
 	if err != nil {
 		return nil, fmt.Errorf("parse character ID: %w", err)
 	}

@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -152,7 +152,7 @@ func (p *Player) Load(playerID uuid.UUID) error {
 	p.email = playerData.Email
 
 	for characterName, characterID := range playerData.CharacterList {
-		parsedUUID, err := uuid.Parse(characterID)
+		parsedUUID, err := uuid.FromString(characterID)
 		if err != nil {
 			Logger.Error("Error parsing character ID", "character_id", characterID)
 			continue
@@ -161,7 +161,7 @@ func (p *Player) Load(playerID uuid.UUID) error {
 	}
 
 	for _, motdID := range playerData.SeenMotDs {
-		motdUUID, err := uuid.Parse(motdID)
+		motdUUID, err := uuid.FromString(motdID)
 		if err != nil {
 			Logger.Error("Error parsing MOTD ID", "motd_id", motdID)
 			continue

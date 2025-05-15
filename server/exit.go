@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 // Exit represents the in-memory structure for an exit
@@ -79,7 +79,7 @@ func (g *Game) LoadExits() error {
 	}
 
 	for _, exitData := range exitsData {
-		exitID, err := uuid.Parse(exitData.ExitID)
+		exitID, err := uuid.FromString(exitData.ExitID)
 		if err != nil {
 			Logger.Warn("Error parsing exit ID", "error", err)
 			continue

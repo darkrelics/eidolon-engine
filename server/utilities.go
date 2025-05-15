@@ -19,7 +19,7 @@ limitations under the License.
 package main
 
 import (
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 func GenerateUUIDv7() uuid.UUID {

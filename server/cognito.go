@@ -26,7 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/smithy-go"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 func (s *Server) SignInUser(email, password string) (*cognitoidentityprovider.InitiateAuthOutput, error) {
@@ -201,7 +201,7 @@ func Authenticate(username, password string, ssh_interface *Interface_SSH) (bool
 	}
 
 	// Parse string UUID into uuid.UUID type
-	userUUID, err := uuid.Parse(userUUIDStr)
+	userUUID, err := uuid.FromString(userUUIDStr)
 	if err != nil {
 		Logger.Error("failed to parse user UUID", "username", username, "uuid_string", userUUIDStr, "error", err)
 		return true, uuid.Nil, fmt.Errorf("failed to parse user UUID: %w", err)
