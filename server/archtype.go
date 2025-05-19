@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type ArchetypeItem struct {
@@ -128,8 +128,12 @@ func (c *Character) SelectArchetype() (string, error) {
 	}
 	msg += "Enter the number of your choice: "
 
+	uuidV4, err := uuid.NewV4()
+	if err != nil {
+		Logger.Error("Error generating UUID", "error", err)
+	}
 	c.gameCommandIn <- &CommandResponse{
-		RequestID: uuid.New(),
+		RequestID: uuidV4,
 		Success:   true,
 		Message:   msg,
 		Timestamp: time.Now(),

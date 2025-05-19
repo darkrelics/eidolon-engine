@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 // RunConsole is the main loop that handles character console input/output
