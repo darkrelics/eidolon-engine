@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 // CanExecuteCommand checks if character can perform a command based on wait time and state
@@ -159,7 +159,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 			if len(archetypeObj.StartingItems) > 0 {
 				for _, startingItem := range archetypeObj.StartingItems {
 					// Find prototype by ID
-					prototypeIDUUID, err := uuid.Parse(startingItem.PrototypeID)
+					prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
 					if err != nil {
 						Logger.Warn("Invalid prototype ID in archetype", "archetype", archetype, "prototypeID", startingItem.PrototypeID, "error", err)
 						continue

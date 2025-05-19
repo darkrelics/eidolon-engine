@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type Item struct {
@@ -461,12 +461,12 @@ func itemDataToItem(data *ItemData) (*Item, error) {
 	}
 
 	// Parse UUID strings
-	itemID, err := uuid.Parse(data.ItemID)
+	itemID, err := uuid.FromString(data.ItemID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid item ID format: %w", err)
 	}
 
-	prototypeID, err := uuid.Parse(data.PrototypeID)
+	prototypeID, err := uuid.FromString(data.PrototypeID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid prototype ID format: %w", err)
 	}
@@ -516,7 +516,7 @@ func prototypeDataToPrototype(data *PrototypeData) (*Prototype, error) {
 	}
 
 	// Parse UUID strings
-	prototypeID, err := uuid.Parse(data.PrototypeID)
+	prototypeID, err := uuid.FromString(data.PrototypeID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid prototype ID format: %w", err)
 	}
@@ -524,7 +524,7 @@ func prototypeDataToPrototype(data *PrototypeData) (*Prototype, error) {
 	// Convert content UUIDs
 	contents := make([]uuid.UUID, 0, len(data.Contents))
 	for _, contentIDStr := range data.Contents {
-		contentID, err := uuid.Parse(contentIDStr)
+		contentID, err := uuid.FromString(contentIDStr)
 		if err != nil {
 			Logger.Warn("Invalid content ID in prototype", "contentID", contentIDStr, "error", err)
 			continue

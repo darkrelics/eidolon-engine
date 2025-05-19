@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 // CommandTier represents the level at which a command will be processed
@@ -186,7 +186,7 @@ func (g *Game) LoadRooms() error {
 	// Assocate exits with rooms
 	for _, roomData := range roomsData {
 		for _, exitID := range roomData.ExitIDs {
-			exitUUID, err := uuid.Parse(exitID)
+			exitUUID, err := uuid.FromString(exitID)
 			if err != nil {
 				Logger.Warn("Error parsing exit ID", "error", err)
 				continue

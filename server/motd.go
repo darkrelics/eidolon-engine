@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type MOTD struct {
@@ -116,7 +116,7 @@ func (s *Server) LoadMOTDs() error {
 			continue
 		}
 
-		motdID, err := uuid.Parse(motdData.MotdID)
+		motdID, err := uuid.FromString(motdData.MotdID)
 		if err != nil {
 			Logger.Warn("Error parsing MOTD ID", "motdID", motdData.MotdID, "error", err)
 			continue
@@ -140,7 +140,7 @@ func (s *Server) LoadMOTDs() error {
 	}
 
 	// Create a default welcome message if none exists
-	defaultMOTDID, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
+	defaultMOTDID, _ := uuid.FromString("00000000-0000-0000-0000-000000000000")
 	foundDefault := false
 
 	for _, motd := range s.activeMotDs {
@@ -174,7 +174,7 @@ func DisplayMOTDs(player *Player) error {
 	Logger.Debug("Displaying MOTDs for player", "playerID", player.id)
 
 	// Find and display the welcome message first
-	defaultMOTDID, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
+	defaultMOTDID, _ := uuid.FromString("00000000-0000-0000-0000-000000000000")
 	welcomeDisplayed := false
 
 	player.mutex.RLock()
@@ -217,7 +217,7 @@ func DisplayUnseenMOTDs(player *Player) error {
 	// Display other unseen MOTDs
 	var newlySeen []uuid.UUID
 
-	defaultMOTDID, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
+	defaultMOTDID, _ := uuid.FromString("00000000-0000-0000-0000-000000000000")
 	for _, motd := range player.server.activeMotDs {
 		if motd == nil || motd.MotdID == defaultMOTDID {
 			continue
