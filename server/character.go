@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 // CanExecuteCommand checks if character can perform a command based on wait time and state
@@ -154,17 +154,17 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
 				character.room = startRoom
 			}
-			
+
 			// Create starting items from prototypes
 			if len(archetypeObj.StartingItems) > 0 {
 				for _, startingItem := range archetypeObj.StartingItems {
 					// Find prototype by ID
-					prototypeIDUUID, err := uuid.Parse(startingItem.PrototypeID)
+					prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
 					if err != nil {
 						Logger.Warn("Invalid prototype ID in archetype", "archetype", archetype, "prototypeID", startingItem.PrototypeID, "error", err)
 						continue
 					}
-					
+
 					// Find prototype in game's prototypes
 					Logger.Debug("Looking for prototype", "prototypeID", prototypeIDUUID.String(), "count", len(p.server.game.prototypes))
 					p.server.game.mutex.RLock()
@@ -180,24 +180,24 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 						p.server.game.mutex.RUnlock()
 						continue
 					}
-					
+
 					// Create item from prototype
 					item, err := CreateItemFromPrototype(prototype, p.server.game)
 					if err != nil {
 						Logger.Error("Failed to create item from prototype", "prototypeID", startingItem.PrototypeID, "error", err)
 						continue
 					}
-					
+
 					// Set worn state if specified
 					if startingItem.IsWorn && item.wearable {
 						item.isWorn = true
-						
+
 						// Apply trait mods if item is worn
 						if len(item.traitMods) > 0 {
 							character.ApplyItemTraitMods(item)
 						}
 					}
-					
+
 					// Add to character's inventory
 					character.inventory[startingItem.Slot] = item
 					Logger.Debug("Added starting item to character", "characterName", character.name, "itemName", item.name, "slot", startingItem.Slot)

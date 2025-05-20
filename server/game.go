@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/bits-and-blooms/bloom/v3"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 // TODO: Move to config

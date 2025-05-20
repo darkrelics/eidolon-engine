@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 func (p *Player) Console(done chan bool) {
@@ -298,7 +298,7 @@ func (p *Player) selectArchetype() (string, error) {
 		// Convert player input to command requests
 		for input := range p.commandIn {
 			commandOutAdapter <- &CommandRequest{
-				ID:        uuid.New(),
+				ID:        uuid.Must(uuid.NewV4()),
 				Character: tempChar,
 				Args:      []string{input},
 				Timestamp: time.Now(),
@@ -540,7 +540,7 @@ func (p *Player) HandleViewMOTDs() {
 		dateStr := motd.CreatedAt.Format("Jan 02, 2006")
 
 		// Default MOTD has no date displayed
-		defaultMOTDID, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
+		defaultMOTDID, _ := uuid.FromString("00000000-0000-0000-0000-000000000000")
 		if motd.MotdID == defaultMOTDID {
 			p.commandOut <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
 		} else {
