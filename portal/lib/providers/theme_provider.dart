@@ -112,7 +112,7 @@ class ThemeProvider extends ChangeNotifier {
         outline: Colors.white.withValues(alpha: 0.2),
       ),
       scaffoldBackgroundColor: Colors.black,
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         color: Colors.grey[850],
         shape: RoundedRectangleBorder(
@@ -230,7 +230,7 @@ class ThemeProvider extends ChangeNotifier {
         outline: Colors.black.withValues(alpha: 0.2),
       ),
       scaffoldBackgroundColor: Colors.white,
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         color: Colors.grey[100],
         shape: RoundedRectangleBorder(

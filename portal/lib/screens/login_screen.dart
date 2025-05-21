@@ -95,6 +95,13 @@ class LoginScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       TextButton(
                         onPressed: () {
+                          Navigator.of(context).pushNamed('/password-reset');
+                        },
+                        child: const Text('Forgot Password?'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () {
                           final authState = Provider.of<AuthState>(
                             context,
                             listen: false,
