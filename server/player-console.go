@@ -463,6 +463,11 @@ func (p *Player) PlayCharacter() {
 	ctx, cancel := context.WithCancel(p.ctx)
 	defer cancel()
 
+	// Store character references to prevent race conditions
+	characterName := p.character.name
+	characterPlayerCommandIn := p.character.playerCommandIn
+	characterEnd := p.character.end
+
 	// Start a goroutine to forward player input to character
 	inputForwarder := make(chan bool, 1)
 	go func() {
@@ -473,7 +478,7 @@ func (p *Player) PlayCharacter() {
 			close(inputForwarder)
 		}()
 
-		Logger.Debug("Starting input forwarding for character", "characterName", p.character.name)
+		Logger.Debug("Starting input forwarding for character", "characterName", characterName)
 		for {
 			select {
 			case input, ok := <-p.commandIn:
@@ -481,29 +486,29 @@ func (p *Player) PlayCharacter() {
 					Logger.Warn("Player command input channel closed unexpectedly")
 					return
 				}
-				Logger.Debug("Forwarding input to character", "input", input, "characterName", p.character.name)
+				Logger.Debug("Forwarding input to character", "input", input, "characterName", characterName)
 				// Forward the input to character
 				select {
-				case p.character.playerCommandIn <- input:
-					Logger.Debug("Successfully forwarded input to character", "characterName", p.character.name)
+				case characterPlayerCommandIn <- input:
+					Logger.Debug("Successfully forwarded input to character", "characterName", characterName)
 				case <-ctx.Done():
-					Logger.Debug("Context cancelled during input forwarding", "characterName", p.character.name)
+					Logger.Debug("Context cancelled during input forwarding", "characterName", characterName)
 					return
 				}
-			case <-p.character.end:
-				Logger.Debug("Character end signal received, stopping input forwarding", "characterName", p.character.name)
+			case <-characterEnd:
+				Logger.Debug("Character end signal received, stopping input forwarding", "characterName", characterName)
 				return
 			case <-ctx.Done():
-				Logger.Debug("Context cancelled, stopping input forwarding", "characterName", p.character.name)
+				Logger.Debug("Context cancelled, stopping input forwarding", "characterName", characterName)
 				return
 			}
 		}
 	}()
-
+	
 	// Run the character's lifecycle (blocks until character session ends)
-	Logger.Info("Starting character session", "characterName", p.character.name)
-	p.character.Run(p.character.end)
-	Logger.Info("Character session ended", "characterName", p.character.name)
+	Logger.Info("Starting character session", "characterName", characterName)
+	p.character.Run(characterEnd)
+	Logger.Info("Character session ended", "characterName", characterName)
 
 	// Signal input forwarder to stop
 	cancel()
