@@ -284,29 +284,54 @@ func (p *Player) selectArchetype() (string, error) {
 	tempChar.gameCommandIn = commandInAdapter
 	tempChar.gameCommandOut = commandOutAdapter
 
+	// Create a context for proper cleanup of goroutines
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Start goroutines to handle channel adaptation
 	go func() {
+		defer close(commandInAdapter)
 		// Forward string messages to player
-		for resp := range commandInAdapter {
-			if resp != nil && resp.Message != "" {
-				p.commandOut <- resp.Message
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case resp := <-commandInAdapter:
+				if resp != nil && resp.Message != "" {
+					p.commandOut <- resp.Message
+				}
 			}
 		}
 	}()
 
 	go func() {
+		defer close(commandOutAdapter)
 		// Convert player input to command requests
-		for input := range p.commandIn {
-			commandOutAdapter <- &CommandRequest{
-				ID:        uuid.Must(uuid.NewV4()),
-				Character: tempChar,
-				Args:      []string{input},
-				Timestamp: time.Now(),
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case input := <-p.commandIn:
+				select {
+				case commandOutAdapter <- &CommandRequest{
+					ID:        uuid.Must(uuid.NewV4()),
+					Character: tempChar,
+					Args:      []string{input},
+					Timestamp: time.Now(),
+				}:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()
 
-	return tempChar.SelectArchetype()
+	result, err := tempChar.SelectArchetype()
+	
+	// Cancel context to clean up goroutines
+	cancel()
+	
+	return result, err
 }
 
 func (p *Player) HandleCharacterSelection() {
