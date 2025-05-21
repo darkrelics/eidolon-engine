@@ -156,8 +156,10 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 			}
 
 			// Create starting items from prototypes
+			Logger.Debug("Processing starting items for archetype", "archetype", archetype, "itemCount", len(archetypeObj.StartingItems))
 			if len(archetypeObj.StartingItems) > 0 {
-				for _, startingItem := range archetypeObj.StartingItems {
+				for i, startingItem := range archetypeObj.StartingItems {
+					Logger.Debug("Processing starting item", "archetype", archetype, "itemIndex", i, "prototypeID", startingItem.PrototypeID, "slot", startingItem.Slot)
 					// Find prototype by ID
 					prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
 					if err != nil {

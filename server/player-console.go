@@ -25,7 +25,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -214,6 +213,17 @@ func (p *Player) HandleCharacterCreation() {
 		return
 	}
 
+	// Validate archetype exists before character creation
+	if archetypeName != "" {
+		p.server.game.mutex.RLock()
+		_, exists := p.server.game.archetypes[archetypeName]
+		p.server.game.mutex.RUnlock()
+		if !exists {
+			p.commandOut <- fmt.Sprintf("Error: Selected archetype '%s' does not exist\n", archetypeName)
+			return
+		}
+	}
+
 	// Create character
 	character, err := p.CreateCharacter(name, archetypeName)
 	if err != nil {
@@ -271,67 +281,31 @@ func (p *Player) selectArchetype() (string, error) {
 		return "", nil // No archetypes available
 	}
 
-	// Create a character instance to use SelectArchetype method
-	tempChar := &Character{
-		game: p.server.game,
+	options := p.server.game.archetypeOptions
+
+	// Display archetype selection menu
+	msg := "\n\rSelect a character archetype.\n\r"
+	for i, option := range options {
+		msg += fmt.Sprintf("%d: %s\n\r", i+1, option)
+	}
+	msg += "Enter the number of your choice: "
+
+	p.commandOut <- msg
+
+	// Wait for player input
+	selection, ok := <-p.commandIn
+	if !ok {
+		return "", fmt.Errorf("player input channel closed")
 	}
 
-	// Create adapter channels to convert between string and structured commands
-	commandInAdapter := make(chan *CommandResponse, 10)
-	commandOutAdapter := make(chan *CommandRequest, 10)
+	// Parse selection
+	num, err := strconv.Atoi(strings.TrimSpace(selection))
+	if err != nil || num < 1 || num > len(options) {
+		return "", fmt.Errorf("invalid archetype selection")
+	}
 
-	// Set up the character channels
-	tempChar.gameCommandIn = commandInAdapter
-	tempChar.gameCommandOut = commandOutAdapter
-
-	// Create a context for proper cleanup of goroutines
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Start goroutines to handle channel adaptation
-	go func() {
-		defer close(commandInAdapter)
-		// Forward string messages to player
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case resp := <-commandInAdapter:
-				if resp != nil && resp.Message != "" {
-					p.commandOut <- resp.Message
-				}
-			}
-		}
-	}()
-
-	go func() {
-		defer close(commandOutAdapter)
-		// Convert player input to command requests
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case input := <-p.commandIn:
-				select {
-				case commandOutAdapter <- &CommandRequest{
-					ID:        uuid.Must(uuid.NewV4()),
-					Character: tempChar,
-					Args:      []string{input},
-					Timestamp: time.Now(),
-				}:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
-	}()
-
-	result, err := tempChar.SelectArchetype()
-
-	// Cancel context to clean up goroutines
-	cancel()
-
-	return result, err
+	// Extract archetype name from option (format: "Name - Description")
+	return strings.Split(options[num-1], " - ")[0], nil
 }
 
 func (p *Player) HandleCharacterSelection() {

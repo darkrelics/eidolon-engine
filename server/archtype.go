@@ -21,9 +21,7 @@ package main
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -87,6 +85,12 @@ func (g *Game) LoadArchetypes() error {
 			}
 		}
 
+		// Validate archetype data consistency
+		if err := g.ValidateArchetype(&archetype); err != nil {
+			Logger.Warn("Skipping invalid archetype", "name", archetype.ArchetypeName, "error", err)
+			continue
+		}
+
 		g.archetypes[archetype.ArchetypeName] = &archetype
 		Logger.Info("Loaded archetype", "name", archetype.ArchetypeName)
 	}
@@ -111,58 +115,52 @@ func (g *Game) BuildArchetypeOptions() error {
 	g.archetypeOptions = options
 
 	return nil
-
 }
 
-func (c *Character) SelectArchetype() (string, error) {
-
-	if len(c.game.archetypeOptions) == 0 {
-		return "", nil
+// ValidateArchetype checks archetype data for consistency and completeness
+func (g *Game) ValidateArchetype(archetype *Archetype) error {
+	if archetype.ArchetypeName == "" {
+		return fmt.Errorf("archetype name cannot be empty")
 	}
 
-	options := c.game.archetypeOptions
-
-	msg := "\n\rSelect a character archetype.\n\r"
-	for i, option := range options {
-		msg += fmt.Sprintf("%d: %s\n\r", i+1, option)
-	}
-	msg += "Enter the number of your choice: "
-
-	uuidV4, err := uuid.NewV4()
-	if err != nil {
-		Logger.Error("Error generating UUID", "error", err)
-	}
-	c.gameCommandIn <- &CommandResponse{
-		RequestID: uuidV4,
-		Success:   true,
-		Message:   msg,
-		Timestamp: time.Now(),
+	if archetype.Description == "" {
+		return fmt.Errorf("archetype '%s' description cannot be empty", archetype.ArchetypeName)
 	}
 
-	// Wait for response from the player
-	var selection string
-
-	cmd, ok := <-c.gameCommandOut
-	if !ok {
-		Logger.Warn("Character input channel closed")
-		return "", fmt.Errorf("character input channel closed")
+	if len(archetype.Attributes) == 0 {
+		return fmt.Errorf("archetype '%s' must have at least one attribute", archetype.ArchetypeName)
 	}
 
-	if cmd == nil {
-		return "", fmt.Errorf("received nil command")
+	if len(archetype.Abilities) == 0 {
+		return fmt.Errorf("archetype '%s' must have at least one ability", archetype.ArchetypeName)
 	}
 
-	// Extract the first argument as the selection
-	if len(cmd.Args) > 0 {
-		selection = cmd.Args[0]
-	} else {
-		return "", fmt.Errorf("no selection provided")
+	// Validate that StartRoom exists
+	if _, exists := g.rooms[archetype.StartRoom]; !exists {
+		return fmt.Errorf("archetype '%s' start room %d does not exist", archetype.ArchetypeName, archetype.StartRoom)
 	}
 
-	num, err := strconv.Atoi(strings.TrimSpace(selection))
-	if err != nil || num < 1 || num > len(options) {
-		return "", fmt.Errorf("invalid archetype selection")
+	// Validate starting items
+	for i, startingItem := range archetype.StartingItems {
+		if startingItem.PrototypeID == "" {
+			return fmt.Errorf("archetype '%s' starting item %d has empty prototype ID", archetype.ArchetypeName, i)
+		}
+
+		if startingItem.Slot == "" {
+			return fmt.Errorf("archetype '%s' starting item %d has empty slot", archetype.ArchetypeName, i)
+		}
+
+		// Validate prototype exists
+		prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
+		if err != nil {
+			return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID: %w", archetype.ArchetypeName, i, err)
+		}
+
+		if _, exists := g.prototypes[prototypeIDUUID]; !exists {
+			return fmt.Errorf("archetype '%s' starting item %d prototype '%s' does not exist", archetype.ArchetypeName, i, startingItem.PrototypeID)
+		}
 	}
 
-	return strings.Split(options[num-1], " - ")[0], nil
+	return nil
 }
+
