@@ -327,10 +327,10 @@ func (p *Player) selectArchetype() (string, error) {
 	}()
 
 	result, err := tempChar.SelectArchetype()
-	
+
 	// Cancel context to clean up goroutines
 	cancel()
-	
+
 	return result, err
 }
 
@@ -529,7 +529,7 @@ func (p *Player) PlayCharacter() {
 			}
 		}
 	}()
-	
+
 	// Run the character's lifecycle (blocks until character session ends)
 	Logger.Info("Starting character session", "characterName", characterName)
 	p.character.Run(characterEnd)
@@ -537,7 +537,7 @@ func (p *Player) PlayCharacter() {
 
 	// Signal input forwarder to stop
 	cancel()
-	
+
 	// Wait for input forwarder to complete
 	<-inputForwarder
 
