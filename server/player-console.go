@@ -284,29 +284,54 @@ func (p *Player) selectArchetype() (string, error) {
 	tempChar.gameCommandIn = commandInAdapter
 	tempChar.gameCommandOut = commandOutAdapter
 
+	// Create a context for proper cleanup of goroutines
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Start goroutines to handle channel adaptation
 	go func() {
+		defer close(commandInAdapter)
 		// Forward string messages to player
-		for resp := range commandInAdapter {
-			if resp != nil && resp.Message != "" {
-				p.commandOut <- resp.Message
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case resp := <-commandInAdapter:
+				if resp != nil && resp.Message != "" {
+					p.commandOut <- resp.Message
+				}
 			}
 		}
 	}()
 
 	go func() {
+		defer close(commandOutAdapter)
 		// Convert player input to command requests
-		for input := range p.commandIn {
-			commandOutAdapter <- &CommandRequest{
-				ID:        uuid.Must(uuid.NewV4()),
-				Character: tempChar,
-				Args:      []string{input},
-				Timestamp: time.Now(),
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case input := <-p.commandIn:
+				select {
+				case commandOutAdapter <- &CommandRequest{
+					ID:        uuid.Must(uuid.NewV4()),
+					Character: tempChar,
+					Args:      []string{input},
+					Timestamp: time.Now(),
+				}:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()
 
-	return tempChar.SelectArchetype()
+	result, err := tempChar.SelectArchetype()
+
+	// Cancel context to clean up goroutines
+	cancel()
+
+	return result, err
 }
 
 func (p *Player) HandleCharacterSelection() {
@@ -463,37 +488,58 @@ func (p *Player) PlayCharacter() {
 	ctx, cancel := context.WithCancel(p.ctx)
 	defer cancel()
 
+	// Store character references to prevent race conditions
+	characterName := p.character.name
+	characterPlayerCommandIn := p.character.playerCommandIn
+	characterEnd := p.character.end
+
 	// Start a goroutine to forward player input to character
+	inputForwarder := make(chan bool, 1)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				Logger.Warn("Recovered in command forwarding", "player", p.id, "recover", r)
 			}
+			close(inputForwarder)
 		}()
 
+		Logger.Debug("Starting input forwarding for character", "characterName", characterName)
 		for {
 			select {
 			case input, ok := <-p.commandIn:
 				if !ok {
+					Logger.Warn("Player command input channel closed unexpectedly")
 					return
 				}
+				Logger.Debug("Forwarding input to character", "input", input, "characterName", characterName)
 				// Forward the input to character
 				select {
-				case p.character.playerCommandIn <- input:
-					// Successfully forwarded
+				case characterPlayerCommandIn <- input:
+					Logger.Debug("Successfully forwarded input to character", "characterName", characterName)
 				case <-ctx.Done():
+					Logger.Debug("Context cancelled during input forwarding", "characterName", characterName)
 					return
 				}
-			case <-p.character.end:
+			case <-characterEnd:
+				Logger.Debug("Character end signal received, stopping input forwarding", "characterName", characterName)
 				return
 			case <-ctx.Done():
+				Logger.Debug("Context cancelled, stopping input forwarding", "characterName", characterName)
 				return
 			}
 		}
 	}()
 
 	// Run the character's lifecycle (blocks until character session ends)
-	p.character.Run(p.character.end)
+	Logger.Info("Starting character session", "characterName", characterName)
+	p.character.Run(characterEnd)
+	Logger.Info("Character session ended", "characterName", characterName)
+
+	// Signal input forwarder to stop
+	cancel()
+
+	// Wait for input forwarder to complete
+	<-inputForwarder
 
 	// Character Run has completed
 	p.character = nil

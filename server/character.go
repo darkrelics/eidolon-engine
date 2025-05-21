@@ -166,11 +166,18 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 					}
 
 					// Find prototype in game's prototypes
+					Logger.Debug("Looking for prototype", "prototypeID", prototypeIDUUID.String(), "count", len(p.server.game.prototypes))
 					p.server.game.mutex.RLock()
 					prototype, ok := p.server.game.prototypes[prototypeIDUUID]
 					p.server.game.mutex.RUnlock()
 					if !ok {
 						Logger.Warn("Prototype not found", "archetype", archetype, "prototypeID", startingItem.PrototypeID)
+						// Dump all prototype IDs for debugging
+						p.server.game.mutex.RLock()
+						for protoID := range p.server.game.prototypes {
+							Logger.Debug("Available prototype", "prototypeID", protoID.String())
+						}
+						p.server.game.mutex.RUnlock()
 						continue
 					}
 
