@@ -5,7 +5,9 @@
       "Area": "The Vedant Forest",
       "Title": "Glade Entrance",
       "Description": "You find yourself at the entrance of a small glade, surrounded by tall trees. Sunlight filters through the canopy, casting dappled shadows on the soft moss beneath your feet. Birds sing in the branches above and the scent of flowers fills the air.",
-      "ExitID": ["f47ac10b-58cc-4372-a567-0e02b2c3d479"],
+      "ExitID": [
+        "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+      ],
       "Persistent": false
     },
     {
@@ -25,7 +27,10 @@
       "Area": "The Vedant Forest",
       "Title": "Small Clearing",
       "Description": "A small clearing opens up in the forest, allowing a break from the closeness of the trees. Wildflowers add pops of color to the greenery, and the buzz of insects fills your ears. A fallen log provides a natural resting spot, inviting you to pause and appreciate the beauty of nature.",
-      "ExitID": ["b47ac10b-58cc-4372-a567-0e02b2c3d483", "a47ac10b-58cc-4372-a567-0e02b2c3d484"],
+      "ExitID": [
+        "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+        "a47ac10b-58cc-4372-a567-0e02b2c3d484"
+      ],
       "Persistent": false
     },
     {
@@ -33,7 +38,9 @@
       "Area": "The Vedant Forest",
       "Title": "Ancient Oak",
       "Description": "The path leads you to a majestic ancient oak tree, its massive trunk twisted and gnarled by the passage of time. The tree stands as a sentinel, a testament to the endurance of nature. Beneath its widespread branches, a soft carpet of leaves and acorns provides a moment of reprieve.",
-      "ExitID": ["947ac10b-58cc-4372-a567-0e02b2c3d485"],
+      "ExitID": [
+        "947ac10b-58cc-4372-a567-0e02b2c3d485"
+      ],
       "Persistent": true
     },
     {
@@ -41,7 +48,10 @@
       "Area": "The Vedant Forest",
       "Title": "Babbling Brook",
       "Description": "The sound of flowing water grows louder as you follow the path deeper into the forest. A babbling brook meanders through the trees, its clear waters sparkling in the dappled sunlight. The peaceful murmur of the water is soothing, inviting you to pause and drink in the tranquility.",
-      "ExitID": ["847ac10b-58cc-4372-a567-0e02b2c3d486", "747ac10b-58cc-4372-a567-0e02b2c3d487"],
+      "ExitID": [
+        "847ac10b-58cc-4372-a567-0e02b2c3d486",
+        "747ac10b-58cc-4372-a567-0e02b2c3d487"
+      ],
       "Persistent": false
     },
     {
@@ -49,7 +59,9 @@
       "Area": "The Vedant Forest",
       "Title": "Tangled Thicket",
       "Description": "The path becomes narrower and more overgrown as you venture further into the forest. Thorny bushes and tangled vines obstruct your progress, a reminder of the wildness of nature. The air is still and heavy, and the buzzing of insects grows more insistent.",
-      "ExitID": ["647ac10b-58cc-4372-a567-0e02b2c3d488"],
+      "ExitID": [
+        "647ac10b-58cc-4372-a567-0e02b2c3d488"
+      ],
       "Persistent": true
     },
     {
@@ -57,7 +69,10 @@
       "Area": "The Vedant Forest",
       "Title": "Mossy Grove",
       "Description": "You stumble upon a tranquil grove, its floor blanketed in a thick layer of moss. The air is filled with the scent of damp earth and the hum of insects. The sunlight breaks through the canopy in patches, creating an almost ethereal atmosphere. Time seems to slow down in this peaceful haven.",
-      "ExitID": ["547ac10b-58cc-4372-a567-0e02b2c3d489", "447ac10b-58cc-4372-a567-0e02b2c3d490"],
+      "ExitID": [
+        "547ac10b-58cc-4372-a567-0e02b2c3d489",
+        "447ac10b-58cc-4372-a567-0e02b2c3d490"
+      ],
       "Persistent": false
     },
     {
@@ -65,7 +80,10 @@
       "Area": "The Vedant Forest",
       "Title": "Whispering Pines",
       "Description": "The trees give way to a grove of tall, slender pines, their needles carpeting the ground in a soft cushion. The wind whispers through the branches, filling the air with a gentle, soothing susurrus. Squirrels dart through the trees, their chattering calls adding to the symphony of forest sounds.",
-      "ExitID": ["347ac10b-58cc-4372-a567-0e02b2c3d491", "247ac10b-58cc-4372-a567-0e02b2c3d492"],
+      "ExitID": [
+        "347ac10b-58cc-4372-a567-0e02b2c3d491",
+        "247ac10b-58cc-4372-a567-0e02b2c3d492"
+      ],
       "Persistent": true
     },
     {
@@ -73,7 +91,10 @@
       "Area": "The Vedant Forest",
       "Title": "Fern Gully",
       "Description": "The path leads you into a damp gully filled with lush ferns, their delicate fronds creating a sea of green. The air is cool and moist, and the scent of decay lingers. Sunlight filters through the canopy, casting the gully in an almost otherworldly glow. The silence is broken only by the occasional drip of water.",
-      "ExitID": ["147ac10b-58cc-4372-a567-0e02b2c3d493", "047ac10b-58cc-4372-a567-0e02b2c3d494"],
+      "ExitID": [
+        "147ac10b-58cc-4372-a567-0e02b2c3d493",
+        "047ac10b-58cc-4372-a567-0e02b2c3d494"
+      ],
       "Persistent": false
     },
     {
@@ -81,7 +102,9 @@
       "Area": "The Vedant Forest",
       "Title": "Abandoned Campsite",
       "Description": "Hidden among the trees, you discover the remnants of an abandoned campsite. A fire pit, now cold and overgrown, sits at the center, surrounded by the remains of a crude shelter. The site whispers of past adventurers, leaving you to wonder what stories were left untold and what fate befell those who once rested here.",
-      "ExitID": ["f37ac10b-58cc-4372-a567-0e02b2c3d495"],
+      "ExitID": [
+        "f37ac10b-58cc-4372-a567-0e02b2c3d495"
+      ],
       "Persistent": true
     }
   ]
