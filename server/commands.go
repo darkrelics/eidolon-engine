@@ -79,17 +79,17 @@ func (g *Game) initCommands() {
 		usage:       "skill",
 	}
 
-	// Movement commands
+	// Movement commands (escalate to room tier)
 	g.commands["go"] = CommandInfo{
 		timed:       true,
-		handler:     executeGoCommand,
+		handler:     nil, // Escalates to room goroutine
 		description: "Move in a direction or through an exit",
 		usage:       "go <direction|exit>",
 	}
 
 	g.commands["move"] = CommandInfo{
 		timed:       true,
-		handler:     executeGoCommand, // Alias to go
+		handler:     nil, // Escalates to room goroutine
 		description: "Move in a direction or through an exit",
 		usage:       "move <direction|exit>",
 	}
@@ -224,83 +224,102 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 		return true, err
 	}
 
-	// Process based on command tier
-	if !cmdInfo.timed {
-		// Execute untimed commands immediately at character level
+	// Try to execute command hierarchically: Character -> Room -> Game
+	
+	// Step 1: Try character-level handler first (both timed and untimed)
+	if cmdInfo.handler != nil {
 		Logger.Debug("Executing character-tier command", "verb", verb, "character", character.name)
-		return false, cmdInfo.handler(character, tokens)
-	} else {
-		// For timed commands, determine the tier and route accordingly
-		var tier CommandTier
-
-		// Determine tier based on command properties
-		switch verb {
-		case "say", "emote", "whisper", "get", "take", "drop":
-			// Commands that only affect the local room
-			tier = RoomTier
-		case "shout", "weather", "time", "global":
-			// Commands that affect multiple rooms or the entire game
-			tier = GameTier
-		default:
-			// Default to room tier for most commands
-			tier = RoomTier
+		if cmdInfo.timed {
+			// For timed character commands, still respect timing but execute directly
+			err := cmdInfo.handler(character, tokens)
+			return false, err
+		} else {
+			// Execute untimed commands immediately
+			return false, cmdInfo.handler(character, tokens)
 		}
+	}
 
-		// Create command request
-		cmdReq := &CommandRequest{
-			ID:        GenerateUUIDv7(),
-			Character: character,
-			Verb:      verb,
-			Args:      tokens,
-			Tier:      tier,
-			State:     CommandPending,
-			Timestamp: time.Now(),
-			Response:  make(chan *CommandResponse, 1),
+	// Step 2: Character doesn't handle this command, escalate to room
+	Logger.Debug("Escalating command to room", "verb", verb, "character", character.name)
+	
+	// Create command request for room processing
+	cmdReq := &CommandRequest{
+		ID:        GenerateUUIDv7(),
+		Character: character,
+		Verb:      verb,
+		Args:      tokens,
+		Tier:      RoomTier,
+		State:     CommandPending,
+		Timestamp: time.Now(),
+		Response:  make(chan *CommandResponse, 1),
+	}
+
+	// Ensure room is running
+	if !character.room.running {
+		character.room.Start(character.game)
+	}
+
+	// Send command to the room
+	select {
+	case character.room.commandIn <- cmdReq:
+		// Command sent successfully to room
+	default:
+		return false, fmt.Errorf("\n\rroom command buffer is full, try again later\n\r")
+	}
+
+	// Wait for response or timeout
+	select {
+	case resp := <-cmdReq.Response:
+		if resp.Error != nil {
+			// If room doesn't handle it, escalate to game
+			if strings.Contains(resp.Error.Error(), "unknown room command") {
+				Logger.Debug("Escalating command to game", "verb", verb, "character", character.name)
+				return escalateToGame(character, verb, tokens)
+			}
+			return false, resp.Error
 		}
-
-		// Route command based on tier
-		switch tier {
-		case RoomTier:
-			// Ensure room is running
-			if !character.room.running {
-				character.room.Start(character.game)
-			}
-
-			// Send command to the room
-			Logger.Debug("Routing command to room", "verb", verb, "character", character.name, "roomID", character.room.roomID)
-			select {
-			case character.room.commandIn <- cmdReq:
-				// Command sent successfully to room
-			default:
-				return false, fmt.Errorf("\n\rroom command buffer is full, try again later\n\r")
-			}
-
-		case GameTier:
-			// Send command to the game
-			Logger.Debug("Routing command to game", "verb", verb, "character", character.name)
-			select {
-			case character.gameCommandOut <- cmdReq:
-				// Command sent successfully to game
-			default:
-				return false, fmt.Errorf("\n\rgame command buffer is full, try again later\n\r")
-			}
-
-		default:
-			return false, fmt.Errorf("\n\rinvalid command tier\n\r")
+		if resp.Message != "" {
+			character.player.commandOut <- resp.Message
 		}
+		return false, nil
+	case <-time.After(5 * time.Second):
+		return false, fmt.Errorf("\n\rcommand timed out\n\r")
+	}
+}
 
-		// Wait for response or timeout
-		select {
-		case resp := <-cmdReq.Response:
-			if resp.Error != nil {
-				return false, resp.Error
-			}
-			if resp.Message != "" {
-				character.player.commandOut <- resp.Message
-			}
-			return false, nil
-		case <-time.After(5 * time.Second):
-			return false, fmt.Errorf("\n\rcommand timed out\n\r")
+// escalateToGame handles commands that neither character nor room can process
+func escalateToGame(character *Character, verb string, tokens []string) (bool, error) {
+	// Create command request for game processing
+	cmdReq := &CommandRequest{
+		ID:        GenerateUUIDv7(),
+		Character: character,
+		Verb:      verb,
+		Args:      tokens,
+		Tier:      GameTier,
+		State:     CommandPending,
+		Timestamp: time.Now(),
+		Response:  make(chan *CommandResponse, 1),
+	}
+
+	// Send command to the game
+	select {
+	case character.gameCommandOut <- cmdReq:
+		// Command sent successfully to game
+	default:
+		return false, fmt.Errorf("\n\rgame command buffer is full, try again later\n\r")
+	}
+
+	// Wait for response or timeout
+	select {
+	case resp := <-cmdReq.Response:
+		if resp.Error != nil {
+			return false, resp.Error
 		}
+		if resp.Message != "" {
+			character.player.commandOut <- resp.Message
+		}
+		return false, nil
+	case <-time.After(5 * time.Second):
+		return false, fmt.Errorf("\n\rcommand timed out\n\r")
 	}
 }

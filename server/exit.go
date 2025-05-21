@@ -27,15 +27,16 @@ import (
 
 // Exit represents the in-memory structure for an exit
 type Exit struct {
-	exitID      uuid.UUID
-	direction   string
-	description string
-	targetRoom  *Room
-	arrivalText string
-	visible     bool
-	scriptID    string
-	lastEdited  time.Time
-	lastSaved   time.Time
+	exitID       uuid.UUID
+	direction    string
+	description  string
+	targetRoom   *Room
+	targetRoomID int64
+	arrivalText  string
+	visible      bool
+	scriptID     string
+	lastEdited   time.Time
+	lastSaved    time.Time
 }
 
 // ExitData represents the structure for storing exit data in DynamoDB
@@ -50,19 +51,20 @@ type ExitData struct {
 }
 
 // NewExit initializes a new exit
-func NewExit(exitID uuid.UUID, direction string, description string, targetRoom *Room, arrivalText string, visible bool, scriptID string) *Exit {
+func NewExit(exitID uuid.UUID, direction string, description string, targetRoom *Room, targetRoomID int64, arrivalText string, visible bool, scriptID string) *Exit {
 	Logger.Info("New Exit...Initializing Exit...")
 
 	return &Exit{
-		exitID:      exitID,
-		direction:   direction,
-		description: description,
-		targetRoom:  targetRoom,
-		arrivalText: arrivalText,
-		visible:     visible,
-		scriptID:    scriptID,
-		lastEdited:  time.Now(),
-		lastSaved:   time.Now(),
+		exitID:       exitID,
+		direction:    direction,
+		description:  description,
+		targetRoom:   targetRoom,
+		targetRoomID: targetRoomID,
+		arrivalText:  arrivalText,
+		visible:      visible,
+		scriptID:     scriptID,
+		lastEdited:   time.Now(),
+		lastSaved:    time.Now(),
 	}
 }
 
@@ -97,6 +99,7 @@ func (g *Game) LoadExits() error {
 			exitData.Direction,
 			exitData.Description,
 			g.rooms[exitData.TargetRoom],
+			exitData.TargetRoom,
 			arrivalText,
 			exitData.Visible,
 			exitData.ScriptID,

@@ -40,9 +40,6 @@ func (g *Game) ProcessGameCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Process command based on verb
 	switch cmd.Verb {
-	case "who", "list":
-		// List all online players
-		return g.handleWhoCommand(cmd)
 	case "weather", "time":
 		// Global environmental commands
 		return g.handleEnvironmentCommand(cmd)
@@ -50,11 +47,12 @@ func (g *Game) ProcessGameCommand(cmd *CommandRequest) *CommandResponse {
 		// Global communication commands
 		return g.handleGlobalCommunicationCommand(cmd)
 	default:
-		// Command not recognized at game level
+		// Command not understood by the engine - log it
+		Logger.Info("Unknown command attempted", "verb", cmd.Verb, "character", cmd.Character.name)
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
-			Error:     fmt.Errorf("command not recognized at game level: %s", cmd.Verb),
+			Error:     fmt.Errorf("the engine doesn't understand that command"),
 			Timestamp: time.Now(),
 		}
 	}

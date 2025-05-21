@@ -58,26 +58,35 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 		Timestamp: time.Now(),
 	}
 
-	// Process command based on verb
-	switch strings.ToLower(cmd.Verb) {
-	case "say", "\"", "'": // Handle speech commands
+	// Try to handle common room commands
+	verb := strings.ToLower(cmd.Verb)
+	
+	// Movement commands
+	if verb == "go" || verb == "move" {
+		return handleMovementCommand(cmd, game)
+	}
+	
+	// Item commands
+	if verb == "get" || verb == "take" || verb == "drop" || verb == "put" || verb == "wear" || verb == "wield" || verb == "equip" || verb == "remove" || verb == "unwear" || verb == "unequip" {
+		return handleItemCommand(cmd)
+	}
+	
+	// Communication commands
+	if verb == "say" || verb == "\"" || verb == "'" {
 		return handleSayCommand(cmd)
-
-	case "look", "l": // Handle look command (additional room-based look processing)
+	}
+	
+	// Look command (room-level effects)
+	if verb == "look" || verb == "l" {
 		// This is typically handled at the character level, but might have room-level effects
 		response.Success = true
-		// No message/error for success since character handler already showed the room
-		return response
-
-	case "get", "take", "drop", "put": // Handle item commands
-		return handleItemCommand(cmd)
-
-	default:
-		// Unknown command at room level
-		Logger.Warn("Unhandled room command", "verb", cmd.Verb, "roomID", r.roomID)
-		response.Error = fmt.Errorf("unknown room command: %s", cmd.Verb)
 		return response
 	}
+
+	// Unknown command at room level
+	Logger.Debug("Room cannot handle command, will escalate", "verb", cmd.Verb, "roomID", r.roomID)
+	response.Error = fmt.Errorf("unknown room command: %s", cmd.Verb)
+	return response
 }
 
 // handleSayCommand processes say/talk commands
@@ -442,6 +451,149 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 		RequestID: cmd.ID,
 		Success:   true,
 		Message:   message,
+		Timestamp: time.Now(),
+	}
+}
+
+// handleMovementCommand processes movement commands (go/move)
+func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
+	character := cmd.Character
+	room := character.room
+
+	if character == nil || room == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character or room state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if character state allows movement
+	if character.charState != "standing" {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you must be standing to move. You are currently %s", character.charState),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if a direction was provided
+	if len(cmd.Args) < 2 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("which direction do you want to go?"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Get the direction from the command
+	direction := strings.ToLower(cmd.Args[1])
+	Logger.Debug("Player attempting to move", "characterName", character.name, "direction", direction)
+
+	// Look for matching exit
+	room.mutex.RLock()
+	var targetExit *Exit
+
+	for _, exit := range room.exits {
+		if exit != nil && strings.ToLower(exit.direction) == direction {
+			targetExit = exit
+			break
+		}
+	}
+	room.mutex.RUnlock()
+
+	// Check if exit exists
+	if targetExit == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you cannot go that way"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if target room exists and load it if necessary
+	targetRoom := targetExit.targetRoom
+	if targetRoom == nil {
+		// Try to load the room using the target room ID
+		loadedRoom, err := game.LoadRoom(targetExit.targetRoomID)
+		if err != nil {
+			Logger.Warn("Could not load target room for movement", 
+				"targetRoomID", targetExit.targetRoomID, 
+				"direction", direction, 
+				"characterName", character.name,
+				"error", err)
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("the way is barred"),
+				Timestamp: time.Now(),
+			}
+		}
+		targetRoom = loadedRoom
+		// Update the exit's room reference for future use
+		targetExit.targetRoom = targetRoom
+	}
+
+	// Ensure target room is running
+	if !targetRoom.running {
+		targetRoom.Start(game)
+	}
+
+	// Get references before the move
+	oldRoom := room
+	newRoom := targetRoom
+
+	Logger.Info("Character moving between rooms",
+		"characterName", character.name,
+		"fromRoom", oldRoom.roomID,
+		"toRoom", newRoom.roomID,
+		"direction", direction)
+
+	// Prepare departure message
+	departureMsg := fmt.Sprintf("%s leaves %s.", character.name, direction)
+
+	// Remove character from current room and send departure message
+	oldRoom.mutex.Lock()
+	delete(oldRoom.characters, character.id)
+	oldRoom.lastActive = time.Now()
+	oldRoom.mutex.Unlock()
+
+	// Send departure message to remaining characters
+	SendRoomMessageExcept(oldRoom, departureMsg, character)
+
+	// Update character's room reference
+	character.mutex.Lock()
+	character.room = newRoom
+	character.mutex.Unlock()
+
+	// Add character to new room and send arrival message
+	newRoom.mutex.Lock()
+	newRoom.characters[character.id] = character
+	newRoom.lastActive = time.Now()
+	newRoom.idleCounter = 0
+
+	// If room has a script ID, activate scripts
+	if newRoom.persistent && newRoom.scriptID != "" && !newRoom.scriptActive {
+		newRoom.scriptActive = true
+		Logger.Info("Activating scripts for persistent room with character entry", "roomID", newRoom.roomID)
+	}
+	newRoom.mutex.Unlock()
+
+	// Send arrival message using the exit's arrival text
+	arrivalMsg := fmt.Sprintf("%s %s.", character.name, targetExit.arrivalText)
+	SendRoomMessageExcept(newRoom, arrivalMsg, character)
+
+	// Get the room description for the character
+	description := newRoom.GetDescription(character)
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   description,
 		Timestamp: time.Now(),
 	}
 }

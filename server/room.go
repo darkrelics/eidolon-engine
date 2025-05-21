@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofrs/uuid/v5"
 )
 
@@ -206,6 +207,62 @@ func (g *Game) LoadRooms() error {
 	}
 
 	return nil
+}
+
+// LoadRoom loads a single room by ID from the database
+func (g *Game) LoadRoom(roomID int64) (*Room, error) {
+	Logger.Info("Loading single room", "roomID", roomID)
+
+	// Check if room already exists
+	g.mutex.RLock()
+	if existingRoom, exists := g.rooms[roomID]; exists {
+		g.mutex.RUnlock()
+		return existingRoom, nil
+	}
+	g.mutex.RUnlock()
+
+	// Load room data from database
+	roomData := &RoomData{}
+	key := map[string]types.AttributeValue{
+		"RoomID": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", roomID)},
+	}
+
+	err := g.database.Get("rooms", key, roomData)
+	if err != nil {
+		Logger.Warn("Could not load room from database", "roomID", roomID, "error", err)
+		return nil, fmt.Errorf("room not found: %w", err)
+	}
+
+	// Create new room
+	newRoom := NewRoom(
+		g.ctx,
+		roomData.RoomID,
+		roomData.Area,
+		roomData.Title,
+		roomData.Description,
+		roomData.Persistent,
+		roomData.ScriptID,
+	)
+
+	// Associate exits with the room
+	for _, exitID := range roomData.ExitIDs {
+		exitUUID, err := uuid.FromString(exitID)
+		if err != nil {
+			Logger.Warn("Error parsing exit ID", "error", err)
+			continue
+		}
+		if exit, exists := g.exits[exitUUID]; exists {
+			newRoom.exits[exitUUID] = exit
+		}
+	}
+
+	// Add room to game
+	g.mutex.Lock()
+	g.rooms[roomID] = newRoom
+	g.mutex.Unlock()
+
+	Logger.Info("Successfully loaded room", "roomID", roomID, "title", newRoom.title)
+	return newRoom, nil
 }
 
 // UpdateActivity updates the lastActive timestamp for a room
