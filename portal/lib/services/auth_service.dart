@@ -94,7 +94,7 @@ class AuthExceptionMapper {
         case 'UserNotConfirmedException':
           return 'Please verify your email before signing in';
         case 'InvalidParameterException':
-          if (error.message?.contains('password') == true) {
+          if (error.message?.toLowerCase().contains('password') == true) {
             return 'Password must meet complexity requirements';
           }
           return 'Please check your input and try again';

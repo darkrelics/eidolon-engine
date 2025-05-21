@@ -16,6 +16,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 
 import '../services/auth_service.dart';
 import '../widgets/ui_components.dart';
@@ -40,6 +41,7 @@ class _PasswordResetConfirmScreenState
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
   String _message = '';
+  bool _isError = false;
 
   @override
   void dispose() {
@@ -55,6 +57,7 @@ class _PasswordResetConfirmScreenState
     if (_passwordController.text != _confirmPasswordController.text) {
       setState(() {
         _message = 'Passwords do not match';
+        _isError = true;
       });
       return;
     }
@@ -62,6 +65,7 @@ class _PasswordResetConfirmScreenState
     setState(() {
       _isLoading = true;
       _message = '';
+      _isError = false;
     });
 
     try {
@@ -75,6 +79,7 @@ class _PasswordResetConfirmScreenState
       if (mounted) {
         setState(() {
           _message = 'Password reset successfully';
+          _isError = false;
         });
 
         Navigator.of(
@@ -84,7 +89,11 @@ class _PasswordResetConfirmScreenState
     } catch (e) {
       if (mounted) {
         setState(() {
-          _message = e.toString();
+          _isError = true;
+          _message =
+              e is CognitoClientException && e.message != null
+                  ? e.message!
+                  : 'An unexpected error occurred. Please try again.';
         });
       }
     } finally {
@@ -100,6 +109,7 @@ class _PasswordResetConfirmScreenState
     setState(() {
       _isLoading = true;
       _message = '';
+      _isError = false;
     });
 
     try {
@@ -109,12 +119,17 @@ class _PasswordResetConfirmScreenState
       if (mounted) {
         setState(() {
           _message = 'New reset code sent to your email';
+          _isError = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _message = e.toString();
+          _isError = true;
+          _message =
+              e is CognitoClientException && e.message != null
+                  ? e.message!
+                  : 'An unexpected error occurred. Please try again.';
         });
       }
     } finally {
@@ -207,10 +222,7 @@ class _PasswordResetConfirmScreenState
                 const SizedBox(height: 24),
                 StatusMessage(
                   message: InputSanitizer.sanitizeDisplayText(_message),
-                  isError:
-                      _message.toLowerCase().contains('fail') ||
-                      _message.toLowerCase().contains('error') ||
-                      _message.toLowerCase().contains('not match'),
+                  isError: _isError,
                 ),
               ],
             ),
