@@ -91,11 +91,43 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 
 // handleSayCommand processes say/talk commands
 func handleSayCommand(cmd *CommandRequest) *CommandResponse {
-	// This is a placeholder. Real implementation would handle speech
+	character := cmd.Character
+	
+	if character == nil || character.room == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character or room state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if there's text to say
+	if len(cmd.Args) < 2 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("what do you want to say?"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Join all arguments after the command to form the message
+	message := strings.Join(cmd.Args[1:], " ")
+	
+	// Message for the speaker
+	speakerMessage := fmt.Sprintf("\n\rYou say '%s'\n\r", message)
+	
+	// Message for others in the room
+	roomMessage := fmt.Sprintf("\n\r%s says '%s'\n\r", character.name, message)
+	
+	// Send message to everyone else in the room
+	SendRoomMessageExcept(character.room, roomMessage, character)
+	
 	return &CommandResponse{
 		RequestID: cmd.ID,
-		Success:   false,
-		Error:     fmt.Errorf("say command not implemented yet"),
+		Success:   true,
+		Message:   speakerMessage,
 		Timestamp: time.Now(),
 	}
 }

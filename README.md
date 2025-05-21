@@ -238,7 +238,7 @@ Objects and Inventory:
 
 Communication:
 
-- [ ] SAY: Speak to other players.
+- [x] SAY: Speak to other players.
 - [ ] WHISPER: Speak privately to another player.
 - [ ] SHOUT: Shout to the adjacent rooms.
 - [ ] EMOTE: Perform an action.
@@ -255,8 +255,8 @@ Combat:
 
 Character Manegment:
 
-- [ ] SHOW: Display your character information.
-- [ ] SKILL: Display your skills.
+- [x] INFO: Display your character information.
+- [x] SKILL: Display your skills.
 - [ ] STATUS: Display the character status.
 - [ ] INVENTORY: Display the contents of your inventory.
 
