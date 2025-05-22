@@ -189,10 +189,7 @@ func (g *Game) ValidateArchetypePrototypes() error {
 				// Check if the archetype slot is compatible with the prototype's wearable locations
 				slotCompatible := false
 				for _, wearableLocation := range prototype.wornOn {
-					if strings.Contains(wearableLocation, startingItem.Slot) ||
-						strings.Contains(startingItem.Slot, wearableLocation) ||
-						(startingItem.Slot == "finger" && wearableLocation == "finger") ||
-						(startingItem.Slot == "wrist" && wearableLocation == "wrist") {
+					if isSlotCompatible(startingItem.Slot, wearableLocation) {
 						slotCompatible = true
 						break
 					}
@@ -211,4 +208,33 @@ func (g *Game) ValidateArchetypePrototypes() error {
 
 	Logger.Info("All archetype prototype references validated successfully")
 	return nil
+}
+
+// isSlotCompatible checks if an archetype slot is compatible with a prototype wearable location
+func isSlotCompatible(slot, wearableLocation string) bool {
+	// Direct match
+	if slot == wearableLocation {
+		return true
+	}
+
+	// Semantic equivalents
+	slotMappings := map[string][]string{
+		"weapon": {"weapon", "waist", "hands"},
+		"armor":  {"armor", "chest", "body"},
+		"back":   {"back", "shoulders"},
+		"finger": {"finger", "left_finger", "right_finger"},
+		"wrist":  {"wrist", "left_wrist", "right_wrist"},
+	}
+
+	// Check if the wearable location is in the allowed locations for this slot
+	if allowedLocations, exists := slotMappings[slot]; exists {
+		for _, allowed := range allowedLocations {
+			if allowed == wearableLocation {
+				return true
+			}
+		}
+	}
+
+	// Fallback to substring matching for backwards compatibility
+	return strings.Contains(wearableLocation, slot) || strings.Contains(slot, wearableLocation)
 }

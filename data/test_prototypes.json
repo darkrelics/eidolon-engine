@@ -10,7 +10,7 @@
       "MaxStack": 1,
       "Quantity": 1,
       "Wearable": true,
-      "WornOn": ["waist"],
+      "WornOn": ["weapon"],
       "Verbs": {
         "use": "You wield the long sword, ready for battle.",
         "examine": "The sword's blade is etched with ancient runes."
@@ -71,7 +71,7 @@
       "MaxStack": 1,
       "Quantity": 1,
       "Wearable": true,
-      "WornOn": ["back"],
+      "WornOn": ["weapon"],
       "Verbs": {
         "use": "You take aim with the bow, ready to loose an arrow at your target.",
         "examine": "The wood of the bow is polished to a smooth finish, and the string is taut and strong."
@@ -101,7 +101,7 @@
       "MaxStack": 1,
       "Quantity": 1,
       "Wearable": true,
-      "WornOn": ["chest"],
+      "WornOn": ["armor"],
       "Verbs": {
         "use": "You put on the leather armor, feeling its protective embrace.",
         "examine": "The leather is thick and sturdy, with reinforced stitching at key points."
