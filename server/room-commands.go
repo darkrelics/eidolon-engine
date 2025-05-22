@@ -490,6 +490,15 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 	}
 
 	// Find the item in the character's inventory
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("character is nil"),
+			Timestamp: time.Now(),
+		}
+	}
+	
 	character.mutex.Lock()
 	var itemToRemove *Item
 

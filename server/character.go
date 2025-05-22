@@ -192,6 +192,13 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 						continue
 					}
 
+					// Save item to database
+					err = item.Save(p.server.game.database)
+					if err != nil {
+						Logger.Error("Failed to save starting item to database", "itemID", item.id, "error", err)
+						continue
+					}
+
 					// Set worn state if specified
 					if startingItem.IsWorn && item.wearable {
 						item.isWorn = true
