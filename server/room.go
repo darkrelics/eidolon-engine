@@ -119,7 +119,7 @@ type RoomData struct {
 // Initialize a new room
 func NewRoom(ctx context.Context, roomID int64, area, title, description string, persistent bool, scriptID string) *Room {
 
-	Logger.Info("New Room...Initalizing Room...", "roomID", roomID, "persistent", persistent, "scriptID", scriptID)
+	Logger.Debug("New Room...Initalizing Room...", "roomID", roomID, "persistent", persistent, "scriptID", scriptID)
 
 	now := time.Now()
 
