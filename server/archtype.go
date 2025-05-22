@@ -135,10 +135,6 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 		return fmt.Errorf("archetype '%s' must have at least one ability", archetype.ArchetypeName)
 	}
 
-	// Validate that StartRoom exists
-	if _, exists := g.rooms[archetype.StartRoom]; !exists {
-		return fmt.Errorf("archetype '%s' start room %d does not exist", archetype.ArchetypeName, archetype.StartRoom)
-	}
 
 	// Validate starting items
 	for i, startingItem := range archetype.StartingItems {
@@ -158,11 +154,15 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 
 		// Skip prototype existence check during initial load - will be validated later
 		
-		// Validate slot compatibility with prototype wearable locations
+		// Validate prototype ID format
 		prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
-		if err == nil {
-			// We can't check prototypes here since they're not loaded yet
-			// This validation will be done in ValidateArchetypePrototypes
+		if err != nil {
+			return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID format: %v", archetype.ArchetypeName, i, err)
+		}
+
+		// Validate prototype exists
+		if _, exists := g.prototypes[prototypeIDUUID]; !exists {
+			return fmt.Errorf("archetype '%s' starting item %d references non-existent prototype '%s'", archetype.ArchetypeName, i, startingItem.PrototypeID)
 		}
 	}
 

@@ -110,18 +110,6 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Warn("Error initializing character bloom filter", "error", err)
 	}
 
-	// Load Archetypes
-
-	if err := game.LoadArchetypes(); err != nil {
-		Logger.Error("Error loading archetypes", "error", err)
-	}
-
-	// Build Archetype Options
-
-	if err := game.BuildArchetypeOptions(); err != nil {
-		Logger.Error("Error loading archetype options", "error", err)
-	}
-
 	// Create Default Room
 
 	game.rooms[0] = NewRoom(ctx, 0, "The Void", "The Void", "Default void room.", true, "") // Default room is always persistent, no script
@@ -139,6 +127,18 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Warn("Error loading item prototypes", "error", err)
 	} else {
 		game.prototypes = prototypes
+	}
+
+	// Load Archetypes
+
+	if err := game.LoadArchetypes(); err != nil {
+		Logger.Error("Error loading archetypes", "error", err)
+	}
+
+	// Build Archetype Options
+
+	if err := game.BuildArchetypeOptions(); err != nil {
+		Logger.Error("Error loading archetype options", "error", err)
 	}
 
 	// Validate archetype prototype references after both archetypes and prototypes are loaded

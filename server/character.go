@@ -153,6 +153,8 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
 				character.room = startRoom
+			} else {
+				character.room = p.server.game.rooms[0]
 			}
 
 			// Create starting items from prototypes
