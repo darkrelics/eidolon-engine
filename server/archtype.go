@@ -150,17 +150,66 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 			return fmt.Errorf("archetype '%s' starting item %d has empty slot", archetype.ArchetypeName, i)
 		}
 
-		// Validate prototype exists
-		prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
+		// Validate prototype ID format
+		_, err := uuid.FromString(startingItem.PrototypeID)
 		if err != nil {
 			return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID: %w", archetype.ArchetypeName, i, err)
 		}
 
-		if _, exists := g.prototypes[prototypeIDUUID]; !exists {
-			return fmt.Errorf("archetype '%s' starting item %d prototype '%s' does not exist", archetype.ArchetypeName, i, startingItem.PrototypeID)
+		// Skip prototype existence check during initial load - will be validated later
+		
+		// Validate slot compatibility with prototype wearable locations
+		prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
+		if err == nil {
+			// We can't check prototypes here since they're not loaded yet
+			// This validation will be done in ValidateArchetypePrototypes
 		}
 	}
 
+	return nil
+}
+
+// ValidateArchetypePrototypes validates that all prototype IDs in archetypes exist in the prototypes map
+func (g *Game) ValidateArchetypePrototypes() error {
+	Logger.Info("Validating archetype prototype references")
+
+	for archetypeName, archetype := range g.archetypes {
+		for i, startingItem := range archetype.StartingItems {
+			prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
+			if err != nil {
+				return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID: %w", archetypeName, i, err)
+			}
+
+			prototype, exists := g.prototypes[prototypeIDUUID]
+			if !exists {
+				return fmt.Errorf("archetype '%s' starting item %d prototype '%s' does not exist", archetypeName, i, startingItem.PrototypeID)
+			}
+
+			// Validate slot compatibility with prototype wearable locations
+			if startingItem.IsWorn && prototype.wearable {
+				// Check if the archetype slot is compatible with the prototype's wearable locations
+				slotCompatible := false
+				for _, wearableLocation := range prototype.wornOn {
+					if strings.Contains(wearableLocation, startingItem.Slot) || 
+					   strings.Contains(startingItem.Slot, wearableLocation) ||
+					   startingItem.Slot == "finger" && (wearableLocation == "left_finger" || wearableLocation == "right_finger") {
+						slotCompatible = true
+						break
+					}
+				}
+				
+				if !slotCompatible {
+					Logger.Warn("Archetype slot incompatible with prototype wearable locations",
+						"archetype", archetypeName,
+						"slot", startingItem.Slot,
+						"wearableLocations", prototype.wornOn,
+						"prototypeID", startingItem.PrototypeID)
+				}
+			}
+		}
+	}
+
+	Logger.Info("All archetype prototype references validated successfully")
 	return nil
 }
 

@@ -80,7 +80,7 @@
         "shoot": "target"
       },
       "TraitMods": {
-        "dexterity": 2
+        "agility": 2
       },
       "Container": false,
       "Contents": [],
@@ -108,7 +108,7 @@
       },
       "Overrides": {},
       "TraitMods": {
-        "defense": 3,
+        "endurance": 3,
         "agility": -1
       },
       "Container": false,
@@ -165,7 +165,7 @@
       },
       "Overrides": {},
       "TraitMods": {
-        "carry_capacity": 5
+        "strength": 1
       },
       "Container": true,
       "Contents": ["b47ac10b-58cc-4372-a567-0e02b2c3d483", "947ac10b-58cc-4372-a567-0e02b2c3d486"],
@@ -193,7 +193,7 @@
       },
       "Overrides": {},
       "TraitMods": {
-        "magic_power": 2
+        "arcane": 2
       },
       "Container": false,
       "Contents": [],

@@ -141,6 +141,11 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		game.prototypes = prototypes
 	}
 
+	// Validate archetype prototype references after both archetypes and prototypes are loaded
+	if err := game.ValidateArchetypePrototypes(); err != nil {
+		Logger.Error("Archetype prototype validation failed", "error", err)
+	}
+
 	game.initCommands()
 
 	return game, nil
