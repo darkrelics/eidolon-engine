@@ -542,13 +542,22 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 // handleMovementCommand processes movement commands (go/move)
 func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	character := cmd.Character
-	room := character.room
 
-	if character == nil || room == nil {
+	if character == nil {
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
-			Error:     fmt.Errorf("invalid character or room state"),
+			Error:     fmt.Errorf("invalid character"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	room := character.room
+	if room == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid room state"),
 			Timestamp: time.Now(),
 		}
 	}
