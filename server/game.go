@@ -359,7 +359,6 @@ func (g *Game) handleGameCommand(cmd *CommandRequest) {
 	g.sendCommandResponse(cmd, response)
 }
 
-
 // handleEnvironmentCommand processes environment-related commands
 func (g *Game) handleEnvironmentCommand(cmd *CommandRequest) *CommandResponse {
 	var msg string

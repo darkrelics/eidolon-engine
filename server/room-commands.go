@@ -498,7 +498,7 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 			Timestamp: time.Now(),
 		}
 	}
-	
+
 	character.mutex.Lock()
 	var itemToRemove *Item
 
