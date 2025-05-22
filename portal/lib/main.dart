@@ -25,6 +25,8 @@ import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/registration_screen.dart';
 import 'screens/character_management_screen.dart';
+import 'screens/password_reset_screen.dart';
+import 'screens/password_reset_confirm_screen.dart';
 import 'utils/security_config.dart';
 import 'utils/route_guard.dart';
 import 'utils/session_monitor.dart';
@@ -59,6 +61,7 @@ void main() {
         ),
         ChangeNotifierProvider(create: (_) => ThemeProvider.create()),
         Provider.value(value: sessionMonitor),
+        Provider.value(value: authService),
       ],
       child: const MyApp(),
     ),
@@ -134,6 +137,13 @@ class MyApp extends StatelessWidget {
         );
       case '/register':
         return MaterialPageRoute(builder: (_) => const RegistrationScreen());
+      case '/password-reset':
+        return MaterialPageRoute(builder: (_) => const PasswordResetScreen());
+      case '/password-reset-confirm':
+        final email = settings.arguments as String;
+        return MaterialPageRoute(
+          builder: (_) => PasswordResetConfirmScreen(email: email),
+        );
       case '/character-management':
         return MaterialPageRoute(
           builder: (_) => const CharacterManagementScreen(),

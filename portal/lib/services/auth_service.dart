@@ -94,6 +94,9 @@ class AuthExceptionMapper {
         case 'UserNotConfirmedException':
           return 'Please verify your email before signing in';
         case 'InvalidParameterException':
+          if (error.message?.toLowerCase().contains('password') == true) {
+            return 'Password must meet complexity requirements';
+          }
           return 'Please check your input and try again';
         case 'UsernameExistsException':
           return 'An account with this email already exists';
@@ -323,6 +326,58 @@ class AuthService {
       );
     } catch (e) {
       _logError('Failed to send verification code');
+      rethrow;
+    }
+  }
+
+  /// Initiates password reset by sending reset code to user's email
+  Future<void> forgotPassword(String email) async {
+    try {
+      if (!_validateEmail(email)) {
+        throw CognitoClientException('Invalid email format');
+      }
+
+      final user = CognitoUser(email, userPool);
+      await user.forgotPassword();
+    } on CognitoClientException catch (e) {
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(e),
+      );
+    } catch (e) {
+      _logError('Failed to initiate password reset');
+      rethrow;
+    }
+  }
+
+  /// Confirms password reset with code and new password
+  Future<void> confirmPassword(
+    String email,
+    String code,
+    String newPassword,
+  ) async {
+    try {
+      if (!_validateEmail(email)) {
+        throw CognitoClientException('Invalid email format');
+      }
+
+      if (code.isEmpty) {
+        throw CognitoClientException('Verification code cannot be empty');
+      }
+
+      if (!_validatePassword(newPassword)) {
+        throw CognitoClientException(
+          'Password must be at least 8 characters with uppercase, lowercase, number and special character',
+        );
+      }
+
+      final user = CognitoUser(email, userPool);
+      await user.confirmPassword(code, newPassword);
+    } on CognitoClientException catch (e) {
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(e),
+      );
+    } catch (e) {
+      _logError('Failed to reset password');
       rethrow;
     }
   }
