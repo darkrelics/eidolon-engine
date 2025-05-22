@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -110,18 +109,6 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Warn("Error initializing character bloom filter", "error", err)
 	}
 
-	// Load Archetypes
-
-	if err := game.LoadArchetypes(); err != nil {
-		Logger.Error("Error loading archetypes", "error", err)
-	}
-
-	// Build Archetype Options
-
-	if err := game.BuildArchetypeOptions(); err != nil {
-		Logger.Error("Error loading archetype options", "error", err)
-	}
-
 	// Create Default Room
 
 	game.rooms[0] = NewRoom(ctx, 0, "The Void", "The Void", "Default void room.", true, "") // Default room is always persistent, no script
@@ -139,6 +126,23 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Warn("Error loading item prototypes", "error", err)
 	} else {
 		game.prototypes = prototypes
+	}
+
+	// Load Archetypes
+
+	if err := game.LoadArchetypes(); err != nil {
+		Logger.Error("Error loading archetypes", "error", err)
+	}
+
+	// Build Archetype Options
+
+	if err := game.BuildArchetypeOptions(); err != nil {
+		Logger.Error("Error loading archetype options", "error", err)
+	}
+
+	// Validate archetype prototype references after both archetypes and prototypes are loaded
+	if err := game.ValidateArchetypePrototypes(); err != nil {
+		Logger.Error("Archetype prototype validation failed", "error", err)
 	}
 
 	game.initCommands()
@@ -353,43 +357,6 @@ func (g *Game) handleGameCommand(cmd *CommandRequest) {
 
 	// Send response
 	g.sendCommandResponse(cmd, response)
-}
-
-// handleWhoCommand processes the "who" command at game tier
-func (g *Game) handleWhoCommand(cmd *CommandRequest) *CommandResponse {
-	// Get a list of all players
-	g.mutex.RLock()
-	var players []string
-	for _, c := range g.characters {
-		if c != nil && c.name != "" {
-			players = append(players, c.name)
-		}
-	}
-	g.mutex.RUnlock()
-
-	// Sort the names
-	sort.Strings(players)
-
-	// Build message
-	var msg strings.Builder
-	msg.WriteString("\n\rPlayers Online:\n\r")
-	msg.WriteString("----------------\n\r")
-
-	if len(players) == 0 {
-		msg.WriteString("No players online.\n\r")
-	} else {
-		for _, name := range players {
-			msg.WriteString(fmt.Sprintf("%s\n\r", name))
-		}
-		msg.WriteString(fmt.Sprintf("\n\rTotal: %d player(s)\n\r", len(players)))
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   msg.String(),
-		Timestamp: time.Now(),
-	}
 }
 
 // handleEnvironmentCommand processes environment-related commands

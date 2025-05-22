@@ -153,11 +153,15 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
 				character.room = startRoom
+			} else {
+				character.room = p.server.game.rooms[0]
 			}
 
 			// Create starting items from prototypes
+			Logger.Debug("Processing starting items for archetype", "archetype", archetype, "itemCount", len(archetypeObj.StartingItems))
 			if len(archetypeObj.StartingItems) > 0 {
-				for _, startingItem := range archetypeObj.StartingItems {
+				for i, startingItem := range archetypeObj.StartingItems {
+					Logger.Debug("Processing starting item", "archetype", archetype, "itemIndex", i, "prototypeID", startingItem.PrototypeID, "slot", startingItem.Slot)
 					// Find prototype by ID
 					prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
 					if err != nil {
@@ -185,6 +189,13 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 					item, err := CreateItemFromPrototype(prototype, p.server.game)
 					if err != nil {
 						Logger.Error("Failed to create item from prototype", "prototypeID", startingItem.PrototypeID, "error", err)
+						continue
+					}
+
+					// Save item to database
+					err = item.Save(p.server.game.database)
+					if err != nil {
+						Logger.Error("Failed to save starting item to database", "itemID", item.id, "error", err)
 						continue
 					}
 

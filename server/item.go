@@ -205,6 +205,8 @@ var WearLocations = map[string]bool{
 	"waist":        true,
 	"legs":         true,
 	"feet":         true,
+	"finger":       true,
+	"wrist":        true,
 	"left_finger":  true,
 	"right_finger": true,
 	"left_wrist":   true,
