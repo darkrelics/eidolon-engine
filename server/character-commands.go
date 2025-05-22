@@ -304,4 +304,3 @@ func executeEquipmentCommand(character *Character, tokens []string) error {
 	character.player.commandOut <- eqDisplay.String()
 	return nil
 }
-

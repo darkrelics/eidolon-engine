@@ -52,7 +52,7 @@ type ExitData struct {
 
 // NewExit initializes a new exit
 func NewExit(exitID uuid.UUID, direction string, description string, targetRoom *Room, targetRoomID int64, arrivalText string, visible bool, scriptID string) *Exit {
-	Logger.Info("New Exit...Initializing Exit...")
+	Logger.Debug("New Exit...Initializing Exit...")
 
 	return &Exit{
 		exitID:       exitID,

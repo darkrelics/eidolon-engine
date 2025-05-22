@@ -60,22 +60,22 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 
 	// Try to handle common room commands
 	verb := strings.ToLower(cmd.Verb)
-	
+
 	// Movement commands
 	if verb == "go" || verb == "move" {
 		return handleMovementCommand(cmd, game)
 	}
-	
+
 	// Item commands
 	if verb == "get" || verb == "take" || verb == "drop" || verb == "put" || verb == "wear" || verb == "wield" || verb == "equip" || verb == "remove" || verb == "unwear" || verb == "unequip" {
 		return handleItemCommand(cmd)
 	}
-	
+
 	// Communication commands
 	if verb == "say" || verb == "\"" || verb == "'" {
 		return handleSayCommand(cmd)
 	}
-	
+
 	// Look command (room-level effects)
 	if verb == "look" || verb == "l" {
 		// This is typically handled at the character level, but might have room-level effects
@@ -92,7 +92,7 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 // handleSayCommand processes say/talk commands
 func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 	character := cmd.Character
-	
+
 	if character == nil || character.room == nil {
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -114,16 +114,16 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Join all arguments after the command to form the message
 	message := strings.Join(cmd.Args[1:], " ")
-	
+
 	// Message for the speaker
 	speakerMessage := fmt.Sprintf("\n\rYou say '%s'\n\r", message)
-	
+
 	// Message for others in the room
 	roomMessage := fmt.Sprintf("\n\r%s says '%s'\n\r", character.name, message)
-	
+
 	// Send message to everyone else in the room
 	SendRoomMessageExcept(character.room, roomMessage, character)
-	
+
 	return &CommandResponse{
 		RequestID: cmd.ID,
 		Success:   true,
@@ -307,6 +307,15 @@ func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 
 // handleWearCommand processes the wear/equip command
 func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse {
+	// Check if cmd is valid
+	if cmd == nil {
+		return &CommandResponse{
+			Success:   false,
+			Error:     fmt.Errorf("invalid command request"),
+			Timestamp: time.Now(),
+		}
+	}
+
 	character := cmd.Character
 
 	// Check if character is valid
@@ -385,17 +394,53 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 		}
 	}
 
-	// Check if any locations conflict
+	// Special handling for finger and wrist items - map to specific left/right locations
+	var finalWearLocations []string
 	for _, location := range itemToWear.wornOn {
-		if wornLocations[location] {
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("you're already wearing something on your %s", location),
-				Timestamp: time.Now(),
+		if location == "finger" {
+			// Check left finger first, then right finger
+			if !wornLocations["left_finger"] {
+				finalWearLocations = append(finalWearLocations, "left_finger")
+			} else if !wornLocations["right_finger"] {
+				finalWearLocations = append(finalWearLocations, "right_finger")
+			} else {
+				return &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Error:     fmt.Errorf("both your fingers are already occupied"),
+					Timestamp: time.Now(),
+				}
 			}
+		} else if location == "wrist" {
+			// Check left wrist first, then right wrist
+			if !wornLocations["left_wrist"] {
+				finalWearLocations = append(finalWearLocations, "left_wrist")
+			} else if !wornLocations["right_wrist"] {
+				finalWearLocations = append(finalWearLocations, "right_wrist")
+			} else {
+				return &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Error:     fmt.Errorf("both your wrists are already occupied"),
+					Timestamp: time.Now(),
+				}
+			}
+		} else {
+			// For all other locations, check for conflicts normally
+			if wornLocations[location] {
+				return &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Error:     fmt.Errorf("you're already wearing something on your %s", location),
+					Timestamp: time.Now(),
+				}
+			}
+			finalWearLocations = append(finalWearLocations, location)
 		}
 	}
+
+	// Update the item's worn locations to the specific locations
+	itemToWear.wornOn = finalWearLocations
 
 	// Mark item as worn
 	itemToWear.isWorn = true
@@ -426,10 +471,15 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 
 // handleRemoveCommand processes the remove/unwear command
 func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandResponse {
-	character := cmd.Character
+	if cmd == nil {
+		return &CommandResponse{
+			Success:   false,
+			Error:     fmt.Errorf("invalid command request"),
+			Timestamp: time.Now(),
+		}
+	}
 
-	// Check if character is valid
-	if character == nil {
+	if cmd.Character == nil {
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
@@ -438,16 +488,19 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 		}
 	}
 
+	character := cmd.Character
 	// Find the item in the character's inventory
 	character.mutex.Lock()
 	defer character.mutex.Unlock()
 
 	var itemToRemove *Item
 
-	for _, item := range character.inventory {
-		if item != nil && item.isWorn && strings.Contains(strings.ToLower(item.name), targetName) {
-			itemToRemove = item
-			break
+	if character.inventory != nil {
+		for _, item := range character.inventory {
+			if item != nil && item.isWorn && strings.Contains(strings.ToLower(item.name), targetName) {
+				itemToRemove = item
+				break
+			}
 		}
 	}
 
@@ -553,9 +606,9 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		// Try to load the room using the target room ID
 		loadedRoom, err := game.LoadRoom(targetExit.targetRoomID)
 		if err != nil {
-			Logger.Warn("Could not load target room for movement", 
-				"targetRoomID", targetExit.targetRoomID, 
-				"direction", direction, 
+			Logger.Warn("Could not load target room for movement",
+				"targetRoomID", targetExit.targetRoomID,
+				"direction", direction,
 				"characterName", character.name,
 				"error", err)
 			return &CommandResponse{

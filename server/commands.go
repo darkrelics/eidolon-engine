@@ -225,7 +225,7 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 	}
 
 	// Try to execute command hierarchically: Character -> Room -> Game
-	
+
 	// Step 1: Try character-level handler first (both timed and untimed)
 	if cmdInfo.handler != nil {
 		Logger.Debug("Executing character-tier command", "verb", verb, "character", character.name)
@@ -241,7 +241,7 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 
 	// Step 2: Character doesn't handle this command, escalate to room
 	Logger.Debug("Escalating command to room", "verb", verb, "character", character.name)
-	
+
 	// Create command request for room processing
 	cmdReq := &CommandRequest{
 		ID:        GenerateUUIDv7(),
