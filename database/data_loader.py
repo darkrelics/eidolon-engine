@@ -81,23 +81,23 @@ def store_exits(dynamodb, exits_data):
                 "Visible": exit_data["Visible"],
                 "ScriptID": exit_data.get("ScriptID", ""),
             }
-            
+
             # Build update expression dynamically
             update_expression = "SET "
             expression_attribute_values = {}
             expression_parts = []
-            
+
             for key, value in exit_item.items():
                 if key != "ExitID":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
                     expression_attribute_values[f":{key.lower()}"] = convert_to_dynamodb_format(value)
-            
+
             update_expression += ", ".join(expression_parts)
-            
+
             exits_table.update_item(
                 Key={"ExitID": exit_data["ExitID"]},
                 UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_attribute_values
+                ExpressionAttributeValues=expression_attribute_values,
             )
         print("Exit data stored in DynamoDB successfully")
     except ClientError as e:
@@ -126,23 +126,23 @@ def store_rooms(dynamodb, rooms_data):
                 "Persistent": room.get("Persistent", False),
                 "ScriptID": room.get("ScriptID", ""),
             }
-            
+
             # Build update expression dynamically
             update_expression = "SET "
             expression_attribute_values = {}
             expression_parts = []
-            
+
             for key, value in room_item.items():
                 if key != "RoomID":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
                     expression_attribute_values[f":{key.lower()}"] = convert_to_dynamodb_format(value)
-            
+
             update_expression += ", ".join(expression_parts)
-            
+
             rooms_table.update_item(
                 Key={"RoomID": room["RoomID"]},
                 UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_attribute_values
+                ExpressionAttributeValues=expression_attribute_values,
             )
         print("Room data stored in DynamoDB successfully")
     except ClientError as e:
@@ -175,23 +175,23 @@ def store_archetypes(dynamodb, archetypes_data):
                 "StartRoom": archetype.get("StartRoom", 0),
                 "StartingItems": archetype.get("StartingItems", []),
             }
-            
+
             # Build update expression dynamically
             update_expression = "SET "
             expression_attribute_values = {}
             expression_parts = []
-            
+
             for key, value in archetype_item.items():
                 if key != "ArchetypeName":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
                     expression_attribute_values[f":{key.lower()}"] = convert_to_dynamodb_format(value)
-            
+
             update_expression += ", ".join(expression_parts)
-            
+
             table.update_item(
                 Key={"ArchetypeName": name},
                 UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_attribute_values
+                ExpressionAttributeValues=expression_attribute_values,
             )
         print("Archetype data stored in DynamoDB successfully")
     except ClientError as err:
@@ -213,23 +213,23 @@ def store_item_prototypes(dynamodb, prototypes_data):
         for prototype in prototypes_data.get("itemPrototypes", []):
             prototype_id = prototype["PrototypeID"]
             prototype_data = prototype.copy()
-            
+
             # Build update expression dynamically
             update_expression = "SET "
             expression_attribute_values = {}
             expression_parts = []
-            
+
             for key, value in prototype_data.items():
                 if key != "PrototypeID":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
                     expression_attribute_values[f":{key.lower()}"] = convert_to_dynamodb_format(value)
-            
+
             update_expression += ", ".join(expression_parts)
-            
+
             table.update_item(
                 Key={"PrototypeID": prototype_id},
                 UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_attribute_values
+                ExpressionAttributeValues=expression_attribute_values,
             )
         print("Item prototype data stored in DynamoDB successfully")
     except ClientError as err:
