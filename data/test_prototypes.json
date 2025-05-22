@@ -186,7 +186,7 @@
       "MaxStack": 1,
       "Quantity": 1,
       "Wearable": true,
-      "WornOn": ["left_finger", "right_finger"],
+      "WornOn": ["finger"],
       "Verbs": {
         "use": "You slip the ring onto your finger, feeling a surge of magical power.",
         "examine": "The ring's surface is covered in tiny, glowing runes."

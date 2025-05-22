@@ -479,7 +479,8 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 		}
 	}
 
-	if cmd.Character == nil {
+	character := cmd.Character
+	if character == nil {
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
@@ -488,11 +489,8 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 		}
 	}
 
-	character := cmd.Character
 	// Find the item in the character's inventory
 	character.mutex.Lock()
-	defer character.mutex.Unlock()
-
 	var itemToRemove *Item
 
 	if character.inventory != nil {
@@ -506,6 +504,7 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 
 	// Check if item exists
 	if itemToRemove == nil {
+		character.mutex.Unlock()
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
@@ -524,6 +523,7 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 
 	// Create success message
 	message := fmt.Sprintf("\n\rYou remove %s.\n\r", itemToRemove.name)
+	character.mutex.Unlock()
 
 	// Notify the room
 	if character.room != nil {
