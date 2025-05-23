@@ -299,45 +299,59 @@ func (g *Game) tick() error {
 
 // processGameCommands processes any commands that have been escalated to game tier
 func (g *Game) processGameCommands() {
-	// Process commands from all active rooms
+	// Collect active rooms and characters while holding the lock
 	g.mutex.RLock()
+	
+	// Make a slice of rooms to process
+	activeRooms := make([]*Room, 0, len(g.rooms))
 	for _, room := range g.rooms {
 		if room != nil && room.running {
-			// Non-blocking check for commands from this room
-			select {
-			case cmd, ok := <-room.gameCommandOut:
-				if !ok {
-					// Channel closed, skip this room
-					continue
-				}
-				// Handle the command asynchronously
-				go g.handleGameCommand(cmd)
-			default:
-				// No command waiting, continue to next room
+			activeRooms = append(activeRooms, room)
+		}
+	}
+	
+	// Make a slice of characters to process
+	activeCharacters := make([]*Character, 0, len(g.characters))
+	for _, character := range g.characters {
+		if character != nil {
+			activeCharacters = append(activeCharacters, character)
+		}
+	}
+	
+	g.mutex.RUnlock()
+	
+	// Now process commands without holding the lock
+	// Process commands from all active rooms
+	for _, room := range activeRooms {
+		// Non-blocking check for commands from this room
+		select {
+		case cmd, ok := <-room.gameCommandOut:
+			if !ok {
+				// Channel closed, skip this room
 				continue
 			}
+			// Handle the command asynchronously
+			go g.handleGameCommand(cmd)
+		default:
+			// No command waiting, continue to next room
 		}
 	}
 
 	// Process commands from characters directly
-	for _, character := range g.characters {
-		if character != nil {
-			// Non-blocking check for commands from this character
-			select {
-			case cmd, ok := <-character.gameCommandOut:
-				if !ok {
-					// Channel closed, skip this character
-					continue
-				}
-				// Handle the command asynchronously
-				go g.handleGameCommand(cmd)
-			default:
-				// No command waiting, continue to next character
+	for _, character := range activeCharacters {
+		// Non-blocking check for commands from this character
+		select {
+		case cmd, ok := <-character.gameCommandOut:
+			if !ok {
+				// Channel closed, skip this character
 				continue
 			}
+			// Handle the command asynchronously
+			go g.handleGameCommand(cmd)
+		default:
+			// No command waiting, continue to next character
 		}
 	}
-	g.mutex.RUnlock()
 }
 
 // handleGameCommand processes a command at the game tier
@@ -404,28 +418,34 @@ func (g *Game) handleGlobalCommunicationCommand(cmd *CommandRequest) *CommandRes
 		broadcastMsg = fmt.Sprintf("\n\r[Announcement] %s: %s\n\r", cmd.Character.name, message)
 	}
 
-	// Broadcast to all characters
+	// Collect recipients while holding the lock
 	g.mutex.RLock()
+	recipients := make([]*Character, 0, len(g.characters))
 	for _, c := range g.characters {
 		if c != nil && c != cmd.Character && c.player != nil {
-			select {
-			case c.player.commandOut <- broadcastMsg:
-				// Message sent successfully
-				select {
-				case c.player.commandOut <- c.prompt:
-					// Prompt sent successfully
-				default:
-					// Could not send prompt, but that's ok
-				}
-			default:
-				// Could not send message, character's buffer might be full
-				Logger.Warn("Failed to send global message to player",
-					"recipient", c.name,
-					"sender", cmd.Character.name)
-			}
+			recipients = append(recipients, c)
 		}
 	}
 	g.mutex.RUnlock()
+	
+	// Broadcast to all recipients without holding the lock
+	for _, c := range recipients {
+		select {
+		case c.player.commandOut <- broadcastMsg:
+			// Message sent successfully
+			select {
+			case c.player.commandOut <- c.prompt:
+				// Prompt sent successfully
+			default:
+				// Could not send prompt, but that's ok
+			}
+		default:
+			// Could not send message, character's buffer might be full
+			Logger.Warn("Failed to send global message to player",
+				"recipient", c.name,
+				"sender", cmd.Character.name)
+		}
+	}
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
@@ -487,26 +507,38 @@ func (g *Game) ValidateCharacterName(name string) error {
 
 // saveAllCharacters saves all active characters
 func (g *Game) saveAllCharacters() {
+	// Collect characters while holding the lock
 	g.mutex.RLock()
-	defer g.mutex.RUnlock()
-
+	characters := make([]*Character, 0, len(g.characters))
 	for _, character := range g.characters {
 		if character != nil {
-			if err := character.Save(); err != nil {
-				Logger.Error("Error saving character during shutdown", "characterName", character.name, "error", err)
-			}
+			characters = append(characters, character)
+		}
+	}
+	g.mutex.RUnlock()
+
+	// Save characters without holding the lock
+	for _, character := range characters {
+		if err := character.Save(); err != nil {
+			Logger.Error("Error saving character during shutdown", "characterName", character.name, "error", err)
 		}
 	}
 }
 
 // logoutAllCharacters logs out all active characters
 func (g *Game) logoutAllCharacters() {
+	// Collect characters while holding the lock
 	g.mutex.RLock()
-	defer g.mutex.RUnlock()
-
+	characters := make([]*Character, 0, len(g.characters))
 	for _, character := range g.characters {
 		if character != nil {
-			character.Stop(character.end)
+			characters = append(characters, character)
 		}
+	}
+	g.mutex.RUnlock()
+
+	// Stop characters without holding the lock
+	for _, character := range characters {
+		character.Stop(character.end)
 	}
 }
