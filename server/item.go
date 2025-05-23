@@ -381,6 +381,23 @@ func LoadPrototypes(k *KeyPair) (map[uuid.UUID]*Prototype, error) {
 	return prototypes, nil
 }
 
+// ValidatePrototypes validates all loaded prototypes
+func ValidatePrototypes(prototypes map[uuid.UUID]*Prototype) error {
+	Logger.Info("Validating prototypes")
+	
+	for id, prototype := range prototypes {
+		// Validate prototype has required fields
+		if prototype.name == "" {
+			return fmt.Errorf("prototype %s has empty name", id)
+		}
+		
+		// Additional validation can be added here as needed
+	}
+	
+	Logger.Info("All prototypes validated successfully", "count", len(prototypes))
+	return nil
+}
+
 // LoadItemsForCharacter loads items for a character from the inventory map
 func LoadItemsForCharacter(itemMap map[string]string, k *KeyPair) (map[string]*Item, error) {
 	Logger.Debug("Loading items for character inventory")

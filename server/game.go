@@ -126,6 +126,11 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Warn("Error loading item prototypes", "error", err)
 	} else {
 		game.prototypes = prototypes
+		
+		// Validate prototypes after loading
+		if err := ValidatePrototypes(prototypes); err != nil {
+			Logger.Error("Error validating prototypes", "error", err)
+		}
 	}
 
 	// Load Archetypes
@@ -138,11 +143,6 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	if err := game.BuildArchetypeOptions(); err != nil {
 		Logger.Error("Error loading archetype options", "error", err)
-	}
-
-	// Validate archetype prototype references after both archetypes and prototypes are loaded
-	if err := game.ValidateArchetypePrototypes(); err != nil {
-		Logger.Error("Archetype prototype validation failed", "error", err)
 	}
 
 	game.initCommands()
