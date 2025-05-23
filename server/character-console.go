@@ -122,8 +122,12 @@ func (c *Character) RunConsole(done chan bool) {
 			// Always send prompt after processing a command
 			c.player.commandOut <- c.prompt
 
-		case <-c.end:
-			Logger.Info("Character end signaled", "characterName", c.name)
+		case _, ok := <-c.end:
+			if !ok {
+				Logger.Info("Character end channel closed", "characterName", c.name)
+			} else {
+				Logger.Info("Character end signaled", "characterName", c.name)
+			}
 			return
 
 		case <-timer.C:

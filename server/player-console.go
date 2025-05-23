@@ -507,8 +507,12 @@ func (p *Player) PlayCharacter() {
 					Logger.Debug("Context cancelled during input forwarding", "characterName", characterName)
 					return
 				}
-			case <-characterEnd:
-				Logger.Debug("Character end signal received, stopping input forwarding", "characterName", characterName)
+			case _, ok := <-characterEnd:
+				if !ok {
+					Logger.Debug("Character end channel closed, stopping input forwarding", "characterName", characterName)
+				} else {
+					Logger.Debug("Character end signal received, stopping input forwarding", "characterName", characterName)
+				}
 				return
 			case <-ctx.Done():
 				Logger.Debug("Context cancelled, stopping input forwarding", "characterName", characterName)

@@ -54,6 +54,7 @@ type Character struct {
 	playerCommandIn  chan string           // Messages from player
 	end              chan bool             // Channel for shutdown signaling
 	prompt           string                // Character prompt
+	stopped          bool                  // Flag to ensure Stop is only executed once
 }
 
 // CharacterData for unmarshalling character.

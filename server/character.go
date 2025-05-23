@@ -242,11 +242,23 @@ func (c *Character) Run(done chan bool) {
 
 // Stop cleanly shuts down the character session
 func (c *Character) Stop(done chan bool) {
-
+	// First, signal done will be called at the end
 	defer func() {
-		done <- true
+		if done != nil {
+			done <- true
+		}
 	}()
 
+	// Ensure Stop logic is only executed once
+	c.mutex.Lock()
+	if c.stopped {
+		c.mutex.Unlock()
+		Logger.Debug("Character already stopped", "characterName", c.name)
+		return
+	}
+	c.stopped = true
+	c.mutex.Unlock()
+	
 	Logger.Info("Stopping character session", "characterName", c.name)
 
 	// Notify the room of departure before removing the character
@@ -276,13 +288,9 @@ func (c *Character) Stop(done chan bool) {
 	// Store a reference to the player before resetting
 	player := c.player
 
-	// Use a non-blocking send to avoid deadlocks
-	select {
-	case c.end <- true:
-		Logger.Debug("End signal sent successfully", "characterName", c.name)
-	default:
-		Logger.Warn("End channel is full or closed", "characterName", c.name)
-	}
+	// Signal shutdown by closing the end channel
+	// This is safe because we check the stopped flag
+	close(c.end)
 
 	// If we have a valid player reference, inform them we're returning to console
 	if player != nil {
