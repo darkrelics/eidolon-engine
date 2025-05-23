@@ -19,6 +19,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -252,7 +253,7 @@ func formatCarriedItem(item *Item) string {
 }
 
 // SaveItem saves an item to the database
-func (item *Item) Save(k *KeyPair) error {
+func (item *Item) Save(ctx context.Context, k *KeyPair) error {
 	item.mutex.RLock()
 	defer item.mutex.RUnlock()
 
@@ -290,7 +291,7 @@ func (item *Item) Save(k *KeyPair) error {
 	}
 
 	// Write to database
-	err := k.Put("items", itemData)
+	err := k.Put(ctx, "items", itemData)
 	if err != nil {
 		Logger.Error("Error writing item data", "itemID", item.id, "error", err)
 		return fmt.Errorf("error writing item data: %w", err)
@@ -299,7 +300,7 @@ func (item *Item) Save(k *KeyPair) error {
 	// Recursively save contained items
 	for _, content := range item.contents {
 		if content != nil {
-			if err := content.Save(k); err != nil {
+			if err := content.Save(ctx, k); err != nil {
 				Logger.Warn("Error saving contained item", "containerID", item.id, "itemID", content.id, "error", err)
 			}
 		}
@@ -310,7 +311,7 @@ func (item *Item) Save(k *KeyPair) error {
 }
 
 // SavePrototype saves a prototype to the database
-func (p *Prototype) Save(k *KeyPair) error {
+func (p *Prototype) Save(ctx context.Context, k *KeyPair) error {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 
@@ -344,7 +345,7 @@ func (p *Prototype) Save(k *KeyPair) error {
 	}
 
 	// Write to database
-	err := k.Put("prototypes", prototypeData)
+	err := k.Put(ctx, "prototypes", prototypeData)
 	if err != nil {
 		Logger.Error("Error writing prototype data", "prototypeID", p.id, "error", err)
 		return fmt.Errorf("error writing prototype data: %w", err)
@@ -355,13 +356,13 @@ func (p *Prototype) Save(k *KeyPair) error {
 }
 
 // LoadPrototypes loads all item prototypes from DynamoDB
-func LoadPrototypes(k *KeyPair) (map[uuid.UUID]*Prototype, error) {
+func LoadPrototypes(ctx context.Context, k *KeyPair) (map[uuid.UUID]*Prototype, error) {
 	Logger.Info("Loading item prototypes...")
 
 	prototypes := make(map[uuid.UUID]*Prototype)
 
 	var prototypesData []PrototypeData
-	err := k.Scan("prototypes", &prototypesData)
+	err := k.Scan(ctx, "prototypes", &prototypesData)
 	if err != nil {
 		return prototypes, fmt.Errorf("error scanning prototypes: %w", err)
 	}
@@ -384,22 +385,22 @@ func LoadPrototypes(k *KeyPair) (map[uuid.UUID]*Prototype, error) {
 // ValidatePrototypes validates all loaded prototypes
 func ValidatePrototypes(prototypes map[uuid.UUID]*Prototype) error {
 	Logger.Info("Validating prototypes")
-	
+
 	for id, prototype := range prototypes {
 		// Validate prototype has required fields
 		if prototype.name == "" {
 			return fmt.Errorf("prototype %s has empty name", id)
 		}
-		
+
 		// Additional validation can be added here as needed
 	}
-	
+
 	Logger.Info("All prototypes validated successfully", "count", len(prototypes))
 	return nil
 }
 
 // LoadItemsForCharacter loads items for a character from the inventory map
-func LoadItemsForCharacter(itemMap map[string]string, k *KeyPair) (map[string]*Item, error) {
+func LoadItemsForCharacter(ctx context.Context, itemMap map[string]string, k *KeyPair) (map[string]*Item, error) {
 	Logger.Debug("Loading items for character inventory")
 
 	inventory := make(map[string]*Item)
@@ -410,7 +411,7 @@ func LoadItemsForCharacter(itemMap map[string]string, k *KeyPair) (map[string]*I
 			continue
 		}
 
-		item, err := LoadItem(itemIDStr, k)
+		item, err := LoadItem(ctx, itemIDStr, k)
 		if err != nil {
 			Logger.Error("Error loading item for character", "itemID", itemIDStr, "error", err)
 			continue
@@ -424,7 +425,7 @@ func LoadItemsForCharacter(itemMap map[string]string, k *KeyPair) (map[string]*I
 }
 
 // LoadItem retrieves an item from the DynamoDB table by its ID.
-func LoadItem(id string, k *KeyPair) (*Item, error) {
+func LoadItem(ctx context.Context, id string, k *KeyPair) (*Item, error) {
 	Logger.Debug("Loading item", "itemID", id)
 
 	if id == "" {
@@ -438,7 +439,7 @@ func LoadItem(id string, k *KeyPair) (*Item, error) {
 
 	// Retrieve item data from DynamoDB
 	var itemData ItemData
-	err := k.Get("items", key, &itemData)
+	err := k.Get(ctx, "items", key, &itemData)
 	if err != nil {
 		Logger.Error("Error loading item data", "itemID", id, "error", err)
 		return nil, fmt.Errorf("error loading item data: %w", err)
@@ -449,7 +450,7 @@ func LoadItem(id string, k *KeyPair) (*Item, error) {
 }
 
 // LoadPrototype retrieves a prototype from the DynamoDB table by its ID.
-func LoadPrototype(id string, k *KeyPair) (*Prototype, error) {
+func LoadPrototype(ctx context.Context, id string, k *KeyPair) (*Prototype, error) {
 	Logger.Debug("Loading prototype", "prototypeID", id)
 
 	if id == "" {
@@ -463,7 +464,7 @@ func LoadPrototype(id string, k *KeyPair) (*Prototype, error) {
 
 	// Retrieve prototype data from DynamoDB
 	var prototypeData PrototypeData
-	err := k.Get("prototypes", key, &prototypeData)
+	err := k.Get(ctx, "prototypes", key, &prototypeData)
 	if err != nil {
 		Logger.Error("Error loading prototype data", "prototypeID", id, "error", err)
 		return nil, fmt.Errorf("error loading prototype data: %w", err)

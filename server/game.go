@@ -96,7 +96,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	// Initialize Game Database Interface
 
-	database, err := NewKeyPair(config)
+	database, err := NewKeyPair(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("database init error: %w", err)
 	}
@@ -121,12 +121,12 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	// Load Item Prototypes
 
-	prototypes, err := LoadPrototypes(game.database)
+	prototypes, err := LoadPrototypes(ctx, game.database)
 	if err != nil {
 		Logger.Warn("Error loading item prototypes", "error", err)
 	} else {
 		game.prototypes = prototypes
-		
+
 		// Validate prototypes after loading
 		if err := ValidatePrototypes(prototypes); err != nil {
 			Logger.Error("Error validating prototypes", "error", err)
@@ -163,7 +163,7 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 		CharacterName string `dynamodbav:"character_name"`
 	}
 
-	err := g.database.Scan("characters", &characters)
+	err := g.database.Scan(g.ctx, "characters", &characters)
 	if err != nil {
 		Logger.Error("Error scanning characters table", "error", err)
 		return nil, fmt.Errorf("error scanning characters: %w", err)
@@ -301,7 +301,7 @@ func (g *Game) tick() error {
 func (g *Game) processGameCommands() {
 	// Collect active rooms and characters while holding the lock
 	g.mutex.RLock()
-	
+
 	// Make a slice of rooms to process
 	activeRooms := make([]*Room, 0, len(g.rooms))
 	for _, room := range g.rooms {
@@ -309,7 +309,7 @@ func (g *Game) processGameCommands() {
 			activeRooms = append(activeRooms, room)
 		}
 	}
-	
+
 	// Make a slice of characters to process
 	activeCharacters := make([]*Character, 0, len(g.characters))
 	for _, character := range g.characters {
@@ -317,9 +317,9 @@ func (g *Game) processGameCommands() {
 			activeCharacters = append(activeCharacters, character)
 		}
 	}
-	
+
 	g.mutex.RUnlock()
-	
+
 	// Now process commands without holding the lock
 	// Process commands from all active rooms
 	for _, room := range activeRooms {
@@ -427,7 +427,7 @@ func (g *Game) handleGlobalCommunicationCommand(cmd *CommandRequest) *CommandRes
 		}
 	}
 	g.mutex.RUnlock()
-	
+
 	// Broadcast to all recipients without holding the lock
 	for _, c := range recipients {
 		select {

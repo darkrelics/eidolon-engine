@@ -159,7 +159,7 @@ func (g *Game) LoadRooms() error {
 
 	// Load room data from DynamoDB
 	var roomsData []RoomData
-	err := g.database.Scan("rooms", &roomsData)
+	err := g.database.Scan(g.ctx, "rooms", &roomsData)
 	if err != nil {
 		Logger.Error("Error scanning rooms table", "error", err)
 		return fmt.Errorf("error scanning rooms: %w", err)
@@ -197,7 +197,7 @@ func (g *Game) LoadRooms() error {
 	}
 
 	// Load item prototypes
-	prototypes, err := LoadPrototypes(g.database)
+	prototypes, err := LoadPrototypes(g.ctx, g.database)
 	if err != nil {
 		Logger.Warn("Error loading prototypes", "error", err)
 	} else {
@@ -227,7 +227,7 @@ func (g *Game) LoadRoom(roomID int64) (*Room, error) {
 		"RoomID": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", roomID)},
 	}
 
-	err := g.database.Get("rooms", key, roomData)
+	err := g.database.Get(g.ctx, "rooms", key, roomData)
 	if err != nil {
 		Logger.Warn("Could not load room from database", "roomID", roomID, "error", err)
 		return nil, fmt.Errorf("room not found: %w", err)
@@ -438,7 +438,7 @@ func (r *Room) Stop() {
 		Logger.Warn("Attempted to stop a room that is not running", "roomID", r.roomID)
 		return
 	}
-	
+
 	// Mark as not running and get references to cancel func and channels
 	r.running = false
 	cancelFunc := r.cancel

@@ -84,7 +84,7 @@ func (c *Character) Save() error {
 	}
 
 	// Write to database
-	err := kp.Put("characters", characterData)
+	err := kp.Put(c.game.ctx, "characters", characterData)
 	if err != nil {
 		Logger.Error("Error writing character data", "characterName", c.name, "error", err)
 		return fmt.Errorf("error writing character data: %w", err)
@@ -193,7 +193,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 					}
 
 					// Save item to database
-					err = item.Save(p.server.game.database)
+					err = item.Save(p.server.game.ctx, p.server.game.database)
 					if err != nil {
 						Logger.Error("Failed to save starting item to database", "itemID", item.id, "error", err)
 						continue
@@ -258,7 +258,7 @@ func (c *Character) Stop(done chan bool) {
 	}
 	c.stopped = true
 	c.mutex.Unlock()
-	
+
 	Logger.Info("Stopping character session", "characterName", c.name)
 
 	// Notify the room of departure before removing the character

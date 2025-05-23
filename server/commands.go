@@ -19,6 +19,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -135,7 +136,7 @@ func ValidateCommand(character *Character, input string) (string, []string, erro
 	if len(input) == 0 {
 		return "", nil, errors.New("\n\rNo command entered.\n\r")
 	}
-	
+
 	// Limit input to 240 characters
 	if len(input) > 240 {
 		return "", nil, errors.New("\n\rCommand too long. Maximum 240 characters allowed.\n\r")
@@ -193,12 +194,12 @@ func tokenizeInput(input string) []string {
 }
 
 // ProcessCommand determines command tier and routes it appropriately
-func ProcessCommand(character *Character, input string) (bool, error) {
+func ProcessCommand(ctx context.Context, character *Character, input string) (bool, error) {
 	// Limit input to 240 characters
 	if len(input) > 240 {
 		return false, errors.New("\n\rCommand too long. Maximum 240 characters allowed.\n\r")
 	}
-	
+
 	// Parse and validate the command
 	verb, tokens, err := ValidateCommand(character, input)
 	if err != nil {
@@ -284,7 +285,7 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 			// If room doesn't handle it, escalate to game
 			if strings.Contains(resp.Error.Error(), "unknown room command") {
 				Logger.Debug("Escalating command to game", "verb", verb, "character", character.name)
-				return escalateToGame(character, verb, tokens)
+				return escalateToGame(ctx, character, verb, tokens)
 			}
 			return false, resp.Error
 		}
@@ -294,11 +295,13 @@ func ProcessCommand(character *Character, input string) (bool, error) {
 		return false, nil
 	case <-time.After(5 * time.Second):
 		return false, fmt.Errorf("\n\rcommand timed out\n\r")
+	case <-ctx.Done():
+		return false, ctx.Err()
 	}
 }
 
 // escalateToGame handles commands that neither character nor room can process
-func escalateToGame(character *Character, verb string, tokens []string) (bool, error) {
+func escalateToGame(ctx context.Context, character *Character, verb string, tokens []string) (bool, error) {
 	// Create command request for game processing
 	cmdReq := &CommandRequest{
 		ID:        GenerateUUIDv7(),
@@ -331,5 +334,7 @@ func escalateToGame(character *Character, verb string, tokens []string) (bool, e
 		return false, nil
 	case <-time.After(5 * time.Second):
 		return false, fmt.Errorf("\n\rcommand timed out\n\r")
+	case <-ctx.Done():
+		return false, ctx.Err()
 	}
 }

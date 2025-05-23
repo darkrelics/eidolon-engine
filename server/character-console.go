@@ -97,7 +97,7 @@ func (c *Character) RunConsole(done chan bool) {
 			}
 
 			// Process the command
-			isQuit, err := ProcessCommand(c, strings.TrimSpace(inputLine))
+			isQuit, err := ProcessCommand(c.game.ctx, c, strings.TrimSpace(inputLine))
 			if err != nil {
 				// Send error message to player
 				c.player.commandOut <- err.Error() + "\n\r"

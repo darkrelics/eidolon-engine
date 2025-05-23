@@ -78,7 +78,7 @@ func NewServer(globalCtx context.Context, cfg *Configuration) (*Server, error) {
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
-	database, err := NewKeyPair(cfg)
+	database, err := NewKeyPair(ctx, cfg)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("database init error: %w", err)

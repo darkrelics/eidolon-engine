@@ -19,8 +19,8 @@ limitations under the License.
 package main
 
 import (
-	"strings"
 	"github.com/gofrs/uuid/v5"
+	"strings"
 )
 
 func GenerateUUIDv7() uuid.UUID {

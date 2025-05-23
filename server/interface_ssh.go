@@ -316,10 +316,10 @@ func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
 			}
 
 			Logger.Info("New connection", "remote_addr", conn.RemoteAddr())
-			
+
 			// Create a child context for this connection
 			connCtx, connCancel := context.WithCancel(ssh_interface.ctx)
-			
+
 			// Handle connection with context
 			go func(conn net.Conn, ctx context.Context) {
 				defer connCancel()

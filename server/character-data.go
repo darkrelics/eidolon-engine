@@ -106,7 +106,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
 	}
 
-	if err := game.database.Get("characters", key, cd); err != nil {
+	if err := game.database.Get(game.ctx, "characters", key, cd); err != nil {
 		return nil, fmt.Errorf("error loading character data: %w", err)
 	}
 
@@ -134,7 +134,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	character.room = room
 
 	// Load inventory items
-	inventory, err := LoadItemsForCharacter(cd.Inventory, game.database)
+	inventory, err := LoadItemsForCharacter(game.ctx, cd.Inventory, game.database)
 	if err != nil {
 		Logger.Warn("Error loading character inventory", "characterID", characterID, "error", err)
 	}
@@ -183,7 +183,7 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 	}
 
 	// Delete the character from the database
-	err := p.server.database.Delete("characters", key)
+	err := p.server.database.Delete(p.server.ctx, "characters", key)
 	if err != nil {
 		Logger.Error("Failed to delete character", "characterID", characterID, "error", err)
 		return fmt.Errorf("failed to delete character: %w", err)

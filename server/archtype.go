@@ -59,7 +59,7 @@ func (g *Game) LoadArchetypes() error {
 
 	var archetypes []Archetype
 
-	err := g.database.Scan("archetypes", &archetypes)
+	err := g.database.Scan(g.ctx, "archetypes", &archetypes)
 	if err != nil {
 		Logger.Error("Load Archetypes: Error Scanning Archetypes Table", "error", err)
 		return fmt.Errorf("error scanning archetypes table: %w", err)
@@ -164,7 +164,7 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 		if !exists {
 			return fmt.Errorf("archetype '%s' starting item %d references non-existent prototype '%s'", archetype.ArchetypeName, i, startingItem.PrototypeID)
 		}
-		
+
 		// Validate slot compatibility with prototype wearable locations
 		if startingItem.IsWorn && prototype.wearable {
 			// Check if the archetype slot is compatible with the prototype's wearable locations
@@ -188,7 +188,6 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 
 	return nil
 }
-
 
 // isSlotCompatible checks if an archetype slot is compatible with a prototype wearable location
 func isSlotCompatible(slot, wearableLocation string) bool {
