@@ -37,11 +37,11 @@ type KeyPair struct {
 }
 
 // NewKeyPair initializes a new DynamoDB client.
-func NewKeyPair(cfg *Configuration) (*KeyPair, error) {
+func NewKeyPair(ctx context.Context, cfg *Configuration) (*KeyPair, error) {
 
 	Logger.Info("Initializing DynamoDB client", "region", cfg.AWS.Region)
 
-	awsConfig, err := config.LoadDefaultConfig(context.TODO(),
+	awsConfig, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(cfg.AWS.Region),
 	)
 	if err != nil {
@@ -57,7 +57,7 @@ func NewKeyPair(cfg *Configuration) (*KeyPair, error) {
 	}, nil
 }
 
-func (k *KeyPair) Put(tableName string, item interface{}) error {
+func (k *KeyPair) Put(ctx context.Context, tableName string, item interface{}) error {
 
 	Logger.Info("Putting item into table", "tableName", tableName)
 
@@ -71,7 +71,7 @@ func (k *KeyPair) Put(tableName string, item interface{}) error {
 		TableName: aws.String(tableName),
 	}
 
-	_, err = k.db.PutItem(context.TODO(), input)
+	_, err = k.db.PutItem(ctx, input)
 	if err != nil {
 		return fmt.Errorf("error putting item into table %s: %w", tableName, err)
 	}
@@ -82,7 +82,7 @@ func (k *KeyPair) Put(tableName string, item interface{}) error {
 }
 
 // Get retrieves an item from the DynamoDB table.
-func (k *KeyPair) Get(tableName string, key map[string]types.AttributeValue, item interface{}) error {
+func (k *KeyPair) Get(ctx context.Context, tableName string, key map[string]types.AttributeValue, item interface{}) error {
 
 	Logger.Info("Getting item from table", "tableName", tableName)
 
@@ -91,7 +91,7 @@ func (k *KeyPair) Get(tableName string, key map[string]types.AttributeValue, ite
 		TableName: aws.String(tableName),
 	}
 
-	result, err := k.db.GetItem(context.TODO(), input)
+	result, err := k.db.GetItem(ctx, input)
 	if err != nil {
 		return fmt.Errorf("error getting item from table %s: %w", tableName, err)
 	}
@@ -109,7 +109,7 @@ func (k *KeyPair) Get(tableName string, key map[string]types.AttributeValue, ite
 }
 
 // Delete removes an item from the DynamoDB table.
-func (k *KeyPair) Delete(tableName string, key map[string]types.AttributeValue) error {
+func (k *KeyPair) Delete(ctx context.Context, tableName string, key map[string]types.AttributeValue) error {
 
 	Logger.Info("Deleting item from table", "tableName", tableName)
 
@@ -118,7 +118,7 @@ func (k *KeyPair) Delete(tableName string, key map[string]types.AttributeValue) 
 		TableName: aws.String(tableName),
 	}
 
-	_, err := k.db.DeleteItem(context.TODO(), input)
+	_, err := k.db.DeleteItem(ctx, input)
 	if err != nil {
 		return fmt.Errorf("error deleting item from table %s: %w", tableName, err)
 	}
@@ -128,7 +128,7 @@ func (k *KeyPair) Delete(tableName string, key map[string]types.AttributeValue) 
 }
 
 // Query performs a query operation on the DynamoDB table with pagination.
-func (k *KeyPair) Query(tableName string, keyConditionExpression string, expressionAttributeValues map[string]types.AttributeValue, items interface{}) error {
+func (k *KeyPair) Query(ctx context.Context, tableName string, keyConditionExpression string, expressionAttributeValues map[string]types.AttributeValue, items interface{}) error {
 	Logger.Info("Querying table", "tableName", tableName)
 
 	input := &dynamodb.QueryInput{
@@ -147,7 +147,7 @@ func (k *KeyPair) Query(tableName string, keyConditionExpression string, express
 		}
 
 		// Perform the query operation
-		result, err := k.db.Query(context.TODO(), input)
+		result, err := k.db.Query(ctx, input)
 		if err != nil {
 			return fmt.Errorf("error querying table %s: %w", tableName, err)
 		}
@@ -188,7 +188,7 @@ func (k *KeyPair) Query(tableName string, keyConditionExpression string, express
 }
 
 // Scan performs a scan operation on the DynamoDB table with pagination..
-func (k *KeyPair) Scan(tableName string, items interface{}) error {
+func (k *KeyPair) Scan(ctx context.Context, tableName string, items interface{}) error {
 	Logger.Info("Scanning table", "tableName", tableName)
 
 	input := &dynamodb.ScanInput{
@@ -205,7 +205,7 @@ func (k *KeyPair) Scan(tableName string, items interface{}) error {
 		}
 
 		// Perform the scan operation
-		result, err := k.db.Scan(context.TODO(), input)
+		result, err := k.db.Scan(ctx, input)
 		if err != nil {
 			return fmt.Errorf("error scanning table %s: %w", tableName, err)
 		}

@@ -74,7 +74,7 @@ func (g *Game) LoadExits() error {
 
 	var exitsData []ExitData
 
-	err := g.database.Scan("exits", &exitsData)
+	err := g.database.Scan(g.ctx, "exits", &exitsData)
 	if err != nil {
 		Logger.Error("Error scanning exits table", "error", err)
 		return nil

@@ -59,7 +59,7 @@ func (g *Game) LoadArchetypes() error {
 
 	var archetypes []Archetype
 
-	err := g.database.Scan("archetypes", &archetypes)
+	err := g.database.Scan(g.ctx, "archetypes", &archetypes)
 	if err != nil {
 		Logger.Error("Load Archetypes: Error Scanning Archetypes Table", "error", err)
 		return fmt.Errorf("error scanning archetypes table: %w", err)
@@ -160,55 +160,60 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 		}
 
 		// Validate prototype exists
-		if _, exists := g.prototypes[prototypeIDUUID]; !exists {
+		prototype, exists := g.prototypes[prototypeIDUUID]
+		if !exists {
 			return fmt.Errorf("archetype '%s' starting item %d references non-existent prototype '%s'", archetype.ArchetypeName, i, startingItem.PrototypeID)
+		}
+
+		// Validate slot compatibility with prototype wearable locations
+		if startingItem.IsWorn && prototype.wearable {
+			// Check if the archetype slot is compatible with the prototype's wearable locations
+			slotCompatible := false
+			for _, wearableLocation := range prototype.wornOn {
+				if isSlotCompatible(startingItem.Slot, wearableLocation) {
+					slotCompatible = true
+					break
+				}
+			}
+
+			if !slotCompatible {
+				Logger.Warn("Archetype slot incompatible with prototype wearable locations",
+					"archetype", archetype.ArchetypeName,
+					"slot", startingItem.Slot,
+					"wearableLocations", prototype.wornOn,
+					"prototypeID", startingItem.PrototypeID)
+			}
 		}
 	}
 
 	return nil
 }
 
-// ValidateArchetypePrototypes validates that all prototype IDs in archetypes exist in the prototypes map
-func (g *Game) ValidateArchetypePrototypes() error {
-	Logger.Info("Validating archetype prototype references")
+// isSlotCompatible checks if an archetype slot is compatible with a prototype wearable location
+func isSlotCompatible(slot, wearableLocation string) bool {
+	// Direct match
+	if slot == wearableLocation {
+		return true
+	}
 
-	for archetypeName, archetype := range g.archetypes {
-		for i, startingItem := range archetype.StartingItems {
-			prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
-			if err != nil {
-				return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID: %w", archetypeName, i, err)
-			}
+	// Semantic equivalents
+	slotMappings := map[string][]string{
+		"weapon": {"weapon", "waist", "hands"},
+		"armor":  {"armor", "chest", "body"},
+		"back":   {"back", "shoulders"},
+		"finger": {"finger", "left_finger", "right_finger"},
+		"wrist":  {"wrist", "left_wrist", "right_wrist"},
+	}
 
-			prototype, exists := g.prototypes[prototypeIDUUID]
-			if !exists {
-				return fmt.Errorf("archetype '%s' starting item %d prototype '%s' does not exist", archetypeName, i, startingItem.PrototypeID)
-			}
-
-			// Validate slot compatibility with prototype wearable locations
-			if startingItem.IsWorn && prototype.wearable {
-				// Check if the archetype slot is compatible with the prototype's wearable locations
-				slotCompatible := false
-				for _, wearableLocation := range prototype.wornOn {
-					if strings.Contains(wearableLocation, startingItem.Slot) ||
-						strings.Contains(startingItem.Slot, wearableLocation) ||
-						(startingItem.Slot == "finger" && wearableLocation == "finger") ||
-						(startingItem.Slot == "wrist" && wearableLocation == "wrist") {
-						slotCompatible = true
-						break
-					}
-				}
-
-				if !slotCompatible {
-					Logger.Warn("Archetype slot incompatible with prototype wearable locations",
-						"archetype", archetypeName,
-						"slot", startingItem.Slot,
-						"wearableLocations", prototype.wornOn,
-						"prototypeID", startingItem.PrototypeID)
-				}
+	// Check if the wearable location is in the allowed locations for this slot
+	if allowedLocations, exists := slotMappings[slot]; exists {
+		for _, allowed := range allowedLocations {
+			if allowed == wearableLocation {
+				return true
 			}
 		}
 	}
 
-	Logger.Info("All archetype prototype references validated successfully")
-	return nil
+	// Fallback to substring matching for backwards compatibility
+	return strings.Contains(wearableLocation, slot) || strings.Contains(slot, wearableLocation)
 }

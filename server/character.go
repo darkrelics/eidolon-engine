@@ -84,7 +84,7 @@ func (c *Character) Save() error {
 	}
 
 	// Write to database
-	err := kp.Put("characters", characterData)
+	err := kp.Put(c.game.ctx, "characters", characterData)
 	if err != nil {
 		Logger.Error("Error writing character data", "characterName", c.name, "error", err)
 		return fmt.Errorf("error writing character data: %w", err)
@@ -193,7 +193,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 					}
 
 					// Save item to database
-					err = item.Save(p.server.game.database)
+					err = item.Save(p.server.game.ctx, p.server.game.database)
 					if err != nil {
 						Logger.Error("Failed to save starting item to database", "itemID", item.id, "error", err)
 						continue
@@ -242,10 +242,22 @@ func (c *Character) Run(done chan bool) {
 
 // Stop cleanly shuts down the character session
 func (c *Character) Stop(done chan bool) {
-
+	// First, signal done will be called at the end
 	defer func() {
-		done <- true
+		if done != nil {
+			done <- true
+		}
 	}()
+
+	// Ensure Stop logic is only executed once
+	c.mutex.Lock()
+	if c.stopped {
+		c.mutex.Unlock()
+		Logger.Debug("Character already stopped", "characterName", c.name)
+		return
+	}
+	c.stopped = true
+	c.mutex.Unlock()
 
 	Logger.Info("Stopping character session", "characterName", c.name)
 
@@ -276,13 +288,9 @@ func (c *Character) Stop(done chan bool) {
 	// Store a reference to the player before resetting
 	player := c.player
 
-	// Use a non-blocking send to avoid deadlocks
-	select {
-	case c.end <- true:
-		Logger.Debug("End signal sent successfully", "characterName", c.name)
-	default:
-		Logger.Warn("End channel is full or closed", "characterName", c.name)
-	}
+	// Signal shutdown by closing the end channel
+	// This is safe because we check the stopped flag
+	close(c.end)
 
 	// If we have a valid player reference, inform them we're returning to console
 	if player != nil {
@@ -334,23 +342,34 @@ func (c *Character) GetCharacterInfo() string {
 
 	// Inventory information
 	if len(c.inventory) > 0 {
-		info.WriteString("\n\rInventory:\n\r")
+		// Separate worn and carried items
+		var wornItems, carriedItems []string
+
 		for _, item := range c.inventory {
 			if item != nil {
 				if item.isWorn {
-					info.WriteString(fmt.Sprintf("  %s (worn on %s)\n\r", item.name, strings.Join(item.wornOn, ", ")))
+					wornItems = append(wornItems, item.name)
 				} else {
-					info.WriteString(fmt.Sprintf("  %s\n\r", item.name))
+					carriedItems = append(carriedItems, item.name)
 				}
 			}
 		}
+
+		// Display worn items
+		if len(wornItems) > 0 {
+			info.WriteString("\n\rYou are wearing ")
+			info.WriteString(formatItemListWithOxfordComma(wornItems))
+			info.WriteString(".\n\r")
+		}
+
+		// Display carried items
+		if len(carriedItems) > 0 {
+			info.WriteString("\n\rYou are carrying ")
+			info.WriteString(formatItemListWithOxfordComma(carriedItems))
+			info.WriteString(".\n\r")
+		}
 	} else {
 		info.WriteString("\n\rYou are not carrying anything.\n\r")
-	}
-
-	// Current location
-	if c.room != nil {
-		info.WriteString(fmt.Sprintf("\n\rCurrently in: %s\n\r", c.room.title))
 	}
 
 	return info.String()

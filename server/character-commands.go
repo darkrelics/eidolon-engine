@@ -196,7 +196,7 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 		invDisplay.WriteString("You are not carrying anything.\n\r")
 	} else {
 		// Separate worn and carried items
-		var wornItems, carriedItems []*Item
+		var wornItemNames, carriedItemNames []string
 
 		for _, item := range character.inventory {
 			if item == nil {
@@ -204,26 +204,24 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 			}
 
 			if item.isWorn {
-				wornItems = append(wornItems, item)
+				wornItemNames = append(wornItemNames, item.name)
 			} else {
-				carriedItems = append(carriedItems, item)
+				carriedItemNames = append(carriedItemNames, item.name)
 			}
 		}
 
-		// Display worn items first
-		if len(wornItems) > 0 {
-			invDisplay.WriteString("\n\rYou are wearing:\n\r")
-			for _, item := range wornItems {
-				invDisplay.WriteString(formatWornItem(item))
-			}
+		// Display worn items
+		if len(wornItemNames) > 0 {
+			invDisplay.WriteString("\n\rYou are wearing ")
+			invDisplay.WriteString(formatItemListWithOxfordComma(wornItemNames))
+			invDisplay.WriteString(".\n\r")
 		}
 
-		// Then display carried items
-		if len(carriedItems) > 0 {
-			invDisplay.WriteString("\n\rYou are carrying:\n\r")
-			for _, item := range carriedItems {
-				invDisplay.WriteString(formatCarriedItem(item))
-			}
+		// Display carried items
+		if len(carriedItemNames) > 0 {
+			invDisplay.WriteString("\n\rYou are carrying ")
+			invDisplay.WriteString(formatItemListWithOxfordComma(carriedItemNames))
+			invDisplay.WriteString(".\n\r")
 		}
 	}
 

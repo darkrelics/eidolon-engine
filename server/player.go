@@ -49,7 +49,7 @@ func (ib *InputBuffer) Append(r rune) bool {
 	ib.mutex.Lock()
 	defer ib.mutex.Unlock()
 
-	if len(ib.buffer) >= 1024 {
+	if len(ib.buffer) >= 240 {
 		return false
 	}
 	ib.buffer = append(ib.buffer, r)
@@ -132,7 +132,7 @@ func (p *Player) Load(playerID uuid.UUID) error {
 	p.characterList = make(map[string]uuid.UUID)
 	p.seenMotD = make([]uuid.UUID, 0)
 
-	err := database.Get("players", key, &playerData)
+	err := database.Get(p.server.ctx, "players", key, &playerData)
 	if err != nil {
 		if strings.Contains(err.Error(), "item not found") {
 			Logger.Info("New player", "player_id", playerID.String(), "email", p.email)
@@ -197,7 +197,7 @@ func (p *Player) Save() error {
 		playerData.SeenMotDs[i] = motdID.String()
 	}
 
-	err := database.Put("players", playerData)
+	err := database.Put(p.server.ctx, "players", playerData)
 	if err != nil {
 		Logger.Error("Error saving player data", "error", err)
 		p.commandOut <- "Error saving player data. Please contact an administrator.\n"

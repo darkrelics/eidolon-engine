@@ -119,7 +119,7 @@ type RoomData struct {
 // Initialize a new room
 func NewRoom(ctx context.Context, roomID int64, area, title, description string, persistent bool, scriptID string) *Room {
 
-	Logger.Info("New Room...Initalizing Room...", "roomID", roomID, "persistent", persistent, "scriptID", scriptID)
+	Logger.Debug("New Room...Initalizing Room...", "roomID", roomID, "persistent", persistent, "scriptID", scriptID)
 
 	now := time.Now()
 
@@ -159,7 +159,7 @@ func (g *Game) LoadRooms() error {
 
 	// Load room data from DynamoDB
 	var roomsData []RoomData
-	err := g.database.Scan("rooms", &roomsData)
+	err := g.database.Scan(g.ctx, "rooms", &roomsData)
 	if err != nil {
 		Logger.Error("Error scanning rooms table", "error", err)
 		return fmt.Errorf("error scanning rooms: %w", err)
@@ -197,7 +197,7 @@ func (g *Game) LoadRooms() error {
 	}
 
 	// Load item prototypes
-	prototypes, err := LoadPrototypes(g.database)
+	prototypes, err := LoadPrototypes(g.ctx, g.database)
 	if err != nil {
 		Logger.Warn("Error loading prototypes", "error", err)
 	} else {
@@ -227,7 +227,7 @@ func (g *Game) LoadRoom(roomID int64) (*Room, error) {
 		"RoomID": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", roomID)},
 	}
 
-	err := g.database.Get("rooms", key, roomData)
+	err := g.database.Get(g.ctx, "rooms", key, roomData)
 	if err != nil {
 		Logger.Warn("Could not load room from database", "roomID", roomID, "error", err)
 		return nil, fmt.Errorf("room not found: %w", err)
@@ -382,26 +382,32 @@ func SendRoomMessageExcept(room *Room, message string, except *Character) {
 	// Update room activity before acquiring lock to avoid concurrency issues
 	room.UpdateActivity()
 
+	// Collect recipients while holding the lock
 	room.mutex.RLock()
-	defer room.mutex.RUnlock()
-
+	recipients := make([]*Character, 0, len(room.characters))
 	for _, c := range room.characters {
 		if c != nil && c != except && c.player != nil {
+			recipients = append(recipients, c)
+		}
+	}
+	room.mutex.RUnlock()
+
+	// Send messages without holding the lock to prevent deadlock
+	for _, c := range recipients {
+		select {
+		case c.player.commandOut <- message:
+			// After sending room message, send the prompt again to ensure consistent UI
 			select {
-			case c.player.commandOut <- message:
-				// After sending room message, send the prompt again to ensure consistent UI
-				select {
-				case c.player.commandOut <- c.prompt:
-					// Prompt sent successfully
-				default:
-					Logger.Warn("Failed to send prompt after room message to player",
-						"recipient", c.name)
-				}
+			case c.player.commandOut <- c.prompt:
+				// Prompt sent successfully
 			default:
-				Logger.Warn("Failed to send room message to player",
-					"recipient", c.name,
-					"message", message)
+				Logger.Warn("Failed to send prompt after room message to player",
+					"recipient", c.name)
 			}
+		default:
+			Logger.Warn("Failed to send room message to player",
+				"recipient", c.name,
+				"message", message)
 		}
 	}
 }
@@ -425,23 +431,31 @@ func (r *Room) Start(game *Game) {
 
 // Stop signals the room goroutine to shut down
 func (r *Room) Stop() {
+	// First check if already stopped to avoid unnecessary work
 	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	if !r.running {
+		r.mutex.Unlock()
 		Logger.Warn("Attempted to stop a room that is not running", "roomID", r.roomID)
 		return
 	}
 
+	// Mark as not running and get references to cancel func and channels
+	r.running = false
+	cancelFunc := r.cancel
+	commandIn := r.commandIn
+	commandOut := r.commandOut
+	r.mutex.Unlock()
+
 	Logger.Info("Stopping room goroutine", "roomID", r.roomID, "title", r.title)
 
 	// Cancel the room's context to signal all operations to stop
-	r.cancel()
-	r.running = false
+	// This is done outside the lock to prevent deadlock
+	cancelFunc()
 
-	// Close channels (deferred until after context cancelation to prevent race conditions)
-	close(r.commandIn)
-	close(r.commandOut)
+	// Close channels after releasing the lock
+	// This prevents deadlock if channel operations were waiting on the mutex
+	close(commandIn)
+	close(commandOut)
 	// Note: we don't close gameCommandOut as it belongs to the Game
 }
 

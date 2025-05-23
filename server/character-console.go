@@ -97,7 +97,7 @@ func (c *Character) RunConsole(done chan bool) {
 			}
 
 			// Process the command
-			isQuit, err := ProcessCommand(c, strings.TrimSpace(inputLine))
+			isQuit, err := ProcessCommand(c.game.ctx, c, strings.TrimSpace(inputLine))
 			if err != nil {
 				// Send error message to player
 				c.player.commandOut <- err.Error() + "\n\r"
@@ -122,8 +122,12 @@ func (c *Character) RunConsole(done chan bool) {
 			// Always send prompt after processing a command
 			c.player.commandOut <- c.prompt
 
-		case <-c.end:
-			Logger.Info("Character end signaled", "characterName", c.name)
+		case _, ok := <-c.end:
+			if !ok {
+				Logger.Info("Character end channel closed", "characterName", c.name)
+			} else {
+				Logger.Info("Character end signaled", "characterName", c.name)
+			}
 			return
 
 		case <-timer.C:
