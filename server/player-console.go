@@ -324,7 +324,19 @@ func (p *Player) HandleCharacterSelection() {
 	}
 
 	num, err := strconv.Atoi(strings.TrimSpace(choice))
-	if err != nil || num < 1 || num > len(options) {
+	if err != nil {
+		p.commandOut <- "Invalid selection.\n"
+		return
+	}
+
+	// Check for return to menu option
+	if num == 0 {
+		p.commandOut <- "Returning to menu.\n"
+		return
+	}
+
+	// Validate selection
+	if num < 1 || num > len(options) {
 		p.commandOut <- "Invalid selection.\n"
 		return
 	}
@@ -365,6 +377,7 @@ func (p *Player) displayCharacterOptions(options []string) {
 	for i, name := range options {
 		p.commandOut <- fmt.Sprintf("%d) %s\n", i+1, name)
 	}
+	p.commandOut <- "0) Return to menu\n"
 	p.commandOut <- "\nEnter your choice: "
 }
 
