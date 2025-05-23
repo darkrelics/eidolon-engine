@@ -217,11 +217,15 @@ def store_item_prototypes(dynamodb, prototypes_data):
             # Build update expression dynamically
             update_expression = "SET "
             expression_attribute_values = {}
+            expression_attribute_names = {}
             expression_parts = []
 
             for key, value in prototype_data.items():
                 if key != "PrototypeID":  # Skip the key
-                    expression_parts.append(f"{key} = :{key.lower()}")
+                    # Always use expression attribute names to avoid reserved keyword issues
+                    attr_name_placeholder = f"#{key}"
+                    expression_attribute_names[attr_name_placeholder] = key
+                    expression_parts.append(f"{attr_name_placeholder} = :{key.lower()}")
                     expression_attribute_values[f":{key.lower()}"] = convert_to_dynamodb_format(value)
 
             update_expression += ", ".join(expression_parts)
@@ -229,6 +233,7 @@ def store_item_prototypes(dynamodb, prototypes_data):
             table.update_item(
                 Key={"PrototypeID": prototype_id},
                 UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
         print("Item prototype data stored in DynamoDB successfully")
