@@ -174,7 +174,7 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 	return sshInterface, nil
 }
 
-func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
+func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn, ctx context.Context) {
 	defer conn.Close()
 
 	// Set authentication timeout
@@ -196,7 +196,22 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 		return
 	}
 
-	go ssh.DiscardRequests(reqs)
+	// Handle SSH requests with context cancellation
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case req, ok := <-reqs:
+				if !ok {
+					return
+				}
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
+			}
+		}
+	}()
 
 	// Extract UUID from permissions
 	userUUIDStr := ""
@@ -228,14 +243,17 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		player, err := NewPlayerSSH(ssh_interface.server, sshConn.User(), channel, ssh_interface.ctx, userUUID)
+		player, err := NewPlayerSSH(ssh_interface.server, sshConn.User(), channel, ctx, userUUID)
 		if err != nil {
 			Logger.Error("Failed to create player", "error", err)
 			channel.Close()
 			continue
 		}
 
-		go player.RunSSH(requests)
+		// Run player with connection context
+		go func() {
+			player.RunSSH(requests)
+		}()
 	}
 }
 
@@ -298,7 +316,15 @@ func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
 			}
 
 			Logger.Info("New connection", "remote_addr", conn.RemoteAddr())
-			go ssh_interface.handleConnection(conn)
+			
+			// Create a child context for this connection
+			connCtx, connCancel := context.WithCancel(ssh_interface.ctx)
+			
+			// Handle connection with context
+			go func(conn net.Conn, ctx context.Context) {
+				defer connCancel()
+				ssh_interface.handleConnection(conn, ctx)
+			}(conn, connCtx)
 		}
 	}
 }
