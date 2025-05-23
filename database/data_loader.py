@@ -413,7 +413,7 @@ def display_item_prototypes(prototypes):
     print("Item Prototypes:")
     for prototype in prototypes.get("itemPrototypes", []):
         print(f"ID: {prototype.get('PrototypeID', 'No ID')}")
-        print(f"  Name: {prototype.get('Name', 'No Name')}")
+        print(f"  Name: {prototype.get('prototype_name', 'No Name')}")
         print(f"  Description: {prototype.get('Description', 'No description')}")
         print(f"  Mass: {prototype.get('Mass', 'Unknown')}")
         print(f"  Value: {prototype.get('Value', 'Unknown')}")

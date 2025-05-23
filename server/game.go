@@ -160,7 +160,7 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 	var names []string
 
 	var characters []struct {
-		CharacterName string `dynamodbav:"Name"`
+		CharacterName string `dynamodbav:"character_name"`
 	}
 
 	err := g.database.Scan("characters", &characters)

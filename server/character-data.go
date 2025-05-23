@@ -60,7 +60,7 @@ type Character struct {
 type CharacterData struct {
 	CharacterID   string             `json:"CharacterID" dynamodbav:"CharacterID"`
 	PlayerID      string             `json:"PlayerID" dynamodbav:"PlayerID"`
-	CharacterName string             `json:"Name" dynamodbav:"Name"`
+	CharacterName string             `json:"Name" dynamodbav:"character_name"`
 	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
 	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"Abilities"`
 	Essence       float64            `json:"Essence" dynamodbav:"Essence"`

@@ -2,7 +2,7 @@
   "itemPrototypes": [
     {
       "PrototypeID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-      "name": "Long Sword",
+      "prototype_name": "Long Sword",
       "description": "A finely crafted long sword with a sharp blade, glinting in the light.",
       "mass": 4.5,
       "value": 50,
@@ -35,7 +35,7 @@
     },
     {
       "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
-      "name": "Magic Book",
+      "prototype_name": "Magic Book",
       "description": "An ancient tome filled with arcane knowledge and mystical spells.",
       "mass": 2.0,
       "value": 100,
@@ -65,7 +65,7 @@
     },
     {
       "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
-      "name": "Bow",
+      "prototype_name": "Bow",
       "description": "A sturdy bow made of fine wood, capable of shooting arrows with great precision.",
       "mass": 3.0,
       "value": 75,
@@ -97,7 +97,7 @@
     },
     {
       "PrototypeID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
-      "name": "Leather Armor",
+      "prototype_name": "Leather Armor",
       "description": "A set of well-crafted leather armor, offering decent protection without sacrificing mobility.",
       "mass": 8.0,
       "value": 80,
@@ -128,7 +128,7 @@
     },
     {
       "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-      "name": "Healing Potion",
+      "prototype_name": "Healing Potion",
       "description": "A small vial containing a red, shimmering liquid that seems to glow with restorative energy.",
       "mass": 0.5,
       "value": 25,
@@ -156,7 +156,7 @@
     },
     {
       "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
-      "name": "Backpack",
+      "prototype_name": "Backpack",
       "description": "A sturdy leather backpack with multiple compartments, perfect for storing various items.",
       "mass": 2.0,
       "value": 20,
@@ -189,7 +189,7 @@
     },
     {
       "PrototypeID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
-      "name": "Magic Ring",
+      "prototype_name": "Magic Ring",
       "description": "A small, intricately carved golden ring that pulses with magical energy.",
       "mass": 0.1,
       "value": 200,
@@ -219,7 +219,7 @@
     },
     {
       "PrototypeID": "947ac10b-58cc-4372-a567-0e02b2c3d486",
-      "name": "Torch",
+      "prototype_name": "Torch",
       "description": "A wooden torch with a cloth-wrapped end, ready to be lit for illumination.",
       "mass": 1.0,
       "value": 5,

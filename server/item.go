@@ -57,7 +57,7 @@ type Item struct {
 type ItemData struct {
 	ItemID      string            `json:"itemId" dynamodbav:"ItemID"`
 	PrototypeID string            `json:"prototypeID" dynamodbav:"PrototypeID"`
-	Name        string            `json:"name" dynamodbav:"Name"`
+	Name        string            `json:"name" dynamodbav:"item_name"`
 	Description string            `json:"description" dynamodbav:"Description"`
 	Mass        float64           `json:"mass" dynamodbav:"Mass"`
 	Value       uint64            `json:"value" dynamodbav:"Value"`
@@ -175,7 +175,7 @@ func (p *Prototype) GetInfo() string {
 
 type PrototypeData struct {
 	PrototypeID string            `json:"id" dynamodbav:"prototypeID"`
-	Name        string            `json:"name" dynamodbav:"name"`
+	Name        string            `json:"name" dynamodbav:"prototype_name"`
 	Description string            `json:"description" dynamodbav:"description"`
 	Mass        float64           `json:"mass" dynamodbav:"mass"`
 	Value       uint64            `json:"value" dynamodbav:"value"`
