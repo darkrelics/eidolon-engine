@@ -334,15 +334,31 @@ func (c *Character) GetCharacterInfo() string {
 
 	// Inventory information
 	if len(c.inventory) > 0 {
-		info.WriteString("\n\rInventory:\n\r")
+		// Separate worn and carried items
+		var wornItems, carriedItems []string
+
 		for _, item := range c.inventory {
 			if item != nil {
 				if item.isWorn {
-					info.WriteString(fmt.Sprintf("  %s (worn on %s)\n\r", item.name, strings.Join(item.wornOn, ", ")))
+					wornItems = append(wornItems, item.name)
 				} else {
-					info.WriteString(fmt.Sprintf("  %s\n\r", item.name))
+					carriedItems = append(carriedItems, item.name)
 				}
 			}
+		}
+
+		// Display worn items
+		if len(wornItems) > 0 {
+			info.WriteString("\n\rYou are wearing ")
+			info.WriteString(formatItemListWithOxfordComma(wornItems))
+			info.WriteString(".\n\r")
+		}
+
+		// Display carried items
+		if len(carriedItems) > 0 {
+			info.WriteString("\n\rYou are carrying ")
+			info.WriteString(formatItemListWithOxfordComma(carriedItems))
+			info.WriteString(".\n\r")
 		}
 	} else {
 		info.WriteString("\n\rYou are not carrying anything.\n\r")
