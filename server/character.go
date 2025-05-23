@@ -348,11 +348,6 @@ func (c *Character) GetCharacterInfo() string {
 		info.WriteString("\n\rYou are not carrying anything.\n\r")
 	}
 
-	// Current location
-	if c.room != nil {
-		info.WriteString(fmt.Sprintf("\n\rCurrently in: %s\n\r", c.room.title))
-	}
-
 	return info.String()
 }
 
