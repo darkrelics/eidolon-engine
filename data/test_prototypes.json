@@ -10,9 +10,7 @@
       "max_stack": 1,
       "quantity": 1,
       "wearable": true,
-      "worn_on": [
-        "weapon"
-      ],
+      "worn_on": ["weapon"],
       "verbs": {
         "use": "You wield the long sword, ready for battle.",
         "examine": "The sword's blade is etched with ancient runes."
@@ -73,9 +71,7 @@
       "max_stack": 1,
       "quantity": 1,
       "wearable": true,
-      "worn_on": [
-        "weapon"
-      ],
+      "worn_on": ["weapon"],
       "verbs": {
         "use": "You take aim with the bow, ready to loose an arrow at your target.",
         "examine": "The wood of the bow is polished to a smooth finish, and the string is taut and strong."
@@ -105,9 +101,7 @@
       "max_stack": 1,
       "quantity": 1,
       "wearable": true,
-      "worn_on": [
-        "armor"
-      ],
+      "worn_on": ["armor"],
       "verbs": {
         "use": "You put on the leather armor, feeling its protective embrace.",
         "examine": "The leather is thick and sturdy, with reinforced stitching at key points."
@@ -164,9 +158,7 @@
       "max_stack": 1,
       "quantity": 1,
       "wearable": true,
-      "worn_on": [
-        "back"
-      ],
+      "worn_on": ["back"],
       "verbs": {
         "use": "You open the backpack, ready to store or retrieve items.",
         "examine": "The backpack is made of thick leather with reinforced straps and multiple pockets."
@@ -176,10 +168,7 @@
         "strength": 1
       },
       "container": true,
-      "contents": [
-        "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-        "947ac10b-58cc-4372-a567-0e02b2c3d486"
-      ],
+      "contents": ["b47ac10b-58cc-4372-a567-0e02b2c3d483", "947ac10b-58cc-4372-a567-0e02b2c3d486"],
       "is_worn": false,
       "can_pick_up": true,
       "metadata": {
@@ -197,9 +186,7 @@
       "max_stack": 1,
       "quantity": 1,
       "wearable": true,
-      "worn_on": [
-        "finger"
-      ],
+      "worn_on": ["finger"],
       "verbs": {
         "use": "You slip the ring onto your finger, feeling a surge of magical power.",
         "examine": "The ring's surface is covered in tiny, glowing runes."
