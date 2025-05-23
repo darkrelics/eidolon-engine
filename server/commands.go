@@ -135,6 +135,11 @@ func ValidateCommand(character *Character, input string) (string, []string, erro
 	if len(input) == 0 {
 		return "", nil, errors.New("\n\rNo command entered.\n\r")
 	}
+	
+	// Limit input to 240 characters
+	if len(input) > 240 {
+		return "", nil, errors.New("\n\rCommand too long. Maximum 240 characters allowed.\n\r")
+	}
 
 	tokens := tokenizeInput(input)
 
@@ -189,6 +194,11 @@ func tokenizeInput(input string) []string {
 
 // ProcessCommand determines command tier and routes it appropriately
 func ProcessCommand(character *Character, input string) (bool, error) {
+	// Limit input to 240 characters
+	if len(input) > 240 {
+		return false, errors.New("\n\rCommand too long. Maximum 240 characters allowed.\n\r")
+	}
+	
 	// Parse and validate the command
 	verb, tokens, err := ValidateCommand(character, input)
 	if err != nil {

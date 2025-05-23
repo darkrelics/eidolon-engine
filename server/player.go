@@ -49,7 +49,7 @@ func (ib *InputBuffer) Append(r rune) bool {
 	ib.mutex.Lock()
 	defer ib.mutex.Unlock()
 
-	if len(ib.buffer) >= 1024 {
+	if len(ib.buffer) >= 240 {
 		return false
 	}
 	ib.buffer = append(ib.buffer, r)
