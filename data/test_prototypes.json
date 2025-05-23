@@ -10,7 +10,7 @@
       "MaxStack": 1,
       "Quantity": 1,
       "Wearable": true,
-      "WornOn": ["weapon"],
+      "worn_on": ["weapon"],
       "Verbs": {
         "use": "You wield the long sword, ready for battle.",
         "examine": "The sword's blade is etched with ancient runes."
@@ -41,7 +41,7 @@
       "MaxStack": 1,
       "Quantity": 1,
       "Wearable": false,
-      "WornOn": [],
+      "worn_on": [],
       "Verbs": {
         "use": "You open the magic book and begin to recite a spell.",
         "examine": "The book's pages are filled with magical incantations and diagrams."
@@ -71,7 +71,7 @@
       "MaxStack": 1,
       "Quantity": 1,
       "Wearable": true,
-      "WornOn": ["weapon"],
+      "worn_on": ["weapon"],
       "Verbs": {
         "use": "You take aim with the bow, ready to loose an arrow at your target.",
         "examine": "The wood of the bow is polished to a smooth finish, and the string is taut and strong."
@@ -101,7 +101,7 @@
       "MaxStack": 1,
       "Quantity": 1,
       "Wearable": true,
-      "WornOn": ["armor"],
+      "worn_on": ["armor"],
       "Verbs": {
         "use": "You put on the leather armor, feeling its protective embrace.",
         "examine": "The leather is thick and sturdy, with reinforced stitching at key points."
@@ -130,7 +130,7 @@
       "MaxStack": 5,
       "Quantity": 1,
       "Wearable": false,
-      "WornOn": [],
+      "worn_on": [],
       "Verbs": {
         "use": "You drink the healing potion, feeling a warm sensation spread through your body.",
         "examine": "The liquid inside the vial swirls with magical energy."
@@ -158,7 +158,7 @@
       "MaxStack": 1,
       "Quantity": 1,
       "Wearable": true,
-      "WornOn": ["back"],
+      "worn_on": ["back"],
       "Verbs": {
         "use": "You open the backpack, ready to store or retrieve items.",
         "examine": "The backpack is made of thick leather with reinforced straps and multiple pockets."
@@ -186,7 +186,7 @@
       "MaxStack": 1,
       "Quantity": 1,
       "Wearable": true,
-      "WornOn": ["finger"],
+      "worn_on": ["finger"],
       "Verbs": {
         "use": "You slip the ring onto your finger, feeling a surge of magical power.",
         "examine": "The ring's surface is covered in tiny, glowing runes."
@@ -214,7 +214,7 @@
       "MaxStack": 10,
       "Quantity": 1,
       "Wearable": false,
-      "WornOn": [],
+      "worn_on": [],
       "Verbs": {
         "use": "You light the torch, casting a warm glow around you.",
         "examine": "The torch is made of sturdy wood with a cloth-wrapped end soaked in flammable oil."
