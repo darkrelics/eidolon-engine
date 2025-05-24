@@ -98,6 +98,48 @@ func (k *KeyPair) TransactWrite(ctx context.Context, items []types.TransactWrite
 	return nil
 }
 
+// BatchDeleteItems deletes multiple items in a single transaction to minimize DB access
+func (k *KeyPair) BatchDeleteItems(ctx context.Context, itemIDs []string) error {
+	if len(itemIDs) == 0 {
+		return nil
+	}
+
+	Logger.Info("Performing batch delete of items", "itemCount", len(itemIDs))
+
+	// DynamoDB TransactWriteItems has a limit of 25 items per transaction
+	const batchSize = 25
+	
+	for i := 0; i < len(itemIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(itemIDs) {
+			end = len(itemIDs)
+		}
+		
+		batch := itemIDs[i:end]
+		transactItems := make([]types.TransactWriteItem, 0, len(batch))
+		
+		for _, itemID := range batch {
+			transactItems = append(transactItems, types.TransactWriteItem{
+				Delete: &types.Delete{
+					TableName: aws.String("items"),
+					Key: map[string]types.AttributeValue{
+						"ItemID": &types.AttributeValueMemberS{Value: itemID},
+					},
+				},
+			})
+		}
+		
+		err := k.TransactWrite(ctx, transactItems)
+		if err != nil {
+			Logger.Error("Error deleting batch of items", "batchStart", i, "batchEnd", end, "error", err)
+			return fmt.Errorf("error deleting items batch: %w", err)
+		}
+	}
+	
+	Logger.Debug("Successfully deleted items", "itemCount", len(itemIDs))
+	return nil
+}
+
 // SaveCharacterWithInventory saves character and inventory items in a single transaction
 func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData *CharacterData, items map[string]*Item) error {
 	Logger.Debug("Saving character with inventory transactionally", "characterID", characterData.CharacterID, "itemCount", len(items))
