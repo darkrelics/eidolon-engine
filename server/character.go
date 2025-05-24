@@ -244,14 +244,7 @@ func (c *Character) Run(done chan bool) {
 }
 
 // Stop cleanly shuts down the character session
-func (c *Character) Stop(done chan bool) {
-	// First, signal done will be called at the end
-	defer func() {
-		if done != nil {
-			done <- true
-		}
-	}()
-
+func (c *Character) Stop() {
 	// Ensure Stop logic is only executed once
 	c.mutex.Lock()
 	if c.stopped {
@@ -315,6 +308,31 @@ func (c *Character) Stop(done chan bool) {
 	if player != nil {
 		// Reset the player's character reference
 		player.character = nil
+	}
+}
+
+// cleanupAndSignalDone stops the character and signals completion on the done channel
+func (c *Character) cleanupAndSignalDone(done chan bool) {
+	// Recover from any panic to prevent crash
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic in cleanupAndSignalDone", "error", r, "characterName", c.name)
+		}
+	}()
+
+	// Stop the character
+	c.Stop()
+
+	// Signal completion if channel is valid
+	if done != nil {
+		// Check if channel is closed by attempting a non-blocking send
+		select {
+		case done <- true:
+			// Successfully sent
+		default:
+			// Channel might be full or closed, log but don't panic
+			Logger.Warn("Failed to signal done channel", "characterName", c.name)
+		}
 	}
 }
 

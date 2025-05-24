@@ -174,7 +174,7 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 	// If character is active, stop it first
 	if isActive && activeChar != nil {
 		Logger.Info("Stopping active character before deletion", "characterName", activeChar.name)
-		activeChar.Stop(activeChar.end)
+		activeChar.Stop()
 	}
 
 	// Load character data to get inventory items if character is not active

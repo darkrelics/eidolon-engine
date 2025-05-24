@@ -324,7 +324,7 @@ func (p *Player) Stop() {
 		// Stop the character if active
 		if p.character != nil {
 			Logger.Info("Stopping active character", "character", p.character.name)
-			p.character.Stop(p.character.end)
+			p.character.Stop()
 			p.character = nil
 		}
 
