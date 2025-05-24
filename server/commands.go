@@ -129,6 +129,28 @@ func (g *Game) initCommands() {
 		description: "Show your equipped items",
 		usage:       "eq",
 	}
+
+	// Communication commands (escalate to room tier)
+	g.commands["say"] = CommandInfo{
+		timed:       false,
+		handler:     nil, // Escalates to room goroutine
+		description: "Say something to everyone in the room",
+		usage:       "say <message>",
+	}
+
+	g.commands["'"] = CommandInfo{
+		timed:       false,
+		handler:     nil, // Escalates to room goroutine, alias for say
+		description: "Say something to everyone in the room",
+		usage:       "' <message>",
+	}
+
+	g.commands["\""] = CommandInfo{
+		timed:       false,
+		handler:     nil, // Escalates to room goroutine, alias for say
+		description: "Say something to everyone in the room",
+		usage:       "\" <message>",
+	}
 }
 
 // ValidateCommand checks if a command is valid and returns its verb and tokens
