@@ -223,21 +223,7 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn, ctx context.
 	}
 
 	// Handle SSH requests with context cancellation
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case req, ok := <-reqs:
-				if !ok {
-					return
-				}
-				if req.WantReply {
-					req.Reply(false, nil)
-				}
-			}
-		}
-	}()
+	go ssh_interface.handleSSHRequests(ctx, reqs)
 
 	// Extract UUID from permissions
 	userUUIDStr := ""
@@ -277,9 +263,7 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn, ctx context.
 		}
 
 		// Run player with connection context
-		go func() {
-			player.RunSSH(requests)
-		}()
+		go ssh_interface.runPlayer(player, requests)
 	}
 }
 
@@ -299,16 +283,7 @@ func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
 	done := make(chan struct{})
 
 	// Set up a goroutine to listen for context cancellation
-	go func() {
-		select {
-		case <-ssh_interface.server.ctx.Done():
-			ssh_interface.listener.Close()
-			close(done)
-		case <-ssh_interface.ctx.Done():
-			ssh_interface.listener.Close()
-			close(done)
-		}
-	}()
+	go ssh_interface.listenForCancellation(done)
 
 	for {
 		select {
@@ -347,10 +322,7 @@ func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
 			connCtx, connCancel := context.WithCancel(ssh_interface.ctx)
 
 			// Handle connection with context
-			go func(conn net.Conn, ctx context.Context) {
-				defer connCancel()
-				ssh_interface.handleConnection(conn, ctx)
-			}(conn, connCtx)
+			go ssh_interface.handleConnectionWithContext(conn, connCtx, connCancel)
 		}
 	}
 }
@@ -551,4 +523,44 @@ func ParseDims(b []byte) (width, height int) {
 	width = int(b[0])<<24 | int(b[1])<<16 | int(b[2])<<8 | int(b[3])
 	height = int(b[4])<<24 | int(b[5])<<16 | int(b[6])<<8 | int(b[7])
 	return width, height
+}
+
+// handleSSHRequests processes SSH requests for a connection
+func (ssh_interface *Interface_SSH) handleSSHRequests(ctx context.Context, reqs <-chan *ssh.Request) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case req, ok := <-reqs:
+			if !ok {
+				return
+			}
+			if req.WantReply {
+				req.Reply(false, nil)
+			}
+		}
+	}
+}
+
+// runPlayer runs a player's SSH session
+func (ssh_interface *Interface_SSH) runPlayer(player *Player, requests <-chan *ssh.Request) {
+	player.RunSSH(requests)
+}
+
+// listenForCancellation listens for context cancellation and closes the listener
+func (ssh_interface *Interface_SSH) listenForCancellation(done chan struct{}) {
+	select {
+	case <-ssh_interface.server.ctx.Done():
+		ssh_interface.listener.Close()
+		close(done)
+	case <-ssh_interface.ctx.Done():
+		ssh_interface.listener.Close()
+		close(done)
+	}
+}
+
+// handleConnectionWithContext handles an SSH connection with proper context management
+func (ssh_interface *Interface_SSH) handleConnectionWithContext(conn net.Conn, ctx context.Context, cancel context.CancelFunc) {
+	defer cancel()
+	ssh_interface.handleConnection(conn, ctx)
 }

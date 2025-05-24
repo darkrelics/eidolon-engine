@@ -482,44 +482,7 @@ func (p *Player) PlayCharacter() {
 
 	// Start a goroutine to forward player input to character
 	inputForwarder := make(chan bool, 1)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				Logger.Warn("Recovered in command forwarding", "player", p.id, "recover", r)
-			}
-			close(inputForwarder)
-		}()
-
-		Logger.Debug("Starting input forwarding for character", "characterName", characterName)
-		for {
-			select {
-			case input, ok := <-p.commandIn:
-				if !ok {
-					Logger.Warn("Player command input channel closed unexpectedly")
-					return
-				}
-				Logger.Debug("Forwarding input to character", "input", input, "characterName", characterName)
-				// Forward the input to character
-				select {
-				case characterPlayerCommandIn <- input:
-					Logger.Debug("Successfully forwarded input to character", "characterName", characterName)
-				case <-ctx.Done():
-					Logger.Debug("Context cancelled during input forwarding", "characterName", characterName)
-					return
-				}
-			case _, ok := <-characterEnd:
-				if !ok {
-					Logger.Debug("Character end channel closed, stopping input forwarding", "characterName", characterName)
-				} else {
-					Logger.Debug("Character end signal received, stopping input forwarding", "characterName", characterName)
-				}
-				return
-			case <-ctx.Done():
-				Logger.Debug("Context cancelled, stopping input forwarding", "characterName", characterName)
-				return
-			}
-		}
-	}()
+	go p.forwardInputToCharacter(ctx, characterName, characterPlayerCommandIn, characterEnd, inputForwarder)
 
 	// Run the character's lifecycle (blocks until character session ends)
 	Logger.Info("Starting character session", "characterName", characterName)
@@ -566,6 +529,46 @@ func (p *Player) HandleViewMOTDs() {
 			p.commandOut <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
 		} else {
 			p.commandOut <- fmt.Sprintf("\n\r[%s]\n\r%s\n\r", dateStr, motd.Message)
+		}
+	}
+}
+
+// forwardInputToCharacter forwards player input to the character
+func (p *Player) forwardInputToCharacter(ctx context.Context, characterName string, characterPlayerCommandIn chan<- string, characterEnd <-chan bool, inputForwarder chan bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Warn("Recovered in command forwarding", "player", p.id, "recover", r)
+		}
+		close(inputForwarder)
+	}()
+
+	Logger.Debug("Starting input forwarding for character", "characterName", characterName)
+	for {
+		select {
+		case input, ok := <-p.commandIn:
+			if !ok {
+				Logger.Warn("Player command input channel closed unexpectedly")
+				return
+			}
+			Logger.Debug("Forwarding input to character", "input", input, "characterName", characterName)
+			// Forward the input to character
+			select {
+			case characterPlayerCommandIn <- input:
+				Logger.Debug("Successfully forwarded input to character", "characterName", characterName)
+			case <-ctx.Done():
+				Logger.Debug("Context cancelled during input forwarding", "characterName", characterName)
+				return
+			}
+		case _, ok := <-characterEnd:
+			if !ok {
+				Logger.Debug("Character end channel closed, stopping input forwarding", "characterName", characterName)
+			} else {
+				Logger.Debug("Character end signal received, stopping input forwarding", "characterName", characterName)
+			}
+			return
+		case <-ctx.Done():
+			Logger.Debug("Context cancelled, stopping input forwarding", "characterName", characterName)
+			return
 		}
 	}
 }
