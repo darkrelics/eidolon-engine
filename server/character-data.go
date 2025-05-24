@@ -177,6 +177,48 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 		activeChar.Stop(activeChar.end)
 	}
 
+	// Load character data to get inventory items if character is not active
+	var inventoryItems map[string]string
+	if !isActive {
+		// Load character data to get inventory
+		charKey := map[string]types.AttributeValue{
+			"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
+		}
+		var charData CharacterData
+		err := p.server.database.Get(p.server.ctx, "characters", charKey, &charData)
+		if err == nil {
+			inventoryItems = charData.Inventory
+		} else {
+			Logger.Warn("Could not load character data for inventory cleanup", "characterID", characterID, "error", err)
+		}
+	} else if activeChar != nil {
+		// Get inventory from active character
+		activeChar.mutex.RLock()
+		inventoryItems = make(map[string]string)
+		for slot, item := range activeChar.inventory {
+			if item != nil {
+				inventoryItems[slot] = item.id.String()
+			}
+		}
+		activeChar.mutex.RUnlock()
+	}
+
+	// Clean up inventory items from game.items map
+	if len(inventoryItems) > 0 {
+		p.server.game.mutex.Lock()
+		for _, itemIDStr := range inventoryItems {
+			itemID, err := uuid.FromString(itemIDStr)
+			if err != nil {
+				Logger.Warn("Invalid item ID in character inventory", "itemID", itemIDStr, "error", err)
+				continue
+			}
+			delete(p.server.game.items, itemID)
+			Logger.Debug("Removed item from game.items", "itemID", itemID, "characterID", characterID)
+		}
+		p.server.game.mutex.Unlock()
+		Logger.Info("Cleaned up character inventory items", "characterID", characterID, "itemCount", len(inventoryItems))
+	}
+
 	// Create the key for DynamoDB deletion
 	key := map[string]types.AttributeValue{
 		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},

@@ -327,6 +327,12 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			// For non-persistent rooms, unload the room
 			Logger.Info("Unloading non-persistent idle room", "roomID", r.roomID)
 
+			// Clean up ALL items in the room from game.items map
+			for itemID := range r.items {
+				delete(game.items, itemID)
+			}
+			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", len(r.items))
+
 			// We must unlock mutex before calling Stop to avoid deadlock
 			r.mutex.Unlock()
 			r.Stop()

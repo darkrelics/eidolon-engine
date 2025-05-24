@@ -285,6 +285,22 @@ func (c *Character) Stop(done chan bool) {
 		Logger.Error("Error saving character during shutdown", "characterName", c.name, "error", err)
 	}
 
+	// Clean up character inventory items from game.items map
+	c.mutex.Lock()
+	itemCount := 0
+	for _, item := range c.inventory {
+		if item != nil {
+			c.game.mutex.Lock()
+			delete(c.game.items, item.id)
+			c.game.mutex.Unlock()
+			itemCount++
+		}
+	}
+	c.mutex.Unlock()
+	if itemCount > 0 {
+		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", itemCount)
+	}
+
 	// Store a reference to the player before resetting
 	player := c.player
 
