@@ -539,6 +539,6 @@ func (g *Game) logoutAllCharacters() {
 
 	// Stop characters without holding the lock
 	for _, character := range characters {
-		character.Stop(character.end)
+		character.Stop()
 	}
 }

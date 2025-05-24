@@ -312,23 +312,47 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 	// Increment the idle counter
 	r.idleCounter++
 
-	// Check if idle threshold has been reached (600 ticks = 10 minutes @ 1 second per tick)
-	if r.idleCounter >= 600 {
-		Logger.Info("Room idle threshold reached", "roomID", r.roomID, "title", r.title, "persistent", r.persistent)
+	// Check for item cleanup every 10 minutes (600 ticks = 10 minutes @ 1 second per tick)
+	if r.idleCounter%600 == 0 && r.idleCounter > 0 {
+		Logger.Info("Room item cleanup interval reached", "roomID", r.roomID, "title", r.title, "idleMinutes", r.idleCounter/60)
 
-		// Clean up items in the room
+		// Clean up marked items in the room
 		r.cleanupItems(game)
+	}
 
-		// For persistent rooms, deactivate scripts but keep room loaded
+	// Check if room unload threshold has been reached (3600 ticks = 60 minutes @ 1 second per tick)
+	if r.idleCounter >= 3600 {
+		Logger.Info("Room unload threshold reached", "roomID", r.roomID, "title", r.title, "persistent", r.persistent)
+
+		// For persistent rooms, only deactivate scripts but keep room loaded
 		if r.persistent {
 			r.scriptActive = false
 			Logger.Info("Deactivating scripts for idle persistent room", "roomID", r.roomID)
+			// Reset idle counter for persistent rooms to prevent repeated deactivation logs
+			r.idleCounter = 0
 		} else {
 			// For non-persistent rooms, unload the room
 			Logger.Info("Unloading non-persistent idle room", "roomID", r.roomID)
 
+			// Clean up ALL items in the room from game.items map
+			itemsToDelete := make([]string, 0)
+			for itemID, item := range r.items {
+				delete(game.items, itemID)
+				// Track items that might need database cleanup
+				if item != nil && item.lastSaved.After(item.lastEdited) {
+					itemsToDelete = append(itemsToDelete, itemID.String())
+				}
+			}
+			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", len(r.items))
+
 			// We must unlock mutex before calling Stop to avoid deadlock
 			r.mutex.Unlock()
+
+			// Delete items from database if needed (minimize DB access)
+			if len(itemsToDelete) > 0 {
+				r.deleteItemsFromDatabase(game, itemsToDelete)
+			}
+
 			r.Stop()
 			r.mutex.Lock() // Re-lock for the remainder of the function
 
@@ -344,25 +368,56 @@ func (r *Room) cleanupItems(game *Game) {
 
 	// Create temporary list of items to remove
 	var itemsToRemove []uuid.UUID
+	var itemsToDeleteFromDB []string
 
 	for id, item := range r.items {
 		if item != nil && item.markedForDeletion {
 			itemsToRemove = append(itemsToRemove, id)
+			// Track items that have been saved to database
+			if item.lastSaved.After(item.lastEdited) {
+				itemsToDeleteFromDB = append(itemsToDeleteFromDB, id.String())
+			}
 		}
 	}
 
-	// Remove the items
+	// Remove the items from room and game maps
 	for _, id := range itemsToRemove {
 		delete(r.items, id)
-		// Also remove from game's items map if needed
+		// Also remove from game's items map
 		delete(game.items, id)
 	}
 
-	Logger.Info("Cleaned up marked items from idle room",
-		"roomID", r.roomID,
-		"itemsRemoved", len(itemsToRemove),
-		"totalItemsBefore", itemCount,
-		"totalItemsAfter", len(r.items))
+	// Delete items from database if needed (batch operation to minimize DB access)
+	if len(itemsToDeleteFromDB) > 0 {
+		go func() {
+			// Run database deletion asynchronously to avoid blocking room operations
+			r.deleteItemsFromDatabase(game, itemsToDeleteFromDB)
+		}()
+	}
+
+	if len(itemsToRemove) > 0 {
+		Logger.Info("Cleaned up marked items from idle room",
+			"roomID", r.roomID,
+			"itemsRemoved", len(itemsToRemove),
+			"dbItemsDeleted", len(itemsToDeleteFromDB),
+			"totalItemsBefore", itemCount,
+			"totalItemsAfter", len(r.items))
+	}
+}
+
+// deleteItemsFromDatabase deletes items from the database in batch to minimize DB access
+func (r *Room) deleteItemsFromDatabase(game *Game, itemIDs []string) {
+	if len(itemIDs) == 0 {
+		return
+	}
+
+	Logger.Info("Deleting items from database", "roomID", r.roomID, "itemCount", len(itemIDs))
+
+	// Use batch delete to minimize DB calls
+	err := game.database.BatchDeleteItems(game.ctx, itemIDs)
+	if err != nil {
+		Logger.Error("Failed to batch delete items from database", "roomID", r.roomID, "error", err)
+	}
 }
 
 // GetScriptID returns the script ID for the room

@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -256,16 +257,64 @@ func (p *Player) validateCharacterName(name string) error {
 	}
 
 	// Check name length
-	if len(name) < 3 {
-		return fmt.Errorf("name must be at least 3 characters")
+	if len(name) < 4 {
+		return fmt.Errorf("name must be at least 4 characters")
 	}
-	if len(name) > 15 {
-		return fmt.Errorf("name must be 15 characters or fewer")
+	if len(name) > 20 {
+		return fmt.Errorf("name must be 20 characters or fewer")
 	}
 
-	// Check if name contains only letters
-	if !regexp.MustCompile(`^[a-zA-Z]+$`).MatchString(name) {
-		return fmt.Errorf("name must contain only letters")
+	// Check if name contains only letters, hyphens, and apostrophes
+	if !regexp.MustCompile(`^[a-zA-Z'-]+$`).MatchString(name) {
+		return fmt.Errorf("name must contain only letters, hyphens, and apostrophes")
+	}
+
+	// Prevent names starting or ending with special characters
+	if name[0] == '-' || name[0] == '\'' || name[len(name)-1] == '-' || name[len(name)-1] == '\'' {
+		return fmt.Errorf("name cannot start or end with special characters")
+	}
+
+	// Prevent consecutive special characters
+	if regexp.MustCompile(`[-']{2,}`).MatchString(name) {
+		return fmt.Errorf("name cannot have consecutive special characters")
+	}
+
+	// Prevent excessive repetition (more than 2 consecutive identical characters)
+	if regexp.MustCompile(`(.)\1{2,}`).MatchString(name) {
+		return fmt.Errorf("name cannot have more than 2 consecutive identical characters")
+	}
+
+	// Prevent single-letter names with special characters
+	if len(name) <= 3 && (strings.Contains(name, "-") || strings.Contains(name, "'")) {
+		return fmt.Errorf("short names cannot contain special characters")
+	}
+
+	// Ensure reasonable letter-to-special-character ratio
+	letterCount := 0
+	for _, r := range name {
+		if unicode.IsLetter(r) {
+			letterCount++
+		}
+	}
+	if float64(letterCount)/float64(len(name)) < 0.5 {
+		return fmt.Errorf("name must be primarily letters")
+	}
+
+	// Check reserved prefixes
+	nameLower := strings.ToLower(name)
+	reservedPrefixes := []string{"gm_", "admin_", "mod_", "system_", "server_", "npc_"}
+	for _, prefix := range reservedPrefixes {
+		if strings.HasPrefix(nameLower, prefix) {
+			return fmt.Errorf("name uses reserved prefix")
+		}
+	}
+
+	// Check reserved exact names
+	reservedNames := []string{"admin", "administrator", "moderator", "gamemaster", "system"}
+	for _, reserved := range reservedNames {
+		if nameLower == reserved {
+			return fmt.Errorf("name is reserved")
+		}
 	}
 
 	// Check if name already exists
@@ -482,44 +531,7 @@ func (p *Player) PlayCharacter() {
 
 	// Start a goroutine to forward player input to character
 	inputForwarder := make(chan bool, 1)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				Logger.Warn("Recovered in command forwarding", "player", p.id, "recover", r)
-			}
-			close(inputForwarder)
-		}()
-
-		Logger.Debug("Starting input forwarding for character", "characterName", characterName)
-		for {
-			select {
-			case input, ok := <-p.commandIn:
-				if !ok {
-					Logger.Warn("Player command input channel closed unexpectedly")
-					return
-				}
-				Logger.Debug("Forwarding input to character", "input", input, "characterName", characterName)
-				// Forward the input to character
-				select {
-				case characterPlayerCommandIn <- input:
-					Logger.Debug("Successfully forwarded input to character", "characterName", characterName)
-				case <-ctx.Done():
-					Logger.Debug("Context cancelled during input forwarding", "characterName", characterName)
-					return
-				}
-			case _, ok := <-characterEnd:
-				if !ok {
-					Logger.Debug("Character end channel closed, stopping input forwarding", "characterName", characterName)
-				} else {
-					Logger.Debug("Character end signal received, stopping input forwarding", "characterName", characterName)
-				}
-				return
-			case <-ctx.Done():
-				Logger.Debug("Context cancelled, stopping input forwarding", "characterName", characterName)
-				return
-			}
-		}
-	}()
+	go p.forwardInputToCharacter(ctx, characterName, characterPlayerCommandIn, characterEnd, inputForwarder)
 
 	// Run the character's lifecycle (blocks until character session ends)
 	Logger.Info("Starting character session", "characterName", characterName)
@@ -566,6 +578,46 @@ func (p *Player) HandleViewMOTDs() {
 			p.commandOut <- fmt.Sprintf("\n\r%s\n\r", motd.Message)
 		} else {
 			p.commandOut <- fmt.Sprintf("\n\r[%s]\n\r%s\n\r", dateStr, motd.Message)
+		}
+	}
+}
+
+// forwardInputToCharacter forwards player input to the character
+func (p *Player) forwardInputToCharacter(ctx context.Context, characterName string, characterPlayerCommandIn chan<- string, characterEnd <-chan bool, inputForwarder chan bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Warn("Recovered in command forwarding", "player", p.id, "recover", r)
+		}
+		close(inputForwarder)
+	}()
+
+	Logger.Debug("Starting input forwarding for character", "characterName", characterName)
+	for {
+		select {
+		case input, ok := <-p.commandIn:
+			if !ok {
+				Logger.Warn("Player command input channel closed unexpectedly")
+				return
+			}
+			Logger.Debug("Forwarding input to character", "input", input, "characterName", characterName)
+			// Forward the input to character
+			select {
+			case characterPlayerCommandIn <- input:
+				Logger.Debug("Successfully forwarded input to character", "characterName", characterName)
+			case <-ctx.Done():
+				Logger.Debug("Context cancelled during input forwarding", "characterName", characterName)
+				return
+			}
+		case _, ok := <-characterEnd:
+			if !ok {
+				Logger.Debug("Character end channel closed, stopping input forwarding", "characterName", characterName)
+			} else {
+				Logger.Debug("Character end signal received, stopping input forwarding", "characterName", characterName)
+			}
+			return
+		case <-ctx.Done():
+			Logger.Debug("Context cancelled, stopping input forwarding", "characterName", characterName)
+			return
 		}
 	}
 }

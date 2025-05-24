@@ -58,6 +58,7 @@ func main() {
 		fmt.Printf("Main - Error initializing logging: %v\n", err)
 		os.Exit(124)
 	}
+	CloudWatchMetrics = cloudWatch
 
 	// Initialize game engine
 

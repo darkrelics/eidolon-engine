@@ -66,9 +66,17 @@ func (c *Character) Save() error {
 
 	// Convert inventory to ID map
 	inventoryIDs := make(map[string]string)
+	c.mutex.RLock()
 	for name, item := range c.inventory {
-		inventoryIDs[name] = item.id.String()
+		if item != nil {
+			inventoryIDs[name] = item.id.String()
+		}
 	}
+	inventoryCopy := make(map[string]*Item)
+	for k, v := range c.inventory {
+		inventoryCopy[k] = v
+	}
+	c.mutex.RUnlock()
 
 	// Create character data for storage
 	characterData := &CharacterData{
@@ -83,14 +91,14 @@ func (c *Character) Save() error {
 		Inventory:     inventoryIDs,
 	}
 
-	// Write to database
-	err := kp.Put(c.game.ctx, "characters", characterData)
+	// Save character and inventory transactionally
+	err := kp.SaveCharacterWithInventory(c.game.ctx, characterData, inventoryCopy)
 	if err != nil {
-		Logger.Error("Error writing character data", "characterName", c.name, "error", err)
-		return fmt.Errorf("error writing character data: %w", err)
+		Logger.Error("Error saving character and inventory", "characterName", c.name, "error", err)
+		return fmt.Errorf("error saving character and inventory: %w", err)
 	}
 
-	Logger.Debug("Successfully wrote character to database", "characterName", c.name, "characterID", c.id.String())
+	Logger.Debug("Successfully saved character and inventory", "characterName", c.name, "characterID", c.id.String(), "itemCount", len(inventoryIDs))
 
 	c.lastSaved = time.Now()
 
@@ -192,12 +200,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 						continue
 					}
 
-					// Save item to database
-					err = item.Save(p.server.game.ctx, p.server.game.database)
-					if err != nil {
-						Logger.Error("Failed to save starting item to database", "itemID", item.id, "error", err)
-						continue
-					}
+					// Items will be saved transactionally with character
 
 					// Set worn state if specified
 					if startingItem.IsWorn && item.wearable {
@@ -241,14 +244,7 @@ func (c *Character) Run(done chan bool) {
 }
 
 // Stop cleanly shuts down the character session
-func (c *Character) Stop(done chan bool) {
-	// First, signal done will be called at the end
-	defer func() {
-		if done != nil {
-			done <- true
-		}
-	}()
-
+func (c *Character) Stop() {
 	// Ensure Stop logic is only executed once
 	c.mutex.Lock()
 	if c.stopped {
@@ -285,6 +281,22 @@ func (c *Character) Stop(done chan bool) {
 		Logger.Error("Error saving character during shutdown", "characterName", c.name, "error", err)
 	}
 
+	// Clean up character inventory items from game.items map
+	c.mutex.Lock()
+	itemCount := 0
+	for _, item := range c.inventory {
+		if item != nil {
+			c.game.mutex.Lock()
+			delete(c.game.items, item.id)
+			c.game.mutex.Unlock()
+			itemCount++
+		}
+	}
+	c.mutex.Unlock()
+	if itemCount > 0 {
+		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", itemCount)
+	}
+
 	// Store a reference to the player before resetting
 	player := c.player
 
@@ -296,6 +308,31 @@ func (c *Character) Stop(done chan bool) {
 	if player != nil {
 		// Reset the player's character reference
 		player.character = nil
+	}
+}
+
+// cleanupAndSignalDone stops the character and signals completion on the done channel
+func (c *Character) cleanupAndSignalDone(done chan bool) {
+	// Recover from any panic to prevent crash
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic in cleanupAndSignalDone", "error", r, "characterName", c.name)
+		}
+	}()
+
+	// Stop the character
+	c.Stop()
+
+	// Signal completion if channel is valid
+	if done != nil {
+		// Check if channel is closed by attempting a non-blocking send
+		select {
+		case done <- true:
+			// Successfully sent
+		default:
+			// Channel might be full or closed, log but don't panic
+			Logger.Warn("Failed to signal done channel", "characterName", c.name)
+		}
 	}
 }
 

@@ -36,7 +36,7 @@ func (c *Character) RunConsole(done chan bool) {
 	}
 
 	// Ensure character is properly stopped when the function exits
-	defer c.Stop(done)
+	defer c.cleanupAndSignalDone(done)
 
 	Logger.Debug("Starting character console", "characterName", c.name)
 

@@ -100,6 +100,69 @@ func (c *CloudWatch) SendMetrics(metrics []types.MetricDatum) error {
 	return nil
 }
 
+// SendSecurityMetric sends a security-related metric to CloudWatch
+func (c *CloudWatch) SendSecurityMetric(metricName string, value float64, unit types.StandardUnit, dimensions []types.Dimension) {
+	metric := types.MetricDatum{
+		MetricName: aws.String(metricName),
+		Unit:       unit,
+		Value:      aws.Float64(value),
+		Timestamp:  aws.Time(time.Now()),
+		Dimensions: dimensions,
+	}
+
+	select {
+	case c.metrics <- metric:
+		// Metric queued successfully
+	default:
+		// Channel full, log but don't block
+		Logger.Warn("Security metric channel full, dropping metric", "metric", metricName)
+	}
+}
+
+// SendAuthenticationBlock sends a metric when an IP or user is blocked
+func (c *CloudWatch) SendAuthenticationBlock(blockType string, identifier string, banDuration time.Duration) {
+	dimensions := []types.Dimension{
+		{
+			Name:  aws.String("BlockType"),
+			Value: aws.String(blockType),
+		},
+		{
+			Name:  aws.String("Environment"),
+			Value: aws.String(c.namespace),
+		},
+	}
+
+	// Send block count metric
+	c.SendSecurityMetric("AuthenticationBlocks", 1, types.StandardUnitCount, dimensions)
+
+	// Send ban duration metric
+	c.SendSecurityMetric("AuthenticationBanDuration", banDuration.Minutes(), types.StandardUnitSeconds, dimensions)
+
+	// Log the block event separately (not as a normal log)
+	Logger.Info("SECURITY_EVENT: Authentication block applied",
+		"event_type", "auth_block",
+		"block_type", blockType,
+		"identifier", identifier,
+		"ban_duration_minutes", banDuration.Minutes(),
+		"timestamp", time.Now().Unix())
+}
+
+// SendRateLimitViolation sends a metric when a rate limit is exceeded (but not necessarily banned)
+func (c *CloudWatch) SendRateLimitViolation(limitType string) {
+	dimensions := []types.Dimension{
+		{
+			Name:  aws.String("LimitType"),
+			Value: aws.String(limitType),
+		},
+		{
+			Name:  aws.String("Environment"),
+			Value: aws.String(c.namespace),
+		},
+	}
+
+	c.SendSecurityMetric("RateLimitViolations", 1, types.StandardUnitCount, dimensions)
+}
+
 // Run handles periodic metric submission and log processing
 func (c *CloudWatch) Run(errChan chan error) error {
 

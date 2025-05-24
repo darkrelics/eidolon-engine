@@ -47,7 +47,6 @@ type Server struct {
 	index         *Index
 	activeMotDs   []*MOTD
 	sshInterface  *Interface_SSH
-	wg            sync.WaitGroup
 }
 
 type Index struct {
@@ -110,7 +109,6 @@ func NewServer(globalCtx context.Context, cfg *Configuration) (*Server, error) {
 		shutdownOnce:  sync.Once{},
 		cognito:       cognitoidentityprovider.NewFromConfig(awsConfig),
 		index:         index,
-		wg:            sync.WaitGroup{},
 	}
 
 	server.playerCount.Store(0)
@@ -160,12 +158,7 @@ func (s *Server) startSSHInterface(errorChan chan error) error {
 		return fmt.Errorf("failed to start SSH interface: %w", err)
 	}
 
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		s.sshInterface.Run(errorChan)
-		Logger.Info("SSH Interface finished")
-	}()
+	go s.runSSHInterface(errorChan)
 
 	Logger.Info("SSH Interface started successfully")
 	return nil
@@ -197,20 +190,7 @@ func (s *Server) Stop() error {
 			}
 		}
 
-		// Wait for all goroutines to finish
-		doneChan := make(chan struct{})
-		go func() {
-			s.wg.Wait()
-			close(doneChan)
-		}()
-
-		select {
-		case <-doneChan:
-			Logger.Info("All server components stopped gracefully")
-		case <-time.After(10 * time.Second):
-			Logger.Error("Server shutdown timed out waiting for components")
-			shutdownError = fmt.Errorf("server shutdown timeout")
-		}
+		Logger.Info("Server shutdown complete")
 	})
 
 	return shutdownError
@@ -383,4 +363,10 @@ func (s *Server) GetPlayerList() []uuid.UUID {
 	}
 
 	return playerList
+}
+
+// runSSHInterface runs the SSH interface in a goroutine
+func (s *Server) runSSHInterface(errorChan chan error) {
+	s.sshInterface.Run(errorChan)
+	Logger.Info("SSH Interface finished")
 }

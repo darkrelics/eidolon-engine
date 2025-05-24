@@ -53,7 +53,7 @@ func executeQuitCommand(character *Character, tokens []string) error {
 	}
 
 	// Signal the end of character's lifecycle
-	character.Stop(character.end)
+	character.Stop()
 	return nil
 }
 
