@@ -81,6 +81,90 @@ func (k *KeyPair) Put(ctx context.Context, tableName string, item interface{}) e
 
 }
 
+// TransactWrite performs multiple write operations in a single transaction
+func (k *KeyPair) TransactWrite(ctx context.Context, items []types.TransactWriteItem) error {
+	Logger.Info("Performing transactional write", "itemCount", len(items))
+
+	input := &dynamodb.TransactWriteItemsInput{
+		TransactItems: items,
+	}
+
+	_, err := k.db.TransactWriteItems(ctx, input)
+	if err != nil {
+		return fmt.Errorf("error performing transactional write: %w", err)
+	}
+
+	Logger.Debug("Successfully completed transactional write", "itemCount", len(items))
+	return nil
+}
+
+// SaveCharacterWithInventory saves character and inventory items in a single transaction
+func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData *CharacterData, items map[string]*Item) error {
+	Logger.Debug("Saving character with inventory transactionally", "characterID", characterData.CharacterID, "itemCount", len(items))
+
+	// Build transaction items
+	transactItems := make([]types.TransactWriteItem, 0, len(items)+1)
+
+	// Add all inventory items to transaction
+	for _, item := range items {
+		if item != nil {
+			// Create item data for storage
+			itemData := &ItemData{
+				ItemID:      item.id.String(),
+				PrototypeID: item.prototypeID.String(),
+				Name:        item.name,
+				Description: item.description,
+				Mass:        item.mass,
+				Value:       item.value,
+				Stackable:   item.stackable,
+				MaxStack:    item.maxStack,
+				Quantity:    item.quantity,
+				Wearable:    item.wearable,
+				WornOn:      item.wornOn,
+				Verbs:       item.verbs,
+				Overrides:   item.overrides,
+				TraitMods:   item.traitMods,
+				Container:   item.container,
+				Contents:    make([]string, 0), // Handle container contents separately if needed
+				IsWorn:      item.isWorn,
+				CanPickUp:   item.canPickUp,
+				Metadata:    item.metadata,
+			}
+
+			// Marshal item data
+			itemAV, err := attributevalue.MarshalMap(itemData)
+			if err != nil {
+				return fmt.Errorf("error marshalling item %s: %w", item.id, err)
+			}
+
+			// Add item to transaction
+			transactItems = append(transactItems, types.TransactWriteItem{
+				Put: &types.Put{
+					TableName: aws.String("items"),
+					Item:      itemAV,
+				},
+			})
+		}
+	}
+
+	// Marshal character data
+	charAV, err := attributevalue.MarshalMap(characterData)
+	if err != nil {
+		return fmt.Errorf("error marshalling character data: %w", err)
+	}
+
+	// Add character to transaction
+	transactItems = append(transactItems, types.TransactWriteItem{
+		Put: &types.Put{
+			TableName: aws.String("characters"),
+			Item:      charAV,
+		},
+	})
+
+	// Execute transaction
+	return k.TransactWrite(ctx, transactItems)
+}
+
 // Get retrieves an item from the DynamoDB table.
 func (k *KeyPair) Get(ctx context.Context, tableName string, key map[string]types.AttributeValue, item interface{}) error {
 

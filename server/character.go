@@ -66,9 +66,17 @@ func (c *Character) Save() error {
 
 	// Convert inventory to ID map
 	inventoryIDs := make(map[string]string)
+	c.mutex.RLock()
 	for name, item := range c.inventory {
-		inventoryIDs[name] = item.id.String()
+		if item != nil {
+			inventoryIDs[name] = item.id.String()
+		}
 	}
+	inventoryCopy := make(map[string]*Item)
+	for k, v := range c.inventory {
+		inventoryCopy[k] = v
+	}
+	c.mutex.RUnlock()
 
 	// Create character data for storage
 	characterData := &CharacterData{
@@ -83,14 +91,14 @@ func (c *Character) Save() error {
 		Inventory:     inventoryIDs,
 	}
 
-	// Write to database
-	err := kp.Put(c.game.ctx, "characters", characterData)
+	// Save character and inventory transactionally
+	err := kp.SaveCharacterWithInventory(c.game.ctx, characterData, inventoryCopy)
 	if err != nil {
-		Logger.Error("Error writing character data", "characterName", c.name, "error", err)
-		return fmt.Errorf("error writing character data: %w", err)
+		Logger.Error("Error saving character and inventory", "characterName", c.name, "error", err)
+		return fmt.Errorf("error saving character and inventory: %w", err)
 	}
 
-	Logger.Debug("Successfully wrote character to database", "characterName", c.name, "characterID", c.id.String())
+	Logger.Debug("Successfully saved character and inventory", "characterName", c.name, "characterID", c.id.String(), "itemCount", len(inventoryIDs))
 
 	c.lastSaved = time.Now()
 
@@ -192,12 +200,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 						continue
 					}
 
-					// Save item to database
-					err = item.Save(p.server.game.ctx, p.server.game.database)
-					if err != nil {
-						Logger.Error("Failed to save starting item to database", "itemID", item.id, "error", err)
-						continue
-					}
+					// Items will be saved transactionally with character
 
 					// Set worn state if specified
 					if startingItem.IsWorn && item.wearable {
