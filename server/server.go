@@ -370,4 +370,3 @@ func (s *Server) runSSHInterface(errorChan chan error) {
 	s.sshInterface.Run(errorChan)
 	Logger.Info("SSH Interface finished")
 }
-

@@ -315,7 +315,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 	// Check for item cleanup every 10 minutes (600 ticks = 10 minutes @ 1 second per tick)
 	if r.idleCounter%600 == 0 && r.idleCounter > 0 {
 		Logger.Info("Room item cleanup interval reached", "roomID", r.roomID, "title", r.title, "idleMinutes", r.idleCounter/60)
-		
+
 		// Clean up marked items in the room
 		r.cleanupItems(game)
 	}
@@ -347,12 +347,12 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 
 			// We must unlock mutex before calling Stop to avoid deadlock
 			r.mutex.Unlock()
-			
+
 			// Delete items from database if needed (minimize DB access)
 			if len(itemsToDelete) > 0 {
 				r.deleteItemsFromDatabase(game, itemsToDelete)
 			}
-			
+
 			r.Stop()
 			r.mutex.Lock() // Re-lock for the remainder of the function
 

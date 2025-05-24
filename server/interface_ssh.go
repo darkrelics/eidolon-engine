@@ -35,13 +35,13 @@ import (
 
 const (
 	// Authentication rate limiting
-	authLimitRate       = 1 // attempts per second per IP/user
-	authLimitBurst      = 5 // burst size per IP/user
-	globalAuthLimitRate = 10 // global attempts per second across all connections
+	authLimitRate        = 1  // attempts per second per IP/user
+	authLimitBurst       = 5  // burst size per IP/user
+	globalAuthLimitRate  = 10 // global attempts per second across all connections
 	globalAuthLimitBurst = 50 // global burst size
-	authTimeout         = 30 * time.Second
-	authBanThreshold    = 10
-	authBanDuration     = 15 * time.Minute
+	authTimeout          = 30 * time.Second
+	authBanThreshold     = 10
+	authBanDuration      = 15 * time.Minute
 )
 
 // AuthAttempt tracks authentication attempts and bans
@@ -62,9 +62,9 @@ type Interface_SSH struct {
 	privateKeyPath string
 	listener       net.Listener
 	sshConfig      *ssh.ServerConfig
-	authAttempts   map[string]*AuthAttempt  // IP-based rate limiting
-	userAttempts   map[string]*AuthAttempt  // Username-based rate limiting
-	globalLimiter  *rate.Limiter            // Global rate limiter across all connections
+	authAttempts   map[string]*AuthAttempt // IP-based rate limiting
+	userAttempts   map[string]*AuthAttempt // Username-based rate limiting
+	globalLimiter  *rate.Limiter           // Global rate limiter across all connections
 	authMutex      sync.RWMutex
 }
 
@@ -397,7 +397,7 @@ func (ssh_interface *Interface_SSH) recordFailedAttempt(clientIP string) {
 	if attempt.attempts >= authBanThreshold {
 		attempt.banUntil = time.Now().Add(authBanDuration)
 		Logger.Warn("Client banned due to excessive failed attempts", "ip", clientIP, "ban_until", attempt.banUntil)
-		
+
 		// Send CloudWatch metric for IP ban
 		if CloudWatchMetrics != nil {
 			CloudWatchMetrics.SendAuthenticationBlock("IP", clientIP, authBanDuration)
@@ -458,7 +458,7 @@ func (ssh_interface *Interface_SSH) recordFailedUserAttempt(username string) {
 	if attempt.attempts >= authBanThreshold {
 		attempt.banUntil = time.Now().Add(authBanDuration)
 		Logger.Warn("User banned due to excessive failed attempts", "username", username, "ban_until", attempt.banUntil)
-		
+
 		// Send CloudWatch metric for username ban
 		if CloudWatchMetrics != nil {
 			CloudWatchMetrics.SendAuthenticationBlock("Username", username, authBanDuration)

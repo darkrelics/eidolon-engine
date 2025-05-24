@@ -108,16 +108,16 @@ func (k *KeyPair) BatchDeleteItems(ctx context.Context, itemIDs []string) error 
 
 	// DynamoDB TransactWriteItems has a limit of 25 items per transaction
 	const batchSize = 25
-	
+
 	for i := 0; i < len(itemIDs); i += batchSize {
 		end := i + batchSize
 		if end > len(itemIDs) {
 			end = len(itemIDs)
 		}
-		
+
 		batch := itemIDs[i:end]
 		transactItems := make([]types.TransactWriteItem, 0, len(batch))
-		
+
 		for _, itemID := range batch {
 			transactItems = append(transactItems, types.TransactWriteItem{
 				Delete: &types.Delete{
@@ -128,14 +128,14 @@ func (k *KeyPair) BatchDeleteItems(ctx context.Context, itemIDs []string) error 
 				},
 			})
 		}
-		
+
 		err := k.TransactWrite(ctx, transactItems)
 		if err != nil {
 			Logger.Error("Error deleting batch of items", "batchStart", i, "batchEnd", end, "error", err)
 			return fmt.Errorf("error deleting items batch: %w", err)
 		}
 	}
-	
+
 	Logger.Debug("Successfully deleted items", "itemCount", len(itemIDs))
 	return nil
 }

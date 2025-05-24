@@ -109,7 +109,7 @@ func (c *CloudWatch) SendSecurityMetric(metricName string, value float64, unit t
 		Timestamp:  aws.Time(time.Now()),
 		Dimensions: dimensions,
 	}
-	
+
 	select {
 	case c.metrics <- metric:
 		// Metric queued successfully
@@ -131,13 +131,13 @@ func (c *CloudWatch) SendAuthenticationBlock(blockType string, identifier string
 			Value: aws.String(c.namespace),
 		},
 	}
-	
+
 	// Send block count metric
 	c.SendSecurityMetric("AuthenticationBlocks", 1, types.StandardUnitCount, dimensions)
-	
+
 	// Send ban duration metric
 	c.SendSecurityMetric("AuthenticationBanDuration", banDuration.Minutes(), types.StandardUnitSeconds, dimensions)
-	
+
 	// Log the block event separately (not as a normal log)
 	Logger.Info("SECURITY_EVENT: Authentication block applied",
 		"event_type", "auth_block",
@@ -159,7 +159,7 @@ func (c *CloudWatch) SendRateLimitViolation(limitType string) {
 			Value: aws.String(c.namespace),
 		},
 	}
-	
+
 	c.SendSecurityMetric("RateLimitViolations", 1, types.StandardUnitCount, dimensions)
 }
 
