@@ -41,6 +41,7 @@ import (
 const maxRetries = 3
 
 var Logger *slog.Logger
+var CloudWatchMetrics *CloudWatch
 
 func parseLogLevel(level int) slog.Level {
 	switch level {

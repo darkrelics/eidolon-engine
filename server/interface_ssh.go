@@ -35,11 +35,13 @@ import (
 
 const (
 	// Authentication rate limiting
-	authLimitRate    = 1 // attempts per second
-	authLimitBurst   = 5 // burst size
-	authTimeout      = 30 * time.Second
-	authBanThreshold = 10
-	authBanDuration  = 15 * time.Minute
+	authLimitRate       = 1 // attempts per second per IP/user
+	authLimitBurst      = 5 // burst size per IP/user
+	globalAuthLimitRate = 10 // global attempts per second across all connections
+	globalAuthLimitBurst = 50 // global burst size
+	authTimeout         = 30 * time.Second
+	authBanThreshold    = 10
+	authBanDuration     = 15 * time.Minute
 )
 
 // AuthAttempt tracks authentication attempts and bans
@@ -60,16 +62,34 @@ type Interface_SSH struct {
 	privateKeyPath string
 	listener       net.Listener
 	sshConfig      *ssh.ServerConfig
-	authAttempts   map[string]*AuthAttempt
+	authAttempts   map[string]*AuthAttempt  // IP-based rate limiting
+	userAttempts   map[string]*AuthAttempt  // Username-based rate limiting
+	globalLimiter  *rate.Limiter            // Global rate limiter across all connections
 	authMutex      sync.RWMutex
 }
 
 func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Interface_SSH) (*ssh.Permissions, error) {
 	clientIP := getClientIP(conn)
+	username := strings.ToLower(conn.User())
 
-	// Check if client is rate limited or banned
+	// Check global rate limit first (prevents DoS attacks)
+	if !sshInterface.globalLimiter.Allow() {
+		Logger.Warn("Global rate limit exceeded", "ip", clientIP, "username", username)
+		if CloudWatchMetrics != nil {
+			CloudWatchMetrics.SendRateLimitViolation("Global")
+		}
+		return nil, fmt.Errorf("server is experiencing high load, please try again later")
+	}
+
+	// Check if client IP is rate limited or banned
 	if err := sshInterface.checkAuthLimit(clientIP); err != nil {
-		Logger.Warn("Rate limited or banned client", "ip", clientIP, "error", err)
+		Logger.Warn("Rate limited or banned client IP", "ip", clientIP, "error", err)
+		return nil, err
+	}
+
+	// Check if username is rate limited or banned (prevents bypass via multiple IPs)
+	if err := sshInterface.checkUserAuthLimit(username); err != nil {
+		Logger.Warn("Rate limited or banned username", "username", username, "ip", clientIP, "error", err)
 		return nil, err
 	}
 
@@ -77,12 +97,14 @@ func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Inte
 	sanitizedPassword := string(password)
 	if !isValidPassword(sanitizedPassword) {
 		sshInterface.recordFailedAttempt(clientIP)
+		sshInterface.recordFailedUserAttempt(username)
 		return nil, fmt.Errorf("invalid password format")
 	}
 
 	authenticated, userUUID, err := Authenticate(conn.User(), sanitizedPassword, sshInterface)
 	if err != nil {
 		sshInterface.recordFailedAttempt(clientIP)
+		sshInterface.recordFailedUserAttempt(username)
 		Logger.Info("Failed to authenticate player", "error", err)
 		// Return generic error to prevent user enumeration
 		return nil, fmt.Errorf("authentication failed")
@@ -90,6 +112,7 @@ func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Inte
 
 	if authenticated {
 		sshInterface.resetAuthAttempts(clientIP)
+		sshInterface.resetUserAuthAttempts(username)
 		Logger.Info("Player authenticated", "player_email", conn.User(), "player_uuid", userUUID.String())
 		perms := &ssh.Permissions{
 			Extensions: map[string]string{
@@ -99,6 +122,7 @@ func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Inte
 		return perms, nil
 	} else {
 		sshInterface.recordFailedAttempt(clientIP)
+		sshInterface.recordFailedUserAttempt(username)
 		Logger.Warn("Player failed to authenticate", "player_email", conn.User())
 		return nil, fmt.Errorf("authentication failed")
 	}
@@ -135,6 +159,8 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 		privateKeyPath: config.SSH.PrivateKeyPath,
 		start:          time.Now(),
 		authAttempts:   make(map[string]*AuthAttempt),
+		userAttempts:   make(map[string]*AuthAttempt),
+		globalLimiter:  rate.NewLimiter(globalAuthLimitRate, globalAuthLimitBurst),
 	}
 
 	// Set up the SSH server config
@@ -374,6 +400,9 @@ func (ssh_interface *Interface_SSH) checkAuthLimit(clientIP string) error {
 
 	// Check rate limit
 	if !attempt.limiter.Allow() {
+		if CloudWatchMetrics != nil {
+			CloudWatchMetrics.SendRateLimitViolation("IP")
+		}
 		return fmt.Errorf("rate limit exceeded")
 	}
 
@@ -396,6 +425,11 @@ func (ssh_interface *Interface_SSH) recordFailedAttempt(clientIP string) {
 	if attempt.attempts >= authBanThreshold {
 		attempt.banUntil = time.Now().Add(authBanDuration)
 		Logger.Warn("Client banned due to excessive failed attempts", "ip", clientIP, "ban_until", attempt.banUntil)
+		
+		// Send CloudWatch metric for IP ban
+		if CloudWatchMetrics != nil {
+			CloudWatchMetrics.SendAuthenticationBlock("IP", clientIP, authBanDuration)
+		}
 	}
 }
 
@@ -403,6 +437,67 @@ func (ssh_interface *Interface_SSH) resetAuthAttempts(clientIP string) {
 	ssh_interface.authMutex.Lock()
 	defer ssh_interface.authMutex.Unlock()
 	delete(ssh_interface.authAttempts, clientIP)
+}
+
+// Username-based rate limiting functions
+func (ssh_interface *Interface_SSH) checkUserAuthLimit(username string) error {
+	ssh_interface.authMutex.RLock()
+	attempt, exists := ssh_interface.userAttempts[username]
+	ssh_interface.authMutex.RUnlock()
+
+	if !exists {
+		ssh_interface.authMutex.Lock()
+		attempt = &AuthAttempt{
+			limiter: rate.NewLimiter(authLimitRate, authLimitBurst),
+		}
+		ssh_interface.userAttempts[username] = attempt
+		ssh_interface.authMutex.Unlock()
+	}
+
+	// Check if user is banned
+	if time.Now().Before(attempt.banUntil) {
+		return fmt.Errorf("user is banned until %v", attempt.banUntil)
+	}
+
+	// Check rate limit
+	if !attempt.limiter.Allow() {
+		if CloudWatchMetrics != nil {
+			CloudWatchMetrics.SendRateLimitViolation("Username")
+		}
+		return fmt.Errorf("rate limit exceeded")
+	}
+
+	return nil
+}
+
+func (ssh_interface *Interface_SSH) recordFailedUserAttempt(username string) {
+	ssh_interface.authMutex.Lock()
+	defer ssh_interface.authMutex.Unlock()
+
+	attempt, exists := ssh_interface.userAttempts[username]
+	if !exists {
+		attempt = &AuthAttempt{
+			limiter: rate.NewLimiter(authLimitRate, authLimitBurst),
+		}
+		ssh_interface.userAttempts[username] = attempt
+	}
+
+	attempt.attempts++
+	if attempt.attempts >= authBanThreshold {
+		attempt.banUntil = time.Now().Add(authBanDuration)
+		Logger.Warn("User banned due to excessive failed attempts", "username", username, "ban_until", attempt.banUntil)
+		
+		// Send CloudWatch metric for username ban
+		if CloudWatchMetrics != nil {
+			CloudWatchMetrics.SendAuthenticationBlock("Username", username, authBanDuration)
+		}
+	}
+}
+
+func (ssh_interface *Interface_SSH) resetUserAuthAttempts(username string) {
+	ssh_interface.authMutex.Lock()
+	defer ssh_interface.authMutex.Unlock()
+	delete(ssh_interface.userAttempts, username)
 }
 
 func (ssh_interface *Interface_SSH) cleanupAuthAttempts() {
@@ -416,9 +511,16 @@ func (ssh_interface *Interface_SSH) cleanupAuthAttempts() {
 		case <-ticker.C:
 			ssh_interface.authMutex.Lock()
 			now := time.Now()
+			// Clean up IP-based attempts
 			for ip, attempt := range ssh_interface.authAttempts {
 				if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
 					delete(ssh_interface.authAttempts, ip)
+				}
+			}
+			// Clean up username-based attempts
+			for username, attempt := range ssh_interface.userAttempts {
+				if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
+					delete(ssh_interface.userAttempts, username)
 				}
 			}
 			ssh_interface.authMutex.Unlock()
