@@ -1,4 +1,20 @@
 """
+Eidolon Engine
+
+Copyright 2024-2025 Jason Robinson
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
 Utility to add an item to a room in the DynamoDB database.
 """
 
@@ -47,7 +63,7 @@ def convert_to_dynamodb_format(data):
 
 def store_exits(dynamodb, exits_data):
     """
-    Stores exit data into the 'exits' DynamoDB table.
+    Stores exit data into the 'exits' DynamoDB table using update operations.
 
     Args:
         dynamodb: The DynamoDB resource object.
@@ -55,15 +71,34 @@ def store_exits(dynamodb, exits_data):
     """
     exits_table = dynamodb.Table("exits")
     try:
-        with exits_table.batch_writer() as exits_batch:
-            for exit_data in exits_data.get("exits", []):
-                exit_item = {
-                    "ExitID": exit_data["ExitID"],
-                    "Direction": exit_data["Direction"],
-                    "TargetRoom": exit_data["TargetRoom"],
-                    "Visible": exit_data["Visible"],
-                }
-                exits_batch.put_item(Item=convert_to_dynamodb_format(exit_item))
+        for exit_data in exits_data.get("exits", []):
+            exit_item = {
+                "ExitID": exit_data["ExitID"],
+                "Direction": exit_data["Direction"],
+                "Description": exit_data.get("Description", ""),
+                "TargetRoom": exit_data["TargetRoom"],
+                "ArrivalText": exit_data.get("ArrivalText", ""),
+                "Visible": exit_data["Visible"],
+                "ScriptID": exit_data.get("ScriptID", ""),
+            }
+
+            # Build update expression dynamically
+            update_expression = "SET "
+            expression_attribute_values = {}
+            expression_parts = []
+
+            for key, value in exit_item.items():
+                if key != "ExitID":  # Skip the key
+                    expression_parts.append(f"{key} = :{key.lower()}")
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_dynamodb_format(value)
+
+            update_expression += ", ".join(expression_parts)
+
+            exits_table.update_item(
+                Key={"ExitID": exit_data["ExitID"]},
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
         print("Exit data stored in DynamoDB successfully")
     except ClientError as e:
         logging.error(f"An error occurred while storing exits: {e.response['Error']['Message']}")
@@ -73,7 +108,7 @@ def store_exits(dynamodb, exits_data):
 
 def store_rooms(dynamodb, rooms_data):
     """
-    Stores room data into the 'rooms' DynamoDB table.
+    Stores room data into the 'rooms' DynamoDB table using update operations.
 
     Args:
         dynamodb: The DynamoDB resource object.
@@ -81,17 +116,34 @@ def store_rooms(dynamodb, rooms_data):
     """
     rooms_table = dynamodb.Table("rooms")
     try:
-        with rooms_table.batch_writer() as rooms_batch:
-            for room in rooms_data.get("rooms", []):
-                room_item = {
-                    "RoomID": room["RoomID"],
-                    "Area": room["Area"],
-                    "Title": room["Title"],
-                    "Description": room["Description"],
-                    "ExitID": room["ExitID"],
-                    "ItemID": room.get("ItemID", []),
-                }
-                rooms_batch.put_item(Item=convert_to_dynamodb_format(room_item))
+        for room in rooms_data.get("rooms", []):
+            room_item = {
+                "RoomID": room["RoomID"],
+                "Area": room["Area"],
+                "Title": room["Title"],
+                "Description": room["Description"],
+                "ExitID": room["ExitID"],
+                "Persistent": room.get("Persistent", False),
+                "ScriptID": room.get("ScriptID", ""),
+            }
+
+            # Build update expression dynamically
+            update_expression = "SET "
+            expression_attribute_values = {}
+            expression_parts = []
+
+            for key, value in room_item.items():
+                if key != "RoomID":  # Skip the key
+                    expression_parts.append(f"{key} = :{key.lower()}")
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_dynamodb_format(value)
+
+            update_expression += ", ".join(expression_parts)
+
+            rooms_table.update_item(
+                Key={"RoomID": room["RoomID"]},
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
         print("Room data stored in DynamoDB successfully")
     except ClientError as e:
         logging.error(f"An error occurred while storing rooms: {e.response['Error']['Message']}")
@@ -101,7 +153,7 @@ def store_rooms(dynamodb, rooms_data):
 
 def store_archetypes(dynamodb, archetypes_data):
     """
-    Stores archetype data into the 'archetypes' DynamoDB table.
+    Stores archetype data into the 'archetypes' DynamoDB table using update operations.
 
     Args:
         dynamodb: The DynamoDB resource object.
@@ -109,26 +161,48 @@ def store_archetypes(dynamodb, archetypes_data):
     """
     table = dynamodb.Table("archetypes")
     try:
-        with table.batch_writer() as batch:
-            for name, archetype in archetypes_data.get("archetypes", {}).items():
-                archetype_item = {
-                    "ArchetypeName": name,
-                    "Description": archetype.get("Description", ""),
-                    "Attributes": archetype.get("Attributes", {}),
-                    "Abilities": archetype.get("Abilities", {}),
-                    "StartRoom": archetype.get("StartRoom", 0),
-                }
-                batch.put_item(Item=convert_to_dynamodb_format(archetype_item))
+        for name, archetype in archetypes_data.get("archetypes", {}).items():
+            # Convert attributes to lowercase
+            attributes = {k.lower(): v for k, v in archetype.get("Attributes", {}).items()}
+            # Convert abilities to lowercase
+            abilities = {k.lower(): v for k, v in archetype.get("Abilities", {}).items()}
+
+            archetype_item = {
+                "ArchetypeName": name,
+                "Description": archetype.get("Description", ""),
+                "Attributes": attributes,
+                "Abilities": abilities,
+                "StartRoom": archetype.get("StartRoom", 0),
+                "StartingItems": archetype.get("StartingItems", []),
+            }
+
+            # Build update expression dynamically
+            update_expression = "SET "
+            expression_attribute_values = {}
+            expression_parts = []
+
+            for key, value in archetype_item.items():
+                if key != "ArchetypeName":  # Skip the key
+                    expression_parts.append(f"{key} = :{key.lower()}")
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_dynamodb_format(value)
+
+            update_expression += ", ".join(expression_parts)
+
+            table.update_item(
+                Key={"ArchetypeName": name},
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
         print("Archetype data stored in DynamoDB successfully")
-    except ClientError as e:
-        logging.error(f"An error occurred while storing archetypes: {e.response['Error']['Message']}")
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while storing archetypes: {str(e)}")
+    except ClientError as err:
+        logging.error(f"An error occurred while storing archetypes: {err.response['Error']['Message']}")
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while storing archetypes: {str(err)}")
 
 
 def store_item_prototypes(dynamodb, prototypes_data):
     """
-    Stores item prototype data into the 'prototypes' DynamoDB table.
+    Stores item prototype data into the 'prototypes' DynamoDB table using update operations.
 
     Args:
         dynamodb: The DynamoDB resource object.
@@ -136,10 +210,32 @@ def store_item_prototypes(dynamodb, prototypes_data):
     """
     table = dynamodb.Table("prototypes")
     try:
-        with table.batch_writer() as batch:
-            for prototype in prototypes_data.get("itemPrototypes", []):
-                prototype["PrototypeID"] = prototype.pop("PrototypeID")
-                batch.put_item(Item=convert_to_dynamodb_format(prototype))
+        for prototype in prototypes_data.get("itemPrototypes", []):
+            prototype_id = prototype["PrototypeID"]
+            prototype_data = prototype.copy()
+
+            # Build update expression dynamically
+            update_expression = "SET "
+            expression_attribute_values = {}
+            expression_attribute_names = {}
+            expression_parts = []
+
+            for key, value in prototype_data.items():
+                if key != "PrototypeID":  # Skip the key
+                    # Always use expression attribute names to avoid reserved keyword issues
+                    attr_name_placeholder = f"#{key}"
+                    expression_attribute_names[attr_name_placeholder] = key
+                    expression_parts.append(f"{attr_name_placeholder} = :{key.lower()}")
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_dynamodb_format(value)
+
+            update_expression += ", ".join(expression_parts)
+
+            table.update_item(
+                Key={"PrototypeID": prototype_id},
+                UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
         print("Item prototype data stored in DynamoDB successfully")
     except ClientError as err:
         logging.error(f"An error occurred while storing item prototypes: {err.response['Error']['Message']}")
@@ -254,8 +350,14 @@ def display_exits(exits):
     for exit_id, exit_data in exits.items():
         print(f"Exit ID: {exit_id}")
         print(f"  Direction: {exit_data['Direction']}")
+        if exit_data.get("Description"):
+            print(f"  Description: {exit_data['Description']}")
         print(f"  Target Room: {exit_data['TargetRoom']}")
+        if exit_data.get("ArrivalText"):
+            print(f"  Arrival Text: {exit_data['ArrivalText']}")
         print(f"  Visible: {exit_data['Visible']}")
+        if exit_data.get("ScriptID"):
+            print(f"  Script ID: {exit_data['ScriptID']}")
         print()
 
 
@@ -272,7 +374,8 @@ def display_rooms(rooms):
         print(f"  Area: {room.get('Area', 'Unknown')}")
         print(f"  Description: {room.get('Description', 'No description')}")
         print(f"  Exits: {', '.join(room.get('ExitID', []))}")
-        print(f"  Items: {', '.join(room.get('ItemID', []))}")
+        print(f"  Persistent: {room.get('Persistent', False)}")
+        print(f"  ScriptID: {room.get('ScriptID', '')}")
         print()
 
 
@@ -293,6 +396,15 @@ def display_archetypes(archetypes):
         print("  Abilities:")
         for ability, value in archetype.get("Abilities", {}).items():
             print(f"    {ability}: {value}")
+
+        # Add starting items information
+        starting_items = archetype.get("StartingItems", [])
+        if starting_items:
+            print("  Starting Items:")
+            for item in starting_items:
+                print(f"    Prototype: {item.get('PrototypeID', 'Unknown')}")
+                print(f"      Slot: {item.get('Slot', 'Unspecified')}")
+                print(f"      Worn: {item.get('IsWorn', False)}")
         print()
 
 
@@ -306,7 +418,7 @@ def display_item_prototypes(prototypes):
     print("Item Prototypes:")
     for prototype in prototypes.get("itemPrototypes", []):
         print(f"ID: {prototype.get('PrototypeID', 'No ID')}")
-        print(f"  Name: {prototype.get('Name', 'No Name')}")
+        print(f"  Name: {prototype.get('prototype_name', 'No Name')}")
         print(f"  Description: {prototype.get('Description', 'No description')}")
         print(f"  Mass: {prototype.get('Mass', 'Unknown')}")
         print(f"  Value: {prototype.get('Value', 'Unknown')}")

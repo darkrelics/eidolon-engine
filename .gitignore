@@ -18,7 +18,7 @@
 # vendor/
 
 # Go workspace file
-# go.work
+go.work
 
 .vscode/
 
@@ -38,6 +38,8 @@
 
 **/*.key
 **/*.pem
+
+.env
 
 # Ignore bolt files.
 
@@ -62,3 +64,12 @@
 **/.dart_tool/
 
 **/*.metadata
+
+# Claude Code specific files
+CLAUDE.md
+.claude/
+**/.claude/
+.claude_history
+**/claude_logs/
+.cache/
+**/claude_cache/

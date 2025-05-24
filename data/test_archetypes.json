@@ -31,7 +31,29 @@
         "Foraging": 1.0,
         "Appraise": 1.0
       },
-      "StartRoom": 8
+      "StartRoom": 8,
+      "StartingItems": [
+        {
+          "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
+          "Slot": "book",
+          "IsWorn": false
+        },
+        {
+          "PrototypeID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "Slot": "finger",
+          "IsWorn": true
+        },
+        {
+          "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Slot": "potion",
+          "IsWorn": false
+        },
+        {
+          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Slot": "back",
+          "IsWorn": true
+        }
+      ]
     },
     "rogue": {
       "ArchetypeName": "Rogue",
@@ -64,7 +86,29 @@
         "Foraging": 0.0,
         "Appraise": 0.0
       },
-      "StartRoom": 10
+      "StartRoom": 10,
+      "StartingItems": [
+        {
+          "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
+          "Slot": "weapon",
+          "IsWorn": true
+        },
+        {
+          "PrototypeID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "Slot": "armor",
+          "IsWorn": true
+        },
+        {
+          "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Slot": "potion",
+          "IsWorn": false
+        },
+        {
+          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Slot": "back",
+          "IsWorn": true
+        }
+      ]
     },
     "warrior": {
       "ArchetypeName": "Warrior",
@@ -97,7 +141,29 @@
         "Foraging": 0.0,
         "Appraise": 0.0
       },
-      "StartRoom": 3
+      "StartRoom": 4,
+      "StartingItems": [
+        {
+          "PrototypeID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "Slot": "weapon",
+          "IsWorn": true
+        },
+        {
+          "PrototypeID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "Slot": "armor",
+          "IsWorn": true
+        },
+        {
+          "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Slot": "potion",
+          "IsWorn": false
+        },
+        {
+          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Slot": "back",
+          "IsWorn": true
+        }
+      ]
     }
   }
 }

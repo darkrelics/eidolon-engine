@@ -1,4 +1,20 @@
 """
+Eidolon Engine
+
+Copyright 2024-2025 Jason Robinson
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
 This module adds an item based on a prototype to a room.
 """
 
@@ -72,7 +88,7 @@ def display_prototypes(dynamodb) -> list:
         print("Available Prototypes:")
         for prototype in prototypes:
             prototype_id = prototype.get("PrototypeID", "No ID")
-            name = prototype.get("Name", "No Name")
+            name = prototype.get("prototype_name", "No Name")
             print(f"{prototype_id}: {name}")
         return prototypes
     except ClientError as e:
@@ -103,7 +119,7 @@ def create_new_item_from_prototype(prototype: dict) -> dict:
     new_item: dict = {
         "ItemID": str(uuid.uuid4()),
         "PrototypeID": prototype.get("PrototypeID", "No ID"),
-        "Name": prototype.get("Name", "Unnamed Item"),
+        "item_name": prototype.get("prototype_name", "Unnamed Item"),
         "Description": prototype.get("Description", ""),
         "Mass": Decimal(str(prototype.get("Mass", 0))),
         "Value": Decimal(str(prototype.get("Value", 0))),
@@ -138,7 +154,7 @@ def add_item_to_table(dynamodb, new_item: dict) -> bool:
     items_table = dynamodb.Table("items")
     try:
         items_table.put_item(Item=new_item)
-        print(f"Successfully added item '{new_item['Name']}' to items table.")
+        print(f"Successfully added item '{new_item['item_name']}' to items table.")
         return True
     except ClientError as e:
         print(f"Error saving new item to items table: {e.response['Error']['Message']}")
@@ -202,12 +218,12 @@ def add_item_to_room(dynamodb, room: dict, new_item: dict) -> bool:
         try:
             items_table = dynamodb.Table("items")
             items_table.delete_item(Key={"ItemID": new_item["ItemID"]})
-            print(f"Rolled back: Deleted item '{new_item['Name']}' from items table.")
+            print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
         except ClientError as del_e:
             print(f"Error rolling back item addition: {del_e.response['Error']['Message']}")
         return False
 
-    print(f"Successfully added item '{new_item['Name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
+    print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
     return True
 
 
@@ -255,13 +271,13 @@ def main() -> None:
         print(f"New item created: {new_item}")
 
         if add_item_to_table(dynamodb, new_item):
-            print(f"Successfully added '{new_item['Name']}' to items table.")
+            print(f"Successfully added '{new_item['item_name']}' to items table.")
         else:
             print("Failed to add item to table.")
             continue
 
         if add_item_to_room(dynamodb, room, new_item):
-            print(f"Successfully added '{new_item['Name']}' to room {room_id}.")
+            print(f"Successfully added '{new_item['item_name']}' to room {room_id}.")
         else:
             print("Failed to add item to room.")
 

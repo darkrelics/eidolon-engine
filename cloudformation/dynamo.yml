@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "DynamoDB tables for Multi-User Dungeon game"
+Description: "DynamoDB tables for Eidolon Engine"
 
 Resources:
   PlayersTable:
@@ -12,9 +12,7 @@ Resources:
       KeySchema:
         - AttributeName: PlayerID
           KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
+      BillingMode: PAY_PER_REQUEST
 
   CharactersTable:
     Type: AWS::DynamoDB::Table
@@ -26,9 +24,7 @@ Resources:
       KeySchema:
         - AttributeName: CharacterID
           KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
+      BillingMode: PAY_PER_REQUEST
 
   RoomsTable:
     Type: AWS::DynamoDB::Table
@@ -40,9 +36,7 @@ Resources:
       KeySchema:
         - AttributeName: RoomID
           KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
+      BillingMode: PAY_PER_REQUEST
 
   ExitsTable:
     Type: AWS::DynamoDB::Table
@@ -54,9 +48,7 @@ Resources:
       KeySchema:
         - AttributeName: ExitID
           KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
+      BillingMode: PAY_PER_REQUEST
 
   ItemsTable:
     Type: AWS::DynamoDB::Table
@@ -68,9 +60,7 @@ Resources:
       KeySchema:
         - AttributeName: ItemID
           KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
+      BillingMode: PAY_PER_REQUEST
 
   ItemPrototypesTable:
     Type: AWS::DynamoDB::Table
@@ -82,9 +72,7 @@ Resources:
       KeySchema:
         - AttributeName: PrototypeID
           KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
+      BillingMode: PAY_PER_REQUEST
 
   ArchetypesTable:
     Type: AWS::DynamoDB::Table
@@ -96,9 +84,7 @@ Resources:
       KeySchema:
         - AttributeName: ArchetypeName
           KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
+      BillingMode: PAY_PER_REQUEST
 
   MOTDTable:
     Type: AWS::DynamoDB::Table
@@ -110,14 +96,12 @@ Resources:
       KeySchema:
         - AttributeName: MotdID
           KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
+      BillingMode: PAY_PER_REQUEST
 
-  MUDDynamoDBPolicy:
+  EidolonDynamoDBPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: MUDDynamoDBReadWritePolicy
+      ManagedPolicyName: EidolonDynamoDBReadWritePolicy
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -174,6 +158,6 @@ Outputs:
     Description: "ARN of the MotD table"
     Value: !GetAtt MOTDTable.Arn
 
-  MUDDynamoDBPolicyArn:
-    Description: "ARN of the MUD DynamoDB Read/Write Policy"
-    Value: !Ref MUDDynamoDBPolicy
+  EidolonDynamoDBPolicyArn:
+    Description: "ARN of the Eidolon Engine DynamoDB Read/Write Policy"
+    Value: !Ref EidolonDynamoDBPolicy

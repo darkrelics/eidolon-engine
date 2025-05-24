@@ -1,10 +1,10 @@
 name: JavaScript Auto Format
 
 on:
-  pull_request:
-    branches: "**"
   push:
     branches: [develop, qa, prod]
+  pull_request:
+    branches: "**"
 
 permissions:
   pull-requests: write
@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Node 20
+      - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       - name: Install JavaScript Autoformatting Tools
         run: |
           npm install npm@latest --location=global

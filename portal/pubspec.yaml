@@ -1,0 +1,26 @@
+name: portal
+description: Eidolon Engine Web Portal.
+
+environment:
+  sdk: ">=3.7.2 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  amazon_cognito_identity_dart_2: ^3.8.1
+  http: ^1.4.0
+  crypto: ^3.0.6
+  provider: ^6.1.5
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.5.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/background.jpg

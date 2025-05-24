@@ -5,19 +5,18 @@ Parameters:
   UserPoolId:
     Type: String
     Description: The ID of the AWS Cognito User Pool
+
   ClientId:
     Type: String
     Description: The Client ID of the AWS Cognito User Pool
-  ClientSecret:
-    Type: String
-    Description: The Client Secret of the AWS Cognito User Pool
+
   S3BucketName:
     Type: String
     Description: The name of the S3 bucket where build artifacts will be stored
   GitHubSourceRepo:
     Type: String
     Description: The GitHub repository URL for the source code
-    Default: https://github.com/robinje/multi-user-dungeon
+    Default: https://github.com/robinje/eidolon-engine
 
 Resources:
   CodeBuildAccessPolicy:
@@ -53,11 +52,11 @@ Resources:
       ManagedPolicyArns:
         - !Ref CodeBuildAccessPolicy
 
-  RegistrationApplicationCodeBuild:
+  PortalApplicationCodeBuild:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: RegistrationApplicationBuild
-      Description: Build project for the Flutter Web Registration Application
+      Name: PortalApplicationBuild
+      Description: Build project for the Web Portal Application
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
         Type: NO_ARTIFACTS
@@ -70,21 +69,19 @@ Resources:
             Value: !Ref UserPoolId
           - Name: CLIENT_ID
             Value: !Ref ClientId
-          - Name: CLIENT_SECRET
-            Value: !Ref ClientSecret
           - Name: S3_BUCKET_NAME
             Value: !Ref S3BucketName
       Source:
         Type: GITHUB
         Location: !Ref GitHubSourceRepo
-        BuildSpec: buildspec/registration.yml
+        BuildSpec: buildspec/portal.yml
       TimeoutInMinutes: 15
 
 Outputs:
   CodeBuildProjectName:
-    Description: "Name of the CodeBuild Project"
-    Value: !Ref RegistrationApplicationCodeBuild
+    Description: "Portal CodeBuild Project"
+    Value: !Ref PortalApplicationCodeBuild
 
   CodeBuildProjectARN:
-    Description: "ARN of the CodeBuild Project"
-    Value: !GetAtt RegistrationApplicationCodeBuild.Arn
+    Description: "ARN of Portal Project"
+    Value: !GetAtt PortalApplicationCodeBuild.Arn

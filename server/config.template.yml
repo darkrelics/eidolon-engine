@@ -1,0 +1,24 @@
+AWS:
+  Region: us-east-1
+Cognito:
+  UserPoolId: us-east-1_xxxxxxxxx
+  UserPoolClientId: xxxxxxxxxxxxxxxxxxxxxxxxxx
+  UserPoolDomain: eidolon-user-pool
+  UserPoolArn: arn:aws:cognito-idp:us-east-1:999999999999:userpool/us-east-1_xxxxxxxxx
+Game:
+  AutoSave: 5
+  Balance: 0.25
+  StartingHealth: 10
+  StartingEssence: 3
+  NamesPath: ./data/names.txt
+  ObscenityPath: ./data/obscenity.txt
+Logging:
+  ApplicationName: eidolon-engine
+  LogLevel: 20
+  LogGroup: /eidolon/game-logs
+  LogStream: system
+  MetricNamespace: eidolon/application
+SSH:
+  Enabled: true
+  PrivateKeyPath: ./server.key
+  Port: 9050
