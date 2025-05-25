@@ -201,7 +201,7 @@ func (p *Player) HandlePasswordChange() {
 
 func (p *Player) HandleCharacterCreation() {
 	// Get character name
-	p.commandOut <- "\nEnter character name (3-15 letters only): "
+	p.commandOut <- "\nEnter character name (4-20 letters only): "
 	name, ok := <-p.commandIn
 	if !ok {
 		Logger.Warn("Player input channel closed")
@@ -289,8 +289,10 @@ func (p *Player) validateCharacterName(name string) error {
 	}
 
 	// Prevent excessive repetition (more than 2 consecutive identical characters)
-	if regexp.MustCompile(`(.)\1{2,}`).MatchString(name) {
-		return fmt.Errorf("name cannot have more than 2 consecutive identical characters")
+	for i := 0; i < len(name)-2; i++ {
+		if name[i] == name[i+1] && name[i+1] == name[i+2] {
+			return fmt.Errorf("name cannot have more than 2 consecutive identical characters")
+		}
 	}
 
 	// Prevent single-letter names with special characters
