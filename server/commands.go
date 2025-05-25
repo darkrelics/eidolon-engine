@@ -188,6 +188,17 @@ func ValidateCommand(character *Character, input string) (string, []string, erro
 
 // tokenizeInput breaks the input into individual tokens
 func tokenizeInput(input string) []string {
+	// Sanitize input first
+	input = strings.TrimSpace(input)
+	
+	// Remove any control characters (except tab which is handled in tokenization)
+	input = strings.Map(func(r rune) rune {
+		if r < 32 && r != '\t' {
+			return -1
+		}
+		return r
+	}, input)
+
 	var tokens []string
 	var current strings.Builder
 	inQuotes := false
