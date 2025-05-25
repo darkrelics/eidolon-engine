@@ -42,14 +42,17 @@ type Configuration struct {
 
 	// Game mechanics settings
 	Game struct {
-		Balance                float64 `yaml:"Balance"`
-		StartingEssence        uint16  `yaml:"StartingEssence"`
-		StartingHealth         uint16  `yaml:"StartingHealth"`
-		AutoSave               uint16  `yaml:"AutoSave"`
-		TickIntervalSeconds    int     `yaml:"TickIntervalSeconds"`    // Game tick interval (default: 1)
-		RoomItemCleanupSeconds int     `yaml:"RoomItemCleanupSeconds"` // Room item cleanup interval (default: 600)
-		RoomUnloadSeconds      int     `yaml:"RoomUnloadSeconds"`      // Non-persistent room unload time (default: 3600)
-		CommandTimeoutSeconds  int     `yaml:"CommandTimeoutSeconds"`  // Command processing timeout (default: 5)
+		Balance                 float64 `yaml:"Balance"`
+		StartingEssence         uint16  `yaml:"StartingEssence"`
+		StartingHealth          uint16  `yaml:"StartingHealth"`
+		AutoSave                uint16  `yaml:"AutoSave"`
+		NamesPath               string  `yaml:"NamesPath"`
+		ObscenityPath           string  `yaml:"ObscenityPath"`
+		TickIntervalSeconds     int     `yaml:"TickIntervalSeconds"`     // Game tick interval (default: 1)
+		RoomItemCleanupSeconds  int     `yaml:"RoomItemCleanupSeconds"`  // Room item cleanup interval (default: 600)
+		RoomUnloadSeconds       int     `yaml:"RoomUnloadSeconds"`       // Non-persistent room unload time (default: 3600)
+		CommandTimeoutSeconds   int     `yaml:"CommandTimeoutSeconds"`   // Command processing timeout (default: 5)
+		PlayerIdleTimeoutSeconds int    `yaml:"PlayerIdleTimeoutSeconds"` // Player idle timeout (default: 900)
 	} `yaml:"Game"`
 
 	// Logging and metrics settings
@@ -129,6 +132,9 @@ func setConfigDefaults(config *Configuration) {
 	}
 	if config.Game.CommandTimeoutSeconds <= 0 {
 		config.Game.CommandTimeoutSeconds = 5
+	}
+	if config.Game.PlayerIdleTimeoutSeconds <= 0 {
+		config.Game.PlayerIdleTimeoutSeconds = 900 // 15 minutes
 	}
 
 	// SSH defaults
