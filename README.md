@@ -190,20 +190,20 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [ ] Load item prototypes at startup
   - [ ] Create item prototype factory function
 
-- [ ] Administrative Features (Milestone 9)
+- [ ] Administrative Features
 
   - [ ] Implement privilege/permission system
   - [ ] Add @shutdown command for admins
   - [ ] Add @broadcast command for system messages
   - [ ] Create GM-only command prefix handling
 
-- [ ] Command Rate Limiting (Milestone 10)
+- [ ] Command Rate Limiting
 
   - [ ] Implement per-player command rate limiting (5/second)
   - [ ] Add command frequency tracking
   - [ ] Implement queue/drop strategy for excess commands
 
-- [ ] Build & Deploy Automation (Milestone 11)
+- [ ] Build & Deploy Automation
 
   - [ ] Create server build script with version stamping
   - [ ] Implement automated deployment (systemd/Docker)
@@ -212,7 +212,7 @@ Testing will primarily be conducted through live user interaction, with unit tes
 
 #### Medium Priority - Enhanced Features
 
-- [ ] Logging & Audit Trail (Milestone 8)
+- [ ] Logging & Audit Trail
 
   - [ ] Implement dedicated audit logging for commands
   - [ ] Add command origin tracking (player ID, IP, session)
@@ -221,7 +221,7 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [ ] Character Features
 
   - [ ] Implement auto-save functionality
-  - [ ] Add dynamic prompt with HP/status (Milestone 6)
+  - [ ] Add dynamic prompt with HP/status
   - [ ] Expand character states (sitting, prone, dead)
   - [ ] Add whisper command for private communication
 
@@ -285,8 +285,8 @@ Communication:
 
 - [x] SAY: Speak to other players in the same room.
 - [ ] WHISPER: Speak privately to another player.
-- [x] SHOUT: Shout server-wide message.
-- [x] ANNOUNCE: Admin announcement to all players.
+- [ ] SHOUT: Shout server-wide message.
+- [ ] ANNOUNCE: Admin announcement to all players.
 - [ ] EMOTE: Perform an action.
 
 Combat:
@@ -439,7 +439,6 @@ OTHER:
 - [x] Support for room persistence in database tools
 - [x] Support for room script IDs in database tools
 - [x] Character and item transactional saves
-- [ ] RAM caching to minimize database access
 - [x] Non-blocking database operations via goroutines
 
 ### AWS Integration
@@ -458,19 +457,6 @@ OTHER:
 
 ## Known Issues and GitHub Tracking
 
-### Open Enhancement Issues
-
-- [#501](https://github.com/robinje/eidolon-engine/issues/501) - Implement Dynamic Prompt Formatter (Milestone 6)
-- [#502](https://github.com/robinje/eidolon-engine/issues/502) - Implement Character Auto-Save Feature
-- [#503](https://github.com/robinje/eidolon-engine/issues/503) - Implement Audit Logging for Commands
-- [#504](https://github.com/robinje/eidolon-engine/issues/504) - Add Command Origin Tracking
-- [#505](https://github.com/robinje/eidolon-engine/issues/505) - Implement Player Privilege System
-- [#506](https://github.com/robinje/eidolon-engine/issues/506) - Implement @shutdown Administrative Command
-- [#507](https://github.com/robinje/eidolon-engine/issues/507) - Implement @broadcast Administrative Command
-- [#508](https://github.com/robinje/eidolon-engine/issues/508) - Implement Command Rate Limiting (Milestone 10)
-- [#509](https://github.com/robinje/eidolon-engine/issues/509) - Create EC2 AMI Deployment Pipeline
-- [#510](https://github.com/robinje/eidolon-engine/issues/510) - Implement Server Build Pipeline
-
 ### Primary Technical Debt
 
 1. **Item System Incomplete** - Basic structures exist but no player commands
@@ -478,53 +464,6 @@ OTHER:
 3. **Limited State Management** - Only "standing" state implemented
 4. **No Combat System** - Combat commands and mechanics not implemented
 5. **Missing Admin Tools** - No in-game administration capabilities
-
-### Recent Progress
-
-- Implemented player idle timeout system with configurable warnings
-- Added comprehensive panic recovery and graceful shutdown
-- Enhanced exit system with custom descriptions and visibility controls
-- Implemented basic communication commands (say, shout, announce)
-- Added SSH authentication rate limiting and ban system
-- Created modular command architecture with dedicated files per tier
-
-### Critical Issues
-
-1. **Weak Password Validation (interface_ssh.go)**:
-   - Password validation only checks length (minimum 8 characters)
-   - No requirements for complexity (uppercase, lowercase, numbers, symbols)
-   - Located in `isValidPassword` function (lines 412-419)
-
-### High Severity Issues
-
-1. **Command Rate Limiting Missing**:
-
-   - No per-player command rate limiting implemented
-   - System vulnerable to command spam/flooding
-   - SSH auth has rate limiting, but game commands do not
-
-2. **No Administrative Commands**:
-
-   - No privilege system for GM/admin users
-   - Cannot shutdown server remotely
-   - No way to broadcast system messages
-
-3. **Incomplete Audit Logging**:
-
-   - Commands logged at Debug level only
-   - No dedicated audit trail with player attribution
-   - Missing command origin tracking (IP, session)
-
-4. **No Automated Build/Deploy**:
-
-   - Manual build process prone to errors
-   - No version stamping in binaries
-   - No automated deployment mechanism
-
-5. **Missing Dynamic Prompts**:
-   - Static prompts don't show player status
-   - No HP/Essence display in prompt
-   - Prompts not sent after game ticks
 
 ## Web Portal
 
