@@ -300,9 +300,14 @@ func (c *Character) Stop() {
 	// Store a reference to the player before resetting
 	player := c.player
 
-	// Signal shutdown by closing the end channel
-	// This is safe because we check the stopped flag
-	close(c.end)
+	// Signal shutdown without closing the channel
+	select {
+	case c.end <- true:
+		// Successfully sent shutdown signal
+	default:
+		// Channel is full or no receiver, which is fine
+		// The stopped flag will prevent any issues
+	}
 
 	// If we have a valid player reference, inform them we're returning to console
 	if player != nil {
