@@ -104,12 +104,26 @@ func (k *KeyPair) BatchDeleteItems(ctx context.Context, itemIDs []string) error 
 		return nil
 	}
 
+	// Check context at start
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	Logger.Info("Performing batch delete of items", "itemCount", len(itemIDs))
 
 	// DynamoDB TransactWriteItems has a limit of 25 items per transaction
 	const batchSize = 25
 
 	for i := 0; i < len(itemIDs); i += batchSize {
+		// Check context before each batch
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		
 		end := i + batchSize
 		if end > len(itemIDs) {
 			end = len(itemIDs)
@@ -142,6 +156,13 @@ func (k *KeyPair) BatchDeleteItems(ctx context.Context, itemIDs []string) error 
 
 // SaveCharacterWithInventory saves character and inventory items in a single transaction
 func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData *CharacterData, items map[string]*Item) error {
+	// Check context at start
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	Logger.Debug("Saving character with inventory transactionally", "characterID", characterData.CharacterID, "itemCount", len(items))
 
 	// Build transaction items
@@ -149,6 +170,13 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 
 	// Add all inventory items to transaction
 	for _, item := range items {
+		// Check context periodically
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		
 		if item != nil {
 			// Create item data for storage
 			itemData := &ItemData{

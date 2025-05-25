@@ -254,6 +254,13 @@ func formatCarriedItem(item *Item) string {
 
 // SaveItem saves an item to the database
 func (item *Item) Save(ctx context.Context, k *KeyPair) error {
+	// Check context at start
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	item.mutex.RLock()
 	defer item.mutex.RUnlock()
 
@@ -299,6 +306,13 @@ func (item *Item) Save(ctx context.Context, k *KeyPair) error {
 
 	// Recursively save contained items
 	for _, content := range item.contents {
+		// Check context before each contained item save
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		
 		if content != nil {
 			if err := content.Save(ctx, k); err != nil {
 				Logger.Warn("Error saving contained item", "containerID", item.id, "itemID", content.id, "error", err)
@@ -312,6 +326,13 @@ func (item *Item) Save(ctx context.Context, k *KeyPair) error {
 
 // SavePrototype saves a prototype to the database
 func (p *Prototype) Save(ctx context.Context, k *KeyPair) error {
+	// Check context at start
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 
@@ -357,6 +378,13 @@ func (p *Prototype) Save(ctx context.Context, k *KeyPair) error {
 
 // LoadPrototypes loads all item prototypes from DynamoDB
 func LoadPrototypes(ctx context.Context, k *KeyPair) (map[uuid.UUID]*Prototype, error) {
+	// Check context at start
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	Logger.Info("Loading item prototypes...")
 
 	prototypes := make(map[uuid.UUID]*Prototype)
@@ -369,6 +397,13 @@ func LoadPrototypes(ctx context.Context, k *KeyPair) (map[uuid.UUID]*Prototype, 
 
 	loadedCount := 0
 	for _, protoData := range prototypesData {
+		// Check context periodically during loading
+		select {
+		case <-ctx.Done():
+			return prototypes, ctx.Err()
+		default:
+		}
+		
 		prototype, err := prototypeDataToPrototype(&protoData)
 		if err != nil {
 			Logger.Warn("Error converting prototype data", "prototypeID", protoData.PrototypeID, "error", err)
@@ -401,12 +436,26 @@ func ValidatePrototypes(prototypes map[uuid.UUID]*Prototype) error {
 
 // LoadItemsForCharacter loads items for a character from the inventory map
 func LoadItemsForCharacter(ctx context.Context, itemMap map[string]string, k *KeyPair) (map[string]*Item, error) {
+	// Check context at start
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	Logger.Debug("Loading items for character inventory")
 
 	inventory := make(map[string]*Item)
 
 	// Load each item by its ID
 	for slotName, itemIDStr := range itemMap {
+		// Check context before loading each item
+		select {
+		case <-ctx.Done():
+			return inventory, ctx.Err()
+		default:
+		}
+		
 		if itemIDStr == "" {
 			continue
 		}
