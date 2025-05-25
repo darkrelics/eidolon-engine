@@ -32,9 +32,6 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
-// TODO: Move to config
-var NAMES_PATH = "../data/names.txt"
-var OBSCENITY_PATH = "../data/obscenity.txt"
 
 type Game struct {
 	config               *Configuration
@@ -263,12 +260,12 @@ func (g *Game) InitCharacterBloomFilter() error {
 		Logger.Warn("Error loading character names from database", "error", err)
 	}
 
-	namesFromFile, err := LoadNameFromFile(NAMES_PATH)
+	namesFromFile, err := LoadNameFromFile(g.config.Game.NamesPath)
 	if err != nil {
 		Logger.Warn("Error loading character names from file", "error", err)
 	}
 
-	obscenities, err := LoadNameFromFile(OBSCENITY_PATH)
+	obscenities, err := LoadNameFromFile(g.config.Game.ObscenityPath)
 	if err != nil {
 		Logger.Warn("Error loading obscenities from file", "error", err)
 	}

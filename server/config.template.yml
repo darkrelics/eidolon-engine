@@ -11,8 +11,8 @@ Game:
   Balance: 0.25
   StartingHealth: 10
   StartingEssence: 3
-  NamesPath: ./data/names.txt
-  ObscenityPath: ./data/obscenity.txt
+  NamesPath: ../data/names.txt
+  ObscenityPath: ../data/obscenity.txt
   TickIntervalSeconds: 1
   RoomItemCleanupSeconds: 600  # 10 minutes
   RoomUnloadSeconds: 3600      # 60 minutes

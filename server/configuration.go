@@ -136,6 +136,12 @@ func setConfigDefaults(config *Configuration) {
 	if config.Game.PlayerIdleTimeoutSeconds <= 0 {
 		config.Game.PlayerIdleTimeoutSeconds = 900 // 15 minutes
 	}
+	if config.Game.NamesPath == "" {
+		config.Game.NamesPath = "../data/names.txt"
+	}
+	if config.Game.ObscenityPath == "" {
+		config.Game.ObscenityPath = "../data/obscenity.txt"
+	}
 
 	// SSH defaults
 	if config.SSH.AuthTimeoutSeconds <= 0 {
