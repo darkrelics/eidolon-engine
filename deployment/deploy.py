@@ -160,11 +160,13 @@ def update_configuration_file(config_updates, user_pool_name=None) -> None:
         logging_updates = {
             "ApplicationName": config["Logging"].get("ApplicationName", "Eidolon Engine"),
             "LogLevel": config["Logging"].get("LogLevel", 20),
-            "LogGroup": config_updates.get("CloudWatch", {}).get("LogGroupName", 
-                       config["Logging"].get("LogGroup", "/eidolon/game-logs")),
+            "LogGroup": config_updates.get("CloudWatch", {}).get(
+                "LogGroupName", config["Logging"].get("LogGroup", "/eidolon/game-logs")
+            ),
             "LogStream": config["Logging"].get("LogStream", "application"),
-            "MetricNamespace": config_updates.get("CloudWatch", {}).get("MetricNamespace", 
-                              config["Logging"].get("MetricNamespace", "eidolon/application")),
+            "MetricNamespace": config_updates.get("CloudWatch", {}).get(
+                "MetricNamespace", config["Logging"].get("MetricNamespace", "eidolon/application")
+            ),
         }
         config["Logging"].update(logging_updates)
 
