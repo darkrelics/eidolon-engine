@@ -42,10 +42,14 @@ type Configuration struct {
 
 	// Game mechanics settings
 	Game struct {
-		Balance         float64 `yaml:"Balance"`
-		StartingEssence uint16  `yaml:"StartingEssence"`
-		StartingHealth  uint16  `yaml:"StartingHealth"`
-		AutoSave        uint16  `yaml:"AutoSave"`
+		Balance                float64 `yaml:"Balance"`
+		StartingEssence        uint16  `yaml:"StartingEssence"`
+		StartingHealth         uint16  `yaml:"StartingHealth"`
+		AutoSave               uint16  `yaml:"AutoSave"`
+		TickIntervalSeconds    int     `yaml:"TickIntervalSeconds"`    // Game tick interval (default: 1)
+		RoomItemCleanupSeconds int     `yaml:"RoomItemCleanupSeconds"` // Room item cleanup interval (default: 600)
+		RoomUnloadSeconds      int     `yaml:"RoomUnloadSeconds"`      // Non-persistent room unload time (default: 3600)
+		CommandTimeoutSeconds  int     `yaml:"CommandTimeoutSeconds"`  // Command processing timeout (default: 5)
 	} `yaml:"Game"`
 
 	// Logging and metrics settings
@@ -59,10 +63,29 @@ type Configuration struct {
 
 	// SSH server settings
 	SSH struct {
-		Enabled        bool   `yaml:"Enabled"`
-		Port           uint16 `yaml:"Port"`
-		PrivateKeyPath string `yaml:"PrivateKeyPath"`
+		Enabled                   bool   `yaml:"Enabled"`
+		Port                      uint16 `yaml:"Port"`
+		PrivateKeyPath            string `yaml:"PrivateKeyPath"`
+		AuthTimeoutSeconds        int    `yaml:"AuthTimeoutSeconds"`        // SSH auth timeout (default: 30)
+		AuthBanDurationSeconds    int    `yaml:"AuthBanDurationSeconds"`    // Ban duration after failed auth (default: 900)
+		AuthCleanupIntervalSeconds int   `yaml:"AuthCleanupIntervalSeconds"` // Auth attempts cleanup interval (default: 300)
+		ConnectionAcceptTimeoutSeconds int `yaml:"ConnectionAcceptTimeoutSeconds"` // Connection accept timeout (default: 1)
 	} `yaml:"SSH"`
+	
+	// Server settings
+	Server struct {
+		SessionCleanupIntervalSeconds int `yaml:"SessionCleanupIntervalSeconds"` // Stale session cleanup interval (default: 300)
+		SessionIdleTimeoutSeconds     int `yaml:"SessionIdleTimeoutSeconds"`     // Session idle timeout (default: 1800)
+		ConsoleIdleTimeoutSeconds     int `yaml:"ConsoleIdleTimeoutSeconds"`     // Console idle timeout (default: 30)
+	} `yaml:"Server"`
+	
+	// CloudWatch settings
+	CloudWatch struct {
+		MetricsIntervalSeconds  int `yaml:"MetricsIntervalSeconds"`  // Metrics submission interval (default: 60)
+		MetricsTimeoutSeconds   int `yaml:"MetricsTimeoutSeconds"`   // Metrics submission timeout (default: 10)
+		LogFlushTimeoutSeconds  int `yaml:"LogFlushTimeoutSeconds"`  // Log flush timeout (default: 3)
+		ShutdownDrainSeconds    int `yaml:"ShutdownDrainSeconds"`    // Error channel drain timeout during shutdown (default: 2)
+	} `yaml:"CloudWatch"`
 }
 
 // LoadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
@@ -81,12 +104,71 @@ func LoadConfiguration(configurationFile string) (*Configuration, error) {
 		return nil, fmt.Errorf("error parsing configuration from '%s': %w", configurationFile, err)
 	}
 
+	// Set defaults for any unspecified values
+	setConfigDefaults(&config)
+
 	if err := validateConfiguration(&config); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	fmt.Println("Configuration loaded successfully")
 	return &config, nil
+}
+
+// setConfigDefaults sets default values for configuration fields that weren't specified
+func setConfigDefaults(config *Configuration) {
+	// Game defaults
+	if config.Game.TickIntervalSeconds <= 0 {
+		config.Game.TickIntervalSeconds = 1
+	}
+	if config.Game.RoomItemCleanupSeconds <= 0 {
+		config.Game.RoomItemCleanupSeconds = 600 // 10 minutes
+	}
+	if config.Game.RoomUnloadSeconds <= 0 {
+		config.Game.RoomUnloadSeconds = 3600 // 60 minutes
+	}
+	if config.Game.CommandTimeoutSeconds <= 0 {
+		config.Game.CommandTimeoutSeconds = 5
+	}
+
+	// SSH defaults
+	if config.SSH.AuthTimeoutSeconds <= 0 {
+		config.SSH.AuthTimeoutSeconds = 30
+	}
+	if config.SSH.AuthBanDurationSeconds <= 0 {
+		config.SSH.AuthBanDurationSeconds = 900 // 15 minutes
+	}
+	if config.SSH.AuthCleanupIntervalSeconds <= 0 {
+		config.SSH.AuthCleanupIntervalSeconds = 300 // 5 minutes
+	}
+	if config.SSH.ConnectionAcceptTimeoutSeconds <= 0 {
+		config.SSH.ConnectionAcceptTimeoutSeconds = 1
+	}
+
+	// Server defaults
+	if config.Server.SessionCleanupIntervalSeconds <= 0 {
+		config.Server.SessionCleanupIntervalSeconds = 300 // 5 minutes
+	}
+	if config.Server.SessionIdleTimeoutSeconds <= 0 {
+		config.Server.SessionIdleTimeoutSeconds = 1800 // 30 minutes
+	}
+	if config.Server.ConsoleIdleTimeoutSeconds <= 0 {
+		config.Server.ConsoleIdleTimeoutSeconds = 30
+	}
+
+	// CloudWatch defaults
+	if config.CloudWatch.MetricsIntervalSeconds <= 0 {
+		config.CloudWatch.MetricsIntervalSeconds = 60
+	}
+	if config.CloudWatch.MetricsTimeoutSeconds <= 0 {
+		config.CloudWatch.MetricsTimeoutSeconds = 10
+	}
+	if config.CloudWatch.LogFlushTimeoutSeconds <= 0 {
+		config.CloudWatch.LogFlushTimeoutSeconds = 3
+	}
+	if config.CloudWatch.ShutdownDrainSeconds <= 0 {
+		config.CloudWatch.ShutdownDrainSeconds = 2
+	}
 }
 
 // validateConfiguration performs validation checks on the configuration

@@ -137,33 +137,36 @@ def update_configuration_file(config_updates, user_pool_name=None) -> None:
         config: dict = load_config()
 
         # Ensure top-level keys exist
-        for key in ["Server", "AWS", "Cognito", "Game", "Logging"]:
+        for key in ["Server", "AWS", "Cognito", "Game", "Logging", "SSH", "CloudWatch"]:
             if key not in config or config[key] is None:
                 config[key] = {}
 
         # Update AWS configuration
-        config["AWS"]["Region"] = "us-east-1"
+        if "Region" not in config["AWS"]:
+            config["AWS"]["Region"] = "us-east-1"
 
-        # Update Game configuration
-        config["Game"].update(
-            {
-                "Balance": 0.25,
-                "AutoSave": 5,
-                "StartingHealth": 10,
-                "StartingEssence": 3,
-            }
-        )
+        # Update Game configuration - only set defaults if not present
+        game_defaults = {
+            "Balance": 0.25,
+            "AutoSave": 5,
+            "StartingHealth": 10,
+            "StartingEssence": 3,
+        }
+        for key, value in game_defaults.items():
+            if key not in config["Game"]:
+                config["Game"][key] = value
 
-        # Update Logging configuration
-        config["Logging"].update(
-            {
-                "ApplicationName": "Eidolon Engine",
-                "LogLevel": 20,
-                "LogGroup": config_updates.get("CloudWatch", {}).get("LogGroupName", "/eidolon/game-logs"),
-                "LogStream": "application",
-                "MetricNamespace": config_updates.get("CloudWatch", {}).get("MetricNamespace", "eidolon/application"),
-            }
-        )
+        # Update Logging configuration - preserve existing values
+        logging_updates = {
+            "ApplicationName": config["Logging"].get("ApplicationName", "Eidolon Engine"),
+            "LogLevel": config["Logging"].get("LogLevel", 20),
+            "LogGroup": config_updates.get("CloudWatch", {}).get("LogGroupName", 
+                       config["Logging"].get("LogGroup", "/eidolon/game-logs")),
+            "LogStream": config["Logging"].get("LogStream", "application"),
+            "MetricNamespace": config_updates.get("CloudWatch", {}).get("MetricNamespace", 
+                              config["Logging"].get("MetricNamespace", "eidolon/application")),
+        }
+        config["Logging"].update(logging_updates)
 
         # Update Cognito configuration
         cognito_updates = config_updates.get("Cognito", {})
