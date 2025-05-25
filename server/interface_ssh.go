@@ -473,31 +473,33 @@ func (ssh_interface *Interface_SSH) resetUserAuthAttempts(username string) {
 }
 
 func (ssh_interface *Interface_SSH) cleanupAuthAttempts() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
+	RunWithPanicRecovery("ssh.cleanupAuthAttempts", func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
 
-	for {
-		select {
-		case <-ssh_interface.ctx.Done():
-			return
-		case <-ticker.C:
-			ssh_interface.authMutex.Lock()
-			now := time.Now()
-			// Clean up IP-based attempts
-			for ip, attempt := range ssh_interface.authAttempts {
-				if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
-					delete(ssh_interface.authAttempts, ip)
+		for {
+			select {
+			case <-ssh_interface.ctx.Done():
+				return
+			case <-ticker.C:
+				ssh_interface.authMutex.Lock()
+				now := time.Now()
+				// Clean up IP-based attempts
+				for ip, attempt := range ssh_interface.authAttempts {
+					if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
+						delete(ssh_interface.authAttempts, ip)
+					}
 				}
-			}
-			// Clean up username-based attempts
-			for username, attempt := range ssh_interface.userAttempts {
-				if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
-					delete(ssh_interface.userAttempts, username)
+				// Clean up username-based attempts
+				for username, attempt := range ssh_interface.userAttempts {
+					if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
+						delete(ssh_interface.userAttempts, username)
+					}
 				}
+				ssh_interface.authMutex.Unlock()
 			}
-			ssh_interface.authMutex.Unlock()
 		}
-	}
+	})
 }
 
 func getClientIP(conn ssh.ConnMetadata) string {
@@ -527,40 +529,51 @@ func ParseDims(b []byte) (width, height int) {
 
 // handleSSHRequests processes SSH requests for a connection
 func (ssh_interface *Interface_SSH) handleSSHRequests(ctx context.Context, reqs <-chan *ssh.Request) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case req, ok := <-reqs:
-			if !ok {
+	RunWithPanicRecovery("ssh.handleSSHRequests", func() {
+		for {
+			select {
+			case <-ctx.Done():
 				return
-			}
-			if req.WantReply {
-				req.Reply(false, nil)
+			case req, ok := <-reqs:
+				if !ok {
+					return
+				}
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
 			}
 		}
-	}
+	})
 }
 
 // runPlayer runs a player's SSH session
 func (ssh_interface *Interface_SSH) runPlayer(player *Player, requests <-chan *ssh.Request) {
-	player.RunSSH(requests)
+	RunWithPanicRecoveryCallback("ssh.runPlayer", func() {
+		player.RunSSH(requests)
+	}, func(err error) {
+		// Ensure player is cleaned up
+		player.Stop()
+	}, "playerID", player.id)
 }
 
 // listenForCancellation listens for context cancellation and closes the listener
 func (ssh_interface *Interface_SSH) listenForCancellation(done chan struct{}) {
-	select {
-	case <-ssh_interface.server.ctx.Done():
-		ssh_interface.listener.Close()
-		close(done)
-	case <-ssh_interface.ctx.Done():
-		ssh_interface.listener.Close()
-		close(done)
-	}
+	RunWithPanicRecovery("ssh.listenForCancellation", func() {
+		select {
+		case <-ssh_interface.server.ctx.Done():
+			ssh_interface.listener.Close()
+			close(done)
+		case <-ssh_interface.ctx.Done():
+			ssh_interface.listener.Close()
+			close(done)
+		}
+	})
 }
 
 // handleConnectionWithContext handles an SSH connection with proper context management
 func (ssh_interface *Interface_SSH) handleConnectionWithContext(conn net.Conn, ctx context.Context, cancel context.CancelFunc) {
 	defer cancel()
-	ssh_interface.handleConnection(conn, ctx)
+	RunWithPanicRecovery("ssh.handleConnectionWithContext", func() {
+		ssh_interface.handleConnection(conn, ctx)
+	}, "remoteAddr", conn.RemoteAddr().String())
 }

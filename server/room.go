@@ -389,10 +389,11 @@ func (r *Room) cleanupItems(game *Game) {
 
 	// Delete items from database if needed (batch operation to minimize DB access)
 	if len(itemsToDeleteFromDB) > 0 {
-		go func() {
+		roomID := r.roomID // Capture for goroutine
+		go RunWithPanicRecovery("room.deleteItems", func() {
 			// Run database deletion asynchronously to avoid blocking room operations
 			r.deleteItemsFromDatabase(game, itemsToDeleteFromDB)
-		}()
+		}, "roomID", roomID, "itemCount", len(itemsToDeleteFromDB))
 	}
 
 	if len(itemsToRemove) > 0 {
@@ -516,6 +517,16 @@ func (r *Room) Stop() {
 
 // run is the main goroutine function for a room
 func (r *Room) run(game *Game) {
+	RunWithPanicRecoveryCallback("room.run", func() {
+		r.runInternal(game)
+	}, func(err error) {
+		// Attempt graceful cleanup
+		r.Stop()
+	}, "roomID", r.roomID)
+}
+
+// runInternal contains the actual room processing logic
+func (r *Room) runInternal(game *Game) {
 	Logger.Info("Room goroutine started", "roomID", r.roomID, "title", r.title)
 
 	// Set up a 1-second ticker to match game heartbeat

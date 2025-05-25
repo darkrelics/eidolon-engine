@@ -123,6 +123,17 @@ func NewServer(globalCtx context.Context, cfg *Configuration) (*Server, error) {
 }
 
 func (s *Server) Run(errorChan chan error) error {
+	var runErr error
+	RunWithPanicRecoveryCallback("server.Run", func() {
+		runErr = s.runInternal(errorChan)
+	}, func(err error) {
+		errorChan <- fmt.Errorf("panic in Server: %v", err)
+	})
+	return runErr
+}
+
+// runInternal contains the actual server loop logic
+func (s *Server) runInternal(errorChan chan error) error {
 	Logger.Info("Running server...")
 
 	// Start SSH Interface if enabled
@@ -297,25 +308,27 @@ func (s *Server) DuplicatePlayer(existingPlayer *Player) {
 	if existingPlayer == nil {
 		return
 	}
+	
+	RunWithPanicRecovery("server.DuplicatePlayer", func() {
+		Logger.Info("Player already logged in, disconnecting previous session",
+			"playerID", existingPlayer.id.String(),
+			"email", existingPlayer.email)
 
-	Logger.Info("Player already logged in, disconnecting previous session",
-		"playerID", existingPlayer.id.String(),
-		"email", existingPlayer.email)
+		// Send a message to the existing player
+		select {
+		case existingPlayer.commandOut <- "\r\nYou are being disconnected because your account has logged in from another location.\r\n":
+			// Message sent successfully
+		default:
+			// Channel might be full or closed, log and continue
+			Logger.Warn("Could not send disconnect message to existing player",
+				"playerID", existingPlayer.id.String())
+		}
 
-	// Send a message to the existing player
-	select {
-	case existingPlayer.commandOut <- "\r\nYou are being disconnected because your account has logged in from another location.\r\n":
-		// Message sent successfully
-	default:
-		// Channel might be full or closed, log and continue
-		Logger.Warn("Could not send disconnect message to existing player",
-			"playerID", existingPlayer.id.String())
-	}
+		// Stop the existing player session
+		existingPlayer.Stop()
 
-	// Stop the existing player session
-	existingPlayer.Stop()
-
-	Logger.Info("Waiting for player session to clean up", "playerID", existingPlayer.id.String())
+		Logger.Info("Waiting for player session to clean up", "playerID", existingPlayer.id.String())
+	}, "playerID", existingPlayer.id.String())
 }
 
 func (s *Server) PlayerCount() uint64 {
@@ -367,6 +380,10 @@ func (s *Server) GetPlayerList() []uuid.UUID {
 
 // runSSHInterface runs the SSH interface in a goroutine
 func (s *Server) runSSHInterface(errorChan chan error) {
-	s.sshInterface.Run(errorChan)
-	Logger.Info("SSH Interface finished")
+	RunWithPanicRecoveryCallback("server.runSSHInterface", func() {
+		s.sshInterface.Run(errorChan)
+		Logger.Info("SSH Interface finished")
+	}, func(err error) {
+		errorChan <- fmt.Errorf("panic in SSH interface: %v", err)
+	})
 }

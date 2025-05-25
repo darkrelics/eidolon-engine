@@ -262,7 +262,17 @@ func (g *Game) Stop() error {
 // Run the game engine
 
 func (g *Game) Run(errChan chan error) error {
+	var runErr error
+	RunWithPanicRecoveryCallback("game.Run", func() {
+		runErr = g.runInternal(errChan)
+	}, func(err error) {
+		errChan <- fmt.Errorf("panic in Game: %v", err)
+	})
+	return runErr
+}
 
+// runInternal contains the actual game loop logic
+func (g *Game) runInternal(errChan chan error) error {
 	Logger.Info("Starting game engine...")
 
 	// Start Game Heart Beat
@@ -331,7 +341,9 @@ func (g *Game) processGameCommands() {
 				continue
 			}
 			// Handle the command asynchronously
-			go g.handleGameCommand(cmd)
+			go RunWithPanicRecovery("game.handleCommand", func() {
+				g.handleGameCommand(cmd)
+			}, "verb", cmd.Verb, "character", cmd.Character.name)
 		default:
 			// No command waiting, continue to next room
 		}
@@ -347,7 +359,9 @@ func (g *Game) processGameCommands() {
 				continue
 			}
 			// Handle the command asynchronously
-			go g.handleGameCommand(cmd)
+			go RunWithPanicRecovery("game.handleCommand", func() {
+				g.handleGameCommand(cmd)
+			}, "verb", cmd.Verb, "character", cmd.Character.name)
 		default:
 			// No command waiting, continue to next character
 		}

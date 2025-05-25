@@ -31,6 +31,15 @@ import (
 )
 
 func (p *Player) Console(done chan bool) {
+	RunWithPanicRecoveryCallback("player.Console", func() {
+		p.consoleInternal(done)
+	}, func(err error) {
+		done <- true
+	}, "playerID", p.id)
+}
+
+// consoleInternal contains the actual console logic
+func (p *Player) consoleInternal(done chan bool) {
 	for {
 		select {
 		case <-p.ctx.Done():
