@@ -397,3 +397,78 @@ func (k *KeyPair) Scan(ctx context.Context, tableName string, items interface{})
 
 	return nil
 }
+
+// CharacterInfo holds minimal character data for bloom filter loading
+type CharacterInfo struct {
+	CharacterID   string `dynamodbav:"character_id"`
+	CharacterName string `dynamodbav:"character_name"`
+	PlayerID      string `dynamodbav:"player_id"`
+}
+
+// PlayerInfo holds minimal player data for bloom filter loading
+type PlayerInfo struct {
+	PlayerID      string            `dynamodbav:"player_id"`
+	CharacterList map[string]string `dynamodbav:"character_list"`
+}
+
+// LoadCharactersAndPlayers loads all characters and players in a single operation for bloom filter initialization
+func (k *KeyPair) LoadCharactersAndPlayers(ctx context.Context) ([]CharacterInfo, []PlayerInfo, error) {
+	Logger.Info("Loading characters and players for bloom filter initialization")
+
+	// Load all characters
+	var characters []CharacterInfo
+	err := k.Scan(ctx, "characters", &characters)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error scanning characters: %w", err)
+	}
+
+	// Load all players
+	var players []PlayerInfo
+	err = k.Scan(ctx, "players", &players)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error scanning players: %w", err)
+	}
+
+	Logger.Info("Loaded characters and players", 
+		"characterCount", len(characters),
+		"playerCount", len(players))
+
+	return characters, players, nil
+}
+
+// DeleteCharacter removes a character from the database
+func (k *KeyPair) DeleteCharacter(ctx context.Context, characterID string) error {
+	key := map[string]types.AttributeValue{
+		"CharacterID": &types.AttributeValueMemberS{Value: characterID},
+	}
+	return k.Delete(ctx, "characters", key)
+}
+
+// RemoveCharacterFromPlayer removes a character from a player's character list
+func (k *KeyPair) RemoveCharacterFromPlayer(ctx context.Context, playerID, characterName string) error {
+	// Load the player data
+	var playerData PlayerData
+	key := map[string]types.AttributeValue{
+		"PlayerID": &types.AttributeValueMemberS{Value: playerID},
+	}
+
+	err := k.Get(ctx, "players", key, &playerData)
+	if err != nil {
+		return fmt.Errorf("failed to get player data: %w", err)
+	}
+
+	// Remove the character from the list
+	delete(playerData.CharacterList, characterName)
+
+	// Update the player record
+	err = k.Put(ctx, "players", &playerData)
+	if err != nil {
+		return fmt.Errorf("failed to update player data: %w", err)
+	}
+
+	Logger.Info("Removed character from player",
+		"playerID", playerID,
+		"characterName", characterName)
+
+	return nil
+}
