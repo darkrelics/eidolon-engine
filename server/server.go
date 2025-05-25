@@ -308,7 +308,7 @@ func (s *Server) DuplicatePlayer(existingPlayer *Player) {
 	if existingPlayer == nil {
 		return
 	}
-	
+
 	RunWithPanicRecovery("server.DuplicatePlayer", func() {
 		Logger.Info("Player already logged in, disconnecting previous session",
 			"playerID", existingPlayer.id.String(),

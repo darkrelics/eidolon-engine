@@ -123,7 +123,7 @@ func (k *KeyPair) BatchDeleteItems(ctx context.Context, itemIDs []string) error 
 			return ctx.Err()
 		default:
 		}
-		
+
 		end := i + batchSize
 		if end > len(itemIDs) {
 			end = len(itemIDs)
@@ -176,7 +176,7 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 			return ctx.Err()
 		default:
 		}
-		
+
 		if item != nil {
 			// Create item data for storage
 			itemData := &ItemData{

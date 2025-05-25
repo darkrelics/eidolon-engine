@@ -312,7 +312,7 @@ func (item *Item) Save(ctx context.Context, k *KeyPair) error {
 			return ctx.Err()
 		default:
 		}
-		
+
 		if content != nil {
 			if err := content.Save(ctx, k); err != nil {
 				Logger.Warn("Error saving contained item", "containerID", item.id, "itemID", content.id, "error", err)
@@ -403,7 +403,7 @@ func LoadPrototypes(ctx context.Context, k *KeyPair) (map[uuid.UUID]*Prototype, 
 			return prototypes, ctx.Err()
 		default:
 		}
-		
+
 		prototype, err := prototypeDataToPrototype(&protoData)
 		if err != nil {
 			Logger.Warn("Error converting prototype data", "prototypeID", protoData.PrototypeID, "error", err)
@@ -455,7 +455,7 @@ func LoadItemsForCharacter(ctx context.Context, itemMap map[string]string, k *Ke
 			return inventory, ctx.Err()
 		default:
 		}
-		
+
 		if itemIDStr == "" {
 			continue
 		}

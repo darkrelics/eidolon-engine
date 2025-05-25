@@ -12,10 +12,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.43.1
 	github.com/aws/smithy-go v1.22.3
 	github.com/bits-and-blooms/bloom/v3 v3.7.0
+	github.com/goccy/go-yaml v1.11.3
 	github.com/gofrs/uuid/v5 v5.3.2
 	golang.org/x/crypto v0.38.0
 	golang.org/x/time v0.11.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -33,5 +33,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.19 // indirect
 	github.com/bits-and-blooms/bitset v1.14.3 // indirect
+	github.com/fatih/color v1.10.0 // indirect
+	github.com/mattn/go-colorable v0.1.8 // indirect
+	github.com/mattn/go-isatty v0.0.12 // indirect
 	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 )

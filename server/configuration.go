@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"os"
 
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 )
 
 // Configuration holds all configuration settings
@@ -63,28 +63,28 @@ type Configuration struct {
 
 	// SSH server settings
 	SSH struct {
-		Enabled                   bool   `yaml:"Enabled"`
-		Port                      uint16 `yaml:"Port"`
-		PrivateKeyPath            string `yaml:"PrivateKeyPath"`
-		AuthTimeoutSeconds        int    `yaml:"AuthTimeoutSeconds"`        // SSH auth timeout (default: 30)
-		AuthBanDurationSeconds    int    `yaml:"AuthBanDurationSeconds"`    // Ban duration after failed auth (default: 900)
-		AuthCleanupIntervalSeconds int   `yaml:"AuthCleanupIntervalSeconds"` // Auth attempts cleanup interval (default: 300)
-		ConnectionAcceptTimeoutSeconds int `yaml:"ConnectionAcceptTimeoutSeconds"` // Connection accept timeout (default: 1)
+		Enabled                        bool   `yaml:"Enabled"`
+		Port                           uint16 `yaml:"Port"`
+		PrivateKeyPath                 string `yaml:"PrivateKeyPath"`
+		AuthTimeoutSeconds             int    `yaml:"AuthTimeoutSeconds"`             // SSH auth timeout (default: 30)
+		AuthBanDurationSeconds         int    `yaml:"AuthBanDurationSeconds"`         // Ban duration after failed auth (default: 900)
+		AuthCleanupIntervalSeconds     int    `yaml:"AuthCleanupIntervalSeconds"`     // Auth attempts cleanup interval (default: 300)
+		ConnectionAcceptTimeoutSeconds int    `yaml:"ConnectionAcceptTimeoutSeconds"` // Connection accept timeout (default: 1)
 	} `yaml:"SSH"`
-	
+
 	// Server settings
 	Server struct {
 		SessionCleanupIntervalSeconds int `yaml:"SessionCleanupIntervalSeconds"` // Stale session cleanup interval (default: 300)
 		SessionIdleTimeoutSeconds     int `yaml:"SessionIdleTimeoutSeconds"`     // Session idle timeout (default: 1800)
 		ConsoleIdleTimeoutSeconds     int `yaml:"ConsoleIdleTimeoutSeconds"`     // Console idle timeout (default: 30)
 	} `yaml:"Server"`
-	
+
 	// CloudWatch settings
 	CloudWatch struct {
-		MetricsIntervalSeconds  int `yaml:"MetricsIntervalSeconds"`  // Metrics submission interval (default: 60)
-		MetricsTimeoutSeconds   int `yaml:"MetricsTimeoutSeconds"`   // Metrics submission timeout (default: 10)
-		LogFlushTimeoutSeconds  int `yaml:"LogFlushTimeoutSeconds"`  // Log flush timeout (default: 3)
-		ShutdownDrainSeconds    int `yaml:"ShutdownDrainSeconds"`    // Error channel drain timeout during shutdown (default: 2)
+		MetricsIntervalSeconds int `yaml:"MetricsIntervalSeconds"` // Metrics submission interval (default: 60)
+		MetricsTimeoutSeconds  int `yaml:"MetricsTimeoutSeconds"`  // Metrics submission timeout (default: 10)
+		LogFlushTimeoutSeconds int `yaml:"LogFlushTimeoutSeconds"` // Log flush timeout (default: 3)
+		ShutdownDrainSeconds   int `yaml:"ShutdownDrainSeconds"`   // Error channel drain timeout during shutdown (default: 2)
 	} `yaml:"CloudWatch"`
 }
 

@@ -40,7 +40,7 @@ func main() {
 
 	// Use a larger buffer to reduce blocking risk
 	errorChannel := make(chan error, 100)
-	
+
 	// Start error handler goroutine
 	errorHandlerDone := make(chan struct{})
 	go handleErrors(ctx, errorChannel, errorHandlerDone)
@@ -122,7 +122,7 @@ func main() {
 	if shutdownErr != nil {
 		Logger.Error("Main: Error during shutdown", "error", shutdownErr)
 	}
-	
+
 	// Close error channel and wait for handler to finish
 	close(errorChannel)
 	select {
@@ -131,7 +131,7 @@ func main() {
 	case <-time.After(5 * time.Second):
 		Logger.Warn("Timeout waiting for error handler to stop")
 	}
-	
+
 	if shutdownErr != nil {
 		os.Exit(121)
 	}
@@ -142,11 +142,11 @@ func main() {
 // handleErrors processes errors from components in a dedicated goroutine
 func handleErrors(ctx context.Context, errorChan <-chan error, done chan<- struct{}) {
 	defer close(done)
-	
+
 	RunWithPanicRecovery("error-handler", func() {
 		errorCount := 0
 		lastErrorTime := time.Now()
-		
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -159,17 +159,17 @@ func handleErrors(ctx context.Context, errorChan <-chan error, done chan<- struc
 				}
 				if err != nil {
 					errorCount++
-					Logger.Error("Component error", 
+					Logger.Error("Component error",
 						"error", err,
 						"errorCount", errorCount)
-					
+
 					// Simple circuit breaker: if too many errors in short time
 					if time.Since(lastErrorTime) < time.Second && errorCount > 10 {
 						Logger.Error("Too many errors in short period, circuit breaker triggered",
 							"errorCount", errorCount,
 							"duration", time.Since(lastErrorTime))
 					}
-					
+
 					if errorCount == 1 {
 						lastErrorTime = time.Now()
 					}

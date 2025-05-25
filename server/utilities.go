@@ -73,7 +73,7 @@ func RunWithPanicRecoveryCallback(goroutineName string, fn func(), onPanic func(
 			}
 			fields = append(fields, extraFields...)
 			Logger.Error("Panic in goroutine", fields...)
-			
+
 			if onPanic != nil {
 				onPanic(fmt.Errorf("%v", err))
 			}
@@ -89,7 +89,7 @@ func SendErrorNonBlocking(errChan chan<- error, err error, componentName string)
 		// Error sent successfully
 	default:
 		// Channel is full, log the error instead
-		Logger.Error("Error channel full, dropping error", 
+		Logger.Error("Error channel full, dropping error",
 			"component", componentName,
 			"error", err)
 	}
