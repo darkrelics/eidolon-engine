@@ -429,7 +429,7 @@ func (k *KeyPair) LoadCharactersAndPlayers(ctx context.Context) ([]CharacterInfo
 		return nil, nil, fmt.Errorf("error scanning players: %w", err)
 	}
 
-	Logger.Info("Loaded characters and players", 
+	Logger.Info("Loaded characters and players",
 		"characterCount", len(characters),
 		"playerCount", len(players))
 

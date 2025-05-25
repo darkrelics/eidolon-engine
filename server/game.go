@@ -32,7 +32,6 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
-
 type Game struct {
 	config               *Configuration
 	ctx                  context.Context
@@ -175,13 +174,13 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 	for _, character := range characters {
 		// Check if character has a player association
 		associatedPlayers, hasAssociation := characterToPlayers[character.CharacterID]
-		
+
 		if !hasAssociation || len(associatedPlayers) == 0 {
 			// Character has no player association - delete it
-			Logger.Warn("Deleting orphaned character", 
+			Logger.Warn("Deleting orphaned character",
 				"characterID", character.CharacterID,
 				"characterName", character.CharacterName)
-			
+
 			err := g.database.DeleteCharacter(g.ctx, character.CharacterID)
 			if err != nil {
 				Logger.Error("Failed to delete orphaned character",
@@ -197,7 +196,7 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 				"characterID", character.CharacterID,
 				"characterName", character.CharacterName,
 				"players", associatedPlayers)
-			
+
 			// Keep only the first association
 			for i := 1; i < len(associatedPlayers); i++ {
 				err := g.database.RemoveCharacterFromPlayer(g.ctx, associatedPlayers[i], character.CharacterName)
@@ -220,7 +219,6 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 
 	return names, nil
 }
-
 
 // Load names from a file.
 

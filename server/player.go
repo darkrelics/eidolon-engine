@@ -418,10 +418,10 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 	} else {
 		warningTime = idleTimeout / 2
 	}
-	
+
 	var warningTimer *time.Timer
 	var warningShown bool
-	
+
 	if warningTime > 0 {
 		warningTimer = time.NewTimer(idleTimeout - warningTime)
 		defer warningTimer.Stop()
