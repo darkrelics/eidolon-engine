@@ -139,6 +139,7 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Command wait time system for actions
 
 - [x] Room System
+
   - [x] Implement movement commands with room state changes
   - [x] GO and MOVE commands for character movement
   - [x] Support for both cardinal directions and object-based exits
@@ -157,12 +158,14 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Exit visibility controls for hidden paths
 
 - [x] Item System Foundation
+
   - [x] Basic item data structures
   - [x] Item persistence in DynamoDB
   - [x] Item trait system for modifications
   - [x] Worn item tracking and state
 
 - [x] Communication System
+
   - [x] Say command with room-wide communication
   - [x] Shout command for server-wide messages
   - [x] Announce command for GM announcements
@@ -495,21 +498,25 @@ OTHER:
 ### High Severity Issues
 
 1. **Command Rate Limiting Missing**:
+
    - No per-player command rate limiting implemented
    - System vulnerable to command spam/flooding
    - SSH auth has rate limiting, but game commands do not
 
 2. **No Administrative Commands**:
+
    - No privilege system for GM/admin users
    - Cannot shutdown server remotely
    - No way to broadcast system messages
 
 3. **Incomplete Audit Logging**:
+
    - Commands logged at Debug level only
    - No dedicated audit trail with player attribution
    - Missing command origin tracking (IP, session)
 
 4. **No Automated Build/Deploy**:
+
    - Manual build process prone to errors
    - No version stamping in binaries
    - No automated deployment mechanism
@@ -528,18 +535,21 @@ A Flutter application for player registration and self-service.
 ### AWS Infrastructure Setup
 
 1. Ensure you have the following installed:
+
    - Go 1.24 or later
    - Python 3.12 or later
    - Flutter 3.29 or later
    - AWS CLI configured with appropriate credentials
 
 2. Clone the repository:
+
    ```bash
    git clone https://github.com/robinje/eidolon-engine.git
    cd eidolon-engine
    ```
 
 3. Install Python dependencies:
+
    ```bash
    pip install -r requirements/scripts-requirements.txt
    ```
@@ -558,6 +568,7 @@ A Flutter application for player registration and self-service.
 ### Server Build and Run
 
 1. Copy and configure the server:
+
    ```bash
    cd server
    cp config.template.yml config.yml
@@ -565,6 +576,7 @@ A Flutter application for player registration and self-service.
    ```
 
 2. Build the server:
+
    ```bash
    go build -o eidolon-engine
    ```
