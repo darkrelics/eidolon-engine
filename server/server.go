@@ -127,7 +127,7 @@ func (s *Server) Run(errorChan chan error) error {
 	RunWithPanicRecoveryCallback("server.Run", func() {
 		runErr = s.runInternal(errorChan)
 	}, func(err error) {
-		errorChan <- fmt.Errorf("panic in Server: %v", err)
+		SendErrorNonBlocking(errorChan, fmt.Errorf("panic in Server: %v", err), "Server")
 	})
 	return runErr
 }
@@ -384,6 +384,6 @@ func (s *Server) runSSHInterface(errorChan chan error) {
 		s.sshInterface.Run(errorChan)
 		Logger.Info("SSH Interface finished")
 	}, func(err error) {
-		errorChan <- fmt.Errorf("panic in SSH interface: %v", err)
+		SendErrorNonBlocking(errorChan, fmt.Errorf("panic in SSH interface: %v", err), "SSHInterface")
 	})
 }

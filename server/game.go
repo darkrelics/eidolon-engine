@@ -266,7 +266,7 @@ func (g *Game) Run(errChan chan error) error {
 	RunWithPanicRecoveryCallback("game.Run", func() {
 		runErr = g.runInternal(errChan)
 	}, func(err error) {
-		errChan <- fmt.Errorf("panic in Game: %v", err)
+		SendErrorNonBlocking(errChan, fmt.Errorf("panic in Game: %v", err), "Game")
 	})
 	return runErr
 }
@@ -290,8 +290,9 @@ func (g *Game) runInternal(errChan chan error) error {
 			err := g.tick()
 			if err != nil {
 				Logger.Error("Error running game logic", "error", err)
-				errChan <- fmt.Errorf("error running game logic: %w", err)
-				return fmt.Errorf("error running game logic: %w", err)
+				gameErr := fmt.Errorf("error running game logic: %w", err)
+				SendErrorNonBlocking(errChan, gameErr, "Game")
+				return gameErr
 			}
 		}
 	}

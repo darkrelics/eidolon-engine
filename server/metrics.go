@@ -169,7 +169,7 @@ func (c *CloudWatch) Run(errChan chan error) error {
 	RunWithPanicRecoveryCallback("cloudwatch.Run", func() {
 		runErr = c.runInternal(errChan)
 	}, func(err error) {
-		errChan <- fmt.Errorf("panic in CloudWatch: %v", err)
+		SendErrorNonBlocking(errChan, fmt.Errorf("panic in CloudWatch: %v", err), "CloudWatch")
 	})
 	return runErr
 }
@@ -208,8 +208,9 @@ func (c *CloudWatch) runInternal(errChan chan error) error {
 			if len(metrics) > 0 {
 				if err := c.SendMetrics(metrics); err != nil {
 					Logger.Error("Error sending metrics", "error", err)
-					errChan <- fmt.Errorf("error sending metrics: %w", err)
-					return fmt.Errorf("error sending metrics: %w", err)
+					metricsErr := fmt.Errorf("error sending metrics: %w", err)
+					SendErrorNonBlocking(errChan, metricsErr, "CloudWatch")
+					return metricsErr
 				}
 			}
 		}

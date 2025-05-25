@@ -38,7 +38,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	errorChannel := make(chan error, 10)
+	// Use a larger buffer to reduce blocking risk
+	errorChannel := make(chan error, 100)
+	
+	// Start error handler goroutine
+	errorHandlerDone := make(chan struct{})
+	go handleErrors(ctx, errorChannel, errorHandlerDone)
 
 	// Load configuration
 
@@ -116,10 +121,62 @@ func main() {
 	shutdownErr := shutdown(errorChannel, game, server, cloudWatch)
 	if shutdownErr != nil {
 		Logger.Error("Main: Error during shutdown", "error", shutdownErr)
+	}
+	
+	// Close error channel and wait for handler to finish
+	close(errorChannel)
+	select {
+	case <-errorHandlerDone:
+		Logger.Info("Error handler stopped")
+	case <-time.After(5 * time.Second):
+		Logger.Warn("Timeout waiting for error handler to stop")
+	}
+	
+	if shutdownErr != nil {
 		os.Exit(121)
 	}
 
 	os.Exit(0)
+}
+
+// handleErrors processes errors from components in a dedicated goroutine
+func handleErrors(ctx context.Context, errorChan <-chan error, done chan<- struct{}) {
+	defer close(done)
+	
+	RunWithPanicRecovery("error-handler", func() {
+		errorCount := 0
+		lastErrorTime := time.Now()
+		
+		for {
+			select {
+			case <-ctx.Done():
+				Logger.Info("Error handler shutting down")
+				return
+			case err, ok := <-errorChan:
+				if !ok {
+					// Channel closed
+					return
+				}
+				if err != nil {
+					errorCount++
+					Logger.Error("Component error", 
+						"error", err,
+						"errorCount", errorCount)
+					
+					// Simple circuit breaker: if too many errors in short time
+					if time.Since(lastErrorTime) < time.Second && errorCount > 10 {
+						Logger.Error("Too many errors in short period, circuit breaker triggered",
+							"errorCount", errorCount,
+							"duration", time.Since(lastErrorTime))
+					}
+					
+					if errorCount == 1 {
+						lastErrorTime = time.Now()
+					}
+				}
+			}
+		}
+	})
 }
 
 func shutdown(errorChan chan error, game *Game, server *Server, cloudWatch *CloudWatch) error {

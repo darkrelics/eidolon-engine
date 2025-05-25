@@ -81,3 +81,16 @@ func RunWithPanicRecoveryCallback(goroutineName string, fn func(), onPanic func(
 	}()
 	fn()
 }
+
+// SendErrorNonBlocking sends an error to a channel without blocking
+func SendErrorNonBlocking(errChan chan<- error, err error, componentName string) {
+	select {
+	case errChan <- err:
+		// Error sent successfully
+	default:
+		// Channel is full, log the error instead
+		Logger.Error("Error channel full, dropping error", 
+			"component", componentName,
+			"error", err)
+	}
+}

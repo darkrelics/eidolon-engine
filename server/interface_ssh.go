@@ -273,7 +273,7 @@ func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
 	// Make sure listener is not nil
 	if ssh_interface.listener == nil {
 		Logger.Error("SSH listener is nil, cannot run interface")
-		errorChan <- fmt.Errorf("SSH listener is nil")
+		SendErrorNonBlocking(errorChan, fmt.Errorf("SSH listener is nil"), "SSHInterface")
 		return
 	}
 
