@@ -3,6 +3,8 @@
     "wizard": {
       "ArchetypeName": "Wizard",
       "Description": "A Wizard!",
+      "Health": 8,
+      "Essence": 5,
       "Attributes": {
         "Strength": 1.0,
         "Agility": 1.0,
@@ -58,6 +60,8 @@
     "rogue": {
       "ArchetypeName": "Rogue",
       "Description": "A Rogue!",
+      "Health": 10,
+      "Essence": 3,
       "Attributes": {
         "Strength": 2.0,
         "Agility": 2.0,
@@ -113,6 +117,8 @@
     "warrior": {
       "ArchetypeName": "Warrior",
       "Description": "A Warrior!",
+      "Health": 12,
+      "Essence": 2,
       "Attributes": {
         "Strength": 2.0,
         "Agility": 2.0,

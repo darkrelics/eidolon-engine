@@ -39,6 +39,8 @@ type Archetype struct {
 	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"abilities"`
 	StartRoom     int64              `json:"StartRoom" dynamodbav:"startRoom"`
 	StartingItems []ArchetypeItem    `json:"StartingItems" dynamodbav:"startingItems"`
+	Health        uint16             `json:"Health,omitempty" dynamodbav:"health,omitempty"`
+	Essence       uint16             `json:"Essence,omitempty" dynamodbav:"essence,omitempty"`
 }
 
 // Display Archetypes for debugging purposes.
