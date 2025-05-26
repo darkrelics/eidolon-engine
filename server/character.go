@@ -19,6 +19,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -59,6 +60,12 @@ func (c *Character) SetCommandWaitTime(duration time.Duration) {
 
 // Save saves the character to the database
 func (c *Character) Save() error {
+	return c.SaveWithContext(c.game.ctx)
+}
+
+// SaveWithContext saves the character to the database with a specific context
+// This is used during shutdown to ensure saves complete even after game context is cancelled
+func (c *Character) SaveWithContext(ctx context.Context) error {
 
 	Logger.Debug("Saving character", "characterName", c.name)
 
@@ -92,7 +99,7 @@ func (c *Character) Save() error {
 	}
 
 	// Save character and inventory transactionally
-	err := kp.SaveCharacterWithInventory(c.game.ctx, characterData, inventoryCopy)
+	err := kp.SaveCharacterWithInventory(ctx, characterData, inventoryCopy)
 	if err != nil {
 		Logger.Error("Error saving character and inventory", "characterName", c.name, "error", err)
 		return fmt.Errorf("error saving character and inventory: %w", err)

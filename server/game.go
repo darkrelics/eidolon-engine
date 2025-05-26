@@ -291,13 +291,17 @@ func (g *Game) Stop() error {
 
 	Logger.Info("Stopping game engine...")
 
-	g.cancel()
-
-	// Save all active characters
+	// CRITICAL: Save all character data BEFORE cancelling context
+	// This ensures all database operations complete successfully during shutdown
+	// Customer data persistence is our highest priority
 	g.saveAllCharacters()
 
-	// Logout all characters
+	// Logout all characters after saving
 	g.logoutAllCharacters()
+
+	// Only cancel context after all critical data is persisted
+	// This prevents database operations from failing due to cancelled context
+	g.cancel()
 
 	return nil
 
@@ -576,12 +580,24 @@ func (g *Game) saveAllCharacters() {
 	}
 	g.mutex.RUnlock()
 
+	Logger.Info("Saving all characters during shutdown", "characterCount", len(characters))
+
 	// Save characters without holding the lock
+	// Use a separate context with timeout to ensure saves don't hang indefinitely
+	saveCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	savedCount := 0
 	for _, character := range characters {
-		if err := character.Save(); err != nil {
+		// Override character's game context with our save context to ensure DB operations succeed
+		if err := character.SaveWithContext(saveCtx); err != nil {
 			Logger.Error("Error saving character during shutdown", "characterName", character.name, "error", err)
+		} else {
+			savedCount++
 		}
 	}
+
+	Logger.Info("Completed saving characters during shutdown", "savedCount", savedCount, "totalCount", len(characters))
 }
 
 // logoutAllCharacters logs out all active characters

@@ -169,13 +169,18 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 	transactItems := make([]types.TransactWriteItem, 0, len(items)+1)
 
 	// Add all inventory items to transaction
+	itemCount := 0
 	for _, item := range items {
-		// Check context periodically
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
+		// Check context periodically to handle cancellation gracefully
+		// During shutdown, context should remain valid until after all saves complete
+		if itemCount%10 == 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 		}
+		itemCount++
 
 		if item != nil {
 			// Create item data for storage
