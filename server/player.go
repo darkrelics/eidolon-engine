@@ -659,33 +659,19 @@ func wrapText(text string, width int) string {
 }
 
 func (s *Server) RemovePlayer(playerID uint64) error {
-
-	if s.players[playerID] == nil {
+	s.mutex.RLock()
+	player, exists := s.players[playerID]
+	s.mutex.RUnlock()
+	
+	if !exists || player == nil {
 		Logger.Warn("Attempted to remove non-existent player", "playerID", playerID)
 		return nil
 	}
 
-	player := s.players[playerID]
+	Logger.Info("Removing inactive player", "playerID", player.id.String(), "playerIndex", playerID)
 
-	// Stop the existing player session
-
-	Logger.Info("Disconnected player with active character", "playerID", player.id.String(), "playerIndex", playerID)
-
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	// Find the player by index
-	player, exists := s.players[playerID]
-	if exists {
-		// Remove from both maps
-		delete(s.players, playerID)
-		delete(s.playersByUUID, player.id)
-
-		s.playerCount.Add(^uint64(0)) // Decrement count
-		Logger.Info("Player removed", "playerID", playerID, "playerUUID", player.id.String())
-	} else {
-		Logger.Warn("Attempted to remove non-existent player", "playerID", playerID)
-	}
+	// Cancel the player's context - this will trigger shutdown of all goroutines
+	player.cancel()
 
 	return nil
 }
