@@ -544,7 +544,15 @@ func (r *Room) runInternal(game *Game) {
 		case cmd, ok := <-r.commandIn:
 			// Handle incoming command requests
 			if !ok {
-				Logger.Warn("Room command channel closed unexpectedly", "roomID", r.roomID)
+				// Check if this is an intentional shutdown
+				select {
+				case <-r.ctx.Done():
+					// Context was canceled, this is expected during shutdown
+					Logger.Debug("Room command channel closed during shutdown", "roomID", r.roomID)
+				default:
+					// Context not canceled, this is unexpected
+					Logger.Warn("Room command channel closed unexpectedly", "roomID", r.roomID)
+				}
 				return
 			}
 
