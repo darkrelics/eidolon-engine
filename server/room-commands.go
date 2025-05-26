@@ -147,9 +147,15 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 
 	switch cmd.Verb {
 	case "get", "take":
+		// Special handling for "take from" command
+		if len(cmd.Args) >= 4 && strings.ToLower(cmd.Args[2]) == "from" {
+			return handleTakeFromCommand(cmd)
+		}
 		return handleGetCommand(cmd, targetName)
 	case "drop":
 		return handleDropCommand(cmd, targetName)
+	case "put":
+		return handlePutCommand(cmd)
 	case "wear", "wield", "equip":
 		return handleWearCommand(cmd, targetName)
 	case "remove", "unwear", "unequip":
@@ -161,6 +167,342 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 			Error:     fmt.Errorf("invalid item command: %s", cmd.Verb),
 			Timestamp: time.Now(),
 		}
+	}
+}
+
+// handlePutCommand processes the "put [item] in [container]" command
+func handlePutCommand(cmd *CommandRequest) *CommandResponse {
+	if len(cmd.Args) < 4 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("put what in what?"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Find "in" keyword position
+	inIndex := -1
+	for i, arg := range cmd.Args {
+		if strings.ToLower(arg) == "in" {
+			inIndex = i
+			break
+		}
+	}
+
+	if inIndex < 2 || inIndex >= len(cmd.Args)-1 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("usage: put [item] in [container]"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Extract item and container names
+	itemName := strings.ToLower(strings.Join(cmd.Args[1:inIndex], " "))
+	containerName := strings.ToLower(strings.Join(cmd.Args[inIndex+1:], " "))
+	
+	// Check for "my" prefix on container
+	isMyContainer := false
+	if strings.HasPrefix(containerName, "my ") {
+		isMyContainer = true
+		containerName = strings.TrimPrefix(containerName, "my ")
+	}
+
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Find the item in character's inventory
+	character.mutex.Lock()
+	var itemToPut *Item
+	var itemSlot string
+	
+	for slot, item := range character.inventory {
+		if item != nil && strings.Contains(strings.ToLower(item.name), itemName) {
+			if item.isWorn {
+				character.mutex.Unlock()
+				return &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Error:     fmt.Errorf("you need to remove that first"),
+					Timestamp: time.Now(),
+				}
+			}
+			itemToPut = item
+			itemSlot = slot
+			break
+		}
+	}
+	
+	if itemToPut == nil {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you don't have that"),
+			Timestamp: time.Now(),
+		}
+	}
+	
+	// Remove item from inventory before unlocking
+	delete(character.inventory, itemSlot)
+	character.mutex.Unlock()
+
+	// Find the container
+	var container *Item
+	
+	if isMyContainer {
+		// Look in character's inventory
+		character.mutex.RLock()
+		for _, item := range character.inventory {
+			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
+				container = item
+				break
+			}
+		}
+		character.mutex.RUnlock()
+		
+		if container == nil {
+			// Put the item back in inventory
+			character.mutex.Lock()
+			character.inventory[itemSlot] = itemToPut
+			character.mutex.Unlock()
+			
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("you don't have a '%s'", containerName),
+				Timestamp: time.Now(),
+			}
+		}
+	} else {
+		// Look in room
+		if character.room == nil {
+			// Put the item back in inventory
+			character.mutex.Lock()
+			character.inventory[itemSlot] = itemToPut
+			character.mutex.Unlock()
+			
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("invalid room state"),
+				Timestamp: time.Now(),
+			}
+		}
+		
+		character.room.mutex.RLock()
+		for _, item := range character.room.items {
+			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
+				container = item
+				break
+			}
+		}
+		character.room.mutex.RUnlock()
+		
+		if container == nil {
+			// Put the item back in inventory
+			character.mutex.Lock()
+			character.inventory[itemSlot] = itemToPut
+			character.mutex.Unlock()
+			
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("you don't see a '%s' here", containerName),
+				Timestamp: time.Now(),
+			}
+		}
+	}
+
+	// Add item to container
+	err := container.AddItemToContainer(itemToPut)
+	if err != nil {
+		// Put the item back in inventory
+		character.mutex.Lock()
+		character.inventory[itemSlot] = itemToPut
+		character.mutex.Unlock()
+		
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     err,
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Success message
+	message := fmt.Sprintf("\n\rYou put %s in %s.\n\r", itemToPut.name, container.name)
+	
+	// Notify room
+	if character.room != nil {
+		SendRoomMessageExcept(character.room,
+			fmt.Sprintf("\n\r%s puts %s in %s.\n\r", character.name, itemToPut.name, container.name),
+			character)
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   message,
+		Timestamp: time.Now(),
+	}
+}
+
+// handleTakeFromCommand processes the "take [item] from [container]" command
+func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
+	// Args format: ["take", "item", "from", "container"]
+	if len(cmd.Args) < 4 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("take what from what?"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Find "from" keyword position
+	fromIndex := -1
+	for i, arg := range cmd.Args {
+		if strings.ToLower(arg) == "from" {
+			fromIndex = i
+			break
+		}
+	}
+
+	if fromIndex < 2 || fromIndex >= len(cmd.Args)-1 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("usage: take [item] from [container]"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Extract item and container names
+	itemName := strings.ToLower(strings.Join(cmd.Args[1:fromIndex], " "))
+	containerName := strings.ToLower(strings.Join(cmd.Args[fromIndex+1:], " "))
+	
+	// Check for "my" prefix on container
+	isMyContainer := false
+	if strings.HasPrefix(containerName, "my ") {
+		isMyContainer = true
+		containerName = strings.TrimPrefix(containerName, "my ")
+	}
+
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Find the container
+	var container *Item
+	
+	if isMyContainer {
+		// Look in character's inventory
+		character.mutex.RLock()
+		for _, item := range character.inventory {
+			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
+				container = item
+				break
+			}
+		}
+		character.mutex.RUnlock()
+		
+		if container == nil {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("you don't have a '%s'", containerName),
+				Timestamp: time.Now(),
+			}
+		}
+	} else {
+		// Look in room
+		if character.room == nil {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("invalid room state"),
+				Timestamp: time.Now(),
+			}
+		}
+		
+		character.room.mutex.RLock()
+		for _, item := range character.room.items {
+			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
+				container = item
+				break
+			}
+		}
+		character.room.mutex.RUnlock()
+		
+		if container == nil {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("you don't see a '%s' here", containerName),
+				Timestamp: time.Now(),
+			}
+		}
+	}
+
+	// Find item in container
+	itemToTake := container.FindItemInContainer(itemName)
+	if itemToTake == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("there's no '%s' in the %s", itemName, container.name),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Remove from container
+	removedItem, err := container.RemoveItemFromContainer(itemToTake.id)
+	if err != nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     err,
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Add to character's inventory
+	character.mutex.Lock()
+	slotName := removedItem.name
+	character.inventory[slotName] = removedItem
+	character.mutex.Unlock()
+
+	// Success message
+	message := fmt.Sprintf("\n\rYou take %s from %s.\n\r", removedItem.name, container.name)
+	
+	// Notify room
+	if character.room != nil {
+		SendRoomMessageExcept(character.room,
+			fmt.Sprintf("\n\r%s takes %s from %s.\n\r", character.name, removedItem.name, container.name),
+			character)
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   message,
+		Timestamp: time.Now(),
 	}
 }
 

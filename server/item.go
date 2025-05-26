@@ -697,3 +697,90 @@ func CreateItemFromPrototype(prototype *Prototype, game *Game) (*Item, error) {
 
 	return item, nil
 }
+
+// AddItemToContainer adds an item to a container's contents
+func (container *Item) AddItemToContainer(item *Item) error {
+	if container == nil || item == nil {
+		return fmt.Errorf("invalid container or item")
+	}
+
+	container.mutex.Lock()
+	defer container.mutex.Unlock()
+
+	if !container.container {
+		return fmt.Errorf("this is not a container")
+	}
+
+	// Add item to contents
+	container.contents = append(container.contents, item)
+	return nil
+}
+
+// RemoveItemFromContainer removes an item from a container's contents
+func (container *Item) RemoveItemFromContainer(itemID uuid.UUID) (*Item, error) {
+	container.mutex.Lock()
+	defer container.mutex.Unlock()
+
+	if !container.container {
+		return nil, fmt.Errorf("this is not a container")
+	}
+
+	// Find and remove the item
+	for i, item := range container.contents {
+		if item != nil && item.id == itemID {
+			// Remove from slice
+			container.contents = append(container.contents[:i], container.contents[i+1:]...)
+			return item, nil
+		}
+	}
+
+	return nil, fmt.Errorf("item not found in container")
+}
+
+// FindItemInContainer searches for an item by name in the container
+func (container *Item) FindItemInContainer(itemName string) *Item {
+	container.mutex.RLock()
+	defer container.mutex.RUnlock()
+
+	if !container.container {
+		return nil
+	}
+
+	itemNameLower := strings.ToLower(itemName)
+	for _, item := range container.contents {
+		if item != nil && strings.Contains(strings.ToLower(item.name), itemNameLower) {
+			return item
+		}
+	}
+
+	return nil
+}
+
+// GetContainerContents returns a formatted string of container contents
+func (container *Item) GetContainerContents() string {
+	container.mutex.RLock()
+	defer container.mutex.RUnlock()
+
+	if !container.container {
+		return "This is not a container.\n\r"
+	}
+
+	if len(container.contents) == 0 {
+		return fmt.Sprintf("The %s is empty.\n\r", container.name)
+	}
+
+	var contents strings.Builder
+	contents.WriteString(fmt.Sprintf("The %s contains:\n\r", container.name))
+	
+	for _, item := range container.contents {
+		if item != nil {
+			contents.WriteString(fmt.Sprintf("  %s", item.name))
+			if item.stackable && item.quantity > 1 {
+				contents.WriteString(fmt.Sprintf(" (x%d)", item.quantity))
+			}
+			contents.WriteString("\n\r")
+		}
+	}
+
+	return contents.String()
+}

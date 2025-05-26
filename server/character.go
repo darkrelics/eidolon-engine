@@ -488,6 +488,22 @@ func (c *Character) GetSkillInfo() string {
 
 // LookAtTarget handles examining specific targets
 func (c *Character) LookAtTarget(target string) error {
+	// Check if this is a "look in" command
+	if strings.HasPrefix(target, "in ") {
+		// Extract container name and check for "my" prefix
+		containerPart := strings.TrimPrefix(target, "in ")
+		isMyContainer := false
+		
+		if strings.HasPrefix(containerPart, "my ") {
+			isMyContainer = true
+			containerPart = strings.TrimPrefix(containerPart, "my ")
+		}
+		
+		desc := c.LookInContainer(containerPart, isMyContainer)
+		c.player.commandOut <- desc
+		return nil
+	}
+
 	// First check if target is in the room
 	desc := c.LookAtRoomTarget(target)
 	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
@@ -555,6 +571,57 @@ func (c *Character) LookAtInventoryItem(target string) string {
 	}
 
 	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+}
+
+// LookInContainer handles looking inside a container
+func (c *Character) LookInContainer(containerName string, isMyContainer bool) string {
+	if isMyContainer {
+		// Look in character's inventory for the container
+		c.mutex.RLock()
+		var container *Item
+		for _, item := range c.inventory {
+			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
+				container = item
+				break
+			}
+		}
+		c.mutex.RUnlock()
+
+		if container == nil {
+			return fmt.Sprintf("\n\rYou don't have a '%s'.\n\r", containerName)
+		}
+
+		if !container.container {
+			return fmt.Sprintf("\n\rThe %s is not a container.\n\r", container.name)
+		}
+
+		return "\n\r" + container.GetContainerContents()
+	} else {
+		// Look in room for the container
+		if c.room == nil {
+			return "\n\rYou're not in a valid room.\n\r"
+		}
+
+		c.room.mutex.RLock()
+		var container *Item
+		for _, item := range c.room.items {
+			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
+				container = item
+				break
+			}
+		}
+		c.room.mutex.RUnlock()
+
+		if container == nil {
+			return fmt.Sprintf("\n\rYou don't see a '%s' here.\n\r", containerName)
+		}
+
+		if !container.container {
+			return fmt.Sprintf("\n\rThe %s is not a container.\n\r", container.name)
+		}
+
+		return "\n\r" + container.GetContainerContents()
+	}
 }
 
 // FormatCharacterDescription creates a description of a character for look command
