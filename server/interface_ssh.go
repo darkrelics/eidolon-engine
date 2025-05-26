@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofrs/uuid/v5"
 	"golang.org/x/crypto/ssh"
@@ -512,11 +513,68 @@ func getClientIP(conn ssh.ConnMetadata) string {
 }
 
 func isValidPassword(password string) bool {
-	// Basic password validation - adjust as needed
+	// Length check - AWS Cognito requires 8-256 characters
 	if len(password) < 8 || len(password) > 128 {
 		return false
 	}
-	// Add additional validation as required
+
+	// Ensure password is valid UTF-8
+	if !utf8.ValidString(password) {
+		return false
+	}
+
+	// Check for null bytes or dangerous control characters
+	for _, r := range password {
+		// Reject null bytes
+		if r == 0 {
+			return false
+		}
+		// Reject control characters except tab, newline, and carriage return
+		// These are sometimes used in password managers
+		if r < 32 && r != '\t' && r != '\n' && r != '\r' {
+			return false
+		}
+		// Reject non-printable characters above ASCII range
+		if r == 127 {
+			return false
+		}
+	}
+
+	// Password complexity checks to align with security best practices
+	var hasUpper, hasLower, hasDigit, hasSpecial bool
+	for _, r := range password {
+		switch {
+		case r >= 'A' && r <= 'Z':
+			hasUpper = true
+		case r >= 'a' && r <= 'z':
+			hasLower = true
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		case r >= 33 && r <= 126 && !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')):
+			hasSpecial = true
+		}
+	}
+
+	// Require at least 3 of 4 character types for security
+	complexity := 0
+	if hasUpper {
+		complexity++
+	}
+	if hasLower {
+		complexity++
+	}
+	if hasDigit {
+		complexity++
+	}
+	if hasSpecial {
+		complexity++
+	}
+
+	// Require at least 3 different character types
+	if complexity < 3 {
+		return false
+	}
+
 	return true
 }
 
