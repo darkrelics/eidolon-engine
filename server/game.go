@@ -32,10 +32,6 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
-// TODO: Move to config
-var NAMES_PATH = "../data/names.txt"
-var OBSCENITY_PATH = "../data/obscenity.txt"
-
 type Game struct {
 	config               *Configuration
 	ctx                  context.Context
@@ -159,19 +155,67 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 
 	var names []string
 
-	var characters []struct {
-		CharacterName string `dynamodbav:"character_name"`
-	}
-
-	err := g.database.Scan(g.ctx, "characters", &characters)
+	// Load all characters and players in one operation
+	characters, players, err := g.database.LoadCharactersAndPlayers(g.ctx)
 	if err != nil {
-		Logger.Error("Error scanning characters table", "error", err)
-		return nil, fmt.Errorf("error scanning characters: %w", err)
+		Logger.Error("Error loading characters and players", "error", err)
+		return nil, err
 	}
 
+	// Build a map of character IDs to their owning players
+	characterToPlayers := make(map[string][]string)
+	for _, player := range players {
+		for _, charID := range player.CharacterList {
+			characterToPlayers[charID] = append(characterToPlayers[charID], player.PlayerID)
+		}
+	}
+
+	// Process characters
 	for _, character := range characters {
+		// Check if character has a player association
+		associatedPlayers, hasAssociation := characterToPlayers[character.CharacterID]
+
+		if !hasAssociation || len(associatedPlayers) == 0 {
+			// Character has no player association - delete it
+			Logger.Warn("Deleting orphaned character",
+				"characterID", character.CharacterID,
+				"characterName", character.CharacterName)
+
+			err := g.database.DeleteCharacter(g.ctx, character.CharacterID)
+			if err != nil {
+				Logger.Error("Failed to delete orphaned character",
+					"characterID", character.CharacterID,
+					"error", err)
+			}
+			continue
+		}
+
+		// Check for duplicate associations
+		if len(associatedPlayers) > 1 {
+			Logger.Warn("Character has multiple player associations",
+				"characterID", character.CharacterID,
+				"characterName", character.CharacterName,
+				"players", associatedPlayers)
+
+			// Keep only the first association
+			for i := 1; i < len(associatedPlayers); i++ {
+				err := g.database.RemoveCharacterFromPlayer(g.ctx, associatedPlayers[i], character.CharacterName)
+				if err != nil {
+					Logger.Error("Failed to remove duplicate character association",
+						"playerID", associatedPlayers[i],
+						"characterID", character.CharacterID,
+						"error", err)
+				}
+			}
+		}
+
+		// Add valid character name to bloom filter
 		names = append(names, strings.ToLower(character.CharacterName))
 	}
+
+	Logger.Info("Character name loading complete",
+		"totalNames", len(names),
+		"totalCharacters", len(characters))
 
 	return names, nil
 }
@@ -214,12 +258,12 @@ func (g *Game) InitCharacterBloomFilter() error {
 		Logger.Warn("Error loading character names from database", "error", err)
 	}
 
-	namesFromFile, err := LoadNameFromFile(NAMES_PATH)
+	namesFromFile, err := LoadNameFromFile(g.config.Game.NamesPath)
 	if err != nil {
 		Logger.Warn("Error loading character names from file", "error", err)
 	}
 
-	obscenities, err := LoadNameFromFile(OBSCENITY_PATH)
+	obscenities, err := LoadNameFromFile(g.config.Game.ObscenityPath)
 	if err != nil {
 		Logger.Warn("Error loading obscenities from file", "error", err)
 	}
@@ -262,7 +306,17 @@ func (g *Game) Stop() error {
 // Run the game engine
 
 func (g *Game) Run(errChan chan error) error {
+	var runErr error
+	RunWithPanicRecoveryCallback("game.Run", func() {
+		runErr = g.runInternal(errChan)
+	}, func(err error) {
+		SendErrorNonBlocking(errChan, fmt.Errorf("panic in Game: %v", err), "Game")
+	})
+	return runErr
+}
 
+// runInternal contains the actual game loop logic
+func (g *Game) runInternal(errChan chan error) error {
 	Logger.Info("Starting game engine...")
 
 	// Start Game Heart Beat
@@ -280,8 +334,9 @@ func (g *Game) Run(errChan chan error) error {
 			err := g.tick()
 			if err != nil {
 				Logger.Error("Error running game logic", "error", err)
-				errChan <- fmt.Errorf("error running game logic: %w", err)
-				return fmt.Errorf("error running game logic: %w", err)
+				gameErr := fmt.Errorf("error running game logic: %w", err)
+				SendErrorNonBlocking(errChan, gameErr, "Game")
+				return gameErr
 			}
 		}
 	}
@@ -331,7 +386,9 @@ func (g *Game) processGameCommands() {
 				continue
 			}
 			// Handle the command asynchronously
-			go g.handleGameCommand(cmd)
+			go RunWithPanicRecovery("game.handleCommand", func() {
+				g.handleGameCommand(cmd)
+			}, "verb", cmd.Verb, "character", cmd.Character.name)
 		default:
 			// No command waiting, continue to next room
 		}
@@ -347,7 +404,9 @@ func (g *Game) processGameCommands() {
 				continue
 			}
 			// Handle the command asynchronously
-			go g.handleGameCommand(cmd)
+			go RunWithPanicRecovery("game.handleCommand", func() {
+				g.handleGameCommand(cmd)
+			}, "verb", cmd.Verb, "character", cmd.Character.name)
 		default:
 			// No command waiting, continue to next character
 		}
