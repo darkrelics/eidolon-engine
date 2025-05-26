@@ -147,18 +147,10 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 			return fmt.Errorf("archetype '%s' starting item %d has empty slot", archetype.ArchetypeName, i)
 		}
 
-		// Validate prototype ID format
-		_, err := uuid.FromString(startingItem.PrototypeID)
-		if err != nil {
-			return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID: %w", archetype.ArchetypeName, i, err)
-		}
-
-		// Skip prototype existence check during initial load - will be validated later
-
-		// Validate prototype ID format
+		// Validate prototype ID format and parse UUID
 		prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
 		if err != nil {
-			return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID format: %v", archetype.ArchetypeName, i, err)
+			return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID: %w", archetype.ArchetypeName, i, err)
 		}
 
 		// Validate prototype exists
