@@ -300,12 +300,12 @@ func (r *Room) HandleCharacterEntry() {
 // IncrementIdleCounter increments the idle counter for an empty room and handles cleanup if threshold is reached
 func (r *Room) IncrementIdleCounter(game *Game) {
 	r.mutex.Lock()
-	defer r.mutex.Unlock()
 
 	// Only increment if room is empty
 	if len(r.characters) > 0 {
 		// Reset counter if characters are present
 		r.idleCounter = 0
+		r.mutex.Unlock()
 		return
 	}
 
@@ -330,6 +330,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			Logger.Info("Deactivating scripts for idle persistent room", "roomID", r.roomID)
 			// Reset idle counter for persistent rooms to prevent repeated deactivation logs
 			r.idleCounter = 0
+			r.mutex.Unlock()
 		} else {
 			// For non-persistent rooms, unload the room
 			Logger.Info("Unloading non-persistent idle room", "roomID", r.roomID)
@@ -345,7 +346,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			}
 			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", len(r.items))
 
-			// We must unlock mutex before calling Stop to avoid deadlock
+			// Must unlock before Stop to avoid deadlock
 			r.mutex.Unlock()
 
 			// Delete items from database if needed (minimize DB access)
@@ -354,11 +355,14 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			}
 
 			r.Stop()
-			r.mutex.Lock() // Re-lock for the remainder of the function
 
 			// Remove room from game's room map
+			game.mutex.Lock()
 			delete(game.rooms, r.roomID)
+			game.mutex.Unlock()
 		}
+	} else {
+		r.mutex.Unlock()
 	}
 }
 
