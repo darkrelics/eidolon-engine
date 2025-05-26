@@ -165,7 +165,17 @@ func (c *CloudWatch) SendRateLimitViolation(limitType string) {
 
 // Run handles periodic metric submission and log processing
 func (c *CloudWatch) Run(errChan chan error) error {
+	var runErr error
+	RunWithPanicRecoveryCallback("cloudwatch.Run", func() {
+		runErr = c.runInternal(errChan)
+	}, func(err error) {
+		SendErrorNonBlocking(errChan, fmt.Errorf("panic in CloudWatch: %v", err), "CloudWatch")
+	})
+	return runErr
+}
 
+// runInternal contains the actual CloudWatch loop logic
+func (c *CloudWatch) runInternal(errChan chan error) error {
 	Logger.Info("CloudWatch: Starting CloudWatch Metrics Collection")
 
 	if err := c.initLogStream(); err != nil {
@@ -198,8 +208,9 @@ func (c *CloudWatch) Run(errChan chan error) error {
 			if len(metrics) > 0 {
 				if err := c.SendMetrics(metrics); err != nil {
 					Logger.Error("Error sending metrics", "error", err)
-					errChan <- fmt.Errorf("error sending metrics: %w", err)
-					return fmt.Errorf("error sending metrics: %w", err)
+					metricsErr := fmt.Errorf("error sending metrics: %w", err)
+					SendErrorNonBlocking(errChan, metricsErr, "CloudWatch")
+					return metricsErr
 				}
 			}
 		}

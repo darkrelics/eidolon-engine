@@ -121,7 +121,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 	p.server.game.characterBloomFilter.AddString(strings.ToLower(name))
 
-	// Create Character
+	// Create Character with default values from config
 	character := &Character{
 		game:             p.server.game,
 		id:               GenerateUUIDv7(),
@@ -129,8 +129,8 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		name:             name,
 		attributes:       make(map[string]float64),
 		abilities:        make(map[string]float64),
-		essence:          float64(p.server.game.startingEssence),
-		health:           float64(p.server.game.startingHealth),
+		essence:          float64(p.server.game.startingEssence), // Default from config
+		health:           float64(p.server.game.startingHealth),  // Default from config
 		inventory:        make(map[string]*Item),
 		mutex:            sync.RWMutex{},
 		advancing:        false,
@@ -157,6 +157,14 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 			for ability, value := range archetypeObj.Abilities {
 				character.abilities[ability] = value
+			}
+
+			// Use archetype's Health and Essence if specified, otherwise keep defaults
+			if archetypeObj.Health > 0 {
+				character.health = float64(archetypeObj.Health)
+			}
+			if archetypeObj.Essence > 0 {
+				character.essence = float64(archetypeObj.Essence)
 			}
 
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
@@ -300,9 +308,14 @@ func (c *Character) Stop() {
 	// Store a reference to the player before resetting
 	player := c.player
 
-	// Signal shutdown by closing the end channel
-	// This is safe because we check the stopped flag
-	close(c.end)
+	// Signal shutdown without closing the channel
+	select {
+	case c.end <- true:
+		// Successfully sent shutdown signal
+	default:
+		// Channel is full or no receiver, which is fine
+		// The stopped flag will prevent any issues
+	}
 
 	// If we have a valid player reference, inform them we're returning to console
 	if player != nil {
