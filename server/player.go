@@ -662,7 +662,7 @@ func (s *Server) RemovePlayer(playerID uint64) error {
 	s.mutex.RLock()
 	player, exists := s.players[playerID]
 	s.mutex.RUnlock()
-	
+
 	if !exists || player == nil {
 		Logger.Warn("Attempted to remove non-existent player", "playerID", playerID)
 		return nil
