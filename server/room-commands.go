@@ -283,7 +283,7 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 	itemToPut.mutex.RLock()
 	isWorn := itemToPut.isWorn
 	itemToPut.mutex.RUnlock()
-	
+
 	if isWorn {
 		character.mutex.Unlock()
 		return &CommandResponse{
@@ -901,7 +901,7 @@ func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	itemToRemove.mutex.RLock()
 	isWorn := itemToRemove.isWorn
 	itemToRemove.mutex.RUnlock()
-	
+
 	if isWorn {
 		character.mutex.Unlock()
 		return &CommandResponse{
@@ -985,7 +985,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	itemToWear.mutex.RLock()
 	isWorn := itemToWear.isWorn
 	itemToWear.mutex.RUnlock()
-	
+
 	if isWorn {
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -1024,13 +1024,13 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 		if item == nil {
 			continue
 		}
-		
+
 		item.mutex.RLock()
 		isWorn := item.isWorn
 		wornOn := make([]string, len(item.wornOn))
 		copy(wornOn, item.wornOn)
 		item.mutex.RUnlock()
-		
+
 		if isWorn {
 			for _, loc := range wornOn {
 				wornLocations[loc] = true
@@ -1141,13 +1141,13 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 			if item == nil {
 				continue
 			}
-			
+
 			// Safely check item state with mutex
 			item.mutex.RLock()
 			isWorn := item.isWorn
 			name := item.name
 			item.mutex.RUnlock()
-			
+
 			if isWorn && MatchesTarget(name, targetName) {
 				itemToRemove = item
 				break

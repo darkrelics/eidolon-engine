@@ -258,12 +258,12 @@ func executeEquipmentCommand(character *Character, tokens []string) error {
 		if item == nil {
 			continue
 		}
-		
+
 		// Safely check item state with mutex
 		item.mutex.RLock()
 		isWorn := item.isWorn
 		item.mutex.RUnlock()
-		
+
 		if isWorn {
 			wornItems = append(wornItems, item)
 		}

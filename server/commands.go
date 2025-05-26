@@ -104,14 +104,12 @@ func (g *Game) initCommands() {
 		usage:       "inventory",
 	}
 
-
 	g.commands["equipment"] = CommandInfo{
 		timed:       false,
 		handler:     executeEquipmentCommand,
 		description: "Show your equipped items",
 		usage:       "equipment",
 	}
-
 
 	// Communication commands (escalate to room tier)
 	g.commands["say"] = CommandInfo{
@@ -395,16 +393,16 @@ func buildOrdinalIndex() {
 // Assumes ordinalIndex has been built during game initialization
 func fuzzyMatchOrdinal(input string) (string, int, bool) {
 	input = strings.ToLower(strings.TrimSpace(input))
-	
+
 	// First check for exact match
 	if position, exists := ordinalWords[input]; exists {
 		return input, position, true
 	}
-	
+
 	// Try fuzzy matching using pre-built index
 	var bestMatch string
 	var bestScore int
-	
+
 	for _, ordinal := range ordinalIndex {
 		score := fuzzy.Ratio(input, ordinal)
 		if score > bestScore {
@@ -412,12 +410,12 @@ func fuzzyMatchOrdinal(input string) (string, int, bool) {
 			bestMatch = ordinal
 		}
 	}
-	
+
 	// Use standard 80% threshold
 	if bestScore >= 80 {
 		return bestMatch, ordinalWords[bestMatch], true
 	}
-	
+
 	return "", 0, false
 }
 
@@ -450,9 +448,10 @@ func ParseTargetWithOrdinal(target string) (int, string, bool) {
 // This helps match "red door", "blue door", "green door" all as "door"
 // Returns the last word as the base noun
 // Examples:
-//   "red door" -> "door"
-//   "silver sword" -> "sword"
-//   "door" -> "door"
+//
+//	"red door" -> "door"
+//	"silver sword" -> "sword"
+//	"door" -> "door"
 func ExtractBaseNoun(name string) string {
 	words := strings.Fields(strings.ToLower(name))
 	if len(words) == 0 {
@@ -464,22 +463,23 @@ func ExtractBaseNoun(name string) string {
 // MatchesTarget checks if an item/exit name matches the target string
 // Supports both full name matching and base noun matching
 // Examples:
-//   MatchesTarget("red door", "door") -> true
-//   MatchesTarget("red door", "red door") -> true
-//   MatchesTarget("red door", "blue door") -> false
+//
+//	MatchesTarget("red door", "door") -> true
+//	MatchesTarget("red door", "red door") -> true
+//	MatchesTarget("red door", "blue door") -> false
 func MatchesTarget(itemName, target string) bool {
 	itemNameLower := strings.ToLower(itemName)
 	targetLower := strings.ToLower(target)
-	
+
 	// First check if the full name contains the target
 	if strings.Contains(itemNameLower, targetLower) {
 		return true
 	}
-	
+
 	// Then check if the base noun matches
 	itemBaseNoun := ExtractBaseNoun(itemName)
 	targetBaseNoun := ExtractBaseNoun(target)
-	
+
 	return itemBaseNoun == targetBaseNoun
 }
 

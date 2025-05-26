@@ -234,7 +234,7 @@ func formatItemDescription(item *Item) string {
 func formatWornItem(item *Item) string {
 	item.mutex.RLock()
 	defer item.mutex.RUnlock()
-	
+
 	description := fmt.Sprintf("  %s", item.name)
 	if len(item.wornOn) > 0 {
 		description += fmt.Sprintf(" (worn on %s)", strings.Join(item.wornOn, ", "))
@@ -248,7 +248,7 @@ func formatWornItem(item *Item) string {
 func formatCarriedItem(item *Item) string {
 	item.mutex.RLock()
 	defer item.mutex.RUnlock()
-	
+
 	description := fmt.Sprintf("  %s", item.name)
 	if item.stackable && item.quantity > 1 {
 		description += fmt.Sprintf(" (x%d)", item.quantity)
@@ -652,7 +652,7 @@ func LoadItemWithContents(ctx context.Context, id string, k *KeyPair, loadedItem
 		// Load each contained item recursively
 		if len(itemData.Contents) > 0 {
 			item.contents = make([]*Item, 0, len(itemData.Contents))
-			
+
 			for _, contentIDStr := range itemData.Contents {
 				// Check context before loading each contained item
 				select {
