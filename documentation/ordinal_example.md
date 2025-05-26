@@ -5,6 +5,7 @@ The ordinal selection utility allows players to specify which item they want whe
 ## Usage Examples
 
 ### Picking up items:
+
 ```
 > look
 You see:
@@ -22,6 +23,7 @@ There aren't that many swords here.
 ```
 
 ### Dropping items:
+
 ```
 > inventory
 You are carrying:
@@ -36,6 +38,7 @@ You drop torch.
 ```
 
 ### Movement:
+
 ```
 > look
 Exits: north, north, east
@@ -48,6 +51,7 @@ You go north.
 ```
 
 ### Container operations:
+
 ```
 > inventory
 You are carrying:
@@ -68,9 +72,11 @@ The backpack contains:
 ```
 
 ## Ordinal Words Supported
+
 - first through twentieth
 
 ## Design Constraints
+
 - Maximum of 20 items with same name supported
 - If no ordinal specified, defaults to first item
 - Clear error messages guide players to use ordinals when needed
