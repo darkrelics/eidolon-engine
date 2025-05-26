@@ -149,6 +149,25 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		prompt:           "> ",
 	}
 
+	// Track if we need cleanup on error
+	var err error
+	needsCleanup := true
+
+	// Ensure cleanup of channels on error
+	defer func() {
+		if needsCleanup && err != nil {
+			// Close all channels to prevent leaks
+			close(character.roomCommandOut)
+			close(character.roomCommandIn)
+			close(character.gameCommandOut)
+			close(character.gameCommandIn)
+			close(character.playerCommandOut)
+			close(character.playerCommandIn)
+			close(character.end)
+			Logger.Debug("Cleaned up channels after character creation error", "characterName", name)
+		}
+	}()
+
 	if archetype != "" {
 		if archetypeObj, ok := p.server.game.archetypes[archetype]; ok {
 			for attr, value := range archetypeObj.Attributes {
@@ -235,12 +254,14 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		character.room = p.server.game.rooms[0]
 	}
 
-	err := character.Save()
+	err = character.Save()
 	if err != nil {
 		Logger.Error("Error saving character", "error", err)
 		return nil, fmt.Errorf("error saving character: %w", err)
 	}
 
+	// Mark that cleanup is not needed on successful creation
+	needsCleanup = false
 	return character, nil
 }
 
