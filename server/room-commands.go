@@ -279,8 +279,12 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 	itemToPut := targetMatch.item
 	itemSlot := targetMatch.slot
 
-	// Check if worn
-	if itemToPut.isWorn {
+	// Check if worn (with proper mutex protection)
+	itemToPut.mutex.RLock()
+	isWorn := itemToPut.isWorn
+	itemToPut.mutex.RUnlock()
+	
+	if isWorn {
 		character.mutex.Unlock()
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -893,8 +897,12 @@ func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	itemToRemove := targetMatch.item
 	slotToRemove := targetMatch.slot
 
-	// Check if worn
-	if itemToRemove.isWorn {
+	// Check if worn (with proper mutex protection)
+	itemToRemove.mutex.RLock()
+	isWorn := itemToRemove.isWorn
+	itemToRemove.mutex.RUnlock()
+	
+	if isWorn {
 		character.mutex.Unlock()
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -973,8 +981,12 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 		}
 	}
 
-	// Check if item is already worn
-	if itemToWear.isWorn {
+	// Check if item is already worn (with proper mutex protection)
+	itemToWear.mutex.RLock()
+	isWorn := itemToWear.isWorn
+	itemToWear.mutex.RUnlock()
+	
+	if isWorn {
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
@@ -1006,11 +1018,21 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	}
 
 	// Check if wear locations are already occupied
-	// Build a map of worn locations
+	// Build a map of worn locations (with proper mutex protection)
 	wornLocations := make(map[string]bool)
 	for _, item := range character.inventory {
-		if item != nil && item.isWorn {
-			for _, loc := range item.wornOn {
+		if item == nil {
+			continue
+		}
+		
+		item.mutex.RLock()
+		isWorn := item.isWorn
+		wornOn := make([]string, len(item.wornOn))
+		copy(wornOn, item.wornOn)
+		item.mutex.RUnlock()
+		
+		if isWorn {
+			for _, loc := range wornOn {
 				wornLocations[loc] = true
 			}
 		}
@@ -1061,11 +1083,11 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 		}
 	}
 
-	// Update the item's worn locations to the specific locations
+	// Update the item's state with proper mutex protection
+	itemToWear.mutex.Lock()
 	itemToWear.wornOn = finalWearLocations
-
-	// Mark item as worn
 	itemToWear.isWorn = true
+	itemToWear.mutex.Unlock()
 
 	// Apply trait modifications
 	if len(itemToWear.traitMods) > 0 {
@@ -1116,7 +1138,17 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 
 	if character.inventory != nil {
 		for _, item := range character.inventory {
-			if item != nil && item.isWorn && MatchesTarget(item.name, targetName) {
+			if item == nil {
+				continue
+			}
+			
+			// Safely check item state with mutex
+			item.mutex.RLock()
+			isWorn := item.isWorn
+			name := item.name
+			item.mutex.RUnlock()
+			
+			if isWorn && MatchesTarget(name, targetName) {
 				itemToRemove = item
 				break
 			}
@@ -1134,8 +1166,10 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 		}
 	}
 
-	// Mark item as not worn
+	// Mark item as not worn (with proper mutex protection)
+	itemToRemove.mutex.Lock()
 	itemToRemove.isWorn = false
+	itemToRemove.mutex.Unlock()
 
 	// Remove trait modifications
 	if len(itemToRemove.traitMods) > 0 {

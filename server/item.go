@@ -232,6 +232,9 @@ func formatItemDescription(item *Item) string {
 
 // formatWornItem formats a worn item for inventory display
 func formatWornItem(item *Item) string {
+	item.mutex.RLock()
+	defer item.mutex.RUnlock()
+	
 	description := fmt.Sprintf("  %s", item.name)
 	if len(item.wornOn) > 0 {
 		description += fmt.Sprintf(" (worn on %s)", strings.Join(item.wornOn, ", "))
@@ -243,6 +246,9 @@ func formatWornItem(item *Item) string {
 
 // formatCarriedItem formats a carried item for inventory display
 func formatCarriedItem(item *Item) string {
+	item.mutex.RLock()
+	defer item.mutex.RUnlock()
+	
 	description := fmt.Sprintf("  %s", item.name)
 	if item.stackable && item.quantity > 1 {
 		description += fmt.Sprintf(" (x%d)", item.quantity)
