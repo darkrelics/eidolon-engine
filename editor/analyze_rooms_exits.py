@@ -22,7 +22,7 @@ def load_json_file(filepath: str) -> dict:
     Returns:
         Parsed JSON data as a dictionary
     """
-    with open(filepath, "r") as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -49,7 +49,7 @@ def get_opposite_direction(direction: str) -> str:
         "in": "out",
         "out": "in",
     }
-    return opposites.get(direction, None)
+    return opposites.get(direction, "")
 
 
 def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:

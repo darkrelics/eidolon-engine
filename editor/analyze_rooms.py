@@ -8,10 +8,10 @@ from collections import defaultdict
 def analyze_room_exits():
     """Analyze the room and exit structure for consistency issues."""
     # Load data
-    with open("../data/test_rooms.json", "r") as f:
+    with open("../data/test_rooms.json", "r", encoding="utf-8") as f:
         rooms_data = json.load(f)
 
-    with open("../data/test_exits.json", "r") as f:
+    with open("../data/test_exits.json", "r", encoding="utf-8") as f:
         exits_data = json.load(f)
 
     # Create lookup structures
