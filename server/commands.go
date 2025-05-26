@@ -123,16 +123,24 @@ func (g *Game) initCommands() {
 
 }
 
-// findBestCommand uses fuzzy matching to find the best matching command
-func (g *Game) findBestCommand(input string) (string, int) {
-	g.mutex.RLock()
-	defer g.mutex.RUnlock()
+// commandIndex holds all command names for fuzzy matching
+var commandIndex []string
 
+// buildCommandIndex builds the command index for fuzzy matching
+// This should be called after all commands are registered
+func (g *Game) buildCommandIndex() {
+	commandIndex = g.getCommandList()
+	Logger.Info("Built command fuzzy index", "commands", len(commandIndex))
+}
+
+// findBestCommand uses fuzzy matching to find the best matching command
+// Assumes commandIndex has been built during game initialization
+func (g *Game) findBestCommand(input string) (string, int) {
 	var bestMatch string
 	var bestScore int
 
-	// Build list of available commands
-	for command := range g.commands {
+	// Use pre-built command index for efficiency
+	for _, command := range commandIndex {
 		score := fuzzy.Ratio(input, command)
 		if score > bestScore {
 			bestScore = score
@@ -269,6 +277,50 @@ var ordinalWords = map[string]int{
 	"twentieth":   20,
 }
 
+// ordinalIndex holds all ordinal words for fuzzy matching
+var ordinalIndex []string
+
+// buildOrdinalIndex builds the ordinal index for fuzzy matching
+// This should be called once during game initialization
+func buildOrdinalIndex() {
+	ordinalIndex = make([]string, 0, len(ordinalWords))
+	for ordinal := range ordinalWords {
+		ordinalIndex = append(ordinalIndex, ordinal)
+	}
+	Logger.Info("Built ordinal fuzzy index", "ordinals", len(ordinalIndex))
+}
+
+// fuzzyMatchOrdinal attempts to fuzzy match an input string to an ordinal word
+// Returns the matched ordinal, its position value, and whether a match was found
+// Assumes ordinalIndex has been built during game initialization
+func fuzzyMatchOrdinal(input string) (string, int, bool) {
+	input = strings.ToLower(strings.TrimSpace(input))
+	
+	// First check for exact match
+	if position, exists := ordinalWords[input]; exists {
+		return input, position, true
+	}
+	
+	// Try fuzzy matching using pre-built index
+	var bestMatch string
+	var bestScore int
+	
+	for _, ordinal := range ordinalIndex {
+		score := fuzzy.Ratio(input, ordinal)
+		if score > bestScore {
+			bestScore = score
+			bestMatch = ordinal
+		}
+	}
+	
+	// Use standard 80% threshold
+	if bestScore >= 80 {
+		return bestMatch, ordinalWords[bestMatch], true
+	}
+	
+	return "", 0, false
+}
+
 // ParseTargetWithOrdinal parses a target string and extracts ordinal position and item name
 // Returns: ordinal position (1-based), item name, and whether an ordinal was found
 // Examples:
@@ -285,8 +337,8 @@ func ParseTargetWithOrdinal(target string) (int, string, bool) {
 		return 1, target, false
 	}
 
-	// Check if first word is an ordinal
-	if position, isOrdinal := ordinalWords[parts[0]]; isOrdinal {
+	// Check if first word is an ordinal (with fuzzy matching)
+	if _, position, isOrdinal := fuzzyMatchOrdinal(parts[0]); isOrdinal {
 		return position, parts[1], true
 	}
 

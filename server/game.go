@@ -142,6 +142,10 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 	}
 
 	game.initCommands()
+	
+	// Build fuzzy matching indices
+	game.buildCommandIndex()  // Build command index for fuzzy matching
+	buildOrdinalIndex()       // Build ordinal index for fuzzy matching
 
 	return game, nil
 
