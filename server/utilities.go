@@ -19,6 +19,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"github.com/gofrs/uuid/v5"
 	"strings"
 )
@@ -44,5 +45,52 @@ func formatItemListWithOxfordComma(items []string) string {
 		return items[0] + " and " + items[1]
 	default:
 		return strings.Join(items[:len(items)-1], ", ") + ", and " + items[len(items)-1]
+	}
+}
+
+// RunWithPanicRecovery runs a function with panic recovery and logging
+func RunWithPanicRecovery(goroutineName string, fn func(), extraFields ...interface{}) {
+	defer func() {
+		if err := recover(); err != nil {
+			fields := []interface{}{
+				"goroutine", goroutineName,
+				"error", err,
+			}
+			fields = append(fields, extraFields...)
+			Logger.Error("Panic in goroutine", fields...)
+		}
+	}()
+	fn()
+}
+
+// RunWithPanicRecoveryCallback runs a function with panic recovery and calls a callback on panic
+func RunWithPanicRecoveryCallback(goroutineName string, fn func(), onPanic func(error), extraFields ...interface{}) {
+	defer func() {
+		if err := recover(); err != nil {
+			fields := []interface{}{
+				"goroutine", goroutineName,
+				"error", err,
+			}
+			fields = append(fields, extraFields...)
+			Logger.Error("Panic in goroutine", fields...)
+
+			if onPanic != nil {
+				onPanic(fmt.Errorf("%v", err))
+			}
+		}
+	}()
+	fn()
+}
+
+// SendErrorNonBlocking sends an error to a channel without blocking
+func SendErrorNonBlocking(errChan chan<- error, err error, componentName string) {
+	select {
+	case errChan <- err:
+		// Error sent successfully
+	default:
+		// Channel is full, log the error instead
+		Logger.Error("Error channel full, dropping error",
+			"component", componentName,
+			"error", err)
 	}
 }
