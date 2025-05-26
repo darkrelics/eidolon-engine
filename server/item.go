@@ -771,7 +771,7 @@ func (container *Item) GetContainerContents() string {
 
 	var contents strings.Builder
 	contents.WriteString(fmt.Sprintf("The %s contains:\n\r", container.name))
-	
+
 	for _, item := range container.contents {
 		if item != nil {
 			contents.WriteString(fmt.Sprintf("  %s", item.name))

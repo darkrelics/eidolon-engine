@@ -226,6 +226,55 @@ func tokenizeInput(input string) []string {
 	return tokens
 }
 
+// Ordinal words mapping for command parsing
+var ordinalWords = map[string]int{
+	"first":       1,
+	"second":      2,
+	"third":       3,
+	"fourth":      4,
+	"fifth":       5,
+	"sixth":       6,
+	"seventh":     7,
+	"eighth":      8,
+	"ninth":       9,
+	"tenth":       10,
+	"eleventh":    11,
+	"twelfth":     12,
+	"thirteenth":  13,
+	"fourteenth":  14,
+	"fifteenth":   15,
+	"sixteenth":   16,
+	"seventeenth": 17,
+	"eighteenth":  18,
+	"nineteenth":  19,
+	"twentieth":   20,
+}
+
+// ParseTargetWithOrdinal parses a target string and extracts ordinal position and item name
+// Returns: ordinal position (1-based), item name, and whether an ordinal was found
+// Examples:
+//
+//	"sword" -> 1, "sword", false (default to first)
+//	"second sword" -> 2, "sword", true
+//	"third goblin" -> 3, "goblin", true
+func ParseTargetWithOrdinal(target string) (int, string, bool) {
+	target = strings.ToLower(strings.TrimSpace(target))
+	parts := strings.SplitN(target, " ", 2)
+
+	// If only one word, return it as the item name with position 1
+	if len(parts) == 1 {
+		return 1, target, false
+	}
+
+	// Check if first word is an ordinal
+	if position, isOrdinal := ordinalWords[parts[0]]; isOrdinal {
+		return position, parts[1], true
+	}
+
+	// No ordinal found, return full target as item name
+	return 1, target, false
+}
+
 // ProcessCommand determines command tier and routes it appropriately
 func ProcessCommand(ctx context.Context, character *Character, input string) (bool, error) {
 	// Limit input to 240 characters

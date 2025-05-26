@@ -202,13 +202,17 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 	// Extract item and container names
 	itemName := strings.ToLower(strings.Join(cmd.Args[1:inIndex], " "))
 	containerName := strings.ToLower(strings.Join(cmd.Args[inIndex+1:], " "))
-	
+
 	// Check for "my" prefix on container
 	isMyContainer := false
 	if strings.HasPrefix(containerName, "my ") {
 		isMyContainer = true
 		containerName = strings.TrimPrefix(containerName, "my ")
 	}
+
+	// Parse ordinals for both item and container
+	itemPosition, itemBaseName, itemHasOrdinal := ParseTargetWithOrdinal(itemName)
+	containerPosition, containerBaseName, containerHasOrdinal := ParseTargetWithOrdinal(containerName)
 
 	character := cmd.Character
 	if character == nil {
@@ -220,29 +224,24 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 		}
 	}
 
-	// Find the item in character's inventory
+	// Find matching items in character's inventory
 	character.mutex.Lock()
-	var itemToPut *Item
-	var itemSlot string
-	
+	var matchingItems []struct {
+		item *Item
+		slot string
+	}
+
 	for slot, item := range character.inventory {
-		if item != nil && strings.Contains(strings.ToLower(item.name), itemName) {
-			if item.isWorn {
-				character.mutex.Unlock()
-				return &CommandResponse{
-					RequestID: cmd.ID,
-					Success:   false,
-					Error:     fmt.Errorf("you need to remove that first"),
-					Timestamp: time.Now(),
-				}
-			}
-			itemToPut = item
-			itemSlot = slot
-			break
+		if item != nil && strings.Contains(strings.ToLower(item.name), itemBaseName) {
+			matchingItems = append(matchingItems, struct {
+				item *Item
+				slot string
+			}{item, slot})
 		}
 	}
-	
-	if itemToPut == nil {
+
+	// Check if we found any matches
+	if len(matchingItems) == 0 {
 		character.mutex.Unlock()
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -251,31 +250,70 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 			Timestamp: time.Now(),
 		}
 	}
-	
+
+	// If multiple matches and no ordinal specified, inform the player
+	if len(matchingItems) > 1 && !itemHasOrdinal {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error: fmt.Errorf("which %s? You have %d. Try 'put first %s in %s'",
+				itemBaseName, len(matchingItems), itemBaseName, containerName),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if position is valid
+	if itemPosition > len(matchingItems) {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you don't have that many %ss", itemBaseName),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Get the specific item
+	targetMatch := matchingItems[itemPosition-1]
+	itemToPut := targetMatch.item
+	itemSlot := targetMatch.slot
+
+	// Check if worn
+	if itemToPut.isWorn {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you need to remove that first"),
+			Timestamp: time.Now(),
+		}
+	}
+
 	// Remove item from inventory before unlocking
 	delete(character.inventory, itemSlot)
 	character.mutex.Unlock()
 
 	// Find the container
 	var container *Item
-	
+	var matchingContainers []*Item
+
 	if isMyContainer {
 		// Look in character's inventory
 		character.mutex.RLock()
 		for _, item := range character.inventory {
-			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
-				container = item
-				break
+			if item != nil && strings.Contains(strings.ToLower(item.name), containerBaseName) {
+				matchingContainers = append(matchingContainers, item)
 			}
 		}
 		character.mutex.RUnlock()
-		
-		if container == nil {
+
+		if len(matchingContainers) == 0 {
 			// Put the item back in inventory
 			character.mutex.Lock()
 			character.inventory[itemSlot] = itemToPut
 			character.mutex.Unlock()
-			
+
 			return &CommandResponse{
 				RequestID: cmd.ID,
 				Success:   false,
@@ -283,6 +321,39 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 				Timestamp: time.Now(),
 			}
 		}
+
+		// If multiple matches and no ordinal specified, inform the player
+		if len(matchingContainers) > 1 && !containerHasOrdinal {
+			// Put the item back in inventory
+			character.mutex.Lock()
+			character.inventory[itemSlot] = itemToPut
+			character.mutex.Unlock()
+
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error: fmt.Errorf("which %s? You have %d. Try 'put %s in first %s'",
+					containerBaseName, len(matchingContainers), itemName, containerBaseName),
+				Timestamp: time.Now(),
+			}
+		}
+
+		// Check if position is valid
+		if containerPosition > len(matchingContainers) {
+			// Put the item back in inventory
+			character.mutex.Lock()
+			character.inventory[itemSlot] = itemToPut
+			character.mutex.Unlock()
+
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("you don't have that many %ss", containerBaseName),
+				Timestamp: time.Now(),
+			}
+		}
+
+		container = matchingContainers[containerPosition-1]
 	} else {
 		// Look in room
 		if character.room == nil {
@@ -290,7 +361,7 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 			character.mutex.Lock()
 			character.inventory[itemSlot] = itemToPut
 			character.mutex.Unlock()
-			
+
 			return &CommandResponse{
 				RequestID: cmd.ID,
 				Success:   false,
@@ -298,28 +369,75 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 				Timestamp: time.Now(),
 			}
 		}
-		
+
 		character.room.mutex.RLock()
 		for _, item := range character.room.items {
-			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
-				container = item
-				break
+			if item != nil && strings.Contains(strings.ToLower(item.name), containerBaseName) {
+				matchingContainers = append(matchingContainers, item)
 			}
 		}
 		character.room.mutex.RUnlock()
-		
-		if container == nil {
+
+		if len(matchingContainers) == 0 {
 			// Put the item back in inventory
 			character.mutex.Lock()
 			character.inventory[itemSlot] = itemToPut
 			character.mutex.Unlock()
-			
+
 			return &CommandResponse{
 				RequestID: cmd.ID,
 				Success:   false,
 				Error:     fmt.Errorf("you don't see a '%s' here", containerName),
 				Timestamp: time.Now(),
 			}
+		}
+
+		// If multiple matches and no ordinal specified, inform the player
+		if len(matchingContainers) > 1 && !containerHasOrdinal {
+			// Put the item back in inventory
+			character.mutex.Lock()
+			character.inventory[itemSlot] = itemToPut
+			character.mutex.Unlock()
+
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error: fmt.Errorf("which %s? There are %d here. Try 'put %s in first %s'",
+					containerBaseName, len(matchingContainers), itemName, containerBaseName),
+				Timestamp: time.Now(),
+			}
+		}
+
+		// Check if position is valid
+		if containerPosition > len(matchingContainers) {
+			// Put the item back in inventory
+			character.mutex.Lock()
+			character.inventory[itemSlot] = itemToPut
+			character.mutex.Unlock()
+
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("there aren't that many %ss here", containerBaseName),
+				Timestamp: time.Now(),
+			}
+		}
+
+		container = matchingContainers[containerPosition-1]
+	}
+
+	// Check if container is actually a container
+	if !container.container {
+		// Put the item back in inventory
+		character.mutex.Lock()
+		character.inventory[itemSlot] = itemToPut
+		character.mutex.Unlock()
+
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("the %s is not a container", container.name),
+			Timestamp: time.Now(),
 		}
 	}
 
@@ -330,7 +448,7 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 		character.mutex.Lock()
 		character.inventory[itemSlot] = itemToPut
 		character.mutex.Unlock()
-		
+
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
@@ -341,7 +459,7 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Success message
 	message := fmt.Sprintf("\n\rYou put %s in %s.\n\r", itemToPut.name, container.name)
-	
+
 	// Notify room
 	if character.room != nil {
 		SendRoomMessageExcept(character.room,
@@ -390,13 +508,17 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 	// Extract item and container names
 	itemName := strings.ToLower(strings.Join(cmd.Args[1:fromIndex], " "))
 	containerName := strings.ToLower(strings.Join(cmd.Args[fromIndex+1:], " "))
-	
+
 	// Check for "my" prefix on container
 	isMyContainer := false
 	if strings.HasPrefix(containerName, "my ") {
 		isMyContainer = true
 		containerName = strings.TrimPrefix(containerName, "my ")
 	}
+
+	// Parse ordinals for both item and container
+	itemPosition, itemBaseName, itemHasOrdinal := ParseTargetWithOrdinal(itemName)
+	containerPosition, containerBaseName, containerHasOrdinal := ParseTargetWithOrdinal(containerName)
 
 	character := cmd.Character
 	if character == nil {
@@ -410,19 +532,19 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Find the container
 	var container *Item
-	
+	var matchingContainers []*Item
+
 	if isMyContainer {
 		// Look in character's inventory
 		character.mutex.RLock()
 		for _, item := range character.inventory {
-			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
-				container = item
-				break
+			if item != nil && strings.Contains(strings.ToLower(item.name), containerBaseName) {
+				matchingContainers = append(matchingContainers, item)
 			}
 		}
 		character.mutex.RUnlock()
-		
-		if container == nil {
+
+		if len(matchingContainers) == 0 {
 			return &CommandResponse{
 				RequestID: cmd.ID,
 				Success:   false,
@@ -430,6 +552,29 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 				Timestamp: time.Now(),
 			}
 		}
+
+		// If multiple matches and no ordinal specified, inform the player
+		if len(matchingContainers) > 1 && !containerHasOrdinal {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error: fmt.Errorf("which %s? You have %d. Try 'take %s from first %s'",
+					containerBaseName, len(matchingContainers), itemName, containerBaseName),
+				Timestamp: time.Now(),
+			}
+		}
+
+		// Check if position is valid
+		if containerPosition > len(matchingContainers) {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("you don't have that many %ss", containerBaseName),
+				Timestamp: time.Now(),
+			}
+		}
+
+		container = matchingContainers[containerPosition-1]
 	} else {
 		// Look in room
 		if character.room == nil {
@@ -440,17 +585,16 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 				Timestamp: time.Now(),
 			}
 		}
-		
+
 		character.room.mutex.RLock()
 		for _, item := range character.room.items {
-			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
-				container = item
-				break
+			if item != nil && strings.Contains(strings.ToLower(item.name), containerBaseName) {
+				matchingContainers = append(matchingContainers, item)
 			}
 		}
 		character.room.mutex.RUnlock()
-		
-		if container == nil {
+
+		if len(matchingContainers) == 0 {
 			return &CommandResponse{
 				RequestID: cmd.ID,
 				Success:   false,
@@ -458,18 +602,82 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 				Timestamp: time.Now(),
 			}
 		}
+
+		// If multiple matches and no ordinal specified, inform the player
+		if len(matchingContainers) > 1 && !containerHasOrdinal {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error: fmt.Errorf("which %s? There are %d here. Try 'take %s from first %s'",
+					containerBaseName, len(matchingContainers), itemName, containerBaseName),
+				Timestamp: time.Now(),
+			}
+		}
+
+		// Check if position is valid
+		if containerPosition > len(matchingContainers) {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("there aren't that many %ss here", containerBaseName),
+				Timestamp: time.Now(),
+			}
+		}
+
+		container = matchingContainers[containerPosition-1]
 	}
 
-	// Find item in container
-	itemToTake := container.FindItemInContainer(itemName)
-	if itemToTake == nil {
+	// Check if container is actually a container
+	if !container.container {
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
-			Error:     fmt.Errorf("there's no '%s' in the %s", itemName, container.name),
+			Error:     fmt.Errorf("the %s is not a container", container.name),
 			Timestamp: time.Now(),
 		}
 	}
+
+	// Find all matching items in container
+	var matchingItems []*Item
+	container.mutex.RLock()
+	for _, item := range container.contents {
+		if item != nil && strings.Contains(strings.ToLower(item.name), itemBaseName) {
+			matchingItems = append(matchingItems, item)
+		}
+	}
+	container.mutex.RUnlock()
+
+	if len(matchingItems) == 0 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("there's no '%s' in the %s", itemBaseName, container.name),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// If multiple matches and no ordinal specified, inform the player
+	if len(matchingItems) > 1 && !itemHasOrdinal {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error: fmt.Errorf("which %s? There are %d in the %s. Try 'take first %s from %s'",
+				itemBaseName, len(matchingItems), container.name, itemBaseName, container.name),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if position is valid
+	if itemPosition > len(matchingItems) {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("there aren't that many %ss in the %s", itemBaseName, container.name),
+			Timestamp: time.Now(),
+		}
+	}
+
+	itemToTake := matchingItems[itemPosition-1]
 
 	// Remove from container
 	removedItem, err := container.RemoveItemFromContainer(itemToTake.id)
@@ -490,7 +698,7 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Success message
 	message := fmt.Sprintf("\n\rYou take %s from %s.\n\r", removedItem.name, container.name)
-	
+
 	// Notify room
 	if character.room != nil {
 		SendRoomMessageExcept(character.room,
@@ -521,35 +729,70 @@ func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
 		}
 	}
 
+	// Parse ordinal from target
+	position, itemName, hasOrdinal := ParseTargetWithOrdinal(targetName)
+
 	// Acquire room lock to search for the item
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
 
-	// Find the item in the room
-	var targetItem *Item
-	var targetItemID uuid.UUID
+	// Find all matching items first
+	var matchingItems []struct {
+		item *Item
+		id   uuid.UUID
+	}
 
 	for id, item := range room.items {
-		if item != nil && strings.Contains(strings.ToLower(item.name), targetName) {
-			if !item.canPickUp {
-				return &CommandResponse{
-					RequestID: cmd.ID,
-					Success:   false,
-					Error:     fmt.Errorf("you cannot pick that up"),
-					Timestamp: time.Now(),
-				}
-			}
-			targetItem = item
-			targetItemID = id
-			break
+		if item != nil && strings.Contains(strings.ToLower(item.name), itemName) {
+			matchingItems = append(matchingItems, struct {
+				item *Item
+				id   uuid.UUID
+			}{item, id})
 		}
 	}
 
-	if targetItem == nil {
+	// Check if we found any matches
+	if len(matchingItems) == 0 {
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
 			Error:     fmt.Errorf("you don't see that here"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// If multiple matches and no ordinal specified, inform the player
+	if len(matchingItems) > 1 && !hasOrdinal {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error: fmt.Errorf("which %s? There are %d here. Try 'get first %s' or 'get second %s'",
+				itemName, len(matchingItems), itemName, itemName),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if position is valid
+	if position > len(matchingItems) {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("there aren't that many %ss here", itemName),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Get the specific item (position is 1-based)
+	targetMatch := matchingItems[position-1]
+	targetItem := targetMatch.item
+	targetItemID := targetMatch.id
+
+	// Check if item can be picked up
+	if !targetItem.canPickUp {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you cannot pick that up"),
 			Timestamp: time.Now(),
 		}
 	}
@@ -592,34 +835,71 @@ func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 		}
 	}
 
-	// Find the item in the character's inventory
+	// Parse ordinal from target
+	position, itemName, hasOrdinal := ParseTargetWithOrdinal(targetName)
+
+	// Find matching items in the character's inventory
 	character.mutex.Lock()
-	var itemToRemove *Item
-	var slotToRemove string
+	var matchingItems []struct {
+		item *Item
+		slot string
+	}
 
 	for slot, item := range character.inventory {
-		if item != nil && strings.Contains(strings.ToLower(item.name), targetName) {
-			if item.isWorn {
-				character.mutex.Unlock()
-				return &CommandResponse{
-					RequestID: cmd.ID,
-					Success:   false,
-					Error:     fmt.Errorf("you need to remove that first"),
-					Timestamp: time.Now(),
-				}
-			}
-			itemToRemove = item
-			slotToRemove = slot
-			break
+		if item != nil && strings.Contains(strings.ToLower(item.name), itemName) {
+			matchingItems = append(matchingItems, struct {
+				item *Item
+				slot string
+			}{item, slot})
 		}
 	}
 
-	if itemToRemove == nil {
+	// Check if we found any matches
+	if len(matchingItems) == 0 {
 		character.mutex.Unlock()
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
 			Error:     fmt.Errorf("you don't have that"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// If multiple matches and no ordinal specified, inform the player
+	if len(matchingItems) > 1 && !hasOrdinal {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error: fmt.Errorf("which %s? You have %d. Try 'drop first %s' or 'drop second %s'",
+				itemName, len(matchingItems), itemName, itemName),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if position is valid
+	if position > len(matchingItems) {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you don't have that many %ss", itemName),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Get the specific item (position is 1-based)
+	targetMatch := matchingItems[position-1]
+	itemToRemove := targetMatch.item
+	slotToRemove := targetMatch.slot
+
+	// Check if worn
+	if itemToRemove.isWorn {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you need to remove that first"),
 			Timestamp: time.Now(),
 		}
 	}
@@ -925,23 +1205,25 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	}
 
 	// Get the direction from the command
-	direction := strings.ToLower(cmd.Args[1])
+	direction := strings.ToLower(strings.Join(cmd.Args[1:], " "))
 	Logger.Debug("Player attempting to move", "characterName", character.name, "direction", direction)
 
-	// Look for matching exit
+	// Parse ordinal from direction
+	position, exitName, hasOrdinal := ParseTargetWithOrdinal(direction)
+
+	// Look for matching exits
 	room.mutex.RLock()
-	var targetExit *Exit
+	var matchingExits []*Exit
 
 	for _, exit := range room.exits {
-		if exit != nil && strings.ToLower(exit.direction) == direction {
-			targetExit = exit
-			break
+		if exit != nil && strings.Contains(strings.ToLower(exit.direction), exitName) {
+			matchingExits = append(matchingExits, exit)
 		}
 	}
 	room.mutex.RUnlock()
 
-	// Check if exit exists
-	if targetExit == nil {
+	// Check if we found any matches
+	if len(matchingExits) == 0 {
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
@@ -949,6 +1231,30 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 			Timestamp: time.Now(),
 		}
 	}
+
+	// If multiple matches and no ordinal specified, inform the player
+	if len(matchingExits) > 1 && !hasOrdinal {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error: fmt.Errorf("which way? There are %d exits %s. Try 'go first %s' or 'go second %s'",
+				len(matchingExits), exitName, exitName, exitName),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if position is valid
+	if position > len(matchingExits) {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("there aren't that many exits %s", exitName),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Get the specific exit (position is 1-based)
+	targetExit := matchingExits[position-1]
 
 	// Check if target room exists and load it if necessary
 	targetRoom := targetExit.targetRoom

@@ -493,12 +493,12 @@ func (c *Character) LookAtTarget(target string) error {
 		// Extract container name and check for "my" prefix
 		containerPart := strings.TrimPrefix(target, "in ")
 		isMyContainer := false
-		
+
 		if strings.HasPrefix(containerPart, "my ") {
 			isMyContainer = true
 			containerPart = strings.TrimPrefix(containerPart, "my ")
 		}
-		
+
 		desc := c.LookInContainer(containerPart, isMyContainer)
 		c.player.commandOut <- desc
 		return nil
