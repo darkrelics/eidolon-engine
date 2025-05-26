@@ -537,7 +537,7 @@ func (c *Character) LookAtRoomTarget(target string) string {
 
 		// Check if looking at an item in the room
 		for _, item := range c.room.items {
-			if item != nil && strings.Contains(strings.ToLower(item.name), target) {
+			if item != nil && MatchesTarget(item.name, target) {
 				c.room.mutex.RUnlock()
 				return formatItemDescription(item)
 			}
@@ -565,7 +565,7 @@ func (c *Character) LookAtInventoryItem(target string) string {
 	defer c.mutex.RUnlock()
 
 	for _, item := range c.inventory {
-		if item != nil && strings.Contains(strings.ToLower(item.name), target) {
+		if item != nil && MatchesTarget(item.name, target) {
 			return formatItemDescription(item)
 		}
 	}
@@ -580,7 +580,7 @@ func (c *Character) LookInContainer(containerName string, isMyContainer bool) st
 		c.mutex.RLock()
 		var container *Item
 		for _, item := range c.inventory {
-			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
+			if item != nil && MatchesTarget(item.name, containerName) {
 				container = item
 				break
 			}
@@ -605,7 +605,7 @@ func (c *Character) LookInContainer(containerName string, isMyContainer bool) st
 		c.room.mutex.RLock()
 		var container *Item
 		for _, item := range c.room.items {
-			if item != nil && strings.Contains(strings.ToLower(item.name), containerName) {
+			if item != nil && MatchesTarget(item.name, containerName) {
 				container = item
 				break
 			}

@@ -232,7 +232,7 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 	}
 
 	for slot, item := range character.inventory {
-		if item != nil && strings.Contains(strings.ToLower(item.name), itemBaseName) {
+		if item != nil && MatchesTarget(item.name, itemBaseName) {
 			matchingItems = append(matchingItems, struct {
 				item *Item
 				slot string
@@ -302,7 +302,7 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 		// Look in character's inventory
 		character.mutex.RLock()
 		for _, item := range character.inventory {
-			if item != nil && strings.Contains(strings.ToLower(item.name), containerBaseName) {
+			if item != nil && MatchesTarget(item.name, containerBaseName) {
 				matchingContainers = append(matchingContainers, item)
 			}
 		}
@@ -372,7 +372,7 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 
 		character.room.mutex.RLock()
 		for _, item := range character.room.items {
-			if item != nil && strings.Contains(strings.ToLower(item.name), containerBaseName) {
+			if item != nil && MatchesTarget(item.name, containerBaseName) {
 				matchingContainers = append(matchingContainers, item)
 			}
 		}
@@ -538,7 +538,7 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 		// Look in character's inventory
 		character.mutex.RLock()
 		for _, item := range character.inventory {
-			if item != nil && strings.Contains(strings.ToLower(item.name), containerBaseName) {
+			if item != nil && MatchesTarget(item.name, containerBaseName) {
 				matchingContainers = append(matchingContainers, item)
 			}
 		}
@@ -588,7 +588,7 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 
 		character.room.mutex.RLock()
 		for _, item := range character.room.items {
-			if item != nil && strings.Contains(strings.ToLower(item.name), containerBaseName) {
+			if item != nil && MatchesTarget(item.name, containerBaseName) {
 				matchingContainers = append(matchingContainers, item)
 			}
 		}
@@ -641,7 +641,7 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 	var matchingItems []*Item
 	container.mutex.RLock()
 	for _, item := range container.contents {
-		if item != nil && strings.Contains(strings.ToLower(item.name), itemBaseName) {
+		if item != nil && MatchesTarget(item.name, itemBaseName) {
 			matchingItems = append(matchingItems, item)
 		}
 	}
@@ -743,7 +743,7 @@ func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
 	}
 
 	for id, item := range room.items {
-		if item != nil && strings.Contains(strings.ToLower(item.name), itemName) {
+		if item != nil && MatchesTarget(item.name, itemName) {
 			matchingItems = append(matchingItems, struct {
 				item *Item
 				id   uuid.UUID
@@ -846,7 +846,7 @@ func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	}
 
 	for slot, item := range character.inventory {
-		if item != nil && strings.Contains(strings.ToLower(item.name), itemName) {
+		if item != nil && MatchesTarget(item.name, itemName) {
 			matchingItems = append(matchingItems, struct {
 				item *Item
 				slot string
@@ -957,7 +957,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	var itemToWear *Item
 
 	for _, item := range character.inventory {
-		if item != nil && strings.Contains(strings.ToLower(item.name), targetName) {
+		if item != nil && MatchesTarget(item.name, targetName) {
 			itemToWear = item
 			break
 		}
@@ -1116,7 +1116,7 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 
 	if character.inventory != nil {
 		for _, item := range character.inventory {
-			if item != nil && item.isWorn && strings.Contains(strings.ToLower(item.name), targetName) {
+			if item != nil && item.isWorn && MatchesTarget(item.name, targetName) {
 				itemToRemove = item
 				break
 			}
@@ -1216,7 +1216,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	var matchingExits []*Exit
 
 	for _, exit := range room.exits {
-		if exit != nil && strings.Contains(strings.ToLower(exit.direction), exitName) {
+		if exit != nil && MatchesTarget(exit.direction, exitName) {
 			matchingExits = append(matchingExits, exit)
 		}
 	}

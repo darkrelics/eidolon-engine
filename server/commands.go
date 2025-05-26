@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	fuzzy "github.com/paul-mannino/go-fuzzywuzzy"
 )
 
 // CommandInfo stores metadata about each command
@@ -102,19 +104,6 @@ func (g *Game) initCommands() {
 		usage:       "inventory",
 	}
 
-	g.commands["inv"] = CommandInfo{
-		timed:       false,
-		handler:     executeInventoryCommand, // Alias for inventory
-		description: "Show your inventory",
-		usage:       "inv",
-	}
-
-	g.commands["i"] = CommandInfo{
-		timed:       false,
-		handler:     executeInventoryCommand, // Alias for inventory
-		description: "Show your inventory",
-		usage:       "i",
-	}
 
 	g.commands["equipment"] = CommandInfo{
 		timed:       false,
@@ -123,12 +112,6 @@ func (g *Game) initCommands() {
 		usage:       "equipment",
 	}
 
-	g.commands["eq"] = CommandInfo{
-		timed:       false,
-		handler:     executeEquipmentCommand, // Alias for equipment
-		description: "Show your equipped items",
-		usage:       "eq",
-	}
 
 	// Communication commands (escalate to room tier)
 	g.commands["say"] = CommandInfo{
@@ -138,19 +121,38 @@ func (g *Game) initCommands() {
 		usage:       "say <message>",
 	}
 
-	g.commands["'"] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to room goroutine, alias for say
-		description: "Say something to everyone in the room",
-		usage:       "' <message>",
+}
+
+// findBestCommand uses fuzzy matching to find the best matching command
+func (g *Game) findBestCommand(input string) (string, int) {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+
+	var bestMatch string
+	var bestScore int
+
+	// Build list of available commands
+	for command := range g.commands {
+		score := fuzzy.Ratio(input, command)
+		if score > bestScore {
+			bestScore = score
+			bestMatch = command
+		}
 	}
 
-	g.commands["\""] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to room goroutine, alias for say
-		description: "Say something to everyone in the room",
-		usage:       "\" <message>",
+	return bestMatch, bestScore
+}
+
+// getCommandList returns a slice of all available command names
+func (g *Game) getCommandList() []string {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+
+	commands := make([]string, 0, len(g.commands))
+	for command := range g.commands {
+		commands = append(commands, command)
 	}
+	return commands
 }
 
 // ValidateCommand checks if a command is valid and returns its verb and tokens
@@ -175,15 +177,32 @@ func ValidateCommand(character *Character, input string) (string, []string, erro
 		return "", nil, errors.New("\n\rInvalid character state.\n\r")
 	}
 
+	// First check for exact match
 	character.game.mutex.RLock()
-	_, exists := character.game.commands[verb]
+	_, exactMatch := character.game.commands[verb]
 	character.game.mutex.RUnlock()
 
-	if !exists {
-		return "", nil, fmt.Errorf("\n\rCommand '%s' not understood.\n\r", verb)
+	if exactMatch {
+		return verb, tokens, nil
 	}
 
-	return verb, tokens, nil
+	// No exact match, try fuzzy matching
+	bestMatch, score := character.game.findBestCommand(verb)
+
+	// If confidence is 80% or higher, automatically execute the command
+	if score >= 80 {
+		Logger.Debug("Fuzzy match found", "input", verb, "match", bestMatch, "score", score)
+		tokens[0] = bestMatch // Replace the verb with the matched command
+		return bestMatch, tokens, nil
+	}
+
+	// If confidence is between 50% and 80%, ask if they meant the command
+	if score >= 50 {
+		return "", nil, fmt.Errorf("\n\rCommand '%s' not understood. Did you mean '%s'?\n\r", verb, bestMatch)
+	}
+
+	// No good match found
+	return "", nil, fmt.Errorf("\n\rCommand '%s' not understood.\n\r", verb)
 }
 
 // tokenizeInput breaks the input into individual tokens
@@ -273,6 +292,43 @@ func ParseTargetWithOrdinal(target string) (int, string, bool) {
 
 	// No ordinal found, return full target as item name
 	return 1, target, false
+}
+
+// ExtractBaseNoun extracts the base noun from an item or exit name
+// This helps match "red door", "blue door", "green door" all as "door"
+// Returns the last word as the base noun
+// Examples:
+//   "red door" -> "door"
+//   "silver sword" -> "sword"
+//   "door" -> "door"
+func ExtractBaseNoun(name string) string {
+	words := strings.Fields(strings.ToLower(name))
+	if len(words) == 0 {
+		return ""
+	}
+	return words[len(words)-1]
+}
+
+// MatchesTarget checks if an item/exit name matches the target string
+// Supports both full name matching and base noun matching
+// Examples:
+//   MatchesTarget("red door", "door") -> true
+//   MatchesTarget("red door", "red door") -> true
+//   MatchesTarget("red door", "blue door") -> false
+func MatchesTarget(itemName, target string) bool {
+	itemNameLower := strings.ToLower(itemName)
+	targetLower := strings.ToLower(target)
+	
+	// First check if the full name contains the target
+	if strings.Contains(itemNameLower, targetLower) {
+		return true
+	}
+	
+	// Then check if the base noun matches
+	itemBaseNoun := ExtractBaseNoun(itemName)
+	targetBaseNoun := ExtractBaseNoun(target)
+	
+	return itemBaseNoun == targetBaseNoun
 }
 
 // ProcessCommand determines command tier and routes it appropriately
