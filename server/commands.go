@@ -121,6 +121,106 @@ func (g *Game) initCommands() {
 		usage:       "say <message>",
 	}
 
+	// Item commands (escalate to room tier)
+	g.commands["get"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine
+		description: "Pick up an item from the room",
+		usage:       "get <item>",
+	}
+
+	g.commands["take"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine
+		description: "Pick up an item from the room or container",
+		usage:       "take <item> [from <container>]",
+	}
+
+	g.commands["drop"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine
+		description: "Drop an item from your inventory",
+		usage:       "drop <item>",
+	}
+
+	g.commands["put"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine
+		description: "Put an item in a container",
+		usage:       "put <item> in <container>",
+	}
+
+	g.commands["wear"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine
+		description: "Wear an item",
+		usage:       "wear <item>",
+	}
+
+	g.commands["wield"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine
+		description: "Wield a weapon",
+		usage:       "wield <weapon>",
+	}
+
+	g.commands["equip"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine
+		description: "Equip an item",
+		usage:       "equip <item>",
+	}
+
+	g.commands["remove"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine
+		description: "Remove a worn item",
+		usage:       "remove <item>",
+	}
+
+	g.commands["unwear"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine
+		description: "Remove a worn item",
+		usage:       "unwear <item>",
+	}
+
+	g.commands["unequip"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine
+		description: "Remove an equipped item",
+		usage:       "unequip <item>",
+	}
+
+	// Game-level environmental commands
+	g.commands["weather"] = CommandInfo{
+		timed:       false,
+		handler:     nil, // Escalates to game tier
+		description: "Check the current weather",
+		usage:       "weather",
+	}
+
+	g.commands["time"] = CommandInfo{
+		timed:       false,
+		handler:     nil, // Escalates to game tier
+		description: "Check the current game time",
+		usage:       "time",
+	}
+
+	g.commands["shout"] = CommandInfo{
+		timed:       false,
+		handler:     nil, // Escalates to game tier
+		description: "Shout a message to all players",
+		usage:       "shout <message>",
+	}
+
+	g.commands["announce"] = CommandInfo{
+		timed:       false,
+		handler:     nil, // Escalates to game tier
+		description: "Make a global announcement",
+		usage:       "announce <message>",
+	}
+
 }
 
 // commandIndex holds all command names for fuzzy matching
