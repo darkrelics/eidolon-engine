@@ -80,7 +80,7 @@ func TestIsSlotCompatible(t *testing.T) {
 		{"Direct match weapon", "weapon", "weapon", true},
 		{"Direct match armor", "armor", "armor", true},
 		{"Direct match back", "back", "back", true},
-		
+
 		// Semantic equivalents
 		{"Weapon slot with waist location", "weapon", "waist", true},
 		{"Weapon slot with hands location", "weapon", "hands", true},
@@ -91,11 +91,11 @@ func TestIsSlotCompatible(t *testing.T) {
 		{"Finger slot with right_finger location", "finger", "right_finger", true},
 		{"Wrist slot with left_wrist location", "wrist", "left_wrist", true},
 		{"Wrist slot with right_wrist location", "wrist", "right_wrist", true},
-		
+
 		// Substring matching
 		{"Substring match finger in ring_finger", "finger", "ring_finger", true},
 		{"Substring match ring in rings", "ring", "rings", true},
-		
+
 		// Non-matches
 		{"Weapon slot with head location", "weapon", "head", false},
 		{"Armor slot with feet location", "armor", "feet", false},
@@ -106,7 +106,7 @@ func TestIsSlotCompatible(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := isSlotCompatible(tt.slot, tt.wearableLocation)
 			if result != tt.expected {
-				t.Errorf("isSlotCompatible(%s, %s) = %v, want %v", 
+				t.Errorf("isSlotCompatible(%s, %s) = %v, want %v",
 					tt.slot, tt.wearableLocation, result, tt.expected)
 			}
 		})
@@ -115,13 +115,13 @@ func TestIsSlotCompatible(t *testing.T) {
 
 func TestValidateArchetype(t *testing.T) {
 	game := createTestGame()
-	
+
 	// Add a prototype for testing
 	prototypeID := uuid.Must(uuid.NewV4())
 	game.prototypes[prototypeID] = &Prototype{
-		name:        "Test Sword",
-		wearable:    true,
-		wornOn:      []string{"weapon", "waist"},
+		name:     "Test Sword",
+		wearable: true,
+		wornOn:   []string{"weapon", "waist"},
 	}
 
 	tests := []struct {
@@ -260,7 +260,7 @@ func TestValidateArchetype(t *testing.T) {
 			}
 
 			err := game.ValidateArchetype(tt.archetype)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error containing '%s', but got nil", tt.errorMsg)
@@ -279,10 +279,8 @@ func TestValidateArchetype(t *testing.T) {
 // TestAttributeNormalization tests the case normalization logic
 func TestAttributeNormalization(t *testing.T) {
 	archetype := &Archetype{
-		ArchetypeName: "Warrior",
-		Description:   "Test",
-		Attributes:    map[string]float64{"STRENGTH": 10, "Intelligence": 15, "agility": 12},
-		Abilities:     map[string]float64{"SWORDSMANSHIP": 5, "Magic": 10, "stealth": 3},
+		Attributes: map[string]float64{"STRENGTH": 10, "Intelligence": 15, "agility": 12},
+		Abilities:  map[string]float64{"SWORDSMANSHIP": 5, "Magic": 10, "stealth": 3},
 	}
 
 	// Normalize attributes
@@ -330,7 +328,7 @@ func TestAttributeNormalization(t *testing.T) {
 
 func TestBuildArchetypeOptions(t *testing.T) {
 	game := createTestGame()
-	
+
 	// Add test archetypes
 	game.archetypes["Warrior"] = &Archetype{
 		ArchetypeName: "Warrior",
@@ -375,7 +373,7 @@ func TestBuildArchetypeOptions(t *testing.T) {
 
 func TestDisplayArchetypes(t *testing.T) {
 	game := createTestGame()
-	
+
 	// Add test archetypes
 	game.archetypes["Warrior"] = createValidArchetype("Warrior")
 	game.archetypes["Mage"] = createValidArchetype("Mage")
@@ -390,7 +388,7 @@ func TestDisplayArchetypes(t *testing.T) {
 // TestConcurrentAccess tests for race conditions
 func TestConcurrentAccess(t *testing.T) {
 	game := createTestGame()
-	
+
 	// Add a prototype
 	prototypeID := uuid.Must(uuid.NewV4())
 	game.prototypes[prototypeID] = &Prototype{
@@ -434,6 +432,6 @@ func TestConcurrentAccess(t *testing.T) {
 
 // Helper function
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(substr)] == substr || 
-		   len(s) > len(substr) && contains(s[1:], substr)
+	return len(s) >= len(substr) && s[:len(substr)] == substr ||
+		len(s) > len(substr) && contains(s[1:], substr)
 }

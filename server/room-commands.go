@@ -67,7 +67,7 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 	}
 
 	// Item commands
-	if verb == "get" || verb == "take" || verb == "drop" || verb == "put" || verb == "wear" || verb == "wield" || verb == "equip" || verb == "remove" || verb == "unwear" || verb == "unequip" {
+	if verb == "get" || verb == "take" || verb == "drop" || verb == "put" || verb == "wear" || verb == "equip" || verb == "remove" {
 		return handleItemCommand(cmd)
 	}
 
@@ -156,9 +156,9 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 		return handleDropCommand(cmd, targetName)
 	case "put":
 		return handlePutCommand(cmd)
-	case "wear", "wield", "equip":
+	case "wear", "equip":
 		return handleWearCommand(cmd, targetName)
-	case "remove", "unwear", "unequip":
+	case "remove":
 		return handleRemoveCommand(cmd, targetName)
 	default:
 		return &CommandResponse{
