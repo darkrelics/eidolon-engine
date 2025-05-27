@@ -560,12 +560,25 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 		character.room.Start(character.game)
 	}
 
-	// Send command to the room
+	// Try to send command to the room with a brief retry
+	retryTimer := time.NewTimer(50 * time.Millisecond)
+	defer retryTimer.Stop()
+	
 	select {
 	case character.room.commandIn <- cmdReq:
 		// Command sent successfully to room
-	default:
-		return false, fmt.Errorf("\n\rroom command buffer is full, try again later\n\r")
+	case <-retryTimer.C:
+		// Brief retry after 50ms
+		select {
+		case character.room.commandIn <- cmdReq:
+			// Command sent successfully on retry
+		default:
+			Logger.Warn("Room command buffer full after retry", 
+				"roomID", character.room.roomID,
+				"characterName", character.name,
+				"verb", verb)
+			return false, fmt.Errorf("\n\rThe room is processing too many commands. Please wait a moment and try again.\n\r")
+		}
 	}
 
 	// Wait for response or timeout
@@ -609,7 +622,10 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 	case character.gameCommandOut <- cmdReq:
 		// Command sent successfully to game
 	default:
-		return false, fmt.Errorf("\n\rgame command buffer is full, try again later\n\r")
+		Logger.Warn("Game command buffer full",
+			"characterName", character.name,
+			"verb", verb)
+		return false, fmt.Errorf("\n\rThe game is processing too many commands. Please wait a moment and try again.\n\r")
 	}
 
 	// Wait for response or timeout

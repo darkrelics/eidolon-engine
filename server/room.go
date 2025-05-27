@@ -145,7 +145,7 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		ctx:            roomCtx,
 		cancel:         cancel,
 		running:        false,
-		commandIn:      make(chan *CommandRequest, 50),  // Buffer for incoming commands
+		commandIn:      make(chan *CommandRequest, 50),  // Buffer for incoming commands - sized for burst handling
 		commandOut:     make(chan *CommandResponse, 50), // Buffer for outgoing responses
 		gameCommandOut: make(chan *CommandRequest, 10),  // Buffer for commands to game
 		gameCommandIn:  make(chan *CommandResponse, 10), // Buffer for responses from game
@@ -192,7 +192,11 @@ func (g *Game) LoadRooms() error {
 				Logger.Warn("Error parsing exit ID", "error", err)
 				continue
 			}
-			g.rooms[roomData.RoomID].exits[exitUUID] = g.exits[exitUUID]
+			if exit, ok := g.exits[exitUUID]; ok {
+				g.rooms[roomData.RoomID].exits[exitUUID] = exit
+			} else {
+				Logger.Warn("Exit not found in game exits", "exitID", exitID, "roomID", roomData.RoomID)
+			}
 		}
 	}
 
@@ -337,13 +341,16 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 
 			// Clean up ALL items in the room from game.items map
 			itemsToDelete := make([]string, 0)
+			itemIDsToDelete := make([]uuid.UUID, 0, len(r.items))
 			for itemID, item := range r.items {
-				delete(game.items, itemID)
+				itemIDsToDelete = append(itemIDsToDelete, itemID)
 				// Track items that might need database cleanup
 				if item != nil && item.lastSaved.After(item.lastEdited) {
 					itemsToDelete = append(itemsToDelete, itemID.String())
 				}
 			}
+			// Use thread-safe method to delete items
+			game.DeleteItems(itemIDsToDelete)
 			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", len(r.items))
 
 			// Must unlock before Stop to avoid deadlock
@@ -388,7 +395,7 @@ func (r *Room) cleanupItems(game *Game) {
 	for _, id := range itemsToRemove {
 		delete(r.items, id)
 		// Also remove from game's items map
-		delete(game.items, id)
+		game.DeleteItem(id)
 	}
 
 	// Delete items from database if needed (batch operation to minimize DB access)

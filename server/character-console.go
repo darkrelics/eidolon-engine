@@ -43,7 +43,13 @@ func (c *Character) RunConsole(done chan bool) {
 	// If the room is nil, move the character to room 0
 	if c.room == nil {
 		Logger.Warn("Character room is nil, defaulting to room ID 0", "characterName", c.name)
-		c.room = c.game.rooms[0]
+		if defaultRoom, ok := c.game.rooms[0]; ok {
+			c.room = defaultRoom
+		} else {
+			Logger.Error("No default room available", "characterName", c.name)
+			done <- true
+			return
+		}
 	}
 
 	// Add character to game's active characters

@@ -468,6 +468,22 @@ func (g *Game) handleGlobalCommunicationCommand(cmd *CommandRequest) *CommandRes
 	}
 }
 
+// DeleteItem safely removes an item from the game's items map
+func (g *Game) DeleteItem(itemID uuid.UUID) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+	delete(g.items, itemID)
+}
+
+// DeleteItems safely removes multiple items from the game's items map
+func (g *Game) DeleteItems(itemIDs []uuid.UUID) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+	for _, itemID := range itemIDs {
+		delete(g.items, itemID)
+	}
+}
+
 // sendCommandResponse sends a response to a command request
 func (g *Game) sendCommandResponse(cmd *CommandRequest, response *CommandResponse) {
 	if cmd == nil || response == nil {

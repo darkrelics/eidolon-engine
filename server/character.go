@@ -148,7 +148,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		waitUntil:        time.Now(), // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
-		gameCommandOut:   make(chan *CommandRequest, 10),
+		gameCommandOut:   make(chan *CommandRequest, 10), // Smaller buffer as game commands are less frequent
 		gameCommandIn:    make(chan *CommandResponse, 10),
 		playerCommandOut: make(chan string, 20),
 		playerCommandIn:  make(chan string, 20),
@@ -195,8 +195,11 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
 				character.room = startRoom
+			} else if defaultRoom, ok := p.server.game.rooms[0]; ok {
+				character.room = defaultRoom
 			} else {
-				character.room = p.server.game.rooms[0]
+				Logger.Error("No valid starting room available", "archetype", archetype)
+				return nil, fmt.Errorf("no valid starting room available")
 			}
 
 			// Create starting items from prototypes
@@ -253,12 +256,20 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 			}
 		} else {
 			Logger.Warn("Invalid archetype", "archetype", archetype)
-			character.room = p.server.game.rooms[0]
+			if defaultRoom, ok := p.server.game.rooms[0]; ok {
+				character.room = defaultRoom
+			} else {
+				return nil, fmt.Errorf("no default room available")
+			}
 		}
 
 	} else {
 		Logger.Info("No archetype selected")
-		character.room = p.server.game.rooms[0]
+		if defaultRoom, ok := p.server.game.rooms[0]; ok {
+			character.room = defaultRoom
+		} else {
+			return nil, fmt.Errorf("no default room available")
+		}
 	}
 
 	err = character.Save()
@@ -319,18 +330,17 @@ func (c *Character) Stop() {
 
 	// Clean up character inventory items from game.items map
 	c.mutex.Lock()
-	itemCount := 0
+	itemIDsToDelete := make([]uuid.UUID, 0, len(c.inventory))
 	for _, item := range c.inventory {
 		if item != nil {
-			c.game.mutex.Lock()
-			delete(c.game.items, item.id)
-			c.game.mutex.Unlock()
-			itemCount++
+			itemIDsToDelete = append(itemIDsToDelete, item.id)
 		}
 	}
 	c.mutex.Unlock()
-	if itemCount > 0 {
-		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", itemCount)
+	
+	if len(itemIDsToDelete) > 0 {
+		c.game.DeleteItems(itemIDsToDelete)
+		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", len(itemIDsToDelete))
 	}
 
 	// Store a reference to the player before resetting
