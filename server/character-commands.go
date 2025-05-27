@@ -195,110 +195,43 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 	if len(character.inventory) == 0 {
 		invDisplay.WriteString("You are not carrying anything.\n\r")
 	} else {
-		// Separate worn and carried items
-		var wornItemNames, carriedItemNames []string
+		// Display items using detailed formatting with proper mutex protection
+		var wornItems, carriedItems []*Item
 
 		for _, item := range character.inventory {
 			if item == nil {
 				continue
 			}
 
-			if item.isWorn {
-				wornItemNames = append(wornItemNames, item.name)
+			// Safely check item state with mutex
+			item.mutex.RLock()
+			isWorn := item.isWorn
+			item.mutex.RUnlock()
+
+			if isWorn {
+				wornItems = append(wornItems, item)
 			} else {
-				carriedItemNames = append(carriedItemNames, item.name)
+				carriedItems = append(carriedItems, item)
 			}
 		}
 
-		// Display worn items
-		if len(wornItemNames) > 0 {
-			invDisplay.WriteString("\n\rYou are wearing ")
-			invDisplay.WriteString(formatItemListWithOxfordComma(wornItemNames))
-			invDisplay.WriteString(".\n\r")
+		// Display worn items with detailed formatting
+		if len(wornItems) > 0 {
+			invDisplay.WriteString("\n\rYou are wearing:\n\r")
+			for _, item := range wornItems {
+				invDisplay.WriteString(formatWornItem(item))
+			}
 		}
 
-		// Display carried items
-		if len(carriedItemNames) > 0 {
-			invDisplay.WriteString("\n\rYou are carrying ")
-			invDisplay.WriteString(formatItemListWithOxfordComma(carriedItemNames))
-			invDisplay.WriteString(".\n\r")
+		// Display carried items with detailed formatting
+		if len(carriedItems) > 0 {
+			invDisplay.WriteString("\n\rYou are carrying:\n\r")
+			for _, item := range carriedItems {
+				invDisplay.WriteString(formatCarriedItem(item))
+			}
 		}
 	}
 
 	character.player.commandOut <- invDisplay.String()
-	return nil
-}
-
-// executeEquipmentCommand displays only the character's equipped items
-func executeEquipmentCommand(character *Character, tokens []string) error {
-	if character == nil || character.player == nil {
-		return errors.New("invalid character state")
-	}
-
-	Logger.Debug("Player checking equipment", "characterName", character.name)
-
-	// Lock the character's inventory while we read it
-	character.mutex.RLock()
-	defer character.mutex.RUnlock()
-
-	var eqDisplay strings.Builder
-	eqDisplay.WriteString("\n\rEquipment:\n\r")
-	eqDisplay.WriteString("----------------\n\r")
-
-	// Check if character has any equipment
-	var wornItems []*Item
-	for _, item := range character.inventory {
-		if item != nil && item.isWorn {
-			wornItems = append(wornItems, item)
-		}
-	}
-
-	if len(wornItems) == 0 {
-		eqDisplay.WriteString("You are not wearing anything.\n\r")
-	} else {
-		// Organize items by wear location
-		wearSlots := make(map[string][]*Item)
-		for _, item := range wornItems {
-			for _, location := range item.wornOn {
-				wearSlots[location] = append(wearSlots[location], item)
-			}
-		}
-
-		// Display items by location
-		var locations []string
-		for location := range wearSlots {
-			locations = append(locations, location)
-		}
-		sort.Strings(locations)
-
-		for _, location := range locations {
-			items := wearSlots[location]
-			eqDisplay.WriteString(fmt.Sprintf("\n\r%s:\n\r", location))
-			for _, item := range items {
-				eqDisplay.WriteString(fmt.Sprintf("  %s\n\r", item.name))
-			}
-		}
-
-		// Display trait modifications if any
-		var totalMods = make(map[string]int8)
-		for _, item := range wornItems {
-			for trait, mod := range item.traitMods {
-				totalMods[trait] += mod
-			}
-		}
-
-		if len(totalMods) > 0 {
-			eqDisplay.WriteString("\n\rAttribute Modifiers:\n\r")
-			for trait, mod := range totalMods {
-				sign := "+"
-				if mod < 0 {
-					sign = ""
-				}
-				eqDisplay.WriteString(fmt.Sprintf("  %s: %s%d\n\r", trait, sign, mod))
-			}
-		}
-	}
-
-	character.player.commandOut <- eqDisplay.String()
 	return nil
 }

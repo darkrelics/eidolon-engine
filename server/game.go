@@ -143,6 +143,10 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	game.initCommands()
 
+	// Build fuzzy matching indices
+	game.buildCommandIndex() // Build command index for fuzzy matching
+	buildOrdinalIndex()      // Build ordinal index for fuzzy matching
+
 	return game, nil
 
 }
@@ -153,69 +157,15 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 
 	Logger.Info("Loading character names from database...")
 
-	var names []string
-
-	// Load all characters and players in one operation
-	characters, players, err := g.database.LoadCharactersAndPlayers(g.ctx)
+	// Load only character names for bloom filter
+	names, err := g.database.LoadCharacterNames(g.ctx)
 	if err != nil {
-		Logger.Error("Error loading characters and players", "error", err)
+		Logger.Error("Error loading character names", "error", err)
 		return nil, err
 	}
 
-	// Build a map of character IDs to their owning players
-	characterToPlayers := make(map[string][]string)
-	for _, player := range players {
-		for _, charID := range player.CharacterList {
-			characterToPlayers[charID] = append(characterToPlayers[charID], player.PlayerID)
-		}
-	}
-
-	// Process characters
-	for _, character := range characters {
-		// Check if character has a player association
-		associatedPlayers, hasAssociation := characterToPlayers[character.CharacterID]
-
-		if !hasAssociation || len(associatedPlayers) == 0 {
-			// Character has no player association - delete it
-			Logger.Warn("Deleting orphaned character",
-				"characterID", character.CharacterID,
-				"characterName", character.CharacterName)
-
-			err := g.database.DeleteCharacter(g.ctx, character.CharacterID)
-			if err != nil {
-				Logger.Error("Failed to delete orphaned character",
-					"characterID", character.CharacterID,
-					"error", err)
-			}
-			continue
-		}
-
-		// Check for duplicate associations
-		if len(associatedPlayers) > 1 {
-			Logger.Warn("Character has multiple player associations",
-				"characterID", character.CharacterID,
-				"characterName", character.CharacterName,
-				"players", associatedPlayers)
-
-			// Keep only the first association
-			for i := 1; i < len(associatedPlayers); i++ {
-				err := g.database.RemoveCharacterFromPlayer(g.ctx, associatedPlayers[i], character.CharacterName)
-				if err != nil {
-					Logger.Error("Failed to remove duplicate character association",
-						"playerID", associatedPlayers[i],
-						"characterID", character.CharacterID,
-						"error", err)
-				}
-			}
-		}
-
-		// Add valid character name to bloom filter
-		names = append(names, strings.ToLower(character.CharacterName))
-	}
-
 	Logger.Info("Character name loading complete",
-		"totalNames", len(names),
-		"totalCharacters", len(characters))
+		"totalNames", len(names))
 
 	return names, nil
 }
@@ -291,13 +241,17 @@ func (g *Game) Stop() error {
 
 	Logger.Info("Stopping game engine...")
 
-	g.cancel()
-
-	// Save all active characters
+	// CRITICAL: Save all character data BEFORE cancelling context
+	// This ensures all database operations complete successfully during shutdown
+	// Customer data persistence is our highest priority
 	g.saveAllCharacters()
 
-	// Logout all characters
+	// Logout all characters after saving
 	g.logoutAllCharacters()
+
+	// Only cancel context after all critical data is persisted
+	// This prevents database operations from failing due to cancelled context
+	g.cancel()
 
 	return nil
 
@@ -432,85 +386,19 @@ func (g *Game) handleGameCommand(cmd *CommandRequest) {
 	g.sendCommandResponse(cmd, response)
 }
 
-// handleEnvironmentCommand processes environment-related commands
-func (g *Game) handleEnvironmentCommand(cmd *CommandRequest) *CommandResponse {
-	var msg string
-
-	switch cmd.Verb {
-	case "time":
-		// Report game time
-		gameTime := time.Now() // Placeholder for actual game time
-		msg = fmt.Sprintf("\n\rCurrent game time: %s\n\r", gameTime.Format("15:04:05"))
-	case "weather":
-		// Report game weather
-		msg = "\n\rThe weather is clear and pleasant.\n\r" // Placeholder for actual weather system
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   msg,
-		Timestamp: time.Now(),
-	}
+// DeleteItem safely removes an item from the game's items map
+func (g *Game) DeleteItem(itemID uuid.UUID) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+	delete(g.items, itemID)
 }
 
-// handleGlobalCommunicationCommand processes global communication commands
-func (g *Game) handleGlobalCommunicationCommand(cmd *CommandRequest) *CommandResponse {
-	if len(cmd.Args) < 2 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("what do you want to %s?", cmd.Verb),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Extract the message
-	message := strings.Join(cmd.Args[1:], " ")
-
-	// Format based on command type
-	var broadcastMsg string
-	switch cmd.Verb {
-	case "shout":
-		broadcastMsg = fmt.Sprintf("\n\r%s shouts: %s\n\r", cmd.Character.name, message)
-	case "announce":
-		broadcastMsg = fmt.Sprintf("\n\r[Announcement] %s: %s\n\r", cmd.Character.name, message)
-	}
-
-	// Collect recipients while holding the lock
-	g.mutex.RLock()
-	recipients := make([]*Character, 0, len(g.characters))
-	for _, c := range g.characters {
-		if c != nil && c != cmd.Character && c.player != nil {
-			recipients = append(recipients, c)
-		}
-	}
-	g.mutex.RUnlock()
-
-	// Broadcast to all recipients without holding the lock
-	for _, c := range recipients {
-		select {
-		case c.player.commandOut <- broadcastMsg:
-			// Message sent successfully
-			select {
-			case c.player.commandOut <- c.prompt:
-				// Prompt sent successfully
-			default:
-				// Could not send prompt, but that's ok
-			}
-		default:
-			// Could not send message, character's buffer might be full
-			Logger.Warn("Failed to send global message to player",
-				"recipient", c.name,
-				"sender", cmd.Character.name)
-		}
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   broadcastMsg, // Also send to the originating character
-		Timestamp: time.Now(),
+// DeleteItems safely removes multiple items from the game's items map
+func (g *Game) DeleteItems(itemIDs []uuid.UUID) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+	for _, itemID := range itemIDs {
+		delete(g.items, itemID)
 	}
 }
 
@@ -576,12 +464,24 @@ func (g *Game) saveAllCharacters() {
 	}
 	g.mutex.RUnlock()
 
+	Logger.Info("Saving all characters during shutdown", "characterCount", len(characters))
+
 	// Save characters without holding the lock
+	// Use a separate context with timeout to ensure saves don't hang indefinitely
+	saveCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	savedCount := 0
 	for _, character := range characters {
-		if err := character.Save(); err != nil {
+		// Override character's game context with our save context to ensure DB operations succeed
+		if err := character.SaveWithContext(saveCtx); err != nil {
 			Logger.Error("Error saving character during shutdown", "characterName", character.name, "error", err)
+		} else {
+			savedCount++
 		}
 	}
+
+	Logger.Info("Completed saving characters during shutdown", "savedCount", savedCount, "totalCount", len(characters))
 }
 
 // logoutAllCharacters logs out all active characters

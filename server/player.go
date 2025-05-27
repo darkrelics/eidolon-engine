@@ -670,8 +670,8 @@ func (s *Server) RemovePlayer(playerID uint64) error {
 
 	Logger.Info("Removing inactive player", "playerID", player.id.String(), "playerIndex", playerID)
 
-	// Cancel the player's context - this will trigger shutdown of all goroutines
-	player.cancel()
+	// Stop the player properly - this handles all cleanup
+	player.Stop()
 
 	return nil
 }

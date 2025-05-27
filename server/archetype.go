@@ -69,7 +69,8 @@ func (g *Game) LoadArchetypes() error {
 
 	g.archetypes = make(map[string]*Archetype)
 
-	for _, archetype := range archetypes {
+	for i := range archetypes {
+		archetype := &archetypes[i]
 
 		for k, v := range archetype.Attributes {
 			lowerKey := strings.ToLower(k)
@@ -88,12 +89,12 @@ func (g *Game) LoadArchetypes() error {
 		}
 
 		// Validate archetype data consistency
-		if err := g.ValidateArchetype(&archetype); err != nil {
+		if err := g.ValidateArchetype(archetype); err != nil {
 			Logger.Warn("Skipping invalid archetype", "name", archetype.ArchetypeName, "error", err)
 			continue
 		}
 
-		g.archetypes[archetype.ArchetypeName] = &archetype
+		g.archetypes[archetype.ArchetypeName] = archetype
 		Logger.Info("Loaded archetype", "name", archetype.ArchetypeName)
 	}
 
@@ -121,6 +122,10 @@ func (g *Game) BuildArchetypeOptions() error {
 
 // ValidateArchetype checks archetype data for consistency and completeness
 func (g *Game) ValidateArchetype(archetype *Archetype) error {
+	if archetype == nil {
+		return fmt.Errorf("archetype cannot be nil")
+	}
+
 	if archetype.ArchetypeName == "" {
 		return fmt.Errorf("archetype name cannot be empty")
 	}
@@ -147,22 +152,21 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 			return fmt.Errorf("archetype '%s' starting item %d has empty slot", archetype.ArchetypeName, i)
 		}
 
-		// Validate prototype ID format
-		_, err := uuid.FromString(startingItem.PrototypeID)
+		// Validate prototype ID format and parse UUID
+		prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
 		if err != nil {
 			return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID: %w", archetype.ArchetypeName, i, err)
 		}
 
-		// Skip prototype existence check during initial load - will be validated later
-
-		// Validate prototype ID format
-		prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
-		if err != nil {
-			return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID format: %v", archetype.ArchetypeName, i, err)
-		}
-
 		// Validate prototype exists
-		prototype, exists := g.prototypes[prototypeIDUUID]
+		g.mutex.RLock()
+		var prototype *Prototype
+		var exists bool
+		if g.prototypes != nil {
+			prototype, exists = g.prototypes[prototypeIDUUID]
+		}
+		g.mutex.RUnlock()
+
 		if !exists {
 			return fmt.Errorf("archetype '%s' starting item %d references non-existent prototype '%s'", archetype.ArchetypeName, i, startingItem.PrototypeID)
 		}

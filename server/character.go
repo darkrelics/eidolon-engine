@@ -19,6 +19,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -59,6 +60,12 @@ func (c *Character) SetCommandWaitTime(duration time.Duration) {
 
 // Save saves the character to the database
 func (c *Character) Save() error {
+	return c.SaveWithContext(c.game.ctx)
+}
+
+// SaveWithContext saves the character to the database with a specific context
+// This is used during shutdown to ensure saves complete even after game context is cancelled
+func (c *Character) SaveWithContext(ctx context.Context) error {
 
 	Logger.Debug("Saving character", "characterName", c.name)
 
@@ -92,7 +99,7 @@ func (c *Character) Save() error {
 	}
 
 	// Save character and inventory transactionally
-	err := kp.SaveCharacterWithInventory(c.game.ctx, characterData, inventoryCopy)
+	err := kp.SaveCharacterWithInventory(ctx, characterData, inventoryCopy)
 	if err != nil {
 		Logger.Error("Error saving character and inventory", "characterName", c.name, "error", err)
 		return fmt.Errorf("error saving character and inventory: %w", err)
@@ -141,13 +148,32 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		waitUntil:        time.Now(), // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
-		gameCommandOut:   make(chan *CommandRequest, 10),
+		gameCommandOut:   make(chan *CommandRequest, 10), // Smaller buffer as game commands are less frequent
 		gameCommandIn:    make(chan *CommandResponse, 10),
 		playerCommandOut: make(chan string, 20),
 		playerCommandIn:  make(chan string, 20),
 		end:              make(chan bool, 1),
 		prompt:           "> ",
 	}
+
+	// Track if we need cleanup on error
+	var err error
+	needsCleanup := true
+
+	// Ensure cleanup of channels on error
+	defer func() {
+		if needsCleanup && err != nil {
+			// Close all channels to prevent leaks
+			close(character.roomCommandOut)
+			close(character.roomCommandIn)
+			close(character.gameCommandOut)
+			close(character.gameCommandIn)
+			close(character.playerCommandOut)
+			close(character.playerCommandIn)
+			close(character.end)
+			Logger.Debug("Cleaned up channels after character creation error", "characterName", name)
+		}
+	}()
 
 	if archetype != "" {
 		if archetypeObj, ok := p.server.game.archetypes[archetype]; ok {
@@ -169,8 +195,11 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
 				character.room = startRoom
+			} else if defaultRoom, ok := p.server.game.rooms[0]; ok {
+				character.room = defaultRoom
 			} else {
-				character.room = p.server.game.rooms[0]
+				Logger.Error("No valid starting room available", "archetype", archetype)
+				return nil, fmt.Errorf("no valid starting room available")
 			}
 
 			// Create starting items from prototypes
@@ -227,20 +256,30 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 			}
 		} else {
 			Logger.Warn("Invalid archetype", "archetype", archetype)
-			character.room = p.server.game.rooms[0]
+			if defaultRoom, ok := p.server.game.rooms[0]; ok {
+				character.room = defaultRoom
+			} else {
+				return nil, fmt.Errorf("no default room available")
+			}
 		}
 
 	} else {
 		Logger.Info("No archetype selected")
-		character.room = p.server.game.rooms[0]
+		if defaultRoom, ok := p.server.game.rooms[0]; ok {
+			character.room = defaultRoom
+		} else {
+			return nil, fmt.Errorf("no default room available")
+		}
 	}
 
-	err := character.Save()
+	err = character.Save()
 	if err != nil {
 		Logger.Error("Error saving character", "error", err)
 		return nil, fmt.Errorf("error saving character: %w", err)
 	}
 
+	// Mark that cleanup is not needed on successful creation
+	needsCleanup = false
 	return character, nil
 }
 
@@ -291,18 +330,17 @@ func (c *Character) Stop() {
 
 	// Clean up character inventory items from game.items map
 	c.mutex.Lock()
-	itemCount := 0
+	itemIDsToDelete := make([]uuid.UUID, 0, len(c.inventory))
 	for _, item := range c.inventory {
 		if item != nil {
-			c.game.mutex.Lock()
-			delete(c.game.items, item.id)
-			c.game.mutex.Unlock()
-			itemCount++
+			itemIDsToDelete = append(itemIDsToDelete, item.id)
 		}
 	}
 	c.mutex.Unlock()
-	if itemCount > 0 {
-		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", itemCount)
+
+	if len(itemIDsToDelete) > 0 {
+		c.game.DeleteItems(itemIDsToDelete)
+		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", len(itemIDsToDelete))
 	}
 
 	// Store a reference to the player before resetting
@@ -460,6 +498,22 @@ func (c *Character) GetSkillInfo() string {
 
 // LookAtTarget handles examining specific targets
 func (c *Character) LookAtTarget(target string) error {
+	// Check if this is a "look in" command
+	if strings.HasPrefix(target, "in ") {
+		// Extract container name and check for "my" prefix
+		containerPart := strings.TrimPrefix(target, "in ")
+		isMyContainer := false
+
+		if strings.HasPrefix(containerPart, "my ") {
+			isMyContainer = true
+			containerPart = strings.TrimPrefix(containerPart, "my ")
+		}
+
+		desc := c.LookInContainer(containerPart, isMyContainer)
+		c.player.commandOut <- desc
+		return nil
+	}
+
 	// First check if target is in the room
 	desc := c.LookAtRoomTarget(target)
 	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
@@ -493,7 +547,7 @@ func (c *Character) LookAtRoomTarget(target string) string {
 
 		// Check if looking at an item in the room
 		for _, item := range c.room.items {
-			if item != nil && strings.Contains(strings.ToLower(item.name), target) {
+			if item != nil && MatchesTarget(item.name, target) {
 				c.room.mutex.RUnlock()
 				return formatItemDescription(item)
 			}
@@ -521,12 +575,63 @@ func (c *Character) LookAtInventoryItem(target string) string {
 	defer c.mutex.RUnlock()
 
 	for _, item := range c.inventory {
-		if item != nil && strings.Contains(strings.ToLower(item.name), target) {
+		if item != nil && MatchesTarget(item.name, target) {
 			return formatItemDescription(item)
 		}
 	}
 
 	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+}
+
+// LookInContainer handles looking inside a container
+func (c *Character) LookInContainer(containerName string, isMyContainer bool) string {
+	if isMyContainer {
+		// Look in character's inventory for the container
+		c.mutex.RLock()
+		var container *Item
+		for _, item := range c.inventory {
+			if item != nil && MatchesTarget(item.name, containerName) {
+				container = item
+				break
+			}
+		}
+		c.mutex.RUnlock()
+
+		if container == nil {
+			return fmt.Sprintf("\n\rYou don't have a '%s'.\n\r", containerName)
+		}
+
+		if !container.container {
+			return fmt.Sprintf("\n\rThe %s is not a container.\n\r", container.name)
+		}
+
+		return "\n\r" + container.GetContainerContents()
+	} else {
+		// Look in room for the container
+		if c.room == nil {
+			return "\n\rYou're not in a valid room.\n\r"
+		}
+
+		c.room.mutex.RLock()
+		var container *Item
+		for _, item := range c.room.items {
+			if item != nil && MatchesTarget(item.name, containerName) {
+				container = item
+				break
+			}
+		}
+		c.room.mutex.RUnlock()
+
+		if container == nil {
+			return fmt.Sprintf("\n\rYou don't see a '%s' here.\n\r", containerName)
+		}
+
+		if !container.container {
+			return fmt.Sprintf("\n\rThe %s is not a container.\n\r", container.name)
+		}
+
+		return "\n\r" + container.GetContainerContents()
+	}
 }
 
 // FormatCharacterDescription creates a description of a character for look command

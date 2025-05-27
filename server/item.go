@@ -232,6 +232,9 @@ func formatItemDescription(item *Item) string {
 
 // formatWornItem formats a worn item for inventory display
 func formatWornItem(item *Item) string {
+	item.mutex.RLock()
+	defer item.mutex.RUnlock()
+
 	description := fmt.Sprintf("  %s", item.name)
 	if len(item.wornOn) > 0 {
 		description += fmt.Sprintf(" (worn on %s)", strings.Join(item.wornOn, ", "))
@@ -243,6 +246,9 @@ func formatWornItem(item *Item) string {
 
 // formatCarriedItem formats a carried item for inventory display
 func formatCarriedItem(item *Item) string {
+	item.mutex.RLock()
+	defer item.mutex.RUnlock()
+
 	description := fmt.Sprintf("  %s", item.name)
 	if item.stackable && item.quantity > 1 {
 		description += fmt.Sprintf(" (x%d)", item.quantity)
@@ -250,6 +256,42 @@ func formatCarriedItem(item *Item) string {
 	description += "\n\r"
 
 	return description
+}
+
+// SaveItemTree saves an item and all its nested container contents recursively
+func (item *Item) SaveItemTree(ctx context.Context, k *KeyPair) error {
+	// Save this item first
+	err := item.Save(ctx, k)
+	if err != nil {
+		return err
+	}
+
+	// If this is a container, recursively save all contained items
+	if item.container && len(item.contents) > 0 {
+		item.mutex.RLock()
+		contents := make([]*Item, len(item.contents))
+		copy(contents, item.contents)
+		item.mutex.RUnlock()
+
+		for _, contentItem := range contents {
+			if contentItem != nil {
+				// Check context before saving each contained item
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
+
+				err := contentItem.SaveItemTree(ctx, k)
+				if err != nil {
+					Logger.Warn("Failed to save contained item", "containerID", item.id, "contentID", contentItem.id, "error", err)
+					// Continue saving other items rather than failing completely
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // SaveItem saves an item to the database
@@ -447,7 +489,11 @@ func LoadItemsForCharacter(ctx context.Context, itemMap map[string]string, k *Ke
 
 	inventory := make(map[string]*Item)
 
-	// Load each item by its ID
+	// Create a shared map to track loaded items across all inventory slots
+	// This prevents duplicate loading of the same item and handles circular references
+	loadedItems := make(map[string]*Item)
+
+	// Load each item by its ID with full container hierarchies
 	for slotName, itemIDStr := range itemMap {
 		// Check context before loading each item
 		select {
@@ -460,9 +506,10 @@ func LoadItemsForCharacter(ctx context.Context, itemMap map[string]string, k *Ke
 			continue
 		}
 
-		item, err := LoadItem(ctx, itemIDStr, k)
+		// Load the item with all its container contents
+		item, err := LoadItemWithContents(ctx, itemIDStr, k, loadedItems)
 		if err != nil {
-			Logger.Error("Error loading item for character", "itemID", itemIDStr, "error", err)
+			Logger.Error("Error loading item with contents for character", "itemID", itemIDStr, "error", err)
 			continue
 		}
 
@@ -565,17 +612,78 @@ func itemDataToItem(data *ItemData) (*Item, error) {
 		lastSaved:   time.Now(),
 	}
 
-	// If this is a container, we need to parse its contents
-	if data.Container && len(data.Contents) > 0 {
-		item.contents = make([]*Item, 0, len(data.Contents))
-		// We'll leave the contents as an empty slice for now
-		// The actual loading of contained items would need to be
-		// done separately to avoid circular references
-	} else {
-		item.contents = make([]*Item, 0)
+	// Initialize contents slice - actual loading will be done separately
+	item.contents = make([]*Item, 0)
+
+	return item, nil
+}
+
+// LoadItemWithContents loads an item and recursively loads all its container contents
+// Uses a map to track loaded items and prevent infinite loops
+func LoadItemWithContents(ctx context.Context, id string, k *KeyPair, loadedItems map[string]*Item) (*Item, error) {
+	// Check if item is already loaded (prevents circular references)
+	if existingItem, exists := loadedItems[id]; exists {
+		return existingItem, nil
+	}
+
+	// Load the base item first
+	item, err := LoadItem(ctx, id, k)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add to loaded items map immediately to prevent circular loading
+	loadedItems[id] = item
+
+	// If this is a container, load its contents recursively
+	if item.container {
+		// Get the raw item data again to access the Contents field
+		key := map[string]types.AttributeValue{
+			"ItemID": &types.AttributeValueMemberS{Value: id},
+		}
+
+		var itemData ItemData
+		err := k.Get(ctx, "items", key, &itemData)
+		if err != nil {
+			Logger.Warn("Failed to reload item data for container contents", "itemID", id, "error", err)
+			return item, nil // Return item without contents rather than failing completely
+		}
+
+		// Load each contained item recursively
+		if len(itemData.Contents) > 0 {
+			item.contents = make([]*Item, 0, len(itemData.Contents))
+
+			for _, contentIDStr := range itemData.Contents {
+				// Check context before loading each contained item
+				select {
+				case <-ctx.Done():
+					Logger.Warn("Context cancelled while loading container contents", "containerID", id)
+					return item, ctx.Err()
+				default:
+				}
+
+				contentItem, err := LoadItemWithContents(ctx, contentIDStr, k, loadedItems)
+				if err != nil {
+					Logger.Warn("Failed to load contained item", "containerID", id, "contentID", contentIDStr, "error", err)
+					// Continue loading other items rather than failing completely
+					continue
+				}
+
+				if contentItem != nil {
+					item.contents = append(item.contents, contentItem)
+				}
+			}
+		}
 	}
 
 	return item, nil
+}
+
+// LoadItemTree loads an item and all its nested container contents
+// This is the public interface for loading items with full container hierarchies
+func LoadItemTree(ctx context.Context, id string, k *KeyPair) (*Item, error) {
+	loadedItems := make(map[string]*Item)
+	return LoadItemWithContents(ctx, id, k, loadedItems)
 }
 
 // prototypeDataToPrototype converts PrototypeData from DynamoDB to an in-memory Prototype
@@ -696,4 +804,91 @@ func CreateItemFromPrototype(prototype *Prototype, game *Game) (*Item, error) {
 	}
 
 	return item, nil
+}
+
+// AddItemToContainer adds an item to a container's contents
+func (container *Item) AddItemToContainer(item *Item) error {
+	if container == nil || item == nil {
+		return fmt.Errorf("invalid container or item")
+	}
+
+	container.mutex.Lock()
+	defer container.mutex.Unlock()
+
+	if !container.container {
+		return fmt.Errorf("this is not a container")
+	}
+
+	// Add item to contents
+	container.contents = append(container.contents, item)
+	return nil
+}
+
+// RemoveItemFromContainer removes an item from a container's contents
+func (container *Item) RemoveItemFromContainer(itemID uuid.UUID) (*Item, error) {
+	container.mutex.Lock()
+	defer container.mutex.Unlock()
+
+	if !container.container {
+		return nil, fmt.Errorf("this is not a container")
+	}
+
+	// Find and remove the item
+	for i, item := range container.contents {
+		if item != nil && item.id == itemID {
+			// Remove from slice
+			container.contents = append(container.contents[:i], container.contents[i+1:]...)
+			return item, nil
+		}
+	}
+
+	return nil, fmt.Errorf("item not found in container")
+}
+
+// FindItemInContainer searches for an item by name in the container
+func (container *Item) FindItemInContainer(itemName string) *Item {
+	container.mutex.RLock()
+	defer container.mutex.RUnlock()
+
+	if !container.container {
+		return nil
+	}
+
+	itemNameLower := strings.ToLower(itemName)
+	for _, item := range container.contents {
+		if item != nil && strings.Contains(strings.ToLower(item.name), itemNameLower) {
+			return item
+		}
+	}
+
+	return nil
+}
+
+// GetContainerContents returns a formatted string of container contents
+func (container *Item) GetContainerContents() string {
+	container.mutex.RLock()
+	defer container.mutex.RUnlock()
+
+	if !container.container {
+		return "This is not a container.\n\r"
+	}
+
+	if len(container.contents) == 0 {
+		return fmt.Sprintf("The %s is empty.\n\r", container.name)
+	}
+
+	var contents strings.Builder
+	contents.WriteString(fmt.Sprintf("The %s contains:\n\r", container.name))
+
+	for _, item := range container.contents {
+		if item != nil {
+			contents.WriteString(fmt.Sprintf("  %s", item.name))
+			if item.stackable && item.quantity > 1 {
+				contents.WriteString(fmt.Sprintf(" (x%d)", item.quantity))
+			}
+			contents.WriteString("\n\r")
+		}
+	}
+
+	return contents.String()
 }

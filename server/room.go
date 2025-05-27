@@ -145,7 +145,7 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		ctx:            roomCtx,
 		cancel:         cancel,
 		running:        false,
-		commandIn:      make(chan *CommandRequest, 50),  // Buffer for incoming commands
+		commandIn:      make(chan *CommandRequest, 50),  // Buffer for incoming commands - sized for burst handling
 		commandOut:     make(chan *CommandResponse, 50), // Buffer for outgoing responses
 		gameCommandOut: make(chan *CommandRequest, 10),  // Buffer for commands to game
 		gameCommandIn:  make(chan *CommandResponse, 10), // Buffer for responses from game
@@ -192,7 +192,11 @@ func (g *Game) LoadRooms() error {
 				Logger.Warn("Error parsing exit ID", "error", err)
 				continue
 			}
-			g.rooms[roomData.RoomID].exits[exitUUID] = g.exits[exitUUID]
+			if exit, ok := g.exits[exitUUID]; ok {
+				g.rooms[roomData.RoomID].exits[exitUUID] = exit
+			} else {
+				Logger.Warn("Exit not found in game exits", "exitID", exitID, "roomID", roomData.RoomID)
+			}
 		}
 	}
 
@@ -300,12 +304,12 @@ func (r *Room) HandleCharacterEntry() {
 // IncrementIdleCounter increments the idle counter for an empty room and handles cleanup if threshold is reached
 func (r *Room) IncrementIdleCounter(game *Game) {
 	r.mutex.Lock()
-	defer r.mutex.Unlock()
 
 	// Only increment if room is empty
 	if len(r.characters) > 0 {
 		// Reset counter if characters are present
 		r.idleCounter = 0
+		r.mutex.Unlock()
 		return
 	}
 
@@ -330,22 +334,26 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			Logger.Info("Deactivating scripts for idle persistent room", "roomID", r.roomID)
 			// Reset idle counter for persistent rooms to prevent repeated deactivation logs
 			r.idleCounter = 0
+			r.mutex.Unlock()
 		} else {
 			// For non-persistent rooms, unload the room
 			Logger.Info("Unloading non-persistent idle room", "roomID", r.roomID)
 
 			// Clean up ALL items in the room from game.items map
 			itemsToDelete := make([]string, 0)
+			itemIDsToDelete := make([]uuid.UUID, 0, len(r.items))
 			for itemID, item := range r.items {
-				delete(game.items, itemID)
+				itemIDsToDelete = append(itemIDsToDelete, itemID)
 				// Track items that might need database cleanup
 				if item != nil && item.lastSaved.After(item.lastEdited) {
 					itemsToDelete = append(itemsToDelete, itemID.String())
 				}
 			}
+			// Use thread-safe method to delete items
+			game.DeleteItems(itemIDsToDelete)
 			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", len(r.items))
 
-			// We must unlock mutex before calling Stop to avoid deadlock
+			// Must unlock before Stop to avoid deadlock
 			r.mutex.Unlock()
 
 			// Delete items from database if needed (minimize DB access)
@@ -354,11 +362,14 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			}
 
 			r.Stop()
-			r.mutex.Lock() // Re-lock for the remainder of the function
 
 			// Remove room from game's room map
+			game.mutex.Lock()
 			delete(game.rooms, r.roomID)
+			game.mutex.Unlock()
 		}
+	} else {
+		r.mutex.Unlock()
 	}
 }
 
@@ -384,7 +395,7 @@ func (r *Room) cleanupItems(game *Game) {
 	for _, id := range itemsToRemove {
 		delete(r.items, id)
 		// Also remove from game's items map
-		delete(game.items, id)
+		game.DeleteItem(id)
 	}
 
 	// Delete items from database if needed (batch operation to minimize DB access)
@@ -584,15 +595,7 @@ func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 	response := r.ProcessRoomCommand(cmd, game)
 
 	// Send response back to character
-	select {
-	case cmd.Response <- response:
-		// Response sent successfully
-	default:
-		Logger.Error("Failed to send command response",
-			"verb", cmd.Verb,
-			"characterName", cmd.Character.name,
-			"roomID", r.roomID)
-	}
+	cmd.Response <- response
 }
 
 // GetDescription returns a formatted string description of the room
