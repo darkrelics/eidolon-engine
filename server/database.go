@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -439,6 +440,25 @@ func (k *KeyPair) LoadCharactersAndPlayers(ctx context.Context) ([]CharacterInfo
 		"playerCount", len(players))
 
 	return characters, players, nil
+}
+
+// LoadCharacterNames loads only character names for bloom filter initialization
+func (k *KeyPair) LoadCharacterNames(ctx context.Context) ([]string, error) {
+	Logger.Info("Loading character names for bloom filter")
+
+	// Only need to scan for character names
+	var characters []CharacterInfo
+	err := k.Scan(ctx, "characters", &characters)
+	if err != nil {
+		return nil, fmt.Errorf("error scanning characters: %w", err)
+	}
+
+	names := make([]string, 0, len(characters))
+	for _, character := range characters {
+		names = append(names, strings.ToLower(character.CharacterName))
+	}
+
+	return names, nil
 }
 
 // DeleteCharacter removes a character from the database

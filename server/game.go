@@ -157,69 +157,15 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 
 	Logger.Info("Loading character names from database...")
 
-	var names []string
-
-	// Load all characters and players in one operation
-	characters, players, err := g.database.LoadCharactersAndPlayers(g.ctx)
+	// Load only character names for bloom filter
+	names, err := g.database.LoadCharacterNames(g.ctx)
 	if err != nil {
-		Logger.Error("Error loading characters and players", "error", err)
+		Logger.Error("Error loading character names", "error", err)
 		return nil, err
 	}
 
-	// Build a map of character IDs to their owning players
-	characterToPlayers := make(map[string][]string)
-	for _, player := range players {
-		for _, charID := range player.CharacterList {
-			characterToPlayers[charID] = append(characterToPlayers[charID], player.PlayerID)
-		}
-	}
-
-	// Process characters
-	for _, character := range characters {
-		// Check if character has a player association
-		associatedPlayers, hasAssociation := characterToPlayers[character.CharacterID]
-
-		if !hasAssociation || len(associatedPlayers) == 0 {
-			// Character has no player association - delete it
-			Logger.Warn("Deleting orphaned character",
-				"characterID", character.CharacterID,
-				"characterName", character.CharacterName)
-
-			err := g.database.DeleteCharacter(g.ctx, character.CharacterID)
-			if err != nil {
-				Logger.Error("Failed to delete orphaned character",
-					"characterID", character.CharacterID,
-					"error", err)
-			}
-			continue
-		}
-
-		// Check for duplicate associations
-		if len(associatedPlayers) > 1 {
-			Logger.Warn("Character has multiple player associations",
-				"characterID", character.CharacterID,
-				"characterName", character.CharacterName,
-				"players", associatedPlayers)
-
-			// Keep only the first association
-			for i := 1; i < len(associatedPlayers); i++ {
-				err := g.database.RemoveCharacterFromPlayer(g.ctx, associatedPlayers[i], character.CharacterName)
-				if err != nil {
-					Logger.Error("Failed to remove duplicate character association",
-						"playerID", associatedPlayers[i],
-						"characterID", character.CharacterID,
-						"error", err)
-				}
-			}
-		}
-
-		// Add valid character name to bloom filter
-		names = append(names, strings.ToLower(character.CharacterName))
-	}
-
 	Logger.Info("Character name loading complete",
-		"totalNames", len(names),
-		"totalCharacters", len(characters))
+		"totalNames", len(names))
 
 	return names, nil
 }
