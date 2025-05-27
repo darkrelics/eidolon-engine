@@ -40,12 +40,6 @@ func (g *Game) ProcessGameCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Process command based on verb
 	switch cmd.Verb {
-	case "weather", "time":
-		// Global environmental commands
-		return g.handleEnvironmentCommand(cmd)
-	case "shout", "announce":
-		// Global communication commands
-		return g.handleGlobalCommunicationCommand(cmd)
 	default:
 		// Command not understood by the engine - log it
 		Logger.Info("Unknown command attempted", "verb", cmd.Verb, "character", cmd.Character.name)

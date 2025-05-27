@@ -279,10 +279,8 @@ func TestValidateArchetype(t *testing.T) {
 // TestAttributeNormalization tests the case normalization logic
 func TestAttributeNormalization(t *testing.T) {
 	archetype := &Archetype{
-		ArchetypeName: "Warrior",
-		Description:   "Test",
-		Attributes:    map[string]float64{"STRENGTH": 10, "Intelligence": 15, "agility": 12},
-		Abilities:     map[string]float64{"SWORDSMANSHIP": 5, "Magic": 10, "stealth": 3},
+		Attributes: map[string]float64{"STRENGTH": 10, "Intelligence": 15, "agility": 12},
+		Abilities:  map[string]float64{"SWORDSMANSHIP": 5, "Magic": 10, "stealth": 3},
 	}
 
 	// Normalize attributes

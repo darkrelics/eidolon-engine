@@ -104,13 +104,6 @@ func (g *Game) initCommands() {
 		usage:       "inventory",
 	}
 
-	g.commands["equipment"] = CommandInfo{
-		timed:       false,
-		handler:     executeEquipmentCommand,
-		description: "Show your equipped items",
-		usage:       "equipment",
-	}
-
 	// Communication commands (escalate to room tier)
 	g.commands["say"] = CommandInfo{
 		timed:       false,
@@ -155,13 +148,6 @@ func (g *Game) initCommands() {
 		usage:       "wear <item>",
 	}
 
-	g.commands["wield"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
-		description: "Wield a weapon",
-		usage:       "wield <weapon>",
-	}
-
 	g.commands["equip"] = CommandInfo{
 		timed:       true,
 		handler:     nil, // Escalates to room goroutine
@@ -174,49 +160,6 @@ func (g *Game) initCommands() {
 		handler:     nil, // Escalates to room goroutine
 		description: "Remove a worn item",
 		usage:       "remove <item>",
-	}
-
-	g.commands["unwear"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
-		description: "Remove a worn item",
-		usage:       "unwear <item>",
-	}
-
-	g.commands["unequip"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
-		description: "Remove an equipped item",
-		usage:       "unequip <item>",
-	}
-
-	// Game-level environmental commands
-	g.commands["weather"] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to game tier
-		description: "Check the current weather",
-		usage:       "weather",
-	}
-
-	g.commands["time"] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to game tier
-		description: "Check the current game time",
-		usage:       "time",
-	}
-
-	g.commands["shout"] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to game tier
-		description: "Shout a message to all players",
-		usage:       "shout <message>",
-	}
-
-	g.commands["announce"] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to game tier
-		description: "Make a global announcement",
-		usage:       "announce <message>",
 	}
 
 }

@@ -67,7 +67,7 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 	}
 
 	// Item commands
-	if verb == "get" || verb == "take" || verb == "drop" || verb == "put" || verb == "wear" || verb == "wield" || verb == "equip" || verb == "remove" || verb == "unwear" || verb == "unequip" {
+	if verb == "get" || verb == "take" || verb == "drop" || verb == "put" || verb == "wear" || verb == "equip" || verb == "remove" {
 		return handleItemCommand(cmd)
 	}
 
@@ -145,6 +145,9 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 
 	targetName := strings.ToLower(strings.Join(cmd.Args[1:], " "))
 
+	// Strip common articles and possessives
+	targetName = stripArticles(targetName)
+
 	switch cmd.Verb {
 	case "get", "take":
 		// Special handling for "take from" command
@@ -156,9 +159,9 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 		return handleDropCommand(cmd, targetName)
 	case "put":
 		return handlePutCommand(cmd)
-	case "wear", "wield", "equip":
+	case "wear", "equip":
 		return handleWearCommand(cmd, targetName)
-	case "remove", "unwear", "unequip":
+	case "remove":
 		return handleRemoveCommand(cmd, targetName)
 	default:
 		return &CommandResponse{
@@ -736,16 +739,14 @@ func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
 	// Parse ordinal from target
 	position, itemName, hasOrdinal := ParseTargetWithOrdinal(targetName)
 
-	// Acquire room lock to search for the item
-	room.mutex.Lock()
-	defer room.mutex.Unlock()
-
 	// Find all matching items first
 	var matchingItems []struct {
 		item *Item
 		id   uuid.UUID
 	}
 
+	// Lock room briefly to search for items
+	room.mutex.Lock()
 	for id, item := range room.items {
 		if item != nil && MatchesTarget(item.name, itemName) {
 			matchingItems = append(matchingItems, struct {
@@ -754,6 +755,7 @@ func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
 			}{item, id})
 		}
 	}
+	room.mutex.Unlock()
 
 	// Check if we found any matches
 	if len(matchingItems) == 0 {
@@ -801,14 +803,16 @@ func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
 		}
 	}
 
-	// Remove from room
-	delete(room.items, targetItemID)
-
-	// Add to character's inventory
+	// Add to character's inventory first
 	character.mutex.Lock()
 	slotName := targetItem.name // Use the item name as the slot name
 	character.inventory[slotName] = targetItem
 	character.mutex.Unlock()
+
+	// Remove from room after character operation
+	room.mutex.Lock()
+	delete(room.items, targetItemID)
+	room.mutex.Unlock()
 
 	// Create success message
 	message := fmt.Sprintf("\n\rYou pick up %s.\n\r", targetItem.name)
@@ -959,17 +963,17 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	}
 
 	// Find the item in the character's inventory
-	character.mutex.Lock()
-	defer character.mutex.Unlock()
-
 	var itemToWear *Item
 
+	// Lock only for inventory search
+	character.mutex.Lock()
 	for _, item := range character.inventory {
 		if item != nil && MatchesTarget(item.name, targetName) {
 			itemToWear = item
 			break
 		}
 	}
+	character.mutex.Unlock()
 
 	// Check if item exists
 	if itemToWear == nil {
@@ -1020,6 +1024,9 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	// Check if wear locations are already occupied
 	// Build a map of worn locations (with proper mutex protection)
 	wornLocations := make(map[string]bool)
+
+	// Lock character briefly to check worn items
+	character.mutex.Lock()
 	for _, item := range character.inventory {
 		if item == nil {
 			continue
@@ -1037,6 +1044,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 			}
 		}
 	}
+	character.mutex.Unlock()
 
 	// Special handling for finger and wrist items - map to specific left/right locations
 	var finalWearLocations []string
@@ -1087,16 +1095,17 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	itemToWear.mutex.Lock()
 	itemToWear.wornOn = finalWearLocations
 	itemToWear.isWorn = true
+
+	// Create success message while we still have the lock
+	wearLocations := strings.Join(itemToWear.wornOn, " and ")
+	message := fmt.Sprintf("\n\rYou wear %s on your %s.\n\r", itemToWear.name, wearLocations)
+
 	itemToWear.mutex.Unlock()
 
 	// Apply trait modifications
 	if len(itemToWear.traitMods) > 0 {
 		character.ApplyItemTraitMods(itemToWear)
 	}
-
-	// Create success message
-	wearLocations := strings.Join(itemToWear.wornOn, " and ")
-	message := fmt.Sprintf("\n\rYou wear %s on your %s.\n\r", itemToWear.name, wearLocations)
 
 	// Notify the room
 	if character.room != nil {
@@ -1169,16 +1178,20 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 	// Mark item as not worn (with proper mutex protection)
 	itemToRemove.mutex.Lock()
 	itemToRemove.isWorn = false
+	itemName := itemToRemove.name
+	hasTraitMods := len(itemToRemove.traitMods) > 0
 	itemToRemove.mutex.Unlock()
 
-	// Remove trait modifications
-	if len(itemToRemove.traitMods) > 0 {
+	// Unlock character before trait modifications
+	character.mutex.Unlock()
+
+	// Remove trait modifications after unlocking
+	if hasTraitMods {
 		character.RemoveItemTraitMods(itemToRemove)
 	}
 
 	// Create success message
-	message := fmt.Sprintf("\n\rYou remove %s.\n\r", itemToRemove.name)
-	character.mutex.Unlock()
+	message := fmt.Sprintf("\n\rYou remove %s.\n\r", itemName)
 
 	// Notify the room
 	if character.room != nil {
@@ -1371,4 +1384,19 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		Message:   description,
 		Timestamp: time.Now(),
 	}
+}
+
+// stripArticles removes common articles and possessives from the beginning of a string
+func stripArticles(input string) string {
+	// List of common articles and possessives to strip
+	prefixes := []string{"the ", "a ", "an ", "my ", "your ", "his ", "her ", "its ", "their ", "our "}
+
+	// Check each prefix and remove it if found
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(input, prefix) {
+			return strings.TrimPrefix(input, prefix)
+		}
+	}
+
+	return input
 }
