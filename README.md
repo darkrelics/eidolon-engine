@@ -38,6 +38,18 @@ Each interface implements protocol-specific rate limiting and reports metrics to
 
 Player sessions serve as the bridge between the interface and game world, handling essential functions like displaying messages of the day, character management, and console formatting for passwords and other sensitive input. Each session implements anti-abuse rate limiting and maintains clear communication boundaries through channels at both the interface and character layers. When a player creates or selects a character, the player session spawns a character session while maintaining tracking of its associated characters.
 
+### Hand System
+
+Characters have two hands (left and right) for holding items:
+
+- **Right Hand**: Primary/dominant hand - items are picked up here first
+- **Left Hand**: Secondary hand - used when right hand is full
+- **Full Hands**: Cannot pick up items when both hands are occupied
+- **Switch Command**: Swap items between hands when both are holding something
+- **Drop/Put**: Can drop or put items directly from hands
+- **Inventory Display**: Shows hand contents separately from worn/carried items
+- **INFO Command**: Displays what you're holding in a natural format
+
 ### Room System
 
 Each active room runs in its own goroutine, handling commands and state for all characters and items within it. Rooms can be marked as persistent or non-persistent:
@@ -163,6 +175,9 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Item persistence in DynamoDB
   - [x] Item trait system for modifications
   - [x] Worn item tracking and state
+  - [x] Hand system for holding items (left and right hands)
+  - [x] Items picked up go to hands first (right hand is dominant)
+  - [x] Switch command to swap items between hands
 
 - [x] Communication System
 
@@ -181,10 +196,11 @@ Testing will primarily be conducted through live user interaction, with unit tes
 
 - [ ] Item System Completion
 
-  - [ ] Implement inventory command to view items
-  - [ ] Add get/take commands for picking up items
-  - [ ] Add drop command for dropping items
-  - [ ] Add wear/remove commands for equipment
+  - [x] Implement inventory command to view items and hands
+  - [x] Add get/take commands for picking up items (to hands)
+  - [x] Add drop command for dropping items (from hands or inventory)
+  - [x] Add wear/remove commands for equipment
+  - [x] Add switch command for swapping hand items
   - [ ] Add examine command for detailed item inspection
   - [ ] Implement item verb interactions
   - [ ] Load item prototypes at startup
@@ -270,13 +286,14 @@ Basic Movement:
 
 Objects and Inventory:
 
-- [ ] GET: Pick up an object.
-- [ ] DROP: Drop an object.
-- [ ] PUT: Put an object in a container.
-- [ ] TAKE: Take an object from a container.
-- [ ] INVENTORY: Display the contents of your inventory.
-- [ ] WEAR: Wear an object.
-- [ ] REMOVE: Remove an object.
+- [x] GET: Pick up an object (goes to right hand, then left hand if right is full).
+- [x] DROP: Drop an object (from hands or inventory).
+- [x] PUT: Put an object in a container (from hands or inventory).
+- [x] TAKE: Take an object from a container (goes to hands).
+- [x] INVENTORY: Display the contents of your inventory and hands.
+- [x] WEAR: Wear an object.
+- [x] REMOVE: Remove an object.
+- [x] SWITCH: Switch items between your left and right hands.
 - [ ] EXAMINE: Examine an object.
 - [ ] EAT: Eat an object.
 - [ ] DRINK: Drink an object.
@@ -299,12 +316,12 @@ Combat:
 - [ ] LOAD: Load a weapon.
 - [ ] FIRE: Fire a weapon.
 
-Character Manegment:
+Character Management:
 
-- [x] INFO: Display your character information.
+- [x] INFO: Display your character information (including held items).
 - [x] SKILL: Display your skills.
 - [ ] STATUS: Display the character status.
-- [ ] INVENTORY: Display the contents of your inventory.
+- [x] INVENTORY: Display the contents of your inventory and hands.
 
 Group:
 
@@ -459,7 +476,7 @@ OTHER:
 
 ### Primary Technical Debt
 
-1. **Item System Incomplete** - Basic structures exist but no player commands
+1. **Item System Partially Complete** - Basic commands implemented, scripting and verbs needed
 2. **No Script System** - Room/item scripting not implemented
 3. **Limited State Management** - Only "standing" state implemented
 4. **No Combat System** - Combat commands and mechanics not implemented
