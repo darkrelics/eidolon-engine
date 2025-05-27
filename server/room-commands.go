@@ -712,7 +712,7 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 	character.mutex.Lock()
 	var placedInHand bool
 	var handUsed string
-	
+
 	// Try right hand first (dominant hand)
 	if character.rightHand == nil {
 		character.rightHand = removedItem
@@ -725,7 +725,7 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 		handUsed = "left hand"
 	}
 	character.mutex.Unlock()
-	
+
 	// If both hands are full, put the item back in the container
 	if !placedInHand {
 		// Put item back in container
@@ -845,7 +845,7 @@ func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
 	character.mutex.Lock()
 	var placedInHand bool
 	var handUsed string
-	
+
 	// Try right hand first (dominant hand)
 	if character.rightHand == nil {
 		character.rightHand = targetItem
@@ -858,7 +858,7 @@ func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
 		handUsed = "left hand"
 	}
 	character.mutex.Unlock()
-	
+
 	// If both hands are full, cannot pick up the item
 	if !placedInHand {
 		return &CommandResponse{
@@ -1327,7 +1327,7 @@ func handleSwitchCommand(cmd *CommandRequest, targetName string) *CommandRespons
 
 	// Lock the character to check and modify hand contents
 	character.mutex.Lock()
-	
+
 	// Check if both hands have items
 	if character.rightHand == nil && character.leftHand == nil {
 		character.mutex.Unlock()
@@ -1338,7 +1338,7 @@ func handleSwitchCommand(cmd *CommandRequest, targetName string) *CommandRespons
 			Timestamp: time.Now(),
 		}
 	}
-	
+
 	// Check if only one hand has an item
 	if character.rightHand == nil || character.leftHand == nil {
 		character.mutex.Unlock()
@@ -1349,32 +1349,32 @@ func handleSwitchCommand(cmd *CommandRequest, targetName string) *CommandRespons
 			Timestamp: time.Now(),
 		}
 	}
-	
+
 	// Get references to items before switching
 	rightItem := character.rightHand
 	leftItem := character.leftHand
-	
+
 	// Perform the switch
 	character.rightHand = leftItem
 	character.leftHand = rightItem
-	
+
 	// Get item names for the success message
 	rightItemName := rightItem.name
 	leftItemName := leftItem.name
-	
+
 	character.mutex.Unlock()
-	
+
 	// Create success message
-	message := fmt.Sprintf("\n\rYou switch %s to your right hand and %s to your left hand.\n\r", 
+	message := fmt.Sprintf("\n\rYou switch %s to your right hand and %s to your left hand.\n\r",
 		leftItemName, rightItemName)
-	
+
 	// Notify the room
 	if character.room != nil {
 		SendRoomMessageExcept(character.room,
 			fmt.Sprintf("\n\r%s switches the items in their hands.\n\r", character.name),
 			character)
 	}
-	
+
 	return &CommandResponse{
 		RequestID: cmd.ID,
 		Success:   true,
@@ -1387,7 +1387,7 @@ func handleSwitchCommand(cmd *CommandRequest, targetName string) *CommandRespons
 func restoreItemToOriginalLocation(character *Character, item *Item, slot string, isInHand bool) {
 	character.mutex.Lock()
 	defer character.mutex.Unlock()
-	
+
 	if isInHand {
 		if slot == "right_hand" {
 			character.rightHand = item

@@ -42,7 +42,7 @@ func NewMockPlayer() *MockPlayer {
 		},
 		messages: make([]string, 0),
 	}
-	
+
 	// Start a goroutine to capture messages
 	go func() {
 		for msg := range mp.Player.commandOut {
@@ -51,7 +51,7 @@ func NewMockPlayer() *MockPlayer {
 			mp.mu.Unlock()
 		}
 	}()
-	
+
 	return mp
 }
 
@@ -72,7 +72,6 @@ func (mp *MockPlayer) ContainsMessage(msg string) bool {
 	return false
 }
 
-
 func TestNewExit(t *testing.T) {
 	exitID := uuid.Must(uuid.NewV4())
 	targetRoom := &Room{
@@ -81,57 +80,57 @@ func TestNewExit(t *testing.T) {
 		description: "The destination",
 		characters:  make(map[uuid.UUID]*Character),
 	}
-	
+
 	tests := []struct {
-		name        string
-		exitID      uuid.UUID
-		direction   string
-		description string
-		targetRoom  *Room
+		name         string
+		exitID       uuid.UUID
+		direction    string
+		description  string
+		targetRoom   *Room
 		targetRoomID int64
-		arrivalText string
-		visible     bool
-		scriptID    string
+		arrivalText  string
+		visible      bool
+		scriptID     string
 	}{
 		{
-			name:        "Complete exit with all fields",
-			exitID:      exitID,
-			direction:   "north",
-			description: "A path leading north",
-			targetRoom:  targetRoom,
+			name:         "Complete exit with all fields",
+			exitID:       exitID,
+			direction:    "north",
+			description:  "A path leading north",
+			targetRoom:   targetRoom,
 			targetRoomID: 100,
-			arrivalText: "arrives from the south",
-			visible:     true,
-			scriptID:    "north_script",
+			arrivalText:  "arrives from the south",
+			visible:      true,
+			scriptID:     "north_script",
 		},
 		{
-			name:        "Exit with minimal fields",
-			exitID:      exitID,
-			direction:   "east",
-			description: "",
-			targetRoom:  nil,
+			name:         "Exit with minimal fields",
+			exitID:       exitID,
+			direction:    "east",
+			description:  "",
+			targetRoom:   nil,
 			targetRoomID: 200,
-			arrivalText: "",
-			visible:     false,
-			scriptID:    "",
+			arrivalText:  "",
+			visible:      false,
+			scriptID:     "",
 		},
 		{
-			name:        "Hidden exit",
-			exitID:      exitID,
-			direction:   "secret",
-			description: "A hidden passage",
-			targetRoom:  targetRoom,
+			name:         "Hidden exit",
+			exitID:       exitID,
+			direction:    "secret",
+			description:  "A hidden passage",
+			targetRoom:   targetRoom,
 			targetRoomID: 100,
-			arrivalText: "emerges from the shadows",
-			visible:     false,
-			scriptID:    "secret_door",
+			arrivalText:  "emerges from the shadows",
+			visible:      false,
+			scriptID:     "secret_door",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			beforeTime := time.Now()
-			
+
 			exit := NewExit(
 				tt.exitID,
 				tt.direction,
@@ -142,9 +141,9 @@ func TestNewExit(t *testing.T) {
 				tt.visible,
 				tt.scriptID,
 			)
-			
+
 			afterTime := time.Now()
-			
+
 			// Verify all fields are set correctly
 			if exit.exitID != tt.exitID {
 				t.Errorf("exitID = %v, want %v", exit.exitID, tt.exitID)
@@ -170,7 +169,7 @@ func TestNewExit(t *testing.T) {
 			if exit.scriptID != tt.scriptID {
 				t.Errorf("scriptID = %v, want %v", exit.scriptID, tt.scriptID)
 			}
-			
+
 			// Verify timestamps are set and reasonable
 			if exit.lastEdited.Before(beforeTime) || exit.lastEdited.After(afterTime) {
 				t.Errorf("lastEdited timestamp out of expected range")
@@ -186,30 +185,30 @@ func TestNewExit(t *testing.T) {
 func TestExitDataDefaults(t *testing.T) {
 	tests := []struct {
 		name                string
-		arrivalText        string
-		direction          string
+		arrivalText         string
+		direction           string
 		expectedArrivalText string
 	}{
 		{
 			name:                "Custom arrival text preserved",
-			arrivalText:        "teleports in with a flash",
-			direction:          "north",
+			arrivalText:         "teleports in with a flash",
+			direction:           "north",
 			expectedArrivalText: "teleports in with a flash",
 		},
 		{
 			name:                "Empty arrival text generates default",
-			arrivalText:        "",
-			direction:          "south",
+			arrivalText:         "",
+			direction:           "south",
 			expectedArrivalText: "arrives from the south",
 		},
 		{
 			name:                "Default for east direction",
-			arrivalText:        "",
-			direction:          "east",
+			arrivalText:         "",
+			direction:           "east",
 			expectedArrivalText: "arrives from the east",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Simulate the logic from LoadExits
@@ -218,7 +217,7 @@ func TestExitDataDefaults(t *testing.T) {
 				// Generate default arrival text based on direction
 				arrivalText = "arrives from the " + tt.direction
 			}
-			
+
 			if arrivalText != tt.expectedArrivalText {
 				t.Errorf("Expected arrival text '%s', got '%s'",
 					tt.expectedArrivalText, arrivalText)
@@ -307,11 +306,11 @@ func TestSendArrivalMessage(t *testing.T) {
 			shouldSend:      true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var mockObserver *MockPlayer
-			
+
 			// For testing, we'll add mock observers to the room
 			if tt.shouldSend && tt.destinationRoom != nil {
 				// Add a mock observer character
@@ -324,7 +323,7 @@ func TestSendArrivalMessage(t *testing.T) {
 					prompt: "> ",
 				}
 				tt.destinationRoom.characters[observerId] = observer
-				
+
 				// If testing that arriving character is excluded, add them too
 				if tt.character != nil && tt.name == "Arriving character excluded from message" {
 					mockArriver := NewMockPlayer()
@@ -333,22 +332,22 @@ func TestSendArrivalMessage(t *testing.T) {
 					tt.destinationRoom.characters[tt.character.id] = tt.character
 				}
 			}
-			
+
 			SendArrivalMessage(tt.character, tt.exitUsed, tt.destinationRoom)
-			
+
 			// Give time for async message delivery
 			time.Sleep(10 * time.Millisecond)
-			
+
 			if tt.shouldSend && tt.destinationRoom != nil && mockObserver != nil {
 				// Check that observer received the message
 				if !mockObserver.ContainsMessage(tt.expectedMessage) {
-					t.Errorf("Expected message '%s' not found in observer's messages: %v", 
+					t.Errorf("Expected message '%s' not found in observer's messages: %v",
 						tt.expectedMessage, mockObserver.GetMessages())
 				}
-				
+
 				// Verify arriving character didn't receive the message
-				if tt.character != nil && tt.character.player != nil && 
-				   tt.name == "Arriving character excluded from message" {
+				if tt.character != nil && tt.character.player != nil &&
+					tt.name == "Arriving character excluded from message" {
 					// The arriving character's mock would have been created above
 					// We can't easily check it here due to the test structure
 					// but the real SendRoomMessageExcept function handles the exclusion
@@ -357,4 +356,3 @@ func TestSendArrivalMessage(t *testing.T) {
 		})
 	}
 }
-

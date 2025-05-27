@@ -38,8 +38,8 @@ type Character struct {
 	health           float64
 	room             *Room
 	inventory        map[string]*Item
-	leftHand         *Item                 // Item held in left hand
-	rightHand        *Item                 // Item held in right hand
+	leftHand         *Item // Item held in left hand
+	rightHand        *Item // Item held in right hand
 	mutex            sync.RWMutex
 	facing           *Character
 	advancing        bool

@@ -83,7 +83,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 	for k, v := range c.inventory {
 		inventoryCopy[k] = v
 	}
-	
+
 	// Get hand item IDs
 	var leftHandID, rightHandID string
 	if c.leftHand != nil {
