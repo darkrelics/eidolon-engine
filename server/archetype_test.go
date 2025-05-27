@@ -343,10 +343,7 @@ func TestBuildArchetypeOptions(t *testing.T) {
 		Description:   "A stealthy thief",
 	}
 
-	err := game.BuildArchetypeOptions()
-	if err != nil {
-		t.Fatalf("BuildArchetypeOptions failed: %v", err)
-	}
+	game.BuildArchetypeOptions()
 
 	// Check that options are built correctly
 	if len(game.archetypeOptions) != 3 {
@@ -379,10 +376,7 @@ func TestDisplayArchetypes(t *testing.T) {
 	game.archetypes["Mage"] = createValidArchetype("Mage")
 
 	// This function only logs, so we just ensure it doesn't panic
-	err := game.DisplayArchetypes()
-	if err != nil {
-		t.Errorf("DisplayArchetypes returned unexpected error: %v", err)
-	}
+	game.DisplayArchetypes()
 }
 
 // TestConcurrentAccess tests for race conditions
@@ -432,6 +426,5 @@ func TestConcurrentAccess(t *testing.T) {
 
 // Helper function
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(substr)] == substr ||
-		len(s) > len(substr) && contains(s[1:], substr)
+	return strings.Contains(s, substr)
 }

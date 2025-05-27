@@ -137,9 +137,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	// Build Archetype Options
 
-	if err := game.BuildArchetypeOptions(); err != nil {
-		Logger.Error("Error loading archetype options", "error", err)
-	}
+	game.BuildArchetypeOptions()
 
 	game.initCommands()
 
