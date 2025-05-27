@@ -144,7 +144,7 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 	}
 
 	targetName := strings.ToLower(strings.Join(cmd.Args[1:], " "))
-	
+
 	// Strip common articles and possessives
 	targetName = stripArticles(targetName)
 
@@ -964,7 +964,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 
 	// Find the item in the character's inventory
 	var itemToWear *Item
-	
+
 	// Lock only for inventory search
 	character.mutex.Lock()
 	for _, item := range character.inventory {
@@ -1024,7 +1024,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	// Check if wear locations are already occupied
 	// Build a map of worn locations (with proper mutex protection)
 	wornLocations := make(map[string]bool)
-	
+
 	// Lock character briefly to check worn items
 	character.mutex.Lock()
 	for _, item := range character.inventory {
@@ -1095,11 +1095,11 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	itemToWear.mutex.Lock()
 	itemToWear.wornOn = finalWearLocations
 	itemToWear.isWorn = true
-	
+
 	// Create success message while we still have the lock
 	wearLocations := strings.Join(itemToWear.wornOn, " and ")
 	message := fmt.Sprintf("\n\rYou wear %s on your %s.\n\r", itemToWear.name, wearLocations)
-	
+
 	itemToWear.mutex.Unlock()
 
 	// Apply trait modifications
@@ -1390,13 +1390,13 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 func stripArticles(input string) string {
 	// List of common articles and possessives to strip
 	prefixes := []string{"the ", "a ", "an ", "my ", "your ", "his ", "her ", "its ", "their ", "our "}
-	
+
 	// Check each prefix and remove it if found
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(input, prefix) {
 			return strings.TrimPrefix(input, prefix)
 		}
 	}
-	
+
 	return input
 }
