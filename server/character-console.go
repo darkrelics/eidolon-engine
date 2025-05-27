@@ -120,7 +120,13 @@ func (c *Character) RunConsole(done chan bool) {
 			}
 
 			// Always send prompt after processing a command
-			c.player.commandOut <- c.prompt
+			select {
+			case c.player.commandOut <- c.prompt:
+				// Prompt sent successfully
+			default:
+				// Channel full or closed, likely during shutdown
+				Logger.Debug("Failed to send prompt, channel full or closed", "characterName", c.name)
+			}
 
 		case _, ok := <-c.end:
 			if !ok {

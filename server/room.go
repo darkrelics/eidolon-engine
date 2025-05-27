@@ -588,15 +588,7 @@ func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 	response := r.ProcessRoomCommand(cmd, game)
 
 	// Send response back to character
-	select {
-	case cmd.Response <- response:
-		// Response sent successfully
-	default:
-		Logger.Error("Failed to send command response",
-			"verb", cmd.Verb,
-			"characterName", cmd.Character.name,
-			"roomID", r.roomID)
-	}
+	cmd.Response <- response
 }
 
 // GetDescription returns a formatted string description of the room
