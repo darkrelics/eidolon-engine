@@ -137,7 +137,7 @@ func TestApplyColor(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ApplyColor(tt.colorName, tt.text)
 			if got != tt.want {
-				t.Errorf("ApplyColor(%q, %q) = %q, want %q", 
+				t.Errorf("ApplyColor(%q, %q) = %q, want %q",
 					tt.colorName, tt.text, got, tt.want)
 			}
 		})
@@ -148,7 +148,7 @@ func TestApplyColorFormat(t *testing.T) {
 	// Test the ANSI escape sequence format
 	result := ApplyColor("red", "X")
 	expected := fmt.Sprintf("\033[%sm%s\033[0m", "31", "X")
-	
+
 	if result != expected {
 		t.Errorf("ApplyColor format incorrect: got %q, want %q", result, expected)
 	}
@@ -169,4 +169,3 @@ func BenchmarkApplyColor(b *testing.B) {
 		}
 	})
 }
-

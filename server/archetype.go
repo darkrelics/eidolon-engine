@@ -125,7 +125,7 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 	if archetype == nil {
 		return fmt.Errorf("archetype cannot be nil")
 	}
-	
+
 	if archetype.ArchetypeName == "" {
 		return fmt.Errorf("archetype name cannot be empty")
 	}
@@ -166,7 +166,7 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 			prototype, exists = g.prototypes[prototypeIDUUID]
 		}
 		g.mutex.RUnlock()
-		
+
 		if !exists {
 			return fmt.Errorf("archetype '%s' starting item %d references non-existent prototype '%s'", archetype.ArchetypeName, i, startingItem.PrototypeID)
 		}

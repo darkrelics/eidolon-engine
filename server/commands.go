@@ -563,7 +563,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	// Try to send command to the room with a brief retry
 	retryTimer := time.NewTimer(50 * time.Millisecond)
 	defer retryTimer.Stop()
-	
+
 	select {
 	case character.room.commandIn <- cmdReq:
 		// Command sent successfully to room
@@ -573,7 +573,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 		case character.room.commandIn <- cmdReq:
 			// Command sent successfully on retry
 		default:
-			Logger.Warn("Room command buffer full after retry", 
+			Logger.Warn("Room command buffer full after retry",
 				"roomID", character.room.roomID,
 				"characterName", character.name,
 				"verb", verb)

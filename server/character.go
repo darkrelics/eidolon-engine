@@ -337,7 +337,7 @@ func (c *Character) Stop() {
 		}
 	}
 	c.mutex.Unlock()
-	
+
 	if len(itemIDsToDelete) > 0 {
 		c.game.DeleteItems(itemIDsToDelete)
 		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", len(itemIDsToDelete))
