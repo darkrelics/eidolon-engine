@@ -192,8 +192,21 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 	invDisplay.WriteString("\n\rInventory:\n\r")
 	invDisplay.WriteString("----------------\n\r")
 
+	// Display what's in hands first
+	if character.leftHand != nil || character.rightHand != nil {
+		invDisplay.WriteString("\n\rYou are holding:\n\r")
+		if character.leftHand != nil {
+			invDisplay.WriteString(fmt.Sprintf("  Left hand:  %s\n\r", character.leftHand.name))
+		}
+		if character.rightHand != nil {
+			invDisplay.WriteString(fmt.Sprintf("  Right hand: %s\n\r", character.rightHand.name))
+		}
+	}
+
 	if len(character.inventory) == 0 {
-		invDisplay.WriteString("You are not carrying anything.\n\r")
+		if character.leftHand == nil && character.rightHand == nil {
+			invDisplay.WriteString("You are not carrying anything.\n\r")
+		}
 	} else {
 		// Display items using detailed formatting with proper mutex protection
 		var wornItems, carriedItems []*Item

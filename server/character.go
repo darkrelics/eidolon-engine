@@ -83,6 +83,15 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 	for k, v := range c.inventory {
 		inventoryCopy[k] = v
 	}
+	
+	// Get hand item IDs
+	var leftHandID, rightHandID string
+	if c.leftHand != nil {
+		leftHandID = c.leftHand.id.String()
+	}
+	if c.rightHand != nil {
+		rightHandID = c.rightHand.id.String()
+	}
 	c.mutex.RUnlock()
 
 	// Create character data for storage
@@ -96,6 +105,8 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		Health:        c.health,
 		RoomID:        c.room.roomID,
 		Inventory:     inventoryIDs,
+		LeftHandID:    leftHandID,
+		RightHandID:   rightHandID,
 	}
 
 	// Save character and inventory transactionally
@@ -328,13 +339,20 @@ func (c *Character) Stop() {
 		Logger.Error("Error saving character during shutdown", "characterName", c.name, "error", err)
 	}
 
-	// Clean up character inventory items from game.items map
+	// Clean up character inventory and hand items from game.items map
 	c.mutex.Lock()
-	itemIDsToDelete := make([]uuid.UUID, 0, len(c.inventory))
+	itemIDsToDelete := make([]uuid.UUID, 0, len(c.inventory)+2)
 	for _, item := range c.inventory {
 		if item != nil {
 			itemIDsToDelete = append(itemIDsToDelete, item.id)
 		}
+	}
+	// Also clean up hand items
+	if c.leftHand != nil {
+		itemIDsToDelete = append(itemIDsToDelete, c.leftHand.id)
+	}
+	if c.rightHand != nil {
+		itemIDsToDelete = append(itemIDsToDelete, c.rightHand.id)
 	}
 	c.mutex.Unlock()
 
@@ -428,6 +446,20 @@ func (c *Character) GetCharacterInfo() string {
 		}
 	}
 
+	// Display hand contents
+	if c.leftHand != nil || c.rightHand != nil {
+		var handItems []string
+		if c.rightHand != nil {
+			handItems = append(handItems, c.rightHand.name)
+		}
+		if c.leftHand != nil {
+			handItems = append(handItems, c.leftHand.name)
+		}
+		info.WriteString("\n\rYou are holding ")
+		info.WriteString(formatItemListWithOxfordComma(handItems))
+		info.WriteString(".\n\r")
+	}
+
 	// Inventory information
 	if len(c.inventory) > 0 {
 		// Separate worn and carried items
@@ -456,7 +488,8 @@ func (c *Character) GetCharacterInfo() string {
 			info.WriteString(formatItemListWithOxfordComma(carriedItems))
 			info.WriteString(".\n\r")
 		}
-	} else {
+	} else if c.leftHand == nil && c.rightHand == nil {
+		// Only show "not carrying anything" if hands are also empty
 		info.WriteString("\n\rYou are not carrying anything.\n\r")
 	}
 

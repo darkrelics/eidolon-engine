@@ -162,6 +162,13 @@ func (g *Game) initCommands() {
 		usage:       "remove <item>",
 	}
 
+	g.commands["switch"] = CommandInfo{
+		timed:       false,
+		handler:     nil, // Escalates to room goroutine
+		description: "Switch items between your hands",
+		usage:       "switch hands",
+	}
+
 }
 
 // commandIndex holds all command names for fuzzy matching
