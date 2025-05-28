@@ -41,7 +41,6 @@ func (p *Player) Console(done chan bool) {
 	}, "playerID", p.id)
 }
 
-
 // consoleInternal contains the actual console logic
 func (p *Player) consoleInternal(done chan bool) {
 	for {
@@ -59,7 +58,7 @@ func (p *Player) consoleInternal(done chan bool) {
 				"2) View Messages\n",
 				"3) Create Character\n",
 			}
-			
+
 			for _, msg := range menuMessages {
 				select {
 				case <-p.ctx.Done():
@@ -91,7 +90,7 @@ func (p *Player) consoleInternal(done chan bool) {
 					}
 				}
 			}
-			
+
 			select {
 			case <-p.ctx.Done():
 				done <- true

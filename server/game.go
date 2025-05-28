@@ -412,7 +412,7 @@ func (g *Game) clearExitReferencesToRoom(roomID int64) {
 			exit.targetRoom = nil
 		}
 	}
-	
+
 	Logger.Debug("Cleared exit references to room", "roomID", roomID)
 }
 
