@@ -160,7 +160,7 @@
       "TargetRoom": 8,
       "ArrivalText": "drops in through a trapdoor in the ceiling",
       "Visible": false,
-      "ScriptID": "trapdoor_reveal"
+      "ScriptID": ""
     },
     {
       "ExitID": "d37ac10b-58cc-4372-a567-0e02b2c3d497",
@@ -169,7 +169,7 @@
       "TargetRoom": 10,
       "ArrivalText": "steps out of a shimmering portal",
       "Visible": true,
-      "ScriptID": "teleport_fx"
+      "ScriptID": ""
     }
   ]
 }
