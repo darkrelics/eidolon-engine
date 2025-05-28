@@ -400,6 +400,22 @@ func (g *Game) DeleteItems(itemIDs []uuid.UUID) {
 	}
 }
 
+// clearExitReferencesToRoom clears all exit references to a specific room
+func (g *Game) clearExitReferencesToRoom(roomID int64) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+
+	// Iterate through all exits and clear references to this room
+	for _, exit := range g.exits {
+		if exit != nil && exit.targetRoomID == roomID {
+			// Since we already hold the game mutex, we can safely clear the reference
+			exit.targetRoom = nil
+		}
+	}
+	
+	Logger.Debug("Cleared exit references to room", "roomID", roomID)
+}
+
 // sendCommandResponse sends a response to a command request
 func (g *Game) sendCommandResponse(cmd *CommandRequest, response *CommandResponse) {
 	if cmd == nil || response == nil {

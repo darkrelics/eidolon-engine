@@ -41,6 +41,15 @@ func (p *Player) Console(done chan bool) {
 	}, "playerID", p.id)
 }
 
+// safeSend sends a message to the command output channel with context checking
+func (p *Player) safeSend(msg string) bool {
+	select {
+	case <-p.ctx.Done():
+		return false
+	case p.commandOut <- msg:
+		return true
+	}
+}
 
 // consoleInternal contains the actual console logic
 func (p *Player) consoleInternal(done chan bool) {
@@ -52,51 +61,30 @@ func (p *Player) consoleInternal(done chan bool) {
 		default:
 			characterCount := len(p.characterList)
 
-			// Send menu messages with safe channel handling
-			menuMessages := []string{
-				"\n=====Console=====\n",
-				"1) Change Password\n",
-				"2) View Messages\n",
-				"3) Create Character\n",
-			}
-			
-			for _, msg := range menuMessages {
-				select {
-				case <-p.ctx.Done():
-					done <- true
-					return
-				case p.commandOut <- msg:
-				}
+			if !p.safeSend("\n=====Console=====\n") ||
+				!p.safeSend("1) Change Password\n") ||
+				!p.safeSend("2) View Messages\n") ||
+				!p.safeSend("3) Create Character\n") {
+				done <- true
+				return
 			}
 
 			if characterCount == 0 {
-				select {
-				case <-p.ctx.Done():
+				if !p.safeSend("9) Quit\n") {
 					done <- true
 					return
-				case p.commandOut <- "9) Quit\n":
 				}
 			} else {
-				additionalMessages := []string{
-					"4) Select Character\n",
-					"5) Delete Character\n",
-					"9) Quit\n",
-				}
-				for _, msg := range additionalMessages {
-					select {
-					case <-p.ctx.Done():
-						done <- true
-						return
-					case p.commandOut <- msg:
-					}
+				if !p.safeSend("4) Select Character\n") ||
+					!p.safeSend("5) Delete Character\n") ||
+					!p.safeSend("9) Quit\n") {
+					done <- true
+					return
 				}
 			}
-			
-			select {
-			case <-p.ctx.Done():
+			if !p.safeSend("\nEnter your choice: ") {
 				done <- true
 				return
-			case p.commandOut <- "\nEnter your choice: ":
 			}
 
 			select {
@@ -118,40 +106,24 @@ func (p *Player) consoleInternal(done chan bool) {
 					if characterCount > 0 {
 						p.HandleCharacterSelection()
 					} else {
-						select {
-						case <-p.ctx.Done():
-							return
-						case p.commandOut <- "Invalid choice. Please try again.\n":
-						}
+						p.safeSend("Invalid choice. Please try again.\n")
 					}
 
 				case "5":
 					if characterCount > 0 {
 						p.HandleCharacterDeletion()
 					} else {
-						select {
-						case <-p.ctx.Done():
-							return
-						case p.commandOut <- "Invalid choice. Please try again.\n":
-						}
+						p.safeSend("Invalid choice. Please try again.\n")
 					}
 
 				case "9":
-					select {
-					case <-p.ctx.Done():
-						return
-					case p.commandOut <- "\nGoodbye!\n":
-					}
+					p.safeSend("\nGoodbye!\n")
 					p.Stop()
 					done <- true
 					return
 
 				default:
-					select {
-					case <-p.ctx.Done():
-						return
-					case p.commandOut <- "Invalid choice. Please try again.\n":
-					}
+					p.safeSend("Invalid choice. Please try again.\n")
 				}
 			}
 		}

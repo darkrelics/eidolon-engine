@@ -1496,6 +1496,16 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 
 	// Check if target room exists and load it if necessary
 	targetRoom := targetExit.targetRoom
+	
+	// Check if we have a room reference but it's not running (stale reference)
+	if targetRoom != nil && !targetRoom.running {
+		Logger.Debug("Exit has stale room reference, clearing it", 
+			"exitID", targetExit.exitID,
+			"targetRoomID", targetExit.targetRoomID)
+		targetRoom = nil
+		targetExit.targetRoom = nil
+	}
+	
 	if targetRoom == nil {
 		// Try to load the room using the target room ID
 		loadedRoom, err := game.LoadRoom(targetExit.targetRoomID)
