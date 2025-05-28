@@ -1049,15 +1049,29 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 		}
 	}
 
-	// Find the item in the character's inventory
+	// Find the item in the character's inventory or hands
 	var itemToWear *Item
+	var fromHand string // Track which hand the item came from
 
-	// Lock only for inventory search
+	// Lock only for inventory and hand search
 	character.mutex.Lock()
+	
+	// First check inventory
 	for _, item := range character.inventory {
 		if item != nil && MatchesTarget(item.name, targetName) {
 			itemToWear = item
 			break
+		}
+	}
+	
+	// If not found in inventory, check hands
+	if itemToWear == nil {
+		if character.rightHand != nil && MatchesTarget(character.rightHand.name, targetName) {
+			itemToWear = character.rightHand
+			fromHand = "right"
+		} else if character.leftHand != nil && MatchesTarget(character.leftHand.name, targetName) {
+			itemToWear = character.leftHand
+			fromHand = "left"
 		}
 	}
 	character.mutex.Unlock()
@@ -1176,6 +1190,17 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 			}
 			finalWearLocations = append(finalWearLocations, location)
 		}
+	}
+
+	// If item is from a hand, remove it from that hand
+	if fromHand != "" {
+		character.mutex.Lock()
+		if fromHand == "right" {
+			character.rightHand = nil
+		} else {
+			character.leftHand = nil
+		}
+		character.mutex.Unlock()
 	}
 
 	// Update the item's state with proper mutex protection
@@ -1328,24 +1353,13 @@ func handleSwitchCommand(cmd *CommandRequest, targetName string) *CommandRespons
 	// Lock the character to check and modify hand contents
 	character.mutex.Lock()
 
-	// Check if both hands have items
+	// Check if both hands are empty
 	if character.rightHand == nil && character.leftHand == nil {
 		character.mutex.Unlock()
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
 			Error:     fmt.Errorf("your hands are empty"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if only one hand has an item
-	if character.rightHand == nil || character.leftHand == nil {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you need items in both hands to switch"),
 			Timestamp: time.Now(),
 		}
 	}
@@ -1358,15 +1372,21 @@ func handleSwitchCommand(cmd *CommandRequest, targetName string) *CommandRespons
 	character.rightHand = leftItem
 	character.leftHand = rightItem
 
-	// Get item names for the success message
-	rightItemName := rightItem.name
-	leftItemName := leftItem.name
-
 	character.mutex.Unlock()
 
-	// Create success message
-	message := fmt.Sprintf("\n\rYou switch %s to your right hand and %s to your left hand.\n\r",
-		leftItemName, rightItemName)
+	// Create appropriate success message based on what was switched
+	var message string
+	if rightItem != nil && leftItem != nil {
+		// Both hands had items
+		message = fmt.Sprintf("\n\rYou switch %s to your right hand and %s to your left hand.\n\r",
+			leftItem.name, rightItem.name)
+	} else if rightItem != nil {
+		// Only right hand had an item
+		message = fmt.Sprintf("\n\rYou switch %s to your left hand.\n\r", rightItem.name)
+	} else {
+		// Only left hand had an item
+		message = fmt.Sprintf("\n\rYou switch %s to your right hand.\n\r", leftItem.name)
+	}
 
 	// Notify the room
 	if character.room != nil {
