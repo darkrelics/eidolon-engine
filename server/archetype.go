@@ -26,6 +26,15 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
+// slotMappings defines semantic equivalents for archetype slots
+var slotMappings = map[string][]string{
+	"weapon": {"weapon", "waist", "hands"},
+	"armor":  {"armor", "chest", "body"},
+	"back":   {"back", "shoulders"},
+	"finger": {"finger", "left_finger", "right_finger"},
+	"wrist":  {"wrist", "left_wrist", "right_wrist"},
+}
+
 type ArchetypeItem struct {
 	PrototypeID string `json:"PrototypeID" dynamodbav:"prototypeID"`
 	Slot        string `json:"Slot" dynamodbav:"slot"`
@@ -44,15 +53,24 @@ type Archetype struct {
 }
 
 // Display Archetypes for debugging purposes.
-func (g *Game) DisplayArchetypes() error {
+func (g *Game) DisplayArchetypes() {
 	Logger.Info("Display Archetypes")
 
 	Logger.Debug("Archetypes:" + fmt.Sprint(len(g.archetypes)))
 	for key, archetype := range g.archetypes {
 		Logger.Debug("Archetype", "name", key, "description", archetype.Description)
 	}
+}
 
-	return nil
+// normalizeMapKeys converts all keys in a map to lowercase
+func normalizeMapKeys(m map[string]float64) {
+	for k, v := range m {
+		lowerKey := strings.ToLower(k)
+		if lowerKey != k {
+			m[lowerKey] = v
+			delete(m, k)
+		}
+	}
 }
 
 // LoadArchetypes retrieves all archetypes from the DynamoDB table and stores them in the Games's ArcheTypes map.
@@ -72,21 +90,8 @@ func (g *Game) LoadArchetypes() error {
 	for i := range archetypes {
 		archetype := &archetypes[i]
 
-		for k, v := range archetype.Attributes {
-			lowerKey := strings.ToLower(k)
-			if lowerKey != k {
-				archetype.Attributes[lowerKey] = v
-				delete(archetype.Attributes, k)
-			}
-		}
-
-		for k, v := range archetype.Abilities {
-			lowerKey := strings.ToLower(k)
-			if lowerKey != k {
-				archetype.Abilities[lowerKey] = v
-				delete(archetype.Abilities, k)
-			}
-		}
+		normalizeMapKeys(archetype.Attributes)
+		normalizeMapKeys(archetype.Abilities)
 
 		// Validate archetype data consistency
 		if err := g.ValidateArchetype(archetype); err != nil {
@@ -103,7 +108,7 @@ func (g *Game) LoadArchetypes() error {
 	return nil
 }
 
-func (g *Game) BuildArchetypeOptions() error {
+func (g *Game) BuildArchetypeOptions() {
 
 	Logger.Info("Building Archetype Options")
 
@@ -116,8 +121,6 @@ func (g *Game) BuildArchetypeOptions() error {
 	sort.Strings(options)
 
 	g.archetypeOptions = options
-
-	return nil
 }
 
 // ValidateArchetype checks archetype data for consistency and completeness
@@ -200,15 +203,6 @@ func isSlotCompatible(slot, wearableLocation string) bool {
 	// Direct match
 	if slot == wearableLocation {
 		return true
-	}
-
-	// Semantic equivalents
-	slotMappings := map[string][]string{
-		"weapon": {"weapon", "waist", "hands"},
-		"armor":  {"armor", "chest", "body"},
-		"back":   {"back", "shoulders"},
-		"finger": {"finger", "left_finger", "right_finger"},
-		"wrist":  {"wrist", "left_wrist", "right_wrist"},
 	}
 
 	// Check if the wearable location is in the allowed locations for this slot

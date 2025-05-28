@@ -21,7 +21,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -83,6 +82,15 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 	for k, v := range c.inventory {
 		inventoryCopy[k] = v
 	}
+
+	// Get hand item IDs
+	var leftHandID, rightHandID string
+	if c.leftHand != nil {
+		leftHandID = c.leftHand.id.String()
+	}
+	if c.rightHand != nil {
+		rightHandID = c.rightHand.id.String()
+	}
 	c.mutex.RUnlock()
 
 	// Create character data for storage
@@ -96,6 +104,8 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		Health:        c.health,
 		RoomID:        c.room.roomID,
 		Inventory:     inventoryIDs,
+		LeftHandID:    leftHandID,
+		RightHandID:   rightHandID,
 	}
 
 	// Save character and inventory transactionally
@@ -328,13 +338,20 @@ func (c *Character) Stop() {
 		Logger.Error("Error saving character during shutdown", "characterName", c.name, "error", err)
 	}
 
-	// Clean up character inventory items from game.items map
+	// Clean up character inventory and hand items from game.items map
 	c.mutex.Lock()
-	itemIDsToDelete := make([]uuid.UUID, 0, len(c.inventory))
+	itemIDsToDelete := make([]uuid.UUID, 0, len(c.inventory)+2)
 	for _, item := range c.inventory {
 		if item != nil {
 			itemIDsToDelete = append(itemIDsToDelete, item.id)
 		}
+	}
+	// Also clean up hand items
+	if c.leftHand != nil {
+		itemIDsToDelete = append(itemIDsToDelete, c.leftHand.id)
+	}
+	if c.rightHand != nil {
+		itemIDsToDelete = append(itemIDsToDelete, c.rightHand.id)
 	}
 	c.mutex.Unlock()
 
@@ -384,253 +401,6 @@ func (c *Character) cleanupAndSignalDone(done chan bool) {
 			// Channel might be full or closed, log but don't panic
 			Logger.Warn("Failed to signal done channel", "characterName", c.name)
 		}
-	}
-}
-
-// GetCharacterInfo returns a formatted string with character information
-func (c *Character) GetCharacterInfo() string {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	var info strings.Builder
-	info.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_white", c.name)))
-	info.WriteString("----------------\n\r")
-
-	// Basic character information
-	info.WriteString(fmt.Sprintf("Health: %d\n\r", int(c.health)))
-	info.WriteString(fmt.Sprintf("Essence: %d\n\r", int(c.essence)))
-
-	// Attributes
-	if len(c.attributes) > 0 {
-		info.WriteString("\n\rAttributes:\n\r")
-		for attr, value := range c.attributes {
-			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", attr, int(value)))
-		}
-	}
-
-	// Abilities - only show those above zero
-	var abilitiesAboveZero []string
-	for ability, value := range c.abilities {
-		if value > 0 {
-			abilitiesAboveZero = append(abilitiesAboveZero, ability)
-		}
-	}
-
-	if len(abilitiesAboveZero) > 0 {
-		info.WriteString("\n\rAbilities:\n\r")
-		// Sort abilities for consistent display
-		sort.Strings(abilitiesAboveZero)
-
-		// Display each ability with value > 0
-		for _, ability := range abilitiesAboveZero {
-			value := c.abilities[ability]
-			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", ability, int(value)))
-		}
-	}
-
-	// Inventory information
-	if len(c.inventory) > 0 {
-		// Separate worn and carried items
-		var wornItems, carriedItems []string
-
-		for _, item := range c.inventory {
-			if item != nil {
-				if item.isWorn {
-					wornItems = append(wornItems, item.name)
-				} else {
-					carriedItems = append(carriedItems, item.name)
-				}
-			}
-		}
-
-		// Display worn items
-		if len(wornItems) > 0 {
-			info.WriteString("\n\rYou are wearing ")
-			info.WriteString(formatItemListWithOxfordComma(wornItems))
-			info.WriteString(".\n\r")
-		}
-
-		// Display carried items
-		if len(carriedItems) > 0 {
-			info.WriteString("\n\rYou are carrying ")
-			info.WriteString(formatItemListWithOxfordComma(carriedItems))
-			info.WriteString(".\n\r")
-		}
-	} else {
-		info.WriteString("\n\rYou are not carrying anything.\n\r")
-	}
-
-	return info.String()
-}
-
-// GetSkillInfo returns a formatted string with character abilities
-func (c *Character) GetSkillInfo() string {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	var skillInfo strings.Builder
-	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Abilities\n\r", ApplyColor("bright_cyan", c.name)))
-	skillInfo.WriteString("----------------\n\r")
-
-	// Abilities - only show those above zero
-	var abilitiesAboveZero []string
-	for ability, value := range c.abilities {
-		if value > 0 {
-			abilitiesAboveZero = append(abilitiesAboveZero, ability)
-		}
-	}
-
-	if len(abilitiesAboveZero) > 0 {
-		// Sort abilities for consistent display
-		sort.Strings(abilitiesAboveZero)
-
-		// Display each ability with value > 0
-		for _, ability := range abilitiesAboveZero {
-			value := c.abilities[ability]
-			skillInfo.WriteString(fmt.Sprintf("  %-15s: %d\n\r", ability, int(value)))
-		}
-	} else {
-		skillInfo.WriteString("  You have not developed any abilities yet.\n\r")
-	}
-
-	return skillInfo.String()
-}
-
-// LookAtTarget handles examining specific targets
-func (c *Character) LookAtTarget(target string) error {
-	// Check if this is a "look in" command
-	if strings.HasPrefix(target, "in ") {
-		// Extract container name and check for "my" prefix
-		containerPart := strings.TrimPrefix(target, "in ")
-		isMyContainer := false
-
-		if strings.HasPrefix(containerPart, "my ") {
-			isMyContainer = true
-			containerPart = strings.TrimPrefix(containerPart, "my ")
-		}
-
-		desc := c.LookInContainer(containerPart, isMyContainer)
-		c.player.commandOut <- desc
-		return nil
-	}
-
-	// First check if target is in the room
-	desc := c.LookAtRoomTarget(target)
-	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
-		c.player.commandOut <- desc
-		return nil
-	}
-
-	// Then check if it's in inventory
-	desc = c.LookAtInventoryItem(target)
-	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
-		c.player.commandOut <- desc
-		return nil
-	}
-
-	// Not found anywhere
-	c.player.commandOut <- fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
-	return nil
-}
-
-// LookAtRoomTarget looks for a target in the room (character or item)
-func (c *Character) LookAtRoomTarget(target string) string {
-	// Check if looking at a character in the room
-	if c.room != nil {
-		c.room.mutex.RLock()
-		for _, char := range c.room.characters {
-			if char != nil && strings.Contains(strings.ToLower(char.name), target) {
-				c.room.mutex.RUnlock()
-				return FormatCharacterDescription(char, c)
-			}
-		}
-
-		// Check if looking at an item in the room
-		for _, item := range c.room.items {
-			if item != nil && MatchesTarget(item.name, target) {
-				c.room.mutex.RUnlock()
-				return formatItemDescription(item)
-			}
-		}
-
-		// Check for directions/exits
-		for direction, exit := range c.room.exits {
-			if strings.Contains(exit.direction, target) && exit != nil && exit.visible {
-				c.room.mutex.RUnlock()
-				if exit.description != "" {
-					return fmt.Sprintf("\n\r%s\n\r", exit.description)
-				}
-				return fmt.Sprintf("\n\rYou see an exit leading %s.\n\r", direction)
-			}
-		}
-		c.room.mutex.RUnlock()
-	}
-
-	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
-}
-
-// LookAtInventoryItem looks for an item in the character's inventory
-func (c *Character) LookAtInventoryItem(target string) string {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	for _, item := range c.inventory {
-		if item != nil && MatchesTarget(item.name, target) {
-			return formatItemDescription(item)
-		}
-	}
-
-	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
-}
-
-// LookInContainer handles looking inside a container
-func (c *Character) LookInContainer(containerName string, isMyContainer bool) string {
-	if isMyContainer {
-		// Look in character's inventory for the container
-		c.mutex.RLock()
-		var container *Item
-		for _, item := range c.inventory {
-			if item != nil && MatchesTarget(item.name, containerName) {
-				container = item
-				break
-			}
-		}
-		c.mutex.RUnlock()
-
-		if container == nil {
-			return fmt.Sprintf("\n\rYou don't have a '%s'.\n\r", containerName)
-		}
-
-		if !container.container {
-			return fmt.Sprintf("\n\rThe %s is not a container.\n\r", container.name)
-		}
-
-		return "\n\r" + container.GetContainerContents()
-	} else {
-		// Look in room for the container
-		if c.room == nil {
-			return "\n\rYou're not in a valid room.\n\r"
-		}
-
-		c.room.mutex.RLock()
-		var container *Item
-		for _, item := range c.room.items {
-			if item != nil && MatchesTarget(item.name, containerName) {
-				container = item
-				break
-			}
-		}
-		c.room.mutex.RUnlock()
-
-		if container == nil {
-			return fmt.Sprintf("\n\rYou don't see a '%s' here.\n\r", containerName)
-		}
-
-		if !container.container {
-			return fmt.Sprintf("\n\rThe %s is not a container.\n\r", container.name)
-		}
-
-		return "\n\r" + container.GetContainerContents()
 	}
 }
 

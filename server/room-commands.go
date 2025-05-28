@@ -67,7 +67,7 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 	}
 
 	// Item commands
-	if verb == "get" || verb == "take" || verb == "drop" || verb == "put" || verb == "wear" || verb == "equip" || verb == "remove" {
+	if verb == "get" || verb == "take" || verb == "drop" || verb == "put" || verb == "wear" || verb == "equip" || verb == "remove" || verb == "switch" {
 		return handleItemCommand(cmd)
 	}
 
@@ -159,10 +159,12 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 		return handleDropCommand(cmd, targetName)
 	case "put":
 		return handlePutCommand(cmd)
-	case "wear", "equip":
+	case "wear":
 		return handleWearCommand(cmd, targetName)
 	case "remove":
 		return handleRemoveCommand(cmd, targetName)
+	case "switch":
+		return handleSwitchCommand(cmd, targetName)
 	default:
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -227,19 +229,38 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 		}
 	}
 
-	// Find matching items in character's inventory
+	// Find matching items in character's inventory and hands
 	character.mutex.Lock()
 	var matchingItems []struct {
-		item *Item
-		slot string
+		item     *Item
+		slot     string
+		isInHand bool
 	}
 
+	// Check hands first
+	if character.rightHand != nil && MatchesTarget(character.rightHand.name, itemBaseName) {
+		matchingItems = append(matchingItems, struct {
+			item     *Item
+			slot     string
+			isInHand bool
+		}{character.rightHand, "right_hand", true})
+	}
+	if character.leftHand != nil && MatchesTarget(character.leftHand.name, itemBaseName) {
+		matchingItems = append(matchingItems, struct {
+			item     *Item
+			slot     string
+			isInHand bool
+		}{character.leftHand, "left_hand", true})
+	}
+
+	// Then check inventory
 	for slot, item := range character.inventory {
 		if item != nil && MatchesTarget(item.name, itemBaseName) {
 			matchingItems = append(matchingItems, struct {
-				item *Item
-				slot string
-			}{item, slot})
+				item     *Item
+				slot     string
+				isInHand bool
+			}{item, slot, false})
 		}
 	}
 
@@ -297,8 +318,16 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 		}
 	}
 
-	// Remove item from inventory before unlocking
-	delete(character.inventory, itemSlot)
+	// Remove item from inventory or hand before unlocking
+	if targetMatch.isInHand {
+		if targetMatch.slot == "right_hand" {
+			character.rightHand = nil
+		} else if targetMatch.slot == "left_hand" {
+			character.leftHand = nil
+		}
+	} else {
+		delete(character.inventory, itemSlot)
+	}
 	character.mutex.Unlock()
 
 	// Find the container
@@ -316,10 +345,8 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 		character.mutex.RUnlock()
 
 		if len(matchingContainers) == 0 {
-			// Put the item back in inventory
-			character.mutex.Lock()
-			character.inventory[itemSlot] = itemToPut
-			character.mutex.Unlock()
+			// Put the item back where it was
+			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
 
 			return &CommandResponse{
 				RequestID: cmd.ID,
@@ -331,10 +358,8 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 
 		// If multiple matches and no ordinal specified, inform the player
 		if len(matchingContainers) > 1 && !containerHasOrdinal {
-			// Put the item back in inventory
-			character.mutex.Lock()
-			character.inventory[itemSlot] = itemToPut
-			character.mutex.Unlock()
+			// Put the item back where it was
+			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
 
 			return &CommandResponse{
 				RequestID: cmd.ID,
@@ -347,10 +372,8 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 
 		// Check if position is valid
 		if containerPosition > len(matchingContainers) {
-			// Put the item back in inventory
-			character.mutex.Lock()
-			character.inventory[itemSlot] = itemToPut
-			character.mutex.Unlock()
+			// Put the item back where it was
+			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
 
 			return &CommandResponse{
 				RequestID: cmd.ID,
@@ -364,10 +387,8 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 	} else {
 		// Look in room
 		if character.room == nil {
-			// Put the item back in inventory
-			character.mutex.Lock()
-			character.inventory[itemSlot] = itemToPut
-			character.mutex.Unlock()
+			// Put the item back where it was
+			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
 
 			return &CommandResponse{
 				RequestID: cmd.ID,
@@ -386,10 +407,8 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 		character.room.mutex.RUnlock()
 
 		if len(matchingContainers) == 0 {
-			// Put the item back in inventory
-			character.mutex.Lock()
-			character.inventory[itemSlot] = itemToPut
-			character.mutex.Unlock()
+			// Put the item back where it was
+			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
 
 			return &CommandResponse{
 				RequestID: cmd.ID,
@@ -401,10 +420,8 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 
 		// If multiple matches and no ordinal specified, inform the player
 		if len(matchingContainers) > 1 && !containerHasOrdinal {
-			// Put the item back in inventory
-			character.mutex.Lock()
-			character.inventory[itemSlot] = itemToPut
-			character.mutex.Unlock()
+			// Put the item back where it was
+			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
 
 			return &CommandResponse{
 				RequestID: cmd.ID,
@@ -417,10 +434,8 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 
 		// Check if position is valid
 		if containerPosition > len(matchingContainers) {
-			// Put the item back in inventory
-			character.mutex.Lock()
-			character.inventory[itemSlot] = itemToPut
-			character.mutex.Unlock()
+			// Put the item back where it was
+			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
 
 			return &CommandResponse{
 				RequestID: cmd.ID,
@@ -435,10 +450,8 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Check if container is actually a container
 	if !container.container {
-		// Put the item back in inventory
-		character.mutex.Lock()
-		character.inventory[itemSlot] = itemToPut
-		character.mutex.Unlock()
+		// Put the item back where it was
+		restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
 
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -451,10 +464,8 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 	// Add item to container
 	err := container.AddItemToContainer(itemToPut)
 	if err != nil {
-		// Put the item back in inventory
-		character.mutex.Lock()
-		character.inventory[itemSlot] = itemToPut
-		character.mutex.Unlock()
+		// Put the item back where it was
+		restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
 
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -697,14 +708,41 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 		}
 	}
 
-	// Add to character's inventory
+	// Try to put item in a hand
 	character.mutex.Lock()
-	slotName := removedItem.name
-	character.inventory[slotName] = removedItem
+	var placedInHand bool
+	var handUsed string
+
+	// Try right hand first (dominant hand)
+	if character.rightHand == nil {
+		character.rightHand = removedItem
+		placedInHand = true
+		handUsed = "right hand"
+	} else if character.leftHand == nil {
+		// Try left hand if right is full
+		character.leftHand = removedItem
+		placedInHand = true
+		handUsed = "left hand"
+	}
 	character.mutex.Unlock()
 
+	// If both hands are full, put the item back in the container
+	if !placedInHand {
+		// Put item back in container
+		err := container.AddItemToContainer(removedItem)
+		if err != nil {
+			Logger.Error("Failed to return item to container after hands full", "error", err)
+		}
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("your hands are full"),
+			Timestamp: time.Now(),
+		}
+	}
+
 	// Success message
-	message := fmt.Sprintf("\n\rYou take %s from %s.\n\r", removedItem.name, container.name)
+	message := fmt.Sprintf("\n\rYou take %s from %s and hold it in your %s.\n\r", removedItem.name, container.name, handUsed)
 
 	// Notify room
 	if character.room != nil {
@@ -803,11 +841,33 @@ func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
 		}
 	}
 
-	// Add to character's inventory first
+	// Try to put item in a hand
 	character.mutex.Lock()
-	slotName := targetItem.name // Use the item name as the slot name
-	character.inventory[slotName] = targetItem
+	var placedInHand bool
+	var handUsed string
+
+	// Try right hand first (dominant hand)
+	if character.rightHand == nil {
+		character.rightHand = targetItem
+		placedInHand = true
+		handUsed = "right hand"
+	} else if character.leftHand == nil {
+		// Try left hand if right is full
+		character.leftHand = targetItem
+		placedInHand = true
+		handUsed = "left hand"
+	}
 	character.mutex.Unlock()
+
+	// If both hands are full, cannot pick up the item
+	if !placedInHand {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("your hands are full"),
+			Timestamp: time.Now(),
+		}
+	}
 
 	// Remove from room after character operation
 	room.mutex.Lock()
@@ -815,7 +875,7 @@ func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
 	room.mutex.Unlock()
 
 	// Create success message
-	message := fmt.Sprintf("\n\rYou pick up %s.\n\r", targetItem.name)
+	message := fmt.Sprintf("\n\rYou pick up %s in your %s.\n\r", targetItem.name, handUsed)
 
 	// Notify the room
 	SendRoomMessageExcept(room, fmt.Sprintf("\n\r%s picks up %s.\n\r", character.name, targetItem.name), character)
@@ -846,19 +906,38 @@ func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	// Parse ordinal from target
 	position, itemName, hasOrdinal := ParseTargetWithOrdinal(targetName)
 
-	// Find matching items in the character's inventory
+	// Find matching items in the character's inventory and hands
 	character.mutex.Lock()
 	var matchingItems []struct {
-		item *Item
-		slot string
+		item     *Item
+		slot     string
+		isInHand bool
 	}
 
+	// Check hands first
+	if character.rightHand != nil && MatchesTarget(character.rightHand.name, itemName) {
+		matchingItems = append(matchingItems, struct {
+			item     *Item
+			slot     string
+			isInHand bool
+		}{character.rightHand, "right_hand", true})
+	}
+	if character.leftHand != nil && MatchesTarget(character.leftHand.name, itemName) {
+		matchingItems = append(matchingItems, struct {
+			item     *Item
+			slot     string
+			isInHand bool
+		}{character.leftHand, "left_hand", true})
+	}
+
+	// Then check inventory
 	for slot, item := range character.inventory {
 		if item != nil && MatchesTarget(item.name, itemName) {
 			matchingItems = append(matchingItems, struct {
-				item *Item
-				slot string
-			}{item, slot})
+				item     *Item
+				slot     string
+				isInHand bool
+			}{item, slot, false})
 		}
 	}
 
@@ -916,8 +995,16 @@ func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 		}
 	}
 
-	// Remove from inventory
-	delete(character.inventory, slotToRemove)
+	// Remove from inventory or hand
+	if targetMatch.isInHand {
+		if targetMatch.slot == "right_hand" {
+			character.rightHand = nil
+		} else if targetMatch.slot == "left_hand" {
+			character.leftHand = nil
+		}
+	} else {
+		delete(character.inventory, slotToRemove)
+	}
 	character.mutex.Unlock()
 
 	// Add to room
@@ -962,15 +1049,29 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 		}
 	}
 
-	// Find the item in the character's inventory
+	// Find the item in the character's inventory or hands
 	var itemToWear *Item
+	var fromHand string // Track which hand the item came from
 
-	// Lock only for inventory search
+	// Lock only for inventory and hand search
 	character.mutex.Lock()
+
+	// First check inventory
 	for _, item := range character.inventory {
 		if item != nil && MatchesTarget(item.name, targetName) {
 			itemToWear = item
 			break
+		}
+	}
+
+	// If not found in inventory, check hands
+	if itemToWear == nil {
+		if character.rightHand != nil && MatchesTarget(character.rightHand.name, targetName) {
+			itemToWear = character.rightHand
+			fromHand = "right"
+		} else if character.leftHand != nil && MatchesTarget(character.leftHand.name, targetName) {
+			itemToWear = character.leftHand
+			fromHand = "left"
 		}
 	}
 	character.mutex.Unlock()
@@ -1091,6 +1192,34 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 		}
 	}
 
+	// If item is from a hand, remove it from that hand and add to inventory
+	if fromHand != "" {
+		character.mutex.Lock()
+
+		// Check if the inventory slot is already occupied
+		slotKey := itemToWear.id.String()
+		if existingItem, exists := character.inventory[slotKey]; exists && existingItem != nil {
+			character.mutex.Unlock()
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("this item is already in your inventory"),
+				Timestamp: time.Now(),
+			}
+		}
+
+		// Safe to proceed - remove from hand and add to inventory
+		if fromHand == "right" {
+			character.rightHand = nil
+		} else {
+			character.leftHand = nil
+		}
+
+		// Add to inventory using the item's ID as the slot
+		character.inventory[slotKey] = itemToWear
+		character.mutex.Unlock()
+	}
+
 	// Update the item's state with proper mutex protection
 	itemToWear.mutex.Lock()
 	itemToWear.wornOn = finalWearLocations
@@ -1175,6 +1304,44 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 		}
 	}
 
+	// Check if we have a free hand to put the item in
+	var targetHand string
+	if character.rightHand == nil {
+		targetHand = "right"
+	} else if character.leftHand == nil {
+		targetHand = "left"
+	} else {
+		// Both hands are full, cannot remove
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("your hands are full"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Find which slot the item is in
+	var itemSlot string
+	for slot, item := range character.inventory {
+		if item == itemToRemove {
+			itemSlot = slot
+			break
+		}
+	}
+
+	// Move item to hand
+	if targetHand == "right" {
+		character.rightHand = itemToRemove
+	} else {
+		character.leftHand = itemToRemove
+	}
+
+	// Remove from inventory slot
+	if itemSlot != "" {
+		delete(character.inventory, itemSlot)
+	}
+
 	// Mark item as not worn (with proper mutex protection)
 	itemToRemove.mutex.Lock()
 	itemToRemove.isWorn = false
@@ -1191,7 +1358,11 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 	}
 
 	// Create success message
-	message := fmt.Sprintf("\n\rYou remove %s.\n\r", itemName)
+	handName := "right hand"
+	if targetHand == "left" {
+		handName = "left hand"
+	}
+	message := fmt.Sprintf("\n\rYou remove %s and hold it in your %s.\n\r", itemName, handName)
 
 	// Notify the room
 	if character.room != nil {
@@ -1205,6 +1376,105 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 		Success:   true,
 		Message:   message,
 		Timestamp: time.Now(),
+	}
+}
+
+// handleSwitchCommand processes the switch hands command
+func handleSwitchCommand(cmd *CommandRequest, targetName string) *CommandResponse {
+	if cmd == nil {
+		return &CommandResponse{
+			Success:   false,
+			Error:     fmt.Errorf("invalid command request"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if the user provided an argument
+	if targetName != "" {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("usage: switch (no arguments needed)"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Lock the character to check and modify hand contents
+	character.mutex.Lock()
+
+	// Check if both hands are empty
+	if character.rightHand == nil && character.leftHand == nil {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("your hands are empty"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Get references to items before switching
+	rightItem := character.rightHand
+	leftItem := character.leftHand
+
+	// Perform the switch
+	character.rightHand = leftItem
+	character.leftHand = rightItem
+
+	character.mutex.Unlock()
+
+	// Create appropriate success message based on what was switched
+	var message string
+	if rightItem != nil && leftItem != nil {
+		// Both hands had items
+		message = fmt.Sprintf("\n\rYou switch %s to your right hand and %s to your left hand.\n\r",
+			leftItem.name, rightItem.name)
+	} else if rightItem != nil {
+		// Only right hand had an item
+		message = fmt.Sprintf("\n\rYou switch %s to your left hand.\n\r", rightItem.name)
+	} else {
+		// Only left hand had an item
+		message = fmt.Sprintf("\n\rYou switch %s to your right hand.\n\r", leftItem.name)
+	}
+
+	// Notify the room
+	if character.room != nil {
+		SendRoomMessageExcept(character.room,
+			fmt.Sprintf("\n\r%s switches the items in their hands.\n\r", character.name),
+			character)
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   message,
+		Timestamp: time.Now(),
+	}
+}
+
+// restoreItemToOriginalLocation restores an item to its original location (hand or inventory)
+func restoreItemToOriginalLocation(character *Character, item *Item, slot string, isInHand bool) {
+	character.mutex.Lock()
+	defer character.mutex.Unlock()
+
+	if isInHand {
+		if slot == "right_hand" {
+			character.rightHand = item
+		} else if slot == "left_hand" {
+			character.leftHand = item
+		}
+	} else {
+		character.inventory[slot] = item
 	}
 }
 
@@ -1305,6 +1575,16 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 
 	// Check if target room exists and load it if necessary
 	targetRoom := targetExit.targetRoom
+
+	// Check if we have a room reference but it's not running (stale reference)
+	if targetRoom != nil && !targetRoom.running {
+		Logger.Debug("Exit has stale room reference, clearing it",
+			"exitID", targetExit.exitID,
+			"targetRoomID", targetExit.targetRoomID)
+		targetRoom = nil
+		targetExit.targetRoom = nil
+	}
+
 	if targetRoom == nil {
 		// Try to load the room using the target room ID
 		loadedRoom, err := game.LoadRoom(targetExit.targetRoomID)

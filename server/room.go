@@ -363,6 +363,9 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 
 			r.Stop()
 
+			// Clear exit references to this room to prevent stale references
+			game.clearExitReferencesToRoom(r.roomID)
+
 			// Remove room from game's room map
 			game.mutex.Lock()
 			delete(game.rooms, r.roomID)
