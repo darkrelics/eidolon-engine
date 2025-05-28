@@ -26,7 +26,6 @@ import (
 	"time"
 )
 
-
 // ProcessCommand determines command tier and routes it appropriately
 func ProcessCommand(ctx context.Context, character *Character, input string) (bool, error) {
 	// Limit input to 240 characters

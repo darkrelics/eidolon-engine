@@ -145,7 +145,6 @@ func (g *Game) initCommands() {
 		usage:       "wear <item>",
 	}
 
-
 	g.commands["remove"] = CommandInfo{
 		timed:       true,
 		handler:     nil, // Escalates to room goroutine

@@ -1055,7 +1055,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 
 	// Lock only for inventory and hand search
 	character.mutex.Lock()
-	
+
 	// First check inventory
 	for _, item := range character.inventory {
 		if item != nil && MatchesTarget(item.name, targetName) {
@@ -1063,7 +1063,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 			break
 		}
 	}
-	
+
 	// If not found in inventory, check hands
 	if itemToWear == nil {
 		if character.rightHand != nil && MatchesTarget(character.rightHand.name, targetName) {
@@ -1195,7 +1195,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	// If item is from a hand, remove it from that hand and add to inventory
 	if fromHand != "" {
 		character.mutex.Lock()
-		
+
 		// Check if the inventory slot is already occupied
 		slotKey := itemToWear.id.String()
 		if existingItem, exists := character.inventory[slotKey]; exists && existingItem != nil {
@@ -1207,14 +1207,14 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 				Timestamp: time.Now(),
 			}
 		}
-		
+
 		// Safe to proceed - remove from hand and add to inventory
 		if fromHand == "right" {
 			character.rightHand = nil
 		} else {
 			character.leftHand = nil
 		}
-		
+
 		// Add to inventory using the item's ID as the slot
 		character.inventory[slotKey] = itemToWear
 		character.mutex.Unlock()

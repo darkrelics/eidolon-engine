@@ -447,16 +447,16 @@ func TestValidateCommand(t *testing.T) {
 	mockGame := &Game{
 		commands: make(map[string]CommandInfo),
 	}
-	
+
 	// Add some test commands
 	mockGame.commands["look"] = CommandInfo{}
 	mockGame.commands["go"] = CommandInfo{}
 	mockGame.commands["get"] = CommandInfo{}
 	mockGame.commands["inventory"] = CommandInfo{}
-	
+
 	// Build command index
 	mockGame.buildCommandIndex()
-	
+
 	// Create a mock character
 	mockChar := &Character{
 		name: "TestChar",
@@ -525,7 +525,7 @@ func TestValidateCommand(t *testing.T) {
 		{
 			name:         "Fuzzy match medium confidence",
 			character:    mockChar,
-			input:        "invntry", // Close to "inventory" - may actually match with >80%
+			input:        "invntry",   // Close to "inventory" - may actually match with >80%
 			expectedVerb: "inventory", // Fuzzy matching might accept this
 			expectTokens: true,
 		},
@@ -547,7 +547,7 @@ func TestValidateCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			verb, tokens, err := ValidateCommand(tt.character, tt.input)
-			
+
 			if tt.expectedError != "" {
 				if err == nil {
 					t.Errorf("ValidateCommand() expected error %q, got nil", tt.expectedError)
@@ -556,16 +556,16 @@ func TestValidateCommand(t *testing.T) {
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("ValidateCommand() unexpected error: %v", err)
 				return
 			}
-			
+
 			if verb != tt.expectedVerb {
 				t.Errorf("ValidateCommand() verb = %q, expected %q", verb, tt.expectedVerb)
 			}
-			
+
 			if tt.expectTokens && len(tokens) == 0 {
 				t.Errorf("ValidateCommand() returned no tokens, expected some")
 			}
@@ -576,21 +576,21 @@ func TestValidateCommand(t *testing.T) {
 func TestBuildOrdinalIndex(t *testing.T) {
 	// Clear the index first
 	ordinalIndex = nil
-	
+
 	// Build the index
 	buildOrdinalIndex()
-	
+
 	// Check that index was built
 	if len(ordinalIndex) != len(ordinalWords) {
 		t.Errorf("buildOrdinalIndex() created index with %d entries, expected %d", len(ordinalIndex), len(ordinalWords))
 	}
-	
+
 	// Check that all ordinals are in the index
 	indexMap := make(map[string]bool)
 	for _, ord := range ordinalIndex {
 		indexMap[ord] = true
 	}
-	
+
 	for ord := range ordinalWords {
 		if !indexMap[ord] {
 			t.Errorf("buildOrdinalIndex() missing ordinal %q in index", ord)

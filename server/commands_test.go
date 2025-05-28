@@ -25,7 +25,7 @@ import (
 	"sync"
 	"testing"
 	"time"
-	
+
 	"github.com/gofrs/uuid/v5"
 )
 
@@ -50,7 +50,7 @@ func createTestGameForCommands() *Game {
 		commands: make(map[string]CommandInfo),
 		mutex:    sync.RWMutex{},
 	}
-	
+
 	// Register test commands
 	g.commands["look"] = CommandInfo{
 		timed:       false,
@@ -58,31 +58,31 @@ func createTestGameForCommands() *Game {
 		description: "Look around",
 		usage:       "look",
 	}
-	
+
 	g.commands["quit"] = CommandInfo{
 		timed:       false,
 		handler:     mockQuitCommand,
 		description: "Exit game",
 		usage:       "quit",
 	}
-	
+
 	g.commands["get"] = CommandInfo{
 		timed:       true,
 		handler:     mockTimedCommand,
 		description: "Get item",
 		usage:       "get <item>",
 	}
-	
+
 	g.commands["go"] = CommandInfo{
 		timed:       true,
 		handler:     nil, // Escalates to room
 		description: "Move",
 		usage:       "go <direction>",
 	}
-	
+
 	// Build command index
 	g.buildCommandIndex()
-	
+
 	return g
 }
 
@@ -91,7 +91,7 @@ func createTestCharacter(game *Game) *Character {
 	player := &Player{
 		commandOut: make(chan string, 10),
 	}
-	
+
 	room := &Room{
 		roomID:     1,
 		commandIn:  make(chan *CommandRequest, 10),
@@ -99,16 +99,16 @@ func createTestCharacter(game *Game) *Character {
 		mutex:      sync.RWMutex{},
 		characters: make(map[uuid.UUID]*Character),
 	}
-	
+
 	char := &Character{
 		name:           "TestChar",
 		game:           game,
 		player:         player,
 		room:           room,
 		gameCommandOut: make(chan *CommandRequest, 10),
-		waitUntil: time.Now(), // No timeout by default
+		waitUntil:      time.Now(), // No timeout by default
 	}
-	
+
 	return char
 }
 
@@ -116,7 +116,7 @@ func TestProcessCommand_InputValidation(t *testing.T) {
 	game := createTestGameForCommands()
 	char := createTestCharacter(game)
 	ctx := context.Background()
-	
+
 	tests := []struct {
 		name          string
 		input         string
@@ -138,7 +138,7 @@ func TestProcessCommand_InputValidation(t *testing.T) {
 			expectedError: "",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ProcessCommand(ctx, char, tt.input)
@@ -155,7 +155,7 @@ func TestProcessCommand_InputValidation(t *testing.T) {
 
 func TestProcessCommand_CharacterState(t *testing.T) {
 	ctx := context.Background()
-	
+
 	tests := []struct {
 		name          string
 		character     *Character
@@ -172,7 +172,7 @@ func TestProcessCommand_CharacterState(t *testing.T) {
 			expectedError: "Invalid character state",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ProcessCommand(ctx, tt.character, "look")
@@ -192,10 +192,10 @@ func TestProcessCommand_CommandTimeout(t *testing.T) {
 	game := createTestGameForCommands()
 	char := createTestCharacter(game)
 	ctx := context.Background()
-	
+
 	// Set command timeout in the future
 	char.waitUntil = time.Now().Add(1 * time.Hour)
-	
+
 	// Commands that should be blocked
 	blockedCommands := []string{"get sword", "go north"}
 	for _, cmd := range blockedCommands {
@@ -204,7 +204,7 @@ func TestProcessCommand_CommandTimeout(t *testing.T) {
 			t.Errorf("Expected timeout error for %q, got %v", cmd, err)
 		}
 	}
-	
+
 	// Commands that should be allowed - only test with look which we mocked
 	_, err := ProcessCommand(ctx, char, "look")
 	if err != nil && strings.Contains(err.Error(), "You must wait") {
@@ -216,13 +216,13 @@ func TestProcessCommand_CharacterHandler(t *testing.T) {
 	game := createTestGameForCommands()
 	char := createTestCharacter(game)
 	ctx := context.Background()
-	
+
 	// Test untimed command with handler
 	_, err := ProcessCommand(ctx, char, "look")
 	if err != nil {
 		t.Errorf("Expected look command to succeed, got %v", err)
 	}
-	
+
 	// Test timed command with handler
 	_, err = ProcessCommand(ctx, char, "get sword")
 	if err != nil {
@@ -234,7 +234,7 @@ func TestProcessCommand_RoomEscalation(t *testing.T) {
 	game := createTestGameForCommands()
 	char := createTestCharacter(game)
 	ctx := context.Background()
-	
+
 	// Set up a goroutine to handle room commands
 	go func() {
 		for cmdReq := range char.room.commandIn {
@@ -243,7 +243,7 @@ func TestProcessCommand_RoomEscalation(t *testing.T) {
 			}
 		}
 	}()
-	
+
 	// Command that escalates to room (no handler)
 	_, err := ProcessCommand(ctx, char, "go north")
 	if err != nil {
@@ -254,16 +254,16 @@ func TestProcessCommand_RoomEscalation(t *testing.T) {
 func TestProcessCommand_ContextCancellation(t *testing.T) {
 	game := createTestGameForCommands()
 	char := createTestCharacter(game)
-	
+
 	// Create a context that we'll cancel
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	// Command that escalates to room but no handler responds
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		cancel()
 	}()
-	
+
 	_, err := ProcessCommand(ctx, char, "go north")
 	if err == nil || err != context.Canceled {
 		t.Errorf("Expected context canceled error, got %v", err)
@@ -274,7 +274,7 @@ func TestEscalateToGame(t *testing.T) {
 	game := createTestGameForCommands()
 	char := createTestCharacter(game)
 	ctx := context.Background()
-	
+
 	// Set up a goroutine to handle game commands
 	go func() {
 		for cmdReq := range char.gameCommandOut {
@@ -283,7 +283,7 @@ func TestEscalateToGame(t *testing.T) {
 			}
 		}
 	}()
-	
+
 	// Test successful escalation
 	_, err := escalateToGame(ctx, char, "test", []string{"test"})
 	if err != nil {
@@ -295,12 +295,12 @@ func TestEscalateToGame_BufferFull(t *testing.T) {
 	game := createTestGameForCommands()
 	char := createTestCharacter(game)
 	ctx := context.Background()
-	
+
 	// Fill the game command buffer
 	for range cap(char.gameCommandOut) {
 		char.gameCommandOut <- &CommandRequest{}
 	}
-	
+
 	// Try to escalate - should fail immediately
 	_, err := escalateToGame(ctx, char, "test", []string{"test"})
 	if err == nil || !strings.Contains(err.Error(), "processing too many commands") {
@@ -312,19 +312,18 @@ func TestEscalateToGame_Timeout(t *testing.T) {
 	game := createTestGameForCommands()
 	char := createTestCharacter(game)
 	ctx := context.Background()
-	
+
 	// Don't set up a handler - let it timeout
 	start := time.Now()
 	_, err := escalateToGame(ctx, char, "test", []string{"test"})
 	elapsed := time.Since(start)
-	
+
 	if err == nil || !strings.Contains(err.Error(), "command timed out") {
 		t.Errorf("Expected timeout error, got %v", err)
 	}
-	
+
 	// Should timeout after ~5 seconds
 	if elapsed < 4*time.Second || elapsed > 6*time.Second {
 		t.Errorf("Expected ~5 second timeout, got %v", elapsed)
 	}
 }
-
