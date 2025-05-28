@@ -159,7 +159,7 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 		return handleDropCommand(cmd, targetName)
 	case "put":
 		return handlePutCommand(cmd)
-	case "wear", "equip":
+	case "wear":
 		return handleWearCommand(cmd, targetName)
 	case "remove":
 		return handleRemoveCommand(cmd, targetName)
@@ -1192,14 +1192,31 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 		}
 	}
 
-	// If item is from a hand, remove it from that hand
+	// If item is from a hand, remove it from that hand and add to inventory
 	if fromHand != "" {
 		character.mutex.Lock()
+		
+		// Check if the inventory slot is already occupied
+		slotKey := itemToWear.id.String()
+		if existingItem, exists := character.inventory[slotKey]; exists && existingItem != nil {
+			character.mutex.Unlock()
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("this item is already in your inventory"),
+				Timestamp: time.Now(),
+			}
+		}
+		
+		// Safe to proceed - remove from hand and add to inventory
 		if fromHand == "right" {
 			character.rightHand = nil
 		} else {
 			character.leftHand = nil
 		}
+		
+		// Add to inventory using the item's ID as the slot
+		character.inventory[slotKey] = itemToWear
 		character.mutex.Unlock()
 	}
 
@@ -1287,6 +1304,44 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 		}
 	}
 
+	// Check if we have a free hand to put the item in
+	var targetHand string
+	if character.rightHand == nil {
+		targetHand = "right"
+	} else if character.leftHand == nil {
+		targetHand = "left"
+	} else {
+		// Both hands are full, cannot remove
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("your hands are full"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Find which slot the item is in
+	var itemSlot string
+	for slot, item := range character.inventory {
+		if item == itemToRemove {
+			itemSlot = slot
+			break
+		}
+	}
+
+	// Move item to hand
+	if targetHand == "right" {
+		character.rightHand = itemToRemove
+	} else {
+		character.leftHand = itemToRemove
+	}
+
+	// Remove from inventory slot
+	if itemSlot != "" {
+		delete(character.inventory, itemSlot)
+	}
+
 	// Mark item as not worn (with proper mutex protection)
 	itemToRemove.mutex.Lock()
 	itemToRemove.isWorn = false
@@ -1303,7 +1358,11 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 	}
 
 	// Create success message
-	message := fmt.Sprintf("\n\rYou remove %s.\n\r", itemName)
+	handName := "right hand"
+	if targetHand == "left" {
+		handName = "left hand"
+	}
+	message := fmt.Sprintf("\n\rYou remove %s and hold it in your %s.\n\r", itemName, handName)
 
 	// Notify the room
 	if character.room != nil {
