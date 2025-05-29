@@ -200,7 +200,7 @@ func (p *Player) Save() error {
 	err := database.Put(p.server.ctx, "players", playerData)
 	if err != nil {
 		Logger.Error("Error saving player data", "error", err)
-		p.commandOut <- "Error saving player data. Please contact an administrator.\n"
+		SafeSendString(p.commandOut, "Error saving player data. Please contact an administrator.\n", p.id.String())
 		return fmt.Errorf("error saving player data: %w", err)
 	}
 
@@ -345,6 +345,9 @@ func (p *Player) Stop() {
 			p.server.mutex.Unlock()
 			Logger.Info("Player removed from server", "player_name", p.id)
 		}
+
+		// Wait briefly for goroutines to finish processing
+		time.Sleep(100 * time.Millisecond)
 
 		// Close channels after all operations are done
 		close(p.commandOut)

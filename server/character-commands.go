@@ -97,7 +97,7 @@ func executeLookCommand(character *Character, tokens []string) error {
 
 	// Get room description
 	description := character.room.GetDescription(character)
-	character.player.commandOut <- description
+	SafeSendString(character.player.commandOut, description, character.name)
 
 	// Always send prompt after room description
 	character.SendPrompt()
@@ -127,7 +127,7 @@ func executeWhoCommand(character *Character, tokens []string) error {
 
 	// Check if there are any other characters online
 	if len(characterNames) == 0 {
-		character.player.commandOut <- whoEmpty
+		SafeSendString(character.player.commandOut, whoEmpty, character.name)
 		return nil
 	}
 
@@ -144,7 +144,7 @@ func executeWhoCommand(character *Character, tokens []string) error {
 	msg.WriteString("\n\r")
 	msg.WriteString(fmt.Sprintf("Total Characters Online: %d\n\r", len(characterNames)))
 
-	character.player.commandOut <- msg.String()
+	SafeSendString(character.player.commandOut, msg.String(), character.name)
 	return nil
 }
 
@@ -158,7 +158,7 @@ func executeInfoCommand(character *Character, tokens []string) error {
 
 	// Get character info display from character method
 	info := character.GetCharacterInfo()
-	character.player.commandOut <- info
+	SafeSendString(character.player.commandOut, info, character.name)
 	return nil
 }
 
@@ -172,7 +172,7 @@ func executeSkillCommand(character *Character, tokens []string) error {
 
 	// Get skill display from character method
 	skillInfo := character.GetSkillInfo()
-	character.player.commandOut <- skillInfo
+	SafeSendString(character.player.commandOut, skillInfo, character.name)
 	return nil
 }
 
@@ -245,7 +245,7 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 		}
 	}
 
-	character.player.commandOut <- invDisplay.String()
+	SafeSendString(character.player.commandOut, invDisplay.String(), character.name)
 	return nil
 }
 
@@ -387,26 +387,26 @@ func (c *Character) LookAtTarget(target string) error {
 		}
 
 		desc := c.LookInContainer(containerPart, isMyContainer)
-		c.player.commandOut <- desc
+		SafeSendString(c.player.commandOut, desc, c.name)
 		return nil
 	}
 
 	// First check if target is in the room
 	desc := c.LookAtRoomTarget(target)
 	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
-		c.player.commandOut <- desc
+		SafeSendString(c.player.commandOut, desc, c.name)
 		return nil
 	}
 
 	// Then check if it's in inventory
 	desc = c.LookAtInventoryItem(target)
 	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
-		c.player.commandOut <- desc
+		SafeSendString(c.player.commandOut, desc, c.name)
 		return nil
 	}
 
 	// Not found anywhere
-	c.player.commandOut <- fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+	SafeSendString(c.player.commandOut, fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target), c.name)
 	return nil
 }
 

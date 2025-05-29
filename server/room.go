@@ -464,20 +464,9 @@ func SendRoomMessageExcept(room *Room, message string, except *Character) {
 
 	// Send messages without holding the lock to prevent deadlock
 	for _, c := range recipients {
-		select {
-		case c.player.commandOut <- message:
+		if SafeSendString(c.player.commandOut, message, c.name) {
 			// After sending room message, send the prompt again to ensure consistent UI
-			select {
-			case c.player.commandOut <- c.prompt:
-				// Prompt sent successfully
-			default:
-				Logger.Warn("Failed to send prompt after room message to player",
-					"recipient", c.name)
-			}
-		default:
-			Logger.Warn("Failed to send room message to player",
-				"recipient", c.name,
-				"message", message)
+			SafeSendString(c.player.commandOut, c.prompt, c.name)
 		}
 	}
 }
@@ -521,6 +510,9 @@ func (r *Room) Stop() {
 	// Cancel the room's context to signal all operations to stop
 	// This is done outside the lock to prevent deadlock
 	cancelFunc()
+
+	// Wait briefly for goroutines to finish processing
+	time.Sleep(100 * time.Millisecond)
 
 	// Close channels after releasing the lock
 	// This prevents deadlock if channel operations were waiting on the mutex
