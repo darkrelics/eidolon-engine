@@ -106,6 +106,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		Inventory:     inventoryIDs,
 		LeftHandID:    leftHandID,
 		RightHandID:   rightHandID,
+		Hidden:        c.hidden,
 	}
 
 	// Save character and inventory transactionally

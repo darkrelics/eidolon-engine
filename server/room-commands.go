@@ -76,6 +76,20 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 		return handleSayCommand(cmd)
 	}
 
+	// Stealth commands
+	if verb == "hide" {
+		return handleHideCommand(cmd, r)
+	}
+	if verb == "sneak" {
+		return handleSneakCommand(cmd, game)
+	}
+	if verb == "search" {
+		return handleSearchCommand(cmd, r)
+	}
+	if verb == "point" {
+		return handlePointCommand(cmd, r)
+	}
+
 	// Look command (room-level effects)
 	if verb == "look" || verb == "l" {
 		// This is typically handled at the character level, but might have room-level effects
@@ -118,8 +132,13 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 	// Message for the speaker
 	speakerMessage := fmt.Sprintf("\n\rYou say '%s'\n\r", message)
 
-	// Message for others in the room
-	roomMessage := fmt.Sprintf("\n\r%s says '%s'\n\r", character.name, message)
+	// Message for others in the room - depends on whether speaker is hidden
+	var roomMessage string
+	if character.IsHidden() {
+		roomMessage = fmt.Sprintf("\n\rYou hear the voice of %s say '%s'\n\r", character.name, message)
+	} else {
+		roomMessage = fmt.Sprintf("\n\r%s says '%s'\n\r", character.name, message)
+	}
 
 	// Send message to everyone else in the room
 	SendRoomMessageExcept(character.room, roomMessage, character)
@@ -140,6 +159,20 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 			Success:   false,
 			Error:     fmt.Errorf("what do you want to %s?", cmd.Verb),
 			Timestamp: time.Now(),
+		}
+	}
+
+	// Reveal character if hidden - item actions break stealth
+	character := cmd.Character
+	if character != nil && character.IsHidden() {
+		character.SetHidden(false)
+		character.playerCommandOut <- "\n\rYou reveal yourself as you interact with items.\n\r"
+		
+		if character.room != nil {
+			SendRoomMessageExcept(character.room,
+				fmt.Sprintf("\n\r%s suddenly appears!\n\r", character.name),
+				character,
+			)
 		}
 	}
 
@@ -1491,6 +1524,19 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		}
 	}
 
+	// If this is not a sneak command and character is hidden, reveal them
+	if cmd.Verb != "sneak" && character.IsHidden() {
+		character.SetHidden(false)
+		character.playerCommandOut <- "\n\rYou reveal yourself as you move.\n\r"
+		
+		if character.room != nil {
+			SendRoomMessageExcept(character.room,
+				fmt.Sprintf("\n\r%s suddenly appears!\n\r", character.name),
+				character,
+			)
+		}
+	}
+
 	room := character.room
 	if room == nil {
 		return &CommandResponse{
@@ -1679,4 +1725,376 @@ func stripArticles(input string) string {
 	}
 
 	return input
+}
+
+// handleHideCommand processes the hide command
+func handleHideCommand(cmd *CommandRequest, room *Room) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if already hidden
+	if character.IsHidden() {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you are already hidden"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Set wait time for the action
+	character.SetCommandWaitTime(3 * time.Second)
+
+	// Perform static check for hiding (Agility & Stealth vs difficulty 4)
+	outcome := ResolveStaticCheckWithXP(character, "stealth", "agility", 4)
+
+	if !outcome.Success {
+		// Failed to hide
+		message := "\n\rYou attempt to hide but fail to find adequate concealment.\n\r"
+		
+		// Notify others of the failed attempt
+		SendRoomMessageExcept(room, 
+			fmt.Sprintf("\n\r%s attempts to hide but remains visible.\n\r", character.name),
+			character,
+		)
+
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   true, // Command executed successfully, even if hiding failed
+			Message:   message,
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Successfully hidden
+	character.SetHidden(true)
+	message := "\n\rYou slip into the shadows and hide.\n\r"
+
+	// Now perform detection checks for all observers in the room
+	room.mutex.RLock()
+	observers := make([]*Character, 0, len(room.characters))
+	for _, observer := range room.characters {
+		if observer != nil && observer != character {
+			observers = append(observers, observer)
+		}
+	}
+	room.mutex.RUnlock()
+
+	// Check if each observer detects the hidden character
+	var detectedBy []*Character
+	for _, observer := range observers {
+		// Perception & Investigation vs Stealth & Agility
+		detectOutcome := ResolveOpposedCheckWithXP(
+			observer, character,
+			"investigation", "perception",
+			"stealth", "agility",
+		)
+		
+		if detectOutcome.Success {
+			detectedBy = append(detectedBy, observer)
+		}
+	}
+
+	// If detected by anyone, reveal immediately
+	if len(detectedBy) > 0 {
+		character.SetHidden(false)
+		message = "\n\rYou attempt to hide but are spotted!\n\r"
+		
+		// Notify those who detected
+		for _, detector := range detectedBy {
+			detector.playerCommandOut <- fmt.Sprintf("\n\rYou notice %s trying to hide.\n\r", character.name)
+		}
+		
+		// Notify others who didn't detect
+		for _, observer := range observers {
+			wasDetector := false
+			for _, detector := range detectedBy {
+				if observer == detector {
+					wasDetector = true
+					break
+				}
+			}
+			if !wasDetector {
+				observer.playerCommandOut <- fmt.Sprintf("\n\r%s points out %s who was trying to hide.\n\r", 
+					detectedBy[0].name, character.name)
+			}
+		}
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   message,
+		Timestamp: time.Now(),
+	}
+}
+
+// handleSneakCommand processes the sneak command for hidden movement
+func handleSneakCommand(cmd *CommandRequest, game *Game) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if character is hidden
+	if !character.IsHidden() {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you must be hidden to sneak"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Perform static check for sneaking (Agility & Stealth vs difficulty 4)
+	outcome := ResolveStaticCheckWithXP(character, "stealth", "agility", 4)
+
+	if !outcome.Success {
+		// Failed to sneak - become visible
+		character.SetHidden(false)
+		character.SetCommandWaitTime(3 * time.Second)
+		
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you stumble and reveal yourself"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Use the existing movement handler but suppress normal messages
+	cmd.Verb = "go" // Convert sneak to go for the movement handler
+	moveResponse := handleMovementCommand(cmd, game)
+	
+	if !moveResponse.Success {
+		// Movement failed, remain hidden
+		return moveResponse
+	}
+
+	// Movement succeeded, character remains hidden
+	// Perform detection checks in the new room
+	newRoom := character.room
+	newRoom.mutex.RLock()
+	observers := make([]*Character, 0, len(newRoom.characters))
+	for _, observer := range newRoom.characters {
+		if observer != nil && observer != character {
+			observers = append(observers, observer)
+		}
+	}
+	newRoom.mutex.RUnlock()
+
+	// Check if each observer detects the hidden character
+	for _, observer := range observers {
+		// Perception & Investigation vs Stealth & Agility
+		detectOutcome := ResolveOpposedCheckWithXP(
+			observer, character,
+			"investigation", "perception", 
+			"stealth", "agility",
+		)
+		
+		if detectOutcome.Success {
+			character.SetHidden(false)
+			observer.playerCommandOut <- fmt.Sprintf("\n\rYou spot %s sneaking in!\n\r", character.name)
+			
+			// Notify others
+			SendRoomMessageExcept(newRoom,
+				fmt.Sprintf("\n\r%s points out %s who was sneaking in.\n\r", observer.name, character.name),
+				observer,
+			)
+			break
+		}
+	}
+
+	// Set appropriate wait time
+	character.SetCommandWaitTime(5 * time.Second)
+
+	return moveResponse
+}
+
+// handleSearchCommand processes the search command to find hidden characters
+func handleSearchCommand(cmd *CommandRequest, room *Room) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Set wait time for searching
+	character.SetCommandWaitTime(3 * time.Second)
+
+	// Find all hidden characters in the room
+	room.mutex.RLock()
+	var hiddenCharacters []*Character
+	for _, other := range room.characters {
+		if other != nil && other != character && other.IsHidden() {
+			hiddenCharacters = append(hiddenCharacters, other)
+		}
+	}
+	room.mutex.RUnlock()
+
+	if len(hiddenCharacters) == 0 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   true,
+			Message:   "\n\rYou search carefully but find no one hiding.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Announce the search
+	character.playerCommandOut <- "\n\rYou begin searching for hidden characters...\n\r"
+	SendRoomMessageExcept(room,
+		fmt.Sprintf("\n\r%s begins searching the area carefully.\n\r", character.name),
+		character,
+	)
+
+	// Check against each hidden character
+	var foundAny bool
+	for _, hidden := range hiddenCharacters {
+		// Perception & Investigation vs Stealth & Agility
+		detectOutcome := ResolveOpposedCheckWithXP(
+			character, hidden,
+			"investigation", "perception",
+			"stealth", "agility",
+		)
+		
+		if detectOutcome.Success {
+			foundAny = true
+			hidden.SetHidden(false)
+			
+			character.playerCommandOut <- fmt.Sprintf("\n\rYou discover %s hiding!\n\r", hidden.name)
+			hidden.playerCommandOut <- fmt.Sprintf("\n\r%s discovers your hiding place!\n\r", character.name)
+			
+			// Notify others
+			SendRoomMessageExcept(room,
+				fmt.Sprintf("\n\r%s discovers %s hiding!\n\r", character.name, hidden.name),
+				character,
+			)
+		}
+	}
+
+	if !foundAny {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   true,
+			Message:   "\n\rYour search reveals nothing.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   "", // Messages already sent
+		Timestamp: time.Now(),
+	}
+}
+
+// handlePointCommand processes the point command to reveal a hidden character
+func handlePointCommand(cmd *CommandRequest, room *Room) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character state"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if target was specified
+	if len(cmd.Args) < 2 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("point at whom?"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	targetName := strings.ToLower(strings.Join(cmd.Args[1:], " "))
+
+	// Find the target character
+	room.mutex.RLock()
+	var target *Character
+	for _, other := range room.characters {
+		if other != nil && other != character && MatchesTarget(other.name, targetName) {
+			target = other
+			break
+		}
+	}
+	room.mutex.RUnlock()
+
+	if target == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("you don't see anyone by that name here"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if the character can see the target
+	if target.IsHidden() && !character.IsHidden() {
+		// Perform detection check first
+		detectOutcome := ResolveOpposedCheckWithXP(
+			character, target,
+			"investigation", "perception",
+			"stealth", "agility",
+		)
+		
+		if !detectOutcome.Success {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Error:     fmt.Errorf("you don't see anyone by that name here"),
+				Timestamp: time.Now(),
+			}
+		}
+	}
+
+	// If target is hidden, reveal them
+	if target.IsHidden() {
+		target.SetHidden(false)
+		
+		character.playerCommandOut <- fmt.Sprintf("\n\rYou point at %s, revealing their location!\n\r", target.name)
+		target.playerCommandOut <- fmt.Sprintf("\n\r%s points at you, revealing your location!\n\r", character.name)
+		
+		SendRoomMessageExcept(room,
+			fmt.Sprintf("\n\r%s points at %s, revealing their location!\n\r", character.name, target.name),
+			character,
+		)
+	} else {
+		// Target is not hidden, just point normally
+		character.playerCommandOut <- fmt.Sprintf("\n\rYou point at %s.\n\r", target.name)
+		target.playerCommandOut <- fmt.Sprintf("\n\r%s points at you.\n\r", character.name)
+		
+		SendRoomMessageExcept(room,
+			fmt.Sprintf("\n\r%s points at %s.\n\r", character.name, target.name),
+			character,
+		)
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   "", // Messages already sent
+		Timestamp: time.Now(),
+	}
 }

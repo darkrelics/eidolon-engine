@@ -41,6 +41,12 @@ func ResolveOpposedCheck(aggressor, defender int) Outcome {
 	}
 }
 
+// ResolveStaticCheck performs a check against a fixed difficulty
+// using the same mechanics as opposed checks but with a static defender value
+func ResolveStaticCheck(aggressor, difficulty int) Outcome {
+	return ResolveOpposedCheck(aggressor, difficulty)
+}
+
 // cryptoNormal returns a single N(0,1) sample using Box–Muller and crypto/rand.
 func cryptoNormal() float64 {
 	u1 := secureUniform()

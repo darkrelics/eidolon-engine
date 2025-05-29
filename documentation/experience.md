@@ -17,7 +17,8 @@ The Eidolon Engine implements a continuous skill progression system designed aro
 - **No XP Pools** - Skills and attributes ARE the progression. They increase directly through use.
 - **Continuous Values** - All skills and attributes are 64-bit floats ranging from 0.00 to 10.00
 - **Contested Actions** - Experience is awarded when characters engage in opposed checks
-- **Automatic Awards** - The system automatically grants experience after any `ResolveOpposedCheck`
+- **Static Challenges** - Experience is awarded when characters face environmental challenges
+- **Automatic Awards** - The system automatically grants experience after any `ResolveOpposedCheck` or `ResolveStaticCheckWithXP`
 
 ### Mathematical Model
 
@@ -71,6 +72,31 @@ if outcome.Success {
     // Defender succeeded
 }
 ```
+
+#### Using ResolveStaticCheckWithXP
+
+For environmental challenges that should award experience:
+
+```go
+// Hiding attempt against difficulty 4
+outcome := ResolveStaticCheckWithXP(
+    character,          // *Character attempting the check
+    "stealth",         // skill being tested
+    "agility",         // attribute being tested  
+    4,                 // difficulty level
+)
+
+if outcome.Success {
+    // Character succeeded at the task
+} else {
+    // Character failed the task
+}
+```
+
+The experience award is calculated based on the character's effective score versus the difficulty:
+- Challenging tasks (where character skill ≈ difficulty) give full XP
+- Trivial tasks (skill >> difficulty) give minimal XP
+- Impossible tasks (skill << difficulty) give bonus XP even on failure
 
 #### Manual Experience Awards
 
@@ -169,6 +195,20 @@ The continuous system makes it easy to track:
 - Scores above 6.0 represent true dedication
 - Months or years of play required
 - Prestige comes from the rarity of high scores
+
+#### Example: Hide Mechanism
+The hide system demonstrates both static and opposed checks working together:
+
+1. **Initial Hide Attempt** - Static check (Stealth + Agility vs difficulty 4)
+   - Success: Character becomes hidden, gains XP based on skill vs difficulty
+   - Failure: Character remains visible, gains 50% XP
+
+2. **Detection Checks** - Opposed checks (Observer's Investigation + Perception vs Hidden's Stealth + Agility)
+   - Each observer makes a check, both parties gain XP
+   - Success: Observer detects the hidden character
+   - Failure: Character remains hidden from that observer
+
+3. **Continuous Learning** - All participants improve their skills through the interaction
 
 ## Implementation Notes
 

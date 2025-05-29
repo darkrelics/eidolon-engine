@@ -630,10 +630,10 @@ func (r *Room) GetDescription(character *Character) string {
 		roomInfo.WriteString("\n\r")
 	}
 
-	// Characters - collect while under lock
+	// Characters - collect while under lock, only visible ones
 	chars := make([]string, 0, len(r.characters))
 	for _, c := range r.characters {
-		if c != nil && c != character {
+		if c != nil && c != character && c.IsVisibleTo(character) {
 			chars = append(chars, c.name)
 		}
 	}

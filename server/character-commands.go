@@ -416,7 +416,7 @@ func (c *Character) LookAtRoomTarget(target string) string {
 	if c.room != nil {
 		c.room.mutex.RLock()
 		for _, char := range c.room.characters {
-			if char != nil && strings.Contains(strings.ToLower(char.name), target) {
+			if char != nil && strings.Contains(strings.ToLower(char.name), target) && char.IsVisibleTo(c) {
 				c.room.mutex.RUnlock()
 				return FormatCharacterDescription(char, c)
 			}
@@ -509,4 +509,28 @@ func (c *Character) LookInContainer(containerName string, isMyContainer bool) st
 
 		return "\n\r" + container.GetContainerContents()
 	}
+}
+
+// executeUnhideCommand handles the unhide command
+func executeUnhideCommand(character *Character, tokens []string) error {
+	if character == nil {
+		return errors.New("invalid character state")
+	}
+
+	if !character.IsHidden() {
+		character.playerCommandOut <- "\n\rYou are not hidden.\n\r"
+		return nil
+	}
+
+	// Reveal the character
+	character.SetHidden(false)
+	character.playerCommandOut <- "\n\rYou step out from hiding.\n\r"
+	
+	// Notify others in the room
+	SendRoomMessageExcept(character.room, 
+		fmt.Sprintf("\n\r%s steps out from hiding.\n\r", character.name),
+		character,
+	)
+	
+	return nil
 }

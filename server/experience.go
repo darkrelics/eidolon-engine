@@ -221,3 +221,31 @@ func (c *Character) AwardAttributeXP(attrName string, xpAmount float64) {
 			"newScore", c.attributes[attrName])
 	}
 }
+
+// ResolveStaticCheckWithXP performs a static check against a difficulty and awards experience
+func ResolveStaticCheckWithXP(character *Character, skill, attr string, difficulty int) Outcome {
+	// Calculate effective score
+	skillVal := character.GetSkill(skill)
+	attrVal := character.GetAttribute(attr)
+	effective := int(skillVal + attrVal)
+	
+	// Perform the static check
+	outcome := ResolveStaticCheck(effective, difficulty)
+	
+	// Calculate variance modifier based on character score vs difficulty
+	varianceModifier := CalculateVarianceModifier(effective, difficulty)
+	
+	// Calculate XP award
+	baseXPValue := CalculateBaseXP()
+	finalXP := CalculateFinalXP(baseXPValue, varianceModifier, outcome.Success)
+	
+	// Award XP to character
+	if skill != "" {
+		character.AwardSkillXP(skill, finalXP)
+	}
+	if attr != "" {
+		character.AwardAttributeXP(attr, finalXP*attributeXPRatio)
+	}
+	
+	return outcome
+}

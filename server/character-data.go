@@ -48,6 +48,7 @@ type Character struct {
 	lastSaved        time.Time
 	waitUntil        time.Time             // Time when the character can execute the next command
 	charState        string                // Current character state (standing, sitting, etc.)
+	hidden           bool                  // Whether the character is hidden
 	roomCommandOut   chan *CommandRequest  // Commands sent from character to room
 	roomCommandIn    chan *CommandResponse // Responses from room to character
 	gameCommandOut   chan *CommandRequest  // Commands escalated directly to game
@@ -72,6 +73,7 @@ type CharacterData struct {
 	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
 	LeftHandID    string             `json:"LeftHandID,omitempty" dynamodbav:"LeftHandID,omitempty"`
 	RightHandID   string             `json:"RightHandID,omitempty" dynamodbav:"RightHandID,omitempty"`
+	Hidden        bool               `json:"Hidden" dynamodbav:"Hidden"`
 }
 
 func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
@@ -95,6 +97,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		combatRange:      make(map[uuid.UUID]float64),
 		lastEdited:       time.Now(),
 		charState:        "standing", // Default character state
+		hidden:           false,      // Default not hidden
 		waitUntil:        time.Now(), // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
@@ -127,6 +130,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	character.skills = cd.Skills
 	character.essence = cd.Essence
 	character.health = cd.Health
+	character.hidden = cd.Hidden
 
 	// Set character room
 	room, exists := game.rooms[cd.RoomID]
@@ -406,4 +410,31 @@ func (c *Character) GetAttribute(attrName string) float64 {
 		return value
 	}
 	return 0.0
+}
+
+// IsHidden returns whether the character is currently hidden
+func (c *Character) IsHidden() bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.hidden
+}
+
+// SetHidden sets the character's hidden state
+func (c *Character) SetHidden(hidden bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.hidden = hidden
+	c.lastEdited = time.Now()
+}
+
+// IsVisibleTo checks if this character is visible to another character
+func (c *Character) IsVisibleTo(observer *Character) bool {
+	if c == observer {
+		return true // Always visible to self
+	}
+	
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	
+	return !c.hidden
 }
