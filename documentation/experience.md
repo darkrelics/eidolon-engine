@@ -23,27 +23,32 @@ The Eidolon Engine implements a continuous skill progression system designed aro
 ### Mathematical Model
 
 #### XP Requirement Formula
+
 ```
 XP_required(score) = 10 * 3.5^score
 ```
 
 This creates an exponential curve where:
+
 - 0→1: ~80 actions at even odds
-- 5→6: ~42,000 actions at even odds  
+- 5→6: ~42,000 actions at even odds
 - 9→10: ~4.4 million actions at even odds
 
 #### Variance Modifier
+
 ```
 ratio = min(E_att, E_def) / max(E_att, E_def)
 xp_modifier = ratio^2
 ```
 
 This ensures:
+
 - Even match (10 vs 10): 100% XP
 - Moderate advantage (10 vs 5): 25% XP for stronger, 400% for weaker
 - Extreme mismatch (10 vs 2): 4% XP for stronger, 2500% for weaker
 
 #### Base Constants
+
 - `BASE_XP = 0.25` - Base experience per action
 - `FAILURE_PENALTY = 0.5` - Failed actions give 50% XP
 - `ATTRIBUTE_XP_RATIO = 0.1` - Attributes gain 10% of skill XP
@@ -59,7 +64,7 @@ For any contested action that should award experience:
 ```go
 outcome := ResolveOpposedCheckWithXP(
     attacker,           // *Character - aggressor
-    defender,           // *Character - defender  
+    defender,           // *Character - defender
     "swordsmanship",    // aggressor's skill
     "strength",         // aggressor's attribute
     "defense",          // defender's skill
@@ -82,7 +87,7 @@ For environmental challenges that should award experience:
 outcome := ResolveStaticCheckWithXP(
     character,          // *Character attempting the check
     "stealth",         // skill being tested
-    "agility",         // attribute being tested  
+    "agility",         // attribute being tested
     4,                 // difficulty level
 )
 
@@ -94,6 +99,7 @@ if outcome.Success {
 ```
 
 The experience award is calculated based on the character's effective score versus the difficulty:
+
 - Challenging tasks (where character skill ≈ difficulty) give full XP
 - Trivial tasks (skill >> difficulty) give minimal XP
 - Impossible tasks (skill << difficulty) give bonus XP even on failure
@@ -106,7 +112,7 @@ For non-contested actions:
 // Award skill experience directly
 character.AwardSkillXP("crafting", 0.1)
 
-// Award attribute experience directly  
+// Award attribute experience directly
 character.AwardAttributeXP("intelligence", 0.01)
 ```
 
@@ -125,7 +131,7 @@ When implementing new contested mechanics:
 context := ExperienceContext{
     AggressorSkill:     "persuasion",
     AggressorAttr:      "charisma",
-    DefenderSkill:      "willpower", 
+    DefenderSkill:      "willpower",
     DefenderAttr:       "wisdom",
     AggressorSuccess:   true,
     DefenderSuccess:    false,
@@ -140,14 +146,14 @@ AwardExperience(aggressor, defender, context)
 
 ### Skill Progression Expectations
 
-| Score Range | Description | Typical Time to Achieve |
-|-------------|-------------|------------------------|
-| 0.0 - 1.0 | Novice | Hours of play |
-| 1.0 - 3.0 | Competent | Days to weeks |
-| 3.0 - 5.0 | Expert | Weeks to months |
-| 5.0 - 6.0 | Master | Months of dedicated play |
-| 6.0 - 8.0 | Legendary | Years of play |
-| 8.0 - 10.0 | Mythical | Theoretical maximum |
+| Score Range | Description | Typical Time to Achieve  |
+| ----------- | ----------- | ------------------------ |
+| 0.0 - 1.0   | Novice      | Hours of play            |
+| 1.0 - 3.0   | Competent   | Days to weeks            |
+| 3.0 - 5.0   | Expert      | Weeks to months          |
+| 5.0 - 6.0   | Master      | Months of dedicated play |
+| 6.0 - 8.0   | Legendary   | Years of play            |
+| 8.0 - 10.0  | Mythical    | Theoretical maximum      |
 
 ### Tuning Parameters
 
@@ -163,11 +169,14 @@ Located in `experience.go`:
 ### Monitoring Tools
 
 #### Player Commands
+
 - `info` - Shows skills/attributes as integers
 - `skill` - Shows precise skill values (##.##)
 
 #### Progression Metrics
+
 The continuous system makes it easy to track:
+
 - Average skill levels across the player base
 - Progression velocity for different skills
 - Time to reach various milestones
@@ -182,28 +191,34 @@ The continuous system makes it easy to track:
 ### Common Scenarios
 
 #### New Player Experience
+
 - Start with attributes/skills between 1.0-3.0 (defined by archetype)
 - Early progression is rapid and rewarding
 - Can reach competence (3.0) in core skills within days
 
 #### Mid-Game Plateau
+
 - Around score 5.0-6.0, progression naturally slows
 - Players must seek greater challenges for meaningful growth
 - Encourages exploration of different skills rather than grinding
 
 #### End-Game Mastery
+
 - Scores above 6.0 represent true dedication
 - Months or years of play required
 - Prestige comes from the rarity of high scores
 
 #### Example: Hide Mechanism
+
 The hide system demonstrates both static and opposed checks working together:
 
 1. **Initial Hide Attempt** - Static check (Stealth + Agility vs difficulty 4)
+
    - Success: Character becomes hidden, gains XP based on skill vs difficulty
    - Failure: Character remains visible, gains 50% XP
 
 2. **Detection Checks** - Opposed checks (Observer's Investigation + Perception vs Hidden's Stealth + Agility)
+
    - Each observer makes a check, both parties gain XP
    - Success: Observer detects the hidden character
    - Failure: Character remains hidden from that observer
@@ -213,13 +228,17 @@ The hide system demonstrates both static and opposed checks working together:
 ## Implementation Notes
 
 ### Thread Safety
+
 All experience operations are mutex-protected for safe concurrent access.
 
 ### Persistence
+
 Skills and attributes are automatically saved with character data - no separate experience tracking needed.
 
 ### Floating Point Precision
+
 The system uses 64-bit floats, providing sufficient precision for millions of increments without drift.
 
 ### Performance
+
 Experience calculations are lightweight (a few multiplications and one power operation) and suitable for real-time combat.

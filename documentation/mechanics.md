@@ -11,6 +11,7 @@ The mechanics module provides a system for opposed checks in the game. It uses a
 The system provides two types of checks:
 
 #### Opposed Checks
+
 Resolves conflicts between an aggressor and defender using their numeric ratings:
 
 ```go
@@ -23,6 +24,7 @@ if outcome.Success {
 ```
 
 #### Static Checks
+
 Resolves checks against a fixed difficulty:
 
 ```go
@@ -160,6 +162,7 @@ if outcome.Success {
 ```
 
 Common difficulty guidelines:
+
 - 2: Trivial task
 - 4: Easy task
 - 6: Moderate task
