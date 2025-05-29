@@ -20,6 +20,7 @@ if outcome.Success {
 ```
 
 The `Outcome` struct provides:
+
 - `Success`: Boolean indicating if the aggressor won
 - `Sigma`: The raw result value (positive = success, negative = failure)
 
@@ -28,6 +29,7 @@ The `Outcome` struct provides:
 The system uses a normal distribution with two key transformations:
 
 1. **Mean Shift (μ)**: Based on the rating difference (Δ = aggressor - defender)
+
    - μ = kShift × Δ
    - Shifts the probability curve to favor the higher-rated participant
 
@@ -43,13 +45,14 @@ The system exposes two constants that control game feel:
 
 kShift controls **who wins** by tilting the probability distribution.
 
-| kShift Value | Effect | Game Feel |
-|--------------|--------|-----------|
-| 0.10 | Weak bias | High upset potential, luck matters more |
-| 0.20 | Moderate bias | Balanced skill vs luck |
-| 0.30 | Strong bias | Skill dominates, upsets are rare |
+| kShift Value | Effect        | Game Feel                               |
+| ------------ | ------------- | --------------------------------------- |
+| 0.10         | Weak bias     | High upset potential, luck matters more |
+| 0.20         | Moderate bias | Balanced skill vs luck                  |
+| 0.30         | Strong bias   | Skill dominates, upsets are rare        |
 
 **Tuning Guide:**
+
 - Increase if experts lose to novices too often
 - Decrease if matches feel too predictable
 - Each 0.05 change shifts win rates by ~3-5% per rating point
@@ -58,13 +61,14 @@ kShift controls **who wins** by tilting the probability distribution.
 
 kVar controls **by how much** winners win through variance scaling.
 
-| kVar Value | Effect | Game Feel |
-|------------|--------|-----------|
-| 0.20 | Tight outcomes | Close margins, consistent results |
-| 0.35 | Moderate swing | Balanced drama vs predictability |
-| 0.50 | High variance | Spectacular victories and crushing defeats |
+| kVar Value | Effect         | Game Feel                                  |
+| ---------- | -------------- | ------------------------------------------ |
+| 0.20       | Tight outcomes | Close margins, consistent results          |
+| 0.35       | Moderate swing | Balanced drama vs predictability           |
+| 0.50       | High variance  | Spectacular victories and crushing defeats |
 
 **Tuning Guide:**
+
 - Increase for more cinematic, swingy results
 - Decrease for tighter, more chess-like play
 - Does NOT affect overall win rates, only margin of victory
@@ -73,17 +77,18 @@ kVar controls **by how much** winners win through variance scaling.
 
 ### Win Probability by Rating Difference
 
-| Rating Difference | Win Probability | Description |
-|-------------------|-----------------|-------------|
-| 0 | 50% | Fair contest |
-| 2 | 65% | Slight advantage |
-| 5 | 79% | Clear favorite |
-| 10 | 94% | Dominant position |
-| 15 | 99% | Near certain victory |
+| Rating Difference | Win Probability | Description          |
+| ----------------- | --------------- | -------------------- |
+| 0                 | 50%             | Fair contest         |
+| 2                 | 65%             | Slight advantage     |
+| 5                 | 79%             | Clear favorite       |
+| 10                | 94%             | Dominant position    |
+| 15                | 99%             | Near certain victory |
 
 ### Outcome Ranges (Sigma Values)
 
 For a contest between equals (Δ = 0):
+
 - 68% of outcomes fall within [-1.0, +1.0]
 - 95% of outcomes fall within [-2.0, +2.0]
 - Extreme results (|σ| > 3) occur ~0.3% of the time
@@ -133,6 +138,7 @@ default:
 ## Security Notes
 
 The system uses `crypto/rand` for true randomness:
+
 - Prevents prediction or manipulation of outcomes
 - Suitable for competitive or high-stakes gameplay
 - Cannot be seeded for replay/debugging (use test framework for deterministic testing)
