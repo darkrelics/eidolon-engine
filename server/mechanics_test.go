@@ -46,7 +46,7 @@ func TestResolveOpposedCheck(t *testing.T) {
 			// For actual testing, we'll need to expose a testing interface
 			// For now, just test the production function
 			outcome := ResolveOpposedCheck(tt.aggressor, tt.defender)
-			
+
 			// Basic sanity checks
 			if math.IsNaN(outcome.Sigma) {
 				t.Errorf("Sigma is NaN")
@@ -61,7 +61,7 @@ func TestResolveOpposedCheck(t *testing.T) {
 // TestOutcomeDistribution tests the statistical properties
 func TestOutcomeDistribution(t *testing.T) {
 	const iterations = 10000
-	
+
 	testCases := []struct {
 		name           string
 		aggressor      int
@@ -75,7 +75,7 @@ func TestOutcomeDistribution(t *testing.T) {
 		{"Small disadvantage", 8, 10, 0.334, 0.02},
 		{"Large disadvantage", 0, 10, 0.003, 0.02},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			wins := 0
@@ -85,7 +85,7 @@ func TestOutcomeDistribution(t *testing.T) {
 					wins++
 				}
 			}
-			
+
 			actualWinPct := float64(wins) / float64(iterations)
 			if math.Abs(actualWinPct-tc.expectedWinPct) > tc.tolerance {
 				t.Errorf("Win percentage %.3f outside expected range %.3f±%.3f",
@@ -98,28 +98,28 @@ func TestOutcomeDistribution(t *testing.T) {
 // TestSigmaRange tests that sigma values stay within expected bounds
 func TestSigmaRange(t *testing.T) {
 	const iterations = 1000
-	
+
 	for delta := -20; delta <= 20; delta += 5 {
 		aggressor := 10 + delta
 		defender := 10
-		
+
 		minSigma := math.Inf(1)
 		maxSigma := math.Inf(-1)
-		
+
 		for range iterations {
 			outcome := ResolveOpposedCheck(aggressor, defender)
 			minSigma = min(minSigma, outcome.Sigma)
 			maxSigma = max(maxSigma, outcome.Sigma)
 		}
-		
+
 		// Expected bounds based on the mechanics
 		mu := kShift * float64(delta)
 		sigma := 1 + kVar*math.Tanh(float64(delta)/10)
 		sigma = max(sigma, minSig)
-		
+
 		expectedMin := mu - 4*sigma // 4 standard deviations
 		expectedMax := mu + 4*sigma
-		
+
 		if minSigma < expectedMin || maxSigma > expectedMax {
 			t.Logf("Delta %d: range [%.2f, %.2f] vs expected [%.2f, %.2f]",
 				delta, minSigma, maxSigma, expectedMin, expectedMax)
