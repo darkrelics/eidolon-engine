@@ -162,7 +162,7 @@ func executeInfoCommand(character *Character, tokens []string) error {
 	return nil
 }
 
-// executeSkillCommand displays only the character's abilities
+// executeSkillCommand displays only the character's skills
 func executeSkillCommand(character *Character, tokens []string) error {
 	if character == nil || character.player == nil {
 		return errors.New("invalid character state")
@@ -270,23 +270,23 @@ func (c *Character) GetCharacterInfo() string {
 		}
 	}
 
-	// Abilities - only show those above zero
-	var abilitiesAboveZero []string
-	for ability, value := range c.abilities {
+	// Skills - only show those above zero
+	var skillsAboveZero []string
+	for skill, value := range c.skills {
 		if value > 0 {
-			abilitiesAboveZero = append(abilitiesAboveZero, ability)
+			skillsAboveZero = append(skillsAboveZero, skill)
 		}
 	}
 
-	if len(abilitiesAboveZero) > 0 {
-		info.WriteString("\n\rAbilities:\n\r")
-		// Sort abilities for consistent display
-		sort.Strings(abilitiesAboveZero)
+	if len(skillsAboveZero) > 0 {
+		info.WriteString("\n\rSkills:\n\r")
+		// Sort skills for consistent display
+		sort.Strings(skillsAboveZero)
 
-		// Display each ability with value > 0
-		for _, ability := range abilitiesAboveZero {
-			value := c.abilities[ability]
-			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", ability, int(value)))
+		// Display each skill with value > 0
+		for _, skill := range skillsAboveZero {
+			value := c.skills[skill]
+			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", skill, int(value)))
 		}
 	}
 
@@ -340,34 +340,34 @@ func (c *Character) GetCharacterInfo() string {
 	return info.String()
 }
 
-// GetSkillInfo returns a formatted string with character abilities
+// GetSkillInfo returns a formatted string with character skills
 func (c *Character) GetSkillInfo() string {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
 	var skillInfo strings.Builder
-	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Abilities\n\r", ApplyColor("bright_cyan", c.name)))
+	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Skills\n\r", ApplyColor("bright_cyan", c.name)))
 	skillInfo.WriteString("----------------\n\r")
 
-	// Abilities - only show those above zero
-	var abilitiesAboveZero []string
-	for ability, value := range c.abilities {
+	// Skills - only show those above zero
+	var skillsAboveZero []string
+	for skill, value := range c.skills {
 		if value > 0 {
-			abilitiesAboveZero = append(abilitiesAboveZero, ability)
+			skillsAboveZero = append(skillsAboveZero, skill)
 		}
 	}
 
-	if len(abilitiesAboveZero) > 0 {
-		// Sort abilities for consistent display
-		sort.Strings(abilitiesAboveZero)
+	if len(skillsAboveZero) > 0 {
+		// Sort skills for consistent display
+		sort.Strings(skillsAboveZero)
 
-		// Display each ability with value > 0
-		for _, ability := range abilitiesAboveZero {
-			value := c.abilities[ability]
-			skillInfo.WriteString(fmt.Sprintf("  %-15s: %d\n\r", ability, int(value)))
+		// Display each skill with value > 0
+		for _, skill := range skillsAboveZero {
+			value := c.skills[skill]
+			skillInfo.WriteString(fmt.Sprintf("  %-15s: %d\n\r", skill, int(value)))
 		}
 	} else {
-		skillInfo.WriteString("  You have not developed any abilities yet.\n\r")
+		skillInfo.WriteString("  You have not developed any skills yet.\n\r")
 	}
 
 	return skillInfo.String()

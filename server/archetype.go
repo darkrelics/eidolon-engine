@@ -45,7 +45,7 @@ type Archetype struct {
 	ArchetypeName string             `json:"ArchetypeName" dynamodbav:"archetypeName"`
 	Description   string             `json:"Description" dynamodbav:"description"`
 	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"attributes"`
-	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"abilities"`
+	Skills        map[string]float64 `json:"Skills" dynamodbav:"skills"`
 	StartRoom     int64              `json:"StartRoom" dynamodbav:"startRoom"`
 	StartingItems []ArchetypeItem    `json:"StartingItems" dynamodbav:"startingItems"`
 	Health        uint16             `json:"Health,omitempty" dynamodbav:"health,omitempty"`
@@ -91,7 +91,7 @@ func (g *Game) LoadArchetypes() error {
 		archetype := &archetypes[i]
 
 		normalizeMapKeys(archetype.Attributes)
-		normalizeMapKeys(archetype.Abilities)
+		normalizeMapKeys(archetype.Skills)
 
 		// Validate archetype data consistency
 		if err := g.ValidateArchetype(archetype); err != nil {
@@ -141,8 +141,8 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 		return fmt.Errorf("archetype '%s' must have at least one attribute", archetype.ArchetypeName)
 	}
 
-	if len(archetype.Abilities) == 0 {
-		return fmt.Errorf("archetype '%s' must have at least one ability", archetype.ArchetypeName)
+	if len(archetype.Skills) == 0 {
+		return fmt.Errorf("archetype '%s' must have at least one skill", archetype.ArchetypeName)
 	}
 
 	// Validate starting items

@@ -99,7 +99,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		PlayerID:      c.player.id.String(),
 		CharacterName: c.name,
 		Attributes:    c.attributes,
-		Abilities:     c.abilities,
+		Skills:        c.skills,
 		Essence:       c.essence,
 		Health:        c.health,
 		RoomID:        c.room.roomID,
@@ -145,7 +145,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		player:           p,
 		name:             name,
 		attributes:       make(map[string]float64),
-		abilities:        make(map[string]float64),
+		skills:           make(map[string]float64),
 		essence:          float64(p.server.game.startingEssence), // Default from config
 		health:           float64(p.server.game.startingHealth),  // Default from config
 		inventory:        make(map[string]*Item),
@@ -191,8 +191,8 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 				character.attributes[attr] = value
 			}
 
-			for ability, value := range archetypeObj.Abilities {
-				character.abilities[ability] = value
+			for skill, value := range archetypeObj.Skills {
+				character.skills[skill] = value
 			}
 
 			// Use archetype's Health and Essence if specified, otherwise keep defaults

@@ -75,7 +75,7 @@ func (g *Game) initCommands() {
 	g.commands["skill"] = CommandInfo{
 		timed:       false,
 		handler:     executeSkillCommand,
-		description: "Display your character's abilities",
+		description: "Display your character's skills",
 		usage:       "skill",
 	}
 

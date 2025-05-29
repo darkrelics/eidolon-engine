@@ -33,7 +33,7 @@ type Character struct {
 	player           *Player
 	name             string
 	attributes       map[string]float64
-	abilities        map[string]float64
+	skills           map[string]float64
 	essence          float64
 	health           float64
 	room             *Room
@@ -65,7 +65,7 @@ type CharacterData struct {
 	PlayerID      string             `json:"PlayerID" dynamodbav:"PlayerID"`
 	CharacterName string             `json:"Name" dynamodbav:"character_name"`
 	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
-	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"Abilities"`
+	Skills        map[string]float64 `json:"Skills" dynamodbav:"Skills"`
 	Essence       float64            `json:"Essence" dynamodbav:"Essence"`
 	Health        float64            `json:"Health" dynamodbav:"Health"`
 	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
@@ -85,7 +85,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		id:               characterID,
 		player:           player,
 		attributes:       make(map[string]float64),
-		abilities:        make(map[string]float64),
+		skills:           make(map[string]float64),
 		inventory:        make(map[string]*Item),
 		leftHand:         nil,
 		rightHand:        nil,
@@ -124,7 +124,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	}
 	character.name = cd.CharacterName
 	character.attributes = cd.Attributes
-	character.abilities = cd.Abilities
+	character.skills = cd.Skills
 	character.essence = cd.Essence
 	character.health = cd.Health
 
@@ -323,14 +323,14 @@ func (c *Character) ApplyItemTraitMods(item *Item) {
 				"mod", mod,
 				"newValue", c.attributes[trait])
 		}
-		// For abilities
-		if _, exists := c.abilities[trait]; exists {
-			c.abilities[trait] += float64(mod)
-			Logger.Debug("Applied ability mod",
+		// For skills
+		if _, exists := c.skills[trait]; exists {
+			c.skills[trait] += float64(mod)
+			Logger.Debug("Applied skill mod",
 				"character", c.name,
-				"ability", trait,
+				"skill", trait,
 				"mod", mod,
-				"newValue", c.abilities[trait])
+				"newValue", c.skills[trait])
 		}
 		// Special case handling
 		switch trait {
@@ -367,14 +367,14 @@ func (c *Character) RemoveItemTraitMods(item *Item) {
 				"mod", -mod,
 				"newValue", c.attributes[trait])
 		}
-		// For abilities
-		if _, exists := c.abilities[trait]; exists {
-			c.abilities[trait] -= float64(mod)
-			Logger.Debug("Removed ability mod",
+		// For skills
+		if _, exists := c.skills[trait]; exists {
+			c.skills[trait] -= float64(mod)
+			Logger.Debug("Removed skill mod",
 				"character", c.name,
-				"ability", trait,
+				"skill", trait,
 				"mod", -mod,
-				"newValue", c.abilities[trait])
+				"newValue", c.skills[trait])
 		}
 		// Special case handling
 		switch trait {
