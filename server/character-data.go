@@ -49,6 +49,7 @@ type Character struct {
 	waitUntil        time.Time             // Time when the character can execute the next command
 	charState        string                // Current character state (standing, sitting, etc.)
 	hidden           bool                  // Whether the character is hidden
+	lastHideAttempt  time.Time             // Time of last hide attempt for rate limiting
 	roomCommandOut   chan *CommandRequest  // Commands sent from character to room
 	roomCommandIn    chan *CommandResponse // Responses from room to character
 	gameCommandOut   chan *CommandRequest  // Commands escalated directly to game
@@ -96,9 +97,9 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		advancing:        false,
 		combatRange:      make(map[uuid.UUID]float64),
 		lastEdited:       time.Now(),
-		charState:        "standing", // Default character state
-		hidden:           false,      // Default not hidden
-		waitUntil:        time.Now(), // No initial wait time
+		charState:        "standing",
+		hidden:           false,
+		waitUntil:        time.Now(),
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
 		gameCommandOut:   make(chan *CommandRequest, 10),
@@ -429,12 +430,12 @@ func (c *Character) SetHidden(hidden bool) {
 
 // IsVisibleTo checks if this character is visible to another character
 func (c *Character) IsVisibleTo(observer *Character) bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	
 	if c == observer {
 		return true // Always visible to self
 	}
-	
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
 	
 	return !c.hidden
 }

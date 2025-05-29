@@ -33,6 +33,15 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
+	// Check if character and associated objects are valid
+	if c.player == nil {
+		return false, "Character not properly connected."
+	}
+	
+	if c.room == nil {
+		return false, "Character not in a valid room."
+	}
+
 	// Check wait time
 	if time.Now().Before(c.waitUntil) {
 		waitTime := time.Until(c.waitUntil).Round(time.Second)
