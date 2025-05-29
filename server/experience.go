@@ -36,12 +36,12 @@ const (
 
 // ExperienceContext holds information about a contested action for experience calculation
 type ExperienceContext struct {
-	AggressorSkill    string
-	AggressorAttr     string
-	DefenderSkill     string
-	DefenderAttr      string
-	AggressorSuccess  bool
-	DefenderSuccess   bool
+	AggressorSkill     string
+	AggressorAttr      string
+	DefenderSkill      string
+	DefenderAttr       string
+	AggressorSuccess   bool
+	DefenderSuccess    bool
 	AggressorEffective int
 	DefenderEffective  int
 }
@@ -56,14 +56,14 @@ func CalculateVarianceModifier(myEffective, opponentEffective int) float64 {
 	if myEffective == 0 && opponentEffective == 0 {
 		return 1.0
 	}
-	
+
 	minScore := float64(min(myEffective, opponentEffective))
 	maxScore := float64(max(myEffective, opponentEffective))
-	
+
 	if maxScore == 0 {
 		return 1.0
 	}
-	
+
 	ratio := minScore / maxScore
 	return math.Pow(ratio, varianceExponent)
 }
@@ -87,15 +87,15 @@ func CalculateScoreIncrement(xpGained float64, currentScore float64) float64 {
 	if currentScore >= maxScore {
 		return 0.0
 	}
-	
+
 	xpRequired := CalculateXPRequirement(currentScore)
 	increment := xpGained / xpRequired
-	
+
 	newScore := currentScore + increment
 	if newScore > maxScore {
 		return maxScore - currentScore
 	}
-	
+
 	return increment
 }
 
@@ -106,13 +106,13 @@ func ResolveOpposedCheckWithXP(aggressor, defender *Character, aggressorSkill, a
 	aggressorAttrVal := aggressor.GetAttribute(aggressorAttr)
 	defenderSkillVal := defender.GetSkill(defenderSkill)
 	defenderAttrVal := defender.GetAttribute(defenderAttr)
-	
+
 	aggressorEffective := int(aggressorSkillVal + aggressorAttrVal)
 	defenderEffective := int(defenderSkillVal + defenderAttrVal)
-	
+
 	// Perform the opposed check
 	outcome := ResolveOpposedCheck(aggressorEffective, defenderEffective)
-	
+
 	// Create experience context
 	context := ExperienceContext{
 		AggressorSkill:     aggressorSkill,
@@ -124,10 +124,10 @@ func ResolveOpposedCheckWithXP(aggressor, defender *Character, aggressorSkill, a
 		AggressorEffective: aggressorEffective,
 		DefenderEffective:  defenderEffective,
 	}
-	
+
 	// Award experience
 	AwardExperience(aggressor, defender, context)
-	
+
 	return outcome
 }
 
@@ -136,17 +136,17 @@ func AwardExperience(aggressor, defender *Character, context ExperienceContext) 
 	if aggressor == nil || defender == nil {
 		return
 	}
-	
+
 	baseXPValue := CalculateBaseXP()
-	
+
 	// Calculate variance modifiers for each participant
 	aggressorVariance := CalculateVarianceModifier(context.DefenderEffective, context.AggressorEffective)
 	defenderVariance := CalculateVarianceModifier(context.AggressorEffective, context.DefenderEffective)
-	
+
 	// Calculate final XP for each participant
 	aggressorXP := CalculateFinalXP(baseXPValue, aggressorVariance, context.AggressorSuccess)
 	defenderXP := CalculateFinalXP(baseXPValue, defenderVariance, context.DefenderSuccess)
-	
+
 	// Award XP to aggressor
 	if context.AggressorSkill != "" {
 		aggressor.AwardSkillXP(context.AggressorSkill, aggressorXP)
@@ -154,7 +154,7 @@ func AwardExperience(aggressor, defender *Character, context ExperienceContext) 
 	if context.AggressorAttr != "" {
 		aggressor.AwardAttributeXP(context.AggressorAttr, aggressorXP*attributeXPRatio)
 	}
-	
+
 	// Award XP to defender
 	if context.DefenderSkill != "" {
 		defender.AwardSkillXP(context.DefenderSkill, defenderXP)
@@ -169,21 +169,21 @@ func (c *Character) AwardSkillXP(skillName string, xpAmount float64) {
 	if xpAmount <= 0 {
 		return
 	}
-	
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	
+
 	currentScore, exists := c.skills[skillName]
 	if !exists {
 		currentScore = 0.0
 		c.skills[skillName] = currentScore
 	}
-	
+
 	increment := CalculateScoreIncrement(xpAmount, currentScore)
 	if increment > 0 {
 		c.skills[skillName] = currentScore + increment
 		c.lastEdited = time.Now()
-		
+
 		Logger.Debug("Skill XP awarded",
 			"character", c.name,
 			"skill", skillName,
@@ -198,21 +198,21 @@ func (c *Character) AwardAttributeXP(attrName string, xpAmount float64) {
 	if xpAmount <= 0 {
 		return
 	}
-	
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	
+
 	currentScore, exists := c.attributes[attrName]
 	if !exists {
 		currentScore = 0.0
 		c.attributes[attrName] = currentScore
 	}
-	
+
 	increment := CalculateScoreIncrement(xpAmount, currentScore)
 	if increment > 0 {
 		c.attributes[attrName] = currentScore + increment
 		c.lastEdited = time.Now()
-		
+
 		Logger.Debug("Attribute XP awarded",
 			"character", c.name,
 			"attribute", attrName,
@@ -228,17 +228,17 @@ func ResolveStaticCheckWithXP(character *Character, skill, attr string, difficul
 	skillVal := character.GetSkill(skill)
 	attrVal := character.GetAttribute(attr)
 	effective := int(skillVal + attrVal)
-	
+
 	// Perform the static check
 	outcome := ResolveStaticCheck(effective, difficulty)
-	
+
 	// Calculate variance modifier based on character score vs difficulty
 	varianceModifier := CalculateVarianceModifier(effective, difficulty)
-	
+
 	// Calculate XP award
 	baseXPValue := CalculateBaseXP()
 	finalXP := CalculateFinalXP(baseXPValue, varianceModifier, outcome.Success)
-	
+
 	// Award XP to character
 	if skill != "" {
 		character.AwardSkillXP(skill, finalXP)
@@ -246,6 +246,6 @@ func ResolveStaticCheckWithXP(character *Character, skill, attr string, difficul
 	if attr != "" {
 		character.AwardAttributeXP(attr, finalXP*attributeXPRatio)
 	}
-	
+
 	return outcome
 }

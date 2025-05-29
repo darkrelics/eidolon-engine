@@ -49,13 +49,13 @@ func createTestGameForCharacterCommands() *Game {
 // Helper function to create a test room
 func createTestRoom(id int64) *Room {
 	return &Room{
-		roomID:     id,
-		title:      "Test Room",
+		roomID:      id,
+		title:       "Test Room",
 		description: "A simple test room",
-		mutex:      sync.RWMutex{},
-		characters: make(map[uuid.UUID]*Character),
-		items:      make(map[uuid.UUID]*Item),
-		exits:      make(map[uuid.UUID]*Exit),
+		mutex:       sync.RWMutex{},
+		characters:  make(map[uuid.UUID]*Character),
+		items:       make(map[uuid.UUID]*Item),
+		exits:       make(map[uuid.UUID]*Exit),
 	}
 }
 
@@ -129,7 +129,7 @@ func TestExecuteQuitCommand(t *testing.T) {
 func TestExecuteHelpCommand(t *testing.T) {
 	game := createTestGameForCharacterCommands()
 	room := createTestRoom(0)
-	
+
 	tests := []struct {
 		name        string
 		character   *Character
@@ -304,7 +304,7 @@ func TestExecuteWhoCommand(t *testing.T) {
 			if tt.setupFunc != nil {
 				tt.setupFunc()
 			}
-			
+
 			err := executeWhoCommand(tt.character, tt.tokens)
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -312,7 +312,7 @@ func TestExecuteWhoCommand(t *testing.T) {
 			if !tt.expectError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			
+
 			// Clean up characters for next test
 			game.characters = make(map[uuid.UUID]*Character)
 		})
@@ -451,7 +451,7 @@ func TestExecuteInventoryCommand(t *testing.T) {
 				sword := createTestItem("Iron Sword", "A sharp iron sword")
 				armor := createTestItem("Leather Armor", "Basic leather armor")
 				armor.isWorn = true
-				
+
 				char.inventory["sword"] = sword
 				char.inventory["armor"] = armor
 				char.rightHand = sword
@@ -465,7 +465,7 @@ func TestExecuteInventoryCommand(t *testing.T) {
 			if tt.setupFunc != nil && tt.character != nil {
 				tt.setupFunc(tt.character)
 			}
-			
+
 			err := executeInventoryCommand(tt.character, tt.tokens)
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -480,12 +480,12 @@ func TestExecuteInventoryCommand(t *testing.T) {
 // TestGetCharacterInfo tests the character info display method
 func TestGetCharacterInfo(t *testing.T) {
 	char := createTestCharacterForCommands("TestChar", createTestGameForCharacterCommands(), createTestRoom(0))
-	
+
 	// Add some attributes and skills
 	char.attributes["strength"] = 15
 	char.attributes["intelligence"] = 12
 	char.skills["swordsmanship"] = 8
-	char.skills["magic"] = 0  // Should not be displayed
+	char.skills["magic"] = 0 // Should not be displayed
 
 	info := char.GetCharacterInfo()
 
@@ -524,11 +524,11 @@ func TestGetCharacterInfo(t *testing.T) {
 // TestGetSkillInfo tests the skill info display method
 func TestGetSkillInfo(t *testing.T) {
 	char := createTestCharacterForCommands("TestChar", createTestGameForCharacterCommands(), createTestRoom(0))
-	
+
 	// Add some skills
 	char.skills["swordsmanship"] = 8
 	char.skills["magic"] = 5
-	char.skills["stealth"] = 0  // Should not be displayed
+	char.skills["stealth"] = 0 // Should not be displayed
 
 	skillInfo := char.GetSkillInfo()
 
@@ -554,7 +554,7 @@ func TestGetSkillInfo(t *testing.T) {
 // TestGetSkillInfo_NoSkills tests skill display with no developed skills
 func TestGetSkillInfo_NoSkills(t *testing.T) {
 	char := createTestCharacterForCommands("TestChar", createTestGameForCharacterCommands(), createTestRoom(0))
-	
+
 	skillInfo := char.GetSkillInfo()
 
 	if !strings.Contains(skillInfo, "You have not developed any skills yet") {
@@ -759,11 +759,11 @@ func TestLookInContainer(t *testing.T) {
 // TestConcurrentCharacterAccess tests concurrent access to character methods
 func TestConcurrentCharacterAccess(t *testing.T) {
 	char := createTestCharacterForCommands("TestChar", createTestGameForCharacterCommands(), createTestRoom(0))
-	
+
 	// Add some data to the character
 	char.attributes["strength"] = 15
 	char.skills["swordsmanship"] = 8
-	
+
 	var wg sync.WaitGroup
 	errors := make([]error, 10)
 
@@ -772,13 +772,13 @@ func TestConcurrentCharacterAccess(t *testing.T) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			
+
 			// Test concurrent access to character info
 			info := char.GetCharacterInfo()
 			if !strings.Contains(info, "TestChar") {
 				errors[index] = fmt.Errorf("character info missing name")
 			}
-			
+
 			// Test concurrent access to skill info
 			skillInfo := char.GetSkillInfo()
 			if !strings.Contains(skillInfo, "TestChar") {

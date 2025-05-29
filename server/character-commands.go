@@ -525,12 +525,12 @@ func executeUnhideCommand(character *Character, tokens []string) error {
 	// Reveal the character
 	character.SetHidden(false)
 	character.playerCommandOut <- "\n\rYou step out from hiding.\n\r"
-	
+
 	// Notify others in the room
-	SendRoomMessageExcept(character.room, 
+	SendRoomMessageExcept(character.room,
 		fmt.Sprintf("\n\r%s steps out from hiding.\n\r", character.name),
 		character,
 	)
-	
+
 	return nil
 }

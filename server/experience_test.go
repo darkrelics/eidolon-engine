@@ -55,10 +55,10 @@ func TestCalculateXPRequirement(t *testing.T) {
 
 func TestCalculateVarianceModifier(t *testing.T) {
 	tests := []struct {
-		name               string
-		myEffective        int
-		opponentEffective  int
-		expectedModifier   float64
+		name              string
+		myEffective       int
+		opponentEffective int
+		expectedModifier  float64
 	}{
 		{"Even match", 10, 10, 1.0},
 		{"Weaker opponent", 10, 5, 0.25},
@@ -73,7 +73,7 @@ func TestCalculateVarianceModifier(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := CalculateVarianceModifier(tt.myEffective, tt.opponentEffective)
 			if math.Abs(result-tt.expectedModifier) > 0.0001 {
-				t.Errorf("CalculateVarianceModifier(%d, %d) = %f, want %f", 
+				t.Errorf("CalculateVarianceModifier(%d, %d) = %f, want %f",
 					tt.myEffective, tt.opponentEffective, result, tt.expectedModifier)
 			}
 		})
@@ -98,7 +98,7 @@ func TestCalculateFinalXP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := CalculateFinalXP(tt.baseXP, tt.varianceModifier, tt.success)
 			if math.Abs(result-tt.expectedXP) > 0.0001 {
-				t.Errorf("CalculateFinalXP(%f, %f, %v) = %f, want %f", 
+				t.Errorf("CalculateFinalXP(%f, %f, %v) = %f, want %f",
 					tt.baseXP, tt.varianceModifier, tt.success, result, tt.expectedXP)
 			}
 		})
@@ -107,10 +107,10 @@ func TestCalculateFinalXP(t *testing.T) {
 
 func TestCalculateScoreIncrement(t *testing.T) {
 	tests := []struct {
-		name          string
-		xpGained      float64
-		currentScore  float64
-		expectedIncr  float64
+		name         string
+		xpGained     float64
+		currentScore float64
+		expectedIncr float64
 	}{
 		{"Small XP at level 0", 0.25, 0.0, 0.025},
 		{"Large XP at level 0", 10.0, 0.0, 1.0},
@@ -123,7 +123,7 @@ func TestCalculateScoreIncrement(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := CalculateScoreIncrement(tt.xpGained, tt.currentScore)
 			if math.Abs(result-tt.expectedIncr) > 0.0001 {
-				t.Errorf("CalculateScoreIncrement(%f, %f) = %f, want %f", 
+				t.Errorf("CalculateScoreIncrement(%f, %f) = %f, want %f",
 					tt.xpGained, tt.currentScore, result, tt.expectedIncr)
 			}
 		})

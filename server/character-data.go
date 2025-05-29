@@ -395,7 +395,7 @@ func (c *Character) RemoveItemTraitMods(item *Item) {
 func (c *Character) GetSkill(skillName string) float64 {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
-	
+
 	if value, exists := c.skills[skillName]; exists {
 		return value
 	}
@@ -406,7 +406,7 @@ func (c *Character) GetSkill(skillName string) float64 {
 func (c *Character) GetAttribute(attrName string) float64 {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
-	
+
 	if value, exists := c.attributes[attrName]; exists {
 		return value
 	}
@@ -432,10 +432,10 @@ func (c *Character) SetHidden(hidden bool) {
 func (c *Character) IsVisibleTo(observer *Character) bool {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
-	
+
 	if c == observer {
 		return true // Always visible to self
 	}
-	
+
 	return !c.hidden
 }

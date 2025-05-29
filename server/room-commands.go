@@ -37,11 +37,11 @@ const (
 
 // Stealth system constants
 const (
-	hideBaseDifficulty = 4                    // Base difficulty for hide attempts
-	hideActionTime     = 3 * time.Second     // Time blocked after hide attempt
-	hideRateLimit      = 10 * time.Second    // Cooldown between hide attempts
-	sneakActionTime    = 5 * time.Second     // Time blocked after sneak attempt
-	searchActionTime   = 3 * time.Second     // Time blocked after search attempt
+	hideBaseDifficulty = 4                // Base difficulty for hide attempts
+	hideActionTime     = 3 * time.Second  // Time blocked after hide attempt
+	hideRateLimit      = 10 * time.Second // Cooldown between hide attempts
+	sneakActionTime    = 5 * time.Second  // Time blocked after sneak attempt
+	searchActionTime   = 3 * time.Second  // Time blocked after search attempt
 )
 
 // processRoomCommand handles commands at the room level
@@ -176,7 +176,7 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 	if character != nil && character.IsHidden() {
 		character.SetHidden(false)
 		character.playerCommandOut <- "\n\rYou reveal yourself as you interact with items.\n\r"
-		
+
 		if character.room != nil {
 			SendRoomMessageExcept(character.room,
 				fmt.Sprintf("\n\r%s suddenly appears!\n\r", character.name),
@@ -1537,7 +1537,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	if cmd.Verb != "sneak" && character.IsHidden() {
 		character.SetHidden(false)
 		character.playerCommandOut <- "\n\rYou reveal yourself as you move.\n\r"
-		
+
 		if character.room != nil {
 			SendRoomMessageExcept(character.room,
 				fmt.Sprintf("\n\r%s suddenly appears!\n\r", character.name),
@@ -1694,22 +1694,22 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		// Same room (shouldn't happen, but handle gracefully)
 		oldRoom.mutex.Lock()
 	}
-	
+
 	// Remove from old room
 	delete(oldRoom.characters, character.id)
 	oldRoom.lastActive = time.Now()
-	
+
 	// Add to new room
 	newRoom.characters[character.id] = character
 	newRoom.lastActive = time.Now()
 	newRoom.idleCounter = 0
-	
+
 	// If room has a script ID, activate scripts
 	if newRoom.persistent && newRoom.scriptID != "" && !newRoom.scriptActive {
 		newRoom.scriptActive = true
 		Logger.Info("Activating scripts for persistent room with character entry", "roomID", newRoom.roomID)
 	}
-	
+
 	// Unlock rooms before updating character
 	if oldRoom.roomID != newRoom.roomID {
 		oldRoom.mutex.Unlock()
@@ -1771,7 +1771,7 @@ func handleHideCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 			Timestamp: time.Now(),
 		}
 	}
-	
+
 	// Verify character is actually in this room
 	if character.room != room {
 		return &CommandResponse{
@@ -1786,7 +1786,7 @@ func handleHideCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 	character.mutex.RLock()
 	timeSinceLastHide := time.Since(character.lastHideAttempt)
 	character.mutex.RUnlock()
-	
+
 	if timeSinceLastHide < hideRateLimit {
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -1797,7 +1797,7 @@ func handleHideCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 	}
 
 	character.SetCommandWaitTime(hideActionTime)
-	
+
 	character.mutex.Lock()
 	character.lastHideAttempt = time.Now()
 	character.mutex.Unlock()
@@ -1815,8 +1815,8 @@ func handleHideCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 
 	if !outcome.Success {
 		message := "\n\rYou attempt to hide but fail to find adequate concealment.\n\r"
-		
-		SendRoomMessageExcept(room, 
+
+		SendRoomMessageExcept(room,
 			fmt.Sprintf("\n\r%s attempts to hide but remains visible.\n\r", character.name),
 			character,
 		)
@@ -1846,27 +1846,27 @@ func handleHideCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 	// Use atomic detection to prevent race conditions
 	var detectedBy []*Character
 	var detectionMessages []string
-	
+
 	for _, observer := range observers {
 		if observer == nil || observer.player == nil {
 			continue // Skip invalid observers
 		}
-		
+
 		// Re-verify character is still hidden before each check
 		if !character.IsHidden() {
 			break // Character already revealed by previous detection
 		}
-		
+
 		// Perception & Investigation vs Stealth & Agility
 		detectOutcome := ResolveOpposedCheckWithXP(
 			observer, character,
 			"investigation", "perception",
 			"stealth", "agility",
 		)
-		
+
 		if detectOutcome.Success {
 			detectedBy = append(detectedBy, observer)
-			detectionMessages = append(detectionMessages, 
+			detectionMessages = append(detectionMessages,
 				fmt.Sprintf("\n\rYou notice %s trying to hide.\n\r", character.name))
 		}
 	}
@@ -1875,14 +1875,14 @@ func handleHideCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 	if len(detectedBy) > 0 && character.IsHidden() {
 		character.SetHidden(false)
 		message = "\n\rYou attempt to hide but are spotted!\n\r"
-		
+
 		// Send detection messages only to those who detected
 		for i, detector := range detectedBy {
 			if i < len(detectionMessages) && detector.player != nil {
 				SafeSendString(detector.player.commandOut, detectionMessages[i], detector.name)
 			}
 		}
-		
+
 		// Notify others that someone was discovered (without details)
 		for _, observer := range observers {
 			if observer == nil || observer.player == nil {
@@ -1935,7 +1935,7 @@ func handleSneakCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	if !outcome.Success {
 		character.SetHidden(false)
 		character.SetCommandWaitTime(hideActionTime)
-		
+
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
@@ -1949,7 +1949,7 @@ func handleSneakCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	cmd.Verb = "sneak" // Keep as sneak so movement handler knows not to reveal
 	moveResponse := handleMovementCommand(cmd, game)
 	cmd.Verb = originalVerb // Restore original verb
-	
+
 	if !moveResponse.Success {
 		// Movement failed, remain hidden
 		return moveResponse
@@ -1972,14 +1972,14 @@ func handleSneakCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		// Perception & Investigation vs Stealth & Agility
 		detectOutcome := ResolveOpposedCheckWithXP(
 			observer, character,
-			"investigation", "perception", 
+			"investigation", "perception",
 			"stealth", "agility",
 		)
-		
+
 		if detectOutcome.Success {
 			character.SetHidden(false)
 			SafeSendString(observer.player.commandOut, fmt.Sprintf("\n\rYou spot %s sneaking in!\n\r", character.name), observer.name)
-			
+
 			// Notify others
 			SendRoomMessageExcept(newRoom,
 				fmt.Sprintf("\n\r%s points out %s who was sneaking in.\n\r", observer.name, character.name),
@@ -2037,33 +2037,33 @@ func handleSearchCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 	// Check against each hidden character - find only one per search
 	var foundAny bool
 	var foundCharacter *Character
-	
+
 	for _, hidden := range hiddenCharacters {
 		if hidden == nil || hidden.player == nil {
 			continue
 		}
-		
+
 		// Perception & Investigation vs Stealth & Agility
 		detectOutcome := ResolveOpposedCheckWithXP(
 			character, hidden,
 			"investigation", "perception",
 			"stealth", "agility",
 		)
-		
+
 		if detectOutcome.Success {
 			foundAny = true
 			foundCharacter = hidden
 			break // Only find one character per search attempt
 		}
 	}
-	
+
 	// Process the discovery if any character was found
 	if foundAny && foundCharacter != nil {
 		foundCharacter.SetHidden(false)
-		
+
 		SafeSendString(character.player.commandOut, fmt.Sprintf("\n\rYou discover %s hiding!\n\r", foundCharacter.name), character.name)
 		SafeSendString(foundCharacter.player.commandOut, fmt.Sprintf("\n\r%s discovers your hiding place!\n\r", character.name), foundCharacter.name)
-		
+
 		// Notify others
 		SendRoomMessageExcept(room,
 			fmt.Sprintf("\n\r%s discovers %s hiding!\n\r", character.name, foundCharacter.name),
@@ -2140,7 +2140,7 @@ func handlePointCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 			"investigation", "perception",
 			"stealth", "agility",
 		)
-		
+
 		if !detectOutcome.Success {
 			return &CommandResponse{
 				RequestID: cmd.ID,
@@ -2154,10 +2154,10 @@ func handlePointCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 	// If target is hidden, reveal them
 	if target.IsHidden() {
 		target.SetHidden(false)
-		
+
 		SafeSendString(character.player.commandOut, fmt.Sprintf("\n\rYou point at %s, revealing their location!\n\r", target.name), character.name)
 		SafeSendString(target.player.commandOut, fmt.Sprintf("\n\r%s points at you, revealing your location!\n\r", character.name), target.name)
-		
+
 		SendRoomMessageExcept(room,
 			fmt.Sprintf("\n\r%s points at %s, revealing their location!\n\r", character.name, target.name),
 			character,
@@ -2166,7 +2166,7 @@ func handlePointCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 		// Target is not hidden, just point normally
 		SafeSendString(character.player.commandOut, fmt.Sprintf("\n\rYou point at %s.\n\r", target.name), character.name)
 		SafeSendString(target.player.commandOut, fmt.Sprintf("\n\r%s points at you.\n\r", character.name), target.name)
-		
+
 		SendRoomMessageExcept(room,
 			fmt.Sprintf("\n\r%s points at %s.\n\r", character.name, target.name),
 			character,

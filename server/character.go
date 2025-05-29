@@ -37,7 +37,7 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 	if c.player == nil {
 		return false, "Character not properly connected."
 	}
-	
+
 	if c.room == nil {
 		return false, "Character not in a valid room."
 	}
