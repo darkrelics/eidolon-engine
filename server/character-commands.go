@@ -364,7 +364,7 @@ func (c *Character) GetSkillInfo() string {
 		// Display each skill with value > 0
 		for _, skill := range skillsAboveZero {
 			value := c.skills[skill]
-			skillInfo.WriteString(fmt.Sprintf("  %-15s: %d\n\r", skill, int(value)))
+			skillInfo.WriteString(fmt.Sprintf("  %-15s: %.2f\n\r", skill, value))
 		}
 	} else {
 		skillInfo.WriteString("  You have not developed any skills yet.\n\r")

@@ -385,3 +385,25 @@ func (c *Character) RemoveItemTraitMods(item *Item) {
 		}
 	}
 }
+
+// GetSkill safely retrieves a skill value, returning 0 if not found
+func (c *Character) GetSkill(skillName string) float64 {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	
+	if value, exists := c.skills[skillName]; exists {
+		return value
+	}
+	return 0.0
+}
+
+// GetAttribute safely retrieves an attribute value, returning 0 if not found
+func (c *Character) GetAttribute(attrName string) float64 {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	
+	if value, exists := c.attributes[attrName]; exists {
+		return value
+	}
+	return 0.0
+}
