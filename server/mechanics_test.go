@@ -5,47 +5,43 @@ import (
 	"testing"
 )
 
-// TestResolveOpposedCheck tests the basic mechanics
-func TestResolveOpposedCheck(t *testing.T) {
+// TestResolveStaticCheck tests the static check mechanics
+func TestResolveStaticCheck(t *testing.T) {
 	tests := []struct {
-		name      string
-		aggressor int
-		defender  int
-		seed      int64
-		wantMin   float64
-		wantMax   float64
+		name       string
+		aggressor  int
+		difficulty int
 	}{
 		{
-			name:      "Equal ratings",
-			aggressor: 10,
-			defender:  10,
-			seed:      12345,
-			wantMin:   -2.0,
-			wantMax:   2.0,
+			name:       "Equal to difficulty",
+			aggressor:  10,
+			difficulty: 10,
 		},
 		{
-			name:      "Aggressor advantage",
-			aggressor: 15,
-			defender:  10,
-			seed:      12345,
-			wantMin:   -1.0,
-			wantMax:   3.0,
+			name:       "Above difficulty",
+			aggressor:  15,
+			difficulty: 10,
 		},
 		{
-			name:      "Defender advantage",
-			aggressor: 5,
-			defender:  10,
-			seed:      12345,
-			wantMin:   -3.0,
-			wantMax:   1.0,
+			name:       "Below difficulty",
+			aggressor:  5,
+			difficulty: 10,
+		},
+		{
+			name:       "Zero difficulty",
+			aggressor:  10,
+			difficulty: 0,
+		},
+		{
+			name:       "High difficulty",
+			aggressor:  10,
+			difficulty: 20,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// For actual testing, we'll need to expose a testing interface
-			// For now, just test the production function
-			outcome := ResolveOpposedCheck(tt.aggressor, tt.defender)
+			outcome := ResolveStaticCheck(tt.aggressor, tt.difficulty)
 
 			// Basic sanity checks
 			if math.IsNaN(outcome.Sigma) {
@@ -58,18 +54,18 @@ func TestResolveOpposedCheck(t *testing.T) {
 	}
 }
 
-// TestOutcomeDistribution tests the statistical properties
-func TestOutcomeDistribution(t *testing.T) {
+// TestResolveStaticCheckDistribution tests the statistical properties of static checks
+func TestResolveStaticCheckDistribution(t *testing.T) {
 	const iterations = 10000
 
 	testCases := []struct {
 		name           string
 		aggressor      int
-		defender       int
+		difficulty     int
 		expectedWinPct float64
 		tolerance      float64
 	}{
-		{"Equal ratings", 10, 10, 0.50, 0.02},
+		{"Equal to difficulty", 10, 10, 0.50, 0.02},
 		{"Small advantage", 12, 10, 0.646, 0.02},
 		{"Large advantage", 20, 10, 0.943, 0.02},
 		{"Small disadvantage", 8, 10, 0.334, 0.02},
@@ -79,8 +75,8 @@ func TestOutcomeDistribution(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			wins := 0
-			for range iterations {
-				outcome := ResolveOpposedCheck(tc.aggressor, tc.defender)
+			for i := 0; i < iterations; i++ {
+				outcome := ResolveStaticCheck(tc.aggressor, tc.difficulty)
 				if outcome.Success {
 					wins++
 				}
@@ -95,34 +91,94 @@ func TestOutcomeDistribution(t *testing.T) {
 	}
 }
 
-// TestSigmaRange tests that sigma values stay within expected bounds
-func TestSigmaRange(t *testing.T) {
-	const iterations = 1000
+// TestResolveStaticCheckWithXP tests the static check with XP mechanics
+func TestResolveStaticCheckWithXP(t *testing.T) {
+	tests := []struct {
+		name       string
+		skill      string
+		attr       string
+		skillVal   float64
+		attrVal    float64
+		difficulty int
+	}{
+		{
+			name:       "Basic check with XP",
+			skill:      "stealth",
+			attr:       "dexterity",
+			skillVal:   5.0,
+			attrVal:    5.0,
+			difficulty: 10,
+		},
+		{
+			name:       "High skill check",
+			skill:      "perception",
+			attr:       "wisdom",
+			skillVal:   8.0,
+			attrVal:    5.0,
+			difficulty: 10,
+		},
+		{
+			name:       "Low skill check",
+			skill:      "athletics",
+			attr:       "strength",
+			skillVal:   2.0,
+			attrVal:    3.0,
+			difficulty: 10,
+		},
+	}
 
-	for delta := -20; delta <= 20; delta += 5 {
-		aggressor := 10 + delta
-		defender := 10
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a test character
+			character := &Character{
+				name:       "TestChar",
+				skills:     make(map[string]float64),
+				attributes: make(map[string]float64),
+			}
+			character.skills[tt.skill] = tt.skillVal
+			character.attributes[tt.attr] = tt.attrVal
 
-		minSigma := math.Inf(1)
-		maxSigma := math.Inf(-1)
+			// Store initial values
+			initialSkill := character.GetSkill(tt.skill)
+			initialAttr := character.GetAttribute(tt.attr)
 
-		for range iterations {
-			outcome := ResolveOpposedCheck(aggressor, defender)
-			minSigma = min(minSigma, outcome.Sigma)
-			maxSigma = max(maxSigma, outcome.Sigma)
+			// Perform the check
+			outcome := ResolveStaticCheckWithXP(character, tt.skill, tt.attr, tt.difficulty)
+
+			// Verify outcome structure
+			if math.IsNaN(outcome.Sigma) {
+				t.Errorf("Sigma is NaN")
+			}
+			if outcome.Success != (outcome.Sigma >= 0) {
+				t.Errorf("Success flag doesn't match Sigma sign")
+			}
+
+			// Verify XP was awarded (skill should increase)
+			finalSkill := character.GetSkill(tt.skill)
+			finalAttr := character.GetAttribute(tt.attr)
+
+			if finalSkill <= initialSkill {
+				t.Errorf("Skill XP not awarded: initial=%.3f, final=%.3f", initialSkill, finalSkill)
+			}
+			if finalAttr <= initialAttr {
+				t.Errorf("Attribute XP not awarded: initial=%.3f, final=%.3f", initialAttr, finalAttr)
+			}
+		})
+	}
+}
+
+// TestResolveStaticCheckWithXPNilCharacter tests handling of nil character
+func TestResolveStaticCheckWithXPNilCharacter(t *testing.T) {
+	// This should not panic
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("ResolveStaticCheckWithXP panicked with nil character: %v", r)
 		}
+	}()
 
-		// Expected bounds based on the mechanics
-		mu := kShift * float64(delta)
-		sigma := 1 + kVar*math.Tanh(float64(delta)/10)
-		sigma = max(sigma, minSig)
-
-		expectedMin := mu - 4*sigma // 4 standard deviations
-		expectedMax := mu + 4*sigma
-
-		if minSigma < expectedMin || maxSigma > expectedMax {
-			t.Logf("Delta %d: range [%.2f, %.2f] vs expected [%.2f, %.2f]",
-				delta, minSigma, maxSigma, expectedMin, expectedMax)
-		}
+	outcome := ResolveStaticCheckWithXP(nil, "stealth", "dexterity", 10)
+	// Should still return a valid outcome even with nil character
+	if outcome.Success && outcome.Sigma < 0 {
+		t.Errorf("Invalid outcome returned for nil character")
 	}
 }

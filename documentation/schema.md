@@ -35,9 +35,10 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 | `RoomID`        | `NUMBER` | ID of the room the character is currently in.               |
 | `Inventory`     | `MAP`    | Map of inventory slots to item UUIDs.                       |
 | `Attributes`    | `MAP`    | Map of attribute names to their values (e.g., Strength: 4). |
-| `Abilities`     | `MAP`    | Map of ability names to their values (e.g., Stealth: 3).    |
+| `Skills`        | `MAP`    | Map of skill names to their values (e.g., Stealth: 3).      |
 | `Essence`       | `NUMBER` | The character's essence or magical energy.                  |
 | `Health`        | `NUMBER` | The character's current health points.                      |
+| `Hidden`        | `BOOL`   | Whether the character is currently hidden.                  |
 
 - **`CharacterID`**: The UUID of the character, serving as the primary key.
 - **`PlayerID`**: The email address of the player who owns this character.
@@ -45,9 +46,10 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 - **`RoomID`**: The ID of the room where the character is located.
 - **`Inventory`**: A map where keys represent inventory slots or item names, and values are item UUIDs.
 - **`Attributes`**: A map of character attributes (e.g., Strength, Agility) to their numerical values.
-- **`Abilities`**: A map of character abilities (e.g., Stealth, Archery) to their numerical values.
+- **`Skills`**: A map of character skills (e.g., Stealth, Archery) to their numerical values.
 - **`Essence`**: Represents the character's magical energy or mana.
 - **`Health`**: Indicates the character's current health status.
+- **`Hidden`**: Boolean indicating whether the character is currently hidden from other players.
 
 ---
 

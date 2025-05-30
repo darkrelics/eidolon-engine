@@ -6,9 +6,13 @@ The mechanics module provides a system for opposed checks in the game. It uses a
 
 ## Core Components
 
-### The Resolution Function
+### The Resolution Functions
 
-The system resolves conflicts between an aggressor and defender using their numeric ratings:
+The system provides two types of checks:
+
+#### Opposed Checks
+
+Resolves conflicts between an aggressor and defender using their numeric ratings:
 
 ```go
 outcome := ResolveOpposedCheck(aggressor, defender)
@@ -19,9 +23,24 @@ if outcome.Success {
 }
 ```
 
+#### Static Checks
+
+Resolves checks against a fixed difficulty:
+
+```go
+// Calculate effective score (e.g., skill + attribute)
+effectiveScore := int(character.GetSkill("stealth") + character.GetAttribute("dexterity"))
+outcome := ResolveStaticCheck(effectiveScore, difficulty)
+if outcome.Success {
+    // Character succeeds against the difficulty
+} else {
+    // Character fails
+}
+```
+
 The `Outcome` struct provides:
 
-- `Success`: Boolean indicating if the aggressor won
+- `Success`: Boolean indicating if the check succeeded
 - `Sigma`: The raw result value (positive = success, negative = failure)
 
 ### Mathematical Model
@@ -127,6 +146,31 @@ default:
     // Critical failure - caught red-handed
 }
 ```
+
+### Static Checks
+
+Static checks are used when testing against environmental challenges or fixed difficulties:
+
+```go
+// Climbing a wall (difficulty 4)
+climbSkill := character.GetSkill("climbing") + character.GetAttribute("strength")
+outcome := ResolveStaticCheck(int(climbSkill), 4)
+
+if outcome.Success {
+    // Successfully climbed the wall
+} else {
+    // Failed to climb
+}
+```
+
+Common difficulty guidelines:
+
+- 2: Trivial task
+- 4: Easy task
+- 6: Moderate task
+- 8: Hard task
+- 10: Very hard task
+- 12+: Exceptional task
 
 ## Performance Considerations
 

@@ -103,6 +103,7 @@ type Room struct {
 	commandOut     chan *CommandResponse // Channel for responses from the room
 	gameCommandOut chan *CommandRequest  // Channel for commands the room escalates to the game
 	gameCommandIn  chan *CommandResponse // Channel for responses from the game to the room
+	done           chan struct{}         // Channel signaled when room goroutine completes
 }
 
 // RoomData represents the structure for storing room data in DynamoDB
@@ -149,6 +150,7 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		commandOut:     make(chan *CommandResponse, 50), // Buffer for outgoing responses
 		gameCommandOut: make(chan *CommandRequest, 10),  // Buffer for commands to game
 		gameCommandIn:  make(chan *CommandResponse, 10), // Buffer for responses from game
+		done:           make(chan struct{}),             // Channel to signal goroutine completion
 	}
 }
 
@@ -464,20 +466,9 @@ func SendRoomMessageExcept(room *Room, message string, except *Character) {
 
 	// Send messages without holding the lock to prevent deadlock
 	for _, c := range recipients {
-		select {
-		case c.player.commandOut <- message:
+		if SafeSendString(c.player.commandOut, message, c.name) {
 			// After sending room message, send the prompt again to ensure consistent UI
-			select {
-			case c.player.commandOut <- c.prompt:
-				// Prompt sent successfully
-			default:
-				Logger.Warn("Failed to send prompt after room message to player",
-					"recipient", c.name)
-			}
-		default:
-			Logger.Warn("Failed to send room message to player",
-				"recipient", c.name,
-				"message", message)
+			SafeSendString(c.player.commandOut, c.prompt, c.name)
 		}
 	}
 }
@@ -509,11 +500,9 @@ func (r *Room) Stop() {
 		return
 	}
 
-	// Mark as not running and get references to cancel func and channels
+	// Mark as not running and get reference to cancel func
 	r.running = false
 	cancelFunc := r.cancel
-	commandIn := r.commandIn
-	commandOut := r.commandOut
 	r.mutex.Unlock()
 
 	Logger.Info("Stopping room goroutine", "roomID", r.roomID, "title", r.title)
@@ -522,10 +511,13 @@ func (r *Room) Stop() {
 	// This is done outside the lock to prevent deadlock
 	cancelFunc()
 
+	// Wait for the room goroutine to complete
+	<-r.done
+
 	// Close channels after releasing the lock
 	// This prevents deadlock if channel operations were waiting on the mutex
-	close(commandIn)
-	close(commandOut)
+	close(r.commandIn)
+	close(r.commandOut)
 	// Note: we don't close gameCommandOut as it belongs to the Game
 }
 
@@ -542,6 +534,9 @@ func (r *Room) run(game *Game) {
 // runInternal contains the actual room processing logic
 func (r *Room) runInternal(game *Game) {
 	Logger.Info("Room goroutine started", "roomID", r.roomID, "title", r.title)
+
+	// Signal completion when this function returns
+	defer close(r.done)
 
 	// Set up a 1-second ticker to match game heartbeat
 	ticker := time.NewTicker(1 * time.Second)
@@ -638,10 +633,10 @@ func (r *Room) GetDescription(character *Character) string {
 		roomInfo.WriteString("\n\r")
 	}
 
-	// Characters - collect while under lock
+	// Characters - collect while under lock, only visible ones
 	chars := make([]string, 0, len(r.characters))
 	for _, c := range r.characters {
-		if c != nil && c != character {
+		if c != nil && c != character && c.IsVisibleTo(character) {
 			chars = append(chars, c.name)
 		}
 	}

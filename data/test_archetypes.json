@@ -16,7 +16,7 @@
         "Intelligence": 3.0,
         "Cunning": 2.0
       },
-      "Abilities": {
+      "Skills": {
         "Melee": 0.0,
         "Archery": 0.0,
         "Brawling": 0.0,
@@ -73,7 +73,7 @@
         "Intelligence": 1.0,
         "Cunning": 1.0
       },
-      "Abilities": {
+      "Skills": {
         "Melee": 0.0,
         "Archery": 0.0,
         "Brawling": 0.0,
@@ -130,7 +130,7 @@
         "Intelligence": 1.0,
         "Cunning": 1.0
       },
-      "Abilities": {
+      "Skills": {
         "Melee": 0.0,
         "Archery": 0.0,
         "Brawling": 0.0,

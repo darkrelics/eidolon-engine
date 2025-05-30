@@ -33,7 +33,7 @@ type Character struct {
 	player           *Player
 	name             string
 	attributes       map[string]float64
-	abilities        map[string]float64
+	skills           map[string]float64
 	essence          float64
 	health           float64
 	room             *Room
@@ -48,6 +48,8 @@ type Character struct {
 	lastSaved        time.Time
 	waitUntil        time.Time             // Time when the character can execute the next command
 	charState        string                // Current character state (standing, sitting, etc.)
+	hidden           bool                  // Whether the character is hidden
+	lastHideAttempt  time.Time             // Time of last hide attempt for rate limiting
 	roomCommandOut   chan *CommandRequest  // Commands sent from character to room
 	roomCommandIn    chan *CommandResponse // Responses from room to character
 	gameCommandOut   chan *CommandRequest  // Commands escalated directly to game
@@ -65,13 +67,14 @@ type CharacterData struct {
 	PlayerID      string             `json:"PlayerID" dynamodbav:"PlayerID"`
 	CharacterName string             `json:"Name" dynamodbav:"character_name"`
 	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
-	Abilities     map[string]float64 `json:"Abilities" dynamodbav:"Abilities"`
+	Skills        map[string]float64 `json:"Skills" dynamodbav:"Skills"`
 	Essence       float64            `json:"Essence" dynamodbav:"Essence"`
 	Health        float64            `json:"Health" dynamodbav:"Health"`
 	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
 	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
 	LeftHandID    string             `json:"LeftHandID,omitempty" dynamodbav:"LeftHandID,omitempty"`
 	RightHandID   string             `json:"RightHandID,omitempty" dynamodbav:"RightHandID,omitempty"`
+	Hidden        bool               `json:"Hidden" dynamodbav:"Hidden"`
 }
 
 func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
@@ -85,7 +88,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		id:               characterID,
 		player:           player,
 		attributes:       make(map[string]float64),
-		abilities:        make(map[string]float64),
+		skills:           make(map[string]float64),
 		inventory:        make(map[string]*Item),
 		leftHand:         nil,
 		rightHand:        nil,
@@ -94,8 +97,9 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		advancing:        false,
 		combatRange:      make(map[uuid.UUID]float64),
 		lastEdited:       time.Now(),
-		charState:        "standing", // Default character state
-		waitUntil:        time.Now(), // No initial wait time
+		charState:        "standing",
+		hidden:           false,
+		waitUntil:        time.Now(),
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
 		gameCommandOut:   make(chan *CommandRequest, 10),
@@ -124,9 +128,10 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	}
 	character.name = cd.CharacterName
 	character.attributes = cd.Attributes
-	character.abilities = cd.Abilities
+	character.skills = cd.Skills
 	character.essence = cd.Essence
 	character.health = cd.Health
+	character.hidden = cd.Hidden
 
 	// Set character room
 	room, exists := game.rooms[cd.RoomID]
@@ -323,14 +328,14 @@ func (c *Character) ApplyItemTraitMods(item *Item) {
 				"mod", mod,
 				"newValue", c.attributes[trait])
 		}
-		// For abilities
-		if _, exists := c.abilities[trait]; exists {
-			c.abilities[trait] += float64(mod)
-			Logger.Debug("Applied ability mod",
+		// For skills
+		if _, exists := c.skills[trait]; exists {
+			c.skills[trait] += float64(mod)
+			Logger.Debug("Applied skill mod",
 				"character", c.name,
-				"ability", trait,
+				"skill", trait,
 				"mod", mod,
-				"newValue", c.abilities[trait])
+				"newValue", c.skills[trait])
 		}
 		// Special case handling
 		switch trait {
@@ -367,14 +372,14 @@ func (c *Character) RemoveItemTraitMods(item *Item) {
 				"mod", -mod,
 				"newValue", c.attributes[trait])
 		}
-		// For abilities
-		if _, exists := c.abilities[trait]; exists {
-			c.abilities[trait] -= float64(mod)
-			Logger.Debug("Removed ability mod",
+		// For skills
+		if _, exists := c.skills[trait]; exists {
+			c.skills[trait] -= float64(mod)
+			Logger.Debug("Removed skill mod",
 				"character", c.name,
-				"ability", trait,
+				"skill", trait,
 				"mod", -mod,
-				"newValue", c.abilities[trait])
+				"newValue", c.skills[trait])
 		}
 		// Special case handling
 		switch trait {
@@ -384,4 +389,53 @@ func (c *Character) RemoveItemTraitMods(item *Item) {
 			c.essence -= float64(mod)
 		}
 	}
+}
+
+// GetSkill safely retrieves a skill value, returning 0 if not found
+func (c *Character) GetSkill(skillName string) float64 {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if value, exists := c.skills[skillName]; exists {
+		return value
+	}
+	return 0.0
+}
+
+// GetAttribute safely retrieves an attribute value, returning 0 if not found
+func (c *Character) GetAttribute(attrName string) float64 {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if value, exists := c.attributes[attrName]; exists {
+		return value
+	}
+	return 0.0
+}
+
+// IsHidden returns whether the character is currently hidden
+func (c *Character) IsHidden() bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.hidden
+}
+
+// SetHidden sets the character's hidden state
+func (c *Character) SetHidden(hidden bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.hidden = hidden
+	c.lastEdited = time.Now()
+}
+
+// IsVisibleTo checks if this character is visible to another character
+func (c *Character) IsVisibleTo(observer *Character) bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if c == observer {
+		return true // Always visible to self
+	}
+
+	return !c.hidden
 }

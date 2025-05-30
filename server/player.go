@@ -26,6 +26,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -109,6 +110,7 @@ type Player struct {
 	server        *Server
 	mutex         sync.RWMutex
 	shutdownOnce  sync.Once
+	done          chan struct{} // Channel signaled when all goroutines complete
 }
 
 type PlayerData struct {
@@ -200,7 +202,7 @@ func (p *Player) Save() error {
 	err := database.Put(p.server.ctx, "players", playerData)
 	if err != nil {
 		Logger.Error("Error saving player data", "error", err)
-		p.commandOut <- "Error saving player data. Please contact an administrator.\n"
+		SafeSendString(p.commandOut, "Error saving player data. Please contact an administrator.\n", p.id.String())
 		return fmt.Errorf("error saving player data: %w", err)
 	}
 
@@ -230,6 +232,7 @@ func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfac
 		ctx:           ctx,
 		cancel:        cancel,
 		shutdownOnce:  sync.Once{},
+		done:          make(chan struct{}),
 	}
 
 	// Load player data
@@ -258,10 +261,32 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 	inputDone := make(chan error, 1)
 	outputDone := make(chan error, 1)
 
+	// Channel to track when all goroutines have completed
+	allDone := make(chan struct{})
+	var activeGoroutines int32 = 4
+
+	// Helper to track goroutine completion
+	trackDone := func() {
+		if atomic.AddInt32(&activeGoroutines, -1) == 0 {
+			close(allDone)
+		}
+	}
+
 	// Start handlers
-	go p.handleRequests(p.ctx, requests, requestDone)
-	go p.handleInput(p.ctx, inputDone)
-	go p.handleOutput(p.ctx, outputDone)
+	go func() {
+		defer trackDone()
+		p.handleRequests(p.ctx, requests, requestDone)
+	}()
+
+	go func() {
+		defer trackDone()
+		p.handleInput(p.ctx, inputDone)
+	}()
+
+	go func() {
+		defer trackDone()
+		p.handleOutput(p.ctx, outputDone)
+	}()
 
 	// Display MOTDs after connection is established but before entering main loop
 	if err := DisplayUnseenMOTDs(p); err != nil {
@@ -270,7 +295,16 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 	}
 
 	// Start Player Interface
-	go p.Console(p.consoleDone)
+	go func() {
+		defer trackDone()
+		p.Console(p.consoleDone)
+	}()
+
+	// Monitor for completion in a separate goroutine
+	go func() {
+		<-allDone
+		close(p.done)
+	}()
 
 	// Wait for shutdown conditions
 	select {
@@ -345,6 +379,9 @@ func (p *Player) Stop() {
 			p.server.mutex.Unlock()
 			Logger.Info("Player removed from server", "player_name", p.id)
 		}
+
+		// Wait for all goroutines to complete
+		<-p.done
 
 		// Close channels after all operations are done
 		close(p.commandOut)

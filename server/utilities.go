@@ -19,6 +19,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/gofrs/uuid/v5"
 	"strings"
@@ -92,5 +93,30 @@ func SendErrorNonBlocking(errChan chan<- error, err error, componentName string)
 		Logger.Error("Error channel full, dropping error",
 			"component", componentName,
 			"error", err)
+	}
+}
+
+// SafeSendString sends a string to a channel without blocking or panicking
+func SafeSendString(ch chan<- string, msg string, recipientName string) bool {
+	select {
+	case ch <- msg:
+		return true
+	default:
+		Logger.Warn("Channel send failed", "recipient", recipientName, "messageLength", len(msg))
+		return false
+	}
+}
+
+// SafeSendStringContext sends a string to a channel with context cancellation support
+func SafeSendStringContext(ctx context.Context, ch chan<- string, msg string, recipientName string) bool {
+	select {
+	case ch <- msg:
+		return true
+	case <-ctx.Done():
+		Logger.Debug("Channel send cancelled", "recipient", recipientName, "reason", ctx.Err())
+		return false
+	default:
+		Logger.Warn("Channel send failed", "recipient", recipientName, "messageLength", len(msg))
+		return false
 	}
 }

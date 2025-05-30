@@ -75,7 +75,7 @@ func (g *Game) initCommands() {
 	g.commands["skill"] = CommandInfo{
 		timed:       false,
 		handler:     executeSkillCommand,
-		description: "Display your character's abilities",
+		description: "Display your character's skills",
 		usage:       "skill",
 	}
 
@@ -157,6 +157,41 @@ func (g *Game) initCommands() {
 		handler:     nil, // Escalates to room goroutine
 		description: "Switch items between your hands",
 		usage:       "switch hands",
+	}
+
+	g.commands["hide"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine for detection checks
+		description: "Attempt to hide from others in the room",
+		usage:       "hide",
+	}
+
+	g.commands["unhide"] = CommandInfo{
+		timed:       false,
+		handler:     executeUnhideCommand,
+		description: "Reveal yourself if hidden",
+		usage:       "unhide",
+	}
+
+	g.commands["sneak"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine for movement
+		description: "Move stealthily while hidden",
+		usage:       "sneak <direction|exit>",
+	}
+
+	g.commands["search"] = CommandInfo{
+		timed:       true,
+		handler:     nil, // Escalates to room goroutine for detection
+		description: "Search for hidden characters in the room",
+		usage:       "search",
+	}
+
+	g.commands["point"] = CommandInfo{
+		timed:       false,
+		handler:     nil, // Escalates to room goroutine to reveal target
+		description: "Point at a hidden character to reveal them",
+		usage:       "point <character>",
 	}
 
 }

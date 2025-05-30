@@ -58,7 +58,7 @@ func createValidArchetype(name string) *Archetype {
 			"intelligence": 15,
 			"agility":      12,
 		},
-		Abilities: map[string]float64{
+		Skills: map[string]float64{
 			"swordsmanship": 5,
 			"magic":         10,
 		},
@@ -147,7 +147,7 @@ func TestValidateArchetype(t *testing.T) {
 			archetype: &Archetype{
 				Description: "Test",
 				Attributes:  map[string]float64{"str": 10},
-				Abilities:   map[string]float64{"skill": 5},
+				Skills:      map[string]float64{"skill": 5},
 			},
 			expectError: true,
 			errorMsg:    "archetype name cannot be empty",
@@ -157,7 +157,7 @@ func TestValidateArchetype(t *testing.T) {
 			archetype: &Archetype{
 				ArchetypeName: "Warrior",
 				Attributes:    map[string]float64{"str": 10},
-				Abilities:     map[string]float64{"skill": 5},
+				Skills:        map[string]float64{"skill": 5},
 			},
 			expectError: true,
 			errorMsg:    "description cannot be empty",
@@ -167,20 +167,20 @@ func TestValidateArchetype(t *testing.T) {
 			archetype: &Archetype{
 				ArchetypeName: "Warrior",
 				Description:   "Test",
-				Abilities:     map[string]float64{"skill": 5},
+				Skills:        map[string]float64{"skill": 5},
 			},
 			expectError: true,
 			errorMsg:    "must have at least one attribute",
 		},
 		{
-			name: "No abilities",
+			name: "No skills",
 			archetype: &Archetype{
 				ArchetypeName: "Warrior",
 				Description:   "Test",
 				Attributes:    map[string]float64{"str": 10},
 			},
 			expectError: true,
-			errorMsg:    "must have at least one ability",
+			errorMsg:    "must have at least one skill",
 		},
 		{
 			name: "Starting item with empty prototype ID",
@@ -188,7 +188,7 @@ func TestValidateArchetype(t *testing.T) {
 				ArchetypeName: "Warrior",
 				Description:   "Test",
 				Attributes:    map[string]float64{"str": 10},
-				Abilities:     map[string]float64{"skill": 5},
+				Skills:        map[string]float64{"skill": 5},
 				StartingItems: []ArchetypeItem{
 					{PrototypeID: "", Slot: "weapon"},
 				},
@@ -202,7 +202,7 @@ func TestValidateArchetype(t *testing.T) {
 				ArchetypeName: "Warrior",
 				Description:   "Test",
 				Attributes:    map[string]float64{"str": 10},
-				Abilities:     map[string]float64{"skill": 5},
+				Skills:        map[string]float64{"skill": 5},
 				StartingItems: []ArchetypeItem{
 					{PrototypeID: prototypeID.String(), Slot: ""},
 				},
@@ -216,7 +216,7 @@ func TestValidateArchetype(t *testing.T) {
 				ArchetypeName: "Warrior",
 				Description:   "Test",
 				Attributes:    map[string]float64{"str": 10},
-				Abilities:     map[string]float64{"skill": 5},
+				Skills:        map[string]float64{"skill": 5},
 				StartingItems: []ArchetypeItem{
 					{PrototypeID: "not-a-uuid", Slot: "weapon"},
 				},
@@ -230,7 +230,7 @@ func TestValidateArchetype(t *testing.T) {
 				ArchetypeName: "Warrior",
 				Description:   "Test",
 				Attributes:    map[string]float64{"str": 10},
-				Abilities:     map[string]float64{"skill": 5},
+				Skills:        map[string]float64{"skill": 5},
 				StartingItems: []ArchetypeItem{
 					{PrototypeID: uuid.Must(uuid.NewV4()).String(), Slot: "weapon"},
 				},
@@ -244,7 +244,7 @@ func TestValidateArchetype(t *testing.T) {
 				ArchetypeName: "Warrior",
 				Description:   "Test",
 				Attributes:    map[string]float64{"str": 10},
-				Abilities:     map[string]float64{"skill": 5},
+				Skills:        map[string]float64{"skill": 5},
 				StartingItems: []ArchetypeItem{
 					{PrototypeID: prototypeID.String(), Slot: "weapon", IsWorn: true},
 				},
@@ -280,7 +280,7 @@ func TestValidateArchetype(t *testing.T) {
 func TestAttributeNormalization(t *testing.T) {
 	archetype := &Archetype{
 		Attributes: map[string]float64{"STRENGTH": 10, "Intelligence": 15, "agility": 12},
-		Abilities:  map[string]float64{"SWORDSMANSHIP": 5, "Magic": 10, "stealth": 3},
+		Skills:     map[string]float64{"SWORDSMANSHIP": 5, "Magic": 10, "stealth": 3},
 	}
 
 	// Normalize attributes
@@ -292,12 +292,12 @@ func TestAttributeNormalization(t *testing.T) {
 		}
 	}
 
-	// Normalize abilities
-	for k, v := range archetype.Abilities {
+	// Normalize skills
+	for k, v := range archetype.Skills {
 		lowerKey := strings.ToLower(k)
 		if lowerKey != k {
-			archetype.Abilities[lowerKey] = v
-			delete(archetype.Abilities, k)
+			archetype.Skills[lowerKey] = v
+			delete(archetype.Skills, k)
 		}
 	}
 
@@ -313,15 +313,15 @@ func TestAttributeNormalization(t *testing.T) {
 		}
 	}
 
-	// Check abilities
-	expectedAbils := map[string]float64{
+	// Check skills
+	expectedSkills := map[string]float64{
 		"swordsmanship": 5,
 		"magic":         10,
 		"stealth":       3,
 	}
-	for key, expected := range expectedAbils {
-		if val, ok := archetype.Abilities[key]; !ok || val != expected {
-			t.Errorf("Expected ability %s=%f, got %f", key, expected, val)
+	for key, expected := range expectedSkills {
+		if val, ok := archetype.Skills[key]; !ok || val != expected {
+			t.Errorf("Expected skill %s=%f, got %f", key, expected, val)
 		}
 	}
 }
@@ -396,7 +396,7 @@ func TestConcurrentAccess(t *testing.T) {
 		ArchetypeName: "Warrior",
 		Description:   "Test",
 		Attributes:    map[string]float64{"str": 10},
-		Abilities:     map[string]float64{"skill": 5},
+		Skills:        map[string]float64{"skill": 5},
 		StartingItems: []ArchetypeItem{
 			{PrototypeID: prototypeID.String(), Slot: "weapon"},
 		},

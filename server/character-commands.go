@@ -97,7 +97,7 @@ func executeLookCommand(character *Character, tokens []string) error {
 
 	// Get room description
 	description := character.room.GetDescription(character)
-	character.player.commandOut <- description
+	SafeSendString(character.player.commandOut, description, character.name)
 
 	// Always send prompt after room description
 	character.SendPrompt()
@@ -127,7 +127,7 @@ func executeWhoCommand(character *Character, tokens []string) error {
 
 	// Check if there are any other characters online
 	if len(characterNames) == 0 {
-		character.player.commandOut <- whoEmpty
+		SafeSendString(character.player.commandOut, whoEmpty, character.name)
 		return nil
 	}
 
@@ -144,7 +144,7 @@ func executeWhoCommand(character *Character, tokens []string) error {
 	msg.WriteString("\n\r")
 	msg.WriteString(fmt.Sprintf("Total Characters Online: %d\n\r", len(characterNames)))
 
-	character.player.commandOut <- msg.String()
+	SafeSendString(character.player.commandOut, msg.String(), character.name)
 	return nil
 }
 
@@ -158,11 +158,11 @@ func executeInfoCommand(character *Character, tokens []string) error {
 
 	// Get character info display from character method
 	info := character.GetCharacterInfo()
-	character.player.commandOut <- info
+	SafeSendString(character.player.commandOut, info, character.name)
 	return nil
 }
 
-// executeSkillCommand displays only the character's abilities
+// executeSkillCommand displays only the character's skills
 func executeSkillCommand(character *Character, tokens []string) error {
 	if character == nil || character.player == nil {
 		return errors.New("invalid character state")
@@ -172,7 +172,7 @@ func executeSkillCommand(character *Character, tokens []string) error {
 
 	// Get skill display from character method
 	skillInfo := character.GetSkillInfo()
-	character.player.commandOut <- skillInfo
+	SafeSendString(character.player.commandOut, skillInfo, character.name)
 	return nil
 }
 
@@ -245,7 +245,7 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 		}
 	}
 
-	character.player.commandOut <- invDisplay.String()
+	SafeSendString(character.player.commandOut, invDisplay.String(), character.name)
 	return nil
 }
 
@@ -270,23 +270,23 @@ func (c *Character) GetCharacterInfo() string {
 		}
 	}
 
-	// Abilities - only show those above zero
-	var abilitiesAboveZero []string
-	for ability, value := range c.abilities {
+	// Skills - only show those above zero
+	var skillsAboveZero []string
+	for skill, value := range c.skills {
 		if value > 0 {
-			abilitiesAboveZero = append(abilitiesAboveZero, ability)
+			skillsAboveZero = append(skillsAboveZero, skill)
 		}
 	}
 
-	if len(abilitiesAboveZero) > 0 {
-		info.WriteString("\n\rAbilities:\n\r")
-		// Sort abilities for consistent display
-		sort.Strings(abilitiesAboveZero)
+	if len(skillsAboveZero) > 0 {
+		info.WriteString("\n\rSkills:\n\r")
+		// Sort skills for consistent display
+		sort.Strings(skillsAboveZero)
 
-		// Display each ability with value > 0
-		for _, ability := range abilitiesAboveZero {
-			value := c.abilities[ability]
-			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", ability, int(value)))
+		// Display each skill with value > 0
+		for _, skill := range skillsAboveZero {
+			value := c.skills[skill]
+			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", skill, int(value)))
 		}
 	}
 
@@ -340,34 +340,34 @@ func (c *Character) GetCharacterInfo() string {
 	return info.String()
 }
 
-// GetSkillInfo returns a formatted string with character abilities
+// GetSkillInfo returns a formatted string with character skills
 func (c *Character) GetSkillInfo() string {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
 	var skillInfo strings.Builder
-	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Abilities\n\r", ApplyColor("bright_cyan", c.name)))
+	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Skills\n\r", ApplyColor("bright_cyan", c.name)))
 	skillInfo.WriteString("----------------\n\r")
 
-	// Abilities - only show those above zero
-	var abilitiesAboveZero []string
-	for ability, value := range c.abilities {
+	// Skills - only show those above zero
+	var skillsAboveZero []string
+	for skill, value := range c.skills {
 		if value > 0 {
-			abilitiesAboveZero = append(abilitiesAboveZero, ability)
+			skillsAboveZero = append(skillsAboveZero, skill)
 		}
 	}
 
-	if len(abilitiesAboveZero) > 0 {
-		// Sort abilities for consistent display
-		sort.Strings(abilitiesAboveZero)
+	if len(skillsAboveZero) > 0 {
+		// Sort skills for consistent display
+		sort.Strings(skillsAboveZero)
 
-		// Display each ability with value > 0
-		for _, ability := range abilitiesAboveZero {
-			value := c.abilities[ability]
-			skillInfo.WriteString(fmt.Sprintf("  %-15s: %d\n\r", ability, int(value)))
+		// Display each skill with value > 0
+		for _, skill := range skillsAboveZero {
+			value := c.skills[skill]
+			skillInfo.WriteString(fmt.Sprintf("  %-15s: %.2f\n\r", skill, value))
 		}
 	} else {
-		skillInfo.WriteString("  You have not developed any abilities yet.\n\r")
+		skillInfo.WriteString("  You have not developed any skills yet.\n\r")
 	}
 
 	return skillInfo.String()
@@ -387,26 +387,26 @@ func (c *Character) LookAtTarget(target string) error {
 		}
 
 		desc := c.LookInContainer(containerPart, isMyContainer)
-		c.player.commandOut <- desc
+		SafeSendString(c.player.commandOut, desc, c.name)
 		return nil
 	}
 
 	// First check if target is in the room
 	desc := c.LookAtRoomTarget(target)
 	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
-		c.player.commandOut <- desc
+		SafeSendString(c.player.commandOut, desc, c.name)
 		return nil
 	}
 
 	// Then check if it's in inventory
 	desc = c.LookAtInventoryItem(target)
 	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
-		c.player.commandOut <- desc
+		SafeSendString(c.player.commandOut, desc, c.name)
 		return nil
 	}
 
 	// Not found anywhere
-	c.player.commandOut <- fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+	SafeSendString(c.player.commandOut, fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target), c.name)
 	return nil
 }
 
@@ -416,7 +416,7 @@ func (c *Character) LookAtRoomTarget(target string) string {
 	if c.room != nil {
 		c.room.mutex.RLock()
 		for _, char := range c.room.characters {
-			if char != nil && strings.Contains(strings.ToLower(char.name), target) {
+			if char != nil && strings.Contains(strings.ToLower(char.name), target) && char.IsVisibleTo(c) {
 				c.room.mutex.RUnlock()
 				return FormatCharacterDescription(char, c)
 			}
@@ -509,4 +509,28 @@ func (c *Character) LookInContainer(containerName string, isMyContainer bool) st
 
 		return "\n\r" + container.GetContainerContents()
 	}
+}
+
+// executeUnhideCommand handles the unhide command
+func executeUnhideCommand(character *Character, tokens []string) error {
+	if character == nil {
+		return errors.New("invalid character state")
+	}
+
+	if !character.IsHidden() {
+		SafeSendString(character.player.commandOut, "\n\rYou are not hidden.\n\r", character.name)
+		return nil
+	}
+
+	// Reveal the character
+	character.SetHidden(false)
+	SafeSendString(character.player.commandOut, "\n\rYou step out from hiding.\n\r", character.name)
+
+	// Notify others in the room
+	SendRoomMessageExcept(character.room,
+		fmt.Sprintf("\n\r%s steps out from hiding.\n\r", character.name),
+		character,
+	)
+
+	return nil
 }

@@ -164,14 +164,14 @@ def store_archetypes(dynamodb, archetypes_data):
         for name, archetype in archetypes_data.get("archetypes", {}).items():
             # Convert attributes to lowercase
             attributes = {k.lower(): v for k, v in archetype.get("Attributes", {}).items()}
-            # Convert abilities to lowercase
-            abilities = {k.lower(): v for k, v in archetype.get("Abilities", {}).items()}
+            # Convert skills to lowercase
+            skills = {k.lower(): v for k, v in archetype.get("Skills", {}).items()}
 
             archetype_item = {
                 "ArchetypeName": name,
                 "Description": archetype.get("Description", ""),
                 "Attributes": attributes,
-                "Abilities": abilities,
+                "Skills": skills,
                 "StartRoom": archetype.get("StartRoom", 0),
                 "StartingItems": archetype.get("StartingItems", []),
             }
@@ -393,9 +393,9 @@ def display_archetypes(archetypes):
         print("  Attributes:")
         for attr, value in archetype.get("Attributes", {}).items():
             print(f"    {attr}: {value}")
-        print("  Abilities:")
-        for ability, value in archetype.get("Abilities", {}).items():
-            print(f"    {ability}: {value}")
+        print("  Skills:")
+        for skill, value in archetype.get("Skills", {}).items():
+            print(f"    {skill}: {value}")
 
         # Add starting items information
         starting_items = archetype.get("StartingItems", [])
