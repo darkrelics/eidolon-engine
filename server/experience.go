@@ -234,7 +234,7 @@ func ResolveStaticCheckWithXP(character *Character, skill, attr string, difficul
 	if character == nil {
 		return ResolveStaticCheck(0, difficulty)
 	}
-	
+
 	// Calculate effective score
 	skillVal := character.GetSkill(skill)
 	attrVal := character.GetAttribute(attr)
