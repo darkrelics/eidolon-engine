@@ -260,11 +260,11 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 	requestDone := make(chan error, 1)
 	inputDone := make(chan error, 1)
 	outputDone := make(chan error, 1)
-	
+
 	// Channel to track when all goroutines have completed
 	allDone := make(chan struct{})
 	var activeGoroutines int32 = 4
-	
+
 	// Helper to track goroutine completion
 	trackDone := func() {
 		if atomic.AddInt32(&activeGoroutines, -1) == 0 {
@@ -277,12 +277,12 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 		defer trackDone()
 		p.handleRequests(p.ctx, requests, requestDone)
 	}()
-	
+
 	go func() {
 		defer trackDone()
 		p.handleInput(p.ctx, inputDone)
 	}()
-	
+
 	go func() {
 		defer trackDone()
 		p.handleOutput(p.ctx, outputDone)
@@ -299,7 +299,7 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 		defer trackDone()
 		p.Console(p.consoleDone)
 	}()
-	
+
 	// Monitor for completion in a separate goroutine
 	go func() {
 		<-allDone

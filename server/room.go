@@ -150,7 +150,7 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		commandOut:     make(chan *CommandResponse, 50), // Buffer for outgoing responses
 		gameCommandOut: make(chan *CommandRequest, 10),  // Buffer for commands to game
 		gameCommandIn:  make(chan *CommandResponse, 10), // Buffer for responses from game
-		done:           make(chan struct{}),              // Channel to signal goroutine completion
+		done:           make(chan struct{}),             // Channel to signal goroutine completion
 	}
 }
 
@@ -536,7 +536,7 @@ func (r *Room) run(game *Game) {
 // runInternal contains the actual room processing logic
 func (r *Room) runInternal(game *Game) {
 	Logger.Info("Room goroutine started", "roomID", r.roomID, "title", r.title)
-	
+
 	// Signal completion when this function returns
 	defer close(r.done)
 

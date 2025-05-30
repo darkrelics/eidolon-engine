@@ -90,18 +90,18 @@ func CalculateScoreIncrement(xpGained float64, currentScore float64) float64 {
 
 	// Calculate remaining distance to max score
 	remainingToMax := maxScore - currentScore
-	
+
 	// Calculate the XP required to advance from current score
 	xpRequired := CalculateXPRequirement(currentScore)
-	
+
 	// Calculate the raw increment based on XP gained
 	increment := xpGained / xpRequired
-	
+
 	// Cap the increment to not exceed max score
 	if increment > remainingToMax {
 		return remainingToMax
 	}
-	
+
 	return increment
 }
 
