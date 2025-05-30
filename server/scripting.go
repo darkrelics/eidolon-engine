@@ -34,32 +34,32 @@ import (
 
 // ScriptMetadata holds information about what a script handles
 type ScriptMetadata struct {
-	Commands []string          // Commands this script handles (e.g., ["pull", "push"])
-	Events   []string          // Events this script handles (e.g., ["onCharacterEnter", "onRoomStart"])
-	Periodic bool              // Whether script has periodic tick function
+	Commands []string // Commands this script handles (e.g., ["pull", "push"])
+	Events   []string // Events this script handles (e.g., ["onCharacterEnter", "onRoomStart"])
+	Periodic bool     // Whether script has periodic tick function
 }
 
 // ScriptCache holds cached script content and metadata
 type ScriptCache struct {
-	content   string
-	metadata  *ScriptMetadata
-	lastUsed  time.Time
+	content  string
+	metadata *ScriptMetadata
+	lastUsed time.Time
 }
 
 // ScriptManager manages Lua script execution for rooms
 type ScriptManager struct {
-	scripts    map[string]*lua.LState
-	scriptCache map[string]*ScriptCache
-	s3Client   *s3.Client
-	bucketName string
+	scripts      map[string]*lua.LState
+	scriptCache  map[string]*ScriptCache
+	s3Client     *s3.Client
+	bucketName   string
 	bucketPrefix string
-	mutex      sync.RWMutex
+	mutex        sync.RWMutex
 }
 
 // NewScriptManager creates a new script manager
 func NewScriptManager(cfg *Configuration) (*ScriptManager, error) {
 	ctx := context.Background()
-	
+
 	// Create AWS config
 	awsConfig, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(cfg.AWS.Region),
@@ -114,7 +114,7 @@ func (sm *ScriptManager) LoadScript(scriptID string) error {
 
 	// Create new Lua state
 	L := lua.NewState()
-	
+
 	// Load the script content
 	if err := L.DoString(scriptContent); err != nil {
 		L.Close()
@@ -131,13 +131,13 @@ func (sm *ScriptManager) LoadScript(scriptID string) error {
 	}
 
 	sm.scripts[scriptID] = L
-	
-	Logger.Info("Script loaded successfully", 
+
+	Logger.Info("Script loaded successfully",
 		"scriptID", scriptID,
 		"commands", metadata.Commands,
 		"events", metadata.Events,
 		"periodic", metadata.Periodic)
-	
+
 	return nil
 }
 
@@ -282,14 +282,14 @@ func (sm *ScriptManager) ExecuteRoomFunction(scriptID string, functionName strin
 
 	// Create a new thread for execution to avoid concurrency issues
 	co, _ := L.NewThread()
-	
+
 	// Push function and arguments
 	co.Push(fn)
-	
+
 	// Push room table as first argument
 	roomTable := sm.createRoomTable(co, room)
 	co.Push(roomTable)
-	
+
 	// Push additional arguments
 	for _, arg := range args {
 		co.Push(arg)
@@ -303,9 +303,9 @@ func (sm *ScriptManager) ExecuteRoomFunction(scriptID string, functionName strin
 
 	// Log any return values for debugging
 	if len(values) > 0 {
-		Logger.Debug("Script function returned values", 
-			"scriptID", scriptID, 
-			"function", functionName, 
+		Logger.Debug("Script function returned values",
+			"scriptID", scriptID,
+			"function", functionName,
 			"valueCount", len(values))
 	}
 
@@ -315,15 +315,15 @@ func (sm *ScriptManager) ExecuteRoomFunction(scriptID string, functionName strin
 // createRoomTable creates a Lua table representing a room
 func (sm *ScriptManager) createRoomTable(L *lua.LState, room *Room) *lua.LTable {
 	tbl := L.NewTable()
-	
+
 	// Basic room properties
 	L.SetField(tbl, "id", lua.LNumber(room.roomID))
 	L.SetField(tbl, "area", lua.LString(room.area))
 	L.SetField(tbl, "title", lua.LString(room.title))
 	L.SetField(tbl, "description", lua.LString(room.description))
-	
+
 	// Room methods will be added here
-	
+
 	return tbl
 }
 
@@ -351,7 +351,7 @@ func (sm *ScriptManager) ClearCache(maxAge time.Duration) {
 func (sm *ScriptManager) GetCacheStats() (int, int) {
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
-	
+
 	return len(sm.scriptCache), len(sm.scripts)
 }
 

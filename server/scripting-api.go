@@ -51,7 +51,7 @@ func (sm *ScriptManager) RegisterRoomAPI(L *lua.LState, room *Room) {
 	// Character functions
 	charAPI := L.NewTable()
 	L.SetField(eidolon, "character", charAPI)
-	
+
 	// Logger functions
 	logAPI := L.NewTable()
 	L.SetField(eidolon, "log", logAPI)
@@ -64,7 +64,7 @@ func (sm *ScriptManager) RegisterRoomAPI(L *lua.LState, room *Room) {
 func (sm *ScriptManager) luaRoomSendMessage(room *Room) lua.LGFunction {
 	return func(L *lua.LState) int {
 		message := L.CheckString(1)
-		
+
 		room.mutex.RLock()
 		characters := make([]*Character, 0, len(room.characters))
 		for _, char := range room.characters {
@@ -158,7 +158,7 @@ func (sm *ScriptManager) luaRoomAddItem(room *Room) lua.LGFunction {
 	return func(L *lua.LState) int {
 		name := L.CheckString(1)
 		description := L.CheckString(2)
-		
+
 		// Create a basic item
 		itemID := uuid.Must(uuid.NewV7())
 		item := &Item{
@@ -176,7 +176,7 @@ func (sm *ScriptManager) luaRoomAddItem(room *Room) lua.LGFunction {
 			lastEdited:  time.Now(),
 			lastSaved:   time.Now(),
 		}
-		
+
 		room.mutex.Lock()
 		room.items[item.id] = item
 		room.mutex.Unlock()
@@ -211,7 +211,7 @@ func (sm *ScriptManager) luaRoomRemoveItem(room *Room) lua.LGFunction {
 func (sm *ScriptManager) luaRoomSetDescription(room *Room) lua.LGFunction {
 	return func(L *lua.LState) int {
 		description := L.CheckString(1)
-		
+
 		room.mutex.Lock()
 		room.description = description
 		room.mutex.Unlock()
@@ -279,7 +279,7 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 
 	// Build function name from command verb (e.g., "pull" -> "onCommandPull")
 	functionName := "onCommand" + strings.Title(verb)
-	
+
 	// Check if handler exists
 	handler := L.GetGlobal(functionName)
 	if handler == lua.LNil {
@@ -299,7 +299,7 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 
 	// Create new thread for execution
 	co, _ := L.NewThread()
-	
+
 	// Push function and arguments
 	co.Push(handler)
 	co.Push(charTable)
@@ -337,7 +337,7 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 		if err != nil {
 			return err
 		}
-		
+
 		// Register the API for the newly loaded script
 		sm.RegisterRoomAPI(L, room)
 	}
@@ -351,10 +351,10 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 
 	// Create a new thread for execution
 	co, _ := L.NewThread()
-	
+
 	// Push function and arguments
 	co.Push(handler)
-	
+
 	// Push all arguments
 	for _, arg := range args {
 		co.Push(arg)

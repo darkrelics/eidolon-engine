@@ -309,7 +309,7 @@ func (r *Room) HandleCharacterEntry(character *Character) {
 		charTable := &lua.LTable{}
 		charTable.RawSetString("name", lua.LString(character.name))
 		charTable.RawSetString("id", lua.LString(character.id.String()))
-		
+
 		if err := ScriptMgr.ExecuteRoomEvent(r, "onCharacterEnter", charTable); err != nil {
 			Logger.Error("Error executing onCharacterEnter", "roomID", r.roomID, "error", err)
 		}

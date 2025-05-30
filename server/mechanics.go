@@ -53,13 +53,13 @@ func ResolveOpposedCheck(aggressor, defender int) Outcome {
 // using the same mechanics as opposed checks but with a static defender value
 func ResolveStaticCheck(aggressor, difficulty int) Outcome {
 	outcome := ResolveOpposedCheck(aggressor, difficulty)
-	
+
 	Logger.Info("Static conflict resolution completed",
 		"aggressor", aggressor,
 		"difficulty", difficulty,
 		"success", outcome.Success,
 		"sigma", outcome.Sigma)
-	
+
 	return outcome
 }
 
