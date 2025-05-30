@@ -28,6 +28,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofrs/uuid/v5"
+	lua "github.com/yuin/gopher-lua"
 )
 
 // CommandTier represents the level at which a command will be processed
@@ -289,7 +290,7 @@ func (r *Room) IsIdle(duration time.Duration) bool {
 }
 
 // HandleCharacterEntry handles character entering a room, resets idle counter and activates scripts
-func (r *Room) HandleCharacterEntry() {
+func (r *Room) HandleCharacterEntry(character *Character) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -300,6 +301,18 @@ func (r *Room) HandleCharacterEntry() {
 	if r.persistent && r.scriptID != "" && !r.scriptActive {
 		r.scriptActive = true
 		Logger.Info("Activating scripts for persistent room with character entry", "roomID", r.roomID)
+	}
+
+	// Trigger onCharacterEnter event for scripts
+	if r.scriptID != "" && r.scriptActive {
+		// Create character table for Lua
+		charTable := &lua.LTable{}
+		charTable.RawSetString("name", lua.LString(character.name))
+		charTable.RawSetString("id", lua.LString(character.id.String()))
+		
+		if err := ScriptMgr.ExecuteRoomEvent(r, "onCharacterEnter", charTable); err != nil {
+			Logger.Error("Error executing onCharacterEnter", "roomID", r.roomID, "error", err)
+		}
 	}
 }
 
@@ -537,6 +550,18 @@ func (r *Room) runInternal(game *Game) {
 
 	// Signal completion when this function returns
 	defer close(r.done)
+
+	// Load and initialize script if room has one
+	if r.scriptID != "" && r.scriptActive {
+		if err := ScriptMgr.LoadScript(r.scriptID); err != nil {
+			Logger.Error("Failed to load room script", "roomID", r.roomID, "scriptID", r.scriptID, "error", err)
+		} else {
+			// Call onRoomStart event if it exists
+			if err := ScriptMgr.ExecuteRoomEvent(r, "onRoomStart"); err != nil {
+				Logger.Error("Error executing onRoomStart", "roomID", r.roomID, "error", err)
+			}
+		}
+	}
 
 	// Set up a 1-second ticker to match game heartbeat
 	ticker := time.NewTicker(1 * time.Second)

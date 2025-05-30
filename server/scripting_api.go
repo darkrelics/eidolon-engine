@@ -1,0 +1,370 @@
+/*
+Eidolon Engine
+
+Copyright 2024-2025 Jason Robinson
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package main
+
+import (
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/gofrs/uuid/v5"
+	lua "github.com/yuin/gopher-lua"
+)
+
+// RegisterRoomAPI registers all room-related functions for Lua scripts
+func (sm *ScriptManager) RegisterRoomAPI(L *lua.LState, room *Room) {
+	// Create the eidolon global table
+	eidolon := L.NewTable()
+	L.SetGlobal("eidolon", eidolon)
+
+	// Room functions
+	roomAPI := L.NewTable()
+	L.SetField(eidolon, "room", roomAPI)
+
+	// Register room methods
+	L.SetField(roomAPI, "sendMessage", L.NewFunction(sm.luaRoomSendMessage(room)))
+	L.SetField(roomAPI, "sendToCharacter", L.NewFunction(sm.luaRoomSendToCharacter(room)))
+	L.SetField(roomAPI, "getCharacters", L.NewFunction(sm.luaRoomGetCharacters(room)))
+	L.SetField(roomAPI, "getItems", L.NewFunction(sm.luaRoomGetItems(room)))
+	L.SetField(roomAPI, "addItem", L.NewFunction(sm.luaRoomAddItem(room)))
+	L.SetField(roomAPI, "removeItem", L.NewFunction(sm.luaRoomRemoveItem(room)))
+	L.SetField(roomAPI, "setDescription", L.NewFunction(sm.luaRoomSetDescription(room)))
+	L.SetField(roomAPI, "getExits", L.NewFunction(sm.luaRoomGetExits(room)))
+
+	// Character functions
+	charAPI := L.NewTable()
+	L.SetField(eidolon, "character", charAPI)
+	
+	// Logger functions
+	logAPI := L.NewTable()
+	L.SetField(eidolon, "log", logAPI)
+	L.SetField(logAPI, "info", L.NewFunction(sm.luaLogInfo))
+	L.SetField(logAPI, "debug", L.NewFunction(sm.luaLogDebug))
+	L.SetField(logAPI, "error", L.NewFunction(sm.luaLogError))
+}
+
+// luaRoomSendMessage sends a message to all characters in the room
+func (sm *ScriptManager) luaRoomSendMessage(room *Room) lua.LGFunction {
+	return func(L *lua.LState) int {
+		message := L.CheckString(1)
+		
+		room.mutex.RLock()
+		characters := make([]*Character, 0, len(room.characters))
+		for _, char := range room.characters {
+			characters = append(characters, char)
+		}
+		room.mutex.RUnlock()
+
+		for _, char := range characters {
+			if char.player != nil {
+				SafeSendString(char.player.commandOut, message, char.name)
+			}
+		}
+
+		return 0
+	}
+}
+
+// luaRoomSendToCharacter sends a message to a specific character
+func (sm *ScriptManager) luaRoomSendToCharacter(room *Room) lua.LGFunction {
+	return func(L *lua.LState) int {
+		charName := L.CheckString(1)
+		message := L.CheckString(2)
+
+		room.mutex.RLock()
+		var targetChar *Character
+		for _, char := range room.characters {
+			if char.name == charName {
+				targetChar = char
+				break
+			}
+		}
+		room.mutex.RUnlock()
+
+		if targetChar != nil && targetChar.player != nil {
+			SafeSendString(targetChar.player.commandOut, message, targetChar.name)
+			L.Push(lua.LTrue)
+		} else {
+			L.Push(lua.LFalse)
+		}
+
+		return 1
+	}
+}
+
+// luaRoomGetCharacters returns a table of character names in the room
+func (sm *ScriptManager) luaRoomGetCharacters(room *Room) lua.LGFunction {
+	return func(L *lua.LState) int {
+		tbl := L.NewTable()
+
+		room.mutex.RLock()
+		i := 1
+		for _, char := range room.characters {
+			charTable := L.NewTable()
+			L.SetField(charTable, "name", lua.LString(char.name))
+			L.SetField(charTable, "state", lua.LString(char.charState))
+			L.SetField(charTable, "hidden", lua.LBool(char.IsHidden()))
+			L.RawSetInt(tbl, i, charTable)
+			i++
+		}
+		room.mutex.RUnlock()
+
+		L.Push(tbl)
+		return 1
+	}
+}
+
+// luaRoomGetItems returns a table of items in the room
+func (sm *ScriptManager) luaRoomGetItems(room *Room) lua.LGFunction {
+	return func(L *lua.LState) int {
+		tbl := L.NewTable()
+
+		room.mutex.RLock()
+		i := 1
+		for _, item := range room.items {
+			itemTable := L.NewTable()
+			L.SetField(itemTable, "name", lua.LString(item.name))
+			L.SetField(itemTable, "description", lua.LString(item.description))
+			L.SetField(itemTable, "id", lua.LString(item.id.String()))
+			L.RawSetInt(tbl, i, itemTable)
+			i++
+		}
+		room.mutex.RUnlock()
+
+		L.Push(tbl)
+		return 1
+	}
+}
+
+// luaRoomAddItem adds an item to the room
+func (sm *ScriptManager) luaRoomAddItem(room *Room) lua.LGFunction {
+	return func(L *lua.LState) int {
+		name := L.CheckString(1)
+		description := L.CheckString(2)
+		
+		// Create a basic item
+		itemID := uuid.Must(uuid.NewV7())
+		item := &Item{
+			id:          itemID,
+			name:        name,
+			description: description,
+			mass:        1.0,
+			value:       0,
+			stackable:   false,
+			quantity:    1,
+			wearable:    false,
+			container:   false,
+			canPickUp:   true,
+			mutex:       sync.RWMutex{},
+			lastEdited:  time.Now(),
+			lastSaved:   time.Now(),
+		}
+		
+		room.mutex.Lock()
+		room.items[item.id] = item
+		room.mutex.Unlock()
+
+		L.Push(lua.LString(item.id.String()))
+		return 1
+	}
+}
+
+// luaRoomRemoveItem removes an item from the room by name
+func (sm *ScriptManager) luaRoomRemoveItem(room *Room) lua.LGFunction {
+	return func(L *lua.LState) int {
+		itemName := L.CheckString(1)
+
+		room.mutex.Lock()
+		var removed bool
+		for id, item := range room.items {
+			if item.name == itemName {
+				delete(room.items, id)
+				removed = true
+				break
+			}
+		}
+		room.mutex.Unlock()
+
+		L.Push(lua.LBool(removed))
+		return 1
+	}
+}
+
+// luaRoomSetDescription sets the room's description
+func (sm *ScriptManager) luaRoomSetDescription(room *Room) lua.LGFunction {
+	return func(L *lua.LState) int {
+		description := L.CheckString(1)
+		
+		room.mutex.Lock()
+		room.description = description
+		room.mutex.Unlock()
+
+		return 0
+	}
+}
+
+// luaRoomGetExits returns a table of exits from the room
+func (sm *ScriptManager) luaRoomGetExits(room *Room) lua.LGFunction {
+	return func(L *lua.LState) int {
+		tbl := L.NewTable()
+
+		room.mutex.RLock()
+		i := 1
+		for _, exit := range room.exits {
+			exitTable := L.NewTable()
+			L.SetField(exitTable, "direction", lua.LString(exit.direction))
+			L.SetField(exitTable, "targetRoomID", lua.LNumber(exit.targetRoomID))
+			L.RawSetInt(tbl, i, exitTable)
+			i++
+		}
+		room.mutex.RUnlock()
+
+		L.Push(tbl)
+		return 1
+	}
+}
+
+// Logging functions
+func (sm *ScriptManager) luaLogInfo(L *lua.LState) int {
+	message := L.CheckString(1)
+	Logger.Info("Lua script", "message", message)
+	return 0
+}
+
+func (sm *ScriptManager) luaLogDebug(L *lua.LState) int {
+	message := L.CheckString(1)
+	Logger.Debug("Lua script", "message", message)
+	return 0
+}
+
+func (sm *ScriptManager) luaLogError(L *lua.LState) int {
+	message := L.CheckString(1)
+	Logger.Error("Lua script", "message", message)
+	return 0
+}
+
+// ExecuteRoomCommand attempts to execute a command through the room's script
+func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bool, error) {
+	if room.scriptID == "" || !room.scriptActive {
+		return false, nil // No script, command not handled
+	}
+
+	// First check if script handles this command
+	verb := strings.ToLower(cmd.Verb)
+	if !sm.HandlesCommand(room.scriptID, verb) {
+		return false, nil // Script doesn't handle this command
+	}
+
+	L, err := sm.GetScript(room.scriptID)
+	if err != nil {
+		return false, nil // Script not loaded
+	}
+
+	// Build function name from command verb (e.g., "pull" -> "onCommandPull")
+	functionName := "onCommand" + strings.Title(verb)
+	
+	// Check if handler exists
+	handler := L.GetGlobal(functionName)
+	if handler == lua.LNil {
+		return false, nil // No handler for this command
+	}
+
+	// Create character table
+	charTable := L.NewTable()
+	L.SetField(charTable, "name", lua.LString(cmd.Character.name))
+	L.SetField(charTable, "id", lua.LString(cmd.Character.id.String()))
+
+	// Create args table
+	argsTable := L.NewTable()
+	for i, arg := range cmd.Args {
+		L.RawSetInt(argsTable, i+1, lua.LString(arg))
+	}
+
+	// Create new thread for execution
+	co, _ := L.NewThread()
+	
+	// Push function and arguments
+	co.Push(handler)
+	co.Push(charTable)
+	co.Push(argsTable)
+
+	// Execute the function
+	state, err, values := L.Resume(co, nil)
+	if state == lua.ResumeError {
+		return false, fmt.Errorf("error executing command handler %s: %w", functionName, err)
+	}
+
+	// Check if command was handled (function should return true/false)
+	if len(values) > 0 {
+		if handled, ok := values[0].(lua.LBool); ok {
+			return bool(handled), nil
+		}
+	}
+
+	return false, nil
+}
+
+// ExecuteRoomEvent executes a room event handler if it exists
+func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...lua.LValue) error {
+	if room.scriptID == "" || !room.scriptActive {
+		return nil
+	}
+
+	L, err := sm.GetScript(room.scriptID)
+	if err != nil {
+		// Try to load the script if not loaded
+		if loadErr := sm.LoadScript(room.scriptID); loadErr != nil {
+			return fmt.Errorf("failed to load script: %w", loadErr)
+		}
+		L, err = sm.GetScript(room.scriptID)
+		if err != nil {
+			return err
+		}
+		
+		// Register the API for the newly loaded script
+		sm.RegisterRoomAPI(L, room)
+	}
+
+	// Check if the event handler exists
+	handler := L.GetGlobal(eventName)
+	if handler == lua.LNil {
+		// No handler for this event, which is fine
+		return nil
+	}
+
+	// Create a new thread for execution
+	co, _ := L.NewThread()
+	
+	// Push function and arguments
+	co.Push(handler)
+	
+	// Push all arguments
+	for _, arg := range args {
+		co.Push(arg)
+	}
+
+	// Execute the function
+	state, err, _ := L.Resume(co, nil)
+	if state == lua.ResumeError {
+		return fmt.Errorf("error executing event %s: %w", eventName, err)
+	}
+
+	return nil
+}

@@ -68,7 +68,7 @@ func (c *Character) RunConsole(done chan bool) {
 	c.room.mutex.Unlock()
 
 	// Call HandleCharacterEntry to reset idle counter and activate scripts
-	c.room.HandleCharacterEntry()
+	c.room.HandleCharacterEntry(c)
 
 	// Notify room of arrival (without holding locks)
 	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
