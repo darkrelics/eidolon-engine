@@ -103,6 +103,7 @@ type Room struct {
 	commandOut     chan *CommandResponse // Channel for responses from the room
 	gameCommandOut chan *CommandRequest  // Channel for commands the room escalates to the game
 	gameCommandIn  chan *CommandResponse // Channel for responses from the game to the room
+	done           chan struct{}         // Channel signaled when room goroutine completes
 }
 
 // RoomData represents the structure for storing room data in DynamoDB
@@ -149,6 +150,7 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		commandOut:     make(chan *CommandResponse, 50), // Buffer for outgoing responses
 		gameCommandOut: make(chan *CommandRequest, 10),  // Buffer for commands to game
 		gameCommandIn:  make(chan *CommandResponse, 10), // Buffer for responses from game
+		done:           make(chan struct{}),              // Channel to signal goroutine completion
 	}
 }
 
@@ -511,8 +513,8 @@ func (r *Room) Stop() {
 	// This is done outside the lock to prevent deadlock
 	cancelFunc()
 
-	// Wait briefly for goroutines to finish processing
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the room goroutine to complete
+	<-r.done
 
 	// Close channels after releasing the lock
 	// This prevents deadlock if channel operations were waiting on the mutex
@@ -534,6 +536,9 @@ func (r *Room) run(game *Game) {
 // runInternal contains the actual room processing logic
 func (r *Room) runInternal(game *Game) {
 	Logger.Info("Room goroutine started", "roomID", r.roomID, "title", r.title)
+	
+	// Signal completion when this function returns
+	defer close(r.done)
 
 	// Set up a 1-second ticker to match game heartbeat
 	ticker := time.NewTicker(1 * time.Second)

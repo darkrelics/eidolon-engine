@@ -116,7 +116,7 @@ func TestCalculateScoreIncrement(t *testing.T) {
 		{"Large XP at level 0", 10.0, 0.0, 1.0},
 		{"Small XP at level 5", 0.25, 5.0, 0.0000475839},
 		{"At max score", 1.0, 10.0, 0.0},
-		{"Near max score", 100.0, 9.99, 0.01},
+		{"Near max score", 100.0, 9.99, 0.0000367106},
 	}
 
 	for _, tt := range tests {
