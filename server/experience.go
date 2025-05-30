@@ -153,6 +153,14 @@ func AwardExperience(aggressor, defender *Character, context ExperienceContext) 
 	aggressorXP := CalculateFinalXP(baseXPValue, aggressorVariance, context.AggressorSuccess)
 	defenderXP := CalculateFinalXP(baseXPValue, defenderVariance, context.DefenderSuccess)
 
+	Logger.Info("Experience awarding for contested action",
+		"aggressor", aggressor.name,
+		"defender", defender.name,
+		"aggressorXP", aggressorXP,
+		"defenderXP", defenderXP,
+		"aggressorSuccess", context.AggressorSuccess,
+		"defenderSuccess", context.DefenderSuccess)
+
 	// Award XP to aggressor
 	if context.AggressorSkill != "" {
 		aggressor.AwardSkillXP(context.AggressorSkill, aggressorXP)
@@ -190,7 +198,7 @@ func (c *Character) AwardSkillXP(skillName string, xpAmount float64) {
 		c.skills[skillName] = currentScore + increment
 		c.lastEdited = time.Now()
 
-		Logger.Debug("Skill XP awarded",
+		Logger.Info("Skill experience awarded",
 			"character", c.name,
 			"skill", skillName,
 			"xp", xpAmount,
@@ -219,7 +227,7 @@ func (c *Character) AwardAttributeXP(attrName string, xpAmount float64) {
 		c.attributes[attrName] = currentScore + increment
 		c.lastEdited = time.Now()
 
-		Logger.Debug("Attribute XP awarded",
+		Logger.Info("Attribute experience awarded",
 			"character", c.name,
 			"attribute", attrName,
 			"xp", xpAmount,
