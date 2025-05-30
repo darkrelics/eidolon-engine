@@ -5,6 +5,7 @@ This directory contains Lua scripts for the Eidolon Engine.
 ## Naming Convention
 
 Scripts are organized by type:
+
 - `room_*.lua` - Room scripts that handle room-specific commands and events
 - `item_*.lua` - Item scripts (future)
 - `exit_*.lua` - Exit scripts (future)
@@ -12,11 +13,13 @@ Scripts are organized by type:
 ## Script Structure
 
 All scripts must include a `SCRIPT_INFO` table that declares:
+
 - `commands` - Array of command verbs the script handles
 - `events` - Array of events the script responds to
 - `periodic` - Boolean indicating if the script has an `onTick` function
 
 Example:
+
 ```lua
 SCRIPT_INFO = {
     commands = { "order", "ring" },
@@ -35,6 +38,7 @@ cd deployment
 ```
 
 Additional options:
+
 - `--dry-run` - Show what would be uploaded without doing it
 - `--profile <name>` - Use a specific AWS profile
 - `list` - List deployed scripts
@@ -54,6 +58,7 @@ Room scripts are loaded when a room starts if the room has a `scriptID` field se
 Scripts have access to the `eidolon` global table with these APIs:
 
 **Room functions:**
+
 - `eidolon.room.sendMessage(message)` - Send message to all in room
 - `eidolon.room.sendToCharacter(name, message)` - Send to specific character
 - `eidolon.room.getCharacters()` - Get list of characters in room
@@ -64,6 +69,7 @@ Scripts have access to the `eidolon` global table with these APIs:
 - `eidolon.room.getExits()` - Get list of exits
 
 **Logging functions:**
+
 - `eidolon.log.info(message)`
 - `eidolon.log.debug(message)`
 - `eidolon.log.error(message)`
@@ -71,10 +77,12 @@ Scripts have access to the `eidolon` global table with these APIs:
 ### Command Handlers
 
 Command handlers follow the naming pattern `onCommand<Verb>` and receive:
+
 - `character` - Table with character info (name, id)
 - `args` - Array of command arguments
 
 Example:
+
 ```lua
 function onCommandOrder(character, args)
     local drinkName = args[2]  -- args[1] is "order"
