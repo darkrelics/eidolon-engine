@@ -518,13 +518,13 @@ func executeUnhideCommand(character *Character, tokens []string) error {
 	}
 
 	if !character.IsHidden() {
-		character.playerCommandOut <- "\n\rYou are not hidden.\n\r"
+		SafeSendString(character.player.commandOut, "\n\rYou are not hidden.\n\r", character.name)
 		return nil
 	}
 
 	// Reveal the character
 	character.SetHidden(false)
-	character.playerCommandOut <- "\n\rYou step out from hiding.\n\r"
+	SafeSendString(character.player.commandOut, "\n\rYou step out from hiding.\n\r", character.name)
 
 	// Notify others in the room
 	SendRoomMessageExcept(character.room,

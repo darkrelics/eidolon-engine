@@ -28,7 +28,9 @@ if outcome.Success {
 Resolves checks against a fixed difficulty:
 
 ```go
-outcome := ResolveStaticCheck(character, difficulty)
+// Calculate effective score (e.g., skill + attribute)
+effectiveScore := int(character.GetSkill("stealth") + character.GetAttribute("dexterity"))
+outcome := ResolveStaticCheck(effectiveScore, difficulty)
 if outcome.Success {
     // Character succeeds against the difficulty
 } else {

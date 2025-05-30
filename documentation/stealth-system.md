@@ -68,13 +68,13 @@ The stealth system allows characters to hide from observation and move undetecte
 
 ## Constants
 
-| Constant             | Value      | Purpose                           |
-| -------------------- | ---------- | --------------------------------- |
-| `hideBaseDifficulty` | 4          | Base difficulty for hide attempts |
-| `hideActionTime`     | 3 seconds  | Time blocked after hide attempt   |
-| `hideRateLimit`      | 10 seconds | Cooldown between hide attempts    |
-| `sneakActionTime`    | 5 seconds  | Time blocked after sneak attempt  |
-| `searchActionTime`   | 3 seconds  | Time blocked after search attempt |
+| Parameter              | Typical Value | Purpose                           |
+| ---------------------- | ------------- | --------------------------------- |
+| Hide base difficulty   | 4             | Base difficulty for hide attempts |
+| Hide action time       | 3 seconds     | Time blocked after hide attempt   |
+| Hide rate limit        | 10 seconds    | Cooldown between hide attempts    |
+| Sneak action time      | 5 seconds     | Time blocked after sneak attempt  |
+| Search action time     | 3 seconds     | Time blocked after search attempt |
 
 ## Future Enhancements
 

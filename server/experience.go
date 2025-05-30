@@ -230,6 +230,11 @@ func (c *Character) AwardAttributeXP(attrName string, xpAmount float64) {
 
 // ResolveStaticCheckWithXP performs a static check against a difficulty and awards experience
 func ResolveStaticCheckWithXP(character *Character, skill, attr string, difficulty int) Outcome {
+	// Handle nil character
+	if character == nil {
+		return ResolveStaticCheck(0, difficulty)
+	}
+	
 	// Calculate effective score
 	skillVal := character.GetSkill(skill)
 	attrVal := character.GetAttribute(attr)

@@ -500,11 +500,9 @@ func (r *Room) Stop() {
 		return
 	}
 
-	// Mark as not running and get references to cancel func and channels
+	// Mark as not running and get reference to cancel func
 	r.running = false
 	cancelFunc := r.cancel
-	commandIn := r.commandIn
-	commandOut := r.commandOut
 	r.mutex.Unlock()
 
 	Logger.Info("Stopping room goroutine", "roomID", r.roomID, "title", r.title)
@@ -518,8 +516,8 @@ func (r *Room) Stop() {
 
 	// Close channels after releasing the lock
 	// This prevents deadlock if channel operations were waiting on the mutex
-	close(commandIn)
-	close(commandOut)
+	close(r.commandIn)
+	close(r.commandOut)
 	// Note: we don't close gameCommandOut as it belongs to the Game
 }
 
