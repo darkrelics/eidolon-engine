@@ -65,11 +65,6 @@ func main() {
 	}
 	CloudWatchMetrics = cloudWatch
 
-	// Initialize script manager
-	
-	Logger.Info("Main - Initializing Script Manager...")
-	InitScriptManager()
-
 	// Initialize game engine
 
 	Logger.Info("Main - Starting Game Engine...")

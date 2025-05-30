@@ -145,6 +145,14 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 	game.buildCommandIndex() // Build command index for fuzzy matching
 	buildOrdinalIndex()      // Build ordinal index for fuzzy matching
 
+	// Initialize script manager
+	Logger.Info("Initializing Script Manager...")
+	if err := InitScriptManager(config); err != nil {
+		Logger.Error("Script manager initialization failed - continuing without scripting", "error", err)
+	} else {
+		Logger.Info("Script manager initialized successfully")
+	}
+
 	return game, nil
 
 }

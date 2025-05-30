@@ -144,6 +144,9 @@ func setConfigDefaults(config *Configuration) {
 	if config.Game.ObscenityPath == "" {
 		config.Game.ObscenityPath = "../data/obscenity.txt"
 	}
+	if config.Game.ScriptsS3Prefix == "" {
+		config.Game.ScriptsS3Prefix = "scripts"
+	}
 
 	// SSH defaults
 	if config.SSH.AuthTimeoutSeconds <= 0 {

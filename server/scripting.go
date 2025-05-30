@@ -19,11 +19,16 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
-	"os"
-	"path/filepath"
+	"io"
+	"strings"
 	"sync"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -34,22 +39,59 @@ type ScriptMetadata struct {
 	Periodic bool              // Whether script has periodic tick function
 }
 
+// ScriptCache holds cached script content and metadata
+type ScriptCache struct {
+	content   string
+	metadata  *ScriptMetadata
+	lastUsed  time.Time
+}
+
 // ScriptManager manages Lua script execution for rooms
 type ScriptManager struct {
-	scripts  map[string]*lua.LState
-	metadata map[string]*ScriptMetadata
-	mutex    sync.RWMutex
+	scripts    map[string]*lua.LState
+	scriptCache map[string]*ScriptCache
+	s3Client   *s3.Client
+	bucketName string
+	bucketPrefix string
+	mutex      sync.RWMutex
 }
 
 // NewScriptManager creates a new script manager
-func NewScriptManager() *ScriptManager {
-	return &ScriptManager{
-		scripts:  make(map[string]*lua.LState),
-		metadata: make(map[string]*ScriptMetadata),
+func NewScriptManager(cfg *Configuration) (*ScriptManager, error) {
+	ctx := context.Background()
+	
+	// Create AWS config
+	awsConfig, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(cfg.AWS.Region),
+		config.WithRetryMode(aws.RetryModeStandard),
+		config.WithRetryMaxAttempts(3),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AWS config: %w", err)
 	}
+
+	// Create S3 client
+	s3Client := s3.NewFromConfig(awsConfig)
+
+	// Set default prefix if not specified
+	prefix := cfg.Game.ScriptsS3Prefix
+	if prefix == "" {
+		prefix = "scripts"
+	}
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	return &ScriptManager{
+		scripts:      make(map[string]*lua.LState),
+		scriptCache:  make(map[string]*ScriptCache),
+		s3Client:     s3Client,
+		bucketName:   cfg.Game.ScriptsS3Bucket,
+		bucketPrefix: prefix,
+	}, nil
 }
 
-// LoadScript loads a Lua script from the scripts directory
+// LoadScript loads a Lua script from S3 cache or S3 bucket
 func (sm *ScriptManager) LoadScript(scriptID string) error {
 	if scriptID == "" {
 		return fmt.Errorf("empty script ID")
@@ -64,17 +106,85 @@ func (sm *ScriptManager) LoadScript(scriptID string) error {
 		return nil
 	}
 
+	// Get script content from cache or S3
+	scriptContent, metadata, err := sm.getScriptFromCacheOrS3(scriptID)
+	if err != nil {
+		return fmt.Errorf("failed to get script %s: %w", scriptID, err)
+	}
+
 	// Create new Lua state
 	L := lua.NewState()
 	
-	// Load the script file
-	scriptPath := filepath.Join("..", "scripts_lua", scriptID+".lua")
-	if err := L.DoFile(scriptPath); err != nil {
+	// Load the script content
+	if err := L.DoString(scriptContent); err != nil {
 		L.Close()
 		return fmt.Errorf("failed to load script %s: %w", scriptID, err)
 	}
 
-	// Extract metadata from script
+	// Extract metadata from script if not already cached
+	if metadata == nil {
+		metadata = sm.extractScriptMetadata(L)
+		// Update cache with metadata
+		if cached, exists := sm.scriptCache[scriptID]; exists {
+			cached.metadata = metadata
+		}
+	}
+
+	sm.scripts[scriptID] = L
+	
+	Logger.Info("Script loaded successfully", 
+		"scriptID", scriptID,
+		"commands", metadata.Commands,
+		"events", metadata.Events,
+		"periodic", metadata.Periodic)
+	
+	return nil
+}
+
+// getScriptFromCacheOrS3 retrieves script content and metadata from cache or S3
+func (sm *ScriptManager) getScriptFromCacheOrS3(scriptID string) (string, *ScriptMetadata, error) {
+	// Check cache first
+	if cached, exists := sm.scriptCache[scriptID]; exists {
+		cached.lastUsed = time.Now()
+		Logger.Debug("Script found in cache", "scriptID", scriptID)
+		return cached.content, cached.metadata, nil
+	}
+
+	// Not in cache, load from S3
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	key := sm.bucketPrefix + scriptID + ".lua"
+	output, err := sm.s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(sm.bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get script from S3: %w", err)
+	}
+	defer output.Body.Close()
+
+	// Read the script content
+	content, err := io.ReadAll(output.Body)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to read script content: %w", err)
+	}
+
+	scriptContent := string(content)
+
+	// Cache the script
+	sm.scriptCache[scriptID] = &ScriptCache{
+		content:  scriptContent,
+		metadata: nil, // Will be populated after Lua execution
+		lastUsed: time.Now(),
+	}
+
+	Logger.Info("Script loaded from S3", "scriptID", scriptID, "bucket", sm.bucketName, "key", key)
+	return scriptContent, nil, nil
+}
+
+// extractScriptMetadata extracts metadata from a loaded Lua state
+func (sm *ScriptManager) extractScriptMetadata(L *lua.LState) *ScriptMetadata {
 	metadata := &ScriptMetadata{
 		Commands: []string{},
 		Events:   []string{},
@@ -111,16 +221,7 @@ func (sm *ScriptManager) LoadScript(scriptID string) error {
 		}
 	}
 
-	sm.scripts[scriptID] = L
-	sm.metadata[scriptID] = metadata
-	
-	Logger.Info("Script loaded successfully", 
-		"scriptID", scriptID,
-		"commands", metadata.Commands,
-		"events", metadata.Events,
-		"periodic", metadata.Periodic)
-	
-	return nil
+	return metadata
 }
 
 // HandlesCommand checks if a script handles a specific command
@@ -128,20 +229,21 @@ func (sm *ScriptManager) HandlesCommand(scriptID string, command string) bool {
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
 
-	metadata, exists := sm.metadata[scriptID]
-	if !exists {
+	// Check cache first for metadata
+	if cached, exists := sm.scriptCache[scriptID]; exists && cached.metadata != nil {
+		for _, cmd := range cached.metadata.Commands {
+			if cmd == command {
+				return true
+			}
+		}
 		return false
 	}
 
-	for _, cmd := range metadata.Commands {
-		if cmd == command {
-			return true
-		}
-	}
+	// If not in cache, we need to load the script first
 	return false
 }
 
-// UnloadScript unloads a Lua script
+// UnloadScript unloads a Lua script but keeps cache
 func (sm *ScriptManager) UnloadScript(scriptID string) {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -149,7 +251,6 @@ func (sm *ScriptManager) UnloadScript(scriptID string) {
 	if L, exists := sm.scripts[scriptID]; exists {
 		L.Close()
 		delete(sm.scripts, scriptID)
-		delete(sm.metadata, scriptID)
 		Logger.Info("Script unloaded", "scriptID", scriptID)
 	}
 }
@@ -232,31 +333,38 @@ func (sm *ScriptManager) ReloadScript(scriptID string) error {
 	return sm.LoadScript(scriptID)
 }
 
-// ListAvailableScripts returns a list of available script files
-func (sm *ScriptManager) ListAvailableScripts() ([]string, error) {
-	var scripts []string
-	
-	scriptsDir := filepath.Join("..", "scripts_lua")
-	entries, err := os.ReadDir(scriptsDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read scripts directory: %w", err)
-	}
+// ClearCache removes old entries from the script cache
+func (sm *ScriptManager) ClearCache(maxAge time.Duration) {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
 
-	for _, entry := range entries {
-		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".lua" {
-			scriptID := entry.Name()[:len(entry.Name())-4] // Remove .lua extension
-			scripts = append(scripts, scriptID)
+	now := time.Now()
+	for scriptID, cached := range sm.scriptCache {
+		if now.Sub(cached.lastUsed) > maxAge {
+			delete(sm.scriptCache, scriptID)
+			Logger.Debug("Removed script from cache", "scriptID", scriptID)
 		}
 	}
+}
 
-	return scripts, nil
+// GetCacheStats returns statistics about the script cache
+func (sm *ScriptManager) GetCacheStats() (int, int) {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+	
+	return len(sm.scriptCache), len(sm.scripts)
 }
 
 // Global script manager instance
 var ScriptMgr *ScriptManager
 
 // InitScriptManager initializes the global script manager
-func InitScriptManager() {
-	ScriptMgr = NewScriptManager()
+func InitScriptManager(cfg *Configuration) error {
+	var err error
+	ScriptMgr, err = NewScriptManager(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize script manager: %w", err)
+	}
 	Logger.Info("Script manager initialized")
+	return nil
 }
