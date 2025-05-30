@@ -209,46 +209,41 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
     """
     try:
         s3_client = boto3.client("s3")
-        
+
         # Check if scripts directory exists
         if not os.path.exists(SCRIPTS_PATH):
             print(f"Scripts directory not found: {SCRIPTS_PATH}")
             return False
-        
+
         # Find all .lua files
         lua_files = []
         for filename in os.listdir(SCRIPTS_PATH):
             if filename.endswith(".lua"):
                 lua_files.append(filename)
-        
+
         if not lua_files:
             print(f"No .lua files found in {SCRIPTS_PATH}")
             return True
-        
+
         print(f"Found {len(lua_files)} Lua scripts to deploy")
-        
+
         # Upload each script
         success_count = 0
         for filename in lua_files:
             local_path = os.path.join(SCRIPTS_PATH, filename)
             s3_key = f"{prefix}/{filename}"
-            
+
             try:
                 with open(local_path, "rb") as file_data:
-                    s3_client.put_object(
-                        Bucket=bucket_name,
-                        Key=s3_key,
-                        Body=file_data,
-                        ContentType="text/x-lua"
-                    )
+                    s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=file_data, ContentType="text/x-lua")
                 print(f"✓ Uploaded: {filename} -> s3://{bucket_name}/{s3_key}")
                 success_count += 1
             except ClientError as err:
                 print(f"✗ Failed to upload {filename}: {err}")
-        
+
         print(f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded")
         return success_count == len(lua_files)
-        
+
     except Exception as err:
         print(f"Error deploying scripts: {err}")
         return False
@@ -287,10 +282,8 @@ def gather_all_parameters() -> dict:
 
     # Scripts parameters
     parameters["scripts"] = {
-        "S3BucketName": input("Enter the S3 bucket name for Lua scripts: ")
-        or "eidolon-scripts",
-        "S3Prefix": input("Enter the S3 prefix for Lua scripts [default: scripts]: ")
-        or "scripts",
+        "S3BucketName": input("Enter the S3 bucket name for Lua scripts: ") or "eidolon-scripts",
+        "S3Prefix": input("Enter the S3 prefix for Lua scripts [default: scripts]: ") or "scripts",
     }
 
     return parameters
@@ -360,12 +353,12 @@ def main() -> None:
         # Deploy Lua scripts to S3
         scripts_bucket = all_parameters["scripts"]["S3BucketName"]
         scripts_prefix = all_parameters["scripts"]["S3Prefix"]
-        
+
         # Validate scripts bucket exists
         if not validate_s3_bucket(scripts_bucket):
             print(f"Invalid or inaccessible S3 bucket for scripts: {scripts_bucket}. Exiting...")
             return
-        
+
         # Deploy scripts
         if not deploy_scripts(scripts_bucket, scripts_prefix):
             print("Warning: Some scripts failed to deploy, but continuing with deployment...")
@@ -379,10 +372,9 @@ def main() -> None:
             "Game": {
                 "ScriptsS3Bucket": scripts_bucket,
                 "ScriptsS3Prefix": scripts_prefix,
-            }
+            },
         }
         update_configuration_file(config_updates, all_parameters["cognito"]["UserPoolName"])
-
 
         print("Deployment completed successfully.")
     except Exception as err:
