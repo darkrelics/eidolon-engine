@@ -32,10 +32,6 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
-// TODO: Move to config
-var NAMES_PATH = "../data/names.txt"
-var OBSCENITY_PATH = "../data/obscenity.txt"
-
 type Game struct {
 	config               *Configuration
 	ctx                  context.Context
@@ -141,11 +137,13 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	// Build Archetype Options
 
-	if err := game.BuildArchetypeOptions(); err != nil {
-		Logger.Error("Error loading archetype options", "error", err)
-	}
+	game.BuildArchetypeOptions()
 
 	game.initCommands()
+
+	// Build fuzzy matching indices
+	game.buildCommandIndex() // Build command index for fuzzy matching
+	buildOrdinalIndex()      // Build ordinal index for fuzzy matching
 
 	return game, nil
 
@@ -157,21 +155,15 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 
 	Logger.Info("Loading character names from database...")
 
-	var names []string
-
-	var characters []struct {
-		CharacterName string `dynamodbav:"character_name"`
-	}
-
-	err := g.database.Scan(g.ctx, "characters", &characters)
+	// Load only character names for bloom filter
+	names, err := g.database.LoadCharacterNames(g.ctx)
 	if err != nil {
-		Logger.Error("Error scanning characters table", "error", err)
-		return nil, fmt.Errorf("error scanning characters: %w", err)
+		Logger.Error("Error loading character names", "error", err)
+		return nil, err
 	}
 
-	for _, character := range characters {
-		names = append(names, strings.ToLower(character.CharacterName))
-	}
+	Logger.Info("Character name loading complete",
+		"totalNames", len(names))
 
 	return names, nil
 }
@@ -214,12 +206,12 @@ func (g *Game) InitCharacterBloomFilter() error {
 		Logger.Warn("Error loading character names from database", "error", err)
 	}
 
-	namesFromFile, err := LoadNameFromFile(NAMES_PATH)
+	namesFromFile, err := LoadNameFromFile(g.config.Game.NamesPath)
 	if err != nil {
 		Logger.Warn("Error loading character names from file", "error", err)
 	}
 
-	obscenities, err := LoadNameFromFile(OBSCENITY_PATH)
+	obscenities, err := LoadNameFromFile(g.config.Game.ObscenityPath)
 	if err != nil {
 		Logger.Warn("Error loading obscenities from file", "error", err)
 	}
@@ -247,13 +239,17 @@ func (g *Game) Stop() error {
 
 	Logger.Info("Stopping game engine...")
 
-	g.cancel()
-
-	// Save all active characters
+	// CRITICAL: Save all character data BEFORE cancelling context
+	// This ensures all database operations complete successfully during shutdown
+	// Customer data persistence is our highest priority
 	g.saveAllCharacters()
 
-	// Logout all characters
+	// Logout all characters after saving
 	g.logoutAllCharacters()
+
+	// Only cancel context after all critical data is persisted
+	// This prevents database operations from failing due to cancelled context
+	g.cancel()
 
 	return nil
 
@@ -262,7 +258,17 @@ func (g *Game) Stop() error {
 // Run the game engine
 
 func (g *Game) Run(errChan chan error) error {
+	var runErr error
+	RunWithPanicRecoveryCallback("game.Run", func() {
+		runErr = g.runInternal(errChan)
+	}, func(err error) {
+		SendErrorNonBlocking(errChan, fmt.Errorf("panic in Game: %v", err), "Game")
+	})
+	return runErr
+}
 
+// runInternal contains the actual game loop logic
+func (g *Game) runInternal(errChan chan error) error {
 	Logger.Info("Starting game engine...")
 
 	// Start Game Heart Beat
@@ -280,8 +286,9 @@ func (g *Game) Run(errChan chan error) error {
 			err := g.tick()
 			if err != nil {
 				Logger.Error("Error running game logic", "error", err)
-				errChan <- fmt.Errorf("error running game logic: %w", err)
-				return fmt.Errorf("error running game logic: %w", err)
+				gameErr := fmt.Errorf("error running game logic: %w", err)
+				SendErrorNonBlocking(errChan, gameErr, "Game")
+				return gameErr
 			}
 		}
 	}
@@ -331,7 +338,9 @@ func (g *Game) processGameCommands() {
 				continue
 			}
 			// Handle the command asynchronously
-			go g.handleGameCommand(cmd)
+			go RunWithPanicRecovery("game.handleCommand", func() {
+				g.handleGameCommand(cmd)
+			}, "verb", cmd.Verb, "character", cmd.Character.name)
 		default:
 			// No command waiting, continue to next room
 		}
@@ -347,7 +356,9 @@ func (g *Game) processGameCommands() {
 				continue
 			}
 			// Handle the command asynchronously
-			go g.handleGameCommand(cmd)
+			go RunWithPanicRecovery("game.handleCommand", func() {
+				g.handleGameCommand(cmd)
+			}, "verb", cmd.Verb, "character", cmd.Character.name)
 		default:
 			// No command waiting, continue to next character
 		}
@@ -373,86 +384,36 @@ func (g *Game) handleGameCommand(cmd *CommandRequest) {
 	g.sendCommandResponse(cmd, response)
 }
 
-// handleEnvironmentCommand processes environment-related commands
-func (g *Game) handleEnvironmentCommand(cmd *CommandRequest) *CommandResponse {
-	var msg string
+// DeleteItem safely removes an item from the game's items map
+func (g *Game) DeleteItem(itemID uuid.UUID) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+	delete(g.items, itemID)
+}
 
-	switch cmd.Verb {
-	case "time":
-		// Report game time
-		gameTime := time.Now() // Placeholder for actual game time
-		msg = fmt.Sprintf("\n\rCurrent game time: %s\n\r", gameTime.Format("15:04:05"))
-	case "weather":
-		// Report game weather
-		msg = "\n\rThe weather is clear and pleasant.\n\r" // Placeholder for actual weather system
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   msg,
-		Timestamp: time.Now(),
+// DeleteItems safely removes multiple items from the game's items map
+func (g *Game) DeleteItems(itemIDs []uuid.UUID) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+	for _, itemID := range itemIDs {
+		delete(g.items, itemID)
 	}
 }
 
-// handleGlobalCommunicationCommand processes global communication commands
-func (g *Game) handleGlobalCommunicationCommand(cmd *CommandRequest) *CommandResponse {
-	if len(cmd.Args) < 2 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("what do you want to %s?", cmd.Verb),
-			Timestamp: time.Now(),
+// clearExitReferencesToRoom clears all exit references to a specific room
+func (g *Game) clearExitReferencesToRoom(roomID int64) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+
+	// Iterate through all exits and clear references to this room
+	for _, exit := range g.exits {
+		if exit != nil && exit.targetRoomID == roomID {
+			// Since we already hold the game mutex, we can safely clear the reference
+			exit.targetRoom = nil
 		}
 	}
 
-	// Extract the message
-	message := strings.Join(cmd.Args[1:], " ")
-
-	// Format based on command type
-	var broadcastMsg string
-	switch cmd.Verb {
-	case "shout":
-		broadcastMsg = fmt.Sprintf("\n\r%s shouts: %s\n\r", cmd.Character.name, message)
-	case "announce":
-		broadcastMsg = fmt.Sprintf("\n\r[Announcement] %s: %s\n\r", cmd.Character.name, message)
-	}
-
-	// Collect recipients while holding the lock
-	g.mutex.RLock()
-	recipients := make([]*Character, 0, len(g.characters))
-	for _, c := range g.characters {
-		if c != nil && c != cmd.Character && c.player != nil {
-			recipients = append(recipients, c)
-		}
-	}
-	g.mutex.RUnlock()
-
-	// Broadcast to all recipients without holding the lock
-	for _, c := range recipients {
-		select {
-		case c.player.commandOut <- broadcastMsg:
-			// Message sent successfully
-			select {
-			case c.player.commandOut <- c.prompt:
-				// Prompt sent successfully
-			default:
-				// Could not send prompt, but that's ok
-			}
-		default:
-			// Could not send message, character's buffer might be full
-			Logger.Warn("Failed to send global message to player",
-				"recipient", c.name,
-				"sender", cmd.Character.name)
-		}
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   broadcastMsg, // Also send to the originating character
-		Timestamp: time.Now(),
-	}
+	Logger.Debug("Cleared exit references to room", "roomID", roomID)
 }
 
 // sendCommandResponse sends a response to a command request
@@ -517,12 +478,24 @@ func (g *Game) saveAllCharacters() {
 	}
 	g.mutex.RUnlock()
 
+	Logger.Info("Saving all characters during shutdown", "characterCount", len(characters))
+
 	// Save characters without holding the lock
+	// Use a separate context with timeout to ensure saves don't hang indefinitely
+	saveCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	savedCount := 0
 	for _, character := range characters {
-		if err := character.Save(); err != nil {
+		// Override character's game context with our save context to ensure DB operations succeed
+		if err := character.SaveWithContext(saveCtx); err != nil {
 			Logger.Error("Error saving character during shutdown", "characterName", character.name, "error", err)
+		} else {
+			savedCount++
 		}
 	}
+
+	Logger.Info("Completed saving characters during shutdown", "savedCount", savedCount, "totalCount", len(characters))
 }
 
 // logoutAllCharacters logs out all active characters

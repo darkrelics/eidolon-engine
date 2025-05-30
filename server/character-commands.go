@@ -97,7 +97,7 @@ func executeLookCommand(character *Character, tokens []string) error {
 
 	// Get room description
 	description := character.room.GetDescription(character)
-	character.player.commandOut <- description
+	SafeSendString(character.player.commandOut, description, character.name)
 
 	// Always send prompt after room description
 	character.SendPrompt()
@@ -127,7 +127,7 @@ func executeWhoCommand(character *Character, tokens []string) error {
 
 	// Check if there are any other characters online
 	if len(characterNames) == 0 {
-		character.player.commandOut <- whoEmpty
+		SafeSendString(character.player.commandOut, whoEmpty, character.name)
 		return nil
 	}
 
@@ -144,7 +144,7 @@ func executeWhoCommand(character *Character, tokens []string) error {
 	msg.WriteString("\n\r")
 	msg.WriteString(fmt.Sprintf("Total Characters Online: %d\n\r", len(characterNames)))
 
-	character.player.commandOut <- msg.String()
+	SafeSendString(character.player.commandOut, msg.String(), character.name)
 	return nil
 }
 
@@ -158,11 +158,11 @@ func executeInfoCommand(character *Character, tokens []string) error {
 
 	// Get character info display from character method
 	info := character.GetCharacterInfo()
-	character.player.commandOut <- info
+	SafeSendString(character.player.commandOut, info, character.name)
 	return nil
 }
 
-// executeSkillCommand displays only the character's abilities
+// executeSkillCommand displays only the character's skills
 func executeSkillCommand(character *Character, tokens []string) error {
 	if character == nil || character.player == nil {
 		return errors.New("invalid character state")
@@ -172,7 +172,7 @@ func executeSkillCommand(character *Character, tokens []string) error {
 
 	// Get skill display from character method
 	skillInfo := character.GetSkillInfo()
-	character.player.commandOut <- skillInfo
+	SafeSendString(character.player.commandOut, skillInfo, character.name)
 	return nil
 }
 
@@ -192,113 +192,345 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 	invDisplay.WriteString("\n\rInventory:\n\r")
 	invDisplay.WriteString("----------------\n\r")
 
+	// Display what's in hands first
+	if character.leftHand != nil || character.rightHand != nil {
+		invDisplay.WriteString("\n\rYou are holding:\n\r")
+		if character.leftHand != nil {
+			invDisplay.WriteString(fmt.Sprintf("  Left hand:  %s\n\r", character.leftHand.name))
+		}
+		if character.rightHand != nil {
+			invDisplay.WriteString(fmt.Sprintf("  Right hand: %s\n\r", character.rightHand.name))
+		}
+	}
+
 	if len(character.inventory) == 0 {
-		invDisplay.WriteString("You are not carrying anything.\n\r")
+		if character.leftHand == nil && character.rightHand == nil {
+			invDisplay.WriteString("You are not carrying anything.\n\r")
+		}
 	} else {
-		// Separate worn and carried items
-		var wornItemNames, carriedItemNames []string
+		// Display items using detailed formatting with proper mutex protection
+		var wornItems, carriedItems []*Item
 
 		for _, item := range character.inventory {
 			if item == nil {
 				continue
 			}
 
-			if item.isWorn {
-				wornItemNames = append(wornItemNames, item.name)
+			// Safely check item state with mutex
+			item.mutex.RLock()
+			isWorn := item.isWorn
+			item.mutex.RUnlock()
+
+			if isWorn {
+				wornItems = append(wornItems, item)
 			} else {
-				carriedItemNames = append(carriedItemNames, item.name)
+				carriedItems = append(carriedItems, item)
+			}
+		}
+
+		// Display worn items with detailed formatting
+		if len(wornItems) > 0 {
+			invDisplay.WriteString("\n\rYou are wearing:\n\r")
+			for _, item := range wornItems {
+				invDisplay.WriteString(formatWornItem(item))
+			}
+		}
+
+		// Display carried items with detailed formatting
+		if len(carriedItems) > 0 {
+			invDisplay.WriteString("\n\rYou are carrying:\n\r")
+			for _, item := range carriedItems {
+				invDisplay.WriteString(formatCarriedItem(item))
+			}
+		}
+	}
+
+	SafeSendString(character.player.commandOut, invDisplay.String(), character.name)
+	return nil
+}
+
+// GetCharacterInfo returns a formatted string with character information
+func (c *Character) GetCharacterInfo() string {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	var info strings.Builder
+	info.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_white", c.name)))
+	info.WriteString("----------------\n\r")
+
+	// Basic character information
+	info.WriteString(fmt.Sprintf("Health: %d\n\r", int(c.health)))
+	info.WriteString(fmt.Sprintf("Essence: %d\n\r", int(c.essence)))
+
+	// Attributes
+	if len(c.attributes) > 0 {
+		info.WriteString("\n\rAttributes:\n\r")
+		for attr, value := range c.attributes {
+			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", attr, int(value)))
+		}
+	}
+
+	// Skills - only show those above zero
+	var skillsAboveZero []string
+	for skill, value := range c.skills {
+		if value > 0 {
+			skillsAboveZero = append(skillsAboveZero, skill)
+		}
+	}
+
+	if len(skillsAboveZero) > 0 {
+		info.WriteString("\n\rSkills:\n\r")
+		// Sort skills for consistent display
+		sort.Strings(skillsAboveZero)
+
+		// Display each skill with value > 0
+		for _, skill := range skillsAboveZero {
+			value := c.skills[skill]
+			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", skill, int(value)))
+		}
+	}
+
+	// Display hand contents
+	if c.leftHand != nil || c.rightHand != nil {
+		var handItems []string
+		if c.rightHand != nil {
+			handItems = append(handItems, c.rightHand.name)
+		}
+		if c.leftHand != nil {
+			handItems = append(handItems, c.leftHand.name)
+		}
+		info.WriteString("\n\rYou are holding ")
+		info.WriteString(formatItemListWithOxfordComma(handItems))
+		info.WriteString(".\n\r")
+	}
+
+	// Inventory information
+	if len(c.inventory) > 0 {
+		// Separate worn and carried items
+		var wornItems, carriedItems []string
+
+		for _, item := range c.inventory {
+			if item != nil {
+				if item.isWorn {
+					wornItems = append(wornItems, item.name)
+				} else {
+					carriedItems = append(carriedItems, item.name)
+				}
 			}
 		}
 
 		// Display worn items
-		if len(wornItemNames) > 0 {
-			invDisplay.WriteString("\n\rYou are wearing ")
-			invDisplay.WriteString(formatItemListWithOxfordComma(wornItemNames))
-			invDisplay.WriteString(".\n\r")
+		if len(wornItems) > 0 {
+			info.WriteString("\n\rYou are wearing ")
+			info.WriteString(formatItemListWithOxfordComma(wornItems))
+			info.WriteString(".\n\r")
 		}
 
 		// Display carried items
-		if len(carriedItemNames) > 0 {
-			invDisplay.WriteString("\n\rYou are carrying ")
-			invDisplay.WriteString(formatItemListWithOxfordComma(carriedItemNames))
-			invDisplay.WriteString(".\n\r")
+		if len(carriedItems) > 0 {
+			info.WriteString("\n\rYou are carrying ")
+			info.WriteString(formatItemListWithOxfordComma(carriedItems))
+			info.WriteString(".\n\r")
+		}
+	} else if c.leftHand == nil && c.rightHand == nil {
+		// Only show "not carrying anything" if hands are also empty
+		info.WriteString("\n\rYou are not carrying anything.\n\r")
+	}
+
+	return info.String()
+}
+
+// GetSkillInfo returns a formatted string with character skills
+func (c *Character) GetSkillInfo() string {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	var skillInfo strings.Builder
+	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Skills\n\r", ApplyColor("bright_cyan", c.name)))
+	skillInfo.WriteString("----------------\n\r")
+
+	// Skills - only show those above zero
+	var skillsAboveZero []string
+	for skill, value := range c.skills {
+		if value > 0 {
+			skillsAboveZero = append(skillsAboveZero, skill)
 		}
 	}
 
-	character.player.commandOut <- invDisplay.String()
+	if len(skillsAboveZero) > 0 {
+		// Sort skills for consistent display
+		sort.Strings(skillsAboveZero)
+
+		// Display each skill with value > 0
+		for _, skill := range skillsAboveZero {
+			value := c.skills[skill]
+			skillInfo.WriteString(fmt.Sprintf("  %-15s: %.2f\n\r", skill, value))
+		}
+	} else {
+		skillInfo.WriteString("  You have not developed any skills yet.\n\r")
+	}
+
+	return skillInfo.String()
+}
+
+// LookAtTarget handles examining specific targets
+func (c *Character) LookAtTarget(target string) error {
+	// Check if this is a "look in" command
+	if strings.HasPrefix(target, "in ") {
+		// Extract container name and check for "my" prefix
+		containerPart := strings.TrimPrefix(target, "in ")
+		isMyContainer := false
+
+		if strings.HasPrefix(containerPart, "my ") {
+			isMyContainer = true
+			containerPart = strings.TrimPrefix(containerPart, "my ")
+		}
+
+		desc := c.LookInContainer(containerPart, isMyContainer)
+		SafeSendString(c.player.commandOut, desc, c.name)
+		return nil
+	}
+
+	// First check if target is in the room
+	desc := c.LookAtRoomTarget(target)
+	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
+		SafeSendString(c.player.commandOut, desc, c.name)
+		return nil
+	}
+
+	// Then check if it's in inventory
+	desc = c.LookAtInventoryItem(target)
+	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
+		SafeSendString(c.player.commandOut, desc, c.name)
+		return nil
+	}
+
+	// Not found anywhere
+	SafeSendString(c.player.commandOut, fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target), c.name)
 	return nil
 }
 
-// executeEquipmentCommand displays only the character's equipped items
-func executeEquipmentCommand(character *Character, tokens []string) error {
-	if character == nil || character.player == nil {
+// LookAtRoomTarget looks for a target in the room (character or item)
+func (c *Character) LookAtRoomTarget(target string) string {
+	// Check if looking at a character in the room
+	if c.room != nil {
+		c.room.mutex.RLock()
+		for _, char := range c.room.characters {
+			if char != nil && strings.Contains(strings.ToLower(char.name), target) && char.IsVisibleTo(c) {
+				c.room.mutex.RUnlock()
+				return FormatCharacterDescription(char, c)
+			}
+		}
+
+		// Check if looking at an item in the room
+		for _, item := range c.room.items {
+			if item != nil && MatchesTarget(item.name, target) {
+				c.room.mutex.RUnlock()
+				return formatItemDescription(item)
+			}
+		}
+
+		// Check for directions/exits
+		for direction, exit := range c.room.exits {
+			if strings.Contains(exit.direction, target) && exit != nil && exit.visible {
+				c.room.mutex.RUnlock()
+				if exit.description != "" {
+					return fmt.Sprintf("\n\r%s\n\r", exit.description)
+				}
+				return fmt.Sprintf("\n\rYou see an exit leading %s.\n\r", direction)
+			}
+		}
+		c.room.mutex.RUnlock()
+	}
+
+	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+}
+
+// LookAtInventoryItem looks for an item in the character's inventory
+func (c *Character) LookAtInventoryItem(target string) string {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	for _, item := range c.inventory {
+		if item != nil && MatchesTarget(item.name, target) {
+			return formatItemDescription(item)
+		}
+	}
+
+	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
+}
+
+// LookInContainer handles looking inside a container
+func (c *Character) LookInContainer(containerName string, isMyContainer bool) string {
+	if isMyContainer {
+		// Look in character's inventory for the container
+		c.mutex.RLock()
+		var container *Item
+		for _, item := range c.inventory {
+			if item != nil && MatchesTarget(item.name, containerName) {
+				container = item
+				break
+			}
+		}
+		c.mutex.RUnlock()
+
+		if container == nil {
+			return fmt.Sprintf("\n\rYou don't have a '%s'.\n\r", containerName)
+		}
+
+		if !container.container {
+			return fmt.Sprintf("\n\rThe %s is not a container.\n\r", container.name)
+		}
+
+		return "\n\r" + container.GetContainerContents()
+	} else {
+		// Look in room for the container
+		if c.room == nil {
+			return "\n\rYou're not in a valid room.\n\r"
+		}
+
+		c.room.mutex.RLock()
+		var container *Item
+		for _, item := range c.room.items {
+			if item != nil && MatchesTarget(item.name, containerName) {
+				container = item
+				break
+			}
+		}
+		c.room.mutex.RUnlock()
+
+		if container == nil {
+			return fmt.Sprintf("\n\rYou don't see a '%s' here.\n\r", containerName)
+		}
+
+		if !container.container {
+			return fmt.Sprintf("\n\rThe %s is not a container.\n\r", container.name)
+		}
+
+		return "\n\r" + container.GetContainerContents()
+	}
+}
+
+// executeUnhideCommand handles the unhide command
+func executeUnhideCommand(character *Character, tokens []string) error {
+	if character == nil {
 		return errors.New("invalid character state")
 	}
 
-	Logger.Debug("Player checking equipment", "characterName", character.name)
-
-	// Lock the character's inventory while we read it
-	character.mutex.RLock()
-	defer character.mutex.RUnlock()
-
-	var eqDisplay strings.Builder
-	eqDisplay.WriteString("\n\rEquipment:\n\r")
-	eqDisplay.WriteString("----------------\n\r")
-
-	// Check if character has any equipment
-	var wornItems []*Item
-	for _, item := range character.inventory {
-		if item != nil && item.isWorn {
-			wornItems = append(wornItems, item)
-		}
+	if !character.IsHidden() {
+		SafeSendString(character.player.commandOut, "\n\rYou are not hidden.\n\r", character.name)
+		return nil
 	}
 
-	if len(wornItems) == 0 {
-		eqDisplay.WriteString("You are not wearing anything.\n\r")
-	} else {
-		// Organize items by wear location
-		wearSlots := make(map[string][]*Item)
-		for _, item := range wornItems {
-			for _, location := range item.wornOn {
-				wearSlots[location] = append(wearSlots[location], item)
-			}
-		}
+	// Reveal the character
+	character.SetHidden(false)
+	SafeSendString(character.player.commandOut, "\n\rYou step out from hiding.\n\r", character.name)
 
-		// Display items by location
-		var locations []string
-		for location := range wearSlots {
-			locations = append(locations, location)
-		}
-		sort.Strings(locations)
+	// Notify others in the room
+	SendRoomMessageExcept(character.room,
+		fmt.Sprintf("\n\r%s steps out from hiding.\n\r", character.name),
+		character,
+	)
 
-		for _, location := range locations {
-			items := wearSlots[location]
-			eqDisplay.WriteString(fmt.Sprintf("\n\r%s:\n\r", location))
-			for _, item := range items {
-				eqDisplay.WriteString(fmt.Sprintf("  %s\n\r", item.name))
-			}
-		}
-
-		// Display trait modifications if any
-		var totalMods = make(map[string]int8)
-		for _, item := range wornItems {
-			for trait, mod := range item.traitMods {
-				totalMods[trait] += mod
-			}
-		}
-
-		if len(totalMods) > 0 {
-			eqDisplay.WriteString("\n\rAttribute Modifiers:\n\r")
-			for trait, mod := range totalMods {
-				sign := "+"
-				if mod < 0 {
-					sign = ""
-				}
-				eqDisplay.WriteString(fmt.Sprintf("  %s: %s%d\n\r", trait, sign, mod))
-			}
-		}
-	}
-
-	character.player.commandOut <- eqDisplay.String()
 	return nil
 }

@@ -38,6 +38,18 @@ Each interface implements protocol-specific rate limiting and reports metrics to
 
 Player sessions serve as the bridge between the interface and game world, handling essential functions like displaying messages of the day, character management, and console formatting for passwords and other sensitive input. Each session implements anti-abuse rate limiting and maintains clear communication boundaries through channels at both the interface and character layers. When a player creates or selects a character, the player session spawns a character session while maintaining tracking of its associated characters.
 
+### Hand System
+
+Characters have two hands (left and right) for holding items:
+
+- **Right Hand**: Primary/dominant hand - items are picked up here first
+- **Left Hand**: Secondary hand - used when right hand is full
+- **Full Hands**: Cannot pick up items when both hands are occupied
+- **Switch Command**: Swap items between hands when both are holding something
+- **Drop/Put**: Can drop or put items directly from hands
+- **Inventory Display**: Shows hand contents separately from worn/carried items
+- **INFO Command**: Displays what you're holding in a natural format
+
 ### Room System
 
 Each active room runs in its own goroutine, handling commands and state for all characters and items within it. Rooms can be marked as persistent or non-persistent:
@@ -112,6 +124,8 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Set up AWS Cognito authentication
   - [x] Display connection IP address and port information
   - [x] Implement persistent logging
+  - [x] Panic recovery and graceful shutdown
+  - [x] Context-based coordination system
 
 - [x] Player and Character Management
 
@@ -123,6 +137,8 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Allow character deletion
   - [x] Handle unplanned disconnections
   - [x] Display Message of the Day (MOTD)
+  - [x] Player idle timeout with warnings
+  - [x] Character persistence with DynamoDB
 
 - [x] Command System
 
@@ -132,8 +148,10 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Add quit command
   - [x] Create character-commands.go, room-commands.go, game-commands.go modules
   - [x] Improve the say command
+  - [x] Command wait time system for actions
 
 - [x] Room System
+
   - [x] Implement movement commands with room state changes
   - [x] GO and MOVE commands for character movement
   - [x] Support for both cardinal directions and object-based exits
@@ -146,48 +164,91 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Implement item cleanup for empty rooms
   - [x] Allow starting room to be set by Archetype
   - [x] Update database tools to support room flags and scripts
-
-### Upcoming Tasks
-
-- [ ] Item System
-
-  - [ ] Construct the item system with verb interactions
-  - [ ] Load item prototypes at start
-  - [ ] Create item prototype factory function
-  - [ ] Add inventory, get, take, drop commands
-  - [ ] Add wear, remove, examine commands
-
-- [ ] Command System Enhancements
-
-  - [ ] Add state tracking for timeout management
-  - [ ] Implement command queuing system
-  - [ ] Add look at item command
-
-- [x] Room System Extension
-
   - [x] Enhanced exit system with descriptive exits
   - [x] Support for non-cardinal direction exits (doors, portals, stairs)
   - [x] Custom arrival/departure messaging for player movement
   - [x] Exit visibility controls for hidden paths
+
+- [x] Item System Foundation
+
+  - [x] Basic item data structures
+  - [x] Item persistence in DynamoDB
+  - [x] Item trait system for modifications
+  - [x] Worn item tracking and state
+  - [x] Hand system for holding items (left and right hands)
+  - [x] Items picked up go to hands first (right hand is dominant)
+  - [x] Switch command to swap items between hands
+
+- [x] Communication System
+
+  - [x] Say command with room-wide communication
+  - [x] Shout command for server-wide messages
+  - [x] Announce command for GM announcements
+
+- [x] Security Features
+  - [x] SSH authentication rate limiting
+  - [x] IP-based and username-based ban system
+  - [x] Obscenity filter for character names
+
+### Upcoming Tasks (Priority Order)
+
+#### High Priority - Core Functionality
+
+- [ ] Item System Completion
+
+  - [x] Implement inventory command to view items and hands
+  - [x] Add get/take commands for picking up items (to hands)
+  - [x] Add drop command for dropping items (from hands or inventory)
+  - [x] Add wear/remove commands for equipment
+  - [x] Add switch command for swapping hand items
+  - [ ] Add examine command for detailed item inspection
+  - [ ] Implement item verb interactions
+  - [ ] Load item prototypes at startup
+  - [ ] Create item prototype factory function
+
+- [ ] Administrative Features
+
+  - [ ] Implement privilege/permission system
+  - [ ] Add @shutdown command for admins
+  - [ ] Add @broadcast command for system messages
+  - [ ] Create GM-only command prefix handling
+
+- [ ] Command Rate Limiting
+
+  - [ ] Implement per-player command rate limiting (5/second)
+  - [ ] Add command frequency tracking
+  - [ ] Implement queue/drop strategy for excess commands
+
+- [ ] Build & Deploy Automation
+
+  - [ ] Create server build script with version stamping
+  - [ ] Implement automated deployment (systemd/Docker)
+  - [ ] Set up CodeBuild pipeline for server compilation
+  - [ ] Create Packer-based AMI deployment
+
+#### Medium Priority - Enhanced Features
+
+- [ ] Logging & Audit Trail
+
+  - [ ] Implement dedicated audit logging for commands
+  - [ ] Add command origin tracking (player ID, IP, session)
+  - [ ] Create separate audit log stream
+
+- [ ] Character Features
+
+  - [ ] Implement auto-save functionality
+  - [ ] Add dynamic prompt with HP/status
+  - [ ] Expand character states (sitting, prone, dead)
+  - [ ] Add whisper command for private communication
+
+- [ ] Room System Extension
+
   - [ ] Create Script management system with S3 storage
   - [ ] Implement room script loading from S3
   - [ ] Validate graph of loaded rooms and exits
+  - [ ] Add Lua scripting support
 
-- [ ] Player Features
-
-  - [ ] Expand the character creation process
-  - [ ] Develop player communication systems (whisper, shout)
-  - [ ] Implement an obscenity filter
-  - [ ] Improve input filters
-
-- [ ] Administration Tools
-
-  - [ ] Create administrative interface
-  - [ ] Force password resets when needed
-  - [ ] Add account deletion, ban, and mute capabilities
-  - [ ] Limit auto-save to updated objects
-  - [ ] Add rate limiting to the server
-  - [ ] Add session timeout
+#### Low Priority - Advanced Features
 
 - [ ] Advanced Features (Long-term)
   - [ ] Develop a weather and time system
@@ -208,7 +269,7 @@ Game Information:
 - [x] HELP: Display a list of commands.
 - [ ] MAP: Display a map of the current area.
 - [ ] TIME: Display the current time.
-- [ ] MOTD: Display the message of the day.
+- [x] MOTD: Display the message of the day (shown on login).
 - [ ] REPORT: Report a bug or issue.
 - [ ] BUG: Report a bug or issue.
 - [x] WHO: Display a list of players.
@@ -225,22 +286,24 @@ Basic Movement:
 
 Objects and Inventory:
 
-- [ ] GET: Pick up an object.
-- [ ] DROP: Drop an object.
-- [ ] PUT: Put an object in a container.
-- [ ] TAKE: Take an object from a container.
-- [ ] INVENTORY: Display the contents of your inventory.
-- [ ] WEAR: Wear an object.
-- [ ] REMOVE: Remove an object.
+- [x] GET: Pick up an object (goes to right hand, then left hand if right is full).
+- [x] DROP: Drop an object (from hands or inventory).
+- [x] PUT: Put an object in a container (from hands or inventory).
+- [x] TAKE: Take an object from a container (goes to hands).
+- [x] INVENTORY: Display the contents of your inventory and hands.
+- [x] WEAR: Wear an object.
+- [x] REMOVE: Remove an object.
+- [x] SWITCH: Switch items between your left and right hands.
 - [ ] EXAMINE: Examine an object.
 - [ ] EAT: Eat an object.
 - [ ] DRINK: Drink an object.
 
 Communication:
 
-- [x] SAY: Speak to other players.
+- [x] SAY: Speak to other players in the same room.
 - [ ] WHISPER: Speak privately to another player.
-- [ ] SHOUT: Shout to the adjacent rooms.
+- [ ] SHOUT: Shout server-wide message.
+- [ ] ANNOUNCE: Admin announcement to all players.
 - [ ] EMOTE: Perform an action.
 
 Combat:
@@ -253,12 +316,12 @@ Combat:
 - [ ] LOAD: Load a weapon.
 - [ ] FIRE: Fire a weapon.
 
-Character Manegment:
+Character Management:
 
-- [x] INFO: Display your character information.
+- [x] INFO: Display your character information (including held items).
 - [x] SKILL: Display your skills.
 - [ ] STATUS: Display the character status.
-- [ ] INVENTORY: Display the contents of your inventory.
+- [x] INVENTORY: Display the contents of your inventory and hands.
 
 Group:
 
@@ -308,6 +371,8 @@ OTHER:
 - [x] Implement context-based coordination rather than WaitGroups
 - [ ] Support 1,000 concurrent players
 - [x] Implement room goroutine architecture
+- [x] Panic recovery in all goroutines
+- [x] Graceful shutdown with proper cleanup
 
 ### Room System
 
@@ -319,6 +384,7 @@ OTHER:
 - [x] Idle room detection and cleanup
 - [x] Room unloading for non-persistent empty rooms
 - [x] Item cleanup for empty rooms
+- [x] Enhanced exit system with custom messages
 
 ### Scripting System
 
@@ -332,7 +398,7 @@ OTHER:
 - [x] SSH interface implementation
 - [ ] HTTPS interface implementation
 - [ ] gRPC interface implementation
-- [ ] Protocol-specific rate limiting
+- [x] SSH authentication rate limiting
 - [x] CloudWatch metrics reporting
 
 ### Authentication
@@ -340,7 +406,8 @@ OTHER:
 - [x] AWS Cognito integration
 - [x] User authentication flow
 - [x] Password change functionality
-- [ ] Session management
+- [x] Session management with idle timeout
+- [x] IP-based ban system
 
 ### Player Management
 
@@ -348,8 +415,10 @@ OTHER:
 - [x] Character creation
 - [x] Character selection
 - [x] Character deletion
-- [ ] Anti-abuse rate limiting
+- [ ] Command-level rate limiting
 - [x] Console formatting for sensitive input
+- [x] Player idle timeout (15 minutes)
+- [x] Obscenity filter for names
 
 ### Character System
 
@@ -358,10 +427,10 @@ OTHER:
   - [x] Modular file organization (character-commands.go, room-commands.go, game-commands.go)
   - [x] Command routing and tier determination
   - [x] Command error handling and validation
-- [ ] Command timeout system with roundtime
+- [x] Command wait time system
 - [x] Basic character state tracking (standing)
 - [ ] Advanced character states (sitting, prone, dead)
-- [ ] I/O buffering with game-defined limits
+- [x] I/O buffering with channel limits
 - [x] Character state persistence
 - [x] Character cleanup on disconnect
 
@@ -373,11 +442,12 @@ OTHER:
   - [x] Directional and object-based exits (e.g., "north", "stairs", "portal")
   - [x] Custom exit descriptions and arrival messages
   - [x] Support for hidden/visible exits
-  - [x] Script hooks for exit-triggered events
+  - [ ] Script hooks for exit-triggered events
 - [ ] Item interaction system with verbs
 - [x] Archetype system
 - [ ] Combat system
 - [ ] Time passage simulation
+- [x] Basic item structures and persistence
 
 ### Database
 
@@ -385,8 +455,8 @@ OTHER:
 - [x] Database operations abstraction
 - [x] Support for room persistence in database tools
 - [x] Support for room script IDs in database tools
-- [ ] RAM caching to minimize database access
-- [ ] Non-blocking database operations
+- [x] Character and item transactional saves
+- [x] Non-blocking database operations via goroutines
 
 ### AWS Integration
 
@@ -394,70 +464,23 @@ OTHER:
 - [x] Cognito for authentication
 - [x] DynamoDB for persistence
 - [ ] S3 for script storage
-- [ ] Infrastructure optimization for AWS
+- [x] CloudFormation deployment scripts
+- [x] CodeBuild for portal deployment
 
 ### Testing
 
 - [ ] Unit testing for standalone functions
-- [ ] Live user interaction testing
+- [x] Live user interaction testing
 
-## Known Issues
+## Known Issues and GitHub Tracking
 
-### Primary Concerns
+### Primary Technical Debt
 
-1. **Security vulnerabilities** - Credential handling and password validation still need improvement
-2. **Race conditions and concurrency issues** - Several areas need mutex protection and proper synchronization
-3. **Error handling gaps** - Error propagation and recovery need improvement
-4. **Memory management concerns** - Large dataset handling requires pagination
-5. **Hard-coded values** - Configuration should replace hard-coded values
-
-### Recent Progress
-
-The most recent commit (5494d81) addressed a logging issue in the portal code related to:
-
-- Removed potentially insecure default values for configuration
-- Improved error logging formats
-- Simplified authentication error handling
-
-### Critical Issues
-
-1. **Weak Password Validation (interface_ssh.go)**:
-   - Password validation only checks length (minimum 8 characters)
-   - No requirements for complexity (uppercase, lowercase, numbers, symbols)
-   - Located in `isValidPassword` function (lines 412-419)
-
-### High Severity Issues
-
-1. **Race Condition in Player Management (server.go)**:
-
-   - Race condition between checking for existing session and adding new one
-   - Could lead to security issues or resource leaks
-   - Located in `AddPlayer` method (lines 295-307)
-
-2. **Silent Failure in Session Management (server.go)**:
-
-   - Method silently ignores failures to send disconnect messages
-   - Located in `DuplicatePlayer` method (lines 326-333)
-
-3. **No Authentication Rate Limiting (cognito.go)**:
-
-   - Limited rate limiting on authentication attempts at application level
-   - Makes the system vulnerable to brute force attacks
-
-4. **Insufficient Input Validation (player.go)**:
-
-   - Insufficient validation/sanitization of player input
-   - Could lead to command injection or other security issues
-
-5. **SSH Connection Security (interface_ssh.go)**:
-
-   - No validation of SSH connection parameters
-   - No proper handling of unusual SSH client behavior
-
-6. **Hard-Coded File Paths (game.go)**:
-   - Critical game files use hard-coded paths
-   - Makes deployment and configuration inflexible
-   - Located in lines 36-37
+1. **Item System Partially Complete** - Basic commands implemented, scripting and verbs needed
+2. **No Script System** - Room/item scripting not implemented
+3. **Limited State Management** - Only "standing" state implemented
+4. **No Combat System** - Combat commands and mechanics not implemented
+5. **Missing Admin Tools** - No in-game administration capabilities
 
 ## Web Portal
 
@@ -465,26 +488,63 @@ A Flutter application for player registration and self-service.
 
 ## Deployment
 
-Deploying the server involves several steps:
+### AWS Infrastructure Setup
 
-1. Ensure you have Go 1.24, Python 3.12 and Flutter 3.29 installed.
-2. Clone the repository.
-3. Install the required Python packages:
+1. Ensure you have the following installed:
+
+   - Go 1.24 or later
+   - Python 3.12 or later
+   - Flutter 3.29 or later
+   - AWS CLI configured with appropriate credentials
+
+2. Clone the repository:
+
+   ```bash
+   git clone https://github.com/robinje/eidolon-engine.git
+   cd eidolon-engine
    ```
+
+3. Install Python dependencies:
+
+   ```bash
    pip install -r requirements/scripts-requirements.txt
    ```
-4. Set up your AWS credentials (access key ID and secret access key) in your environment variables or AWS credentials file.
-5. Run the deployment script:
+
+4. Deploy AWS infrastructure:
+   ```bash
+   cd deployment
+   python deploy.py
    ```
-   python scripts/deploy.py
+   This creates:
+   - Cognito user pool for authentication
+   - DynamoDB tables for game data
+   - CloudWatch log groups and metrics
+   - CodeBuild project for portal deployment
+
+### Server Build and Run
+
+1. Copy and configure the server:
+
+   ```bash
+   cd server
+   cp config.template.yml config.yml
+   # Edit config.yml with your AWS resource IDs
    ```
-   This script will create the necessary AWS resources using CloudFormation.
-6. Once deployment is complete, build and run the server:
+
+2. Build the server:
+
+   ```bash
+   go build -o eidolon-engine
    ```
-   cd ./server
-   go build . -o server
-   ./server
+
+3. Run the server:
+   ```bash
+   ./eidolon-engine
    ```
+
+### Portal Deployment
+
+The Flutter web portal is automatically deployed via CodeBuild when triggered by the deployment script.
 
 ## License
 

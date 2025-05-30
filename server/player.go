@@ -26,6 +26,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -109,6 +110,7 @@ type Player struct {
 	server        *Server
 	mutex         sync.RWMutex
 	shutdownOnce  sync.Once
+	done          chan struct{} // Channel signaled when all goroutines complete
 }
 
 type PlayerData struct {
@@ -200,7 +202,7 @@ func (p *Player) Save() error {
 	err := database.Put(p.server.ctx, "players", playerData)
 	if err != nil {
 		Logger.Error("Error saving player data", "error", err)
-		p.commandOut <- "Error saving player data. Please contact an administrator.\n"
+		SafeSendString(p.commandOut, "Error saving player data. Please contact an administrator.\n", p.id.String())
 		return fmt.Errorf("error saving player data: %w", err)
 	}
 
@@ -230,6 +232,7 @@ func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfac
 		ctx:           ctx,
 		cancel:        cancel,
 		shutdownOnce:  sync.Once{},
+		done:          make(chan struct{}),
 	}
 
 	// Load player data
@@ -258,10 +261,32 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 	inputDone := make(chan error, 1)
 	outputDone := make(chan error, 1)
 
+	// Channel to track when all goroutines have completed
+	allDone := make(chan struct{})
+	var activeGoroutines int32 = 4
+
+	// Helper to track goroutine completion
+	trackDone := func() {
+		if atomic.AddInt32(&activeGoroutines, -1) == 0 {
+			close(allDone)
+		}
+	}
+
 	// Start handlers
-	go p.handleRequests(p.ctx, requests, requestDone)
-	go p.handleInput(p.ctx, inputDone)
-	go p.handleOutput(p.ctx, outputDone)
+	go func() {
+		defer trackDone()
+		p.handleRequests(p.ctx, requests, requestDone)
+	}()
+
+	go func() {
+		defer trackDone()
+		p.handleInput(p.ctx, inputDone)
+	}()
+
+	go func() {
+		defer trackDone()
+		p.handleOutput(p.ctx, outputDone)
+	}()
 
 	// Display MOTDs after connection is established but before entering main loop
 	if err := DisplayUnseenMOTDs(p); err != nil {
@@ -270,7 +295,16 @@ func (p *Player) RunSSH(requests <-chan *ssh.Request) {
 	}
 
 	// Start Player Interface
-	go p.Console(p.consoleDone)
+	go func() {
+		defer trackDone()
+		p.Console(p.consoleDone)
+	}()
+
+	// Monitor for completion in a separate goroutine
+	go func() {
+		<-allDone
+		close(p.done)
+	}()
 
 	// Wait for shutdown conditions
 	select {
@@ -346,6 +380,9 @@ func (p *Player) Stop() {
 			Logger.Info("Player removed from server", "player_name", p.id)
 		}
 
+		// Wait for all goroutines to complete
+		<-p.done
+
 		// Close channels after all operations are done
 		close(p.commandOut)
 		close(p.commandIn)
@@ -406,10 +443,55 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 	inputBuffer := NewInputBuffer()
 	reader := bufio.NewReader(p.connection)
 
+	// Create idle timeout timer
+	idleTimeout := time.Duration(p.server.config.Game.PlayerIdleTimeoutSeconds) * time.Second
+	idleTimer := time.NewTimer(idleTimeout)
+	defer idleTimer.Stop()
+
+	// Warning timer (5 minutes before disconnect, or half the timeout if less than 10 minutes)
+	var warningTime time.Duration
+	if idleTimeout > 10*time.Minute {
+		warningTime = 5 * time.Minute
+	} else {
+		warningTime = idleTimeout / 2
+	}
+
+	var warningTimer *time.Timer
+	var warningShown bool
+
+	if warningTime > 0 {
+		warningTimer = time.NewTimer(idleTimeout - warningTime)
+		defer warningTimer.Stop()
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			done <- ctx.Err()
+			return
+		case <-func() <-chan time.Time {
+			if warningTimer != nil {
+				return warningTimer.C
+			}
+			return nil
+		}():
+			if !warningShown {
+				warningShown = true
+				remainingMinutes := int(warningTime.Minutes())
+				select {
+				case p.commandOut <- ApplyColor("yellow", fmt.Sprintf("\r\n*** WARNING: You will be disconnected in %d minutes due to inactivity ***\r\n", remainingMinutes)):
+				case <-ctx.Done():
+					done <- ctx.Err()
+					return
+				}
+			}
+		case <-idleTimer.C:
+			select {
+			case p.commandOut <- ApplyColor("red", "\r\n*** Disconnected due to inactivity ***\r\n"):
+			case <-ctx.Done():
+			}
+			Logger.Info("Player disconnected due to idle timeout", "player", p.id)
+			done <- errors.New("idle timeout")
 			return
 		default:
 			r, _, err := reader.ReadRune()
@@ -422,6 +504,32 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				Logger.Error("Error reading input", "player", p.id, "error", err)
 				done <- fmt.Errorf("read error: %w", err)
 				return
+			}
+
+			// Reset idle timers on any input
+			if !idleTimer.Stop() {
+				select {
+				case <-idleTimer.C:
+				default:
+				}
+			}
+			idleTimer.Reset(idleTimeout)
+
+			// Reset warning timer if not already shown
+			if !warningShown && warningTimer != nil {
+				if !warningTimer.Stop() {
+					select {
+					case <-warningTimer.C:
+					default:
+					}
+				}
+				warningTimer.Reset(idleTimeout - warningTime)
+			} else if warningShown {
+				// Clear warning state on new input
+				warningShown = false
+				if warningTimer != nil {
+					warningTimer.Reset(idleTimeout - warningTime)
+				}
 			}
 
 			// Handle different input cases
@@ -588,33 +696,19 @@ func wrapText(text string, width int) string {
 }
 
 func (s *Server) RemovePlayer(playerID uint64) error {
+	s.mutex.RLock()
+	player, exists := s.players[playerID]
+	s.mutex.RUnlock()
 
-	if s.players[playerID] == nil {
+	if !exists || player == nil {
 		Logger.Warn("Attempted to remove non-existent player", "playerID", playerID)
 		return nil
 	}
 
-	player := s.players[playerID]
+	Logger.Info("Removing inactive player", "playerID", player.id.String(), "playerIndex", playerID)
 
-	// Stop the existing player session
-
-	Logger.Info("Disconnected player with active character", "playerID", player.id.String(), "playerIndex", playerID)
-
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	// Find the player by index
-	player, exists := s.players[playerID]
-	if exists {
-		// Remove from both maps
-		delete(s.players, playerID)
-		delete(s.playersByUUID, player.id)
-
-		s.playerCount.Add(^uint64(0)) // Decrement count
-		Logger.Info("Player removed", "playerID", playerID, "playerUUID", player.id.String())
-	} else {
-		Logger.Warn("Attempted to remove non-existent player", "playerID", playerID)
-	}
+	// Stop the player properly - this handles all cleanup
+	player.Stop()
 
 	return nil
 }

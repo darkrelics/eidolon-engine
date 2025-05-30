@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -104,12 +105,26 @@ func (k *KeyPair) BatchDeleteItems(ctx context.Context, itemIDs []string) error 
 		return nil
 	}
 
+	// Check context at start
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	Logger.Info("Performing batch delete of items", "itemCount", len(itemIDs))
 
 	// DynamoDB TransactWriteItems has a limit of 25 items per transaction
 	const batchSize = 25
 
 	for i := 0; i < len(itemIDs); i += batchSize {
+		// Check context before each batch
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		end := i + batchSize
 		if end > len(itemIDs) {
 			end = len(itemIDs)
@@ -142,13 +157,32 @@ func (k *KeyPair) BatchDeleteItems(ctx context.Context, itemIDs []string) error 
 
 // SaveCharacterWithInventory saves character and inventory items in a single transaction
 func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData *CharacterData, items map[string]*Item) error {
+	// Check context at start
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	Logger.Debug("Saving character with inventory transactionally", "characterID", characterData.CharacterID, "itemCount", len(items))
 
 	// Build transaction items
 	transactItems := make([]types.TransactWriteItem, 0, len(items)+1)
 
 	// Add all inventory items to transaction
+	itemCount := 0
 	for _, item := range items {
+		// Check context periodically to handle cancellation gracefully
+		// During shutdown, context should remain valid until after all saves complete
+		if itemCount%10 == 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+		}
+		itemCount++
+
 		if item != nil {
 			// Create item data for storage
 			itemData := &ItemData{
@@ -366,6 +400,100 @@ func (k *KeyPair) Scan(ctx context.Context, tableName string, items interface{})
 	if err != nil {
 		return fmt.Errorf("error unmarshalling scan results: %w", err)
 	}
+
+	return nil
+}
+
+// CharacterInfo holds minimal character data for bloom filter loading
+type CharacterInfo struct {
+	CharacterID   string `dynamodbav:"character_id"`
+	CharacterName string `dynamodbav:"character_name"`
+	PlayerID      string `dynamodbav:"player_id"`
+}
+
+// PlayerInfo holds minimal player data for bloom filter loading
+type PlayerInfo struct {
+	PlayerID      string            `dynamodbav:"player_id"`
+	CharacterList map[string]string `dynamodbav:"character_list"`
+}
+
+// LoadCharactersAndPlayers loads all characters and players in a single operation for bloom filter initialization
+func (k *KeyPair) LoadCharactersAndPlayers(ctx context.Context) ([]CharacterInfo, []PlayerInfo, error) {
+	Logger.Info("Loading characters and players for bloom filter initialization")
+
+	// Load all characters
+	var characters []CharacterInfo
+	err := k.Scan(ctx, "characters", &characters)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error scanning characters: %w", err)
+	}
+
+	// Load all players
+	var players []PlayerInfo
+	err = k.Scan(ctx, "players", &players)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error scanning players: %w", err)
+	}
+
+	Logger.Info("Loaded characters and players",
+		"characterCount", len(characters),
+		"playerCount", len(players))
+
+	return characters, players, nil
+}
+
+// LoadCharacterNames loads only character names for bloom filter initialization
+func (k *KeyPair) LoadCharacterNames(ctx context.Context) ([]string, error) {
+	Logger.Info("Loading character names for bloom filter")
+
+	// Only need to scan for character names
+	var characters []CharacterInfo
+	err := k.Scan(ctx, "characters", &characters)
+	if err != nil {
+		return nil, fmt.Errorf("error scanning characters: %w", err)
+	}
+
+	names := make([]string, 0, len(characters))
+	for _, character := range characters {
+		names = append(names, strings.ToLower(character.CharacterName))
+	}
+
+	return names, nil
+}
+
+// DeleteCharacter removes a character from the database
+func (k *KeyPair) DeleteCharacter(ctx context.Context, characterID string) error {
+	key := map[string]types.AttributeValue{
+		"CharacterID": &types.AttributeValueMemberS{Value: characterID},
+	}
+	return k.Delete(ctx, "characters", key)
+}
+
+// RemoveCharacterFromPlayer removes a character from a player's character list
+func (k *KeyPair) RemoveCharacterFromPlayer(ctx context.Context, playerID, characterName string) error {
+	// Load the player data
+	var playerData PlayerData
+	key := map[string]types.AttributeValue{
+		"PlayerID": &types.AttributeValueMemberS{Value: playerID},
+	}
+
+	err := k.Get(ctx, "players", key, &playerData)
+	if err != nil {
+		return fmt.Errorf("failed to get player data: %w", err)
+	}
+
+	// Remove the character from the list
+	delete(playerData.CharacterList, characterName)
+
+	// Update the player record
+	err = k.Put(ctx, "players", &playerData)
+	if err != nil {
+		return fmt.Errorf("failed to update player data: %w", err)
+	}
+
+	Logger.Info("Removed character from player",
+		"playerID", playerID,
+		"characterName", characterName)
 
 	return nil
 }

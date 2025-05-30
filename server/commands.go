@@ -26,195 +26,6 @@ import (
 	"time"
 )
 
-// CommandInfo stores metadata about each command
-type CommandInfo struct {
-	timed       bool                                      // Whether the command is timed (true) or untimed (false)
-	handler     func(c *Character, tokens []string) error // Function to execute the command
-	description string                                    // Description for help text
-	usage       string                                    // Usage information
-}
-
-// Initialize commands
-func (g *Game) initCommands() {
-
-	// Register basic commands
-	g.commands["quit"] = CommandInfo{
-		timed:       false,
-		handler:     executeQuitCommand,
-		description: "Exit the game",
-		usage:       "quit",
-	}
-
-	g.commands["look"] = CommandInfo{
-		timed:       false,
-		handler:     executeLookCommand,
-		description: "Look around or examine something",
-		usage:       "look [target]",
-	}
-
-	g.commands["help"] = CommandInfo{
-		timed:       false,
-		handler:     executeHelpCommand,
-		description: "Display available commands",
-		usage:       "help",
-	}
-
-	g.commands["who"] = CommandInfo{
-		timed:       false,
-		handler:     executeWhoCommand,
-		description: "Display currently online characters",
-		usage:       "who",
-	}
-
-	g.commands["info"] = CommandInfo{
-		timed:       false,
-		handler:     executeInfoCommand,
-		description: "Display information about your character",
-		usage:       "info",
-	}
-
-	g.commands["skill"] = CommandInfo{
-		timed:       false,
-		handler:     executeSkillCommand,
-		description: "Display your character's abilities",
-		usage:       "skill",
-	}
-
-	// Movement commands (escalate to room tier)
-	g.commands["go"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
-		description: "Move in a direction or through an exit",
-		usage:       "go <direction|exit>",
-	}
-
-	g.commands["move"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
-		description: "Move in a direction or through an exit",
-		usage:       "move <direction|exit>",
-	}
-
-	g.commands["inventory"] = CommandInfo{
-		timed:       false,
-		handler:     executeInventoryCommand,
-		description: "Show your inventory",
-		usage:       "inventory",
-	}
-
-	g.commands["inv"] = CommandInfo{
-		timed:       false,
-		handler:     executeInventoryCommand, // Alias for inventory
-		description: "Show your inventory",
-		usage:       "inv",
-	}
-
-	g.commands["i"] = CommandInfo{
-		timed:       false,
-		handler:     executeInventoryCommand, // Alias for inventory
-		description: "Show your inventory",
-		usage:       "i",
-	}
-
-	g.commands["equipment"] = CommandInfo{
-		timed:       false,
-		handler:     executeEquipmentCommand,
-		description: "Show your equipped items",
-		usage:       "equipment",
-	}
-
-	g.commands["eq"] = CommandInfo{
-		timed:       false,
-		handler:     executeEquipmentCommand, // Alias for equipment
-		description: "Show your equipped items",
-		usage:       "eq",
-	}
-
-	// Communication commands (escalate to room tier)
-	g.commands["say"] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to room goroutine
-		description: "Say something to everyone in the room",
-		usage:       "say <message>",
-	}
-
-	g.commands["'"] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to room goroutine, alias for say
-		description: "Say something to everyone in the room",
-		usage:       "' <message>",
-	}
-
-	g.commands["\""] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to room goroutine, alias for say
-		description: "Say something to everyone in the room",
-		usage:       "\" <message>",
-	}
-}
-
-// ValidateCommand checks if a command is valid and returns its verb and tokens
-func ValidateCommand(character *Character, input string) (string, []string, error) {
-	if len(input) == 0 {
-		return "", nil, errors.New("\n\rNo command entered.\n\r")
-	}
-
-	// Limit input to 240 characters
-	if len(input) > 240 {
-		return "", nil, errors.New("\n\rCommand too long. Maximum 240 characters allowed.\n\r")
-	}
-
-	tokens := tokenizeInput(input)
-
-	if len(tokens) == 0 {
-		return "", nil, errors.New("\n\rNo command entered.\n\r")
-	}
-
-	verb := strings.ToLower(tokens[0])
-	if character == nil || character.game == nil {
-		return "", nil, errors.New("\n\rInvalid character state.\n\r")
-	}
-
-	character.game.mutex.RLock()
-	_, exists := character.game.commands[verb]
-	character.game.mutex.RUnlock()
-
-	if !exists {
-		return "", nil, fmt.Errorf("\n\rCommand '%s' not understood.\n\r", verb)
-	}
-
-	return verb, tokens, nil
-}
-
-// tokenizeInput breaks the input into individual tokens
-func tokenizeInput(input string) []string {
-	var tokens []string
-	var current strings.Builder
-	inQuotes := false
-
-	for i := 0; i < len(input); i++ {
-		switch input[i] {
-		case '"':
-			inQuotes = !inQuotes
-		case ' ', '\t':
-			if !inQuotes && current.Len() > 0 {
-				tokens = append(tokens, current.String())
-				current.Reset()
-			} else if inQuotes {
-				current.WriteByte(input[i])
-			}
-		default:
-			current.WriteByte(input[i])
-		}
-	}
-
-	if current.Len() > 0 {
-		tokens = append(tokens, current.String())
-	}
-
-	return tokens
-}
-
 // ProcessCommand determines command tier and routes it appropriately
 func ProcessCommand(ctx context.Context, character *Character, input string) (bool, error) {
 	// Limit input to 240 characters
@@ -292,12 +103,25 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 		character.room.Start(character.game)
 	}
 
-	// Send command to the room
+	// Try to send command to the room with a brief retry
+	retryTimer := time.NewTimer(50 * time.Millisecond)
+	defer retryTimer.Stop()
+
 	select {
 	case character.room.commandIn <- cmdReq:
 		// Command sent successfully to room
-	default:
-		return false, fmt.Errorf("\n\rroom command buffer is full, try again later\n\r")
+	case <-retryTimer.C:
+		// Brief retry after 50ms
+		select {
+		case character.room.commandIn <- cmdReq:
+			// Command sent successfully on retry
+		default:
+			Logger.Warn("Room command buffer full after retry",
+				"roomID", character.room.roomID,
+				"characterName", character.name,
+				"verb", verb)
+			return false, fmt.Errorf("\n\rThe room is processing too many commands. Please wait a moment and try again.\n\r")
+		}
 	}
 
 	// Wait for response or timeout
@@ -341,7 +165,10 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 	case character.gameCommandOut <- cmdReq:
 		// Command sent successfully to game
 	default:
-		return false, fmt.Errorf("\n\rgame command buffer is full, try again later\n\r")
+		Logger.Warn("Game command buffer full",
+			"characterName", character.name,
+			"verb", verb)
+		return false, fmt.Errorf("\n\rThe game is processing too many commands. Please wait a moment and try again.\n\r")
 	}
 
 	// Wait for response or timeout

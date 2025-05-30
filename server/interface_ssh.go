@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofrs/uuid/v5"
 	"golang.org/x/crypto/ssh"
@@ -273,7 +274,7 @@ func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
 	// Make sure listener is not nil
 	if ssh_interface.listener == nil {
 		Logger.Error("SSH listener is nil, cannot run interface")
-		errorChan <- fmt.Errorf("SSH listener is nil")
+		SendErrorNonBlocking(errorChan, fmt.Errorf("SSH listener is nil"), "SSHInterface")
 		return
 	}
 
@@ -473,31 +474,33 @@ func (ssh_interface *Interface_SSH) resetUserAuthAttempts(username string) {
 }
 
 func (ssh_interface *Interface_SSH) cleanupAuthAttempts() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
+	RunWithPanicRecovery("ssh.cleanupAuthAttempts", func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
 
-	for {
-		select {
-		case <-ssh_interface.ctx.Done():
-			return
-		case <-ticker.C:
-			ssh_interface.authMutex.Lock()
-			now := time.Now()
-			// Clean up IP-based attempts
-			for ip, attempt := range ssh_interface.authAttempts {
-				if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
-					delete(ssh_interface.authAttempts, ip)
+		for {
+			select {
+			case <-ssh_interface.ctx.Done():
+				return
+			case <-ticker.C:
+				ssh_interface.authMutex.Lock()
+				now := time.Now()
+				// Clean up IP-based attempts
+				for ip, attempt := range ssh_interface.authAttempts {
+					if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
+						delete(ssh_interface.authAttempts, ip)
+					}
 				}
-			}
-			// Clean up username-based attempts
-			for username, attempt := range ssh_interface.userAttempts {
-				if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
-					delete(ssh_interface.userAttempts, username)
+				// Clean up username-based attempts
+				for username, attempt := range ssh_interface.userAttempts {
+					if now.After(attempt.banUntil) && attempt.attempts < authBanThreshold {
+						delete(ssh_interface.userAttempts, username)
+					}
 				}
+				ssh_interface.authMutex.Unlock()
 			}
-			ssh_interface.authMutex.Unlock()
 		}
-	}
+	})
 }
 
 func getClientIP(conn ssh.ConnMetadata) string {
@@ -510,11 +513,68 @@ func getClientIP(conn ssh.ConnMetadata) string {
 }
 
 func isValidPassword(password string) bool {
-	// Basic password validation - adjust as needed
+	// Length check - AWS Cognito requires 8-256 characters
 	if len(password) < 8 || len(password) > 128 {
 		return false
 	}
-	// Add additional validation as required
+
+	// Ensure password is valid UTF-8
+	if !utf8.ValidString(password) {
+		return false
+	}
+
+	// Check for null bytes or dangerous control characters
+	for _, r := range password {
+		// Reject null bytes
+		if r == 0 {
+			return false
+		}
+		// Reject control characters except tab, newline, and carriage return
+		// These are sometimes used in password managers
+		if r < 32 && r != '\t' && r != '\n' && r != '\r' {
+			return false
+		}
+		// Reject non-printable characters above ASCII range
+		if r == 127 {
+			return false
+		}
+	}
+
+	// Password complexity checks to align with security best practices
+	var hasUpper, hasLower, hasDigit, hasSpecial bool
+	for _, r := range password {
+		switch {
+		case r >= 'A' && r <= 'Z':
+			hasUpper = true
+		case r >= 'a' && r <= 'z':
+			hasLower = true
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		case r >= 33 && r <= 126 && !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')):
+			hasSpecial = true
+		}
+	}
+
+	// Require at least 3 of 4 character types for security
+	complexity := 0
+	if hasUpper {
+		complexity++
+	}
+	if hasLower {
+		complexity++
+	}
+	if hasDigit {
+		complexity++
+	}
+	if hasSpecial {
+		complexity++
+	}
+
+	// Require at least 3 different character types
+	if complexity < 3 {
+		return false
+	}
+
 	return true
 }
 
@@ -527,40 +587,51 @@ func ParseDims(b []byte) (width, height int) {
 
 // handleSSHRequests processes SSH requests for a connection
 func (ssh_interface *Interface_SSH) handleSSHRequests(ctx context.Context, reqs <-chan *ssh.Request) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case req, ok := <-reqs:
-			if !ok {
+	RunWithPanicRecovery("ssh.handleSSHRequests", func() {
+		for {
+			select {
+			case <-ctx.Done():
 				return
-			}
-			if req.WantReply {
-				req.Reply(false, nil)
+			case req, ok := <-reqs:
+				if !ok {
+					return
+				}
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
 			}
 		}
-	}
+	})
 }
 
 // runPlayer runs a player's SSH session
 func (ssh_interface *Interface_SSH) runPlayer(player *Player, requests <-chan *ssh.Request) {
-	player.RunSSH(requests)
+	RunWithPanicRecoveryCallback("ssh.runPlayer", func() {
+		player.RunSSH(requests)
+	}, func(err error) {
+		// Ensure player is cleaned up
+		player.Stop()
+	}, "playerID", player.id)
 }
 
 // listenForCancellation listens for context cancellation and closes the listener
 func (ssh_interface *Interface_SSH) listenForCancellation(done chan struct{}) {
-	select {
-	case <-ssh_interface.server.ctx.Done():
-		ssh_interface.listener.Close()
-		close(done)
-	case <-ssh_interface.ctx.Done():
-		ssh_interface.listener.Close()
-		close(done)
-	}
+	RunWithPanicRecovery("ssh.listenForCancellation", func() {
+		select {
+		case <-ssh_interface.server.ctx.Done():
+			ssh_interface.listener.Close()
+			close(done)
+		case <-ssh_interface.ctx.Done():
+			ssh_interface.listener.Close()
+			close(done)
+		}
+	})
 }
 
 // handleConnectionWithContext handles an SSH connection with proper context management
 func (ssh_interface *Interface_SSH) handleConnectionWithContext(conn net.Conn, ctx context.Context, cancel context.CancelFunc) {
 	defer cancel()
-	ssh_interface.handleConnection(conn, ctx)
+	RunWithPanicRecovery("ssh.handleConnectionWithContext", func() {
+		ssh_interface.handleConnection(conn, ctx)
+	}, "remoteAddr", conn.RemoteAddr().String())
 }

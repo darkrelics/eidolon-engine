@@ -19,8 +19,8 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +32,15 @@ import (
 func (c *Character) CanExecuteCommand() (bool, string) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
+
+	// Check if character and associated objects are valid
+	if c.player == nil {
+		return false, "Character not properly connected."
+	}
+
+	if c.room == nil {
+		return false, "Character not in a valid room."
+	}
 
 	// Check wait time
 	if time.Now().Before(c.waitUntil) {
@@ -59,6 +68,12 @@ func (c *Character) SetCommandWaitTime(duration time.Duration) {
 
 // Save saves the character to the database
 func (c *Character) Save() error {
+	return c.SaveWithContext(c.game.ctx)
+}
+
+// SaveWithContext saves the character to the database with a specific context
+// This is used during shutdown to ensure saves complete even after game context is cancelled
+func (c *Character) SaveWithContext(ctx context.Context) error {
 
 	Logger.Debug("Saving character", "characterName", c.name)
 
@@ -76,6 +91,15 @@ func (c *Character) Save() error {
 	for k, v := range c.inventory {
 		inventoryCopy[k] = v
 	}
+
+	// Get hand item IDs
+	var leftHandID, rightHandID string
+	if c.leftHand != nil {
+		leftHandID = c.leftHand.id.String()
+	}
+	if c.rightHand != nil {
+		rightHandID = c.rightHand.id.String()
+	}
 	c.mutex.RUnlock()
 
 	// Create character data for storage
@@ -84,15 +108,18 @@ func (c *Character) Save() error {
 		PlayerID:      c.player.id.String(),
 		CharacterName: c.name,
 		Attributes:    c.attributes,
-		Abilities:     c.abilities,
+		Skills:        c.skills,
 		Essence:       c.essence,
 		Health:        c.health,
 		RoomID:        c.room.roomID,
 		Inventory:     inventoryIDs,
+		LeftHandID:    leftHandID,
+		RightHandID:   rightHandID,
+		Hidden:        c.hidden,
 	}
 
 	// Save character and inventory transactionally
-	err := kp.SaveCharacterWithInventory(c.game.ctx, characterData, inventoryCopy)
+	err := kp.SaveCharacterWithInventory(ctx, characterData, inventoryCopy)
 	if err != nil {
 		Logger.Error("Error saving character and inventory", "characterName", c.name, "error", err)
 		return fmt.Errorf("error saving character and inventory: %w", err)
@@ -121,16 +148,16 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 	p.server.game.characterBloomFilter.AddString(strings.ToLower(name))
 
-	// Create Character
+	// Create Character with default values from config
 	character := &Character{
 		game:             p.server.game,
 		id:               GenerateUUIDv7(),
 		player:           p,
 		name:             name,
 		attributes:       make(map[string]float64),
-		abilities:        make(map[string]float64),
-		essence:          float64(p.server.game.startingEssence),
-		health:           float64(p.server.game.startingHealth),
+		skills:           make(map[string]float64),
+		essence:          float64(p.server.game.startingEssence), // Default from config
+		health:           float64(p.server.game.startingHealth),  // Default from config
 		inventory:        make(map[string]*Item),
 		mutex:            sync.RWMutex{},
 		advancing:        false,
@@ -141,7 +168,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		waitUntil:        time.Now(), // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
-		gameCommandOut:   make(chan *CommandRequest, 10),
+		gameCommandOut:   make(chan *CommandRequest, 10), // Smaller buffer as game commands are less frequent
 		gameCommandIn:    make(chan *CommandResponse, 10),
 		playerCommandOut: make(chan string, 20),
 		playerCommandIn:  make(chan string, 20),
@@ -149,20 +176,50 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		prompt:           "> ",
 	}
 
+	// Track if we need cleanup on error
+	var err error
+	needsCleanup := true
+
+	// Ensure cleanup of channels on error
+	defer func() {
+		if needsCleanup && err != nil {
+			// Close all channels to prevent leaks
+			close(character.roomCommandOut)
+			close(character.roomCommandIn)
+			close(character.gameCommandOut)
+			close(character.gameCommandIn)
+			close(character.playerCommandOut)
+			close(character.playerCommandIn)
+			close(character.end)
+			Logger.Debug("Cleaned up channels after character creation error", "characterName", name)
+		}
+	}()
+
 	if archetype != "" {
 		if archetypeObj, ok := p.server.game.archetypes[archetype]; ok {
 			for attr, value := range archetypeObj.Attributes {
 				character.attributes[attr] = value
 			}
 
-			for ability, value := range archetypeObj.Abilities {
-				character.abilities[ability] = value
+			for skill, value := range archetypeObj.Skills {
+				character.skills[skill] = value
+			}
+
+			// Use archetype's Health and Essence if specified, otherwise keep defaults
+			if archetypeObj.Health > 0 {
+				character.health = float64(archetypeObj.Health)
+			}
+			if archetypeObj.Essence > 0 {
+				character.essence = float64(archetypeObj.Essence)
 			}
 
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
 				character.room = startRoom
+			} else if defaultRoom, ok := p.server.game.rooms[0]; ok {
+				character.room = defaultRoom
 			} else {
-				character.room = p.server.game.rooms[0]
+				Logger.Error("No valid starting room available", "archetype", archetype)
+				return nil, fmt.Errorf("no valid starting room available")
 			}
 
 			// Create starting items from prototypes
@@ -219,20 +276,30 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 			}
 		} else {
 			Logger.Warn("Invalid archetype", "archetype", archetype)
-			character.room = p.server.game.rooms[0]
+			if defaultRoom, ok := p.server.game.rooms[0]; ok {
+				character.room = defaultRoom
+			} else {
+				return nil, fmt.Errorf("no default room available")
+			}
 		}
 
 	} else {
 		Logger.Info("No archetype selected")
-		character.room = p.server.game.rooms[0]
+		if defaultRoom, ok := p.server.game.rooms[0]; ok {
+			character.room = defaultRoom
+		} else {
+			return nil, fmt.Errorf("no default room available")
+		}
 	}
 
-	err := character.Save()
+	err = character.Save()
 	if err != nil {
 		Logger.Error("Error saving character", "error", err)
 		return nil, fmt.Errorf("error saving character: %w", err)
 	}
 
+	// Mark that cleanup is not needed on successful creation
+	needsCleanup = false
 	return character, nil
 }
 
@@ -281,28 +348,39 @@ func (c *Character) Stop() {
 		Logger.Error("Error saving character during shutdown", "characterName", c.name, "error", err)
 	}
 
-	// Clean up character inventory items from game.items map
+	// Clean up character inventory and hand items from game.items map
 	c.mutex.Lock()
-	itemCount := 0
+	itemIDsToDelete := make([]uuid.UUID, 0, len(c.inventory)+2)
 	for _, item := range c.inventory {
 		if item != nil {
-			c.game.mutex.Lock()
-			delete(c.game.items, item.id)
-			c.game.mutex.Unlock()
-			itemCount++
+			itemIDsToDelete = append(itemIDsToDelete, item.id)
 		}
 	}
+	// Also clean up hand items
+	if c.leftHand != nil {
+		itemIDsToDelete = append(itemIDsToDelete, c.leftHand.id)
+	}
+	if c.rightHand != nil {
+		itemIDsToDelete = append(itemIDsToDelete, c.rightHand.id)
+	}
 	c.mutex.Unlock()
-	if itemCount > 0 {
-		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", itemCount)
+
+	if len(itemIDsToDelete) > 0 {
+		c.game.DeleteItems(itemIDsToDelete)
+		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", len(itemIDsToDelete))
 	}
 
 	// Store a reference to the player before resetting
 	player := c.player
 
-	// Signal shutdown by closing the end channel
-	// This is safe because we check the stopped flag
-	close(c.end)
+	// Signal shutdown without closing the channel
+	select {
+	case c.end <- true:
+		// Successfully sent shutdown signal
+	default:
+		// Channel is full or no receiver, which is fine
+		// The stopped flag will prevent any issues
+	}
 
 	// If we have a valid player reference, inform them we're returning to console
 	if player != nil {
@@ -334,186 +412,6 @@ func (c *Character) cleanupAndSignalDone(done chan bool) {
 			Logger.Warn("Failed to signal done channel", "characterName", c.name)
 		}
 	}
-}
-
-// GetCharacterInfo returns a formatted string with character information
-func (c *Character) GetCharacterInfo() string {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	var info strings.Builder
-	info.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_white", c.name)))
-	info.WriteString("----------------\n\r")
-
-	// Basic character information
-	info.WriteString(fmt.Sprintf("Health: %d\n\r", int(c.health)))
-	info.WriteString(fmt.Sprintf("Essence: %d\n\r", int(c.essence)))
-
-	// Attributes
-	if len(c.attributes) > 0 {
-		info.WriteString("\n\rAttributes:\n\r")
-		for attr, value := range c.attributes {
-			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", attr, int(value)))
-		}
-	}
-
-	// Abilities - only show those above zero
-	var abilitiesAboveZero []string
-	for ability, value := range c.abilities {
-		if value > 0 {
-			abilitiesAboveZero = append(abilitiesAboveZero, ability)
-		}
-	}
-
-	if len(abilitiesAboveZero) > 0 {
-		info.WriteString("\n\rAbilities:\n\r")
-		// Sort abilities for consistent display
-		sort.Strings(abilitiesAboveZero)
-
-		// Display each ability with value > 0
-		for _, ability := range abilitiesAboveZero {
-			value := c.abilities[ability]
-			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", ability, int(value)))
-		}
-	}
-
-	// Inventory information
-	if len(c.inventory) > 0 {
-		// Separate worn and carried items
-		var wornItems, carriedItems []string
-
-		for _, item := range c.inventory {
-			if item != nil {
-				if item.isWorn {
-					wornItems = append(wornItems, item.name)
-				} else {
-					carriedItems = append(carriedItems, item.name)
-				}
-			}
-		}
-
-		// Display worn items
-		if len(wornItems) > 0 {
-			info.WriteString("\n\rYou are wearing ")
-			info.WriteString(formatItemListWithOxfordComma(wornItems))
-			info.WriteString(".\n\r")
-		}
-
-		// Display carried items
-		if len(carriedItems) > 0 {
-			info.WriteString("\n\rYou are carrying ")
-			info.WriteString(formatItemListWithOxfordComma(carriedItems))
-			info.WriteString(".\n\r")
-		}
-	} else {
-		info.WriteString("\n\rYou are not carrying anything.\n\r")
-	}
-
-	return info.String()
-}
-
-// GetSkillInfo returns a formatted string with character abilities
-func (c *Character) GetSkillInfo() string {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	var skillInfo strings.Builder
-	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Abilities\n\r", ApplyColor("bright_cyan", c.name)))
-	skillInfo.WriteString("----------------\n\r")
-
-	// Abilities - only show those above zero
-	var abilitiesAboveZero []string
-	for ability, value := range c.abilities {
-		if value > 0 {
-			abilitiesAboveZero = append(abilitiesAboveZero, ability)
-		}
-	}
-
-	if len(abilitiesAboveZero) > 0 {
-		// Sort abilities for consistent display
-		sort.Strings(abilitiesAboveZero)
-
-		// Display each ability with value > 0
-		for _, ability := range abilitiesAboveZero {
-			value := c.abilities[ability]
-			skillInfo.WriteString(fmt.Sprintf("  %-15s: %d\n\r", ability, int(value)))
-		}
-	} else {
-		skillInfo.WriteString("  You have not developed any abilities yet.\n\r")
-	}
-
-	return skillInfo.String()
-}
-
-// LookAtTarget handles examining specific targets
-func (c *Character) LookAtTarget(target string) error {
-	// First check if target is in the room
-	desc := c.LookAtRoomTarget(target)
-	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
-		c.player.commandOut <- desc
-		return nil
-	}
-
-	// Then check if it's in inventory
-	desc = c.LookAtInventoryItem(target)
-	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
-		c.player.commandOut <- desc
-		return nil
-	}
-
-	// Not found anywhere
-	c.player.commandOut <- fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
-	return nil
-}
-
-// LookAtRoomTarget looks for a target in the room (character or item)
-func (c *Character) LookAtRoomTarget(target string) string {
-	// Check if looking at a character in the room
-	if c.room != nil {
-		c.room.mutex.RLock()
-		for _, char := range c.room.characters {
-			if char != nil && strings.Contains(strings.ToLower(char.name), target) {
-				c.room.mutex.RUnlock()
-				return FormatCharacterDescription(char, c)
-			}
-		}
-
-		// Check if looking at an item in the room
-		for _, item := range c.room.items {
-			if item != nil && strings.Contains(strings.ToLower(item.name), target) {
-				c.room.mutex.RUnlock()
-				return formatItemDescription(item)
-			}
-		}
-
-		// Check for directions/exits
-		for direction, exit := range c.room.exits {
-			if strings.Contains(exit.direction, target) && exit != nil && exit.visible {
-				c.room.mutex.RUnlock()
-				if exit.description != "" {
-					return fmt.Sprintf("\n\r%s\n\r", exit.description)
-				}
-				return fmt.Sprintf("\n\rYou see an exit leading %s.\n\r", direction)
-			}
-		}
-		c.room.mutex.RUnlock()
-	}
-
-	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
-}
-
-// LookAtInventoryItem looks for an item in the character's inventory
-func (c *Character) LookAtInventoryItem(target string) string {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	for _, item := range c.inventory {
-		if item != nil && strings.Contains(strings.ToLower(item.name), target) {
-			return formatItemDescription(item)
-		}
-	}
-
-	return fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target)
 }
 
 // FormatCharacterDescription creates a description of a character for look command

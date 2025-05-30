@@ -31,6 +31,18 @@ import (
 )
 
 func (p *Player) Console(done chan bool) {
+	RunWithPanicRecoveryCallback("player.Console", func() {
+		p.consoleInternal(done)
+	}, func(err error) {
+		select {
+		case done <- true:
+		default:
+		}
+	}, "playerID", p.id)
+}
+
+// consoleInternal contains the actual console logic
+func (p *Player) consoleInternal(done chan bool) {
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -39,19 +51,52 @@ func (p *Player) Console(done chan bool) {
 		default:
 			characterCount := len(p.characterList)
 
-			p.commandOut <- "\n=====Console=====\n"
-			p.commandOut <- "1) Change Password\n"
-			p.commandOut <- "2) View Messages\n"
-			p.commandOut <- "3) Create Character\n"
+			// Send menu messages with safe channel handling
+			menuMessages := []string{
+				"\n=====Console=====\n",
+				"1) Change Password\n",
+				"2) View Messages\n",
+				"3) Create Character\n",
+			}
+
+			for _, msg := range menuMessages {
+				select {
+				case <-p.ctx.Done():
+					done <- true
+					return
+				case p.commandOut <- msg:
+				}
+			}
 
 			if characterCount == 0 {
-				p.commandOut <- "9) Quit\n"
+				select {
+				case <-p.ctx.Done():
+					done <- true
+					return
+				case p.commandOut <- "9) Quit\n":
+				}
 			} else {
-				p.commandOut <- "4) Select Character\n"
-				p.commandOut <- "5) Delete Character\n"
-				p.commandOut <- "9) Quit\n"
+				additionalMessages := []string{
+					"4) Select Character\n",
+					"5) Delete Character\n",
+					"9) Quit\n",
+				}
+				for _, msg := range additionalMessages {
+					select {
+					case <-p.ctx.Done():
+						done <- true
+						return
+					case p.commandOut <- msg:
+					}
+				}
 			}
-			p.commandOut <- "\nEnter your choice: "
+
+			select {
+			case <-p.ctx.Done():
+				done <- true
+				return
+			case p.commandOut <- "\nEnter your choice: ":
+			}
 
 			select {
 			case <-p.ctx.Done():
@@ -72,24 +117,40 @@ func (p *Player) Console(done chan bool) {
 					if characterCount > 0 {
 						p.HandleCharacterSelection()
 					} else {
-						p.commandOut <- "Invalid choice. Please try again.\n"
+						select {
+						case <-p.ctx.Done():
+							return
+						case p.commandOut <- "Invalid choice. Please try again.\n":
+						}
 					}
 
 				case "5":
 					if characterCount > 0 {
 						p.HandleCharacterDeletion()
 					} else {
-						p.commandOut <- "Invalid choice. Please try again.\n"
+						select {
+						case <-p.ctx.Done():
+							return
+						case p.commandOut <- "Invalid choice. Please try again.\n":
+						}
 					}
 
 				case "9":
-					p.commandOut <- "\nGoodbye!\n"
+					select {
+					case <-p.ctx.Done():
+						return
+					case p.commandOut <- "\nGoodbye!\n":
+					}
 					p.Stop()
 					done <- true
 					return
 
 				default:
-					p.commandOut <- "Invalid choice. Please try again.\n"
+					select {
+					case <-p.ctx.Done():
+						return
+					case p.commandOut <- "Invalid choice. Please try again.\n":
+					}
 				}
 			}
 		}
@@ -192,7 +253,7 @@ func (p *Player) HandlePasswordChange() {
 
 func (p *Player) HandleCharacterCreation() {
 	// Get character name
-	p.commandOut <- "\nEnter character name (3-15 letters only): "
+	p.commandOut <- "\nEnter character name (4-20 letters only): "
 	name, ok := <-p.commandIn
 	if !ok {
 		Logger.Warn("Player input channel closed")
@@ -280,8 +341,10 @@ func (p *Player) validateCharacterName(name string) error {
 	}
 
 	// Prevent excessive repetition (more than 2 consecutive identical characters)
-	if regexp.MustCompile(`(.)\1{2,}`).MatchString(name) {
-		return fmt.Errorf("name cannot have more than 2 consecutive identical characters")
+	for i := 0; i < len(name)-2; i++ {
+		if name[i] == name[i+1] && name[i+1] == name[i+2] {
+			return fmt.Errorf("name cannot have more than 2 consecutive identical characters")
+		}
 	}
 
 	// Prevent single-letter names with special characters
