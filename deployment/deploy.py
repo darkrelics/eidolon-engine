@@ -277,12 +277,13 @@ def gather_all_parameters() -> dict:
             "Enter the GitHub repository URL for the source code [default: https://github.com/robinje/eidolon-engine]: "
         )
         or "https://github.com/robinje/eidolon-engine",
-        "S3BucketName": input("Enter the name of the existing S3 bucket for build artifacts: "),
+        "S3BucketName": input("Enter the name of the existing S3 bucket for build artifacts [default: mud-web-site]: ")
+        or "mud-web-site",
     }
 
     # Scripts parameters
     parameters["scripts"] = {
-        "S3BucketName": input("Enter the S3 bucket name for Lua scripts: ") or "eidolon-scripts",
+        "S3BucketName": input("Enter the S3 bucket name for Lua scripts [default: mud-scripts]: ") or "mud-scripts",
         "S3Prefix": input("Enter the S3 prefix for Lua scripts [default: scripts]: ") or "scripts",
     }
 
