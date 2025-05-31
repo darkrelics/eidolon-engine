@@ -1,6 +1,11 @@
 # NOTE: Values marked with 'deployment-generated' are automatically updated by deployment/deploy.py
 AWS:
   Region: us-east-1 # deployment-generated
+CloudWatch:
+  MetricsIntervalSeconds: 60
+  MetricsTimeoutSeconds: 10
+  LogFlushTimeoutSeconds: 3
+  ShutdownDrainSeconds: 2
 Cognito: # All Cognito values are deployment-generated
   UserPoolId: us-east-1_xxxxxxxxx
   UserPoolClientId: xxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -37,9 +42,4 @@ SSH:
 Server:
   SessionCleanupIntervalSeconds: 300 # 5 minutes
   SessionIdleTimeoutSeconds: 1800 # 30 minutes
-  ConsoleIdleTimeoutSeconds: 30
-CloudWatch:
-  MetricsIntervalSeconds: 60
-  MetricsTimeoutSeconds: 10
-  LogFlushTimeoutSeconds: 3
-  ShutdownDrainSeconds: 2
+  ConsoleIdleTimeoutSeconds: 300
