@@ -63,17 +63,24 @@ func (sm *ScriptManager) RegisterRoomAPI(L *lua.LState, room *Room) {
 // luaRoomSendMessage sends a message to all characters in the room
 func (sm *ScriptManager) luaRoomSendMessage(room *Room) lua.LGFunction {
 	return func(L *lua.LState) int {
+		if room == nil {
+			Logger.Warn("luaRoomSendMessage called with nil room")
+			return 0
+		}
+
 		message := L.CheckString(1)
 
 		room.mutex.RLock()
 		characters := make([]*Character, 0, len(room.characters))
 		for _, char := range room.characters {
-			characters = append(characters, char)
+			if char != nil {
+				characters = append(characters, char)
+			}
 		}
 		room.mutex.RUnlock()
 
 		for _, char := range characters {
-			if char.player != nil {
+			if char != nil && char.player != nil {
 				SafeSendString(char.player.commandOut, message, char.name)
 			}
 		}
@@ -85,13 +92,19 @@ func (sm *ScriptManager) luaRoomSendMessage(room *Room) lua.LGFunction {
 // luaRoomSendToCharacter sends a message to a specific character
 func (sm *ScriptManager) luaRoomSendToCharacter(room *Room) lua.LGFunction {
 	return func(L *lua.LState) int {
+		if room == nil {
+			Logger.Warn("luaRoomSendToCharacter called with nil room")
+			L.Push(lua.LFalse)
+			return 1
+		}
+
 		charName := L.CheckString(1)
 		message := L.CheckString(2)
 
 		room.mutex.RLock()
 		var targetChar *Character
 		for _, char := range room.characters {
-			if char.name == charName {
+			if char != nil && char.name == charName {
 				targetChar = char
 				break
 			}
@@ -112,11 +125,21 @@ func (sm *ScriptManager) luaRoomSendToCharacter(room *Room) lua.LGFunction {
 // luaRoomGetCharacters returns a table of character names in the room
 func (sm *ScriptManager) luaRoomGetCharacters(room *Room) lua.LGFunction {
 	return func(L *lua.LState) int {
+		if room == nil {
+			Logger.Warn("luaRoomGetCharacters called with nil room")
+			L.Push(L.NewTable())
+			return 1
+		}
+
 		tbl := L.NewTable()
 
 		room.mutex.RLock()
 		i := 1
 		for _, char := range room.characters {
+			if char == nil {
+				Logger.Warn("Found nil character in room", "roomID", room.roomID)
+				continue
+			}
 			charTable := L.NewTable()
 			L.SetField(charTable, "name", lua.LString(char.name))
 			L.SetField(charTable, "state", lua.LString(char.charState))
@@ -323,6 +346,11 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 
 // ExecuteRoomEvent executes a room event handler if it exists
 func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...interface{}) error {
+	if room == nil {
+		Logger.Warn("ExecuteRoomEvent called with nil room", "event", eventName)
+		return nil
+	}
+
 	if room.scriptID == "" || !room.scriptActive {
 		return nil
 	}
@@ -331,10 +359,12 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 	if err != nil {
 		// Try to load the script if not loaded
 		if loadErr := sm.LoadScript(room.scriptID); loadErr != nil {
+			Logger.Warn("Failed to load script for room event", "roomID", room.roomID, "event", eventName, "error", loadErr)
 			return fmt.Errorf("failed to load script: %w", loadErr)
 		}
 		L, err = sm.GetScript(room.scriptID)
 		if err != nil {
+			Logger.Warn("Failed to get script after loading", "roomID", room.roomID, "event", eventName, "error", err)
 			return err
 		}
 
@@ -346,6 +376,7 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 	handler := L.GetGlobal(eventName)
 	if handler == lua.LNil {
 		// No handler for this event, which is fine
+		Logger.Debug("No handler found for room event", "roomID", room.roomID, "event", eventName)
 		return nil
 	}
 
@@ -361,12 +392,14 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 		co.Push(luaArg)
 	}
 
-	// Execute the function
+	// Execute the function with proper error handling
 	state, err, _ := L.Resume(co, nil)
 	if state == lua.ResumeError {
+		Logger.Error("Error executing room event", "roomID", room.roomID, "event", eventName, "error", err)
 		return fmt.Errorf("error executing event %s: %w", eventName, err)
 	}
 
+	Logger.Debug("Successfully executed room event", "roomID", room.roomID, "event", eventName)
 	return nil
 }
 

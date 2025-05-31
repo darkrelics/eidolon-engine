@@ -68,15 +68,14 @@ func (c *Character) RunConsole(done chan bool) {
 	c.room.mutex.Unlock()
 
 	// Call HandleCharacterEntry to reset idle counter and activate scripts
-	c.room.HandleCharacterEntry(c)
+	// Ensure this happens after character is fully added to room
+	c.safeHandleCharacterEntry()
 
 	// Notify room of arrival (without holding locks)
 	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
 
 	// Show initial room description
-	if err := executeLookCommand(c, []string{"look"}); err != nil {
-		Logger.Warn("Failed to show initial room", "characterName", c.name, "error", err)
-	}
+	c.safeExecuteLookCommand()
 
 	const idleTimeout = 30 * time.Second
 	timer := time.NewTimer(idleTimeout)
@@ -105,8 +104,8 @@ func (c *Character) RunConsole(done chan bool) {
 			// Process the command
 			isQuit, err := ProcessCommand(c.game.ctx, c, strings.TrimSpace(inputLine))
 			if err != nil {
-				// Send error message to player
-				c.player.commandOut <- err.Error() + "\n\r"
+				// Send user-friendly error message to player
+				c.sendUserFriendlyError(err)
 			} else {
 				// Command processed successfully
 				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
@@ -240,4 +239,56 @@ func (c *Character) DisplayMessage(message string) {
 	}
 
 	c.player.commandOut <- message
+}
+
+// safeHandleCharacterEntry safely calls HandleCharacterEntry with panic recovery
+func (c *Character) safeHandleCharacterEntry() {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic during HandleCharacterEntry", "characterName", c.name, "roomID", c.room.roomID, "panic", r)
+		}
+	}()
+	c.room.HandleCharacterEntry(c)
+}
+
+// safeExecuteLookCommand safely executes the initial look command with panic recovery
+func (c *Character) safeExecuteLookCommand() {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic during initial look command", "characterName", c.name, "roomID", c.room.roomID, "panic", r)
+		}
+	}()
+	if err := executeLookCommand(c, []string{"look"}); err != nil {
+		Logger.Warn("Failed to show initial room", "characterName", c.name, "error", err)
+	}
+}
+
+// sendUserFriendlyError sends a sanitized error message to the player
+func (c *Character) sendUserFriendlyError(err error) {
+	if err == nil {
+		return
+	}
+
+	// Log the full error for debugging
+	Logger.Error("Command error", "characterName", c.name, "error", err.Error())
+
+	// Send a user-friendly message
+	userMessage := "Sorry, that command couldn't be completed. Please try again."
+	
+	// Check for specific error types to provide better messages
+	errStr := err.Error()
+	if strings.Contains(errStr, "not found") || strings.Contains(errStr, "unknown") {
+		userMessage = "I don't understand that command. Type 'help' for available commands."
+	} else if strings.Contains(errStr, "invalid") {
+		userMessage = "That command isn't valid right now. Please try something else."
+	} else if strings.Contains(errStr, "permission") || strings.Contains(errStr, "access") {
+		userMessage = "You don't have permission to do that."
+	}
+
+	// Send safely to player
+	if c.player != nil && c.player.commandOut != nil {
+		c.player.commandOut <- userMessage + "\n\r"
+	} else {
+		Logger.Error("Cannot send error to player - invalid player state", "characterName", c.name)
+	}
 }
