@@ -251,7 +251,7 @@ func (sm *ScriptManager) extractScriptMetadata(L *lua.LState) *ScriptMetadata {
 		if b, ok := periodic.(lua.LBool); ok {
 			metadata.Periodic = bool(b)
 		}
-		
+
 		Logger.Info("Extracted script metadata", "commands", metadata.Commands, "events", metadata.Events, "periodic", metadata.Periodic)
 	} else {
 		Logger.Error("SCRIPT_INFO table not found or invalid in Lua script")

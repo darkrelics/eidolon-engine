@@ -577,14 +577,14 @@ func (r *Room) runInternal(game *Game) {
 			r.scriptActive = false
 		} else {
 			Logger.Info("Loading script for room", "roomID", r.roomID, "scriptID", r.scriptID)
-			
+
 			// Step 1: Pull script from cache or S3
 			if err := ScriptMgr.LoadScriptForRoom(r.scriptID, r); err != nil {
 				Logger.Error("Failed to load room script", "roomID", r.roomID, "scriptID", r.scriptID, "error", err)
 				r.scriptActive = false
 			} else {
 				Logger.Info("Script loaded successfully", "roomID", r.roomID, "scriptID", r.scriptID)
-				
+
 				// Step 2: Call onRoomStart event if script loaded properly
 				Logger.Info("Executing onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
 				if err := ScriptMgr.ExecuteRoomEvent(r, "onRoomStart"); err != nil {
@@ -739,4 +739,3 @@ func (r *Room) GetDescription(character *Character) string {
 
 	return roomInfo.String()
 }
-
