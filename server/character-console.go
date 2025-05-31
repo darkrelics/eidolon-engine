@@ -274,7 +274,7 @@ func (c *Character) sendUserFriendlyError(err error) {
 
 	// Send a user-friendly message
 	userMessage := "Sorry, that command couldn't be completed. Please try again."
-	
+
 	// Check for specific error types to provide better messages
 	errStr := err.Error()
 	if strings.Contains(errStr, "not found") || strings.Contains(errStr, "unknown") {
