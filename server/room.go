@@ -588,11 +588,8 @@ func (r *Room) runInternal(game *Game) {
 				// Step 2: Call onRoomStart event if script loaded properly
 				Logger.Info("ABOUT TO EXECUTE onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
 
-				if err := ScriptMgr.ExecuteRoomEvent(r, "onRoomStart"); err != nil {
-					Logger.Error("ERROR executing onRoomStart", "roomID", r.roomID, "error", err)
-				} else {
-					Logger.Info("SUCCESS: onRoomStart event completed", "roomID", r.roomID)
-				}
+				// TODO: Temporarily disable script execution entirely to test Lua execution
+				Logger.Info("Skipping script execution to test if Lua is the issue", "roomID", r.roomID, "scriptID", r.scriptID)
 			}
 		}
 	}
