@@ -553,7 +553,7 @@ func (r *Room) runInternal(game *Game) {
 
 	// Load and initialize script if room has one
 	if r.scriptID != "" && r.scriptActive {
-		if err := ScriptMgr.LoadScript(r.scriptID); err != nil {
+		if err := ScriptMgr.LoadScriptForRoom(r.scriptID, r); err != nil {
 			Logger.Error("Failed to load room script", "roomID", r.roomID, "scriptID", r.scriptID, "error", err)
 		} else {
 			// Call onRoomStart event if it exists
@@ -594,6 +594,13 @@ func (r *Room) runInternal(game *Game) {
 			r.processCommand(cmd, game)
 
 		case <-ticker.C:
+			// Execute periodic script tick if room has an active script
+			if r.scriptID != "" && r.scriptActive {
+				if err := ScriptMgr.ExecuteRoomEvent(r, "onTick"); err != nil {
+					Logger.Error("Error executing onTick", "roomID", r.roomID, "error", err)
+				}
+			}
+
 			// Increment idle counter if room is empty
 			r.mutex.RLock()
 			isEmpty := len(r.characters) == 0

@@ -19,8 +19,8 @@ local isSilent = false
 local CHIRP_INTERVAL = 20  -- seconds between chirps
 local SILENCE_DURATION = 60  -- seconds of silence before chirping resumes
 
--- Initialize the script
-function onScriptLoad()
+-- Initialize the script when room starts
+function onRoomStart()
     lastActivityTime = os.time()
     isChirping = false
     lastChirpTime = 0
@@ -143,5 +143,4 @@ function playChirp()
     eidolon.log.debug("Cricket chirp played")
 end
 
--- Initialize when script loads
-onScriptLoad()
+-- Note: onRoomStart will be called automatically when the room starts

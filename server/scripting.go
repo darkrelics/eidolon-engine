@@ -93,6 +93,11 @@ func NewScriptManager(cfg *Configuration) (*ScriptManager, error) {
 
 // LoadScript loads a Lua script from S3 cache or S3 bucket
 func (sm *ScriptManager) LoadScript(scriptID string) error {
+	return sm.LoadScriptForRoom(scriptID, nil)
+}
+
+// LoadScriptForRoom loads a Lua script and optionally registers it for a specific room
+func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 	if scriptID == "" {
 		return fmt.Errorf("empty script ID")
 	}
@@ -131,6 +136,11 @@ func (sm *ScriptManager) LoadScript(scriptID string) error {
 	}
 
 	sm.scripts[scriptID] = L
+
+	// Register room API if room is provided
+	if room != nil {
+		sm.RegisterRoomAPI(L, room)
+	}
 
 	Logger.Info("Script loaded successfully",
 		"scriptID", scriptID,
