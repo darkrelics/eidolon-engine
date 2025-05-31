@@ -104,6 +104,8 @@ type Room struct {
 	gameCommandOut chan *CommandRequest  // Channel for commands the room escalates to the game
 	gameCommandIn  chan *CommandResponse // Channel for responses from the game to the room
 	done           chan struct{}         // Channel signaled when room goroutine completes
+	ready          chan struct{}         // Channel signaled when room is ready to accept characters
+	isReady        bool                  // Flag indicating if room is ready
 }
 
 // RoomData represents the structure for storing room data in DynamoDB
@@ -146,11 +148,13 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		ctx:            roomCtx,
 		cancel:         cancel,
 		running:        false,
+		isReady:        false,
 		commandIn:      make(chan *CommandRequest, 50),  // Buffer for incoming commands - sized for burst handling
 		commandOut:     make(chan *CommandResponse, 50), // Buffer for outgoing responses
 		gameCommandOut: make(chan *CommandRequest, 10),  // Buffer for commands to game
 		gameCommandIn:  make(chan *CommandResponse, 10), // Buffer for responses from game
 		done:           make(chan struct{}),             // Channel to signal goroutine completion
+		ready:          make(chan struct{}),             // Channel to signal room is ready
 	}
 }
 
@@ -313,12 +317,8 @@ func (r *Room) HandleCharacterEntry(character *Character) {
 		Logger.Info("Activating scripts for persistent room with character entry", "roomID", r.roomID)
 	}
 
-	// Trigger onCharacterEnter event for scripts
-	if r.scriptID != "" && r.scriptActive {
-		if err := ScriptMgr.ExecuteRoomEvent(r, "onCharacterEnter", character); err != nil {
-			Logger.Error("Error executing onCharacterEnter", "roomID", r.roomID, "error", err)
-		}
-	}
+	// Don't trigger script events here - let the room goroutine handle it
+	// This prevents race conditions where scripts aren't loaded yet
 }
 
 // IncrementIdleCounter increments the idle counter for an empty room and handles cleanup if threshold is reached
@@ -491,6 +491,19 @@ func SendRoomMessageExcept(room *Room, message string, except *Character) {
 	}
 }
 
+// WaitReady waits for the room to be ready to accept characters
+func (r *Room) WaitReady() {
+	r.mutex.RLock()
+	if r.isReady {
+		r.mutex.RUnlock()
+		return
+	}
+	r.mutex.RUnlock()
+	
+	// Wait for ready signal
+	<-r.ready
+}
+
 // Start begins the room goroutine to process room-level commands
 func (r *Room) Start(game *Game) {
 	r.mutex.Lock()
@@ -570,6 +583,12 @@ func (r *Room) runInternal(game *Game) {
 			Logger.Error("Error executing onRoomStart", "roomID", r.roomID, "error", err)
 		}
 	}
+
+	// Signal that room is ready to accept characters
+	r.mutex.Lock()
+	r.isReady = true
+	r.mutex.Unlock()
+	close(r.ready)
 
 	// Set up a 1-second ticker to match game heartbeat
 	ticker := time.NewTicker(1 * time.Second)

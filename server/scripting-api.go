@@ -387,6 +387,9 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 		return fmt.Errorf("lua state is nil for script %s", room.scriptID)
 	}
 
+	// Debug logging
+	Logger.Debug("ExecuteRoomEvent checking for handler", "roomID", room.roomID, "event", eventName, "luaState", L != nil)
+
 	// Check if the event handler exists
 	handler := L.GetGlobal(eventName)
 	if handler == lua.LNil {

@@ -1676,6 +1676,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	// Ensure target room is running
 	if !targetRoom.running {
 		targetRoom.Start(game)
+		targetRoom.WaitReady()
 	}
 
 	// Get references before the move
@@ -1730,9 +1731,9 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	}
 
 	// Trigger onCharacterEnter event for new room scripts after adding character
-	if newRoom.scriptID != "" && newRoom.scriptActive {
+	if newRoom.scriptID != "" && newRoom.scriptActive && ScriptMgr != nil {
 		if err := ScriptMgr.ExecuteRoomEvent(newRoom, "onCharacterEnter", character); err != nil {
-			Logger.Error("Error executing onCharacterEnter", "roomID", newRoom.roomID, "error", err)
+			Logger.Error("Error executing onCharacterEnter during movement", "roomID", newRoom.roomID, "error", err)
 		}
 	}
 
