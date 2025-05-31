@@ -633,9 +633,8 @@ func (r *Room) runInternal(game *Game) {
 		case <-ticker.C:
 			// Execute periodic script tick if room has an active script
 			if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
-				if err := ScriptMgr.ExecuteRoomEvent(r, "onTick"); err != nil {
-					Logger.Error("Error executing onTick", "roomID", r.roomID, "error", err)
-				}
+				// TODO: Temporarily disable onTick execution for debugging
+				Logger.Debug("Skipping onTick execution for debugging", "roomID", r.roomID)
 			}
 
 			// Increment idle counter if room is empty
