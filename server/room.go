@@ -587,7 +587,7 @@ func (r *Room) runInternal(game *Game) {
 
 				// Step 2: Call onRoomStart event if script loaded properly
 				Logger.Info("ABOUT TO EXECUTE onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
-				
+
 				if err := ScriptMgr.ExecuteRoomEvent(r, "onRoomStart"); err != nil {
 					Logger.Error("ERROR executing onRoomStart", "roomID", r.roomID, "error", err)
 				} else {
