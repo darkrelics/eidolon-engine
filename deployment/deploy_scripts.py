@@ -155,10 +155,10 @@ def main():
         config = load_config()
         
         # Try to get defaults from config
-        default_bucket = config.get("Game", {}).get("ScriptsS3Bucket", "")
+        default_bucket = config.get("Game", {}).get("ScriptsS3Bucket", "mud-scripts")
         default_prefix = config.get("Game", {}).get("ScriptsS3Prefix", "scripts")
     except Exception:
-        default_bucket = ""
+        default_bucket = "mud-scripts"
         default_prefix = "scripts"
     
     # Get action
@@ -172,10 +172,7 @@ def main():
         choice = "1"
     
     # Get bucket name
-    if default_bucket:
-        bucket_prompt = f"Enter S3 bucket name for scripts [default: {default_bucket}]: "
-    else:
-        bucket_prompt = "Enter S3 bucket name for scripts: "
+    bucket_prompt = f"Enter S3 bucket name for scripts [default: {default_bucket}]: "
     
     bucket_name = input(bucket_prompt).strip()
     if not bucket_name:
