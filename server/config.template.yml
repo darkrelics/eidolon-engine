@@ -13,7 +13,7 @@ Game:
   StartingEssence: 3
   NamesPath: ../data/names.txt
   ObscenityPath: ../data/obscenity.txt
-  ScriptsS3Bucket: eidolon-scripts # deployment-generated
+  ScriptsS3Bucket: mud-scripts # deployment-generated
   ScriptsS3Prefix: scripts
   TickIntervalSeconds: 1
   RoomItemCleanupSeconds: 600 # 10 minutes

@@ -193,6 +193,11 @@ def update_configuration_file(config_updates, user_pool_name=None) -> None:
             }
         )
 
+        # Update Game configuration with script settings
+        game_updates = config_updates.get("Game", {})
+        if game_updates:
+            config["Game"].update(game_updates)
+
         with open(CONFIG_PATH, "w", encoding="utf-8") as file:
             yaml.dump(config, file, default_flow_style=False)
 
