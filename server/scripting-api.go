@@ -322,7 +322,7 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 }
 
 // ExecuteRoomEvent executes a room event handler if it exists
-func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...lua.LValue) error {
+func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...interface{}) error {
 	if room.scriptID == "" || !room.scriptActive {
 		return nil
 	}
@@ -355,9 +355,10 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 	// Push function and arguments
 	co.Push(handler)
 
-	// Push all arguments
+	// Convert and push all arguments
 	for _, arg := range args {
-		co.Push(arg)
+		luaArg := sm.convertToLuaValue(L, arg)
+		co.Push(luaArg)
 	}
 
 	// Execute the function
@@ -367,4 +368,30 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 	}
 
 	return nil
+}
+
+// convertToLuaValue converts Go values to Lua values
+func (sm *ScriptManager) convertToLuaValue(L *lua.LState, value interface{}) lua.LValue {
+	switch v := value.(type) {
+	case *Character:
+		if v == nil {
+			return lua.LNil
+		}
+		// Create character table
+		table := L.NewTable()
+		table.RawSetString("name", lua.LString(v.name))
+		table.RawSetString("id", lua.LString(v.id.String()))
+		return table
+	case string:
+		return lua.LString(v)
+	case int:
+		return lua.LNumber(v)
+	case bool:
+		return lua.LBool(v)
+	case nil:
+		return lua.LNil
+	default:
+		// For other types, try to convert to string
+		return lua.LString(fmt.Sprintf("%v", value))
+	}
 }

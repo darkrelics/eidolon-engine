@@ -67,6 +67,18 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 		Timestamp: time.Now(),
 	}
 
+	// Try script commands first if room has an active script
+	if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
+		handled, err := ScriptMgr.ExecuteRoomCommand(r, cmd)
+		if err != nil {
+			Logger.Error("Script command execution error", "error", err, "roomID", r.roomID, "command", cmd.Verb)
+		}
+		if handled {
+			response.Success = true
+			return response
+		}
+	}
+
 	// Try to handle common room commands
 	verb := strings.ToLower(cmd.Verb)
 
@@ -1695,6 +1707,13 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		oldRoom.mutex.Lock()
 	}
 
+	// Trigger onCharacterLeave event for old room scripts before removing character
+	if oldRoom.scriptID != "" && oldRoom.scriptActive {
+		if err := ScriptMgr.ExecuteRoomEvent(oldRoom, "onCharacterLeave", character); err != nil {
+			Logger.Error("Error executing onCharacterLeave", "roomID", oldRoom.roomID, "error", err)
+		}
+	}
+
 	// Remove from old room
 	delete(oldRoom.characters, character.id)
 	oldRoom.lastActive = time.Now()
@@ -1708,6 +1727,13 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	if newRoom.persistent && newRoom.scriptID != "" && !newRoom.scriptActive {
 		newRoom.scriptActive = true
 		Logger.Info("Activating scripts for persistent room with character entry", "roomID", newRoom.roomID)
+	}
+
+	// Trigger onCharacterEnter event for new room scripts after adding character
+	if newRoom.scriptID != "" && newRoom.scriptActive {
+		if err := ScriptMgr.ExecuteRoomEvent(newRoom, "onCharacterEnter", character); err != nil {
+			Logger.Error("Error executing onCharacterEnter", "roomID", newRoom.roomID, "error", err)
+		}
 	}
 
 	// Unlock rooms before updating character

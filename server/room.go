@@ -28,7 +28,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofrs/uuid/v5"
-	lua "github.com/yuin/gopher-lua"
 )
 
 // CommandTier represents the level at which a command will be processed
@@ -305,12 +304,7 @@ func (r *Room) HandleCharacterEntry(character *Character) {
 
 	// Trigger onCharacterEnter event for scripts
 	if r.scriptID != "" && r.scriptActive {
-		// Create character table for Lua
-		charTable := &lua.LTable{}
-		charTable.RawSetString("name", lua.LString(character.name))
-		charTable.RawSetString("id", lua.LString(character.id.String()))
-
-		if err := ScriptMgr.ExecuteRoomEvent(r, "onCharacterEnter", charTable); err != nil {
+		if err := ScriptMgr.ExecuteRoomEvent(r, "onCharacterEnter", character); err != nil {
 			Logger.Error("Error executing onCharacterEnter", "roomID", r.roomID, "error", err)
 		}
 	}
