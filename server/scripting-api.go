@@ -315,7 +315,7 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 		Logger.Debug("No handler found for command in script", "scriptID", room.scriptID, "functionName", functionName)
 		return false, nil // No handler for this command
 	}
-	
+
 	Logger.Debug("Found command handler in script", "scriptID", room.scriptID, "functionName", functionName)
 
 	// Create character table

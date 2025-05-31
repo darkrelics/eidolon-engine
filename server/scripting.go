@@ -155,14 +155,14 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 		"commands", metadata.Commands,
 		"events", metadata.Events,
 		"periodic", metadata.Periodic)
-	
+
 	// Log cache state for debugging
 	if cached, exists := sm.scriptCache[scriptID]; exists {
 		commandCount := 0
 		if cached.metadata != nil {
 			commandCount = len(cached.metadata.Commands)
 		}
-		Logger.Debug("Script cache updated", "scriptID", scriptID, "hasMetadata", cached.metadata != nil, 
+		Logger.Debug("Script cache updated", "scriptID", scriptID, "hasMetadata", cached.metadata != nil,
 			"commandCount", commandCount)
 	}
 
