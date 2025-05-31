@@ -33,6 +33,7 @@ cd deployment
 ```
 
 Options:
+
 - `--dry-run`: Preview what would be uploaded
 - `--profile <name>`: Use specific AWS profile
 - `list`: List deployed scripts
@@ -62,24 +63,24 @@ Scripts have access to the global `eidolon` table with the following APIs:
 
 ### Room Functions (`eidolon.room`)
 
-| Function | Parameters | Description |
-|----------|------------|-------------|
-| `sendMessage(message)` | message: string | Send message to all characters in room |
-| `sendToCharacter(name, message)` | name: string, message: string | Send message to specific character |
-| `getCharacters()` | none | Get array of character tables in room |
-| `getItems()` | none | Get array of item tables in room |
-| `addItem(name, description)` | name: string, description: string | Add new item to room |
-| `removeItem(name)` | name: string | Remove item from room by name |
-| `setDescription(description)` | description: string | Change room description |
-| `getExits()` | none | Get array of exit tables |
+| Function                         | Parameters                        | Description                            |
+| -------------------------------- | --------------------------------- | -------------------------------------- |
+| `sendMessage(message)`           | message: string                   | Send message to all characters in room |
+| `sendToCharacter(name, message)` | name: string, message: string     | Send message to specific character     |
+| `getCharacters()`                | none                              | Get array of character tables in room  |
+| `getItems()`                     | none                              | Get array of item tables in room       |
+| `addItem(name, description)`     | name: string, description: string | Add new item to room                   |
+| `removeItem(name)`               | name: string                      | Remove item from room by name          |
+| `setDescription(description)`    | description: string               | Change room description                |
+| `getExits()`                     | none                              | Get array of exit tables               |
 
 ### Logging Functions (`eidolon.log`)
 
-| Function | Parameters | Description |
-|----------|------------|-------------|
-| `info(message)` | message: string | Log informational message |
-| `debug(message)` | message: string | Log debug message |
-| `error(message)` | message: string | Log error message |
+| Function         | Parameters      | Description               |
+| ---------------- | --------------- | ------------------------- |
+| `info(message)`  | message: string | Log informational message |
+| `debug(message)` | message: string | Log debug message         |
+| `error(message)` | message: string | Log error message         |
 
 ## Event Handlers
 
@@ -95,6 +96,7 @@ Scripts can implement event handlers by defining functions with specific names:
 ### Event Parameters
 
 **Character table structure:**
+
 ```lua
 {
     name = "PlayerName",
@@ -114,9 +116,9 @@ Command handlers follow the naming pattern `onCommand<Verb>` where `<Verb>` is t
 function onCommandVerb(character, args)
     -- character: table with character info
     -- args: array of command arguments (args[1] is the verb)
-    
+
     -- Perform command logic
-    
+
     return true  -- Return true if command was handled, false otherwise
 end
 ```
@@ -127,12 +129,12 @@ end
 function onCommandOrder(character, args)
     local name = character.name
     local item = args[2]  -- args[1] is "order"
-    
+
     if item == "ale" then
         eidolon.room.sendToCharacter(name, "The bartender serves you a foamy ale.")
         return true
     end
-    
+
     return false  -- Command not handled
 end
 ```
@@ -185,7 +187,7 @@ end
 
 function onTick()
     tickCount = tickCount + 1
-    
+
     -- Send ambient message every 10 ticks
     if tickCount % 10 == 0 then
         eidolon.room.sendMessage("The room hums with mysterious energy.")
@@ -241,7 +243,7 @@ Add script configuration to your `config.yml`:
 ```yaml
 game:
   scriptsS3Bucket: "your-scripts-bucket"
-  scriptsS3Prefix: "scripts/"  # Optional, defaults to "scripts/"
+  scriptsS3Prefix: "scripts/" # Optional, defaults to "scripts/"
 ```
 
 ## Best Practices
