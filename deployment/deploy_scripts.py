@@ -136,10 +136,10 @@ def delete_script(bucket_name, script_name, prefix="scripts"):
 
     try:
         s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
-        print(f"✓ Deleted: s3://{bucket_name}/{s3_key}")
+        print(f"Deleted: s3://{bucket_name}/{s3_key}")
         return True
     except ClientError as err:
-        print(f"✗ Failed to delete {s3_key}: {err}")
+        print(f"Failed to delete {s3_key}: {err}")
         return False
 
 

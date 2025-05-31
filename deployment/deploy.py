@@ -236,10 +236,10 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
             try:
                 with open(local_path, "rb") as file_data:
                     s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=file_data, ContentType="text/x-lua")
-                print(f"✓ Uploaded: {filename} -> s3://{bucket_name}/{s3_key}")
+                print(f"Uploaded: {filename} -> s3://{bucket_name}/{s3_key}")
                 success_count += 1
             except ClientError as err:
-                print(f"✗ Failed to upload {filename}: {err}")
+                print(f"Failed to upload {filename}: {err}")
 
         print(f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded")
         return success_count == len(lua_files)
