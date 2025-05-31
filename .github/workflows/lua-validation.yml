@@ -1,5 +1,4 @@
 name: Lua Script Validation
-
 on:
   push:
     branches: [develop, qa, prod]

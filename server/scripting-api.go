@@ -38,6 +38,9 @@ func (sm *ScriptManager) RegisterRoomAPI(L *lua.LState, room *Room) {
 		Logger.Error("Cannot register room API: room is nil")
 		return
 	}
+
+	Logger.Debug("Registering room API for script", "roomID", room.roomID, "scriptID", room.scriptID)
+
 	// Create the eidolon global table
 	eidolon := L.NewTable()
 	L.SetGlobal("eidolon", eidolon)
@@ -300,23 +303,29 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 	// Get the command verb
 	verb := strings.ToLower(cmd.Verb)
 
+	Logger.Info("ExecuteRoomCommand called", "roomID", room.roomID, "scriptID", room.scriptID, "verb", verb)
+
 	L, err := sm.GetScript(room.scriptID)
 	if err != nil {
 		Logger.Warn("Script not loaded for room", "roomID", room.roomID, "scriptID", room.scriptID, "error", err)
 		return false, nil // Script should have been loaded during room startup
 	}
 
+	Logger.Info("Script retrieved successfully", "scriptID", room.scriptID, "luaState", L != nil)
+
 	// Build function name from command verb (e.g., "pull" -> "onCommandPull")
 	functionName := "onCommand" + strings.Title(verb)
+
+	Logger.Info("Looking for function in script", "scriptID", room.scriptID, "functionName", functionName)
 
 	// Check if handler exists
 	handler := L.GetGlobal(functionName)
 	if handler == lua.LNil {
-		Logger.Debug("No handler found for command in script", "scriptID", room.scriptID, "functionName", functionName)
+		Logger.Info("No handler found for command in script", "scriptID", room.scriptID, "functionName", functionName)
 		return false, nil // No handler for this command
 	}
 
-	Logger.Debug("Found command handler in script", "scriptID", room.scriptID, "functionName", functionName)
+	Logger.Info("Found command handler in script", "scriptID", room.scriptID, "functionName", functionName)
 
 	// Create character table
 	charTable := L.NewTable()
@@ -367,7 +376,7 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 	L, err := sm.GetScript(room.scriptID)
 	if err != nil {
 		// Try to load the script if not loaded
-		if loadErr := sm.LoadScript(room.scriptID); loadErr != nil {
+		if loadErr := sm.LoadScriptForRoom(room.scriptID, room); loadErr != nil {
 			Logger.Warn("Failed to load script for room event", "roomID", room.roomID, "event", eventName, "error", loadErr)
 			return fmt.Errorf("failed to load script: %w", loadErr)
 		}
@@ -376,9 +385,6 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 			Logger.Warn("Failed to get script after loading", "roomID", room.roomID, "event", eventName, "error", err)
 			return err
 		}
-
-		// Register the API for the newly loaded script
-		sm.RegisterRoomAPI(L, room)
 	}
 
 	// Ensure we have a valid Lua state before proceeding

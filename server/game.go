@@ -109,6 +109,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 	Logger.Info("Initializing Script Manager...")
 	if err := InitScriptManager(config); err != nil {
 		Logger.Error("Script manager initialization failed - continuing without scripting", "error", err)
+		Logger.Error("AWS credentials or configuration may be missing", "scriptsS3Bucket", config.Game.ScriptsS3Bucket, "awsRegion", config.AWS.Region)
 	} else {
 		Logger.Info("Script manager initialized successfully")
 	}

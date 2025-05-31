@@ -515,12 +515,17 @@ func (r *Room) Start(game *Game) {
 	}
 
 	// Load script BEFORE starting the room goroutine if room has one
-	if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
-		Logger.Info("Loading script for room", "roomID", r.roomID, "scriptID", r.scriptID)
-		if err := ScriptMgr.LoadScriptForRoom(r.scriptID, r); err != nil {
-			Logger.Error("Failed to load room script during startup", "roomID", r.roomID, "scriptID", r.scriptID, "error", err)
-			// Disable script to prevent repeated failures
-			r.scriptActive = false
+	if r.scriptID != "" && r.scriptActive {
+		if ScriptMgr == nil {
+			Logger.Warn("Script manager not available at room startup, scripts will be unavailable", "roomID", r.roomID, "scriptID", r.scriptID)
+			// Don't disable r.scriptActive - just skip loading for now
+		} else {
+			Logger.Info("Loading script for room", "roomID", r.roomID, "scriptID", r.scriptID)
+			if err := ScriptMgr.LoadScriptForRoom(r.scriptID, r); err != nil {
+				Logger.Error("Failed to load room script during startup", "roomID", r.roomID, "scriptID", r.scriptID, "error", err)
+				// Disable script to prevent repeated failures
+				r.scriptActive = false
+			}
 		}
 	}
 
@@ -578,9 +583,13 @@ func (r *Room) runInternal(game *Game) {
 	defer r.safeCloseDone()
 
 	// Call onRoomStart event if script is loaded
-	if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
-		if err := ScriptMgr.ExecuteRoomEvent(r, "onRoomStart"); err != nil {
-			Logger.Error("Error executing onRoomStart", "roomID", r.roomID, "error", err)
+	if r.scriptID != "" && r.scriptActive {
+		if ScriptMgr == nil {
+			Logger.Error("ScriptMgr is nil when trying to execute onRoomStart", "roomID", r.roomID, "scriptID", r.scriptID)
+		} else {
+			if err := ScriptMgr.ExecuteRoomEvent(r, "onRoomStart"); err != nil {
+				Logger.Error("Error executing onRoomStart", "roomID", r.roomID, "error", err)
+			}
 		}
 	}
 
@@ -622,7 +631,7 @@ func (r *Room) runInternal(game *Game) {
 
 		case <-ticker.C:
 			// Execute periodic script tick if room has an active script
-			if r.scriptID != "" && r.scriptActive {
+			if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
 				if err := ScriptMgr.ExecuteRoomEvent(r, "onTick"); err != nil {
 					Logger.Error("Error executing onTick", "roomID", r.roomID, "error", err)
 				}

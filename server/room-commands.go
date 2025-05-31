@@ -68,15 +68,21 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 	}
 
 	// Try script commands first if room has an active script
+	Logger.Info("Room script state check", "roomID", r.roomID, "scriptID", r.scriptID, "scriptActive", r.scriptActive, "scriptMgrNil", ScriptMgr == nil)
+	
 	if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
+		Logger.Info("Attempting script command execution", "roomID", r.roomID, "scriptID", r.scriptID, "command", cmd.Verb)
 		handled, err := ScriptMgr.ExecuteRoomCommand(r, cmd)
 		if err != nil {
 			Logger.Error("Script command execution error", "error", err, "roomID", r.roomID, "command", cmd.Verb)
 		}
+		Logger.Info("Script command result", "roomID", r.roomID, "command", cmd.Verb, "handled", handled)
 		if handled {
 			response.Success = true
 			return response
 		}
+	} else {
+		Logger.Info("Script conditions not met for command", "roomID", r.roomID, "command", cmd.Verb)
 	}
 
 	// Try to handle common room commands
@@ -1709,7 +1715,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	}
 
 	// Trigger onCharacterLeave event for old room scripts before removing character
-	if oldRoom.scriptID != "" && oldRoom.scriptActive {
+	if oldRoom.scriptID != "" && oldRoom.scriptActive && ScriptMgr != nil {
 		if err := ScriptMgr.ExecuteRoomEvent(oldRoom, "onCharacterLeave", character); err != nil {
 			Logger.Error("Error executing onCharacterLeave", "roomID", oldRoom.roomID, "error", err)
 		}
