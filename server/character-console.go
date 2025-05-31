@@ -57,6 +57,18 @@ func (c *Character) RunConsole(done chan bool) {
 	c.game.characters[c.id] = c
 	c.game.mutex.Unlock()
 
+	// Ensure room is started before adding character
+	c.room.mutex.RLock()
+	roomRunning := c.room.running
+	c.room.mutex.RUnlock()
+
+	if !roomRunning {
+		Logger.Info("Starting room for character entry", "roomID", c.room.roomID, "characterName", c.name)
+		c.room.Start(c.game)
+		// Wait for room to be ready
+		c.room.WaitReady()
+	}
+
 	// Add character to the room
 	c.room.mutex.Lock()
 	if c.room.characters == nil {
@@ -69,7 +81,15 @@ func (c *Character) RunConsole(done chan bool) {
 
 	// Call HandleCharacterEntry to reset idle counter and activate scripts
 	// Ensure this happens after character is fully added to room
-	c.safeHandleCharacterEntry()
+	c.room.HandleCharacterEntry(c)
+
+	// If room has a script, trigger onCharacterEnter event
+	// This happens after room is started and character is added
+	if c.room.scriptID != "" && c.room.scriptActive && ScriptMgr != nil {
+		if err := ScriptMgr.ExecuteRoomEvent(c.room, "onCharacterEnter", c); err != nil {
+			Logger.Error("Error executing onCharacterEnter", "roomID", c.room.roomID, "characterName", c.name, "error", err)
+		}
+	}
 
 	// Notify room of arrival (without holding locks)
 	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
@@ -239,16 +259,6 @@ func (c *Character) DisplayMessage(message string) {
 	}
 
 	c.player.commandOut <- message
-}
-
-// safeHandleCharacterEntry safely calls HandleCharacterEntry with panic recovery
-func (c *Character) safeHandleCharacterEntry() {
-	defer func() {
-		if r := recover(); r != nil {
-			Logger.Error("Panic during HandleCharacterEntry", "characterName", c.name, "roomID", c.room.roomID, "panic", r)
-		}
-	}()
-	c.room.HandleCharacterEntry(c)
 }
 
 // safeExecuteLookCommand safely executes the initial look command with panic recovery
