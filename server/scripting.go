@@ -121,10 +121,13 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 	L := lua.NewState()
 
 	// Load the script content
+	Logger.Info("Compiling Lua script", "scriptID", scriptID, "contentLength", len(scriptContent))
 	if err := L.DoString(scriptContent); err != nil {
+		Logger.Error("Lua script compilation failed", "scriptID", scriptID, "error", err)
 		L.Close()
 		return fmt.Errorf("failed to load script %s: %w", scriptID, err)
 	}
+	Logger.Info("Lua script compiled successfully", "scriptID", scriptID)
 
 	// Extract metadata from script if not already cached
 	if metadata == nil {
@@ -222,6 +225,7 @@ func (sm *ScriptManager) extractScriptMetadata(L *lua.LState) *ScriptMetadata {
 	// Check for SCRIPT_INFO table
 	scriptInfo := L.GetGlobal("SCRIPT_INFO")
 	if tbl, ok := scriptInfo.(*lua.LTable); ok {
+		Logger.Info("Found SCRIPT_INFO table in Lua script")
 		// Extract commands
 		commands := L.GetField(tbl, "commands")
 		if cmdTbl, ok := commands.(*lua.LTable); ok {
@@ -247,6 +251,10 @@ func (sm *ScriptManager) extractScriptMetadata(L *lua.LState) *ScriptMetadata {
 		if b, ok := periodic.(lua.LBool); ok {
 			metadata.Periodic = bool(b)
 		}
+		
+		Logger.Info("Extracted script metadata", "commands", metadata.Commands, "events", metadata.Events, "periodic", metadata.Periodic)
+	} else {
+		Logger.Error("SCRIPT_INFO table not found or invalid in Lua script")
 	}
 
 	return metadata
@@ -407,8 +415,13 @@ func InitScriptManager(cfg *Configuration) error {
 	var err error
 	ScriptMgr, err = NewScriptManager(cfg)
 	if err != nil {
+		Logger.Error("NewScriptManager failed", "error", err)
 		return fmt.Errorf("failed to initialize script manager: %w", err)
 	}
-	Logger.Info("Script manager initialized")
+	if ScriptMgr == nil {
+		Logger.Error("ScriptMgr is nil after successful NewScriptManager - this should not happen")
+		return fmt.Errorf("script manager is nil after initialization")
+	}
+	Logger.Info("Script manager initialized successfully", "bucket", cfg.Game.ScriptsS3Bucket, "prefix", cfg.Game.ScriptsS3Prefix)
 	return nil
 }
