@@ -88,6 +88,7 @@ func NewScriptManager(cfg *Configuration) (*ScriptManager, error) {
 		s3Client:     s3Client,
 		bucketName:   cfg.Game.ScriptsS3Bucket,
 		bucketPrefix: prefix,
+		mutex:        sync.RWMutex{},
 	}, nil
 }
 
@@ -150,8 +151,7 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 
 	// Register room API if room is provided
 	if room != nil {
-		// TODO: Temporarily disable room API registration for debugging
-		Logger.Info("Skipping room API registration for debugging", "scriptID", scriptID, "roomID", room.roomID)
+		sm.RegisterRoomAPI(L, room)
 	}
 
 	Logger.Info("Script loaded successfully",
