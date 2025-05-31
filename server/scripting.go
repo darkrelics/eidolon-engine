@@ -129,9 +129,17 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 	// Extract metadata from script if not already cached
 	if metadata == nil {
 		metadata = sm.extractScriptMetadata(L)
-		// Update cache with metadata
-		if cached, exists := sm.scriptCache[scriptID]; exists {
-			cached.metadata = metadata
+	}
+
+	// Ensure cache entry exists and has metadata
+	if cached, exists := sm.scriptCache[scriptID]; exists {
+		cached.metadata = metadata
+	} else {
+		// Create cache entry if it doesn't exist
+		sm.scriptCache[scriptID] = &ScriptCache{
+			content:  scriptContent,
+			metadata: metadata,
+			lastUsed: time.Now(),
 		}
 	}
 
@@ -147,6 +155,16 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 		"commands", metadata.Commands,
 		"events", metadata.Events,
 		"periodic", metadata.Periodic)
+	
+	// Log cache state for debugging
+	if cached, exists := sm.scriptCache[scriptID]; exists {
+		commandCount := 0
+		if cached.metadata != nil {
+			commandCount = len(cached.metadata.Commands)
+		}
+		Logger.Debug("Script cache updated", "scriptID", scriptID, "hasMetadata", cached.metadata != nil, 
+			"commandCount", commandCount)
+	}
 
 	return nil
 }
@@ -249,7 +267,23 @@ func (sm *ScriptManager) HandlesCommand(scriptID string, command string) bool {
 		return false
 	}
 
-	// If not in cache, we need to load the script first
+	// If script is loaded but metadata not in cache, try to get it from the loaded script
+	if L, exists := sm.scripts[scriptID]; exists {
+		// Script is loaded, extract metadata
+		metadata := sm.extractScriptMetadata(L)
+		// Update cache with metadata (note: this is read-locked, so we can't update here)
+		for _, cmd := range metadata.Commands {
+			if cmd == command {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Script not loaded - we can't determine if it handles the command without loading it
+	// For now, return false to avoid loading scripts just to check
+	// The script will be loaded when ExecuteRoomCommand is called
+	Logger.Debug("Script not loaded, cannot check if it handles command", "scriptID", scriptID, "command", command)
 	return false
 }
 

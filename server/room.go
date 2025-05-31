@@ -212,6 +212,17 @@ func (g *Game) LoadRooms() error {
 		g.mutex.Unlock()
 	}
 
+	// Start persistent rooms
+	persistentCount := 0
+	for roomID, room := range g.rooms {
+		if room.persistent {
+			Logger.Debug("Starting persistent room", "roomID", roomID, "title", room.title)
+			room.Start(g)
+			persistentCount++
+		}
+	}
+
+	Logger.Info("Persistent rooms started", "count", persistentCount)
 	return nil
 }
 
@@ -490,6 +501,16 @@ func (r *Room) Start(game *Game) {
 		return
 	}
 
+	// Load script BEFORE starting the room goroutine if room has one
+	if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
+		Logger.Info("Loading script for room", "roomID", r.roomID, "scriptID", r.scriptID)
+		if err := ScriptMgr.LoadScriptForRoom(r.scriptID, r); err != nil {
+			Logger.Error("Failed to load room script during startup", "roomID", r.roomID, "scriptID", r.scriptID, "error", err)
+			// Disable script to prevent repeated failures
+			r.scriptActive = false
+		}
+	}
+
 	Logger.Info("Starting room goroutine", "roomID", r.roomID, "title", r.title)
 	r.running = true
 
@@ -521,11 +542,9 @@ func (r *Room) Stop() {
 	// Wait for the room goroutine to complete
 	<-r.done
 
-	// Close channels after releasing the lock
+	// Close channels safely after releasing the lock
 	// This prevents deadlock if channel operations were waiting on the mutex
-	close(r.commandIn)
-	close(r.commandOut)
-	// Note: we don't close gameCommandOut as it belongs to the Game
+	r.safeCloseChannels()
 }
 
 // run is the main goroutine function for a room
@@ -543,17 +562,12 @@ func (r *Room) runInternal(game *Game) {
 	Logger.Info("Room goroutine started", "roomID", r.roomID, "title", r.title)
 
 	// Signal completion when this function returns
-	defer close(r.done)
+	defer r.safeCloseDone()
 
-	// Load and initialize script if room has one
-	if r.scriptID != "" && r.scriptActive {
-		if err := ScriptMgr.LoadScriptForRoom(r.scriptID, r); err != nil {
-			Logger.Error("Failed to load room script", "roomID", r.roomID, "scriptID", r.scriptID, "error", err)
-		} else {
-			// Call onRoomStart event if it exists
-			if err := ScriptMgr.ExecuteRoomEvent(r, "onRoomStart"); err != nil {
-				Logger.Error("Error executing onRoomStart", "roomID", r.roomID, "error", err)
-			}
+	// Call onRoomStart event if script is loaded
+	if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
+		if err := ScriptMgr.ExecuteRoomEvent(r, "onRoomStart"); err != nil {
+			Logger.Error("Error executing onRoomStart", "roomID", r.roomID, "error", err)
 		}
 	}
 
@@ -693,4 +707,42 @@ func (r *Room) GetDescription(character *Character) string {
 	}
 
 	return roomInfo.String()
+}
+
+// safeCloseChannels safely closes room channels without panicking on already closed channels
+func (r *Room) safeCloseChannels() {
+	// Use defer with recover to handle any close-on-closed-channel panics
+	defer func() {
+		if err := recover(); err != nil {
+			Logger.Debug("Channel already closed during room cleanup", "roomID", r.roomID, "error", err)
+		}
+	}()
+
+	// Try to close commandIn channel
+	func() {
+		defer func() { recover() }()
+		close(r.commandIn)
+	}()
+
+	// Try to close commandOut channel  
+	func() {
+		defer func() { recover() }()
+		close(r.commandOut)
+	}()
+	// Note: we don't close gameCommandOut as it belongs to the Game
+}
+
+// safeCloseDone safely closes the done channel without panicking on already closed channels
+func (r *Room) safeCloseDone() {
+	defer func() {
+		if err := recover(); err != nil {
+			Logger.Debug("Done channel already closed during room cleanup", "roomID", r.roomID, "error", err)
+		}
+	}()
+
+	// Try to close done channel
+	func() {
+		defer func() { recover() }()
+		close(r.done)
+	}()
 }

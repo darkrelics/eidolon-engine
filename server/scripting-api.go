@@ -30,6 +30,14 @@ import (
 
 // RegisterRoomAPI registers all room-related functions for Lua scripts
 func (sm *ScriptManager) RegisterRoomAPI(L *lua.LState, room *Room) {
+	if L == nil {
+		Logger.Error("Cannot register room API: Lua state is nil")
+		return
+	}
+	if room == nil {
+		Logger.Error("Cannot register room API: room is nil")
+		return
+	}
 	// Create the eidolon global table
 	eidolon := L.NewTable()
 	L.SetGlobal("eidolon", eidolon)
@@ -289,15 +297,13 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 		return false, nil // No script, command not handled
 	}
 
-	// First check if script handles this command
+	// Get the command verb
 	verb := strings.ToLower(cmd.Verb)
-	if !sm.HandlesCommand(room.scriptID, verb) {
-		return false, nil // Script doesn't handle this command
-	}
 
 	L, err := sm.GetScript(room.scriptID)
 	if err != nil {
-		return false, nil // Script not loaded
+		Logger.Warn("Script not loaded for room", "roomID", room.roomID, "scriptID", room.scriptID, "error", err)
+		return false, nil // Script should have been loaded during room startup
 	}
 
 	// Build function name from command verb (e.g., "pull" -> "onCommandPull")
@@ -306,8 +312,11 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 	// Check if handler exists
 	handler := L.GetGlobal(functionName)
 	if handler == lua.LNil {
+		Logger.Debug("No handler found for command in script", "scriptID", room.scriptID, "functionName", functionName)
 		return false, nil // No handler for this command
 	}
+	
+	Logger.Debug("Found command handler in script", "scriptID", room.scriptID, "functionName", functionName)
 
 	// Create character table
 	charTable := L.NewTable()
@@ -370,6 +379,12 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 
 		// Register the API for the newly loaded script
 		sm.RegisterRoomAPI(L, room)
+	}
+
+	// Ensure we have a valid Lua state before proceeding
+	if L == nil {
+		Logger.Error("Lua state is nil after loading script", "roomID", room.roomID, "scriptID", room.scriptID, "event", eventName)
+		return fmt.Errorf("lua state is nil for script %s", room.scriptID)
 	}
 
 	// Check if the event handler exists
