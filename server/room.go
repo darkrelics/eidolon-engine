@@ -499,7 +499,7 @@ func (r *Room) WaitReady() {
 		return
 	}
 	r.mutex.RUnlock()
-	
+
 	// Wait for ready signal
 	<-r.ready
 }
@@ -743,7 +743,7 @@ func (r *Room) safeCloseChannels() {
 		close(r.commandIn)
 	}()
 
-	// Try to close commandOut channel  
+	// Try to close commandOut channel
 	func() {
 		defer func() { recover() }()
 		close(r.commandOut)

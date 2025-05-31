@@ -61,7 +61,7 @@ func (c *Character) RunConsole(done chan bool) {
 	c.room.mutex.RLock()
 	roomRunning := c.room.running
 	c.room.mutex.RUnlock()
-	
+
 	if !roomRunning {
 		Logger.Info("Starting room for character entry", "roomID", c.room.roomID, "characterName", c.name)
 		c.room.Start(c.game)
@@ -82,7 +82,7 @@ func (c *Character) RunConsole(done chan bool) {
 	// Call HandleCharacterEntry to reset idle counter and activate scripts
 	// Ensure this happens after character is fully added to room
 	c.room.HandleCharacterEntry(c)
-	
+
 	// If room has a script, trigger onCharacterEnter event
 	// This happens after room is started and character is added
 	if c.room.scriptID != "" && c.room.scriptActive && ScriptMgr != nil {
@@ -260,7 +260,6 @@ func (c *Character) DisplayMessage(message string) {
 
 	c.player.commandOut <- message
 }
-
 
 // safeExecuteLookCommand safely executes the initial look command with panic recovery
 func (c *Character) safeExecuteLookCommand() {
