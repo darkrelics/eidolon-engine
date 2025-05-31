@@ -587,7 +587,7 @@ func (r *Room) runInternal(game *Game) {
 
 				// Step 2: Call onRoomStart event if script loaded properly
 				Logger.Info("Executing onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
-				
+
 				// Test: Skip onRoomStart execution to see if that's what's crashing
 				Logger.Info("Skipping onRoomStart execution for debugging", "roomID", r.roomID, "scriptID", r.scriptID)
 			}
