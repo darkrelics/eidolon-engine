@@ -69,7 +69,7 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 
 	// Try script commands first if room has an active script
 	Logger.Info("Room script state check", "roomID", r.roomID, "scriptID", r.scriptID, "scriptActive", r.scriptActive, "scriptMgrNil", ScriptMgr == nil)
-	
+
 	if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
 		Logger.Info("Attempting script command execution", "roomID", r.roomID, "scriptID", r.scriptID, "command", cmd.Verb)
 		handled, err := ScriptMgr.ExecuteRoomCommand(r, cmd)
