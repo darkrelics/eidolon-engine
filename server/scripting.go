@@ -48,7 +48,8 @@ type ScriptCache struct {
 
 // ScriptManager manages Lua script execution for rooms
 type ScriptManager struct {
-	scripts      map[string]*lua.LState
+	scripts      map[string]*lua.LState // Map of scriptID to shared template state (for metadata extraction)
+	roomScripts  map[int64]*lua.LState  // Map of roomID to room-specific Lua state
 	scriptCache  map[string]*ScriptCache
 	s3Client     *s3.Client
 	bucketName   string
@@ -84,6 +85,7 @@ func NewScriptManager(cfg *Configuration) (*ScriptManager, error) {
 
 	return &ScriptManager{
 		scripts:      make(map[string]*lua.LState),
+		roomScripts:  make(map[int64]*lua.LState),
 		scriptCache:  make(map[string]*ScriptCache),
 		s3Client:     s3Client,
 		bucketName:   cfg.Game.ScriptsS3Bucket,
@@ -102,15 +104,13 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 	if scriptID == "" {
 		return fmt.Errorf("empty script ID")
 	}
+	
+	if room == nil {
+		return fmt.Errorf("room is nil")
+	}
 
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
-
-	// Check if script already loaded
-	if _, exists := sm.scripts[scriptID]; exists {
-		Logger.Debug("Script already loaded", "scriptID", scriptID)
-		return nil
-	}
 
 	// Get script content from cache or S3
 	scriptContent, metadata, err := sm.getScriptFromCacheOrS3(scriptID)
@@ -118,8 +118,15 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 		return fmt.Errorf("failed to get script %s: %w", scriptID, err)
 	}
 
-	// Create new Lua state
+	// Create new Lua state for this specific room
 	L := lua.NewState()
+	
+	// Open standard libraries (needed for os.time() and other functions)
+	L.OpenLibs()
+
+	// Register room API BEFORE loading the script
+	Logger.Info("Registering room API before script compilation", "scriptID", scriptID, "roomID", room.roomID)
+	sm.RegisterRoomAPI(L, room)
 
 	// Load the script content
 	Logger.Info("Compiling Lua script", "scriptID", scriptID, "contentLength", len(scriptContent))
@@ -147,16 +154,12 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 		}
 	}
 
-	sm.scripts[scriptID] = L
-
-	// Register room API if room is provided
-	if room != nil {
-		Logger.Info("Registering room API", "scriptID", scriptID, "roomID", room.roomID)
-		sm.RegisterRoomAPI(L, room)
-	}
+	// Store the room-specific Lua state
+	sm.roomScripts[room.roomID] = L
 
 	Logger.Info("Script loaded successfully",
 		"scriptID", scriptID,
+		"roomID", room.roomID,
 		"commands", metadata.Commands,
 		"events", metadata.Events,
 		"periodic", metadata.Periodic)
@@ -309,6 +312,18 @@ func (sm *ScriptManager) UnloadScript(scriptID string) {
 	}
 }
 
+// UnloadRoomScript unloads a room-specific Lua script
+func (sm *ScriptManager) UnloadRoomScript(roomID int64) {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	if L, exists := sm.roomScripts[roomID]; exists {
+		L.Close()
+		delete(sm.roomScripts, roomID)
+		Logger.Info("Room script unloaded", "roomID", roomID)
+	}
+}
+
 // GetScript retrieves a loaded script state
 func (sm *ScriptManager) GetScript(scriptID string) (*lua.LState, error) {
 	sm.mutex.RLock()
@@ -321,9 +336,21 @@ func (sm *ScriptManager) GetScript(scriptID string) (*lua.LState, error) {
 	return L, nil
 }
 
+// GetRoomScript retrieves a room-specific script state
+func (sm *ScriptManager) GetRoomScript(roomID int64) (*lua.LState, error) {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	L, exists := sm.roomScripts[roomID]
+	if !exists {
+		return nil, fmt.Errorf("script not loaded for room %d", roomID)
+	}
+	return L, nil
+}
+
 // ExecuteRoomFunction executes a specific function in a room's script
 func (sm *ScriptManager) ExecuteRoomFunction(scriptID string, functionName string, room *Room, args ...lua.LValue) error {
-	L, err := sm.GetScript(scriptID)
+	L, err := sm.GetRoomScript(room.roomID)
 	if err != nil {
 		return err
 	}
@@ -334,33 +361,23 @@ func (sm *ScriptManager) ExecuteRoomFunction(scriptID string, functionName strin
 		return fmt.Errorf("function %s not found in script %s", functionName, scriptID)
 	}
 
-	// Create a new thread for execution to avoid concurrency issues
-	co, _ := L.NewThread()
-
-	// Push function and arguments
-	co.Push(fn)
-
 	// Push room table as first argument
-	roomTable := sm.createRoomTable(co, room)
-	co.Push(roomTable)
+	roomTable := sm.createRoomTable(L, room)
+	
+	// Prepare all arguments
+	allArgs := make([]lua.LValue, 0, len(args)+1)
+	allArgs = append(allArgs, roomTable)
+	allArgs = append(allArgs, args...)
 
-	// Push additional arguments
-	for _, arg := range args {
-		co.Push(arg)
-	}
-
-	// Execute the function
-	state, err, values := L.Resume(co, nil)
-	if state == lua.ResumeError {
+	// Use CallByParam for safer execution
+	err = L.CallByParam(lua.P{
+		Fn:      fn,
+		NRet:    0,
+		Protect: true,
+	}, allArgs...)
+	
+	if err != nil {
 		return fmt.Errorf("error executing function %s: %w", functionName, err)
-	}
-
-	// Log any return values for debugging
-	if len(values) > 0 {
-		Logger.Debug("Script function returned values",
-			"scriptID", scriptID,
-			"function", functionName,
-			"valueCount", len(values))
 	}
 
 	return nil
@@ -385,6 +402,12 @@ func (sm *ScriptManager) createRoomTable(L *lua.LState, room *Room) *lua.LTable 
 func (sm *ScriptManager) ReloadScript(scriptID string) error {
 	sm.UnloadScript(scriptID)
 	return sm.LoadScript(scriptID)
+}
+
+// ReloadScriptForRoom reloads a script for a specific room
+func (sm *ScriptManager) ReloadScriptForRoom(scriptID string, room *Room) error {
+	sm.UnloadScript(scriptID)
+	return sm.LoadScriptForRoom(scriptID, room)
 }
 
 // ClearCache removes old entries from the script cache

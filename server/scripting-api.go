@@ -39,7 +39,7 @@ func (sm *ScriptManager) RegisterRoomAPI(L *lua.LState, room *Room) {
 		return
 	}
 
-	Logger.Debug("Registering room API for script", "roomID", room.roomID, "scriptID", room.scriptID)
+	Logger.Info("Registering room API for script", "roomID", room.roomID, "scriptID", room.scriptID)
 
 	// Create the eidolon global table
 	eidolon := L.NewTable()
@@ -58,6 +58,8 @@ func (sm *ScriptManager) RegisterRoomAPI(L *lua.LState, room *Room) {
 	L.SetField(roomAPI, "removeItem", L.NewFunction(sm.luaRoomRemoveItem(room)))
 	L.SetField(roomAPI, "setDescription", L.NewFunction(sm.luaRoomSetDescription(room)))
 	L.SetField(roomAPI, "getExits", L.NewFunction(sm.luaRoomGetExits(room)))
+	
+	Logger.Info("Room API functions registered", "roomID", room.roomID)
 
 	// Character functions
 	charAPI := L.NewTable()
@@ -69,6 +71,8 @@ func (sm *ScriptManager) RegisterRoomAPI(L *lua.LState, room *Room) {
 	L.SetField(logAPI, "info", L.NewFunction(sm.luaLogInfo))
 	L.SetField(logAPI, "debug", L.NewFunction(sm.luaLogDebug))
 	L.SetField(logAPI, "error", L.NewFunction(sm.luaLogError))
+	
+	Logger.Info("All API functions registered successfully", "roomID", room.roomID)
 }
 
 // luaRoomSendMessage sends a message to all characters in the room
@@ -305,7 +309,7 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 
 	Logger.Info("ExecuteRoomCommand called", "roomID", room.roomID, "scriptID", room.scriptID, "verb", verb)
 
-	L, err := sm.GetScript(room.scriptID)
+	L, err := sm.GetRoomScript(room.roomID)
 	if err != nil {
 		Logger.Warn("Script not loaded for room", "roomID", room.roomID, "scriptID", room.scriptID, "error", err)
 		return false, nil // Script should have been loaded during room startup
@@ -338,25 +342,23 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 		L.RawSetInt(argsTable, i+1, lua.LString(arg))
 	}
 
-	// Create new thread for execution
-	co, _ := L.NewThread()
-
-	// Push function and arguments
-	co.Push(handler)
-	co.Push(charTable)
-	co.Push(argsTable)
-
-	// Execute the function
-	state, err, values := L.Resume(co, nil)
-	if state == lua.ResumeError {
+	// Use CallByParam for safer execution
+	err = L.CallByParam(lua.P{
+		Fn:      handler,
+		NRet:    1,    // Expecting one return value (handled or not)
+		Protect: true,
+	}, charTable, argsTable)
+	
+	if err != nil {
 		return false, fmt.Errorf("error executing command handler %s: %w", functionName, err)
 	}
 
 	// Check if command was handled (function should return true/false)
-	if len(values) > 0 {
-		if handled, ok := values[0].(lua.LBool); ok {
-			return bool(handled), nil
-		}
+	ret := L.Get(-1) // Get the return value
+	L.Pop(1)         // Remove it from stack
+	
+	if handled, ok := ret.(lua.LBool); ok {
+		return bool(handled), nil
 	}
 
 	return false, nil
@@ -379,7 +381,7 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 	}
 
 	Logger.Info("ExecuteRoomEvent: Getting script", "roomID", room.roomID, "scriptID", room.scriptID)
-	L, err := sm.GetScript(room.scriptID)
+	L, err := sm.GetRoomScript(room.roomID)
 	if err != nil {
 		Logger.Info("ExecuteRoomEvent: Script not loaded, attempting to load", "roomID", room.roomID, "scriptID", room.scriptID, "error", err)
 		// Try to load the script if not loaded
@@ -387,7 +389,7 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 			Logger.Warn("Failed to load script for room event", "roomID", room.roomID, "event", eventName, "error", loadErr)
 			return fmt.Errorf("failed to load script: %w", loadErr)
 		}
-		L, err = sm.GetScript(room.scriptID)
+		L, err = sm.GetRoomScript(room.roomID)
 		if err != nil {
 			Logger.Warn("Failed to get script after loading", "roomID", room.roomID, "event", eventName, "error", err)
 			return err
@@ -412,31 +414,37 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 		return nil
 	}
 
-	Logger.Info("ExecuteRoomEvent: Found handler, creating thread", "roomID", room.roomID, "event", eventName)
-
-	// Create a new thread for execution
-	co, _ := L.NewThread()
-
-	Logger.Info("ExecuteRoomEvent: Pushing handler", "roomID", room.roomID, "event", eventName)
-
-	// Push function and arguments
-	co.Push(handler)
-
-	Logger.Info("ExecuteRoomEvent: Converting arguments", "roomID", room.roomID, "event", eventName, "argCount", len(args))
-
-	// Convert and push all arguments
-	for i, arg := range args {
-		Logger.Info("ExecuteRoomEvent: Converting arg", "roomID", room.roomID, "event", eventName, "argIndex", i, "argType", fmt.Sprintf("%T", arg))
-		luaArg := sm.convertToLuaValue(L, arg)
-		Logger.Info("ExecuteRoomEvent: Pushing arg", "roomID", room.roomID, "event", eventName, "argIndex", i)
-		co.Push(luaArg)
+	// Check handler type
+	if handler.Type() != lua.LTFunction {
+		Logger.Error("Handler is not a function", "roomID", room.roomID, "event", eventName, "type", handler.Type().String())
+		return fmt.Errorf("handler %s is not a function, got %s", eventName, handler.Type().String())
 	}
 
-	Logger.Info("ExecuteRoomEvent: About to execute Lua function", "roomID", room.roomID, "event", eventName)
+	Logger.Info("ExecuteRoomEvent: Found handler, executing", "roomID", room.roomID, "event", eventName)
 
-	// Execute the function with proper error handling
-	state, err, _ := L.Resume(co, nil)
-	if state == lua.ResumeError {
+	// Convert arguments to Lua values
+	luaArgs := make([]lua.LValue, len(args))
+	for i, arg := range args {
+		Logger.Info("ExecuteRoomEvent: Converting arg", "roomID", room.roomID, "event", eventName, "argIndex", i, "argType", fmt.Sprintf("%T", arg))
+		luaArgs[i] = sm.convertToLuaValue(L, arg)
+		Logger.Info("ExecuteRoomEvent: Converted arg", "roomID", room.roomID, "event", eventName, "argIndex", i, "luaType", luaArgs[i].Type().String())
+	}
+
+	// Add defer to catch any panics
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic during Lua execution", "roomID", room.roomID, "event", eventName, "panic", r)
+		}
+	}()
+
+	// Use CallByParam which is safer than manual thread management
+	err = L.CallByParam(lua.P{
+		Fn:      handler,
+		NRet:    0,
+		Protect: true,
+	}, luaArgs...)
+	
+	if err != nil {
 		Logger.Error("Error executing room event", "roomID", room.roomID, "event", eventName, "error", err)
 		return fmt.Errorf("error executing event %s: %w", eventName, err)
 	}
@@ -447,6 +455,11 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 
 // convertToLuaValue converts Go values to Lua values
 func (sm *ScriptManager) convertToLuaValue(L *lua.LState, value interface{}) lua.LValue {
+	if L == nil {
+		Logger.Error("convertToLuaValue called with nil LState")
+		return lua.LNil
+	}
+	
 	switch v := value.(type) {
 	case *Character:
 		if v == nil {
@@ -454,6 +467,10 @@ func (sm *ScriptManager) convertToLuaValue(L *lua.LState, value interface{}) lua
 		}
 		// Create character table
 		table := L.NewTable()
+		if table == nil {
+			Logger.Error("Failed to create Lua table for character")
+			return lua.LNil
+		}
 		table.RawSetString("name", lua.LString(v.name))
 		table.RawSetString("id", lua.LString(v.id.String()))
 		return table

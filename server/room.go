@@ -534,9 +534,11 @@ func (r *Room) Stop() {
 	// Mark as not running and get reference to cancel func
 	r.running = false
 	cancelFunc := r.cancel
+	roomID := r.roomID
+	scriptID := r.scriptID
 	r.mutex.Unlock()
 
-	Logger.Info("Stopping room goroutine", "roomID", r.roomID, "title", r.title)
+	Logger.Info("Stopping room goroutine", "roomID", roomID, "title", r.title)
 
 	// Cancel the room's context to signal all operations to stop
 	// This is done outside the lock to prevent deadlock
@@ -544,6 +546,11 @@ func (r *Room) Stop() {
 
 	// Wait for the room goroutine to complete
 	<-r.done
+
+	// Unload the room's script if it has one
+	if scriptID != "" && ScriptMgr != nil {
+		ScriptMgr.UnloadRoomScript(roomID)
+	}
 
 	// Close channels after room goroutine completes
 	close(r.commandIn)
@@ -639,8 +646,21 @@ func (r *Room) runInternal(game *Game) {
 		case <-ticker.C:
 			// Execute periodic script tick if room has an active script
 			if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
-				// TODO: Temporarily disable onTick execution for debugging
-				Logger.Debug("Skipping onTick execution for debugging", "roomID", r.roomID)
+				// Check if script has periodic events
+				sm := ScriptMgr
+				sm.mutex.RLock()
+				hasPeriodic := false
+				if cached, exists := sm.scriptCache[r.scriptID]; exists && cached.metadata != nil {
+					hasPeriodic = cached.metadata.Periodic
+				}
+				sm.mutex.RUnlock()
+				
+				if hasPeriodic {
+					Logger.Debug("Executing onTick for room", "roomID", r.roomID, "scriptID", r.scriptID)
+					if err := ScriptMgr.ExecuteRoomEvent(r, "onTick"); err != nil {
+						Logger.Error("Failed to execute onTick event", "roomID", r.roomID, "error", err)
+					}
+				}
 			}
 
 			// Increment idle counter if room is empty
