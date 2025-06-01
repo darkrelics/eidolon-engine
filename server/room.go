@@ -687,7 +687,7 @@ func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 
 	// Process the command using the room command handler
 	response := r.ProcessRoomCommand(cmd, game)
-	
+
 	Logger.Debug("Room processCommand: Got response", "roomID", r.roomID, "verb", cmd.Verb, "success", response.Success, "hasError", response.Error != nil)
 
 	// Send response back to character

@@ -84,10 +84,10 @@ func (sm *ScriptManager) luaRoomSendMessage(room *Room) lua.LGFunction {
 		}
 
 		message := L.CheckString(1)
-		
+
 		// Add proper formatting to the message
 		formattedMessage := fmt.Sprintf("\n\r%s\n\r", message)
-		
+
 		// Use the standard room message function which handles prompts
 		SendRoomMessageExcept(room, formattedMessage, nil)
 
@@ -120,7 +120,7 @@ func (sm *ScriptManager) luaRoomSendToCharacter(room *Room) lua.LGFunction {
 		if targetChar != nil && targetChar.player != nil {
 			// Add proper formatting to the message
 			formattedMessage := fmt.Sprintf("\n\r%s\n\r", message)
-			
+
 			if SafeSendString(targetChar.player.commandOut, formattedMessage, targetChar.name) {
 				// Send prompt after message
 				SafeSendString(targetChar.player.commandOut, targetChar.prompt, targetChar.name)

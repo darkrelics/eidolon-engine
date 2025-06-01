@@ -130,7 +130,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 
 	// Wait for response or timeout
 	Logger.Debug("Waiting for command response", "roomID", character.room.roomID, "verb", verb)
-	
+
 	select {
 	case resp := <-cmdReq.Response:
 		Logger.Debug("Got command response", "roomID", character.room.roomID, "verb", verb, "success", resp.Success)

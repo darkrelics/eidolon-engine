@@ -104,7 +104,7 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 	if scriptID == "" {
 		return fmt.Errorf("empty script ID")
 	}
-	
+
 	if room == nil {
 		return fmt.Errorf("room is nil")
 	}
@@ -120,7 +120,7 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 
 	// Create new Lua state for this specific room
 	L := lua.NewState()
-	
+
 	// Open standard libraries (needed for os.time() and other functions)
 	L.OpenLibs()
 
@@ -363,7 +363,7 @@ func (sm *ScriptManager) ExecuteRoomFunction(scriptID string, functionName strin
 
 	// Push room table as first argument
 	roomTable := sm.createRoomTable(L, room)
-	
+
 	// Prepare all arguments
 	allArgs := make([]lua.LValue, 0, len(args)+1)
 	allArgs = append(allArgs, roomTable)
@@ -375,7 +375,7 @@ func (sm *ScriptManager) ExecuteRoomFunction(scriptID string, functionName strin
 		NRet:    0,
 		Protect: true,
 	}, allArgs...)
-	
+
 	if err != nil {
 		return fmt.Errorf("error executing function %s: %w", functionName, err)
 	}

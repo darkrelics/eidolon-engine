@@ -1772,7 +1772,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 
 	// Get the room description for the character
 	description := newRoom.GetDescription(character)
-	
+
 	// Trigger onCharacterEnter event for new room scripts AFTER description is prepared
 	// We'll send it asynchronously after a brief delay to ensure the room description reaches the player first
 	if newRoomHasScript {
@@ -1786,8 +1786,8 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 			Logger.Debug("Completed onCharacterEnter event", "roomID", newRoom.roomID, "character", character.name)
 		}()
 	}
-	
-	Logger.Debug("Movement command completed successfully", 
+
+	Logger.Debug("Movement command completed successfully",
 		"characterName", character.name,
 		"fromRoom", oldRoom.roomID,
 		"toRoom", newRoom.roomID)
