@@ -54,6 +54,7 @@ func (p *Player) consoleInternal(done chan bool) {
 			// Send menu messages with safe channel handling
 			menuMessages := []string{
 				"\n=====Console=====\n",
+				"0) Quit\n",
 				"1) Change Password\n",
 				"2) View Messages\n",
 				"3) Create Character\n",
@@ -68,18 +69,10 @@ func (p *Player) consoleInternal(done chan bool) {
 				}
 			}
 
-			if characterCount == 0 {
-				select {
-				case <-p.ctx.Done():
-					done <- true
-					return
-				case p.commandOut <- "9) Quit\n":
-				}
-			} else {
+			if characterCount > 0 {
 				additionalMessages := []string{
 					"4) Select Character\n",
 					"5) Delete Character\n",
-					"9) Quit\n",
 				}
 				for _, msg := range additionalMessages {
 					select {
@@ -104,6 +97,16 @@ func (p *Player) consoleInternal(done chan bool) {
 				return
 			case choice := <-p.commandIn:
 				switch strings.TrimSpace(choice) {
+				case "0":
+					select {
+					case <-p.ctx.Done():
+						return
+					case p.commandOut <- "\nGoodbye!\n":
+					}
+					p.Stop()
+					done <- true
+					return
+
 				case "1":
 					p.HandlePasswordChange()
 
@@ -135,15 +138,6 @@ func (p *Player) consoleInternal(done chan bool) {
 						}
 					}
 
-				case "9":
-					select {
-					case <-p.ctx.Done():
-						return
-					case p.commandOut <- "\nGoodbye!\n":
-					}
-					p.Stop()
-					done <- true
-					return
 
 				default:
 					select {
@@ -181,21 +175,21 @@ func (p *Player) HandlePasswordChange() {
 		"- Contain at least one number\n" +
 		"- Contain at least one special character\n\n"
 
-	p.commandOut <- "Enter your current password (or 'exit' to cancel): "
+	p.commandOut <- "Enter your current password (or '0' to cancel): "
 	currentPassword := <-p.commandIn
 	p.commandOut <- "\n"
 
-	if strings.ToLower(strings.TrimSpace(currentPassword)) == "exit" {
+	if strings.TrimSpace(currentPassword) == "0" {
 		p.commandOut <- "Password change cancelled.\n"
 		return
 	}
 
 	for {
-		p.commandOut <- "Enter your new password (or 'exit' to cancel): "
+		p.commandOut <- "Enter your new password (or '0' to cancel): "
 		newPassword := <-p.commandIn
 		p.commandOut <- "\n"
 
-		if strings.ToLower(strings.TrimSpace(newPassword)) == "exit" {
+		if strings.TrimSpace(newPassword) == "0" {
 			p.commandOut <- "Password change cancelled.\n"
 			return
 		}
@@ -229,7 +223,7 @@ func (p *Player) HandlePasswordChange() {
 		confirmPassword := <-p.commandIn
 		p.commandOut <- "\n"
 
-		if strings.ToLower(strings.TrimSpace(confirmPassword)) == "exit" {
+		if strings.TrimSpace(confirmPassword) == "0" {
 			p.commandOut <- "Password change cancelled.\n"
 			return
 		}
@@ -253,7 +247,7 @@ func (p *Player) HandlePasswordChange() {
 
 func (p *Player) HandleCharacterCreation() {
 	// Get character name
-	p.commandOut <- "\nEnter character name (4-20 letters only): "
+	p.commandOut <- "\nEnter character name (4-20 letters only, or '0' to cancel): "
 	name, ok := <-p.commandIn
 	if !ok {
 		Logger.Warn("Player input channel closed")
@@ -261,6 +255,12 @@ func (p *Player) HandleCharacterCreation() {
 	}
 
 	name = strings.TrimSpace(name)
+
+	// Check for cancel
+	if name == "0" {
+		p.commandOut <- "Character creation cancelled.\n"
+		return
+	}
 
 	// Validate character name
 	if err := p.validateCharacterName(name); err != nil {
@@ -397,6 +397,7 @@ func (p *Player) selectArchetype() (string, error) {
 
 	// Display archetype selection menu
 	msg := "\n\rSelect a character archetype.\n\r"
+	msg += "0: Cancel\n\r"
 	for i, option := range options {
 		msg += fmt.Sprintf("%d: %s\n\r", i+1, option)
 	}
@@ -412,8 +413,13 @@ func (p *Player) selectArchetype() (string, error) {
 
 	// Parse selection
 	num, err := strconv.Atoi(strings.TrimSpace(selection))
-	if err != nil || num < 1 || num > len(options) {
+	if err != nil || num < 0 || num > len(options) {
 		return "", fmt.Errorf("invalid archetype selection")
+	}
+
+	// Check for cancel
+	if num == 0 {
+		return "", fmt.Errorf("archetype selection cancelled")
 	}
 
 	// Extract archetype name from option (format: "Name - Description")
@@ -486,10 +492,10 @@ func (p *Player) buildCharacterOptions() []string {
 
 func (p *Player) displayCharacterOptions(options []string) {
 	p.commandOut <- "\nSelect a character:\n"
+	p.commandOut <- "0) Return to menu\n"
 	for i, name := range options {
 		p.commandOut <- fmt.Sprintf("%d) %s\n", i+1, name)
 	}
-	p.commandOut <- "0) Return to menu\n"
 	p.commandOut <- "\nEnter your choice: "
 }
 
@@ -501,10 +507,11 @@ func (p *Player) HandleCharacterDeletion() {
 	}
 
 	p.commandOut <- "\nSelect a character to delete:\n"
+	p.commandOut <- "0) Cancel\n"
 	for i, name := range options {
 		p.commandOut <- fmt.Sprintf("%d) %s\n", i+1, name)
 	}
-	p.commandOut <- "\nEnter your choice (or 0 to cancel): "
+	p.commandOut <- "\nEnter your choice: "
 
 	choice, ok := <-p.commandIn
 	if !ok {
