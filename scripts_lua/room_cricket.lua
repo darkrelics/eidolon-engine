@@ -36,14 +36,13 @@ function onCharacterEnter(character)
     local characterCount = #characters
     
     if characterCount == 1 then
-        -- First character enters empty room - start chirping immediately
-        eidolon.log.debug("First character entered, starting cricket chirps")
+        -- First character enters empty room - prepare to start chirping
+        eidolon.log.debug("First character entered, preparing cricket chirps")
         isSilent = false
         isChirping = true
         lastChirpTime = os.time()
         lastActivityTime = os.time()
-        -- Play first chirp shortly after entry
-        playChirp()
+        -- Don't play chirp immediately - let the tick handler do it after a delay
     else
         -- Multiple characters now - crickets go silent
         eidolon.log.debug("Multiple characters present, crickets go silent")

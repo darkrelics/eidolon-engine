@@ -1754,15 +1754,6 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		Logger.Debug("Completed onCharacterLeave event", "roomID", oldRoom.roomID, "character", character.name)
 	}
 
-	// Trigger onCharacterEnter event for new room scripts
-	if newRoomHasScript {
-		Logger.Debug("Executing onCharacterEnter event", "roomID", newRoom.roomID, "character", character.name)
-		if err := ScriptMgr.ExecuteRoomEvent(newRoom, "onCharacterEnter", character); err != nil {
-			Logger.Error("Error executing onCharacterEnter during movement", "roomID", newRoom.roomID, "error", err)
-		}
-		Logger.Debug("Completed onCharacterEnter event", "roomID", newRoom.roomID, "character", character.name)
-	}
-
 	// Send departure message to remaining characters (only if visible)
 	if departureMsg != "" {
 		SendRoomMessageExcept(oldRoom, departureMsg, character)
@@ -1781,6 +1772,20 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 
 	// Get the room description for the character
 	description := newRoom.GetDescription(character)
+	
+	// Trigger onCharacterEnter event for new room scripts AFTER description is prepared
+	// We'll send it asynchronously after a brief delay to ensure the room description reaches the player first
+	if newRoomHasScript {
+		go func() {
+			// Brief delay to ensure room description is processed first
+			time.Sleep(100 * time.Millisecond)
+			Logger.Debug("Executing onCharacterEnter event", "roomID", newRoom.roomID, "character", character.name)
+			if err := ScriptMgr.ExecuteRoomEvent(newRoom, "onCharacterEnter", character); err != nil {
+				Logger.Error("Error executing onCharacterEnter during movement", "roomID", newRoom.roomID, "error", err)
+			}
+			Logger.Debug("Completed onCharacterEnter event", "roomID", newRoom.roomID, "character", character.name)
+		}()
+	}
 	
 	Logger.Debug("Movement command completed successfully", 
 		"characterName", character.name,

@@ -84,21 +84,12 @@ func (sm *ScriptManager) luaRoomSendMessage(room *Room) lua.LGFunction {
 		}
 
 		message := L.CheckString(1)
-
-		room.mutex.RLock()
-		characters := make([]*Character, 0, len(room.characters))
-		for _, char := range room.characters {
-			if char != nil {
-				characters = append(characters, char)
-			}
-		}
-		room.mutex.RUnlock()
-
-		for _, char := range characters {
-			if char != nil && char.player != nil {
-				SafeSendString(char.player.commandOut, message, char.name)
-			}
-		}
+		
+		// Add proper formatting to the message
+		formattedMessage := fmt.Sprintf("\n\r%s\n\r", message)
+		
+		// Use the standard room message function which handles prompts
+		SendRoomMessageExcept(room, formattedMessage, nil)
 
 		return 0
 	}
@@ -127,7 +118,13 @@ func (sm *ScriptManager) luaRoomSendToCharacter(room *Room) lua.LGFunction {
 		room.mutex.RUnlock()
 
 		if targetChar != nil && targetChar.player != nil {
-			SafeSendString(targetChar.player.commandOut, message, targetChar.name)
+			// Add proper formatting to the message
+			formattedMessage := fmt.Sprintf("\n\r%s\n\r", message)
+			
+			if SafeSendString(targetChar.player.commandOut, formattedMessage, targetChar.name) {
+				// Send prompt after message
+				SafeSendString(targetChar.player.commandOut, targetChar.prompt, targetChar.name)
+			}
 			L.Push(lua.LTrue)
 		} else {
 			L.Push(lua.LFalse)
