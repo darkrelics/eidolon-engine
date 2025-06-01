@@ -138,7 +138,6 @@ func (p *Player) consoleInternal(done chan bool) {
 						}
 					}
 
-
 				default:
 					select {
 					case <-p.ctx.Done():
