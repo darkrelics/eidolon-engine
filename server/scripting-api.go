@@ -372,8 +372,6 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 		Logger.Warn("ExecuteRoomEvent called with nil room", "event", eventName)
 		return nil
 	}
-
-	Logger.Info("ExecuteRoomEvent: Room check", "roomID", room.roomID, "scriptID", room.scriptID, "scriptActive", room.scriptActive)
 	
 	if room.scriptID == "" || !room.scriptActive {
 		Logger.Info("ExecuteRoomEvent: No script or inactive", "roomID", room.roomID, "scriptID", room.scriptID, "scriptActive", room.scriptActive)

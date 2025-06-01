@@ -1703,6 +1703,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 
 	// Perform room transitions atomically to prevent deadlocks
 	// Lock in consistent order: oldRoom, newRoom, then character
+	Logger.Info("Acquiring room locks for movement", "oldRoomID", oldRoom.roomID, "newRoomID", newRoom.roomID)
 	if oldRoom.roomID < newRoom.roomID {
 		oldRoom.mutex.Lock()
 		newRoom.mutex.Lock()
@@ -1713,13 +1714,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		// Same room (shouldn't happen, but handle gracefully)
 		oldRoom.mutex.Lock()
 	}
-
-	// Trigger onCharacterLeave event for old room scripts before removing character
-	if oldRoom.scriptID != "" && oldRoom.scriptActive && ScriptMgr != nil {
-		if err := ScriptMgr.ExecuteRoomEvent(oldRoom, "onCharacterLeave", character); err != nil {
-			Logger.Error("Error executing onCharacterLeave", "roomID", oldRoom.roomID, "error", err)
-		}
-	}
+	Logger.Info("Room locks acquired", "oldRoomID", oldRoom.roomID, "newRoomID", newRoom.roomID)
 
 	// Remove from old room
 	delete(oldRoom.characters, character.id)
@@ -1736,19 +1731,36 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		Logger.Info("Activating scripts for persistent room with character entry", "roomID", newRoom.roomID)
 	}
 
-	// Trigger onCharacterEnter event for new room scripts after adding character
-	if newRoom.scriptID != "" && newRoom.scriptActive && ScriptMgr != nil {
-		if err := ScriptMgr.ExecuteRoomEvent(newRoom, "onCharacterEnter", character); err != nil {
-			Logger.Error("Error executing onCharacterEnter during movement", "roomID", newRoom.roomID, "error", err)
-		}
-	}
+	// Store script execution info before unlocking
+	oldRoomHasScript := oldRoom.scriptID != "" && oldRoom.scriptActive && ScriptMgr != nil
+	newRoomHasScript := newRoom.scriptID != "" && newRoom.scriptActive && ScriptMgr != nil
 
-	// Unlock rooms before updating character
+	// Unlock rooms before executing scripts to avoid deadlock
 	if oldRoom.roomID != newRoom.roomID {
 		oldRoom.mutex.Unlock()
 		newRoom.mutex.Unlock()
 	} else {
 		oldRoom.mutex.Unlock()
+	}
+	Logger.Info("Room locks released", "oldRoomID", oldRoom.roomID, "newRoomID", newRoom.roomID)
+
+	// Now execute scripts without holding locks
+	// Trigger onCharacterLeave event for old room scripts
+	if oldRoomHasScript {
+		Logger.Info("Executing onCharacterLeave event", "roomID", oldRoom.roomID, "character", character.name)
+		if err := ScriptMgr.ExecuteRoomEvent(oldRoom, "onCharacterLeave", character); err != nil {
+			Logger.Error("Error executing onCharacterLeave", "roomID", oldRoom.roomID, "error", err)
+		}
+		Logger.Info("Completed onCharacterLeave event", "roomID", oldRoom.roomID, "character", character.name)
+	}
+
+	// Trigger onCharacterEnter event for new room scripts
+	if newRoomHasScript {
+		Logger.Info("Executing onCharacterEnter event", "roomID", newRoom.roomID, "character", character.name)
+		if err := ScriptMgr.ExecuteRoomEvent(newRoom, "onCharacterEnter", character); err != nil {
+			Logger.Error("Error executing onCharacterEnter during movement", "roomID", newRoom.roomID, "error", err)
+		}
+		Logger.Info("Completed onCharacterEnter event", "roomID", newRoom.roomID, "character", character.name)
 	}
 
 	// Send departure message to remaining characters (only if visible)
