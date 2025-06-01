@@ -683,11 +683,20 @@ func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 		return
 	}
 
+	Logger.Info("Room processCommand: Processing command", "roomID", r.roomID, "verb", cmd.Verb, "character", cmd.Character.name)
+
 	// Process the command using the room command handler
 	response := r.ProcessRoomCommand(cmd, game)
+	
+	Logger.Info("Room processCommand: Got response", "roomID", r.roomID, "verb", cmd.Verb, "success", response.Success, "hasError", response.Error != nil)
 
 	// Send response back to character
-	cmd.Response <- response
+	select {
+	case cmd.Response <- response:
+		Logger.Info("Room processCommand: Response sent", "roomID", r.roomID, "verb", cmd.Verb)
+	default:
+		Logger.Error("Room processCommand: Failed to send response - channel full or closed", "roomID", r.roomID, "verb", cmd.Verb)
+	}
 }
 
 // GetDescription returns a formatted string description of the room

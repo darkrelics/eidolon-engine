@@ -1769,6 +1769,11 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 
 	// Get the room description for the character
 	description := newRoom.GetDescription(character)
+	
+	Logger.Info("Movement command completed successfully", 
+		"characterName", character.name,
+		"fromRoom", oldRoom.roomID,
+		"toRoom", newRoom.roomID)
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
