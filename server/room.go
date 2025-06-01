@@ -596,12 +596,12 @@ func (r *Room) runInternal(game *Game) {
 				Logger.Debug("ABOUT TO EXECUTE onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
 
 				// Add detailed logging before calling ExecuteRoomEvent
-				Logger.Info("Calling ScriptMgr.ExecuteRoomEvent", "roomID", r.roomID, "scriptID", r.scriptID, "event", "onRoomStart")
+				Logger.Debug("Calling ScriptMgr.ExecuteRoomEvent", "roomID", r.roomID, "scriptID", r.scriptID, "event", "onRoomStart")
 				if err := ScriptMgr.ExecuteRoomEvent(r, "onRoomStart"); err != nil {
 					Logger.Error("Failed to execute onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID, "error", err)
 					r.scriptActive = false
 				} else {
-					Logger.Info("Successfully executed onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
+					Logger.Debug("Successfully executed onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
 				}
 			}
 		}
@@ -683,17 +683,17 @@ func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 		return
 	}
 
-	Logger.Info("Room processCommand: Processing command", "roomID", r.roomID, "verb", cmd.Verb, "character", cmd.Character.name)
+	Logger.Debug("Room processCommand: Processing command", "roomID", r.roomID, "verb", cmd.Verb, "character", cmd.Character.name)
 
 	// Process the command using the room command handler
 	response := r.ProcessRoomCommand(cmd, game)
 	
-	Logger.Info("Room processCommand: Got response", "roomID", r.roomID, "verb", cmd.Verb, "success", response.Success, "hasError", response.Error != nil)
+	Logger.Debug("Room processCommand: Got response", "roomID", r.roomID, "verb", cmd.Verb, "success", response.Success, "hasError", response.Error != nil)
 
 	// Send response back to character
 	select {
 	case cmd.Response <- response:
-		Logger.Info("Room processCommand: Response sent", "roomID", r.roomID, "verb", cmd.Verb)
+		Logger.Debug("Room processCommand: Response sent", "roomID", r.roomID, "verb", cmd.Verb)
 	default:
 		Logger.Error("Room processCommand: Failed to send response - channel full or closed", "roomID", r.roomID, "verb", cmd.Verb)
 	}

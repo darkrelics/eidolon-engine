@@ -72,7 +72,7 @@ func (sm *ScriptManager) RegisterRoomAPI(L *lua.LState, room *Room) {
 	L.SetField(logAPI, "debug", L.NewFunction(sm.luaLogDebug))
 	L.SetField(logAPI, "error", L.NewFunction(sm.luaLogError))
 
-	Logger.Info("All API functions registered successfully", "roomID", room.roomID)
+	Logger.Debug("All API functions registered successfully", "roomID", room.roomID)
 }
 
 // luaRoomSendMessage sends a message to all characters in the room
@@ -372,14 +372,14 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 	}
 
 	if room.scriptID == "" || !room.scriptActive {
-		Logger.Info("ExecuteRoomEvent: No script or inactive", "roomID", room.roomID, "scriptID", room.scriptID, "scriptActive", room.scriptActive)
+		Logger.Debug("ExecuteRoomEvent: No script or inactive", "roomID", room.roomID, "scriptID", room.scriptID, "scriptActive", room.scriptActive)
 		return nil
 	}
 
 	Logger.Debug("ExecuteRoomEvent: Getting script", "roomID", room.roomID, "scriptID", room.scriptID)
 	L, err := sm.GetRoomScript(room.roomID)
 	if err != nil {
-		Logger.Info("ExecuteRoomEvent: Script not loaded, attempting to load", "roomID", room.roomID, "scriptID", room.scriptID, "error", err)
+		Logger.Debug("ExecuteRoomEvent: Script not loaded, attempting to load", "roomID", room.roomID, "scriptID", room.scriptID, "error", err)
 		// Try to load the script if not loaded
 		if loadErr := sm.LoadScriptForRoom(room.scriptID, room); loadErr != nil {
 			Logger.Warn("Failed to load script for room event", "roomID", room.roomID, "event", eventName, "error", loadErr)

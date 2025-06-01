@@ -107,11 +107,11 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	retryTimer := time.NewTimer(50 * time.Millisecond)
 	defer retryTimer.Stop()
 
-	Logger.Info("Sending command to room", "roomID", character.room.roomID, "verb", verb, "character", character.name)
+	Logger.Debug("Sending command to room", "roomID", character.room.roomID, "verb", verb, "character", character.name)
 
 	select {
 	case character.room.commandIn <- cmdReq:
-		Logger.Info("Command sent successfully to room", "roomID", character.room.roomID, "verb", verb)
+		Logger.Debug("Command sent successfully to room", "roomID", character.room.roomID, "verb", verb)
 		// Command sent successfully to room
 	case <-retryTimer.C:
 		// Brief retry after 50ms
@@ -129,11 +129,11 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	}
 
 	// Wait for response or timeout
-	Logger.Info("Waiting for command response", "roomID", character.room.roomID, "verb", verb)
+	Logger.Debug("Waiting for command response", "roomID", character.room.roomID, "verb", verb)
 	
 	select {
 	case resp := <-cmdReq.Response:
-		Logger.Info("Got command response", "roomID", character.room.roomID, "verb", verb, "success", resp.Success)
+		Logger.Debug("Got command response", "roomID", character.room.roomID, "verb", verb, "success", resp.Success)
 		if resp.Error != nil {
 			// If room doesn't handle it, escalate to game
 			if strings.Contains(resp.Error.Error(), "unknown room command") {
