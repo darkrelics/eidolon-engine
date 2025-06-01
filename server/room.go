@@ -569,11 +569,11 @@ func (r *Room) run(game *Game) {
 
 // runInternal contains the actual room processing logic
 func (r *Room) runInternal(game *Game) {
-	Logger.Info("Room goroutine started", "roomID", r.roomID, "title", r.title)
+	Logger.Debug("Room goroutine started", "roomID", r.roomID, "title", r.title)
 
 	// Signal completion when this function returns - do this at the very end instead of defer
 	defer func() {
-		Logger.Info("Room goroutine ending, closing done channel", "roomID", r.roomID)
+		Logger.Debug("Room goroutine ending, closing done channel", "roomID", r.roomID)
 		close(r.done)
 	}()
 
@@ -593,7 +593,7 @@ func (r *Room) runInternal(game *Game) {
 				Logger.Info("Script loaded successfully", "roomID", r.roomID, "scriptID", r.scriptID)
 
 				// Step 2: Call onRoomStart event if script loaded properly
-				Logger.Info("ABOUT TO EXECUTE onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
+				Logger.Debug("ABOUT TO EXECUTE onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
 
 				// Add detailed logging before calling ExecuteRoomEvent
 				Logger.Info("Calling ScriptMgr.ExecuteRoomEvent", "roomID", r.roomID, "scriptID", r.scriptID, "event", "onRoomStart")
@@ -654,7 +654,7 @@ func (r *Room) runInternal(game *Game) {
 					hasPeriodic = cached.metadata.Periodic
 				}
 				sm.mutex.RUnlock()
-				
+
 				if hasPeriodic {
 					Logger.Debug("Executing onTick for room", "roomID", r.roomID, "scriptID", r.scriptID)
 					if err := ScriptMgr.ExecuteRoomEvent(r, "onTick"); err != nil {
