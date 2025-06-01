@@ -364,17 +364,24 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 
 // ExecuteRoomEvent executes a room event handler if it exists
 func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...interface{}) error {
+	Logger.Info("ExecuteRoomEvent: Entry", "roomID", room.roomID, "event", eventName, "scriptManager", sm != nil)
+	
 	if room == nil {
 		Logger.Warn("ExecuteRoomEvent called with nil room", "event", eventName)
 		return nil
 	}
 
+	Logger.Info("ExecuteRoomEvent: Room check", "roomID", room.roomID, "scriptID", room.scriptID, "scriptActive", room.scriptActive)
+	
 	if room.scriptID == "" || !room.scriptActive {
+		Logger.Info("ExecuteRoomEvent: No script or inactive", "roomID", room.roomID, "scriptID", room.scriptID, "scriptActive", room.scriptActive)
 		return nil
 	}
 
+	Logger.Info("ExecuteRoomEvent: Getting script", "roomID", room.roomID, "scriptID", room.scriptID)
 	L, err := sm.GetScript(room.scriptID)
 	if err != nil {
+		Logger.Info("ExecuteRoomEvent: Script not loaded, attempting to load", "roomID", room.roomID, "scriptID", room.scriptID, "error", err)
 		// Try to load the script if not loaded
 		if loadErr := sm.LoadScriptForRoom(room.scriptID, room); loadErr != nil {
 			Logger.Warn("Failed to load script for room event", "roomID", room.roomID, "event", eventName, "error", loadErr)
@@ -387,14 +394,15 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 		}
 	}
 
+	Logger.Info("ExecuteRoomEvent: Got script", "roomID", room.roomID, "scriptID", room.scriptID, "luaState", L != nil)
+
 	// Ensure we have a valid Lua state before proceeding
 	if L == nil {
 		Logger.Error("Lua state is nil after loading script", "roomID", room.roomID, "scriptID", room.scriptID, "event", eventName)
 		return fmt.Errorf("lua state is nil for script %s", room.scriptID)
 	}
 
-	// Debug logging
-	Logger.Debug("ExecuteRoomEvent checking for handler", "roomID", room.roomID, "event", eventName, "luaState", L != nil)
+	Logger.Info("ExecuteRoomEvent: Checking for handler", "roomID", room.roomID, "event", eventName)
 
 	// Check if the event handler exists
 	handler := L.GetGlobal(eventName)
@@ -404,17 +412,27 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 		return nil
 	}
 
+	Logger.Info("ExecuteRoomEvent: Found handler, creating thread", "roomID", room.roomID, "event", eventName)
+
 	// Create a new thread for execution
 	co, _ := L.NewThread()
+
+	Logger.Info("ExecuteRoomEvent: Pushing handler", "roomID", room.roomID, "event", eventName)
 
 	// Push function and arguments
 	co.Push(handler)
 
+	Logger.Info("ExecuteRoomEvent: Converting arguments", "roomID", room.roomID, "event", eventName, "argCount", len(args))
+
 	// Convert and push all arguments
-	for _, arg := range args {
+	for i, arg := range args {
+		Logger.Info("ExecuteRoomEvent: Converting arg", "roomID", room.roomID, "event", eventName, "argIndex", i, "argType", fmt.Sprintf("%T", arg))
 		luaArg := sm.convertToLuaValue(L, arg)
+		Logger.Info("ExecuteRoomEvent: Pushing arg", "roomID", room.roomID, "event", eventName, "argIndex", i)
 		co.Push(luaArg)
 	}
+
+	Logger.Info("ExecuteRoomEvent: About to execute Lua function", "roomID", room.roomID, "event", eventName)
 
 	// Execute the function with proper error handling
 	state, err, _ := L.Resume(co, nil)
@@ -423,7 +441,7 @@ func (sm *ScriptManager) ExecuteRoomEvent(room *Room, eventName string, args ...
 		return fmt.Errorf("error executing event %s: %w", eventName, err)
 	}
 
-	Logger.Debug("Successfully executed room event", "roomID", room.roomID, "event", eventName)
+	Logger.Info("Successfully executed room event", "roomID", room.roomID, "event", eventName)
 	return nil
 }
 

@@ -151,8 +151,8 @@ func (sm *ScriptManager) LoadScriptForRoom(scriptID string, room *Room) error {
 
 	// Register room API if room is provided
 	if room != nil {
-		// TODO: Temporarily disable room API registration to isolate crash
-		Logger.Info("Skipping room API registration to isolate crash", "scriptID", scriptID, "roomID", room.roomID)
+		Logger.Info("Registering room API", "scriptID", scriptID, "roomID", room.roomID)
+		sm.RegisterRoomAPI(L, room)
 	}
 
 	Logger.Info("Script loaded successfully",
