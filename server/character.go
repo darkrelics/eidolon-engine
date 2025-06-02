@@ -325,7 +325,7 @@ func (c *Character) Stop() {
 
 	// Notify the room of departure before removing the character
 	if c.room != nil {
-		SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has left.\n\r", c.name), c)
+		SendRoomMessage(c.room, fmt.Sprintf("\n\r%s has left.\n\r", c.name), c)
 	}
 
 	// Room removal prevents ghost character references

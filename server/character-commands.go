@@ -527,7 +527,7 @@ func executeUnhideCommand(character *Character, tokens []string) error {
 	SafeSendString(character.player.commandOut, "\n\rYou step out from hiding.\n\r", character.name)
 
 	// Room notification alerts players to revealed presence
-	SendRoomMessageExcept(character.room,
+	SendRoomMessage(character.room,
 		fmt.Sprintf("\n\r%s steps out from hiding.\n\r", character.name),
 		character,
 	)

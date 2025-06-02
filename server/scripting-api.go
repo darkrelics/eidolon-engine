@@ -89,7 +89,7 @@ func (sm *ScriptManager) luaRoomSendMessage(room *Room) lua.LGFunction {
 		formattedMessage := fmt.Sprintf("\n\r%s\n\r", message)
 
 		// Use the standard room message function which handles prompts
-		SendRoomMessageExcept(room, formattedMessage, nil)
+		SendRoomMessage(room, formattedMessage, nil)
 
 		return 0
 	}

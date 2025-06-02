@@ -91,7 +91,7 @@ func (c *Character) RunConsole(done chan bool) {
 	}
 
 	// Arrival notification informs other players
-	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
+	SendRoomMessage(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
 
 	// Initial view orients player to their location
 	c.safeExecuteLookCommand()

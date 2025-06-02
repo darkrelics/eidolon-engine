@@ -167,7 +167,7 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 	}
 
 	// Send message to everyone else in the room
-	SendRoomMessageExcept(character.room, roomMessage, character)
+	SendRoomMessage(character.room, roomMessage, character)
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
@@ -195,7 +195,7 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 		character.playerCommandOut <- "\n\rYou reveal yourself as you interact with items.\n\r"
 
 		if character.room != nil {
-			SendRoomMessageExcept(character.room,
+			SendRoomMessage(character.room,
 				fmt.Sprintf("\n\r%s suddenly appears!\n\r", character.name),
 				character,
 			)
@@ -539,7 +539,7 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Notify room
 	if character.room != nil {
-		SendRoomMessageExcept(character.room,
+		SendRoomMessage(character.room,
 			fmt.Sprintf("\n\r%s puts %s in %s.\n\r", character.name, itemToPut.name, container.name),
 			character)
 	}
@@ -805,7 +805,7 @@ func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Notify room
 	if character.room != nil {
-		SendRoomMessageExcept(character.room,
+		SendRoomMessage(character.room,
 			fmt.Sprintf("\n\r%s takes %s from %s.\n\r", character.name, removedItem.name, container.name),
 			character)
 	}
@@ -937,7 +937,7 @@ func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
 	message := fmt.Sprintf("\n\rYou pick up %s in your %s.\n\r", targetItem.name, handUsed)
 
 	// Notify the room
-	SendRoomMessageExcept(room, fmt.Sprintf("\n\r%s picks up %s.\n\r", character.name, targetItem.name), character)
+	SendRoomMessage(room, fmt.Sprintf("\n\r%s picks up %s.\n\r", character.name, targetItem.name), character)
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
@@ -1075,7 +1075,7 @@ func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	message := fmt.Sprintf("\n\rYou drop %s.\n\r", itemToRemove.name)
 
 	// Notify the room
-	SendRoomMessageExcept(room, fmt.Sprintf("\n\r%s drops %s.\n\r", character.name, itemToRemove.name), character)
+	SendRoomMessage(room, fmt.Sprintf("\n\r%s drops %s.\n\r", character.name, itemToRemove.name), character)
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
@@ -1297,7 +1297,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 
 	// Notify the room
 	if character.room != nil {
-		SendRoomMessageExcept(character.room,
+		SendRoomMessage(character.room,
 			fmt.Sprintf("\n\r%s wears %s.\n\r", character.name, itemToWear.name),
 			character)
 	}
@@ -1425,7 +1425,7 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 
 	// Notify the room
 	if character.room != nil {
-		SendRoomMessageExcept(character.room,
+		SendRoomMessage(character.room,
 			fmt.Sprintf("\n\r%s removes %s.\n\r", character.name, itemToRemove.name),
 			character)
 	}
@@ -1508,7 +1508,7 @@ func handleSwitchCommand(cmd *CommandRequest, targetName string) *CommandRespons
 
 	// Notify the room
 	if character.room != nil {
-		SendRoomMessageExcept(character.room,
+		SendRoomMessage(character.room,
 			fmt.Sprintf("\n\r%s switches the items in their hands.\n\r", character.name),
 			character)
 	}
@@ -1556,7 +1556,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		character.playerCommandOut <- "\n\rYou reveal yourself as you move.\n\r"
 
 		if character.room != nil {
-			SendRoomMessageExcept(character.room,
+			SendRoomMessage(character.room,
 				fmt.Sprintf("\n\r%s suddenly appears!\n\r", character.name),
 				character,
 			)
@@ -1755,7 +1755,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 
 	// Send departure message to remaining characters (only if visible)
 	if departureMsg != "" {
-		SendRoomMessageExcept(oldRoom, departureMsg, character)
+		SendRoomMessage(oldRoom, departureMsg, character)
 	}
 
 	// Update character's room reference
@@ -1766,7 +1766,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	// Send arrival message using the exit's arrival text (only if visible)
 	if !character.IsHidden() {
 		arrivalMsg := fmt.Sprintf("%s %s.", character.name, targetExit.arrivalText)
-		SendRoomMessageExcept(newRoom, arrivalMsg, character)
+		SendRoomMessage(newRoom, arrivalMsg, character)
 	}
 
 	// Get the room description for the character
@@ -1870,7 +1870,7 @@ func handleHideCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 	if !outcome.Success {
 		message := "\n\rYou attempt to hide but fail to find adequate concealment.\n\r"
 
-		SendRoomMessageExcept(room,
+		SendRoomMessage(room,
 			fmt.Sprintf("\n\r%s attempts to hide but remains visible.\n\r", character.name),
 			character,
 		)
@@ -2035,7 +2035,7 @@ func handleSneakCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 			SafeSendString(observer.player.commandOut, fmt.Sprintf("\n\rYou spot %s sneaking in!\n\r", character.name), observer.name)
 
 			// Notify others
-			SendRoomMessageExcept(newRoom,
+			SendRoomMessage(newRoom,
 				fmt.Sprintf("\n\r%s points out %s who was sneaking in.\n\r", observer.name, character.name),
 				observer,
 			)
@@ -2083,7 +2083,7 @@ func handleSearchCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 
 	// Announce the search
 	SafeSendString(character.player.commandOut, "\n\rYou begin searching for hidden characters...\n\r", character.name)
-	SendRoomMessageExcept(room,
+	SendRoomMessage(room,
 		fmt.Sprintf("\n\r%s begins searching the area carefully.\n\r", character.name),
 		character,
 	)
@@ -2119,7 +2119,7 @@ func handleSearchCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 		SafeSendString(foundCharacter.player.commandOut, fmt.Sprintf("\n\r%s discovers your hiding place!\n\r", character.name), foundCharacter.name)
 
 		// Notify others
-		SendRoomMessageExcept(room,
+		SendRoomMessage(room,
 			fmt.Sprintf("\n\r%s discovers %s hiding!\n\r", character.name, foundCharacter.name),
 			character,
 		)
@@ -2212,7 +2212,7 @@ func handlePointCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 		SafeSendString(character.player.commandOut, fmt.Sprintf("\n\rYou point at %s, revealing their location!\n\r", target.name), character.name)
 		SafeSendString(target.player.commandOut, fmt.Sprintf("\n\r%s points at you, revealing your location!\n\r", character.name), target.name)
 
-		SendRoomMessageExcept(room,
+		SendRoomMessage(room,
 			fmt.Sprintf("\n\r%s points at %s, revealing their location!\n\r", character.name, target.name),
 			character,
 		)
@@ -2221,7 +2221,7 @@ func handlePointCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 		SafeSendString(character.player.commandOut, fmt.Sprintf("\n\rYou point at %s.\n\r", target.name), character.name)
 		SafeSendString(target.player.commandOut, fmt.Sprintf("\n\r%s points at you.\n\r", character.name), target.name)
 
-		SendRoomMessageExcept(room,
+		SendRoomMessage(room,
 			fmt.Sprintf("\n\r%s points at %s.\n\r", character.name, target.name),
 			character,
 		)

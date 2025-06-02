@@ -124,5 +124,5 @@ func SendArrivalMessage(character *Character, exitUsed *Exit, destinationRoom *R
 	}
 
 	// Arrival announcements inform room occupants of new presence
-	SendRoomMessageExcept(destinationRoom, message, character)
+	SendRoomMessage(destinationRoom, message, character)
 }

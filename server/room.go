@@ -161,7 +161,7 @@ func (g *Game) LoadRooms() error {
 
 	Logger.Info("Load Rooms...Loading Rooms...")
 
-		var roomsData []RoomData
+	var roomsData []RoomData
 	err := g.database.Scan(g.ctx, "rooms", &roomsData)
 	if err != nil {
 		Logger.Error("Error scanning rooms table", "error", err)
@@ -461,7 +461,7 @@ func (r *Room) GetScriptID() string {
 }
 
 // SendRoomMessageExcept sends a message to all characters in a room except one
-func SendRoomMessageExcept(room *Room, message string, except *Character) {
+func SendRoomMessage(room *Room, message string, except *Character) {
 	if room == nil {
 		return
 	}
