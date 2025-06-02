@@ -257,11 +257,11 @@ func (c *Character) DisplayMessage(message string) {
 	if c == nil {
 		return
 	}
-	
+
 	c.mutex.RLock()
 	player := c.player
 	c.mutex.RUnlock()
-	
+
 	if player == nil {
 		return
 	}
