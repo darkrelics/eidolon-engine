@@ -48,7 +48,7 @@ jsonschema==4.23.0
 jsonschema-specifications==2025.4.1
 jupyter-client==8.6.3
 jupyter-console==6.6.3
-jupyter-core==5.7.2
+jupyter-core==5.8.1
 jupyter-events==0.12.0
 jupyter-lsp==2.2.5
 jupyter-server==2.15.0
