@@ -55,15 +55,15 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 ## Rooms Table
 
-| Field           | Type      | Description                                     |
-| --------------- | --------- | ----------------------------------------------- |
-| `RoomID`        | `NUMBER`  | Unique identifier of the room.                  |
-| `Area`          | `STRING`  | Name of the area or region the room belongs to. |
-| `Title`         | `STRING`  | Title or name of the room.                      |
-| `Description`   | `STRING`  | Text description of the room.                   |
-| `ExitID`        | `LIST`    | Map of exit directions to exit UUIDs.           |
-| `ScriptID`      | `STRING`  | ID of the Lua script associated with the room.  |
-| `ScriptActive`  | `BOOLEAN` | Indicates if the room script is active.         |
+| Field          | Type      | Description                                     |
+| -------------- | --------- | ----------------------------------------------- |
+| `RoomID`       | `NUMBER`  | Unique identifier of the room.                  |
+| `Area`         | `STRING`  | Name of the area or region the room belongs to. |
+| `Title`        | `STRING`  | Title or name of the room.                      |
+| `Description`  | `STRING`  | Text description of the room.                   |
+| `ExitID`       | `LIST`    | Map of exit directions to exit UUIDs.           |
+| `ScriptID`     | `STRING`  | ID of the Lua script associated with the room.  |
+| `ScriptActive` | `BOOLEAN` | Indicates if the room script is active.         |
 
 - **`RoomID`**: Serves as the primary key for the room.
 - **`Area`**: The broader area or zone where the room is located.
@@ -251,6 +251,7 @@ Scripts can handle the following events:
 Scripts have access to the Eidolon API through the global `eidolon` table:
 
 #### Room Functions
+
 - **`eidolon.room.sendMessage(message)`**: Send a message to all characters in the room
 - **`eidolon.room.sendToCharacter(name, message)`**: Send a message to a specific character
 - **`eidolon.room.getCharacters()`**: Get list of characters in the room
@@ -261,6 +262,7 @@ Scripts have access to the Eidolon API through the global `eidolon` table:
 - **`eidolon.room.getExits()`**: Get list of exits from the room
 
 #### Logging Functions
+
 - **`eidolon.log.info(message)`**: Log an info message
 - **`eidolon.log.debug(message)`**: Log a debug message
 - **`eidolon.log.error(message)`**: Log an error message
