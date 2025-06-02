@@ -2,7 +2,7 @@
 jupyter==1.1.1
 matplotlib==3.10.1
 networkx==3.4.2
-notebook==7.4.2
+notebook==7.4.3
 numpy==2.2.4
 pyyaml==6.0.2
 voila==0.5.8
