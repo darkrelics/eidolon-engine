@@ -352,7 +352,7 @@ func (c *Character) Stop() {
 	// State persistence preserves player progress
 	// Use a fresh context for shutdown saves to ensure they complete
 	saveCtx := context.Background()
-	
+
 	err := c.SaveWithContext(saveCtx)
 	if err != nil {
 		Logger.Error("Error saving character during shutdown", "characterName", c.name, "error", err)

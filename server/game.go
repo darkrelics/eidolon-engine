@@ -62,7 +62,6 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
-
 	game := &Game{
 		config:           config,
 		ctx:              ctx,
@@ -87,14 +86,12 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	game.characterCount.Store(0)
 
-
 	database, err := NewKeyPair(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("database init error: %w", err)
 	}
 
 	game.database = database
-
 
 	if err := game.InitCharacterBloomFilter(); err != nil {
 		Logger.Warn("Error initializing character bloom filter", "error", err)
@@ -109,14 +106,11 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Info("Script manager initialized successfully")
 	}
 
-
 	game.rooms[0] = NewRoom(ctx, 0, "The Void", "The Void", "Default void room.", true, "") // Default room is always persistent, no script
-
 
 	if err := game.LoadRooms(); err != nil {
 		Logger.Error("Error loading rooms", "error", err)
 	}
-
 
 	prototypes, err := LoadPrototypes(ctx, game.database)
 	if err != nil {
@@ -130,11 +124,9 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		}
 	}
 
-
 	if err := game.LoadArchetypes(); err != nil {
 		Logger.Error("Error loading archetypes", "error", err)
 	}
-
 
 	game.BuildArchetypeOptions()
 
@@ -261,7 +253,6 @@ func (g *Game) Run(errChan chan error) error {
 // runInternal contains the actual game loop logic
 func (g *Game) runInternal(errChan chan error) error {
 	Logger.Info("Starting game engine...")
-
 
 	g.ticker = time.NewTicker(time.Second)
 	defer g.ticker.Stop()

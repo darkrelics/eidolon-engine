@@ -111,7 +111,7 @@ type Player struct {
 	mutex         sync.RWMutex
 	shutdownOnce  sync.Once
 	done          chan struct{} // Channel signaled when all goroutines complete
-	inputBuffer   *InputBuffer // Track current input line content
+	inputBuffer   *InputBuffer  // Track current input line content
 }
 
 type PlayerData struct {
@@ -398,7 +398,6 @@ func (p *Player) Stop() {
 		close(p.playerError)
 	})
 }
-
 
 func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request, done chan error) {
 	defer func() {

@@ -31,7 +31,6 @@ var CONFIGURATION_FILE string = "config.yml"
 
 func main() {
 
-
 	fmt.Println("Main - Starting System...")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -44,7 +43,6 @@ func main() {
 	errorHandlerDone := make(chan struct{})
 	go handleErrors(ctx, errorChannel, errorHandlerDone)
 
-
 	fmt.Printf("Main - Loading configuration from %s\n", CONFIGURATION_FILE)
 
 	config, err := LoadConfiguration(CONFIGURATION_FILE)
@@ -52,7 +50,6 @@ func main() {
 		fmt.Printf("Main - Error loading configuration: %v\n", err)
 		os.Exit(125)
 	}
-
 
 	fmt.Println("Main - Initializing logging...")
 	cloudWatch, err := NewCloudWatch(ctx, config)
@@ -62,14 +59,12 @@ func main() {
 	}
 	CloudWatchMetrics = cloudWatch
 
-
 	Logger.Info("Main - Starting Game Engine...")
 	game, err := NewGame(ctx, config)
 	if err != nil {
 		Logger.Error("Main - Error initializing game engine", "error", err)
 		os.Exit(123)
 	}
-
 
 	Logger.Info("Main - Starting Server...")
 	server, err := NewServer(ctx, config)
@@ -83,11 +78,9 @@ func main() {
 
 	Logger.Info("Main - Starting server components...")
 
-
 	go cloudWatch.Run(errorChannel)
 	go game.Run(errorChannel)
 	go server.Run(errorChannel)
-
 
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)

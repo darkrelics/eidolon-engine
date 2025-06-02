@@ -299,7 +299,6 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 	return nil
 }
 
-
 // GetSkill safely retrieves a skill value, returning 0 if not found
 func (c *Character) GetSkill(skillName string) float64 {
 	c.mutex.RLock()

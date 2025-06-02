@@ -267,7 +267,7 @@ func (c *Character) DisplayMessage(message string) {
 		// Just send message with prompt
 		completeMessage = "\n\r" + message + "\n\r" + c.prompt
 	}
-	
+
 	c.player.commandOut <- completeMessage
 }
 
@@ -282,4 +282,3 @@ func (c *Character) safeExecuteLookCommand() {
 		Logger.Warn("Failed to show initial room", "characterName", c.name, "error", err)
 	}
 }
-

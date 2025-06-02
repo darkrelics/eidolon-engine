@@ -1290,7 +1290,6 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 
 	itemToWear.mutex.Unlock()
 
-
 	// Notify the room
 	if character.room != nil {
 		SendRoomMessage(character.room,
@@ -1405,7 +1404,6 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 
 	// Unlock character before trait modifications
 	character.mutex.Unlock()
-
 
 	// Create success message
 	handName := "right hand"
