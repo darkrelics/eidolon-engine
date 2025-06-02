@@ -267,10 +267,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 					if startingItem.IsWorn && item.wearable {
 						item.isWorn = true
 
-						// Apply trait mods if item is worn
-						if len(item.traitMods) > 0 {
-							character.ApplyItemTraitMods(item)
-						}
 					}
 
 					// Inventory addition establishes ownership

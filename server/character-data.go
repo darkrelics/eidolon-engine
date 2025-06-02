@@ -182,10 +182,6 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		if item != nil {
 			game.items[item.id] = item
 
-			// Trait mods from equipment affect character stats
-			if item.isWorn && len(item.traitMods) > 0 {
-				character.ApplyItemTraitMods(item)
-			}
 		}
 	}
 	// Hand items require separate tracking for combat
@@ -303,93 +299,6 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 	return nil
 }
 
-// ApplyItemTraitMods applies trait modifications from an item to the character
-func (c *Character) ApplyItemTraitMods(item *Item) {
-	if item == nil || len(item.traitMods) == 0 {
-		return
-	}
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	Logger.Debug("Applying trait mods to character",
-		"characterName", c.name,
-		"itemName", item.name,
-		"mods", item.traitMods)
-
-	// Apply each trait modification
-	for trait, mod := range item.traitMods {
-		// For attributes
-		if _, exists := c.attributes[trait]; exists {
-			c.attributes[trait] += float64(mod)
-			Logger.Debug("Applied attribute mod",
-				"character", c.name,
-				"attribute", trait,
-				"mod", mod,
-				"newValue", c.attributes[trait])
-		}
-		// For skills
-		if _, exists := c.skills[trait]; exists {
-			c.skills[trait] += float64(mod)
-			Logger.Debug("Applied skill mod",
-				"character", c.name,
-				"skill", trait,
-				"mod", mod,
-				"newValue", c.skills[trait])
-		}
-		// Special case handling
-		switch trait {
-		case "health":
-			c.health += float64(mod)
-		case "essence":
-			c.essence += float64(mod)
-		}
-	}
-}
-
-// RemoveItemTraitMods removes trait modifications from an item from the character
-func (c *Character) RemoveItemTraitMods(item *Item) {
-	if item == nil || len(item.traitMods) == 0 {
-		return
-	}
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	Logger.Debug("Removing trait mods from character",
-		"characterName", c.name,
-		"itemName", item.name,
-		"mods", item.traitMods)
-
-	// Inverse application restores base character stats
-	for trait, mod := range item.traitMods {
-		// For attributes
-		if _, exists := c.attributes[trait]; exists {
-			c.attributes[trait] -= float64(mod)
-			Logger.Debug("Removed attribute mod",
-				"character", c.name,
-				"attribute", trait,
-				"mod", -mod,
-				"newValue", c.attributes[trait])
-		}
-		// For skills
-		if _, exists := c.skills[trait]; exists {
-			c.skills[trait] -= float64(mod)
-			Logger.Debug("Removed skill mod",
-				"character", c.name,
-				"skill", trait,
-				"mod", -mod,
-				"newValue", c.skills[trait])
-		}
-		// Special case handling
-		switch trait {
-		case "health":
-			c.health -= float64(mod)
-		case "essence":
-			c.essence -= float64(mod)
-		}
-	}
-}
 
 // GetSkill safely retrieves a skill value, returning 0 if not found
 func (c *Character) GetSkill(skillName string) float64 {

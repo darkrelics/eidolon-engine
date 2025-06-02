@@ -1290,10 +1290,6 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 
 	itemToWear.mutex.Unlock()
 
-	// Apply trait modifications
-	if len(itemToWear.traitMods) > 0 {
-		character.ApplyItemTraitMods(itemToWear)
-	}
 
 	// Notify the room
 	if character.room != nil {
@@ -1405,16 +1401,11 @@ func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandRespons
 	itemToRemove.mutex.Lock()
 	itemToRemove.isWorn = false
 	itemName := itemToRemove.name
-	hasTraitMods := len(itemToRemove.traitMods) > 0
 	itemToRemove.mutex.Unlock()
 
 	// Unlock character before trait modifications
 	character.mutex.Unlock()
 
-	// Remove trait modifications after unlocking
-	if hasTraitMods {
-		character.RemoveItemTraitMods(itemToRemove)
-	}
 
 	// Create success message
 	handName := "right hand"
