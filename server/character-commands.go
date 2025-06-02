@@ -98,9 +98,6 @@ func executeLookCommand(character *Character, tokens []string) error {
 	// Room description includes exits, occupants, and items
 	description := character.room.GetDescription(character)
 	SafeSendString(character.player.commandOut, description, character.name)
-
-	// Prompt restoration maintains UI consistency after output
-	character.SendPrompt()
 	return nil
 }
 

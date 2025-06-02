@@ -143,14 +143,7 @@ func (c *Character) RunConsole(done chan bool) {
 				// Empty channel expected during normal operation
 			}
 
-			// Prompt restoration maintains command-line interface state
-			select {
-			case c.player.commandOut <- c.prompt:
-				// Successful prompt delivery confirms channel health
-			default:
-				// Failed send indicates player disconnection or shutdown
-				Logger.Debug("Failed to send prompt, channel full or closed", "characterName", c.name)
-			}
+			// Prompt is now automatically restored by Player's SendMessageWithBuffer
 
 		case _, ok := <-c.end:
 			if !ok {
@@ -184,7 +177,7 @@ func (c *Character) DisplayHelp(specific string) error {
 		c.game.mutex.RUnlock()
 
 		if !exists {
-			c.player.commandOut <- fmt.Sprintf("\n\rNo help available for '%s'. Command not found.\n\r", specific)
+			c.DisplayMessage(fmt.Sprintf("\n\rNo help available for '%s'. Command not found.\n\r", specific))
 			return nil
 		}
 
@@ -192,7 +185,7 @@ func (c *Character) DisplayHelp(specific string) error {
 		helpMsg.WriteString(fmt.Sprintf("Description: %s\n\r", cmdInfo.description))
 		helpMsg.WriteString(fmt.Sprintf("Usage: %s\n\r", cmdInfo.usage))
 
-		c.player.commandOut <- helpMsg.String()
+		c.DisplayMessage(helpMsg.String())
 		return nil
 	}
 
@@ -222,7 +215,7 @@ func (c *Character) DisplayHelp(specific string) error {
 
 	helpMsg.WriteString("\n\rType 'help <command>' for more information on a specific command.\n\r")
 
-	c.player.commandOut <- helpMsg.String()
+	c.DisplayMessage(helpMsg.String())
 	return nil
 }
 

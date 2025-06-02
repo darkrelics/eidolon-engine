@@ -481,10 +481,7 @@ func SendRoomMessage(room *Room, message string, except *Character) {
 
 	// Send messages without holding the lock to prevent deadlock
 	for _, c := range recipients {
-		if SafeSendString(c.player.commandOut, message, c.name) {
-			// After sending room message, send the prompt again to ensure consistent UI
-			SafeSendString(c.player.commandOut, c.prompt, c.name)
-		}
+		SafeSendString(c.player.commandOut, message, c.name)
 	}
 }
 

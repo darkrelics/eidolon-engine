@@ -111,6 +111,7 @@ type Player struct {
 	mutex         sync.RWMutex
 	shutdownOnce  sync.Once
 	done          chan struct{} // Channel signaled when all goroutines complete
+	inputBuffer   *InputBuffer // Track current input line content
 }
 
 type PlayerData struct {
@@ -239,6 +240,7 @@ func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfac
 		cancel:        cancel,
 		shutdownOnce:  sync.Once{},
 		done:          make(chan struct{}),
+		inputBuffer:   NewInputBuffer(),
 	}
 
 	// Load player data
@@ -397,6 +399,35 @@ func (p *Player) Stop() {
 	})
 }
 
+// SendMessageWithBuffer sends a message to the player while preserving their input buffer
+func (p *Player) SendMessageWithBuffer(message string) {
+	if p == nil || p.connection == nil {
+		return
+	}
+
+	// Get current buffer content
+	bufferContent := p.inputBuffer.String()
+	
+	// Clear the current line if there's content in the buffer
+	if len(bufferContent) > 0 && p.echo {
+		// Move cursor to beginning of line
+		p.connection.Write([]byte("\r"))
+		// Clear from cursor to end of line
+		p.connection.Write([]byte("\033[K"))
+	}
+	
+	// Send the message
+	p.connection.Write([]byte(wrapText(message, p.consoleWidth)))
+	
+	// Send the prompt
+	p.connection.Write([]byte(p.prompt))
+	
+	// Restore the buffer content
+	if len(bufferContent) > 0 && p.echo {
+		p.connection.Write([]byte(bufferContent))
+	}
+}
+
 func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request, done chan error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -447,7 +478,6 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 		}
 	}()
 
-	inputBuffer := NewInputBuffer()
 	reader := bufio.NewReader(p.connection)
 
 	// Create idle timeout timer
@@ -542,14 +572,14 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 			// Handle different input cases
 			switch r {
 			case '\n', '\r':
-				if inputBuffer.Length() > 0 {
-					input := inputBuffer.String()
+				if p.inputBuffer.Length() > 0 {
+					input := p.inputBuffer.String()
 					select {
 					case p.commandIn <- input:
 						if p.echo {
 							p.connection.Write([]byte("\r\n"))
 						}
-						inputBuffer.Clear()
+						p.inputBuffer.Clear()
 					case <-ctx.Done():
 						done <- ctx.Err()
 						return
@@ -563,7 +593,7 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				}
 
 			case '\b', 127: // Backspace
-				if inputBuffer.RemoveLast() && p.echo {
+				if p.inputBuffer.RemoveLast() && p.echo {
 					p.connection.Write([]byte("\b \b"))
 				}
 
@@ -574,7 +604,7 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 			default:
 				// Filter input to only allow printable ASCII (32-126)
 				if r >= 32 && r <= 126 {
-					if inputBuffer.Append(r) && p.echo {
+					if p.inputBuffer.Append(r) && p.echo {
 						p.connection.Write([]byte(string(r)))
 					}
 				}
@@ -603,11 +633,8 @@ func (p *Player) handleOutput(ctx context.Context, done chan error) {
 				return
 			}
 
-			if _, err := p.connection.Write([]byte(wrapText(msg, p.consoleWidth))); err != nil {
-				Logger.Error("Write error in output handler", "player", p.id, "error", err)
-				done <- fmt.Errorf("write error: %w", err)
-				return
-			}
+			// Use SendMessageWithBuffer to preserve input buffer
+			p.SendMessageWithBuffer(msg)
 		}
 	}
 }
