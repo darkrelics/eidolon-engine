@@ -350,7 +350,10 @@ func (c *Character) Stop() {
 	c.game.mutex.Unlock()
 
 	// State persistence preserves player progress
-	err := c.Save()
+	// Use a fresh context for shutdown saves to ensure they complete
+	saveCtx := context.Background()
+	
+	err := c.SaveWithContext(saveCtx)
 	if err != nil {
 		Logger.Error("Error saving character during shutdown", "characterName", c.name, "error", err)
 	}

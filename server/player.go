@@ -178,6 +178,12 @@ func (p *Player) Load(playerID uuid.UUID) error {
 }
 
 func (p *Player) Save() error {
+	return p.SaveWithContext(p.server.ctx)
+}
+
+// SaveWithContext saves the player data with a specific context
+// This is used during shutdown to ensure saves complete even after server context is cancelled
+func (p *Player) SaveWithContext(ctx context.Context) error {
 	Logger.Info("Saving player data", "player_id", p.id.String(), "email", p.email)
 
 	database := p.server.database
@@ -199,7 +205,7 @@ func (p *Player) Save() error {
 		playerData.SeenMotDs[i] = motdID.String()
 	}
 
-	err := database.Put(p.server.ctx, "players", playerData)
+	err := database.Put(ctx, "players", playerData)
 	if err != nil {
 		Logger.Error("Error saving player data", "error", err)
 		SafeSendString(p.commandOut, "Error saving player data. Please contact an administrator.\n", p.id.String())
@@ -362,8 +368,9 @@ func (p *Player) Stop() {
 			p.character = nil
 		}
 
-		// Save player data
-		p.Save()
+		// Save player data with fresh context for shutdown
+		saveCtx := context.Background()
+		p.SaveWithContext(saveCtx)
 
 		// Close the connection
 		if p.connection != nil {
