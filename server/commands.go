@@ -30,7 +30,7 @@ import (
 func ProcessCommand(ctx context.Context, character *Character, input string) (bool, error) {
 	// Limit input to 240 characters
 	if len(input) > 240 {
-		return false, errors.New("\n\rCommand too long. Maximum 240 characters allowed.\n\r")
+		return false, errors.New("Command too long. Maximum 240 characters allowed.")
 	}
 
 	// Parse and validate the command
@@ -40,7 +40,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	}
 
 	if character == nil || character.game == nil {
-		return false, errors.New("\n\rInvalid character state.\n\r")
+		return false, errors.New("Invalid character state.")
 	}
 
 	// Check if the character is waiting for a command timeout
@@ -48,7 +48,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	if !canExecute {
 		// Allow certain commands even when waiting
 		if verb != "look" && verb != "help" && verb != "who" && verb != "quit" {
-			return false, fmt.Errorf("\n\r%s\n\r", reason)
+			return false, fmt.Errorf("%s", reason)
 		}
 		// These commands are allowed during wait time
 	}
@@ -124,7 +124,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 				"roomID", character.room.roomID,
 				"characterName", character.name,
 				"verb", verb)
-			return false, fmt.Errorf("\n\rThe room is processing too many commands. Please wait a moment and try again.\n\r")
+			return false, fmt.Errorf("The room is processing too many commands. Please wait a moment and try again.")
 		}
 	}
 
@@ -143,12 +143,12 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 			return false, resp.Error
 		}
 		if resp.Message != "" {
-			character.player.commandOut <- resp.Message + character.prompt
+			character.DisplayMessage(resp.Message)
 		}
 		return false, nil
 	case <-time.After(5 * time.Second):
 		Logger.Error("Command timed out waiting for response", "roomID", character.room.roomID, "verb", verb, "character", character.name)
-		return false, fmt.Errorf("\n\rcommand timed out\n\r")
+		return false, fmt.Errorf("command timed out")
 	case <-ctx.Done():
 		return false, ctx.Err()
 	}
@@ -176,7 +176,7 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 		Logger.Warn("Game command buffer full",
 			"characterName", character.name,
 			"verb", verb)
-		return false, fmt.Errorf("\n\rThe game is processing too many commands. Please wait a moment and try again.\n\r")
+		return false, fmt.Errorf("The game is processing too many commands. Please wait a moment and try again.")
 	}
 
 	// Wait for response or timeout
@@ -186,11 +186,11 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 			return false, resp.Error
 		}
 		if resp.Message != "" {
-			character.player.commandOut <- resp.Message + character.prompt
+			character.DisplayMessage(resp.Message)
 		}
 		return false, nil
 	case <-time.After(5 * time.Second):
-		return false, fmt.Errorf("\n\rcommand timed out\n\r")
+		return false, fmt.Errorf("command timed out")
 	case <-ctx.Done():
 		return false, ctx.Err()
 	}

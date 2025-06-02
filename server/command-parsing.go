@@ -66,23 +66,23 @@ func buildOrdinalIndex() {
 // ValidateCommand checks if a command is valid and returns its verb and tokens
 func ValidateCommand(character *Character, input string) (string, []string, error) {
 	if len(input) == 0 {
-		return "", nil, errors.New("\n\rNo command entered.\n\r")
+		return "", nil, errors.New("No command entered.")
 	}
 
 	// Limit input to 240 characters
 	if len(input) > 240 {
-		return "", nil, errors.New("\n\rCommand too long. Maximum 240 characters allowed.\n\r")
+		return "", nil, errors.New("Command too long. Maximum 240 characters allowed.")
 	}
 
 	tokens := tokenizeInput(input)
 
 	if len(tokens) == 0 {
-		return "", nil, errors.New("\n\rNo command entered.\n\r")
+		return "", nil, errors.New("No command entered.")
 	}
 
 	verb := strings.ToLower(tokens[0])
 	if character == nil || character.game == nil {
-		return "", nil, errors.New("\n\rInvalid character state.\n\r")
+		return "", nil, errors.New("Invalid character state.")
 	}
 
 	// First check for exact match
@@ -106,11 +106,11 @@ func ValidateCommand(character *Character, input string) (string, []string, erro
 
 	// If confidence is between 50% and 80%, ask if they meant the command
 	if score >= 50 {
-		return "", nil, fmt.Errorf("\n\rCommand '%s' not understood. Did you mean '%s'?\n\r", verb, bestMatch)
+		return "", nil, fmt.Errorf("Command '%s' not understood. Did you mean '%s'?", verb, bestMatch)
 	}
 
 	// No good match found
-	return "", nil, fmt.Errorf("\n\rCommand '%s' not understood.\n\r", verb)
+	return "", nil, fmt.Errorf("Command '%s' not understood.", verb)
 }
 
 // tokenizeInput breaks the input into individual tokens

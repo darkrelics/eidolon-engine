@@ -246,14 +246,29 @@ func (c *Character) SetPrompt(newPrompt string) {
 	}
 }
 
-// DisplayMessage displays a message to the character
+// DisplayMessage displays a message to the character with proper formatting and buffer preservation
 func (c *Character) DisplayMessage(message string) {
 	if c == nil || c.player == nil {
 		return
 	}
 
-	// Send message with prompt appended
-	c.player.commandOut <- message + c.prompt
+	// Get current buffer content to preserve what the user was typing
+	bufferContent := ""
+	if c.player.inputBuffer != nil {
+		bufferContent = c.player.inputBuffer.String()
+	}
+
+	// Build the complete message with formatting
+	var completeMessage string
+	if len(bufferContent) > 0 && c.player.echo {
+		// Clear current line, send message, prompt, and restore buffer
+		completeMessage = "\r\033[K\n\r" + message + "\n\r" + c.prompt + bufferContent
+	} else {
+		// Just send message with prompt
+		completeMessage = "\n\r" + message + "\n\r" + c.prompt
+	}
+	
+	c.player.commandOut <- completeMessage
 }
 
 // safeExecuteLookCommand safely executes the initial look command with panic recovery
