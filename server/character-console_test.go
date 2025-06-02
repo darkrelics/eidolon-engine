@@ -238,7 +238,10 @@ func TestRunConsole_NilRoom(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify character was assigned to default room
-	if character.room == nil || character.room.roomID != 0 {
+	character.mutex.RLock()
+	roomAssigned := character.room != nil && character.room.roomID == 0
+	character.mutex.RUnlock()
+	if !roomAssigned {
 		t.Error("Character was not assigned to default room when starting with nil room")
 	}
 
@@ -593,7 +596,9 @@ func TestRunConsole_IdleTimeout(t *testing.T) {
 	// Set player to nil to simulate lost connection during idle
 	go func() {
 		time.Sleep(500 * time.Millisecond)
+		character.mutex.Lock()
 		character.player = nil
+		character.mutex.Unlock()
 	}()
 
 	// Start console

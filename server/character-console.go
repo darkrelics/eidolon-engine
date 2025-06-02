@@ -41,16 +41,19 @@ func (c *Character) RunConsole(done chan bool) {
 	Logger.Debug("Starting character console", "characterName", c.name)
 
 	// Room 0 serves as fallback void location
+	c.mutex.Lock()
 	if c.room == nil {
 		Logger.Warn("Character room is nil, defaulting to room ID 0", "characterName", c.name)
 		if defaultRoom, ok := c.game.rooms[0]; ok {
 			c.room = defaultRoom
 		} else {
+			c.mutex.Unlock()
 			Logger.Error("No default room available", "characterName", c.name)
 			done <- true
 			return
 		}
 	}
+	c.mutex.Unlock()
 
 	// Game registration enables global character tracking
 	c.game.mutex.Lock()
@@ -156,7 +159,10 @@ func (c *Character) RunConsole(done chan bool) {
 			return
 
 		case <-timer.C:
-			if c.player == nil {
+			c.mutex.RLock()
+			player := c.player
+			c.mutex.RUnlock()
+			if player == nil {
 				Logger.Warn("Player connection lost", "characterName", c.name)
 				return
 			}
@@ -248,19 +254,27 @@ func (c *Character) SetPrompt(newPrompt string) {
 
 // DisplayMessage displays a message to the character with proper formatting and buffer preservation
 func (c *Character) DisplayMessage(message string) {
-	if c == nil || c.player == nil {
+	if c == nil {
+		return
+	}
+	
+	c.mutex.RLock()
+	player := c.player
+	c.mutex.RUnlock()
+	
+	if player == nil {
 		return
 	}
 
 	// Get current buffer content to preserve what the user was typing
 	bufferContent := ""
-	if c.player.inputBuffer != nil {
-		bufferContent = c.player.inputBuffer.String()
+	if player.inputBuffer != nil {
+		bufferContent = player.inputBuffer.String()
 	}
 
 	// Build the complete message with formatting
 	var completeMessage string
-	if len(bufferContent) > 0 && c.player.echo {
+	if len(bufferContent) > 0 && player.echo {
 		// Clear current line, send message, prompt, and restore buffer
 		completeMessage = "\r\033[K\n\r" + message + "\n\r" + c.prompt + bufferContent
 	} else {
@@ -268,7 +282,7 @@ func (c *Character) DisplayMessage(message string) {
 		completeMessage = "\n\r" + message + "\n\r" + c.prompt
 	}
 
-	c.player.commandOut <- completeMessage
+	player.commandOut <- completeMessage
 }
 
 // safeExecuteLookCommand safely executes the initial look command with panic recovery
