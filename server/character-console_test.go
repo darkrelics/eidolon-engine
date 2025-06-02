@@ -62,16 +62,10 @@ func (mp *mockPlayer) captureOutput() {
 			// Ignore panics from closed channels during test cleanup
 		}
 	}()
-	for {
-		select {
-		case msg, ok := <-mp.commandOut:
-			if !ok {
-				return
-			}
-			mp.mutex.Lock()
-			mp.receivedOutput = append(mp.receivedOutput, msg)
-			mp.mutex.Unlock()
-		}
+	for msg := range mp.commandOut {
+		mp.mutex.Lock()
+		mp.receivedOutput = append(mp.receivedOutput, msg)
+		mp.mutex.Unlock()
 	}
 }
 
