@@ -399,34 +399,6 @@ func (p *Player) Stop() {
 	})
 }
 
-// SendMessageWithBuffer sends a message to the player while preserving their input buffer
-func (p *Player) SendMessageWithBuffer(message string) {
-	if p == nil || p.connection == nil {
-		return
-	}
-
-	// Get current buffer content
-	bufferContent := p.inputBuffer.String()
-	
-	// Clear the current line if there's content in the buffer
-	if len(bufferContent) > 0 && p.echo {
-		// Move cursor to beginning of line
-		p.connection.Write([]byte("\r"))
-		// Clear from cursor to end of line
-		p.connection.Write([]byte("\033[K"))
-	}
-	
-	// Send the message
-	p.connection.Write([]byte(wrapText(message, p.consoleWidth)))
-	
-	// Send the prompt
-	p.connection.Write([]byte(p.prompt))
-	
-	// Restore the buffer content
-	if len(bufferContent) > 0 && p.echo {
-		p.connection.Write([]byte(bufferContent))
-	}
-}
 
 func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Request, done chan error) {
 	defer func() {
@@ -633,8 +605,11 @@ func (p *Player) handleOutput(ctx context.Context, done chan error) {
 				return
 			}
 
-			// Use SendMessageWithBuffer to preserve input buffer
-			p.SendMessageWithBuffer(msg)
+			if _, err := p.connection.Write([]byte(wrapText(msg, p.consoleWidth))); err != nil {
+				Logger.Error("Write error in output handler", "player", p.id, "error", err)
+				done <- fmt.Errorf("write error: %w", err)
+				return
+			}
 		}
 	}
 }

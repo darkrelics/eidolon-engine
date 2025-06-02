@@ -143,7 +143,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 			return false, resp.Error
 		}
 		if resp.Message != "" {
-			character.player.commandOut <- resp.Message
+			character.player.commandOut <- resp.Message + character.prompt
 		}
 		return false, nil
 	case <-time.After(5 * time.Second):
@@ -186,7 +186,7 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 			return false, resp.Error
 		}
 		if resp.Message != "" {
-			character.player.commandOut <- resp.Message
+			character.player.commandOut <- resp.Message + character.prompt
 		}
 		return false, nil
 	case <-time.After(5 * time.Second):

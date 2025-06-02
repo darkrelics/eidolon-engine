@@ -250,7 +250,8 @@ func (c *Character) DisplayMessage(message string) {
 		return
 	}
 
-	c.player.commandOut <- message
+	// Send message with prompt appended
+	c.player.commandOut <- message + c.prompt
 }
 
 // safeExecuteLookCommand safely executes the initial look command with panic recovery

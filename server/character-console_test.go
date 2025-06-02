@@ -496,15 +496,16 @@ func TestDisplayMessage(t *testing.T) {
 	output := mockPlayer.getOutput()
 
 	found := false
+	expectedMessage := testMessage + character.prompt
 	for _, msg := range output {
-		if msg == testMessage {
+		if msg == expectedMessage {
 			found = true
 			break
 		}
 	}
 
 	if !found {
-		t.Errorf("Message '%s' not found in output", testMessage)
+		t.Errorf("Message '%s' not found in output (looking for '%s')", testMessage, expectedMessage)
 	}
 }
 

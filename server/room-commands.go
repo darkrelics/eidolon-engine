@@ -192,7 +192,7 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 	character := cmd.Character
 	if character != nil && character.IsHidden() {
 		character.SetHidden(false)
-		character.playerCommandOut <- "\n\rYou reveal yourself as you interact with items.\n\r"
+		character.playerCommandOut <- "\n\rYou reveal yourself as you interact with items.\n\r" + character.prompt
 
 		if character.room != nil {
 			SendRoomMessage(character.room,
@@ -1544,7 +1544,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	// If this is not a sneak command and character is hidden, reveal them
 	if cmd.Verb != "sneak" && character.IsHidden() {
 		character.SetHidden(false)
-		character.playerCommandOut <- "\n\rYou reveal yourself as you move.\n\r"
+		character.playerCommandOut <- "\n\rYou reveal yourself as you move.\n\r" + character.prompt
 
 		if character.room != nil {
 			SendRoomMessage(character.room,

@@ -46,7 +46,7 @@ func executeQuitCommand(character *Character, tokens []string) error {
 	// Player needs immediate feedback about quit action
 	if character.player != nil {
 		select {
-		case character.player.commandOut <- "\n\rSaving character state...\n\r":
+		case character.player.commandOut <- "\n\rSaving character state...\n\r" + character.prompt:
 		default:
 			Logger.Warn("Failed to notify player: ToPlayer channel is full or closed", "characterName", character.name)
 		}
@@ -97,7 +97,7 @@ func executeLookCommand(character *Character, tokens []string) error {
 
 	// Room description includes exits, occupants, and items
 	description := character.room.GetDescription(character)
-	SafeSendString(character.player.commandOut, description, character.name)
+	SafeSendString(character.player.commandOut, description+character.prompt, character.name)
 	return nil
 }
 
