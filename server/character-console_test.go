@@ -496,7 +496,7 @@ func TestDisplayMessage(t *testing.T) {
 	output := mockPlayer.getOutput()
 
 	found := false
-	expectedMessage := testMessage + character.prompt
+	expectedMessage := "\n\r" + testMessage + "\n\r" + character.prompt
 	for _, msg := range output {
 		if msg == expectedMessage {
 			found = true
