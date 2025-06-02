@@ -605,8 +605,6 @@ func (p *Player) handleOutput(ctx context.Context, done chan error) {
 	}
 }
 
-// wrapText wraps the given text to the specified width, preserving
-// empty lines and whitespace. It uses \r\n as the line break.
 func wrapText(text string, width int) string {
 	// Handle edge cases
 	if width <= 0 {

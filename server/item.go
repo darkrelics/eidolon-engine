@@ -214,7 +214,6 @@ var WearLocations = map[string]bool{
 	"right_wrist":  true,
 }
 
-// formatItemDescription creates a description of an item
 func formatItemDescription(item *Item) string {
 	var desc strings.Builder
 	desc.WriteString(fmt.Sprintf("\n\r%s\n\r", item.name))
@@ -230,7 +229,6 @@ func formatItemDescription(item *Item) string {
 
 // Removed unused formatHandSlot function
 
-// formatWornItem formats a worn item for inventory display
 func formatWornItem(item *Item) string {
 	item.mutex.RLock()
 	defer item.mutex.RUnlock()
@@ -244,7 +242,6 @@ func formatWornItem(item *Item) string {
 	return description
 }
 
-// formatCarriedItem formats a carried item for inventory display
 func formatCarriedItem(item *Item) string {
 	item.mutex.RLock()
 	defer item.mutex.RUnlock()
@@ -258,7 +255,6 @@ func formatCarriedItem(item *Item) string {
 	return description
 }
 
-// SaveItemTree saves an item and all its nested container contents recursively
 func (item *Item) SaveItemTree(ctx context.Context, k *KeyPair) error {
 	// Save this item first
 	err := item.Save(ctx, k)
@@ -294,7 +290,6 @@ func (item *Item) SaveItemTree(ctx context.Context, k *KeyPair) error {
 	return nil
 }
 
-// SaveItem saves an item to the database
 func (item *Item) Save(ctx context.Context, k *KeyPair) error {
 	// Check context at start
 	select {

@@ -35,12 +35,12 @@ func (c *Character) RunConsole(done chan bool) {
 		return
 	}
 
-	// Ensure character is properly stopped when the function exits
+	// Defer ensures cleanup even if panic occurs
 	defer c.cleanupAndSignalDone(done)
 
 	Logger.Debug("Starting character console", "characterName", c.name)
 
-	// If the room is nil, move the character to room 0
+	// Room 0 serves as fallback void location
 	if c.room == nil {
 		Logger.Warn("Character room is nil, defaulting to room ID 0", "characterName", c.name)
 		if defaultRoom, ok := c.game.rooms[0]; ok {
@@ -52,12 +52,12 @@ func (c *Character) RunConsole(done chan bool) {
 		}
 	}
 
-	// Add character to game's active characters
+	// Game registration enables global character tracking
 	c.game.mutex.Lock()
 	c.game.characters[c.id] = c
 	c.game.mutex.Unlock()
 
-	// Ensure room is started before adding character
+	// Room must be running to process character events
 	c.room.mutex.RLock()
 	roomRunning := c.room.running
 	c.room.mutex.RUnlock()
@@ -65,43 +65,42 @@ func (c *Character) RunConsole(done chan bool) {
 	if !roomRunning {
 		Logger.Info("Starting room for character entry", "roomID", c.room.roomID, "characterName", c.name)
 		c.room.Start(c.game)
-		// Wait for room to be ready
+		// Ready state indicates room can accept characters
 		c.room.WaitReady()
 	}
 
-	// Add character to the room
+	// Room addition enables location-based interactions
 	c.room.mutex.Lock()
 	if c.room.characters == nil {
 		c.room.characters = make(map[uuid.UUID]*Character)
 	}
 	c.room.characters[c.id] = c
-	// Update room activity timestamp
+	// Activity tracking prevents idle room cleanup
 	c.room.lastActive = time.Now()
 	c.room.mutex.Unlock()
 
 	// Call HandleCharacterEntry to reset idle counter and activate scripts
-	// Ensure this happens after character is fully added to room
+	// Timing prevents race conditions with room scripts
 	c.room.HandleCharacterEntry(c)
 
-	// If room has a script, trigger onCharacterEnter event
-	// This happens after room is started and character is added
+	// Script events provide dynamic room behaviors
 	if c.room.scriptID != "" && c.room.scriptActive && ScriptMgr != nil {
 		if err := ScriptMgr.ExecuteRoomEvent(c.room, "onCharacterEnter", c); err != nil {
 			Logger.Error("Error executing onCharacterEnter", "roomID", c.room.roomID, "characterName", c.name, "error", err)
 		}
 	}
 
-	// Notify room of arrival (without holding locks)
+	// Arrival notification informs other players
 	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
 
-	// Show initial room description
+	// Initial view orients player to their location
 	c.safeExecuteLookCommand()
 
 	const idleTimeout = 30 * time.Second
 	timer := time.NewTimer(idleTimeout)
 	defer timer.Stop()
 
-	// Channel to track when a command is processing
+	// Processing signal prevents command overlap
 	commandProcessing := make(chan struct{}, 1)
 
 	for {
@@ -114,42 +113,42 @@ func (c *Character) RunConsole(done chan bool) {
 				return
 			}
 
-			// Signal that a command is processing
+			// Non-blocking send prevents deadlock on full channel
 			select {
 			case commandProcessing <- struct{}{}:
 			default:
-				// Channel already has a value, which is fine
+				// Existing signal means command already processing
 			}
 
-			// Process the command
+			// Command processing may modify game state
 			isQuit, err := ProcessCommand(c.game.ctx, c, strings.TrimSpace(inputLine))
 			if err != nil {
-				// Send user-friendly error message to player
+				// Error messaging improves player experience
 				c.sendUserFriendlyError(err)
 			} else {
-				// Command processed successfully
+				// Success path continues normal game flow
 				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
 			}
 
-			// If the quit command was processed, exit the loop
+			// Quit command triggers graceful session termination
 			if isQuit {
 				Logger.Info("Quit command processed, exiting character loop", "characterName", c.name)
 				return
 			}
 
-			// Clear the processing signal
+			// Signal clearing allows next command to process
 			select {
 			case <-commandProcessing:
 			default:
-				// Channel already empty, which is fine
+				// Empty channel expected during normal operation
 			}
 
-			// Always send prompt after processing a command
+			// Prompt restoration maintains command-line interface state
 			select {
 			case c.player.commandOut <- c.prompt:
-				// Prompt sent successfully
+				// Successful prompt delivery confirms channel health
 			default:
-				// Channel full or closed, likely during shutdown
+				// Failed send indicates player disconnection or shutdown
 				Logger.Debug("Failed to send prompt, channel full or closed", "characterName", c.name)
 			}
 
@@ -178,7 +177,7 @@ func (c *Character) DisplayHelp(specific string) error {
 
 	var helpMsg strings.Builder
 
-	// If a specific command was requested
+	// Specific command help provides targeted assistance
 	if specific != "" {
 		c.game.mutex.RLock()
 		cmdInfo, exists := c.game.commands[specific]
@@ -207,7 +206,7 @@ func (c *Character) DisplayHelp(specific string) error {
 
 	c.game.mutex.RUnlock()
 
-	// Sort commands alphabetically
+	// Alphabetical order improves command discovery
 	sort.Strings(commandNames)
 
 	helpMsg.WriteString("\n\rAvailable Commands:\n\r\n\r")
@@ -279,13 +278,13 @@ func (c *Character) sendUserFriendlyError(err error) {
 		return
 	}
 
-	// Log the full error for debugging
+	// Debug logging helps identify command processing issues
 	Logger.Error("Command error", "characterName", c.name, "error", err.Error())
 
-	// Send a user-friendly message
+	// User-facing errors hide implementation details
 	userMessage := "Sorry, that command couldn't be completed. Please try again."
 
-	// Check for specific error types to provide better messages
+	// Error type checking enables contextual help messages
 	errStr := err.Error()
 	if strings.Contains(errStr, "not found") || strings.Contains(errStr, "unknown") {
 		userMessage = "I don't understand that command. Type 'help' for available commands."
@@ -295,7 +294,7 @@ func (c *Character) sendUserFriendlyError(err error) {
 		userMessage = "You don't have permission to do that."
 	}
 
-	// Send safely to player
+	// Safe sending prevents panic on closed channels
 	if c.player != nil && c.player.commandOut != nil {
 		c.player.commandOut <- userMessage + "\n\r"
 	} else {

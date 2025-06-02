@@ -217,7 +217,7 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn, ctx context.
 	}
 	defer sshConn.Close()
 
-	// Clear deadline after successful authentication
+	// Deadline removal allows unlimited session duration
 	if err := conn.SetDeadline(time.Time{}); err != nil {
 		Logger.Error("Failed to clear deadline", "error", err)
 		return
@@ -263,7 +263,7 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn, ctx context.
 			continue
 		}
 
-		// Run player with connection context
+		// Player execution tied to connection lifecycle
 		go ssh_interface.runPlayer(player, requests)
 	}
 }
@@ -322,7 +322,7 @@ func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
 			// Create a child context for this connection
 			connCtx, connCancel := context.WithCancel(ssh_interface.ctx)
 
-			// Handle connection with context
+			// Context-aware handling enables clean shutdown
 			go ssh_interface.handleConnectionWithContext(conn, connCtx, connCancel)
 		}
 	}

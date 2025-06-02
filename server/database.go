@@ -37,7 +37,6 @@ type KeyPair struct {
 	baseBackoff time.Duration
 }
 
-// NewKeyPair initializes a new DynamoDB client.
 func NewKeyPair(ctx context.Context, cfg *Configuration) (*KeyPair, error) {
 
 	Logger.Info("Initializing DynamoDB client", "region", cfg.AWS.Region)
@@ -169,7 +168,7 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 	// Build transaction items
 	transactItems := make([]types.TransactWriteItem, 0, len(items)+1)
 
-	// Add all inventory items to transaction
+	// Batch processing minimizes database round trips
 	itemCount := 0
 	for _, item := range items {
 		// Check context periodically to handle cancellation gracefully
@@ -184,7 +183,7 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 		itemCount++
 
 		if item != nil {
-			// Create item data for storage
+			// Item data conversion prepares for DynamoDB
 			itemData := &ItemData{
 				ItemID:      item.id.String(),
 				PrototypeID: item.prototypeID.String(),
@@ -213,7 +212,7 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 				return fmt.Errorf("error marshalling item %s: %w", item.id, err)
 			}
 
-			// Add item to transaction
+			// Transaction accumulation enables atomic writes
 			transactItems = append(transactItems, types.TransactWriteItem{
 				Put: &types.Put{
 					TableName: aws.String("items"),
@@ -229,7 +228,7 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 		return fmt.Errorf("error marshalling character data: %w", err)
 	}
 
-	// Add character to transaction
+	// Character inclusion completes atomic save operation
 	transactItems = append(transactItems, types.TransactWriteItem{
 		Put: &types.Put{
 			TableName: aws.String("characters"),
@@ -237,7 +236,7 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 		},
 	})
 
-	// Execute transaction
+	// Transaction execution atomically saves all items
 	return k.TransactWrite(ctx, transactItems)
 }
 
@@ -268,7 +267,7 @@ func (k *KeyPair) Get(ctx context.Context, tableName string, key map[string]type
 	return nil
 }
 
-// Delete removes an item from the DynamoDB table.
+// Delete performs single-item removal from DynamoDB
 func (k *KeyPair) Delete(ctx context.Context, tableName string, key map[string]types.AttributeValue) error {
 
 	Logger.Info("Deleting item from table", "tableName", tableName)
@@ -301,7 +300,7 @@ func (k *KeyPair) Query(ctx context.Context, tableName string, keyConditionExpre
 	var lastEvaluatedKey map[string]types.AttributeValue
 
 	for {
-		// Set the exclusive start key for pagination
+		// Pagination key enables processing large result sets
 		if lastEvaluatedKey != nil {
 			input.ExclusiveStartKey = lastEvaluatedKey
 		}
@@ -359,7 +358,7 @@ func (k *KeyPair) Scan(ctx context.Context, tableName string, items interface{})
 	var lastEvaluatedKey map[string]types.AttributeValue
 
 	for {
-		// Set the exclusive start key for pagination
+		// Pagination key enables processing large result sets
 		if lastEvaluatedKey != nil {
 			input.ExclusiveStartKey = lastEvaluatedKey
 		}
@@ -386,7 +385,7 @@ func (k *KeyPair) Scan(ctx context.Context, tableName string, items interface{})
 
 	Logger.Info("Scan completed", "tableName", tableName, "totalItems", len(allItems))
 
-	// Handle the case of no items found
+	// Empty results require special handling for unmarshalling
 	if len(allItems) == 0 {
 		err := attributevalue.UnmarshalListOfMaps([]map[string]types.AttributeValue{}, items)
 		if err != nil {
@@ -421,14 +420,14 @@ type PlayerInfo struct {
 func (k *KeyPair) LoadCharactersAndPlayers(ctx context.Context) ([]CharacterInfo, []PlayerInfo, error) {
 	Logger.Info("Loading characters and players for bloom filter initialization")
 
-	// Load all characters
+	// Character scan populates bloom filter data
 	var characters []CharacterInfo
 	err := k.Scan(ctx, "characters", &characters)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error scanning characters: %w", err)
 	}
 
-	// Load all players
+	// Player scan enables account-character mapping
 	var players []PlayerInfo
 	err = k.Scan(ctx, "players", &players)
 	if err != nil {
@@ -471,7 +470,7 @@ func (k *KeyPair) DeleteCharacter(ctx context.Context, characterID string) error
 
 // RemoveCharacterFromPlayer removes a character from a player's character list
 func (k *KeyPair) RemoveCharacterFromPlayer(ctx context.Context, playerID, characterName string) error {
-	// Load the player data
+	// Player data required for character list modification
 	var playerData PlayerData
 	key := map[string]types.AttributeValue{
 		"PlayerID": &types.AttributeValueMemberS{Value: playerID},
@@ -482,10 +481,10 @@ func (k *KeyPair) RemoveCharacterFromPlayer(ctx context.Context, playerID, chara
 		return fmt.Errorf("failed to get player data: %w", err)
 	}
 
-	// Remove the character from the list
+	// List removal breaks character-player association
 	delete(playerData.CharacterList, characterName)
 
-	// Update the player record
+	// Record update persists association changes
 	err = k.Put(ctx, "players", &playerData)
 	if err != nil {
 		return fmt.Errorf("failed to update player data: %w", err)

@@ -118,7 +118,7 @@ func tokenizeInput(input string) []string {
 	// Sanitize input first
 	input = strings.TrimSpace(input)
 
-	// Remove any control characters (except tab which is handled in tokenization)
+	// Control character removal prevents terminal manipulation
 	input = strings.Map(func(r rune) rune {
 		if r < 32 && r != '\t' {
 			return -1

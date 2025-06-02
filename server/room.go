@@ -119,7 +119,6 @@ type RoomData struct {
 	ScriptID    string   `json:"scriptID" dynamodbav:"ScriptID"`
 }
 
-// Initialize a new room
 func NewRoom(ctx context.Context, roomID int64, area, title, description string, persistent bool, scriptID string) *Room {
 
 	Logger.Debug("New Room...Initalizing Room...", "roomID", roomID, "persistent", persistent, "scriptID", scriptID)
@@ -158,13 +157,11 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 	}
 }
 
-// Load room data from DynamoDB
 func (g *Game) LoadRooms() error {
 
 	Logger.Info("Load Rooms...Loading Rooms...")
 
-	// Load room data from DynamoDB
-	var roomsData []RoomData
+		var roomsData []RoomData
 	err := g.database.Scan(g.ctx, "rooms", &roomsData)
 	if err != nil {
 		Logger.Error("Error scanning rooms table", "error", err)

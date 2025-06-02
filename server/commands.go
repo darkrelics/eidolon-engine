@@ -78,7 +78,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 			err := cmdInfo.handler(character, tokens)
 			return false, err
 		} else {
-			// Execute untimed commands immediately
+			// Untimed commands bypass rate limiting
 			return false, cmdInfo.handler(character, tokens)
 		}
 	}
@@ -86,7 +86,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	// Step 2: Character doesn't handle this command, escalate to room
 	Logger.Debug("Escalating command to room", "verb", verb, "character", character.name)
 
-	// Create command request for room processing
+	// Room-tier request enables location-based command handling
 	cmdReq := &CommandRequest{
 		ID:        GenerateUUIDv7(),
 		Character: character,
@@ -156,7 +156,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 
 // escalateToGame handles commands that neither character nor room can process
 func escalateToGame(ctx context.Context, character *Character, verb string, tokens []string) (bool, error) {
-	// Create command request for game processing
+	// Game-tier request handles global commands
 	cmdReq := &CommandRequest{
 		ID:        GenerateUUIDv7(),
 		Character: character,
@@ -168,7 +168,7 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 		Response:  make(chan *CommandResponse, 1),
 	}
 
-	// Send command to the game
+	// Game submission routes to global handler
 	select {
 	case character.gameCommandOut <- cmdReq:
 		// Command sent successfully to game

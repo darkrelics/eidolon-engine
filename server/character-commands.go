@@ -25,7 +25,7 @@ import (
 	"strings"
 )
 
-// Character command messages
+// Error messages and prompts for character commands
 const (
 	msgAlone    = "You are alone.\n\r"
 	msgAlsoHere = "Also here: "
@@ -43,7 +43,7 @@ func executeQuitCommand(character *Character, tokens []string) error {
 
 	Logger.Info("Player initiating quit", "characterName", character.name)
 
-	// Notify the player
+	// Player needs immediate feedback about quit action
 	if character.player != nil {
 		select {
 		case character.player.commandOut <- "\n\rSaving character state...\n\r":
@@ -52,7 +52,7 @@ func executeQuitCommand(character *Character, tokens []string) error {
 		}
 	}
 
-	// Signal the end of character's lifecycle
+	// Lifecycle termination triggers cleanup and save operations
 	character.Stop()
 	return nil
 }
@@ -65,7 +65,7 @@ func executeHelpCommand(character *Character, tokens []string) error {
 
 	Logger.Debug("Player requesting help", "characterName", character.name)
 
-	// Check if help was requested for a specific command
+	// Specific command help provides detailed usage information
 	if len(tokens) > 1 {
 		return character.DisplayHelp(tokens[1])
 	}
@@ -82,24 +82,24 @@ func executeLookCommand(character *Character, tokens []string) error {
 
 	Logger.Debug("Player is looking", "characterName", character.name)
 
-	// Handle looking at specific targets if provided
+	// Target examination provides detailed object descriptions
 	if len(tokens) > 1 {
 		target := strings.ToLower(strings.Join(tokens[1:], " "))
 		return character.LookAtTarget(target)
 	}
 
-	// Look at room - character should always be in a room
+	// Room examination is the default when no target specified
 	// The Run method should have placed the character in room 0 if room was nil
 	if character.room == nil {
 		Logger.Warn("Character has no room assigned, placing in room 0", "characterName", character.name)
 		character.room = character.game.rooms[0]
 	}
 
-	// Get room description
+	// Room description includes exits, occupants, and items
 	description := character.room.GetDescription(character)
 	SafeSendString(character.player.commandOut, description, character.name)
 
-	// Always send prompt after room description
+	// Prompt restoration maintains UI consistency after output
 	character.SendPrompt()
 	return nil
 }
@@ -112,7 +112,7 @@ func executeWhoCommand(character *Character, tokens []string) error {
 
 	Logger.Debug("Player checking who is online", "characterName", character.name)
 
-	// Get all active characters from the game
+	// Active character list shows who's currently online
 	character.game.mutex.RLock()
 	var characterNames []string
 	for _, c := range character.game.characters {
@@ -122,21 +122,21 @@ func executeWhoCommand(character *Character, tokens []string) error {
 	}
 	character.game.mutex.RUnlock()
 
-	// Sort names alphabetically
+	// Alphabetical sorting improves readability of player lists
 	sort.Strings(characterNames)
 
-	// Check if there are any other characters online
+	// Empty player list means player is alone online
 	if len(characterNames) == 0 {
 		SafeSendString(character.player.commandOut, whoEmpty, character.name)
 		return nil
 	}
 
-	// Build message with character list
+	// Character list formatting shows all online players
 	var msg strings.Builder
 	msg.WriteString(whoHeader)
 	msg.WriteString("----------------\n\r")
 
-	// Display characters in simple list format
+	// Simple list format provides clean player roster
 	for _, name := range characterNames {
 		msg.WriteString(fmt.Sprintf("%s\n\r", name))
 	}
@@ -156,7 +156,7 @@ func executeInfoCommand(character *Character, tokens []string) error {
 
 	Logger.Debug("Player requesting character information", "characterName", character.name)
 
-	// Get character info display from character method
+	// Character info includes stats, skills, and status
 	info := character.GetCharacterInfo()
 	SafeSendString(character.player.commandOut, info, character.name)
 	return nil
@@ -170,7 +170,7 @@ func executeSkillCommand(character *Character, tokens []string) error {
 
 	Logger.Debug("Player requesting skill information", "characterName", character.name)
 
-	// Get skill display from character method
+	// Skill display shows only skills with non-zero values
 	skillInfo := character.GetSkillInfo()
 	SafeSendString(character.player.commandOut, skillInfo, character.name)
 	return nil
@@ -184,7 +184,7 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 
 	Logger.Debug("Player checking inventory", "characterName", character.name)
 
-	// Lock the character's inventory while we read it
+	// Inventory locking prevents race conditions during display
 	character.mutex.RLock()
 	defer character.mutex.RUnlock()
 
@@ -192,7 +192,7 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 	invDisplay.WriteString("\n\rInventory:\n\r")
 	invDisplay.WriteString("----------------\n\r")
 
-	// Display what's in hands first
+	// Hand items shown first for combat readiness visibility
 	if character.leftHand != nil || character.rightHand != nil {
 		invDisplay.WriteString("\n\rYou are holding:\n\r")
 		if character.leftHand != nil {
@@ -208,7 +208,7 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 			invDisplay.WriteString("You are not carrying anything.\n\r")
 		}
 	} else {
-		// Display items using detailed formatting with proper mutex protection
+		// Detailed formatting shows quantity for stackable items
 		var wornItems, carriedItems []*Item
 
 		for _, item := range character.inventory {
@@ -216,7 +216,7 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 				continue
 			}
 
-			// Safely check item state with mutex
+			// Mutex protection prevents crashes from concurrent modifications
 			item.mutex.RLock()
 			isWorn := item.isWorn
 			item.mutex.RUnlock()
@@ -228,7 +228,7 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 			}
 		}
 
-		// Display worn items with detailed formatting
+		// Worn items indicate character's current equipment
 		if len(wornItems) > 0 {
 			invDisplay.WriteString("\n\rYou are wearing:\n\r")
 			for _, item := range wornItems {
@@ -236,7 +236,7 @@ func executeInventoryCommand(character *Character, tokens []string) error {
 			}
 		}
 
-		// Display carried items with detailed formatting
+		// Carried items represent inventory not currently equipped
 		if len(carriedItems) > 0 {
 			invDisplay.WriteString("\n\rYou are carrying:\n\r")
 			for _, item := range carriedItems {
@@ -258,7 +258,7 @@ func (c *Character) GetCharacterInfo() string {
 	info.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_white", c.name)))
 	info.WriteString("----------------\n\r")
 
-	// Basic character information
+	// Core stats provide combat and survival metrics
 	info.WriteString(fmt.Sprintf("Health: %d\n\r", int(c.health)))
 	info.WriteString(fmt.Sprintf("Essence: %d\n\r", int(c.essence)))
 
@@ -280,17 +280,17 @@ func (c *Character) GetCharacterInfo() string {
 
 	if len(skillsAboveZero) > 0 {
 		info.WriteString("\n\rSkills:\n\r")
-		// Sort skills for consistent display
+		// Consistent ordering improves skill comparison
 		sort.Strings(skillsAboveZero)
 
-		// Display each skill with value > 0
+		// Zero-value skills hidden to reduce UI clutter
 		for _, skill := range skillsAboveZero {
 			value := c.skills[skill]
 			info.WriteString(fmt.Sprintf("  %-12s: %d\n\r", skill, int(value)))
 		}
 	}
 
-	// Display hand contents
+	// Hand contents affect combat capabilities
 	if c.leftHand != nil || c.rightHand != nil {
 		var handItems []string
 		if c.rightHand != nil {
@@ -304,9 +304,9 @@ func (c *Character) GetCharacterInfo() string {
 		info.WriteString(".\n\r")
 	}
 
-	// Inventory information
+	// Inventory capacity and organization details
 	if len(c.inventory) > 0 {
-		// Separate worn and carried items
+		// Separation clarifies equipment vs stored items
 		var wornItems, carriedItems []string
 
 		for _, item := range c.inventory {
@@ -319,21 +319,21 @@ func (c *Character) GetCharacterInfo() string {
 			}
 		}
 
-		// Display worn items
+		// Worn equipment provides active bonuses
 		if len(wornItems) > 0 {
 			info.WriteString("\n\rYou are wearing ")
 			info.WriteString(formatItemListWithOxfordComma(wornItems))
 			info.WriteString(".\n\r")
 		}
 
-		// Display carried items
+		// Carried items available for use or trade
 		if len(carriedItems) > 0 {
 			info.WriteString("\n\rYou are carrying ")
 			info.WriteString(formatItemListWithOxfordComma(carriedItems))
 			info.WriteString(".\n\r")
 		}
 	} else if c.leftHand == nil && c.rightHand == nil {
-		// Only show "not carrying anything" if hands are also empty
+		// Empty message only when truly nothing held
 		info.WriteString("\n\rYou are not carrying anything.\n\r")
 	}
 
@@ -358,10 +358,10 @@ func (c *Character) GetSkillInfo() string {
 	}
 
 	if len(skillsAboveZero) > 0 {
-		// Sort skills for consistent display
+		// Consistent ordering improves skill comparison
 		sort.Strings(skillsAboveZero)
 
-		// Display each skill with value > 0
+		// Zero-value skills hidden to reduce UI clutter
 		for _, skill := range skillsAboveZero {
 			value := c.skills[skill]
 			skillInfo.WriteString(fmt.Sprintf("  %-15s: %.2f\n\r", skill, value))
@@ -375,9 +375,9 @@ func (c *Character) GetSkillInfo() string {
 
 // LookAtTarget handles examining specific targets
 func (c *Character) LookAtTarget(target string) error {
-	// Check if this is a "look in" command
+	// "Look in" command examines container contents
 	if strings.HasPrefix(target, "in ") {
-		// Extract container name and check for "my" prefix
+		// "My" prefix directs search to personal inventory
 		containerPart := strings.TrimPrefix(target, "in ")
 		isMyContainer := false
 
@@ -391,28 +391,28 @@ func (c *Character) LookAtTarget(target string) error {
 		return nil
 	}
 
-	// First check if target is in the room
+	// Room search takes precedence over inventory
 	desc := c.LookAtRoomTarget(target)
 	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
 		SafeSendString(c.player.commandOut, desc, c.name)
 		return nil
 	}
 
-	// Then check if it's in inventory
+	// Inventory search fallback for personal items
 	desc = c.LookAtInventoryItem(target)
 	if desc != fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target) {
 		SafeSendString(c.player.commandOut, desc, c.name)
 		return nil
 	}
 
-	// Not found anywhere
+	// Target doesn't exist in accessible locations
 	SafeSendString(c.player.commandOut, fmt.Sprintf("\n\rYou don't see '%s' here.\n\r", target), c.name)
 	return nil
 }
 
 // LookAtRoomTarget looks for a target in the room (character or item)
 func (c *Character) LookAtRoomTarget(target string) string {
-	// Check if looking at a character in the room
+	// Character examination shows their description
 	if c.room != nil {
 		c.room.mutex.RLock()
 		for _, char := range c.room.characters {
@@ -422,7 +422,7 @@ func (c *Character) LookAtRoomTarget(target string) string {
 			}
 		}
 
-		// Check if looking at an item in the room
+		// Item examination reveals detailed properties
 		for _, item := range c.room.items {
 			if item != nil && MatchesTarget(item.name, target) {
 				c.room.mutex.RUnlock()
@@ -430,7 +430,7 @@ func (c *Character) LookAtRoomTarget(target string) string {
 			}
 		}
 
-		// Check for directions/exits
+		// Exit examination describes connected areas
 		for direction, exit := range c.room.exits {
 			if strings.Contains(exit.direction, target) && exit != nil && exit.visible {
 				c.room.mutex.RUnlock()
@@ -463,7 +463,7 @@ func (c *Character) LookAtInventoryItem(target string) string {
 // LookInContainer handles looking inside a container
 func (c *Character) LookInContainer(containerName string, isMyContainer bool) string {
 	if isMyContainer {
-		// Look in character's inventory for the container
+		// Personal inventory containers need ownership check
 		c.mutex.RLock()
 		var container *Item
 		for _, item := range c.inventory {
@@ -484,7 +484,7 @@ func (c *Character) LookInContainer(containerName string, isMyContainer bool) st
 
 		return "\n\r" + container.GetContainerContents()
 	} else {
-		// Look in room for the container
+		// Room containers accessible to all present
 		if c.room == nil {
 			return "\n\rYou're not in a valid room.\n\r"
 		}
@@ -522,11 +522,11 @@ func executeUnhideCommand(character *Character, tokens []string) error {
 		return nil
 	}
 
-	// Reveal the character
+	// Stealth state reset makes character visible
 	character.SetHidden(false)
 	SafeSendString(character.player.commandOut, "\n\rYou step out from hiding.\n\r", character.name)
 
-	// Notify others in the room
+	// Room notification alerts players to revealed presence
 	SendRoomMessageExcept(character.room,
 		fmt.Sprintf("\n\r%s steps out from hiding.\n\r", character.name),
 		character,

@@ -130,7 +130,6 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 	return response
 }
 
-// handleSayCommand processes say/talk commands
 func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 	character := cmd.Character
 

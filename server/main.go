@@ -31,7 +31,6 @@ var CONFIGURATION_FILE string = "config.yml"
 
 func main() {
 
-	// Initialize the system components
 
 	fmt.Println("Main - Starting System...")
 
@@ -45,7 +44,6 @@ func main() {
 	errorHandlerDone := make(chan struct{})
 	go handleErrors(ctx, errorChannel, errorHandlerDone)
 
-	// Load configuration
 
 	fmt.Printf("Main - Loading configuration from %s\n", CONFIGURATION_FILE)
 
@@ -55,7 +53,6 @@ func main() {
 		os.Exit(125)
 	}
 
-	// Initialize logging
 
 	fmt.Println("Main - Initializing logging...")
 	cloudWatch, err := NewCloudWatch(ctx, config)
@@ -65,7 +62,6 @@ func main() {
 	}
 	CloudWatchMetrics = cloudWatch
 
-	// Initialize game engine
 
 	Logger.Info("Main - Starting Game Engine...")
 	game, err := NewGame(ctx, config)
@@ -74,7 +70,6 @@ func main() {
 		os.Exit(123)
 	}
 
-	// Initialize server
 
 	Logger.Info("Main - Starting Server...")
 	server, err := NewServer(ctx, config)
@@ -88,13 +83,11 @@ func main() {
 
 	Logger.Info("Main - Starting server components...")
 
-	// Start components with error channels
 
 	go cloudWatch.Run(errorChannel)
 	go game.Run(errorChannel)
 	go server.Run(errorChannel)
 
-	// Handle shutdown via signal or component error
 
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
@@ -123,7 +116,7 @@ func main() {
 		Logger.Error("Main: Error during shutdown", "error", shutdownErr)
 	}
 
-	// Close error channel and wait for handler to finish
+	// Channel closure signals error handler termination
 	close(errorChannel)
 	select {
 	case <-errorHandlerDone:
