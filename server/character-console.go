@@ -123,8 +123,10 @@ func (c *Character) RunConsole(done chan bool) {
 			// Command processing may modify game state
 			isQuit, err := ProcessCommand(c.game.ctx, c, strings.TrimSpace(inputLine))
 			if err != nil {
-				// System errors are logged but not shown to player
-				Logger.Error("Command processing error", "characterName", c.name, "command", inputLine, "error", err)
+				// Send error message to player - these are typically user-friendly messages
+				c.DisplayMessage(err.Error())
+				// Log at debug level since command errors (like typos) are normal gameplay
+				Logger.Debug("Command not recognized", "characterName", c.name, "command", inputLine, "message", err.Error())
 			} else {
 				// Success path continues normal game flow
 				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
