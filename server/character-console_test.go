@@ -20,7 +20,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -28,7 +27,6 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 )
-
 
 // mockPlayer provides a test double for Player
 type mockPlayer struct {
@@ -77,7 +75,6 @@ func (mp *mockPlayer) getOutput() []string {
 	copy(result, mp.receivedOutput)
 	return result
 }
-
 
 // setupTestCharacterConsole creates a test character with console dependencies
 func setupTestCharacterConsole(_ *testing.T) (*Character, *Game, *mockPlayer, chan bool) {
@@ -182,7 +179,7 @@ func setupTestCharacterConsole(_ *testing.T) (*Character, *Game, *mockPlayer, ch
 	}
 
 	done := make(chan bool, 1)
-	
+
 	// Start output capture with cleanup
 	go func() {
 		defer func() {
@@ -196,7 +193,7 @@ func setupTestCharacterConsole(_ *testing.T) (*Character, *Game, *mockPlayer, ch
 
 func TestRunConsole_BasicInitialization(t *testing.T) {
 	character, _, mockPlayer, done := setupTestCharacterConsole(t)
-	
+
 	// Test that character gets registered properly
 	go func() {
 		character.RunConsole(done)
@@ -215,7 +212,7 @@ func TestRunConsole_BasicInitialization(t *testing.T) {
 
 	// Exit cleanly by closing input
 	close(mockPlayer.commandIn)
-	
+
 	// Give it time to exit
 	select {
 	case <-done:
@@ -256,7 +253,7 @@ func TestRunConsole_NilRoom(t *testing.T) {
 
 func TestRunConsole_RoomNotRunning(t *testing.T) {
 	character, _, mockPlayer, done := setupTestCharacterConsole(t)
-	
+
 	// Create a non-running room
 	nonRunningRoom := NewRoom(character.game.ctx, 99, "test", "Non-Running Room", "A stopped room.", false, "")
 	nonRunningRoom.running = false
@@ -339,7 +336,7 @@ func TestDisplayHelp_AllCommands(t *testing.T) {
 
 	// Give output capture time to process
 	time.Sleep(50 * time.Millisecond)
-	
+
 	output := mockPlayer.getOutput()
 	if len(output) == 0 {
 		t.Error("No help output received")
@@ -347,7 +344,7 @@ func TestDisplayHelp_AllCommands(t *testing.T) {
 	}
 
 	helpText := strings.Join(output, "")
-	
+
 	// Verify help contains expected commands
 	expectedCommands := []string{"look", "quit", "help"}
 	for _, cmd := range expectedCommands {
@@ -371,7 +368,7 @@ func TestDisplayHelp_SpecificCommand(t *testing.T) {
 
 	// Give output capture time to process
 	time.Sleep(50 * time.Millisecond)
-	
+
 	output := mockPlayer.getOutput()
 	if len(output) == 0 {
 		t.Error("No help output received")
@@ -379,7 +376,7 @@ func TestDisplayHelp_SpecificCommand(t *testing.T) {
 	}
 
 	helpText := strings.Join(output, "")
-	
+
 	// Verify specific command help
 	if !strings.Contains(helpText, "Command: look") {
 		t.Error("Help output missing command name")
@@ -402,7 +399,7 @@ func TestDisplayHelp_InvalidCommand(t *testing.T) {
 
 	// Give output capture time to process
 	time.Sleep(50 * time.Millisecond)
-	
+
 	output := mockPlayer.getOutput()
 	if len(output) == 0 {
 		t.Error("No help output received")
@@ -410,7 +407,7 @@ func TestDisplayHelp_InvalidCommand(t *testing.T) {
 	}
 
 	helpText := strings.Join(output, "")
-	
+
 	if !strings.Contains(helpText, "No help available for 'nonexistent'") {
 		t.Error("Help output missing error message for invalid command")
 	}
@@ -418,7 +415,7 @@ func TestDisplayHelp_InvalidCommand(t *testing.T) {
 
 func TestDisplayHelp_InvalidState(t *testing.T) {
 	character, _, _, _ := setupTestCharacterConsole(t)
-	
+
 	// Test with nil player
 	character.player = nil
 	err := character.DisplayHelp("")
@@ -442,7 +439,7 @@ func TestSendPrompt(t *testing.T) {
 
 	// Give output capture time to process
 	time.Sleep(50 * time.Millisecond)
-	
+
 	output := mockPlayer.getOutput()
 	if len(output) == 0 {
 		t.Error("No prompt received")
@@ -463,7 +460,7 @@ func TestSetPrompt(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 	output := mockPlayer.getOutput()
-	
+
 	if len(output) > 0 && output[len(output)-1] != "custom> " {
 		t.Errorf("Expected prompt 'custom> ', got '%s'", output[len(output)-1])
 	}
@@ -474,7 +471,7 @@ func TestSetPrompt(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 	output = mockPlayer.getOutput()
-	
+
 	// Find the last prompt in output
 	var lastPrompt string
 	for i := len(output) - 1; i >= 0; i-- {
@@ -497,7 +494,7 @@ func TestDisplayMessage(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 	output := mockPlayer.getOutput()
-	
+
 	found := false
 	for _, msg := range output {
 		if msg == testMessage {
@@ -522,87 +519,6 @@ func TestSafeExecuteLookCommand(t *testing.T) {
 	character.safeExecuteLookCommand() // Should recover from panic
 
 	// If we get here, panic recovery worked
-}
-
-func TestSendUserFriendlyError(t *testing.T) {
-	character, _, mockPlayer, _ := setupTestCharacterConsole(t)
-
-	tests := []struct {
-		name           string
-		err            error
-		expectedOutput string
-	}{
-		{
-			name:           "Command not found",
-			err:            fmt.Errorf("command not found"),
-			expectedOutput: "I don't understand that command",
-		},
-		{
-			name:           "Unknown error",
-			err:            fmt.Errorf("unknown command"),
-			expectedOutput: "I don't understand that command",
-		},
-		{
-			name:           "Invalid error",
-			err:            fmt.Errorf("invalid parameter"),
-			expectedOutput: "That command isn't valid right now",
-		},
-		{
-			name:           "Permission error",
-			err:            fmt.Errorf("permission denied"),
-			expectedOutput: "You don't have permission",
-		},
-		{
-			name:           "Generic error",
-			err:            fmt.Errorf("something went wrong"),
-			expectedOutput: "Sorry, that command couldn't be completed",
-		},
-		{
-			name:           "Nil error",
-			err:            nil,
-			expectedOutput: "",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// Clear previous output
-			mockPlayer.receivedOutput = []string{}
-			
-			character.sendUserFriendlyError(tc.err)
-			
-			if tc.err == nil {
-				// Should not send anything for nil error
-				time.Sleep(50 * time.Millisecond)
-				output := mockPlayer.getOutput()
-				if len(output) > 0 {
-					t.Error("Should not send message for nil error")
-				}
-				return
-			}
-
-			time.Sleep(50 * time.Millisecond)
-			output := mockPlayer.getOutput()
-			
-			if len(output) == 0 {
-				t.Error("No error message received")
-				return
-			}
-
-			errorMsg := output[len(output)-1]
-			if !strings.Contains(errorMsg, tc.expectedOutput) {
-				t.Errorf("Expected error containing '%s', got '%s'", tc.expectedOutput, errorMsg)
-			}
-		})
-	}
-}
-
-func TestSendUserFriendlyError_NilPlayer(t *testing.T) {
-	character, _, _, _ := setupTestCharacterConsole(t)
-	character.player = nil
-
-	// Should not panic with nil player
-	character.sendUserFriendlyError(fmt.Errorf("test error"))
 }
 
 func TestCleanupAndSignalDone(t *testing.T) {
@@ -672,7 +588,7 @@ func TestRunConsole_CommandProcessing(t *testing.T) {
 
 func TestRunConsole_IdleTimeout(t *testing.T) {
 	character, _, mockPlayer, done := setupTestCharacterConsole(t)
-	
+
 	// Set player to nil to simulate lost connection during idle
 	go func() {
 		time.Sleep(500 * time.Millisecond)

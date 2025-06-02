@@ -123,8 +123,8 @@ func (c *Character) RunConsole(done chan bool) {
 			// Command processing may modify game state
 			isQuit, err := ProcessCommand(c.game.ctx, c, strings.TrimSpace(inputLine))
 			if err != nil {
-				// Error messaging improves player experience
-				c.sendUserFriendlyError(err)
+				// System errors are logged but not shown to player
+				Logger.Error("Command processing error", "characterName", c.name, "command", inputLine, "error", err)
 			} else {
 				// Success path continues normal game flow
 				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
@@ -272,32 +272,3 @@ func (c *Character) safeExecuteLookCommand() {
 	}
 }
 
-// sendUserFriendlyError sends a sanitized error message to the player
-func (c *Character) sendUserFriendlyError(err error) {
-	if err == nil {
-		return
-	}
-
-	// Debug logging helps identify command processing issues
-	Logger.Error("Command error", "characterName", c.name, "error", err.Error())
-
-	// User-facing errors hide implementation details
-	userMessage := "Sorry, that command couldn't be completed. Please try again."
-
-	// Error type checking enables contextual help messages
-	errStr := err.Error()
-	if strings.Contains(errStr, "not found") || strings.Contains(errStr, "unknown") {
-		userMessage = "I don't understand that command. Type 'help' for available commands."
-	} else if strings.Contains(errStr, "invalid") {
-		userMessage = "That command isn't valid right now. Please try something else."
-	} else if strings.Contains(errStr, "permission") || strings.Contains(errStr, "access") {
-		userMessage = "You don't have permission to do that."
-	}
-
-	// Safe sending prevents panic on closed channels
-	if c.player != nil && c.player.commandOut != nil {
-		c.player.commandOut <- userMessage + "\n\r"
-	} else {
-		Logger.Error("Cannot send error to player - invalid player state", "characterName", c.name)
-	}
-}

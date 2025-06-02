@@ -146,8 +146,8 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 	if len(cmd.Args) < 2 {
 		return &CommandResponse{
 			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("what do you want to say?"),
+			Success:   true,
+			Message:   "\n\rWhat do you want to say?\n\r",
 			Timestamp: time.Now(),
 		}
 	}
@@ -182,8 +182,8 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 	if len(cmd.Args) < 2 {
 		return &CommandResponse{
 			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("what do you want to %s?", cmd.Verb),
+			Success:   true,
+			Message:   fmt.Sprintf("\n\rWhat do you want to %s?\n\r", cmd.Verb),
 			Timestamp: time.Now(),
 		}
 	}
@@ -1969,8 +1969,8 @@ func handleSneakCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	if !character.IsHidden() {
 		return &CommandResponse{
 			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you must be hidden to sneak"),
+			Success:   true,
+			Message:   "\n\rYou must be hidden to sneak.\n\r",
 			Timestamp: time.Now(),
 		}
 	}
@@ -1983,8 +1983,8 @@ func handleSneakCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 
 		return &CommandResponse{
 			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you stumble and reveal yourself"),
+			Success:   true,
+			Message:   "\n\rYou stumble and reveal yourself.\n\r",
 			Timestamp: time.Now(),
 		}
 	}
