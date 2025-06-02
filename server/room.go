@@ -335,7 +335,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 
 	// Check for item cleanup every 10 minutes (600 ticks = 10 minutes @ 1 second per tick)
 	if r.idleCounter%600 == 0 && r.idleCounter > 0 {
-		Logger.Info("Room item cleanup interval reached", "roomID", r.roomID, "title", r.title, "idleMinutes", r.idleCounter/60)
+		Logger.Debug("Room item cleanup interval reached", "roomID", r.roomID, "title", r.title, "idleMinutes", r.idleCounter/60)
 
 		// Clean up marked items in the room
 		r.cleanupItems(game)
