@@ -146,7 +146,9 @@ func AwardExperience(aggressor, defender *Character, context ExperienceContext) 
 	baseXPValue := CalculateBaseXP()
 
 	// Calculate variance modifiers for each participant
-	aggressorVariance := CalculateVarianceModifier(context.DefenderEffective, context.AggressorEffective)
+	// For aggressor: reward based on taking on stronger opponents
+	aggressorVariance := CalculateVarianceModifier(context.AggressorEffective, context.DefenderEffective)
+	// For defender: reward based on defending against weaker opponents is less
 	defenderVariance := CalculateVarianceModifier(context.AggressorEffective, context.DefenderEffective)
 
 	// Calculate final XP for each participant
