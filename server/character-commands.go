@@ -255,7 +255,7 @@ func (c *Character) GetCharacterInfo() string {
 	defer c.mutex.RUnlock()
 
 	var info strings.Builder
-	info.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_white", c.name)))
+	info.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_cyan", c.name+"'s Info")))
 	info.WriteString("----------------\n\r")
 
 	// Core stats provide combat and survival metrics
@@ -346,7 +346,7 @@ func (c *Character) GetSkillInfo() string {
 	defer c.mutex.RUnlock()
 
 	var skillInfo strings.Builder
-	skillInfo.WriteString(fmt.Sprintf("\n\r%s's Skills\n\r", ApplyColor("bright_cyan", c.name)))
+	skillInfo.WriteString(fmt.Sprintf("\n\r%s\n\r", ApplyColor("bright_cyan", c.name+"'s Skills")))
 	skillInfo.WriteString("----------------\n\r")
 
 	// Skills - only show those above zero
