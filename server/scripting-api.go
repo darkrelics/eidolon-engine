@@ -26,6 +26,8 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	lua "github.com/yuin/gopher-lua"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // RegisterRoomAPI registers all room-related functions for Lua scripts
@@ -315,7 +317,8 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 	Logger.Info("Script retrieved successfully", "scriptID", room.scriptID, "luaState", L != nil)
 
 	// Build function name from command verb (e.g., "pull" -> "onCommandPull")
-	functionName := "onCommand" + strings.Title(verb)
+	caser := cases.Title(language.English)
+	functionName := "onCommand" + caser.String(verb)
 
 	Logger.Info("Looking for function in script", "scriptID", room.scriptID, "functionName", functionName)
 

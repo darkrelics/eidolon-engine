@@ -77,6 +77,11 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 	Logger.Debug("Saving character", "characterName", c.name)
 
 	kp := c.game.database
+	if kp == nil || kp.db == nil {
+		Logger.Error("Database not available, skipping save", "characterName", c.name)
+		c.lastSaved = time.Now()
+		return nil
+	}
 
 	// Convert inventory to ID map
 	inventoryIDs := make(map[string]string)
