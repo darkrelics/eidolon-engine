@@ -55,19 +55,23 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 ## Rooms Table
 
-| Field         | Type     | Description                                     |
-| ------------- | -------- | ----------------------------------------------- |
-| `RoomID`      | `NUMBER` | Unique identifier of the room.                  |
-| `Area`        | `STRING` | Name of the area or region the room belongs to. |
-| `Title`       | `STRING` | Title or name of the room.                      |
-| `Description` | `STRING` | Text description of the room.                   |
-| `ExitID`      | `LIST`   | Map of exit directions to exit UUIDs.           |
+| Field           | Type      | Description                                     |
+| --------------- | --------- | ----------------------------------------------- |
+| `RoomID`        | `NUMBER`  | Unique identifier of the room.                  |
+| `Area`          | `STRING`  | Name of the area or region the room belongs to. |
+| `Title`         | `STRING`  | Title or name of the room.                      |
+| `Description`   | `STRING`  | Text description of the room.                   |
+| `ExitID`        | `LIST`    | Map of exit directions to exit UUIDs.           |
+| `ScriptID`      | `STRING`  | ID of the Lua script associated with the room.  |
+| `ScriptActive`  | `BOOLEAN` | Indicates if the room script is active.         |
 
 - **`RoomID`**: Serves as the primary key for the room.
 - **`Area`**: The broader area or zone where the room is located.
 - **`Title`**: A short name or title for the room.
 - **`Description`**: A detailed description that players see upon entering.
 - **`ExitID`**: A list of UUIDs representing exits from the room.
+- **`ScriptID`**: The filename (without .lua extension) of the Lua script associated with this room. Scripts are stored in S3.
+- **`ScriptActive`**: Boolean flag indicating whether the room's script is currently active and should handle events/commands.
 
 ---
 
@@ -208,6 +212,89 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 - **`Content`**: The actual message displayed to players.
 - **`Date`**: Used to determine if players have seen the latest message.
 - **`Author`**: Identifies who created or modified the message.
+
+---
+
+## Scripting System
+
+The Eidolon Engine supports Lua scripting for dynamic room behavior. Scripts are stored in Amazon S3 and loaded on-demand when rooms are initialized.
+
+### Script Storage
+
+- Scripts are stored in S3 with the naming convention: `{script_id}.lua`
+- The S3 bucket and prefix are configured in the server configuration
+- Scripts are cached in memory for performance, with automatic cache expiration
+
+### Script Metadata
+
+Scripts can define a `SCRIPT_INFO` table to declare their capabilities:
+
+```lua
+SCRIPT_INFO = {
+    commands = {"pull", "push", "turn"},  -- Commands this script handles
+    events = {"onCharacterEnter", "onRoomStart"},  -- Events this script handles
+    periodic = true  -- Whether script has periodic tick function
+}
+```
+
+### Available Events
+
+Scripts can handle the following events:
+
+- **`onRoomStart`**: Called when the room is initialized
+- **`onCharacterEnter(character)`**: Called when a character enters the room
+- **`onCharacterLeave(character)`**: Called when a character leaves the room
+- **`onCommand{Verb}(character, args)`**: Called for custom commands (e.g., `onCommandPull`)
+
+### Script API
+
+Scripts have access to the Eidolon API through the global `eidolon` table:
+
+#### Room Functions
+- **`eidolon.room.sendMessage(message)`**: Send a message to all characters in the room
+- **`eidolon.room.sendToCharacter(name, message)`**: Send a message to a specific character
+- **`eidolon.room.getCharacters()`**: Get list of characters in the room
+- **`eidolon.room.getItems()`**: Get list of items in the room
+- **`eidolon.room.addItem(name, description)`**: Add an item to the room
+- **`eidolon.room.removeItem(name)`**: Remove an item from the room by name
+- **`eidolon.room.setDescription(description)`**: Change the room's description
+- **`eidolon.room.getExits()`**: Get list of exits from the room
+
+#### Logging Functions
+- **`eidolon.log.info(message)`**: Log an info message
+- **`eidolon.log.debug(message)`**: Log a debug message
+- **`eidolon.log.error(message)`**: Log an error message
+
+### Example Script
+
+```lua
+-- Declare script capabilities
+SCRIPT_INFO = {
+    commands = {"pull", "push"},
+    events = {"onCharacterEnter", "onRoomStart"},
+    periodic = false
+}
+
+-- Handle room initialization
+function onRoomStart()
+    eidolon.log.info("Tavern script initialized")
+end
+
+-- Handle character entering
+function onCharacterEnter(character)
+    eidolon.room.sendMessage("The bartender nods at " .. character.name)
+end
+
+-- Handle custom command
+function onCommandPull(character, args)
+    if args[1] == "lever" then
+        eidolon.room.sendMessage(character.name .. " pulls the lever!")
+        eidolon.room.setDescription("A secret door has opened!")
+        return true  -- Command was handled
+    end
+    return false  -- Command not handled
+end
+```
 
 ---
 
