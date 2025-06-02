@@ -1,0 +1,97 @@
+name: Lua Script Validation
+on:
+  push:
+    branches: [develop, qa, prod]
+    paths:
+      - "scripts_lua/**/*.lua"
+  pull_request:
+    branches: "**"
+    paths:
+      - "scripts_lua/**/*.lua"
+
+jobs:
+  validate-lua:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install Lua
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.2
+
+      - name: Validate Lua syntax
+        run: |
+          echo "Validating Lua scripts..."
+          for script in scripts_lua/*.lua; do
+            if [ -f "$script" ]; then
+              echo "Checking syntax: $script"
+              luac -p "$script"
+              if [ $? -eq 0 ]; then
+                echo "$script syntax OK"
+              else
+                echo "$script syntax ERROR"
+                exit 1
+              fi
+            fi
+          done
+
+      - name: Validate script metadata
+        run: |
+          echo "Validating script metadata..."
+          for script in scripts_lua/*.lua; do
+            if [ -f "$script" ]; then
+              echo "Checking metadata: $script"
+              
+              # Check if SCRIPT_INFO exists
+              if ! grep -q "SCRIPT_INFO" "$script"; then
+                echo "$script missing SCRIPT_INFO table"
+                exit 1
+              fi
+              
+              # Check if required fields exist
+              if ! grep -q "commands.*=" "$script"; then
+                echo "$script missing commands field in SCRIPT_INFO"
+                exit 1
+              fi
+              
+              if ! grep -q "events.*=" "$script"; then
+                echo "$script missing events field in SCRIPT_INFO"
+                exit 1
+              fi
+              
+              if ! grep -q "periodic.*=" "$script"; then
+                echo "$script missing periodic field in SCRIPT_INFO"
+                exit 1
+              fi
+              
+              echo "$script metadata OK"
+            fi
+          done
+
+      - name: Check for required event handlers
+        run: |
+          echo "Validating event handlers..."
+          for script in scripts_lua/*.lua; do
+            if [ -f "$script" ]; then
+              echo "Checking handlers: $script"
+              
+              # Extract events from SCRIPT_INFO and check if handlers exist
+              # This is a basic check - could be enhanced with Lua parsing
+              if grep -q "onCharacterEnter" "$script" && ! grep -q "function onCharacterEnter" "$script"; then
+                echo "$script declares onCharacterEnter event but no handler function found"
+              fi
+              
+              if grep -q "onCharacterLeave" "$script" && ! grep -q "function onCharacterLeave" "$script"; then
+                echo "$script declares onCharacterLeave event but no handler function found"
+              fi
+              
+              if grep -q "onTick" "$script" && ! grep -q "function onTick" "$script"; then
+                echo "$script declares onTick event but no handler function found"
+              fi
+              
+              echo "$script handlers checked"
+            fi
+          done

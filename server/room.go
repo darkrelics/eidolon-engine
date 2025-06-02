@@ -104,6 +104,8 @@ type Room struct {
 	gameCommandOut chan *CommandRequest  // Channel for commands the room escalates to the game
 	gameCommandIn  chan *CommandResponse // Channel for responses from the game to the room
 	done           chan struct{}         // Channel signaled when room goroutine completes
+	ready          chan struct{}         // Channel signaled when room is ready to accept characters
+	isReady        bool                  // Flag indicating if room is ready
 }
 
 // RoomData represents the structure for storing room data in DynamoDB
@@ -146,11 +148,13 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		ctx:            roomCtx,
 		cancel:         cancel,
 		running:        false,
+		isReady:        false,
 		commandIn:      make(chan *CommandRequest, 50),  // Buffer for incoming commands - sized for burst handling
 		commandOut:     make(chan *CommandResponse, 50), // Buffer for outgoing responses
 		gameCommandOut: make(chan *CommandRequest, 10),  // Buffer for commands to game
 		gameCommandIn:  make(chan *CommandResponse, 10), // Buffer for responses from game
 		done:           make(chan struct{}),             // Channel to signal goroutine completion
+		ready:          make(chan struct{}),             // Channel to signal room is ready
 	}
 }
 
@@ -212,6 +216,17 @@ func (g *Game) LoadRooms() error {
 		g.mutex.Unlock()
 	}
 
+	// Start persistent rooms
+	persistentCount := 0
+	for roomID, room := range g.rooms {
+		if room.persistent {
+			Logger.Debug("Starting persistent room", "roomID", roomID, "title", room.title)
+			room.Start(g)
+			persistentCount++
+		}
+	}
+
+	Logger.Info("Persistent rooms started", "count", persistentCount)
 	return nil
 }
 
@@ -289,7 +304,7 @@ func (r *Room) IsIdle(duration time.Duration) bool {
 }
 
 // HandleCharacterEntry handles character entering a room, resets idle counter and activates scripts
-func (r *Room) HandleCharacterEntry() {
+func (r *Room) HandleCharacterEntry(character *Character) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -301,6 +316,9 @@ func (r *Room) HandleCharacterEntry() {
 		r.scriptActive = true
 		Logger.Info("Activating scripts for persistent room with character entry", "roomID", r.roomID)
 	}
+
+	// Don't trigger script events here - let the room goroutine handle it
+	// This prevents race conditions where scripts aren't loaded yet
 }
 
 // IncrementIdleCounter increments the idle counter for an empty room and handles cleanup if threshold is reached
@@ -473,6 +491,19 @@ func SendRoomMessageExcept(room *Room, message string, except *Character) {
 	}
 }
 
+// WaitReady waits for the room to be ready to accept characters
+func (r *Room) WaitReady() {
+	r.mutex.RLock()
+	if r.isReady {
+		r.mutex.RUnlock()
+		return
+	}
+	r.mutex.RUnlock()
+
+	// Wait for ready signal
+	<-r.ready
+}
+
 // Start begins the room goroutine to process room-level commands
 func (r *Room) Start(game *Game) {
 	r.mutex.Lock()
@@ -486,7 +517,7 @@ func (r *Room) Start(game *Game) {
 	Logger.Info("Starting room goroutine", "roomID", r.roomID, "title", r.title)
 	r.running = true
 
-	// Start the room goroutine
+	// Start the room goroutine FIRST - let it handle script loading internally
 	go r.run(game)
 }
 
@@ -503,9 +534,11 @@ func (r *Room) Stop() {
 	// Mark as not running and get reference to cancel func
 	r.running = false
 	cancelFunc := r.cancel
+	roomID := r.roomID
+	scriptID := r.scriptID
 	r.mutex.Unlock()
 
-	Logger.Info("Stopping room goroutine", "roomID", r.roomID, "title", r.title)
+	Logger.Info("Stopping room goroutine", "roomID", roomID, "title", r.title)
 
 	// Cancel the room's context to signal all operations to stop
 	// This is done outside the lock to prevent deadlock
@@ -514,11 +547,14 @@ func (r *Room) Stop() {
 	// Wait for the room goroutine to complete
 	<-r.done
 
-	// Close channels after releasing the lock
-	// This prevents deadlock if channel operations were waiting on the mutex
+	// Unload the room's script if it has one
+	if scriptID != "" && ScriptMgr != nil {
+		ScriptMgr.UnloadRoomScript(roomID)
+	}
+
+	// Close channels after room goroutine completes
 	close(r.commandIn)
 	close(r.commandOut)
-	// Note: we don't close gameCommandOut as it belongs to the Game
 }
 
 // run is the main goroutine function for a room
@@ -533,10 +569,49 @@ func (r *Room) run(game *Game) {
 
 // runInternal contains the actual room processing logic
 func (r *Room) runInternal(game *Game) {
-	Logger.Info("Room goroutine started", "roomID", r.roomID, "title", r.title)
+	Logger.Debug("Room goroutine started", "roomID", r.roomID, "title", r.title)
 
-	// Signal completion when this function returns
-	defer close(r.done)
+	// Signal completion when this function returns - do this at the very end instead of defer
+	defer func() {
+		Logger.Debug("Room goroutine ending, closing done channel", "roomID", r.roomID)
+		close(r.done)
+	}()
+
+	// Handle script loading if room has a script - proper order of operations
+	if r.scriptID != "" && r.scriptActive {
+		if ScriptMgr == nil {
+			Logger.Warn("Script manager not available, scripts will be unavailable", "roomID", r.roomID, "scriptID", r.scriptID)
+			r.scriptActive = false
+		} else {
+			Logger.Info("Loading script for room", "roomID", r.roomID, "scriptID", r.scriptID)
+
+			// Step 1: Pull script from cache or S3
+			if err := ScriptMgr.LoadScriptForRoom(r.scriptID, r); err != nil {
+				Logger.Error("Failed to load room script", "roomID", r.roomID, "scriptID", r.scriptID, "error", err)
+				r.scriptActive = false
+			} else {
+				Logger.Info("Script loaded successfully", "roomID", r.roomID, "scriptID", r.scriptID)
+
+				// Step 2: Call onRoomStart event if script loaded properly
+				Logger.Debug("ABOUT TO EXECUTE onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
+
+				// Add detailed logging before calling ExecuteRoomEvent
+				Logger.Debug("Calling ScriptMgr.ExecuteRoomEvent", "roomID", r.roomID, "scriptID", r.scriptID, "event", "onRoomStart")
+				if err := ScriptMgr.ExecuteRoomEvent(r, "onRoomStart"); err != nil {
+					Logger.Error("Failed to execute onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID, "error", err)
+					r.scriptActive = false
+				} else {
+					Logger.Debug("Successfully executed onRoomStart event", "roomID", r.roomID, "scriptID", r.scriptID)
+				}
+			}
+		}
+	}
+
+	// Signal that room is ready to accept characters
+	r.mutex.Lock()
+	r.isReady = true
+	r.mutex.Unlock()
+	close(r.ready)
 
 	// Set up a 1-second ticker to match game heartbeat
 	ticker := time.NewTicker(1 * time.Second)
@@ -569,6 +644,25 @@ func (r *Room) runInternal(game *Game) {
 			r.processCommand(cmd, game)
 
 		case <-ticker.C:
+			// Execute periodic script tick if room has an active script
+			if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
+				// Check if script has periodic events
+				sm := ScriptMgr
+				sm.mutex.RLock()
+				hasPeriodic := false
+				if cached, exists := sm.scriptCache[r.scriptID]; exists && cached.metadata != nil {
+					hasPeriodic = cached.metadata.Periodic
+				}
+				sm.mutex.RUnlock()
+
+				if hasPeriodic {
+					Logger.Debug("Executing onTick for room", "roomID", r.roomID, "scriptID", r.scriptID)
+					if err := ScriptMgr.ExecuteRoomEvent(r, "onTick"); err != nil {
+						Logger.Error("Failed to execute onTick event", "roomID", r.roomID, "error", err)
+					}
+				}
+			}
+
 			// Increment idle counter if room is empty
 			r.mutex.RLock()
 			isEmpty := len(r.characters) == 0
@@ -589,11 +683,20 @@ func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 		return
 	}
 
+	Logger.Debug("Room processCommand: Processing command", "roomID", r.roomID, "verb", cmd.Verb, "character", cmd.Character.name)
+
 	// Process the command using the room command handler
 	response := r.ProcessRoomCommand(cmd, game)
 
+	Logger.Debug("Room processCommand: Got response", "roomID", r.roomID, "verb", cmd.Verb, "success", response.Success, "hasError", response.Error != nil)
+
 	// Send response back to character
-	cmd.Response <- response
+	select {
+	case cmd.Response <- response:
+		Logger.Debug("Room processCommand: Response sent", "roomID", r.roomID, "verb", cmd.Verb)
+	default:
+		Logger.Error("Room processCommand: Failed to send response - channel full or closed", "roomID", r.roomID, "verb", cmd.Verb)
+	}
 }
 
 // GetDescription returns a formatted string description of the room

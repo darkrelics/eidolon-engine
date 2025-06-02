@@ -331,6 +331,13 @@ func (c *Character) Stop() {
 
 	// Remove character from room and update room activity timestamp
 	if c.room != nil {
+		// Trigger onCharacterLeave event before removing character
+		if c.room.scriptID != "" && c.room.scriptActive && ScriptMgr != nil {
+			if err := ScriptMgr.ExecuteRoomEvent(c.room, "onCharacterLeave", c); err != nil {
+				Logger.Error("Error executing onCharacterLeave during character stop", "roomID", c.room.roomID, "characterName", c.name, "error", err)
+			}
+		}
+
 		c.room.mutex.Lock()
 		delete(c.room.characters, c.id)
 		c.room.lastActive = time.Now() // Update the timestamp when character leaves

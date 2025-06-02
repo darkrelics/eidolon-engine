@@ -48,6 +48,8 @@ type Configuration struct {
 		AutoSave                 uint16  `yaml:"AutoSave"`
 		NamesPath                string  `yaml:"NamesPath"`
 		ObscenityPath            string  `yaml:"ObscenityPath"`
+		ScriptsS3Bucket          string  `yaml:"ScriptsS3Bucket"`          // S3 bucket for Lua scripts
+		ScriptsS3Prefix          string  `yaml:"ScriptsS3Prefix"`          // S3 prefix for Lua scripts (default: scripts)
 		TickIntervalSeconds      int     `yaml:"TickIntervalSeconds"`      // Game tick interval (default: 1)
 		RoomItemCleanupSeconds   int     `yaml:"RoomItemCleanupSeconds"`   // Room item cleanup interval (default: 600)
 		RoomUnloadSeconds        int     `yaml:"RoomUnloadSeconds"`        // Non-persistent room unload time (default: 3600)
@@ -141,6 +143,9 @@ func setConfigDefaults(config *Configuration) {
 	}
 	if config.Game.ObscenityPath == "" {
 		config.Game.ObscenityPath = "../data/obscenity.txt"
+	}
+	if config.Game.ScriptsS3Prefix == "" {
+		config.Game.ScriptsS3Prefix = "scripts"
 	}
 
 	// SSH defaults

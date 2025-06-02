@@ -35,16 +35,32 @@ func ResolveOpposedCheck(aggressor, defender int) Outcome {
 	z := cryptoNormal()    // N(0,1) from crypto/rand
 	zPrime := mu + sigma*z // affine transform
 
-	return Outcome{
+	outcome := Outcome{
 		Sigma:   zPrime,
 		Success: zPrime >= 0,
 	}
+
+	Logger.Info("Conflict resolution completed",
+		"aggressor", aggressor,
+		"defender", defender,
+		"success", outcome.Success,
+		"sigma", zPrime)
+
+	return outcome
 }
 
 // ResolveStaticCheck performs a check against a fixed difficulty
 // using the same mechanics as opposed checks but with a static defender value
 func ResolveStaticCheck(aggressor, difficulty int) Outcome {
-	return ResolveOpposedCheck(aggressor, difficulty)
+	outcome := ResolveOpposedCheck(aggressor, difficulty)
+
+	Logger.Info("Static conflict resolution completed",
+		"aggressor", aggressor,
+		"difficulty", difficulty,
+		"success", outcome.Success,
+		"sigma", outcome.Sigma)
+
+	return outcome
 }
 
 // cryptoNormal returns a single N(0,1) sample using Box–Muller and crypto/rand.

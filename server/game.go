@@ -105,6 +105,15 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Warn("Error initializing character bloom filter", "error", err)
 	}
 
+	// Initialize script manager BEFORE loading rooms
+	Logger.Info("Initializing Script Manager...")
+	if err := InitScriptManager(config); err != nil {
+		Logger.Error("Script manager initialization failed - continuing without scripting", "error", err)
+		Logger.Error("AWS credentials or configuration may be missing", "scriptsS3Bucket", config.Game.ScriptsS3Bucket, "awsRegion", config.AWS.Region)
+	} else {
+		Logger.Info("Script manager initialized successfully")
+	}
+
 	// Create Default Room
 
 	game.rooms[0] = NewRoom(ctx, 0, "The Void", "The Void", "Default void room.", true, "") // Default room is always persistent, no script

@@ -57,6 +57,18 @@ func (c *Character) RunConsole(done chan bool) {
 	c.game.characters[c.id] = c
 	c.game.mutex.Unlock()
 
+	// Ensure room is started before adding character
+	c.room.mutex.RLock()
+	roomRunning := c.room.running
+	c.room.mutex.RUnlock()
+
+	if !roomRunning {
+		Logger.Info("Starting room for character entry", "roomID", c.room.roomID, "characterName", c.name)
+		c.room.Start(c.game)
+		// Wait for room to be ready
+		c.room.WaitReady()
+	}
+
 	// Add character to the room
 	c.room.mutex.Lock()
 	if c.room.characters == nil {
@@ -68,15 +80,22 @@ func (c *Character) RunConsole(done chan bool) {
 	c.room.mutex.Unlock()
 
 	// Call HandleCharacterEntry to reset idle counter and activate scripts
-	c.room.HandleCharacterEntry()
+	// Ensure this happens after character is fully added to room
+	c.room.HandleCharacterEntry(c)
+
+	// If room has a script, trigger onCharacterEnter event
+	// This happens after room is started and character is added
+	if c.room.scriptID != "" && c.room.scriptActive && ScriptMgr != nil {
+		if err := ScriptMgr.ExecuteRoomEvent(c.room, "onCharacterEnter", c); err != nil {
+			Logger.Error("Error executing onCharacterEnter", "roomID", c.room.roomID, "characterName", c.name, "error", err)
+		}
+	}
 
 	// Notify room of arrival (without holding locks)
 	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
 
 	// Show initial room description
-	if err := executeLookCommand(c, []string{"look"}); err != nil {
-		Logger.Warn("Failed to show initial room", "characterName", c.name, "error", err)
-	}
+	c.safeExecuteLookCommand()
 
 	const idleTimeout = 30 * time.Second
 	timer := time.NewTimer(idleTimeout)
@@ -105,8 +124,8 @@ func (c *Character) RunConsole(done chan bool) {
 			// Process the command
 			isQuit, err := ProcessCommand(c.game.ctx, c, strings.TrimSpace(inputLine))
 			if err != nil {
-				// Send error message to player
-				c.player.commandOut <- err.Error() + "\n\r"
+				// Send user-friendly error message to player
+				c.sendUserFriendlyError(err)
 			} else {
 				// Command processed successfully
 				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
@@ -240,4 +259,46 @@ func (c *Character) DisplayMessage(message string) {
 	}
 
 	c.player.commandOut <- message
+}
+
+// safeExecuteLookCommand safely executes the initial look command with panic recovery
+func (c *Character) safeExecuteLookCommand() {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic during initial look command", "characterName", c.name, "roomID", c.room.roomID, "panic", r)
+		}
+	}()
+	if err := executeLookCommand(c, []string{"look"}); err != nil {
+		Logger.Warn("Failed to show initial room", "characterName", c.name, "error", err)
+	}
+}
+
+// sendUserFriendlyError sends a sanitized error message to the player
+func (c *Character) sendUserFriendlyError(err error) {
+	if err == nil {
+		return
+	}
+
+	// Log the full error for debugging
+	Logger.Error("Command error", "characterName", c.name, "error", err.Error())
+
+	// Send a user-friendly message
+	userMessage := "Sorry, that command couldn't be completed. Please try again."
+
+	// Check for specific error types to provide better messages
+	errStr := err.Error()
+	if strings.Contains(errStr, "not found") || strings.Contains(errStr, "unknown") {
+		userMessage = "I don't understand that command. Type 'help' for available commands."
+	} else if strings.Contains(errStr, "invalid") {
+		userMessage = "That command isn't valid right now. Please try something else."
+	} else if strings.Contains(errStr, "permission") || strings.Contains(errStr, "access") {
+		userMessage = "You don't have permission to do that."
+	}
+
+	// Send safely to player
+	if c.player != nil && c.player.commandOut != nil {
+		c.player.commandOut <- userMessage + "\n\r"
+	} else {
+		Logger.Error("Cannot send error to player - invalid player state", "characterName", c.name)
+	}
 }
