@@ -28,29 +28,20 @@ import (
 
 // ProcessCommand determines command tier and routes it appropriately
 func ProcessCommand(ctx context.Context, character *Character, input string) (bool, error) {
-	// Limit input to 240 characters
-	if len(input) > 240 {
-		return false, errors.New("Command too long. Maximum 240 characters allowed.")
-	}
-
 	// Parse and validate the command
-	verb, tokens, err := ValidateCommand(character, input)
+	verb, tokens, userMsg, err := ValidateCommand(character, input)
 	if err != nil {
 		return false, err
 	}
 
-	if character == nil || character.game == nil {
-		return false, errors.New("Invalid character state.")
+	// If there's a user message, display it and return
+	if userMsg != "" {
+		character.DisplayMessage(userMsg)
+		return false, nil
 	}
 
-	// Check if the character is waiting for a command timeout
-	canExecute, reason := character.CanExecuteCommand()
-	if !canExecute {
-		// Allow certain commands even when waiting
-		if verb != "look" && verb != "help" && verb != "who" && verb != "quit" {
-			return false, fmt.Errorf("%s", reason)
-		}
-		// These commands are allowed during wait time
+	if character == nil || character.game == nil {
+		return false, errors.New("invalid character state")
 	}
 
 	// Retrieve the command info
@@ -60,6 +51,15 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 
 	if !exists {
 		return false, fmt.Errorf("command '%s' not understood", verb)
+	}
+
+	// Check if the character is waiting for a command timeout
+	// Only check for commands that care about round time (roundTime >= 0)
+	if cmdInfo.roundTime >= 0 {
+		canExecute, reason := character.CanExecuteCommand()
+		if !canExecute {
+			return false, fmt.Errorf("%s", reason)
+		}
 	}
 
 	// Special case handling for "quit" command - always process immediately
@@ -73,14 +73,12 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	// Step 1: Try character-level handler first (both timed and untimed)
 	if cmdInfo.handler != nil {
 		Logger.Debug("Executing character-tier command", "verb", verb, "character", character.name)
-		if cmdInfo.timed {
-			// For timed character commands, still respect timing but execute directly
-			err := cmdInfo.handler(character, tokens)
-			return false, err
-		} else {
-			// Untimed commands bypass rate limiting
-			return false, cmdInfo.handler(character, tokens)
+		err := cmdInfo.handler(character, tokens)
+		// Apply round time if command generates one (roundTime > 0)
+		if cmdInfo.roundTime > 0 {
+			character.SetCommandWaitTime(time.Duration(cmdInfo.roundTime) * time.Second)
 		}
+		return false, err
 	}
 
 	// Step 2: Character doesn't handle this command, escalate to room
@@ -145,6 +143,10 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 		if resp.Message != "" {
 			character.DisplayMessage(resp.Message)
 		}
+		// Apply round time if command generates one (roundTime > 0)
+		if cmdInfo.roundTime > 0 {
+			character.SetCommandWaitTime(time.Duration(cmdInfo.roundTime) * time.Second)
+		}
 		return false, nil
 	case <-time.After(5 * time.Second):
 		Logger.Error("Command timed out waiting for response", "roomID", character.room.roomID, "verb", verb, "character", character.name)
@@ -156,6 +158,10 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 
 // escalateToGame handles commands that neither character nor room can process
 func escalateToGame(ctx context.Context, character *Character, verb string, tokens []string) (bool, error) {
+	// Get command info for round time application
+	character.game.mutex.RLock()
+	cmdInfo, _ := character.game.commands[verb]
+	character.game.mutex.RUnlock()
 	// Game-tier request handles global commands
 	cmdReq := &CommandRequest{
 		ID:        GenerateUUIDv7(),
@@ -187,6 +193,10 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 		}
 		if resp.Message != "" {
 			character.DisplayMessage(resp.Message)
+		}
+		// Apply round time if command generates one (roundTime > 0)
+		if cmdInfo.roundTime > 0 {
+			character.SetCommandWaitTime(time.Duration(cmdInfo.roundTime) * time.Second)
 		}
 		return false, nil
 	case <-time.After(5 * time.Second):

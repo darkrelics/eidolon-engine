@@ -1857,6 +1857,9 @@ func handleHideCommand(cmd *CommandRequest, room *Room) *CommandResponse {
 	outcome := ResolveStaticCheckWithXP(character, "stealth", "agility", hideBaseDifficulty)
 
 	if !outcome.Success {
+		// Set 4-second round time for failed hide attempts
+		character.SetCommandWaitTime(4 * time.Second)
+
 		message := "\n\rYou attempt to hide but fail to find adequate concealment.\n\r"
 
 		SendRoomMessage(room,

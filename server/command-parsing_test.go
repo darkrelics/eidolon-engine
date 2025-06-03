@@ -546,13 +546,20 @@ func TestValidateCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			verb, tokens, err := ValidateCommand(tt.character, tt.input)
+			verb, tokens, msg, err := ValidateCommand(tt.character, tt.input)
 
+			// Check for programmatic errors first
 			if tt.expectedError != "" {
-				if err == nil {
-					t.Errorf("ValidateCommand() expected error %q, got nil", tt.expectedError)
-				} else if err.Error() != tt.expectedError {
-					t.Errorf("ValidateCommand() error = %q, expected %q", err.Error(), tt.expectedError)
+				// For tests expecting state errors (nil character, etc)
+				if tt.expectedError == "Invalid character state." {
+					if err == nil {
+						t.Errorf("ValidateCommand() expected error, got nil")
+					}
+					return
+				}
+				// Otherwise it's a user message
+				if msg != tt.expectedError {
+					t.Errorf("ValidateCommand() message = %q, expected %q", msg, tt.expectedError)
 				}
 				return
 			}

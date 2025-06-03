@@ -44,8 +44,8 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 
 	// Check wait time
 	if time.Now().Before(c.waitUntil) {
-		waitTime := time.Until(c.waitUntil).Round(time.Second)
-		return false, fmt.Sprintf("You must wait %v before your next action.", waitTime)
+		waitTime := time.Until(c.waitUntil).Seconds()
+		return false, fmt.Sprintf("You must wait %.1f seconds before your next action.", waitTime)
 	}
 
 	// Check character state if needed
