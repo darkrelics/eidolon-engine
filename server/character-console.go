@@ -68,7 +68,7 @@ func (c *Character) RunConsole(done chan bool) {
 	// Game registration enables global character tracking
 	c.game.mutex.Lock()
 	c.game.characters[c.id] = c
-	
+
 	// While holding game lock, we can safely check room status
 	// This maintains hierarchy since Game is higher than Room
 	targetRoom := c.room
