@@ -82,7 +82,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 
 	game := player.server.game
 
-	// Initialize new character with default values
+	// Default values prevent nil pointer exceptions
 	character := &Character{
 		game:             game,
 		id:               characterID,
@@ -110,7 +110,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		prompt:           "\n\r> ",
 	}
 
-	// Load character data from database
+	// Database loading restores persistent character state
 	cd := &CharacterData{}
 	key := map[string]types.AttributeValue{
 		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
@@ -120,7 +120,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		return nil, fmt.Errorf("error loading character data: %w", err)
 	}
 
-	// Populate character from data
+	// Data population reconstructs in-memory character
 	var err error
 	character.id, err = uuid.FromString(cd.CharacterID)
 	if err != nil {
@@ -133,7 +133,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	character.health = cd.Health
 	character.hidden = cd.Hidden
 
-	// Set character room
+	// Room assignment determines character's location
 	room, exists := game.rooms[cd.RoomID]
 	if !exists {
 		Logger.Warn("Room not found, defaulting to room ID 0", "roomID", cd.RoomID)
@@ -144,14 +144,14 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	}
 	character.room = room
 
-	// Load inventory items
+	// Inventory restoration equips saved items
 	inventory, err := LoadItemsForCharacter(game.ctx, cd.Inventory, game.database)
 	if err != nil {
 		Logger.Warn("Error loading character inventory", "characterID", characterID, "error", err)
 	}
 	character.inventory = inventory
 
-	// Load hand items
+	// Hand item loading restores wielded equipment
 	if cd.LeftHandID != "" {
 		leftHandID, err := uuid.FromString(cd.LeftHandID)
 		if err == nil {
@@ -176,19 +176,15 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		}
 	}
 
-	// Add loaded items to game's item tracking and apply trait mods for worn items
+	// Item registration enables game-wide item management
 	game.mutex.Lock()
 	for _, item := range character.inventory {
 		if item != nil {
 			game.items[item.id] = item
 
-			// Apply trait modifications for worn items
-			if item.isWorn && len(item.traitMods) > 0 {
-				character.ApplyItemTraitMods(item)
-			}
 		}
 	}
-	// Also add hand items to game tracking
+	// Hand items require separate tracking for combat
 	if character.leftHand != nil {
 		game.items[character.leftHand.id] = character.leftHand
 	}
@@ -197,7 +193,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	}
 	game.mutex.Unlock()
 
-	// Add character to game state
+	// Game state addition completes character activation
 	game.mutex.Lock()
 	game.characters[character.id] = character
 	game.mutex.Unlock()
@@ -205,26 +201,26 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	return character, nil
 }
 
-// Removes a character from the database by its ID
+// DeleteCharacterByID permanently removes character data and associated items
 func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 	Logger.Info("Deleting character from database", "characterID", characterID)
 
-	// Check if character is currently active in the game
+	// Active characters must be stopped before deletion
 	p.server.game.mutex.RLock()
 	activeChar, isActive := p.server.game.characters[characterID]
 	p.server.game.mutex.RUnlock()
 
-	// If character is active, stop it first
+	// Stopping ensures clean disconnect and save
 	if isActive && activeChar != nil {
 		Logger.Info("Stopping active character before deletion", "characterName", activeChar.name)
 		activeChar.Stop()
 	}
 
-	// Load character data to get inventory and hand items if character is not active
+	// Inactive character items still need cleanup
 	var inventoryItems map[string]string
 	var handItemIDs []string
 	if !isActive {
-		// Load character data to get inventory and hands
+		// Database load required to identify owned items
 		charKey := map[string]types.AttributeValue{
 			"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
 		}
@@ -242,7 +238,7 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 			Logger.Warn("Could not load character data for inventory cleanup", "characterID", characterID, "error", err)
 		}
 	} else if activeChar != nil {
-		// Get inventory and hands from active character
+		// Active character already has items in memory
 		activeChar.mutex.RLock()
 		inventoryItems = make(map[string]string)
 		for slot, item := range activeChar.inventory {
@@ -259,11 +255,11 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 		activeChar.mutex.RUnlock()
 	}
 
-	// Clean up inventory and hand items from game.items map
+	// Item cleanup prevents memory leaks
 	totalItems := len(inventoryItems) + len(handItemIDs)
 	if totalItems > 0 {
 		p.server.game.mutex.Lock()
-		// Clean up inventory items
+		// Inventory deletion removes all carried items
 		for _, itemIDStr := range inventoryItems {
 			itemID, err := uuid.FromString(itemIDStr)
 			if err != nil {
@@ -273,7 +269,7 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 			delete(p.server.game.items, itemID)
 			Logger.Debug("Removed item from game.items", "itemID", itemID, "characterID", characterID)
 		}
-		// Clean up hand items
+		// Hand item deletion removes wielded equipment
 		for _, itemIDStr := range handItemIDs {
 			itemID, err := uuid.FromString(itemIDStr)
 			if err != nil {
@@ -287,12 +283,12 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 		Logger.Info("Cleaned up character items", "characterID", characterID, "itemCount", totalItems)
 	}
 
-	// Create the key for DynamoDB deletion
+	// DynamoDB key identifies specific character record
 	key := map[string]types.AttributeValue{
 		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
 	}
 
-	// Delete the character from the database
+	// Database deletion is permanent and irreversible
 	err := p.server.database.Delete(p.server.ctx, "characters", key)
 	if err != nil {
 		Logger.Error("Failed to delete character", "characterID", characterID, "error", err)
@@ -301,94 +297,6 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 
 	Logger.Info("Character deleted successfully", "characterID", characterID)
 	return nil
-}
-
-// ApplyItemTraitMods applies trait modifications from an item to the character
-func (c *Character) ApplyItemTraitMods(item *Item) {
-	if item == nil || len(item.traitMods) == 0 {
-		return
-	}
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	Logger.Debug("Applying trait mods to character",
-		"characterName", c.name,
-		"itemName", item.name,
-		"mods", item.traitMods)
-
-	// Apply each trait modification
-	for trait, mod := range item.traitMods {
-		// For attributes
-		if _, exists := c.attributes[trait]; exists {
-			c.attributes[trait] += float64(mod)
-			Logger.Debug("Applied attribute mod",
-				"character", c.name,
-				"attribute", trait,
-				"mod", mod,
-				"newValue", c.attributes[trait])
-		}
-		// For skills
-		if _, exists := c.skills[trait]; exists {
-			c.skills[trait] += float64(mod)
-			Logger.Debug("Applied skill mod",
-				"character", c.name,
-				"skill", trait,
-				"mod", mod,
-				"newValue", c.skills[trait])
-		}
-		// Special case handling
-		switch trait {
-		case "health":
-			c.health += float64(mod)
-		case "essence":
-			c.essence += float64(mod)
-		}
-	}
-}
-
-// RemoveItemTraitMods removes trait modifications from an item from the character
-func (c *Character) RemoveItemTraitMods(item *Item) {
-	if item == nil || len(item.traitMods) == 0 {
-		return
-	}
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	Logger.Debug("Removing trait mods from character",
-		"characterName", c.name,
-		"itemName", item.name,
-		"mods", item.traitMods)
-
-	// Remove each trait modification (apply the inverse)
-	for trait, mod := range item.traitMods {
-		// For attributes
-		if _, exists := c.attributes[trait]; exists {
-			c.attributes[trait] -= float64(mod)
-			Logger.Debug("Removed attribute mod",
-				"character", c.name,
-				"attribute", trait,
-				"mod", -mod,
-				"newValue", c.attributes[trait])
-		}
-		// For skills
-		if _, exists := c.skills[trait]; exists {
-			c.skills[trait] -= float64(mod)
-			Logger.Debug("Removed skill mod",
-				"character", c.name,
-				"skill", trait,
-				"mod", -mod,
-				"newValue", c.skills[trait])
-		}
-		// Special case handling
-		switch trait {
-		case "health":
-			c.health -= float64(mod)
-		case "essence":
-			c.essence -= float64(mod)
-		}
-	}
 }
 
 // GetSkill safely retrieves a skill value, returning 0 if not found

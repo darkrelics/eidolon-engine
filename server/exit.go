@@ -109,7 +109,6 @@ func (g *Game) LoadExits() error {
 	return nil
 }
 
-// SendArrivalMessage notifies characters in the destination room that a character has arrived
 func SendArrivalMessage(character *Character, exitUsed *Exit, destinationRoom *Room) {
 	if character == nil || exitUsed == nil || destinationRoom == nil {
 		return
@@ -124,6 +123,6 @@ func SendArrivalMessage(character *Character, exitUsed *Exit, destinationRoom *R
 		message = fmt.Sprintf("\n\r%s arrives from the %s.\n\r", character.name, exitUsed.direction)
 	}
 
-	// Send message to all characters in destination room except the arriving character
-	SendRoomMessageExcept(destinationRoom, message, character)
+	// Arrival announcements inform room occupants of new presence
+	SendRoomMessage(destinationRoom, message, character)
 }

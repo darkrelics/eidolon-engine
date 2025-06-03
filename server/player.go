@@ -111,6 +111,7 @@ type Player struct {
 	mutex         sync.RWMutex
 	shutdownOnce  sync.Once
 	done          chan struct{} // Channel signaled when all goroutines complete
+	inputBuffer   *InputBuffer  // Track current input line content
 }
 
 type PlayerData struct {
@@ -178,6 +179,12 @@ func (p *Player) Load(playerID uuid.UUID) error {
 }
 
 func (p *Player) Save() error {
+	return p.SaveWithContext(p.server.ctx)
+}
+
+// SaveWithContext saves the player data with a specific context
+// This is used during shutdown to ensure saves complete even after server context is cancelled
+func (p *Player) SaveWithContext(ctx context.Context) error {
 	Logger.Info("Saving player data", "player_id", p.id.String(), "email", p.email)
 
 	database := p.server.database
@@ -199,7 +206,7 @@ func (p *Player) Save() error {
 		playerData.SeenMotDs[i] = motdID.String()
 	}
 
-	err := database.Put(p.server.ctx, "players", playerData)
+	err := database.Put(ctx, "players", playerData)
 	if err != nil {
 		Logger.Error("Error saving player data", "error", err)
 		SafeSendString(p.commandOut, "Error saving player data. Please contact an administrator.\n", p.id.String())
@@ -233,6 +240,7 @@ func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfac
 		cancel:        cancel,
 		shutdownOnce:  sync.Once{},
 		done:          make(chan struct{}),
+		inputBuffer:   NewInputBuffer(),
 	}
 
 	// Load player data
@@ -362,8 +370,9 @@ func (p *Player) Stop() {
 			p.character = nil
 		}
 
-		// Save player data
-		p.Save()
+		// Save player data with fresh context for shutdown
+		saveCtx := context.Background()
+		p.SaveWithContext(saveCtx)
 
 		// Close the connection
 		if p.connection != nil {
@@ -440,7 +449,6 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 		}
 	}()
 
-	inputBuffer := NewInputBuffer()
 	reader := bufio.NewReader(p.connection)
 
 	// Create idle timeout timer
@@ -535,14 +543,14 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 			// Handle different input cases
 			switch r {
 			case '\n', '\r':
-				if inputBuffer.Length() > 0 {
-					input := inputBuffer.String()
+				if p.inputBuffer.Length() > 0 {
+					input := p.inputBuffer.String()
 					select {
 					case p.commandIn <- input:
 						if p.echo {
 							p.connection.Write([]byte("\r\n"))
 						}
-						inputBuffer.Clear()
+						p.inputBuffer.Clear()
 					case <-ctx.Done():
 						done <- ctx.Err()
 						return
@@ -556,7 +564,7 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				}
 
 			case '\b', 127: // Backspace
-				if inputBuffer.RemoveLast() && p.echo {
+				if p.inputBuffer.RemoveLast() && p.echo {
 					p.connection.Write([]byte("\b \b"))
 				}
 
@@ -567,7 +575,7 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 			default:
 				// Filter input to only allow printable ASCII (32-126)
 				if r >= 32 && r <= 126 {
-					if inputBuffer.Append(r) && p.echo {
+					if p.inputBuffer.Append(r) && p.echo {
 						p.connection.Write([]byte(string(r)))
 					}
 				}
@@ -605,8 +613,6 @@ func (p *Player) handleOutput(ctx context.Context, done chan error) {
 	}
 }
 
-// wrapText wraps the given text to the specified width, preserving
-// empty lines and whitespace. It uses \r\n as the line break.
 func wrapText(text string, width int) string {
 	// Handle edge cases
 	if width <= 0 {

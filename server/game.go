@@ -56,15 +56,11 @@ type Game struct {
 	autoSaveInterval     uint16
 }
 
-// Initalize the game engine
-
 func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	Logger.Info("New Game...Initalizing Game...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
-
-	// Create a new game object
 
 	game := &Game{
 		config:           config,
@@ -90,16 +86,12 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	game.characterCount.Store(0)
 
-	// Initialize Game Database Interface
-
 	database, err := NewKeyPair(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("database init error: %w", err)
 	}
 
 	game.database = database
-
-	// Load Character Bloom Filter
 
 	if err := game.InitCharacterBloomFilter(); err != nil {
 		Logger.Warn("Error initializing character bloom filter", "error", err)
@@ -114,17 +106,11 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		Logger.Info("Script manager initialized successfully")
 	}
 
-	// Create Default Room
-
 	game.rooms[0] = NewRoom(ctx, 0, "The Void", "The Void", "Default void room.", true, "") // Default room is always persistent, no script
-
-	// Load Rooms
 
 	if err := game.LoadRooms(); err != nil {
 		Logger.Error("Error loading rooms", "error", err)
 	}
-
-	// Load Item Prototypes
 
 	prototypes, err := LoadPrototypes(ctx, game.database)
 	if err != nil {
@@ -138,13 +124,9 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		}
 	}
 
-	// Load Archetypes
-
 	if err := game.LoadArchetypes(); err != nil {
 		Logger.Error("Error loading archetypes", "error", err)
 	}
-
-	// Build Archetype Options
 
 	game.BuildArchetypeOptions()
 
@@ -157,8 +139,6 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 	return game, nil
 
 }
-
-// Load names from the database.
 
 func (g *Game) LoadCharacterNames() ([]string, error) {
 
@@ -176,8 +156,6 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 
 	return names, nil
 }
-
-// Load names from a file.
 
 func LoadNameFromFile(path string) ([]string, error) {
 
@@ -203,8 +181,6 @@ func LoadNameFromFile(path string) ([]string, error) {
 
 	return names, nil
 }
-
-// Initialize Character Name Bloom Filter
 
 func (g *Game) InitCharacterBloomFilter() error {
 
@@ -264,8 +240,6 @@ func (g *Game) Stop() error {
 
 }
 
-// Run the game engine
-
 func (g *Game) Run(errChan chan error) error {
 	var runErr error
 	RunWithPanicRecoveryCallback("game.Run", func() {
@@ -280,8 +254,6 @@ func (g *Game) Run(errChan chan error) error {
 func (g *Game) runInternal(errChan chan error) error {
 	Logger.Info("Starting game engine...")
 
-	// Start Game Heart Beat
-
 	g.ticker = time.NewTicker(time.Second)
 	defer g.ticker.Stop()
 
@@ -291,7 +263,7 @@ func (g *Game) runInternal(errChan chan error) error {
 			Logger.Info("Game shutdown requested")
 			return nil
 		case <-g.ticker.C:
-			// Run game logic
+			// Game tick processes time-based events
 			err := g.tick()
 			if err != nil {
 				Logger.Error("Error running game logic", "error", err)
@@ -303,17 +275,14 @@ func (g *Game) runInternal(errChan chan error) error {
 	}
 }
 
-// Game heart beat
-
 func (g *Game) tick() error {
-	// Process any pending game-tier commands
+	// Command processing handles global game actions
 	g.processGameCommands()
 
-	// Run other game logic
+	// Additional game logic placeholder for future features
 	return nil
 }
 
-// processGameCommands processes any commands that have been escalated to game tier
 func (g *Game) processGameCommands() {
 	// Collect active rooms and characters while holding the lock
 	g.mutex.RLock()
@@ -337,7 +306,7 @@ func (g *Game) processGameCommands() {
 	g.mutex.RUnlock()
 
 	// Now process commands without holding the lock
-	// Process commands from all active rooms
+	// Room command collection prevents blocking
 	for _, room := range activeRooms {
 		// Non-blocking check for commands from this room
 		select {
@@ -346,7 +315,7 @@ func (g *Game) processGameCommands() {
 				// Channel closed, skip this room
 				continue
 			}
-			// Handle the command asynchronously
+			// Async handling prevents command queue blocking
 			go RunWithPanicRecovery("game.handleCommand", func() {
 				g.handleGameCommand(cmd)
 			}, "verb", cmd.Verb, "character", cmd.Character.name)
@@ -355,7 +324,7 @@ func (g *Game) processGameCommands() {
 		}
 	}
 
-	// Process commands from characters directly
+	// Direct character commands bypass room processing
 	for _, character := range activeCharacters {
 		// Non-blocking check for commands from this character
 		select {
@@ -364,7 +333,7 @@ func (g *Game) processGameCommands() {
 				// Channel closed, skip this character
 				continue
 			}
-			// Handle the command asynchronously
+			// Async handling prevents command queue blocking
 			go RunWithPanicRecovery("game.handleCommand", func() {
 				g.handleGameCommand(cmd)
 			}, "verb", cmd.Verb, "character", cmd.Character.name)
@@ -374,7 +343,6 @@ func (g *Game) processGameCommands() {
 	}
 }
 
-// handleGameCommand processes a command at the game tier
 func (g *Game) handleGameCommand(cmd *CommandRequest) {
 	if cmd == nil {
 		Logger.Error("Received nil command request in game handler")
@@ -386,21 +354,19 @@ func (g *Game) handleGameCommand(cmd *CommandRequest) {
 	// Update command state
 	cmd.State = CommandProcessing
 
-	// Process the command using our game command handler
+	// Game handler processes global-scope commands
 	response := g.ProcessGameCommand(cmd)
 
-	// Send response
+	// Response delivery completes command cycle
 	g.sendCommandResponse(cmd, response)
 }
 
-// DeleteItem safely removes an item from the game's items map
 func (g *Game) DeleteItem(itemID uuid.UUID) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 	delete(g.items, itemID)
 }
 
-// DeleteItems safely removes multiple items from the game's items map
 func (g *Game) DeleteItems(itemIDs []uuid.UUID) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
@@ -409,7 +375,6 @@ func (g *Game) DeleteItems(itemIDs []uuid.UUID) {
 	}
 }
 
-// clearExitReferencesToRoom clears all exit references to a specific room
 func (g *Game) clearExitReferencesToRoom(roomID int64) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
@@ -425,7 +390,6 @@ func (g *Game) clearExitReferencesToRoom(roomID int64) {
 	Logger.Debug("Cleared exit references to room", "roomID", roomID)
 }
 
-// sendCommandResponse sends a response to a command request
 func (g *Game) sendCommandResponse(cmd *CommandRequest, response *CommandResponse) {
 	if cmd == nil || response == nil {
 		return
@@ -475,7 +439,6 @@ func (g *Game) ValidateCharacterName(name string) error {
 	return nil
 }
 
-// saveAllCharacters saves all active characters
 func (g *Game) saveAllCharacters() {
 	// Collect characters while holding the lock
 	g.mutex.RLock()
@@ -507,7 +470,6 @@ func (g *Game) saveAllCharacters() {
 	Logger.Info("Completed saving characters during shutdown", "savedCount", savedCount, "totalCount", len(characters))
 }
 
-// logoutAllCharacters logs out all active characters
 func (g *Game) logoutAllCharacters() {
 	// Collect characters while holding the lock
 	g.mutex.RLock()

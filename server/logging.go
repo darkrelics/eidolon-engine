@@ -93,7 +93,7 @@ func (h *CloudWatchHandler) Enabled(ctx context.Context, level slog.Level) bool 
 	return level >= h.level
 }
 
-// Handle implements slog.Handler.Handle
+// Handle processes log records for CloudWatch delivery
 func (h *CloudWatchHandler) Handle(ctx context.Context, record slog.Record) error {
 	// Also output to console JSON handler if enabled
 	if h.consoleJSON && h.jsonHandler != nil {
@@ -154,7 +154,7 @@ func (h *CloudWatchHandler) Handle(ctx context.Context, record slog.Record) erro
 		return fmt.Errorf("failed to marshal log entry: %w", err)
 	}
 
-	// Send to CloudWatch
+	// CloudWatch transmission includes structured metadata
 	if err := h.cloudWatch.initLogStream(); err != nil {
 		return err
 	}
@@ -339,7 +339,7 @@ func (c *CloudWatch) sendTestMessage() error {
 	if err != nil {
 		fmt.Printf("Error sending test log event: %v\n", err)
 
-		// Handle invalid sequence token error
+		// Token mismatch requires synchronization with CloudWatch
 		if strings.Contains(err.Error(), "InvalidSequenceTokenException") {
 			updatedToken := c.extractSequenceTokenFromError(err)
 			if updatedToken != "" {
@@ -392,7 +392,7 @@ func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
 			return nil
 		}
 
-		// Handle specific error cases
+		// Error-specific handling enables recovery strategies
 		if strings.Contains(err.Error(), "ResourceNotFoundException") {
 			if err := c.initLogStream(); err != nil {
 				return err
@@ -400,7 +400,7 @@ func (c *CloudWatch) putLogs(input *cloudwatchlogs.PutLogEventsInput) error {
 			continue
 		}
 
-		// Handle invalid sequence token error
+		// Token mismatch requires synchronization with CloudWatch
 		if strings.Contains(err.Error(), "InvalidSequenceTokenException") {
 			// Extract the expected sequence token from the error message
 			parts := strings.Split(err.Error(), "sequenceToken is: ")

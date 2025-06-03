@@ -57,11 +57,9 @@ type ScriptManager struct {
 	mutex        sync.RWMutex
 }
 
-// NewScriptManager creates a new script manager
 func NewScriptManager(cfg *Configuration) (*ScriptManager, error) {
 	ctx := context.Background()
 
-	// Create AWS config
 	awsConfig, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(cfg.AWS.Region),
 		config.WithRetryMode(aws.RetryModeStandard),
@@ -71,10 +69,8 @@ func NewScriptManager(cfg *Configuration) (*ScriptManager, error) {
 		return nil, fmt.Errorf("failed to create AWS config: %w", err)
 	}
 
-	// Create S3 client
 	s3Client := s3.NewFromConfig(awsConfig)
 
-	// Set default prefix if not specified
 	prefix := cfg.Game.ScriptsS3Prefix
 	if prefix == "" {
 		prefix = "scripts"

@@ -33,10 +33,8 @@ type CommandInfo struct {
 // commandIndex holds all command names for fuzzy matching
 var commandIndex []string
 
-// Initialize commands
 func (g *Game) initCommands() {
 
-	// Register basic commands
 	g.commands["quit"] = CommandInfo{
 		timed:       false,
 		handler:     executeQuitCommand,

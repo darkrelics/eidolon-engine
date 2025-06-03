@@ -51,7 +51,7 @@ func (p *Player) consoleInternal(done chan bool) {
 		default:
 			characterCount := len(p.characterList)
 
-			// Send menu messages with safe channel handling
+			// Safe channel operations prevent panic on disconnect
 			menuMessages := []string{
 				"\n=====Console=====\n",
 				"0) Quit\n",

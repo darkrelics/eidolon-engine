@@ -93,7 +93,6 @@ type Configuration struct {
 	} `yaml:"CloudWatch"`
 }
 
-// LoadConfiguration reads the configuration file and unmarshals it into a Configuration struct.
 func LoadConfiguration(configurationFile string) (*Configuration, error) {
 
 	fmt.Println("Loading configuration", "file", configurationFile)
@@ -109,7 +108,7 @@ func LoadConfiguration(configurationFile string) (*Configuration, error) {
 		return nil, fmt.Errorf("error parsing configuration from '%s': %w", configurationFile, err)
 	}
 
-	// Set defaults for any unspecified values
+	// Defaults ensure system can run without complete config
 	setConfigDefaults(&config)
 
 	if err := validateConfiguration(&config); err != nil {

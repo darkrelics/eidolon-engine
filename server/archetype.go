@@ -93,7 +93,7 @@ func (g *Game) LoadArchetypes() error {
 		normalizeMapKeys(archetype.Attributes)
 		normalizeMapKeys(archetype.Skills)
 
-		// Validate archetype data consistency
+		// Consistency check needed for runtime-modified archetype data
 		if err := g.ValidateArchetype(archetype); err != nil {
 			Logger.Warn("Skipping invalid archetype", "name", archetype.ArchetypeName, "error", err)
 			continue
@@ -145,7 +145,7 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 		return fmt.Errorf("archetype '%s' must have at least one skill", archetype.ArchetypeName)
 	}
 
-	// Validate starting items
+	// Starting items must be compatible with character equipment slots
 	for i, startingItem := range archetype.StartingItems {
 		if startingItem.PrototypeID == "" {
 			return fmt.Errorf("archetype '%s' starting item %d has empty prototype ID", archetype.ArchetypeName, i)
@@ -155,13 +155,13 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 			return fmt.Errorf("archetype '%s' starting item %d has empty slot", archetype.ArchetypeName, i)
 		}
 
-		// Validate prototype ID format and parse UUID
+		// Prototype IDs must be valid UUIDs to prevent runtime errors
 		prototypeIDUUID, err := uuid.FromString(startingItem.PrototypeID)
 		if err != nil {
 			return fmt.Errorf("archetype '%s' starting item %d has invalid prototype ID: %w", archetype.ArchetypeName, i, err)
 		}
 
-		// Validate prototype exists
+		// Missing prototypes would cause item creation failures during character creation
 		g.mutex.RLock()
 		var prototype *Prototype
 		var exists bool
@@ -174,9 +174,9 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 			return fmt.Errorf("archetype '%s' starting item %d references non-existent prototype '%s'", archetype.ArchetypeName, i, startingItem.PrototypeID)
 		}
 
-		// Validate slot compatibility with prototype wearable locations
+		// Equipment slots must match prototype's wearable locations to prevent invalid equipment states
 		if startingItem.IsWorn && prototype.wearable {
-			// Check if the archetype slot is compatible with the prototype's wearable locations
+			// Slot compatibility prevents equipment errors during character creation
 			slotCompatible := false
 			for _, wearableLocation := range prototype.wornOn {
 				if isSlotCompatible(startingItem.Slot, wearableLocation) {
@@ -200,12 +200,12 @@ func (g *Game) ValidateArchetype(archetype *Archetype) error {
 
 // isSlotCompatible checks if an archetype slot is compatible with a prototype wearable location
 func isSlotCompatible(slot, wearableLocation string) bool {
-	// Direct match
+	// Direct slot matching ensures proper equipment placement
 	if slot == wearableLocation {
 		return true
 	}
 
-	// Check if the wearable location is in the allowed locations for this slot
+	// Allowed locations prevent equipment conflicts (e.g., weapon in helmet slot)
 	if allowedLocations, exists := slotMappings[slot]; exists {
 		for _, allowed := range allowedLocations {
 			if allowed == wearableLocation {
@@ -214,6 +214,6 @@ func isSlotCompatible(slot, wearableLocation string) bool {
 		}
 	}
 
-	// Fallback to substring matching for backwards compatibility
+	// Substring matching maintains compatibility with legacy archetype definitions
 	return strings.Contains(wearableLocation, slot) || strings.Contains(slot, wearableLocation)
 }

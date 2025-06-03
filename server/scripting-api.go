@@ -26,6 +26,8 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	lua "github.com/yuin/gopher-lua"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // RegisterRoomAPI registers all room-related functions for Lua scripts
@@ -89,7 +91,7 @@ func (sm *ScriptManager) luaRoomSendMessage(room *Room) lua.LGFunction {
 		formattedMessage := fmt.Sprintf("\n\r%s\n\r", message)
 
 		// Use the standard room message function which handles prompts
-		SendRoomMessageExcept(room, formattedMessage, nil)
+		SendRoomMessage(room, formattedMessage, nil)
 
 		return 0
 	}
@@ -315,7 +317,8 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 	Logger.Info("Script retrieved successfully", "scriptID", room.scriptID, "luaState", L != nil)
 
 	// Build function name from command verb (e.g., "pull" -> "onCommandPull")
-	functionName := "onCommand" + strings.Title(verb)
+	caser := cases.Title(language.English)
+	functionName := "onCommand" + caser.String(verb)
 
 	Logger.Info("Looking for function in script", "scriptID", room.scriptID, "functionName", functionName)
 

@@ -119,7 +119,6 @@ type RoomData struct {
 	ScriptID    string   `json:"scriptID" dynamodbav:"ScriptID"`
 }
 
-// Initialize a new room
 func NewRoom(ctx context.Context, roomID int64, area, title, description string, persistent bool, scriptID string) *Room {
 
 	Logger.Debug("New Room...Initalizing Room...", "roomID", roomID, "persistent", persistent, "scriptID", scriptID)
@@ -158,12 +157,10 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 	}
 }
 
-// Load room data from DynamoDB
 func (g *Game) LoadRooms() error {
 
 	Logger.Info("Load Rooms...Loading Rooms...")
 
-	// Load room data from DynamoDB
 	var roomsData []RoomData
 	err := g.database.Scan(g.ctx, "rooms", &roomsData)
 	if err != nil {
@@ -338,7 +335,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 
 	// Check for item cleanup every 10 minutes (600 ticks = 10 minutes @ 1 second per tick)
 	if r.idleCounter%600 == 0 && r.idleCounter > 0 {
-		Logger.Info("Room item cleanup interval reached", "roomID", r.roomID, "title", r.title, "idleMinutes", r.idleCounter/60)
+		Logger.Debug("Room item cleanup interval reached", "roomID", r.roomID, "title", r.title, "idleMinutes", r.idleCounter/60)
 
 		// Clean up marked items in the room
 		r.cleanupItems(game)
@@ -464,7 +461,7 @@ func (r *Room) GetScriptID() string {
 }
 
 // SendRoomMessageExcept sends a message to all characters in a room except one
-func SendRoomMessageExcept(room *Room, message string, except *Character) {
+func SendRoomMessage(room *Room, message string, except *Character) {
 	if room == nil {
 		return
 	}
@@ -484,10 +481,7 @@ func SendRoomMessageExcept(room *Room, message string, except *Character) {
 
 	// Send messages without holding the lock to prevent deadlock
 	for _, c := range recipients {
-		if SafeSendString(c.player.commandOut, message, c.name) {
-			// After sending room message, send the prompt again to ensure consistent UI
-			SafeSendString(c.player.commandOut, c.prompt, c.name)
-		}
+		c.DisplayMessage(message)
 	}
 }
 
