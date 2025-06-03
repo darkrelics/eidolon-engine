@@ -25,6 +25,7 @@ To prevent deadlocks, all code must acquire locks in the following order (from h
 ## Mutex Usage by Component
 
 ### Server
+
 ```go
 type Server struct {
     mutex sync.RWMutex  // Protects server state
@@ -32,6 +33,7 @@ type Server struct {
 ```
 
 ### Game
+
 ```go
 type Game struct {
     mutex sync.RWMutex  // Protects rooms, characters, prototypes
@@ -39,6 +41,7 @@ type Game struct {
 ```
 
 ### Room
+
 ```go
 type Room struct {
     mutex sync.RWMutex  // Protects room state, exits, inventory
@@ -46,6 +49,7 @@ type Room struct {
 ```
 
 ### Character
+
 ```go
 type Character struct {
     mutex sync.RWMutex  // Protects character attributes, inventory
@@ -53,6 +57,7 @@ type Character struct {
 ```
 
 ### Player
+
 ```go
 type Player struct {
     mutex sync.RWMutex  // Protects connection state, channels
@@ -60,6 +65,7 @@ type Player struct {
 ```
 
 ### Item
+
 ```go
 type Item struct {
     mutex sync.RWMutex  // Protects item properties
@@ -75,7 +81,7 @@ When moving a character between rooms, follow this order:
 ```go
 func moveCharacter(game *Game, character *Character, fromRoom *Room, toRoom *Room) error {
     // 1. No game lock needed if rooms already resolved
-    
+
     // 2. Lock rooms in consistent order (by ID) to prevent deadlock
     if fromRoom.RoomID < toRoom.RoomID {
         fromRoom.mutex.Lock()
@@ -88,11 +94,11 @@ func moveCharacter(game *Game, character *Character, fromRoom *Room, toRoom *Roo
         fromRoom.mutex.Lock()
         defer fromRoom.mutex.Unlock()
     }
-    
+
     // 3. Lock character last
     character.mutex.Lock()
     defer character.mutex.Unlock()
-    
+
     // Perform movement operations
     return nil
 }
@@ -107,15 +113,15 @@ func transferItem(fromRoom *Room, toCharacter *Character, item *Item) error {
     // 1. Lock room first (higher in hierarchy)
     fromRoom.mutex.Lock()
     defer fromRoom.mutex.Unlock()
-    
+
     // 2. Lock character
     toCharacter.mutex.Lock()
     defer toCharacter.mutex.Unlock()
-    
+
     // 3. Lock item last
     item.mutex.Lock()
     defer item.mutex.Unlock()
-    
+
     // Perform transfer
     return nil
 }
@@ -132,13 +138,13 @@ func broadcastToRoom(room *Room, message string) {
     characters := make([]*Character, len(room.characters))
     copy(characters, room.characters)
     room.mutex.RUnlock()
-    
+
     // 2. Send messages without holding locks
     for _, character := range characters {
         character.mutex.RLock()
         player := character.player
         character.mutex.RUnlock()
-        
+
         if player != nil {
             // Send message via player's channel
             player.sendMessage(message)
@@ -157,7 +163,7 @@ func saveCharacter(character *Character) error {
     character.mutex.RLock()
     data := character.copyForSave()
     character.mutex.RUnlock()
-    
+
     // 2. Save without holding locks
     return database.SaveCharacter(data)
 }
@@ -171,12 +177,12 @@ Commands should acquire locks in the proper order:
 func executeCommand(game *Game, player *Player, command string) {
     // 1. Parse command without locks
     cmd, args := parseCommand(command)
-    
+
     // 2. Get character reference
     player.mutex.RLock()
     character := player.character
     player.mutex.RUnlock()
-    
+
     // 3. Execute with proper lock ordering
     switch cmd {
     case "get":
@@ -201,12 +207,12 @@ func lockRoomsInOrder(rooms ...*Room) func() {
     sort.Slice(rooms, func(i, j int) bool {
         return rooms[i].RoomID < rooms[j].RoomID
     })
-    
+
     // Lock all rooms
     for _, room := range rooms {
         room.mutex.Lock()
     }
-    
+
     // Return unlock function
     return func() {
         for i := len(rooms) - 1; i >= 0; i-- {
@@ -228,7 +234,7 @@ For read-only operations that need multiple locks:
 func safeReadRoomCharacters(room *Room) []*Character {
     room.mutex.RLock()
     defer room.mutex.RUnlock()
-    
+
     // Return a copy to avoid holding lock
     result := make([]*Character, len(room.characters))
     copy(result, room.characters)
@@ -249,7 +255,7 @@ func tryLockWithTimeout(mu *sync.RWMutex, timeout time.Duration) bool {
         mu.Lock()
         done <- true
     }()
-    
+
     select {
     case <-done:
         return true
@@ -311,7 +317,7 @@ Create tests that stress concurrent operations:
 ```go
 func TestConcurrentMovement(t *testing.T) {
     game := NewGame()
-    
+
     // Create multiple goroutines moving characters
     var wg sync.WaitGroup
     for i := 0; i < 100; i++ {
@@ -321,7 +327,7 @@ func TestConcurrentMovement(t *testing.T) {
             // Perform random movements
         }(i)
     }
-    
+
     wg.Wait()
     // Verify no deadlocks occurred
 }
@@ -332,12 +338,14 @@ func TestConcurrentMovement(t *testing.T) {
 ### 1. Lock Inversion
 
 **Wrong:**
+
 ```go
 character.mutex.Lock()
 room.mutex.Lock()  // BAD: Room is higher in hierarchy
 ```
 
 **Correct:**
+
 ```go
 room.mutex.Lock()
 character.mutex.Lock()
@@ -346,6 +354,7 @@ character.mutex.Lock()
 ### 2. Holding Locks During I/O
 
 **Wrong:**
+
 ```go
 character.mutex.Lock()
 database.Save(character)  // BAD: I/O while holding lock
@@ -353,6 +362,7 @@ character.mutex.Unlock()
 ```
 
 **Correct:**
+
 ```go
 character.mutex.Lock()
 data := character.copyData()
@@ -431,6 +441,7 @@ if debug {
 ### 1. Lock-free Data Structures
 
 Consider lock-free alternatives for hot paths:
+
 - Atomic operations for counters
 - Lock-free queues for message passing
 - Copy-on-write for rarely modified data
@@ -438,6 +449,7 @@ Consider lock-free alternatives for hot paths:
 ### 2. Actor Model
 
 Consider actor model for some subsystems:
+
 - Each entity processes messages serially
 - No shared state between actors
 - Communication via message passing
@@ -445,6 +457,7 @@ Consider actor model for some subsystems:
 ### 3. STM (Software Transactional Memory)
 
 For complex operations with multiple locks:
+
 - Automatic retry on conflicts
 - Composable transactions
 - Simplified reasoning about concurrency
