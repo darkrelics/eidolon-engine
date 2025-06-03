@@ -302,10 +302,10 @@ func TestEscalateToGame_BufferFull(t *testing.T) {
 		char.gameCommandOut <- &CommandRequest{}
 	}
 
-	// Try to escalate - should fail immediately
+	// Try to escalate - should return nil (message displayed to user)
 	_, err := escalateToGame(ctx, char, "test", []string{"test"})
-	if err == nil || !strings.Contains(err.Error(), "processing too many commands") {
-		t.Errorf("Expected buffer full error, got %v", err)
+	if err != nil {
+		t.Errorf("Expected nil error (user message), got %v", err)
 	}
 }
 
@@ -319,8 +319,8 @@ func TestEscalateToGame_Timeout(t *testing.T) {
 	_, err := escalateToGame(ctx, char, "test", []string{"test"})
 	elapsed := time.Since(start)
 
-	if err == nil || !strings.Contains(err.Error(), "command timed out") {
-		t.Errorf("Expected timeout error, got %v", err)
+	if err != nil {
+		t.Errorf("Expected nil error (user message), got %v", err)
 	}
 
 	// Should timeout after ~5 seconds

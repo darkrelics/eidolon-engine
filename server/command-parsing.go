@@ -64,9 +64,6 @@ func buildOrdinalIndex() {
 }
 
 // ValidateCommand checks if a command is valid and returns its verb and tokens
-// Returns: verb, tokens, userMessage, error
-// userMessage is for display to the user (command issues)
-// error is for programmatic/state errors only
 func ValidateCommand(character *Character, input string) (string, []string, string, error) {
 	if len(input) == 0 {
 		return "", nil, "No command entered.", nil

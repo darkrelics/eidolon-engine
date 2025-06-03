@@ -122,7 +122,8 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 				"roomID", character.room.roomID,
 				"characterName", character.name,
 				"verb", verb)
-			return false, fmt.Errorf("The room is processing too many commands. Please wait a moment and try again.")
+			character.DisplayMessage("The room is processing too many commands. Please wait a moment and try again.")
+			return false, nil
 		}
 	}
 
@@ -150,7 +151,8 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 		return false, nil
 	case <-time.After(5 * time.Second):
 		Logger.Error("Command timed out waiting for response", "roomID", character.room.roomID, "verb", verb, "character", character.name)
-		return false, fmt.Errorf("command timed out")
+		character.DisplayMessage("Command timed out. Please try again.")
+		return false, nil
 	case <-ctx.Done():
 		return false, ctx.Err()
 	}
@@ -182,7 +184,8 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 		Logger.Warn("Game command buffer full",
 			"characterName", character.name,
 			"verb", verb)
-		return false, fmt.Errorf("The game is processing too many commands. Please wait a moment and try again.")
+		character.DisplayMessage("The game is processing too many commands. Please wait a moment and try again.")
+		return false, nil
 	}
 
 	// Wait for response or timeout
@@ -200,7 +203,8 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 		}
 		return false, nil
 	case <-time.After(5 * time.Second):
-		return false, fmt.Errorf("command timed out")
+		character.DisplayMessage("Command timed out. Please try again.")
+		return false, nil
 	case <-ctx.Done():
 		return false, ctx.Err()
 	}
