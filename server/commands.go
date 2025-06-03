@@ -162,7 +162,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 func escalateToGame(ctx context.Context, character *Character, verb string, tokens []string) (bool, error) {
 	// Get command info for round time application
 	character.game.mutex.RLock()
-	cmdInfo, _ := character.game.commands[verb]
+	cmdInfo := character.game.commands[verb]
 	character.game.mutex.RUnlock()
 	// Game-tier request handles global commands
 	cmdReq := &CommandRequest{
@@ -181,9 +181,7 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 	case character.gameCommandOut <- cmdReq:
 		// Command sent successfully to game
 	default:
-		Logger.Warn("Game command buffer full",
-			"characterName", character.name,
-			"verb", verb)
+		Logger.Warn("Game command buffer full", "characterName", character.name, "verb", verb)
 		character.DisplayMessage("The game is processing too many commands. Please wait a moment and try again.")
 		return false, nil
 	}
