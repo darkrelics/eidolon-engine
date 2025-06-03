@@ -64,25 +64,25 @@ func buildOrdinalIndex() {
 }
 
 // ValidateCommand checks if a command is valid and returns its verb and tokens
-func ValidateCommand(character *Character, input string) (string, []string, error) {
+func ValidateCommand(character *Character, input string) (string, []string, string, error) {
 	if len(input) == 0 {
-		return "", nil, errors.New("No command entered.")
+		return "", nil, "No command entered.", nil
 	}
 
 	// Limit input to 240 characters
 	if len(input) > 240 {
-		return "", nil, errors.New("Command too long. Maximum 240 characters allowed.")
+		return "", nil, "Command too long. Maximum 240 characters allowed.", nil
 	}
 
 	tokens := tokenizeInput(input)
 
 	if len(tokens) == 0 {
-		return "", nil, errors.New("No command entered.")
+		return "", nil, "No command entered.", nil
 	}
 
 	verb := strings.ToLower(tokens[0])
 	if character == nil || character.game == nil {
-		return "", nil, errors.New("Invalid character state.")
+		return "", nil, "", errors.New("invalid character state")
 	}
 
 	// First check for exact match
@@ -91,7 +91,7 @@ func ValidateCommand(character *Character, input string) (string, []string, erro
 	character.game.mutex.RUnlock()
 
 	if exactMatch {
-		return verb, tokens, nil
+		return verb, tokens, "", nil
 	}
 
 	// No exact match, try fuzzy matching
@@ -101,16 +101,16 @@ func ValidateCommand(character *Character, input string) (string, []string, erro
 	if score >= 80 {
 		Logger.Debug("Fuzzy match found", "input", verb, "match", bestMatch, "score", score)
 		tokens[0] = bestMatch // Replace the verb with the matched command
-		return bestMatch, tokens, nil
+		return bestMatch, tokens, "", nil
 	}
 
 	// If confidence is between 50% and 80%, ask if they meant the command
 	if score >= 50 {
-		return "", nil, fmt.Errorf("Command '%s' not understood. Did you mean '%s'?", verb, bestMatch)
+		return "", nil, fmt.Sprintf("Command '%s' not understood. Did you mean '%s'?", verb, bestMatch), nil
 	}
 
 	// No good match found
-	return "", nil, fmt.Errorf("Command '%s' not understood.", verb)
+	return "", nil, fmt.Sprintf("Command '%s' not understood.", verb), nil
 }
 
 // tokenizeInput breaks the input into individual tokens

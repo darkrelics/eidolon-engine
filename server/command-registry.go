@@ -24,7 +24,7 @@ import (
 
 // CommandInfo stores metadata about each command
 type CommandInfo struct {
-	timed       bool                                      // Whether the command is timed (true) or untimed (false)
+	roundTime   int                                       // Round time in seconds (-1 = doesn't care, 0 = blocked by RT, >0 = generates RT)
 	handler     func(c *Character, tokens []string) error // Function to execute the command
 	description string                                    // Description for help text
 	usage       string                                    // Usage information
@@ -36,42 +36,42 @@ var commandIndex []string
 func (g *Game) initCommands() {
 
 	g.commands["quit"] = CommandInfo{
-		timed:       false,
+		roundTime:   -1,
 		handler:     executeQuitCommand,
 		description: "Exit the game",
 		usage:       "quit",
 	}
 
 	g.commands["look"] = CommandInfo{
-		timed:       false,
+		roundTime:   -1,
 		handler:     executeLookCommand,
 		description: "Look around or examine something",
 		usage:       "look [target]",
 	}
 
 	g.commands["help"] = CommandInfo{
-		timed:       false,
+		roundTime:   -1,
 		handler:     executeHelpCommand,
 		description: "Display available commands",
 		usage:       "help",
 	}
 
 	g.commands["who"] = CommandInfo{
-		timed:       false,
+		roundTime:   -1,
 		handler:     executeWhoCommand,
 		description: "Display currently online characters",
 		usage:       "who",
 	}
 
 	g.commands["info"] = CommandInfo{
-		timed:       false,
+		roundTime:   -1,
 		handler:     executeInfoCommand,
 		description: "Display information about your character",
 		usage:       "info",
 	}
 
 	g.commands["skill"] = CommandInfo{
-		timed:       false,
+		roundTime:   -1,
 		handler:     executeSkillCommand,
 		description: "Display your character's skills",
 		usage:       "skill",
@@ -79,115 +79,114 @@ func (g *Game) initCommands() {
 
 	// Movement commands (escalate to room tier)
 	g.commands["go"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
+		roundTime:   0,
+		handler:     nil,
 		description: "Move in a direction or through an exit",
 		usage:       "go <direction|exit>",
 	}
 
 	g.commands["move"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
+		roundTime:   0,
+		handler:     nil,
 		description: "Move in a direction or through an exit",
 		usage:       "move <direction|exit>",
 	}
 
 	g.commands["inventory"] = CommandInfo{
-		timed:       false,
+		roundTime:   -1,
 		handler:     executeInventoryCommand,
 		description: "Show your inventory",
 		usage:       "inventory",
 	}
 
-	// Communication commands (escalate to room tier)
 	g.commands["say"] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to room goroutine
+		roundTime:   -1,
+		handler:     nil,
 		description: "Say something to everyone in the room",
 		usage:       "say <message>",
 	}
 
 	// Item commands (escalate to room tier)
 	g.commands["get"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
+		roundTime:   0,
+		handler:     nil,
 		description: "Pick up an item from the room",
 		usage:       "get <item>",
 	}
 
 	g.commands["take"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
+		roundTime:   0,
+		handler:     nil,
 		description: "Pick up an item from the room or container",
 		usage:       "take <item> [from <container>]",
 	}
 
 	g.commands["drop"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
+		roundTime:   0,
+		handler:     nil,
 		description: "Drop an item from your inventory",
 		usage:       "drop <item>",
 	}
 
 	g.commands["put"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
+		roundTime:   0,
+		handler:     nil,
 		description: "Put an item in a container",
 		usage:       "put <item> in <container>",
 	}
 
 	g.commands["wear"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
+		roundTime:   0,
+		handler:     nil,
 		description: "Wear an item",
 		usage:       "wear <item>",
 	}
 
 	g.commands["remove"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine
+		roundTime:   0,
+		handler:     nil,
 		description: "Remove a worn item",
 		usage:       "remove <item>",
 	}
 
 	g.commands["switch"] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to room goroutine
+		roundTime:   -1,
+		handler:     nil,
 		description: "Switch items between your hands",
 		usage:       "switch hands",
 	}
 
 	g.commands["hide"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine for detection checks
+		roundTime:   4,
+		handler:     nil,
 		description: "Attempt to hide from others in the room",
 		usage:       "hide",
 	}
 
 	g.commands["unhide"] = CommandInfo{
-		timed:       false,
+		roundTime:   -1,
 		handler:     executeUnhideCommand,
 		description: "Reveal yourself if hidden",
 		usage:       "unhide",
 	}
 
 	g.commands["sneak"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine for movement
+		roundTime:   3,
+		handler:     nil,
 		description: "Move stealthily while hidden",
 		usage:       "sneak <direction|exit>",
 	}
 
 	g.commands["search"] = CommandInfo{
-		timed:       true,
-		handler:     nil, // Escalates to room goroutine for detection
+		roundTime:   0,
+		handler:     nil,
 		description: "Search for hidden characters in the room",
 		usage:       "search",
 	}
 
 	g.commands["point"] = CommandInfo{
-		timed:       false,
-		handler:     nil, // Escalates to room goroutine to reveal target
+		roundTime:   0,
+		handler:     nil,
 		description: "Point at a hidden character to reveal them",
 		usage:       "point <character>",
 	}

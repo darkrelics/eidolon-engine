@@ -44,8 +44,8 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 
 	// Check wait time
 	if time.Now().Before(c.waitUntil) {
-		waitTime := time.Until(c.waitUntil).Round(time.Second)
-		return false, fmt.Sprintf("You must wait %v before your next action.", waitTime)
+		waitTime := time.Until(c.waitUntil).Seconds()
+		return false, fmt.Sprintf("You must wait %.1f seconds before your next action.", waitTime)
 	}
 
 	// Check character state if needed
@@ -329,6 +329,12 @@ func (c *Character) Stop() {
 		SendRoomMessage(c.room, fmt.Sprintf("\n\r%s has left.\n\r", c.name), c)
 	}
 
+	// Follow lock hierarchy: Game -> Room -> Character
+	// Game removal must happen first to maintain hierarchy
+	c.game.mutex.Lock()
+	delete(c.game.characters, c.id)
+	c.game.mutex.Unlock()
+
 	// Room removal prevents ghost character references
 	if c.room != nil {
 		// Trigger onCharacterLeave event before removing character
@@ -343,11 +349,6 @@ func (c *Character) Stop() {
 		c.room.lastActive = time.Now() // Update the timestamp when character leaves
 		c.room.mutex.Unlock()
 	}
-
-	// Game removal completes character deactivation
-	c.game.mutex.Lock()
-	delete(c.game.characters, c.id)
-	c.game.mutex.Unlock()
 
 	// State persistence preserves player progress
 	// Use a fresh context for shutdown saves to ensure they complete
