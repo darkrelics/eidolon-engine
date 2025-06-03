@@ -40,47 +40,61 @@ func (c *Character) RunConsole(done chan bool) {
 
 	Logger.Debug("Starting character console", "characterName", c.name)
 
-	// Room 0 serves as fallback void location
+	// Follow lock hierarchy: Game -> Room -> Character
+	// First handle room assignment if needed
 	c.mutex.Lock()
-	if c.room == nil {
-		Logger.Warn("Character room is nil, defaulting to room ID 0", "characterName", c.name)
-		if defaultRoom, ok := c.game.rooms[0]; ok {
-			c.room = defaultRoom
-		} else {
-			c.mutex.Unlock()
+	needsDefaultRoom := c.room == nil
+	c.mutex.Unlock()
+
+	if needsDefaultRoom {
+		// Need to look up default room from game
+		c.game.mutex.RLock()
+		defaultRoom, hasDefaultRoom := c.game.rooms[0]
+		c.game.mutex.RUnlock()
+
+		if !hasDefaultRoom {
 			Logger.Error("No default room available", "characterName", c.name)
 			done <- true
 			return
 		}
-	}
-	c.mutex.Unlock()
 
+		Logger.Warn("Character room is nil, defaulting to room ID 0", "characterName", c.name)
+		c.mutex.Lock()
+		c.room = defaultRoom
+		c.mutex.Unlock()
+	}
+
+	// Now register character following hierarchy: Game -> Room
 	// Game registration enables global character tracking
 	c.game.mutex.Lock()
 	c.game.characters[c.id] = c
+	
+	// While holding game lock, we can safely check room status
+	// This maintains hierarchy since Game is higher than Room
+	targetRoom := c.room
 	c.game.mutex.Unlock()
 
-	// Room must be running to process character events
-	c.room.mutex.RLock()
-	roomRunning := c.room.running
-	c.room.mutex.RUnlock()
+	// Check if room needs to be started
+	targetRoom.mutex.RLock()
+	roomRunning := targetRoom.running
+	targetRoom.mutex.RUnlock()
 
 	if !roomRunning {
-		Logger.Info("Starting room for character entry", "roomID", c.room.roomID, "characterName", c.name)
-		c.room.Start(c.game)
+		Logger.Info("Starting room for character entry", "roomID", targetRoom.roomID, "characterName", c.name)
+		targetRoom.Start(c.game)
 		// Ready state indicates room can accept characters
-		c.room.WaitReady()
+		targetRoom.WaitReady()
 	}
 
 	// Room addition enables location-based interactions
-	c.room.mutex.Lock()
-	if c.room.characters == nil {
-		c.room.characters = make(map[uuid.UUID]*Character)
+	targetRoom.mutex.Lock()
+	if targetRoom.characters == nil {
+		targetRoom.characters = make(map[uuid.UUID]*Character)
 	}
-	c.room.characters[c.id] = c
+	targetRoom.characters[c.id] = c
 	// Activity tracking prevents idle room cleanup
-	c.room.lastActive = time.Now()
-	c.room.mutex.Unlock()
+	targetRoom.lastActive = time.Now()
+	targetRoom.mutex.Unlock()
 
 	// Call HandleCharacterEntry to reset idle counter and activate scripts
 	// Timing prevents race conditions with room scripts
