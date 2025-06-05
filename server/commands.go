@@ -26,6 +26,23 @@ import (
 	"time"
 )
 
+// applyRoundTime applies round time to a character if the command generates one
+func applyRoundTime(character *Character, cmdInfo CommandInfo) {
+	if cmdInfo.roundTime > 0 {
+		character.SetCommandWaitTime(time.Duration(cmdInfo.roundTime) * time.Second)
+	}
+}
+
+// checkRoundTime checks if a character can execute a command based on round time
+// Returns (canExecute bool, errorMessage string)
+func checkRoundTime(character *Character, cmdInfo CommandInfo) (bool, string) {
+	// Only check for commands that care about round time (roundTime >= 0)
+	if cmdInfo.roundTime >= 0 {
+		return character.CanExecuteCommand()
+	}
+	return true, ""
+}
+
 // ProcessCommand determines command tier and routes it appropriately
 func ProcessCommand(ctx context.Context, character *Character, input string) (bool, error) {
 	// Parse and validate the command
@@ -54,12 +71,9 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	}
 
 	// Check if the character is waiting for a command timeout
-	// Only check for commands that care about round time (roundTime >= 0)
-	if cmdInfo.roundTime >= 0 {
-		canExecute, reason := character.CanExecuteCommand()
-		if !canExecute {
-			return false, fmt.Errorf("%s", reason)
-		}
+	canExecute, reason := checkRoundTime(character, cmdInfo)
+	if !canExecute {
+		return false, fmt.Errorf("%s", reason)
 	}
 
 	// Special case handling for "quit" command - always process immediately
@@ -74,10 +88,8 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	if cmdInfo.handler != nil {
 		Logger.Debug("Executing character-tier command", "verb", verb, "character", character.name)
 		err := cmdInfo.handler(character, tokens)
-		// Apply round time if command generates one (roundTime > 0)
-		if cmdInfo.roundTime > 0 {
-			character.SetCommandWaitTime(time.Duration(cmdInfo.roundTime) * time.Second)
-		}
+		// Apply round time if command generates one
+		applyRoundTime(character, cmdInfo)
 		return false, err
 	}
 
@@ -144,10 +156,8 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 		if resp.Message != "" {
 			character.DisplayMessage(resp.Message)
 		}
-		// Apply round time if command generates one (roundTime > 0)
-		if cmdInfo.roundTime > 0 {
-			character.SetCommandWaitTime(time.Duration(cmdInfo.roundTime) * time.Second)
-		}
+		// Apply round time if command generates one
+		applyRoundTime(character, cmdInfo)
 		return false, nil
 	case <-time.After(5 * time.Second):
 		Logger.Error("Command timed out waiting for response", "roomID", character.room.roomID, "verb", verb, "character", character.name)
@@ -195,10 +205,8 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 		if resp.Message != "" {
 			character.DisplayMessage(resp.Message)
 		}
-		// Apply round time if command generates one (roundTime > 0)
-		if cmdInfo.roundTime > 0 {
-			character.SetCommandWaitTime(time.Duration(cmdInfo.roundTime) * time.Second)
-		}
+		// Apply round time if command generates one
+		applyRoundTime(character, cmdInfo)
 		return false, nil
 	case <-time.After(5 * time.Second):
 		character.DisplayMessage("Command timed out. Please try again.")
