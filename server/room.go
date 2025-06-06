@@ -150,7 +150,7 @@ func (r *Room) GetScriptID() string {
 	return r.scriptID
 }
 
-// SendRoomMessageExcept sends a message to all characters in a room except one
+// SendRoomMessage sends a message to all characters in a room except one
 func SendRoomMessage(room *Room, message string, except *Character) {
 	if room == nil {
 		return
