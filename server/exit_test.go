@@ -350,7 +350,7 @@ func TestSendArrivalMessage(t *testing.T) {
 					tt.name == "Arriving character excluded from message" {
 					// The arriving character's mock would have been created above
 					// We can't easily check it here due to the test structure
-					// but the real SendRoomMessageExcept function handles the exclusion
+					// but the real SendRoomMessage function handles the exclusion
 				}
 			}
 		})
