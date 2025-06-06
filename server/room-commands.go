@@ -463,6 +463,7 @@ func getRangeDescription(distance float64) string {
 }
 
 // initiateCombat sets up combat ranges between two characters at the specified distance
+// TODO: Currently unused - placeholder for future combat system features
 func (r *Room) initiateCombat(char1, char2 *Character, distance float64) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -478,7 +479,8 @@ func (r *Room) initiateCombat(char1, char2 *Character, distance float64) {
 	r.combatRanges[char2.id][char1.id] = distance
 }
 
-// removeCombatRange removes combat range between two specific characters
+// removeCombatRange removes combat range between two specific characters  
+// TODO: Currently unused - placeholder for future combat system features
 func (r *Room) removeCombatRange(char1, char2 *Character) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -515,6 +517,7 @@ func (r *Room) removeCharacterFromCombat(character *Character) {
 }
 
 // getCombatRange returns the combat range between two characters, or -1 if not in combat
+// TODO: Currently unused - placeholder for future combat system features
 func (r *Room) getCombatRange(char1, char2 *Character) float64 {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
@@ -528,6 +531,7 @@ func (r *Room) getCombatRange(char1, char2 *Character) float64 {
 }
 
 // setCombatRange updates the combat range between two characters
+// TODO: Currently unused - placeholder for future combat system features
 func (r *Room) setCombatRange(char1, char2 *Character, distance float64) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
