@@ -58,7 +58,7 @@ type Game struct {
 
 func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
-	Logger.Info("New Game...Initalizing Game...")
+	Logger.Info("New Game...Initializing Game...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
