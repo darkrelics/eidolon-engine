@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/gofrs/uuid/v5"
 )
 
 // Room command messages
@@ -316,6 +318,22 @@ func handleFaceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	}
 	target.mutex.Unlock()
 
+	// Initialize combat ranges with default 30.0 if no existing range
+	r.mutex.Lock()
+	if r.combatRanges[character.id] == nil {
+		r.combatRanges[character.id] = make(map[uuid.UUID]float64)
+	}
+	if r.combatRanges[target.id] == nil {
+		r.combatRanges[target.id] = make(map[uuid.UUID]float64)
+	}
+	
+	// Only set default range if no existing range between these characters
+	if _, exists := r.combatRanges[character.id][target.id]; !exists {
+		r.combatRanges[character.id][target.id] = 30.0
+		r.combatRanges[target.id][character.id] = 30.0
+	}
+	r.mutex.Unlock()
+
 	// Send messages
 	character.DisplayMessage(fmt.Sprintf("\n\rYou turn to face %s.\n\r", target.name))
 	target.DisplayMessage(fmt.Sprintf("\n\r%s turns to face you!\n\r", character.name))
@@ -336,25 +354,28 @@ func handleFaceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	}
 }
 
-// handleAssessCommand shows the character's current combat status
+// handleAssessCommand shows the room's current combat situation
 func handleAssessCommand(cmd *CommandRequest) *CommandResponse {
 	character := cmd.Character
-	if character == nil {
+	if character == nil || character.room == nil {
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
-			Error:     fmt.Errorf("invalid character"),
+			Error:     fmt.Errorf("invalid character or room"),
 			Timestamp: time.Now(),
 		}
 	}
 
+	room := character.room
+	var message strings.Builder
+
+	// Check personal facing status
 	character.mutex.RLock()
 	facing := character.facing
 	character.mutex.RUnlock()
 
-	var message string
 	if facing != nil && facing.room == character.room {
-		message = fmt.Sprintf("\n\rYou are facing %s.\n\r", facing.name)
+		message.WriteString(fmt.Sprintf("\n\rYou are facing %s.\n\r", facing.name))
 	} else {
 		// Clear stale facing if target is no longer in the same room
 		if facing != nil {
@@ -362,13 +383,159 @@ func handleAssessCommand(cmd *CommandRequest) *CommandResponse {
 			character.facing = nil
 			character.mutex.Unlock()
 		}
-		message = "\n\rYou are not in combat.\n\r"
+		message.WriteString("\n\rYou are not currently facing anyone.\n\r")
+	}
+
+	// Show room combat situation
+	room.mutex.RLock()
+	hasAnyCombat := false
+	
+	// Check if this character is in combat with others
+	if ranges, exists := room.combatRanges[character.id]; exists && len(ranges) > 0 {
+		hasAnyCombat = true
+		message.WriteString("\n\rYou are in combat with:\n\r")
+		for targetID, distance := range ranges {
+			if target, found := room.characters[targetID]; found {
+				rangeDesc := getRangeDescription(distance)
+				message.WriteString(fmt.Sprintf("  %s (%s)\n\r", target.name, rangeDesc))
+			}
+		}
+	}
+
+	// Show other combat pairs in the room (excluding those involving this character)
+	otherCombatPairs := make(map[string]bool) // Track pairs to avoid duplicates
+	for attackerID, targets := range room.combatRanges {
+		if attackerID == character.id {
+			continue // Skip this character's combat ranges
+		}
+		
+		if attacker, found := room.characters[attackerID]; found {
+			for targetID, distance := range targets {
+				if targetID == character.id {
+					continue // Skip combat involving this character
+				}
+				
+				if target, found := room.characters[targetID]; found {
+					// Create a normalized pair key to avoid duplicates
+					var pairKey string
+					if attackerID.String() < targetID.String() {
+						pairKey = fmt.Sprintf("%s-%s", attackerID.String(), targetID.String())
+					} else {
+						pairKey = fmt.Sprintf("%s-%s", targetID.String(), attackerID.String())
+					}
+					
+					if !otherCombatPairs[pairKey] {
+						if !hasAnyCombat {
+							message.WriteString("\n\rOther combat in the room:\n\r")
+							hasAnyCombat = true
+						}
+						rangeDesc := getRangeDescription(distance)
+						message.WriteString(fmt.Sprintf("  %s vs %s (%s)\n\r", attacker.name, target.name, rangeDesc))
+						otherCombatPairs[pairKey] = true
+					}
+				}
+			}
+		}
+	}
+	room.mutex.RUnlock()
+
+	if !hasAnyCombat {
+		message.WriteString("\n\rNo combat is currently taking place in this room.\n\r")
 	}
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
 		Success:   true,
-		Message:   message,
+		Message:   message.String(),
 		Timestamp: time.Now(),
+	}
+}
+
+// getRangeDescription returns the range category based on distance
+func getRangeDescription(distance float64) string {
+	if distance < 5.0 {
+		return "melee"
+	} else if distance <= 15.0 {
+		return "pole"
+	} else {
+		return "far"
+	}
+}
+
+// initiateCombat sets up combat ranges between two characters at the specified distance
+func (r *Room) initiateCombat(char1, char2 *Character, distance float64) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	
+	if r.combatRanges[char1.id] == nil {
+		r.combatRanges[char1.id] = make(map[uuid.UUID]float64)
+	}
+	if r.combatRanges[char2.id] == nil {
+		r.combatRanges[char2.id] = make(map[uuid.UUID]float64)
+	}
+	
+	r.combatRanges[char1.id][char2.id] = distance
+	r.combatRanges[char2.id][char1.id] = distance
+}
+
+// removeCombatRange removes combat range between two specific characters
+func (r *Room) removeCombatRange(char1, char2 *Character) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	
+	if r.combatRanges[char1.id] != nil {
+		delete(r.combatRanges[char1.id], char2.id)
+		if len(r.combatRanges[char1.id]) == 0 {
+			delete(r.combatRanges, char1.id)
+		}
+	}
+	
+	if r.combatRanges[char2.id] != nil {
+		delete(r.combatRanges[char2.id], char1.id)
+		if len(r.combatRanges[char2.id]) == 0 {
+			delete(r.combatRanges, char2.id)
+		}
+	}
+}
+
+// removeCharacterFromCombat removes all combat ranges for a specific character
+func (r *Room) removeCharacterFromCombat(character *Character) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	
+	// Remove the character's outgoing combat ranges
+	delete(r.combatRanges, character.id)
+	
+	// Remove the character from other characters' combat ranges
+	for _, targets := range r.combatRanges {
+		if targets != nil {
+			delete(targets, character.id)
+		}
+	}
+}
+
+// getCombatRange returns the combat range between two characters, or -1 if not in combat
+func (r *Room) getCombatRange(char1, char2 *Character) float64 {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	
+	if ranges, exists := r.combatRanges[char1.id]; exists {
+		if distance, found := ranges[char2.id]; found {
+			return distance
+		}
+	}
+	return -1
+}
+
+// setCombatRange updates the combat range between two characters
+func (r *Room) setCombatRange(char1, char2 *Character, distance float64) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	
+	if r.combatRanges[char1.id] != nil {
+		r.combatRanges[char1.id][char2.id] = distance
+	}
+	if r.combatRanges[char2.id] != nil {
+		r.combatRanges[char2.id][char1.id] = distance
 	}
 }

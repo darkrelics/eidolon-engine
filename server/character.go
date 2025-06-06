@@ -166,7 +166,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		mutex:            sync.RWMutex{},
 		advancing:        false,
 		facing:           nil,
-		combatRange:      make(map[uuid.UUID]float64),
 		lastEdited:       time.Now(),
 		charState:        "standing", // Default character state
 		waitUntil:        time.Now(), // No initial wait time

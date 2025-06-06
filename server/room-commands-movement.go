@@ -252,7 +252,8 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	character.mutex.Unlock()
 	
 	// Clear facing for any characters in the old room that were facing the departing character
-	oldRoom.mutex.RLock()
+	// Also clean up combat ranges involving the departing character
+	oldRoom.mutex.Lock()
 	for _, char := range oldRoom.characters {
 		if char != nil && char != character {
 			char.mutex.Lock()
@@ -262,7 +263,10 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 			char.mutex.Unlock()
 		}
 	}
-	oldRoom.mutex.RUnlock()
+	
+	// Remove combat ranges involving the departing character
+	oldRoom.removeCharacterFromCombat(character)
+	oldRoom.mutex.Unlock()
 
 	// Send arrival message using the exit's arrival text (only if visible)
 	if !character.IsHidden() {

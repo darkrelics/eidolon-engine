@@ -43,7 +43,6 @@ type Character struct {
 	mutex            sync.RWMutex
 	facing           *Character
 	advancing        bool
-	combatRange      map[uuid.UUID]float64
 	lastEdited       time.Time
 	lastSaved        time.Time
 	waitUntil        time.Time             // Time when the character can execute the next command
@@ -95,7 +94,6 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		mutex:            sync.RWMutex{},
 		facing:           nil,
 		advancing:        false,
-		combatRange:      make(map[uuid.UUID]float64),
 		lastEdited:       time.Now(),
 		charState:        "standing",
 		hidden:           false,

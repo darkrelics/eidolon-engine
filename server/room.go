@@ -38,8 +38,9 @@ type Room struct {
 	exits          map[uuid.UUID]*Exit
 	characters     map[uuid.UUID]*Character
 	items          map[uuid.UUID]*Item
-	persistent     bool   // Flag indicating if room should remain loaded when empty
-	scriptID       string // ID of the script that defines room-specific behaviors
+	persistent     bool                                  // Flag indicating if room should remain loaded when empty
+	scriptID       string                                // ID of the script that defines room-specific behaviors
+	combatRanges   map[uuid.UUID]map[uuid.UUID]float64   // Combat ranges between characters (outer: attacker, inner: target -> range)
 	mutex          sync.RWMutex
 	lastEdited     time.Time
 	lastSaved      time.Time
@@ -88,6 +89,7 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		items:          make(map[uuid.UUID]*Item),
 		persistent:     persistent,
 		scriptID:       scriptID,
+		combatRanges:   make(map[uuid.UUID]map[uuid.UUID]float64),
 		mutex:          sync.RWMutex{},
 		lastEdited:     now,
 		lastSaved:      now,
