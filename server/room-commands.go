@@ -122,6 +122,14 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 		return response
 	}
 
+	// Combat commands
+	if verb == "face" {
+		return handleFaceCommand(cmd, r)
+	}
+	if verb == "assess" {
+		return handleAssessCommand(cmd)
+	}
+
 	// Unknown command at room level
 	Logger.Debug("Room cannot handle command, will escalate", "verb", cmd.Verb, "roomID", r.roomID)
 	response.Error = fmt.Errorf("unknown room command: %s", cmd.Verb)
@@ -245,4 +253,122 @@ func stripArticles(input string) string {
 	}
 
 	return input
+}
+
+// handleFaceCommand processes the FACE command to target a character for combat
+func handleFaceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check if a target was provided
+	if len(cmd.Args) < 2 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   true,
+			Message:   "\n\rWho do you want to face?\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Get the target name
+	targetName := strings.ToLower(strings.Join(cmd.Args[1:], " "))
+	targetName = stripArticles(targetName)
+
+	// Look for the target in the room
+	r.mutex.RLock()
+	var target *Character
+	for _, char := range r.characters {
+		if char != nil && char != character && strings.Contains(strings.ToLower(char.name), targetName) {
+			target = char
+			break
+		}
+	}
+	r.mutex.RUnlock()
+
+	if target == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   true,
+			Message:   "\n\rYou don't see anyone here by that name.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Clear any existing facing targets that are no longer in the same room
+	character.mutex.Lock()
+	if character.facing != nil && character.facing.room != character.room {
+		character.facing = nil
+	}
+	character.facing = target
+	character.mutex.Unlock()
+
+	// Clear the target's facing if they were facing someone not in the room
+	target.mutex.Lock()
+	if target.facing != nil && target.facing.room != target.room {
+		target.facing = nil
+	}
+	target.mutex.Unlock()
+
+	// Send messages
+	character.DisplayMessage(fmt.Sprintf("\n\rYou turn to face %s.\n\r", target.name))
+	target.DisplayMessage(fmt.Sprintf("\n\r%s turns to face you!\n\r", character.name))
+	
+	// Send message to others in the room (excluding both the character and target)
+	r.mutex.RLock()
+	for _, char := range r.characters {
+		if char != nil && char != character && char != target {
+			char.DisplayMessage(fmt.Sprintf("\n\r%s turns to face %s.\n\r", character.name, target.name))
+		}
+	}
+	r.mutex.RUnlock()
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Timestamp: time.Now(),
+	}
+}
+
+// handleAssessCommand shows the character's current combat status
+func handleAssessCommand(cmd *CommandRequest) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	character.mutex.RLock()
+	facing := character.facing
+	character.mutex.RUnlock()
+
+	var message string
+	if facing != nil && facing.room == character.room {
+		message = fmt.Sprintf("\n\rYou are facing %s.\n\r", facing.name)
+	} else {
+		// Clear stale facing if target is no longer in the same room
+		if facing != nil {
+			character.mutex.Lock()
+			character.facing = nil
+			character.mutex.Unlock()
+		}
+		message = "\n\rYou are not in combat.\n\r"
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   message,
+		Timestamp: time.Now(),
+	}
 }

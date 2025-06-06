@@ -191,6 +191,20 @@ func (g *Game) initCommands() {
 		usage:       "point <character>",
 	}
 
+	g.commands["face"] = CommandInfo{
+		roundTime:   0,
+		handler:     nil,
+		description: "Face a character for combat",
+		usage:       "face <character>",
+	}
+
+	g.commands["assess"] = CommandInfo{
+		roundTime:   -1,
+		handler:     nil,
+		description: "Check your current combat status",
+		usage:       "assess",
+	}
+
 }
 
 // buildCommandIndex builds the command index for fuzzy matching

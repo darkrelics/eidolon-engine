@@ -245,10 +245,24 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		SendRoomMessage(oldRoom, departureMsg, character)
 	}
 
-	// Update character's room reference
+	// Update character's room reference and clear facing
 	character.mutex.Lock()
 	character.room = newRoom
+	character.facing = nil  // Clear facing when changing rooms
 	character.mutex.Unlock()
+	
+	// Clear facing for any characters in the old room that were facing the departing character
+	oldRoom.mutex.RLock()
+	for _, char := range oldRoom.characters {
+		if char != nil && char != character {
+			char.mutex.Lock()
+			if char.facing == character {
+				char.facing = nil
+			}
+			char.mutex.Unlock()
+		}
+	}
+	oldRoom.mutex.RUnlock()
 
 	// Send arrival message using the exit's arrival text (only if visible)
 	if !character.IsHidden() {
