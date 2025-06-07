@@ -511,8 +511,8 @@ func (r *Room) processCombatMovements() {
 			continue
 		}
 
-		// Calculate movement speed based on Agility
-		agility := char.attributes["Agility"]
+		// Calculate movement speed based on agility
+		agility := char.attributes["agility"]
 		if agility < 0 {
 			agility = 0
 		} else if agility > 10 {
