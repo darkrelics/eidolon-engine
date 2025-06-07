@@ -804,35 +804,29 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 
 	// FLEE has no round time requirement
 
-	// Parse exit argument
-	if len(cmd.Args) < 2 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Message:   "\n\rWhich direction do you want to flee?\n\r",
-			Timestamp: time.Now(),
+	// Parse optional exit argument
+	var exitDirection string
+	if len(cmd.Args) >= 2 {
+		exitDirection = strings.ToLower(cmd.Args[1])
+		
+		// Verify exit exists if direction specified
+		r.mutex.RLock()
+		var targetExit *Exit
+		for _, exit := range r.exits {
+			if exit != nil && strings.EqualFold(exit.direction, exitDirection) {
+				targetExit = exit
+				break
+			}
 		}
-	}
+		r.mutex.RUnlock()
 
-	exitDirection := strings.ToLower(cmd.Args[1])
-
-	// Verify exit exists
-	r.mutex.RLock()
-	var targetExit *Exit
-	for _, exit := range r.exits {
-		if exit != nil && strings.EqualFold(exit.direction, exitDirection) {
-			targetExit = exit
-			break
-		}
-	}
-	r.mutex.RUnlock()
-
-	if targetExit == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Message:   "\n\rThere is no exit in that direction.\n\r",
-			Timestamp: time.Now(),
+		if targetExit == nil {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Message:   "\n\rThere is no exit in that direction.\n\r",
+				Timestamp: time.Now(),
+			}
 		}
 	}
 
@@ -855,6 +849,7 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	character.fleeTarget = &FleeState{
 		exitDirection: exitDirection,
 		startTime:     time.Now(),
+		hasDirection:  exitDirection != "",
 	}
 	
 	// Clear any combat movement
@@ -863,7 +858,11 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	character.mutex.Unlock()
 	
 	// Send messages
-	character.DisplayMessage(fmt.Sprintf("\n\rYou attempt to flee %s!\n\r", exitDirection))
+	if exitDirection != "" {
+		character.DisplayMessage(fmt.Sprintf("\n\rYou attempt to flee %s!\n\r", exitDirection))
+	} else {
+		character.DisplayMessage("\n\rYou attempt to flee from combat!\n\r")
+	}
 	SendRoomMessage(r, fmt.Sprintf("\n\r%s attempts to flee!\n\r", character.name), character)
 	
 	return &CommandResponse{

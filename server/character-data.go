@@ -70,8 +70,9 @@ type Character struct {
 
 // FleeState tracks an active flee attempt
 type FleeState struct {
-	exitDirection string    // Direction to flee through
+	exitDirection string    // Direction to flee through (empty for directionless flee)
 	startTime     time.Time // When flee started (for 30 second timeout)
+	hasDirection  bool      // Whether a specific direction was specified
 }
 
 // CharacterData for unmarshalling character.

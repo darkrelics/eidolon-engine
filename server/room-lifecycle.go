@@ -188,6 +188,9 @@ func (r *Room) runInternal(game *Game) {
 			// Process combat movements
 			r.processCombatMovements()
 
+			// Process flee attempts
+			r.processFlee()
+
 			// Increment idle counter if room is empty
 			r.mutex.RLock()
 			isEmpty := len(r.characters) == 0
@@ -618,5 +621,192 @@ func (r *Room) processCombatMovements() {
 		}
 
 		char.mutex.Unlock()
+	}
+}
+
+// processFlee handles flee attempts for characters
+func (r *Room) processFlee() {
+	r.mutex.RLock()
+	charactersToFlee := make([]*Character, 0)
+	for _, char := range r.characters {
+		if char != nil {
+			char.mutex.RLock()
+			if char.fleeTarget != nil {
+				charactersToFlee = append(charactersToFlee, char)
+			}
+			char.mutex.RUnlock()
+		}
+	}
+	r.mutex.RUnlock()
+
+	for _, char := range charactersToFlee {
+		char.mutex.Lock()
+		fleeState := char.fleeTarget
+		if fleeState == nil {
+			char.mutex.Unlock()
+			continue
+		}
+
+		// Check timeout (30 seconds)
+		elapsed := time.Since(fleeState.startTime).Seconds()
+		if elapsed >= 30 {
+			char.mutex.Unlock()
+			r.handleFleeTimeout(char, fleeState)
+			continue
+		}
+
+		// Get character's agility for movement speed
+		agility := char.attributes["agility"]
+		if agility < 1 {
+			agility = 1
+		}
+
+		// Calculate movement speed (same as retreat)
+		moveSpeed := agility * 0.5 // Units per second
+
+		// Find closest adversary
+		minRange := float64(1000)
+		var hasAdversary bool
+		r.mutex.RLock()
+		if ranges, exists := r.combatRanges[char.id]; exists {
+			for _, range_ := range ranges {
+				if range_ < minRange {
+					minRange = range_
+					hasAdversary = true
+				}
+			}
+		}
+		// Also check if character is a target
+		for attackerID, targets := range r.combatRanges {
+			if attackerID != char.id {
+				if range_, exists := targets[char.id]; exists && range_ < minRange {
+					minRange = range_
+					hasAdversary = true
+				}
+			}
+		}
+		r.mutex.RUnlock()
+
+		if !hasAdversary {
+			// No adversaries, complete flee immediately
+			char.mutex.Unlock()
+			r.completeFlee(char, fleeState)
+			continue
+		}
+
+		// Move away from all adversaries
+		r.mutex.Lock()
+		if ranges, exists := r.combatRanges[char.id]; exists {
+			for targetID, currentRange := range ranges {
+				newRange := currentRange + moveSpeed * 0.1 // 0.1 second tick
+				ranges[targetID] = newRange
+			}
+		}
+		// Also update ranges where character is the target
+		for attackerID, targets := range r.combatRanges {
+			if attackerID != char.id {
+				if currentRange, exists := targets[char.id]; exists {
+					newRange := currentRange + moveSpeed * 0.1
+					targets[char.id] = newRange
+				}
+			}
+		}
+		r.mutex.Unlock()
+
+		// Check if flee conditions are met
+		if fleeState.hasDirection {
+			// With direction: flee at 20+ range
+			if minRange >= 20 {
+				char.mutex.Unlock()
+				r.completeFlee(char, fleeState)
+				continue
+			}
+		} else {
+			// Without direction: flee at 45+ range
+			if minRange >= 45 {
+				char.mutex.Unlock()
+				r.completeFlee(char, fleeState)
+				continue
+			}
+		}
+
+		char.mutex.Unlock()
+	}
+}
+
+// handleFleeTimeout handles when a flee attempt times out
+func (r *Room) handleFleeTimeout(char *Character, fleeState *FleeState) {
+	char.mutex.Lock()
+	char.fleeTarget = nil
+	exitDirection := fleeState.exitDirection
+	char.mutex.Unlock()
+
+	// Remove from combat
+	r.removeCharacterFromCombat(char)
+
+	if exitDirection != "" {
+		// Flee through specified exit
+		char.DisplayMessage(fmt.Sprintf("\n\rYou flee %s in panic!\n\r", exitDirection))
+		SendRoomMessage(r, fmt.Sprintf("\n\r%s flees %s in panic!\n\r", char.name, exitDirection), char)
+		r.forceMovementCommand(char, exitDirection)
+	} else {
+		// Flee through first available exit
+		r.mutex.RLock()
+		var firstExit *Exit
+		for _, exit := range r.exits {
+			if exit != nil && exit.visible {
+				firstExit = exit
+				break
+			}
+		}
+		r.mutex.RUnlock()
+
+		if firstExit != nil {
+			char.DisplayMessage(fmt.Sprintf("\n\rYou flee %s in panic!\n\r", firstExit.direction))
+			SendRoomMessage(r, fmt.Sprintf("\n\r%s flees %s in panic!\n\r", char.name, firstExit.direction), char)
+			r.forceMovementCommand(char, firstExit.direction)
+		} else {
+			// No exits available, just remove from combat
+			char.DisplayMessage("\n\rYou manage to escape from combat!\n\r")
+			SendRoomMessage(r, fmt.Sprintf("\n\r%s manages to escape from combat!\n\r", char.name), char)
+		}
+	}
+}
+
+// completeFlee completes a successful flee attempt
+func (r *Room) completeFlee(char *Character, fleeState *FleeState) {
+	char.mutex.Lock()
+	char.fleeTarget = nil
+	exitDirection := fleeState.exitDirection
+	char.mutex.Unlock()
+
+	if exitDirection != "" {
+		// Flee through specified exit
+		char.DisplayMessage(fmt.Sprintf("\n\rYou successfully flee %s!\n\r", exitDirection))
+		SendRoomMessage(r, fmt.Sprintf("\n\r%s flees %s!\n\r", char.name, exitDirection), char)
+		r.forceMovementCommand(char, exitDirection)
+	} else {
+		// Just remove from combat
+		r.removeCharacterFromCombat(char)
+		char.DisplayMessage("\n\rYou successfully escape from combat!\n\r")
+		SendRoomMessage(r, fmt.Sprintf("\n\r%s escapes from combat!\n\r", char.name), char)
+	}
+}
+
+// forceMovementCommand forces a character to move in a direction
+func (r *Room) forceMovementCommand(char *Character, direction string) {
+	// Create a movement command request
+	cmd := &CommandRequest{
+		ID:        uuid.Must(uuid.NewV4()),
+		Character: char,
+		Verb:      direction,
+		Args:      []string{direction},
+		Timestamp: time.Now(),
+	}
+
+	// Process the movement command
+	response := handleMovementCommand(cmd, char.game)
+	if !response.Success && response.Error != nil {
+		Logger.Error("Room: Failed to force movement", "character", char.name, "direction", direction, "error", response.Error)
 	}
 }
