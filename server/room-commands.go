@@ -137,12 +137,6 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 	if verb == "assess" {
 		return handleAssessCommand(cmd)
 	}
-	if verb == "advance" {
-		return handleAdvanceCommand(cmd, r)
-	}
-	if verb == "retreat" {
-		return handleRetreatCommand(cmd, r)
-	}
 	if verb == "flee" {
 		return handleFleeCommand(cmd, r)
 	}
