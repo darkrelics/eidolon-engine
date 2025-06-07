@@ -274,6 +274,10 @@ func (ssh_interface *Interface_SSH) Stop() error {
 
 // parseDims parses terminal dimensions from the SSH payload.
 func ParseDims(b []byte) (width, height int) {
+	if len(b) < 8 {
+		return 0, 0
+	}
+
 	width = int(b[0])<<24 | int(b[1])<<16 | int(b[2])<<8 | int(b[3])
 	height = int(b[4])<<24 | int(b[5])<<16 | int(b[6])<<8 | int(b[7])
 	return width, height
