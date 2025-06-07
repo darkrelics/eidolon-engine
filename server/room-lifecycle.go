@@ -547,16 +547,16 @@ func (r *Room) processCombatMovements() {
 
 			// Get current range
 			currentRange := r.getCombatRange(char, target)
-			
+
 			// Move towards target
 			if currentRange > movement.targetRange {
 				newRange := currentRange - moveSpeed
 				if newRange < movement.targetRange {
 					newRange = movement.targetRange
 				}
-				
+
 				r.setCombatRange(char, target, newRange)
-				
+
 				// Check if reached target range
 				if newRange <= movement.targetRange {
 					char.combatMovement = nil
@@ -698,7 +698,7 @@ func (r *Room) processFlee() {
 		r.mutex.Lock()
 		if ranges, exists := r.combatRanges[char.id]; exists {
 			for targetID, currentRange := range ranges {
-				newRange := currentRange + moveSpeed * 0.1 // 0.1 second tick
+				newRange := currentRange + moveSpeed*0.1 // 0.1 second tick
 				ranges[targetID] = newRange
 			}
 		}
@@ -706,7 +706,7 @@ func (r *Room) processFlee() {
 		for attackerID, targets := range r.combatRanges {
 			if attackerID != char.id {
 				if currentRange, exists := targets[char.id]; exists {
-					newRange := currentRange + moveSpeed * 0.1
+					newRange := currentRange + moveSpeed*0.1
 					targets[char.id] = newRange
 				}
 			}

@@ -248,9 +248,9 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	// Update character's room reference and clear facing
 	character.mutex.Lock()
 	character.room = newRoom
-	character.facing = nil  // Clear facing when changing rooms
+	character.facing = nil // Clear facing when changing rooms
 	character.mutex.Unlock()
-	
+
 	// Clear facing for any characters in the old room that were facing the departing character
 	// Also clean up combat ranges involving the departing character
 	oldRoom.mutex.Lock()
@@ -263,7 +263,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 			char.mutex.Unlock()
 		}
 	}
-	
+
 	// Remove combat ranges involving the departing character
 	oldRoom.removeCharacterFromCombat(character)
 	oldRoom.mutex.Unlock()

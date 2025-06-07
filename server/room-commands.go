@@ -341,7 +341,7 @@ func handleFaceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	if r.combatRanges[target.id] == nil {
 		r.combatRanges[target.id] = make(map[uuid.UUID]float64)
 	}
-	
+
 	// Only set default range if no existing range between these characters
 	if _, exists := r.combatRanges[character.id][target.id]; !exists {
 		r.combatRanges[character.id][target.id] = 30.0
@@ -396,7 +396,7 @@ func handleAssessCommand(cmd *CommandRequest) *CommandResponse {
 	// Show room combat situation
 	room.mutex.RLock()
 	hasAnyCombat := false
-	
+
 	// Check if this character is in combat with others
 	if ranges, exists := room.combatRanges[character.id]; exists && len(ranges) > 0 {
 		hasAnyCombat = true
@@ -415,13 +415,13 @@ func handleAssessCommand(cmd *CommandRequest) *CommandResponse {
 		if attackerID == character.id {
 			continue // Skip this character's combat ranges
 		}
-		
+
 		if attacker, found := room.characters[attackerID]; found {
 			for targetID, distance := range targets {
 				if targetID == character.id {
 					continue // Skip combat involving this character
 				}
-				
+
 				if target, found := room.characters[targetID]; found {
 					// Create a normalized pair key to avoid duplicates
 					var pairKey string
@@ -430,7 +430,7 @@ func handleAssessCommand(cmd *CommandRequest) *CommandResponse {
 					} else {
 						pairKey = fmt.Sprintf("%s-%s", targetID.String(), attackerID.String())
 					}
-					
+
 					if !otherCombatPairs[pairKey] {
 						if !hasAnyCombat {
 							message.WriteString("\n\rOther combat in the room:\n\r")
@@ -474,28 +474,28 @@ func getRangeDescription(distance float64) string {
 func (r *Room) initiateCombat(char1, char2 *Character, distance float64) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	
+
 	if r.combatRanges[char1.id] == nil {
 		r.combatRanges[char1.id] = make(map[uuid.UUID]float64)
 	}
 	if r.combatRanges[char2.id] == nil {
 		r.combatRanges[char2.id] = make(map[uuid.UUID]float64)
 	}
-	
+
 	r.combatRanges[char1.id][char2.id] = distance
 	r.combatRanges[char2.id][char1.id] = distance
 }
 
-// removeCombatRange removes combat range between two specific characters  
+// removeCombatRange removes combat range between two specific characters
 // TODO: Currently unused - placeholder for future combat system features
 // removeCharacterFromCombat removes all combat ranges for a specific character
 func (r *Room) removeCharacterFromCombat(character *Character) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	
+
 	// Remove the character's outgoing combat ranges
 	delete(r.combatRanges, character.id)
-	
+
 	// Remove the character from other characters' combat ranges
 	for _, targets := range r.combatRanges {
 		if targets != nil {
@@ -509,7 +509,7 @@ func (r *Room) removeCharacterFromCombat(character *Character) {
 func (r *Room) getCombatRange(char1, char2 *Character) float64 {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	
+
 	if ranges, exists := r.combatRanges[char1.id]; exists {
 		if distance, found := ranges[char2.id]; found {
 			return distance
@@ -522,7 +522,7 @@ func (r *Room) getCombatRange(char1, char2 *Character) float64 {
 func (r *Room) setCombatRange(char1, char2 *Character, distance float64) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	
+
 	if r.combatRanges[char1.id] != nil {
 		r.combatRanges[char1.id][char2.id] = distance
 	}
@@ -556,7 +556,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	// Parse arguments: ADVANCE [target] [range]
 	var targetName string
 	var rangeType string
-	
+
 	if len(cmd.Args) > 1 {
 		targetName = strings.ToLower(strings.Join(cmd.Args[1:], " "))
 		// Check if last argument is a range type
@@ -596,7 +596,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	}
 
 	character.mutex.Lock()
-	
+
 	// If target specified, execute face command first
 	if targetName != "" {
 		// Find target in room
@@ -625,12 +625,12 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 			character.facing = nil
 		}
 		character.facing = target
-		
+
 		// Initialize combat if needed
 		character.mutex.Unlock()
 		r.initiateCombat(character, target, 30.0)
 		character.mutex.Lock()
-		
+
 		// Send facing messages with advance context
 		character.DisplayMessage(fmt.Sprintf("\n\rYou advance on %s.\n\r", target.name))
 		target.DisplayMessage(fmt.Sprintf("\n\r%s advances on you!\n\r", character.name))
@@ -661,7 +661,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 				}
 			}
 			r.mutex.RUnlock()
-			
+
 			if potentialTarget == nil {
 				character.mutex.Unlock()
 				return &CommandResponse{
@@ -671,7 +671,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 					Timestamp: time.Now(),
 				}
 			}
-			
+
 			character.facing = potentialTarget
 		}
 	}
@@ -683,16 +683,16 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 			targetID:    character.facing.id,
 			targetRange: targetRange,
 		}
-		
+
 		rangeName := "close combat"
 		if rangeType == "melee" {
 			rangeName = "melee range"
 		} else if rangeType == "pole" {
 			rangeName = "pole range"
 		}
-		
+
 		character.mutex.Unlock()
-		
+
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   true,
@@ -734,7 +734,7 @@ func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 
 	// Parse range argument
 	var targetRange float64 = 45.0
-	
+
 	if len(cmd.Args) > 1 {
 		rangeType := strings.ToLower(cmd.Args[1])
 		switch rangeType {
@@ -755,7 +755,7 @@ func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	}
 
 	character.mutex.Lock()
-	
+
 	// Check if in combat
 	inCombat := false
 	r.mutex.RLock()
@@ -779,9 +779,9 @@ func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		mode:        "retreat",
 		targetRange: targetRange,
 	}
-	
+
 	character.mutex.Unlock()
-	
+
 	return &CommandResponse{
 		RequestID: cmd.ID,
 		Success:   true,
@@ -808,7 +808,7 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	var exitDirection string
 	if len(cmd.Args) >= 2 {
 		exitDirection = strings.ToLower(cmd.Args[1])
-		
+
 		// Verify exit exists if direction specified
 		r.mutex.RLock()
 		var targetExit *Exit
@@ -831,12 +831,12 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	}
 
 	character.mutex.Lock()
-	
+
 	// Clear facing
 	if character.facing != nil {
 		oldFacing := character.facing
 		character.facing = nil
-		
+
 		// Clear reciprocal facing
 		oldFacing.mutex.Lock()
 		if oldFacing.facing == character {
@@ -844,19 +844,19 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		}
 		oldFacing.mutex.Unlock()
 	}
-	
+
 	// Set flee state
 	character.fleeTarget = &FleeState{
 		exitDirection: exitDirection,
 		startTime:     time.Now(),
 		hasDirection:  exitDirection != "",
 	}
-	
+
 	// Clear any combat movement
 	character.combatMovement = nil
-	
+
 	character.mutex.Unlock()
-	
+
 	// Send messages
 	if exitDirection != "" {
 		character.DisplayMessage(fmt.Sprintf("\n\rYou attempt to flee %s!\n\r", exitDirection))
@@ -864,7 +864,7 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		character.DisplayMessage("\n\rYou attempt to flee from combat!\n\r")
 	}
 	SendRoomMessage(r, fmt.Sprintf("\n\r%s attempts to flee!\n\r", character.name), character)
-	
+
 	return &CommandResponse{
 		RequestID: cmd.ID,
 		Success:   true,

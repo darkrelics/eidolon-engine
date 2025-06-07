@@ -29,9 +29,9 @@ import (
 
 // CombatMovement tracks character's movement strategy in combat
 type CombatMovement struct {
-	mode         string     // "advance", "retreat", or ""
-	targetID     uuid.UUID  // Target for advance (empty for retreat)
-	targetRange  float64    // Desired range (0, 3, 10 for advance; 3-5, 10-15, 20-30 for retreat)
+	mode        string    // "advance", "retreat", or ""
+	targetID    uuid.UUID // Target for advance (empty for retreat)
+	targetRange float64   // Desired range (0, 3, 10 for advance; 3-5, 10-15, 20-30 for retreat)
 }
 
 type Character struct {
@@ -49,8 +49,8 @@ type Character struct {
 	rightHand        *Item // Item held in right hand
 	mutex            sync.RWMutex
 	facing           *Character
-	combatMovement   *CombatMovement       // Tracks advance/retreat settings
-	fleeTarget       *FleeState            // Tracks flee attempt if active
+	combatMovement   *CombatMovement // Tracks advance/retreat settings
+	fleeTarget       *FleeState      // Tracks flee attempt if active
 	lastEdited       time.Time
 	lastSaved        time.Time
 	waitUntil        time.Time             // Time when the character can execute the next command
