@@ -560,9 +560,9 @@ func (r *Room) processCombatMovements() {
 				if newRange <= movement.targetRange {
 					char.combatMovement = nil
 					rangeName := "close combat with"
-					if movement.targetRange == 3.0 {
+					if movement.targetRange == combatRangeMelee {
 						rangeName = "melee range with"
-					} else if movement.targetRange == 10.0 {
+					} else if movement.targetRange == combatRangePole {
 						rangeName = "pole range with"
 					}
 					char.mutex.Unlock()

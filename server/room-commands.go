@@ -44,6 +44,14 @@ const (
 	searchActionTime   = 3 * time.Second  // Time blocked after search attempt
 )
 
+// Combat range constants
+const (
+	combatRangeClose   = 0.0  // Close combat range
+	combatRangeMelee   = 3.0  // Melee weapon range
+	combatRangePole    = 10.0 // Pole weapon range
+	combatRangeDefault = 30.0 // Default starting combat range
+)
+
 // processRoomCommand handles commands at the room level
 func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	if cmd == nil {
@@ -327,7 +335,7 @@ func handleFaceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	}
 	target.mutex.Unlock()
 
-	// Initialize combat ranges with default 30.0 if no existing range
+	// Initialize combat ranges with default combatRangeDefault if no existing range
 	r.mutex.Lock()
 	if r.combatRanges[character.id] == nil {
 		r.combatRanges[character.id] = make(map[uuid.UUID]float64)
@@ -338,8 +346,8 @@ func handleFaceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 
 	// Only set default range if no existing range between these characters
 	if _, exists := r.combatRanges[character.id][target.id]; !exists {
-		r.combatRanges[character.id][target.id] = 30.0
-		r.combatRanges[target.id][character.id] = 30.0
+		r.combatRanges[character.id][target.id] = combatRangeDefault
+		r.combatRanges[target.id][character.id] = combatRangeDefault
 	}
 	r.mutex.Unlock()
 
@@ -575,11 +583,11 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	var targetRange float64
 	switch rangeType {
 	case "pole":
-		targetRange = 10.0
+		targetRange = combatRangePole
 	case "melee":
-		targetRange = 3.0
+		targetRange = combatRangeMelee
 	case "":
-		targetRange = 0.0
+		targetRange = combatRangeClose
 	default:
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -622,7 +630,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 
 		// Initialize combat if needed
 		character.mutex.Unlock()
-		r.initiateCombat(character, target, 30.0)
+		r.initiateCombat(character, target, combatRangeDefault)
 		character.mutex.Lock()
 
 		// Send facing messages with advance context
@@ -735,7 +743,7 @@ func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		case "melee":
 			targetRange = 5.0
 		case "pole":
-			targetRange = 10.0
+			targetRange = combatRangePole
 		case "far":
 			targetRange = 30.0
 		default:

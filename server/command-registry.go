@@ -191,37 +191,38 @@ func (g *Game) initCommands() {
 		usage:       "point <character>",
 	}
 
+	// Combat commands are handled at the room level, not character level
 	g.commands["face"] = CommandInfo{
 		roundTime:   0,
-		handler:     nil,
+		handler:     nil, // Room-level handler in room-commands.go
 		description: "Face a character for combat",
 		usage:       "face <character>",
 	}
 
 	g.commands["assess"] = CommandInfo{
 		roundTime:   -1,
-		handler:     nil,
+		handler:     nil, // Room-level handler in room-commands.go
 		description: "Check your current combat status",
 		usage:       "assess",
 	}
 
 	g.commands["advance"] = CommandInfo{
 		roundTime:   0,
-		handler:     nil,
+		handler:     nil, // Room-level handler in room-commands.go
 		description: "Advance on a target in combat",
 		usage:       "advance [target] [range]",
 	}
 
 	g.commands["retreat"] = CommandInfo{
 		roundTime:   0,
-		handler:     nil,
+		handler:     nil, // Room-level handler in room-commands.go
 		description: "Retreat from combat opponents",
 		usage:       "retreat [range]",
 	}
 
 	g.commands["flee"] = CommandInfo{
 		roundTime:   0,
-		handler:     nil,
+		handler:     nil, // Room-level handler in room-commands.go
 		description: "Flee from combat",
 		usage:       "flee [direction]",
 	}
