@@ -304,6 +304,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 
 // cleanupItems removes items that are marked for deletion from the room
 func (r *Room) cleanupItems(game *Game) {
+	r.mutex.Lock()
 	itemCount := len(r.items)
 
 	// Create temporary list of items to remove
@@ -317,21 +318,19 @@ func (r *Room) cleanupItems(game *Game) {
 			if item.lastSaved.After(item.lastEdited) {
 				itemsToDeleteFromDB = append(itemsToDeleteFromDB, id.String())
 			}
+			delete(r.items, id)
 		}
 	}
+	r.mutex.Unlock()
 
-	// Remove the items from room and game maps
+	// Remove from game's items map after releasing room lock
 	for _, id := range itemsToRemove {
-		delete(r.items, id)
-		// Also remove from game's items map
 		game.DeleteItem(id)
 	}
 
-	// Delete items from database if needed (batch operation to minimize DB access)
 	if len(itemsToDeleteFromDB) > 0 {
 		roomID := r.roomID // Capture for goroutine
 		go RunWithPanicRecovery("room.deleteItems", func() {
-			// Run database deletion asynchronously to avoid blocking room operations
 			r.deleteItemsFromDatabase(game, itemsToDeleteFromDB)
 		}, "roomID", roomID, "itemCount", len(itemsToDeleteFromDB))
 	}
@@ -566,9 +565,11 @@ func (r *Room) processCombatMovements() {
 					} else if movement.targetRange == 10.0 {
 						rangeName = "pole range with"
 					}
+					char.mutex.Unlock()
 					char.DisplayMessage(fmt.Sprintf("\n\rYou reach %s %s.\n\r", rangeName, target.name))
 					target.DisplayMessage(fmt.Sprintf("\n\r%s reaches %s you.\n\r", char.name, rangeName))
 					SendRoomMessage(r, fmt.Sprintf("\n\r%s reaches %s %s.\n\r", char.name, rangeName, target.name), char, target)
+					continue
 				}
 			} else {
 				// Already at or closer than target range
@@ -616,7 +617,9 @@ func (r *Room) processCombatMovements() {
 
 			if allAtRange {
 				char.combatMovement = nil
+				char.mutex.Unlock()
 				char.DisplayMessage("\n\rYou reach your desired distance.\n\r")
+				continue
 			}
 		}
 
