@@ -164,7 +164,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		health:           float64(p.server.game.startingHealth),  // Default from config
 		inventory:        make(map[string]*Item),
 		mutex:            sync.RWMutex{},
-		advancing:        false,
 		facing:           nil,
 		lastEdited:       time.Now(),
 		charState:        "standing", // Default character state

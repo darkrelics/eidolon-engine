@@ -185,6 +185,9 @@ func (r *Room) runInternal(game *Game) {
 				}
 			}
 
+			// Process combat movements
+			r.processCombatMovements()
+
 			// Increment idle counter if room is empty
 			r.mutex.RLock()
 			isEmpty := len(r.characters) == 0
@@ -479,4 +482,141 @@ func (g *Game) LoadRoom(roomID int64) (*Room, error) {
 
 	Logger.Info("Successfully loaded room", "roomID", roomID, "title", newRoom.title)
 	return newRoom, nil
+}
+
+// processCombatMovements handles all combat movement for characters in the room
+func (r *Room) processCombatMovements() {
+	r.mutex.RLock()
+	charactersToMove := make([]*Character, 0)
+	for _, char := range r.characters {
+		if char != nil {
+			char.mutex.RLock()
+			if char.combatMovement != nil {
+				charactersToMove = append(charactersToMove, char)
+			}
+			char.mutex.RUnlock()
+		}
+	}
+	r.mutex.RUnlock()
+
+	// Process each character's movement
+	for _, char := range charactersToMove {
+		char.mutex.Lock()
+		movement := char.combatMovement
+		if movement == nil {
+			char.mutex.Unlock()
+			continue
+		}
+
+		// Calculate movement speed based on Agility
+		agility := char.attributes["Agility"]
+		if agility < 0 {
+			agility = 0
+		} else if agility > 10 {
+			agility = 10
+		}
+		moveSpeed := agility * 3.0
+		if moveSpeed < 1.0 {
+			moveSpeed = 1.0
+		}
+
+		switch movement.mode {
+		case "advance":
+			// Find target
+			var target *Character
+			r.mutex.RLock()
+			for _, c := range r.characters {
+				if c != nil && c.id == movement.targetID {
+					target = c
+					break
+				}
+			}
+			r.mutex.RUnlock()
+
+			if target == nil || target.room != r {
+				// Target no longer in room
+				char.combatMovement = nil
+				char.facing = nil
+				char.mutex.Unlock()
+				char.DisplayMessage("\n\rYour target is no longer here.\n\r")
+				continue
+			}
+
+			// Get current range
+			currentRange := r.getCombatRange(char, target)
+			
+			// Move towards target
+			if currentRange > movement.targetRange {
+				newRange := currentRange - moveSpeed
+				if newRange < movement.targetRange {
+					newRange = movement.targetRange
+				}
+				
+				r.setCombatRange(char, target, newRange)
+				
+				// Check if reached target range
+				if newRange <= movement.targetRange {
+					char.combatMovement = nil
+					rangeName := "close combat with"
+					if movement.targetRange == 3.0 {
+						rangeName = "melee range with"
+					} else if movement.targetRange == 10.0 {
+						rangeName = "pole range with"
+					}
+					char.DisplayMessage(fmt.Sprintf("\n\rYou reach %s %s.\n\r", rangeName, target.name))
+					target.DisplayMessage(fmt.Sprintf("\n\r%s reaches %s you.\n\r", char.name, rangeName))
+					SendRoomMessage(r, fmt.Sprintf("\n\r%s reaches %s %s.\n\r", char.name, rangeName, target.name), char, target)
+				}
+			} else {
+				// Already at or closer than target range
+				char.combatMovement = nil
+			}
+
+		case "retreat":
+			// Find all combat opponents
+			r.mutex.RLock()
+			ranges := r.combatRanges[char.id]
+			r.mutex.RUnlock()
+
+			if ranges == nil || len(ranges) == 0 {
+				char.combatMovement = nil
+				char.mutex.Unlock()
+				continue
+			}
+
+			// Move away from all opponents
+			allAtRange := true
+			for opponentID, currentRange := range ranges {
+				if currentRange < movement.targetRange {
+					allAtRange = false
+					newRange := currentRange + moveSpeed
+					if newRange > movement.targetRange {
+						newRange = movement.targetRange
+					}
+
+					// Find opponent character
+					var opponent *Character
+					r.mutex.RLock()
+					for _, c := range r.characters {
+						if c != nil && c.id == opponentID {
+							opponent = c
+							break
+						}
+					}
+					r.mutex.RUnlock()
+
+					if opponent != nil {
+						r.setCombatRange(char, opponent, newRange)
+					}
+				}
+			}
+
+			if allAtRange {
+				char.combatMovement = nil
+				char.DisplayMessage("\n\rYou reach your desired distance.\n\r")
+			}
+		}
+
+		char.mutex.Unlock()
+	}
 }

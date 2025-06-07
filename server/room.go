@@ -153,7 +153,7 @@ func (r *Room) GetScriptID() string {
 }
 
 // SendRoomMessage sends a message to all characters in a room except one
-func SendRoomMessage(room *Room, message string, except *Character) {
+func SendRoomMessage(room *Room, message string, except ...*Character) {
 	if room == nil {
 		return
 	}
@@ -161,11 +161,19 @@ func SendRoomMessage(room *Room, message string, except *Character) {
 	// Update room activity before acquiring lock to avoid concurrency issues
 	room.UpdateActivity()
 
+	// Create a map for faster exclusion checking
+	excludeMap := make(map[*Character]bool)
+	for _, char := range except {
+		if char != nil {
+			excludeMap[char] = true
+		}
+	}
+
 	// Collect recipients while holding the lock
 	room.mutex.RLock()
 	recipients := make([]*Character, 0, len(room.characters))
 	for _, c := range room.characters {
-		if c != nil && c != except && c.player != nil {
+		if c != nil && !excludeMap[c] && c.player != nil {
 			recipients = append(recipients, c)
 		}
 	}

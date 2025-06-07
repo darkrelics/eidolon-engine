@@ -205,6 +205,20 @@ func (g *Game) initCommands() {
 		usage:       "assess",
 	}
 
+	g.commands["advance"] = CommandInfo{
+		roundTime:   0,
+		handler:     nil,
+		description: "Advance on a target in combat",
+		usage:       "advance [target] [range]",
+	}
+
+	g.commands["retreat"] = CommandInfo{
+		roundTime:   0,
+		handler:     nil,
+		description: "Retreat from combat opponents",
+		usage:       "retreat [range]",
+	}
+
 }
 
 // buildCommandIndex builds the command index for fuzzy matching

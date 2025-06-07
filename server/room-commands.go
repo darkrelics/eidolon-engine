@@ -128,8 +128,23 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 	if verb == "face" {
 		return handleFaceCommand(cmd, r)
 	}
+	if verb == "advance" {
+		return handleAdvanceCommand(cmd, r)
+	}
+	if verb == "retreat" {
+		return handleRetreatCommand(cmd, r)
+	}
 	if verb == "assess" {
 		return handleAssessCommand(cmd)
+	}
+	if verb == "advance" {
+		return handleAdvanceCommand(cmd, r)
+	}
+	if verb == "retreat" {
+		return handleRetreatCommand(cmd, r)
+	}
+	if verb == "flee" {
+		return handleFleeCommand(cmd, r)
 	}
 
 	// Unknown command at room level
@@ -337,15 +352,7 @@ func handleFaceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	// Send messages
 	character.DisplayMessage(fmt.Sprintf("\n\rYou turn to face %s.\n\r", target.name))
 	target.DisplayMessage(fmt.Sprintf("\n\r%s turns to face you!\n\r", character.name))
-	
-	// Send message to others in the room (excluding both the character and target)
-	r.mutex.RLock()
-	for _, char := range r.characters {
-		if char != nil && char != character && char != target {
-			char.DisplayMessage(fmt.Sprintf("\n\r%s turns to face %s.\n\r", character.name, target.name))
-		}
-	}
-	r.mutex.RUnlock()
+	SendRoomMessage(r, fmt.Sprintf("\n\r%s turns to face %s.\n\r", character.name, target.name), character, target)
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
@@ -481,25 +488,6 @@ func (r *Room) initiateCombat(char1, char2 *Character, distance float64) {
 
 // removeCombatRange removes combat range between two specific characters  
 // TODO: Currently unused - placeholder for future combat system features
-func (r *Room) removeCombatRange(char1, char2 *Character) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	
-	if r.combatRanges[char1.id] != nil {
-		delete(r.combatRanges[char1.id], char2.id)
-		if len(r.combatRanges[char1.id]) == 0 {
-			delete(r.combatRanges, char1.id)
-		}
-	}
-	
-	if r.combatRanges[char2.id] != nil {
-		delete(r.combatRanges[char2.id], char1.id)
-		if len(r.combatRanges[char2.id]) == 0 {
-			delete(r.combatRanges, char2.id)
-		}
-	}
-}
-
 // removeCharacterFromCombat removes all combat ranges for a specific character
 func (r *Room) removeCharacterFromCombat(character *Character) {
 	r.mutex.Lock()
@@ -531,7 +519,6 @@ func (r *Room) getCombatRange(char1, char2 *Character) float64 {
 }
 
 // setCombatRange updates the combat range between two characters
-// TODO: Currently unused - placeholder for future combat system features
 func (r *Room) setCombatRange(char1, char2 *Character, distance float64) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -541,5 +528,347 @@ func (r *Room) setCombatRange(char1, char2 *Character, distance float64) {
 	}
 	if r.combatRanges[char2.id] != nil {
 		r.combatRanges[char2.id][char1.id] = distance
+	}
+}
+
+// handleAdvanceCommand processes the ADVANCE command
+func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check round time
+	if time.Now().Before(character.waitUntil) {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rYou are still recovering from your last action.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Parse arguments: ADVANCE [target] [range]
+	var targetName string
+	var rangeType string
+	
+	if len(cmd.Args) > 1 {
+		targetName = strings.ToLower(strings.Join(cmd.Args[1:], " "))
+		// Check if last argument is a range type
+		lastArg := strings.ToLower(cmd.Args[len(cmd.Args)-1])
+		if lastArg == "pole" || lastArg == "melee" {
+			rangeType = lastArg
+			// Reconstruct target name without range
+			if len(cmd.Args) > 2 {
+				targetName = strings.ToLower(strings.Join(cmd.Args[1:len(cmd.Args)-1], " "))
+			} else {
+				targetName = ""
+			}
+		}
+	}
+
+	// Strip articles from target name
+	if targetName != "" {
+		targetName = stripArticles(targetName)
+	}
+
+	// Determine target range based on range type
+	var targetRange float64
+	switch rangeType {
+	case "pole":
+		targetRange = 10.0
+	case "melee":
+		targetRange = 3.0
+	case "":
+		targetRange = 0.0
+	default:
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rValid range options are: melee, pole, or omit for close combat.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	character.mutex.Lock()
+	
+	// If target specified, execute face command first
+	if targetName != "" {
+		// Find target in room
+		r.mutex.RLock()
+		var target *Character
+		for _, c := range r.characters {
+			if c != nil && c != character && strings.Contains(strings.ToLower(c.name), targetName) {
+				target = c
+				break
+			}
+		}
+		r.mutex.RUnlock()
+
+		if target == nil {
+			character.mutex.Unlock()
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Message:   fmt.Sprintf("\n\rYou don't see anyone here by that name.\n\r"),
+				Timestamp: time.Now(),
+			}
+		}
+
+		// Clear any existing facing targets that are no longer in the same room
+		if character.facing != nil && character.facing.room != character.room {
+			character.facing = nil
+		}
+		character.facing = target
+		
+		// Initialize combat if needed
+		character.mutex.Unlock()
+		r.initiateCombat(character, target, 30.0)
+		character.mutex.Lock()
+		
+		// Send facing messages with advance context
+		character.DisplayMessage(fmt.Sprintf("\n\rYou advance on %s.\n\r", target.name))
+		target.DisplayMessage(fmt.Sprintf("\n\r%s advances on you!\n\r", character.name))
+		SendRoomMessage(r, fmt.Sprintf("\n\r%s advances on %s.\n\r", character.name, target.name), character, target)
+	} else {
+		// No target specified - check if already facing someone or in combat
+		if character.facing == nil {
+			// Check if character is in combat ranges
+			r.mutex.RLock()
+			var potentialTarget *Character
+			if ranges, exists := r.combatRanges[character.id]; exists && len(ranges) > 0 {
+				// Find first character facing this character
+				for targetID := range ranges {
+					for _, c := range r.characters {
+						if c != nil && c.id == targetID {
+							c.mutex.RLock()
+							if c.facing == character {
+								potentialTarget = c
+								c.mutex.RUnlock()
+								break
+							}
+							c.mutex.RUnlock()
+						}
+					}
+					if potentialTarget != nil {
+						break
+					}
+				}
+			}
+			r.mutex.RUnlock()
+			
+			if potentialTarget == nil {
+				character.mutex.Unlock()
+				return &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Message:   "\n\rThere isn't anybody to advance on.\n\r",
+					Timestamp: time.Now(),
+				}
+			}
+			
+			character.facing = potentialTarget
+		}
+	}
+
+	// Set combat movement
+	if character.facing != nil {
+		character.combatMovement = &CombatMovement{
+			mode:        "advance",
+			targetID:    character.facing.id,
+			targetRange: targetRange,
+		}
+		
+		rangeName := "close combat"
+		if rangeType == "melee" {
+			rangeName = "melee range"
+		} else if rangeType == "pole" {
+			rangeName = "pole range"
+		}
+		
+		character.mutex.Unlock()
+		
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   true,
+			Message:   fmt.Sprintf("\n\rYou begin advancing to %s.\n\r", rangeName),
+			Timestamp: time.Now(),
+		}
+	} else {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rThere isn't anybody to advance on.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+}
+
+// handleRetreatCommand processes the RETREAT command
+func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check round time
+	if time.Now().Before(character.waitUntil) {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rYou are still recovering from your last action.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Parse range argument
+	var targetRange float64 = 45.0
+	
+	if len(cmd.Args) > 1 {
+		rangeType := strings.ToLower(cmd.Args[1])
+		switch rangeType {
+		case "melee":
+			targetRange = 5.0
+		case "pole":
+			targetRange = 10.0
+		case "far":
+			targetRange = 30.0
+		default:
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Message:   "\n\rValid range options are: melee, pole, far, or omit for maximum distance.\n\r",
+				Timestamp: time.Now(),
+			}
+		}
+	}
+
+	character.mutex.Lock()
+	
+	// Check if in combat
+	inCombat := false
+	r.mutex.RLock()
+	if ranges, exists := r.combatRanges[character.id]; exists && len(ranges) > 0 {
+		inCombat = true
+	}
+	r.mutex.RUnlock()
+
+	if !inCombat {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rYou are not in combat.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Set combat movement
+	character.combatMovement = &CombatMovement{
+		mode:        "retreat",
+		targetRange: targetRange,
+	}
+	
+	character.mutex.Unlock()
+	
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   "\n\rYou begin retreating.\n\r",
+		Timestamp: time.Now(),
+	}
+}
+
+// handleFleeCommand processes the FLEE command
+func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// FLEE has no round time requirement
+
+	// Parse exit argument
+	if len(cmd.Args) < 2 {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rWhich direction do you want to flee?\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	exitDirection := strings.ToLower(cmd.Args[1])
+
+	// Verify exit exists
+	r.mutex.RLock()
+	var targetExit *Exit
+	for _, exit := range r.exits {
+		if exit != nil && strings.EqualFold(exit.direction, exitDirection) {
+			targetExit = exit
+			break
+		}
+	}
+	r.mutex.RUnlock()
+
+	if targetExit == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rThere is no exit in that direction.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	character.mutex.Lock()
+	
+	// Clear facing
+	if character.facing != nil {
+		oldFacing := character.facing
+		character.facing = nil
+		
+		// Clear reciprocal facing
+		oldFacing.mutex.Lock()
+		if oldFacing.facing == character {
+			oldFacing.facing = nil
+		}
+		oldFacing.mutex.Unlock()
+	}
+	
+	// Set flee state
+	character.fleeTarget = &FleeState{
+		exitDirection: exitDirection,
+		startTime:     time.Now(),
+	}
+	
+	// Clear any combat movement
+	character.combatMovement = nil
+	
+	character.mutex.Unlock()
+	
+	// Send messages
+	character.DisplayMessage(fmt.Sprintf("\n\rYou attempt to flee %s!\n\r", exitDirection))
+	SendRoomMessage(r, fmt.Sprintf("\n\r%s attempts to flee!\n\r", character.name), character)
+	
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Timestamp: time.Now(),
 	}
 }

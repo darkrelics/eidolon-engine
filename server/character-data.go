@@ -27,6 +27,13 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
+// CombatMovement tracks character's movement strategy in combat
+type CombatMovement struct {
+	mode         string     // "advance", "retreat", or ""
+	targetID     uuid.UUID  // Target for advance (empty for retreat)
+	targetRange  float64    // Desired range (0, 3, 10 for advance; 3-5, 10-15, 20-30 for retreat)
+}
+
 type Character struct {
 	game             *Game
 	id               uuid.UUID
@@ -42,7 +49,8 @@ type Character struct {
 	rightHand        *Item // Item held in right hand
 	mutex            sync.RWMutex
 	facing           *Character
-	advancing        bool
+	combatMovement   *CombatMovement       // Tracks advance/retreat settings
+	fleeTarget       *FleeState            // Tracks flee attempt if active
 	lastEdited       time.Time
 	lastSaved        time.Time
 	waitUntil        time.Time             // Time when the character can execute the next command
@@ -58,6 +66,12 @@ type Character struct {
 	end              chan bool             // Channel for shutdown signaling
 	prompt           string                // Character prompt
 	stopped          bool                  // Flag to ensure Stop is only executed once
+}
+
+// FleeState tracks an active flee attempt
+type FleeState struct {
+	exitDirection string    // Direction to flee through
+	startTime     time.Time // When flee started (for 30 second timeout)
 }
 
 // CharacterData for unmarshalling character.
@@ -93,7 +107,8 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		rightHand:        nil,
 		mutex:            sync.RWMutex{},
 		facing:           nil,
-		advancing:        false,
+		combatMovement:   nil,
+		fleeTarget:       nil,
 		lastEdited:       time.Now(),
 		charState:        "standing",
 		hidden:           false,
