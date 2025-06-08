@@ -241,7 +241,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 
 	// Increment the idle counter
 	r.idleCounter++
-	
+
 	// Store values for cleanup check
 	shouldCleanup := r.idleCounter%600 == 0 && r.idleCounter > 0
 	roomID := r.roomID
@@ -256,7 +256,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 		// Clean up marked items in the room
 		r.cleanupItems(game)
 	}
-	
+
 	r.mutex.Lock()
 
 	// Check if room unload threshold has been reached (3600 ticks = 60 minutes @ 1 second per tick)
@@ -277,10 +277,10 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			// Clean up ALL items in the room from game.items map
 			var itemsToDeleteFromDB []string
 			itemCount := len(r.items)
-			
+
 			// Must unlock before calling game methods to avoid lock hierarchy issues
 			r.mutex.Unlock()
-			
+
 			// Delete items from game map and collect DB items
 			game.mutex.Lock()
 			r.mutex.Lock()
@@ -298,7 +298,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			r.items = make(map[uuid.UUID]*Item)
 			r.mutex.Unlock()
 			game.mutex.Unlock()
-			
+
 			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", itemCount)
 
 			// Delete items from database if needed (minimize DB access)
@@ -679,7 +679,7 @@ func (r *Room) processFlee() {
 
 		// Calculate movement speed (same as retreat)
 		moveSpeed := agility * 0.5 // Units per second
-		
+
 		// Release character lock while checking ranges
 		char.mutex.Unlock()
 

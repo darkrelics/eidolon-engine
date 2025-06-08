@@ -362,7 +362,7 @@ func (c *Character) Stop() {
 	// Clean up character inventory and hand items from game.items map
 	c.game.mutex.Lock()
 	c.mutex.Lock()
-	
+
 	itemsDeleted := 0
 	for _, item := range c.inventory {
 		if item != nil {
@@ -379,7 +379,7 @@ func (c *Character) Stop() {
 		delete(c.game.items, c.rightHand.id)
 		itemsDeleted++
 	}
-	
+
 	c.mutex.Unlock()
 	c.game.mutex.Unlock()
 

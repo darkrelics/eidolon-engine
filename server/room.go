@@ -255,7 +255,7 @@ func (r *Room) GetDescription(character *Character) string {
 			charCount++
 		}
 	}
-	
+
 	if charCount == 0 {
 		roomInfo.WriteString(msgAlone)
 	} else {

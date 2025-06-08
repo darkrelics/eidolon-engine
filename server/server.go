@@ -230,7 +230,7 @@ func (s *Server) stopAllPlayers() {
 		}
 	}
 	s.mutex.RUnlock()
-	
+
 	// Clear the maps since we're shutting down
 	s.mutex.Lock()
 	s.players = make(map[uint64]*Player)

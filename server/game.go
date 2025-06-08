@@ -287,7 +287,7 @@ func (g *Game) processGameCommands() {
 	// Process commands from rooms and characters with single read lock
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
-	
+
 	// Room command collection prevents blocking
 	for _, room := range g.rooms {
 		if room != nil && room.running {
@@ -433,7 +433,7 @@ func (g *Game) saveAllCharacters() {
 	g.mutex.RLock()
 	characterCount := len(g.characters)
 	g.mutex.RUnlock()
-	
+
 	Logger.Info("Saving all characters during shutdown", "characterCount", characterCount)
 
 	savedCount := 0
