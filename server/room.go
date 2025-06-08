@@ -40,8 +40,10 @@ type Room struct {
 	items          map[uuid.UUID]*Item
 	persistent     bool                                // Flag indicating if room should remain loaded when empty
 	scriptID       string                              // ID of the script that defines room-specific behaviors
-	combatRanges   map[uuid.UUID]map[uuid.UUID]float64 // Combat ranges between characters (outer: attacker, inner: target -> range)
-	mutex          sync.RWMutex
+	combatRanges    map[uuid.UUID]map[uuid.UUID]float64 // Combat ranges between characters (outer: attacker, inner: target -> range)
+	charactersToMove map[uuid.UUID]*Character           // Characters with active combat movement
+	charactersToFlee map[uuid.UUID]*Character           // Characters with active flee state
+	mutex           sync.RWMutex
 	lastEdited     time.Time
 	lastSaved      time.Time
 	lastActive     time.Time             // Timestamp of last activity in the room
@@ -89,8 +91,10 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 		items:          make(map[uuid.UUID]*Item),
 		persistent:     persistent,
 		scriptID:       scriptID,
-		combatRanges:   make(map[uuid.UUID]map[uuid.UUID]float64),
-		mutex:          sync.RWMutex{},
+		combatRanges:     make(map[uuid.UUID]map[uuid.UUID]float64),
+		charactersToMove: make(map[uuid.UUID]*Character),
+		charactersToFlee: make(map[uuid.UUID]*Character),
+		mutex:            sync.RWMutex{},
 		lastEdited:     now,
 		lastSaved:      now,
 		lastActive:     now,
@@ -269,4 +273,44 @@ func (r *Room) GetDescription(character *Character) string {
 	}
 
 	return roomInfo.String()
+}
+
+// AddCharacterToMove adds a character to the charactersToMove list
+func (r *Room) AddCharacterToMove(char *Character) {
+	if char == nil {
+		return
+	}
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.charactersToMove[char.id] = char
+}
+
+// RemoveCharacterToMove removes a character from the charactersToMove list
+func (r *Room) RemoveCharacterToMove(char *Character) {
+	if char == nil {
+		return
+	}
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	delete(r.charactersToMove, char.id)
+}
+
+// AddCharacterToFlee adds a character to the charactersToFlee list
+func (r *Room) AddCharacterToFlee(char *Character) {
+	if char == nil {
+		return
+	}
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.charactersToFlee[char.id] = char
+}
+
+// RemoveCharacterToFlee removes a character from the charactersToFlee list
+func (r *Room) RemoveCharacterToFlee(char *Character) {
+	if char == nil {
+		return
+	}
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	delete(r.charactersToFlee, char.id)
 }

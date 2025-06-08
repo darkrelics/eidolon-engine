@@ -688,6 +688,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 			targetID:    character.facing.id,
 			targetRange: targetRange,
 		}
+		r.AddCharacterToMove(character)
 
 		rangeName := "close combat"
 		if rangeType == "melee" {
@@ -784,6 +785,7 @@ func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		mode:        "retreat",
 		targetRange: targetRange,
 	}
+	r.AddCharacterToMove(character)
 
 	character.mutex.Unlock()
 
@@ -856,9 +858,13 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		startTime:     time.Now(),
 		hasDirection:  exitDirection != "",
 	}
+	r.AddCharacterToFlee(character)
 
 	// Clear any combat movement
-	character.combatMovement = nil
+	if character.combatMovement != nil {
+		r.RemoveCharacterToMove(character)
+		character.combatMovement = nil
+	}
 
 	character.mutex.Unlock()
 

@@ -204,6 +204,8 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 
 	// Remove from old room
 	delete(oldRoom.characters, character.id)
+	delete(oldRoom.charactersToMove, character.id)
+	delete(oldRoom.charactersToFlee, character.id)
 	oldRoom.lastActive = time.Now()
 
 	// Add to new room

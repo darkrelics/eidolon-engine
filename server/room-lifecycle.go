@@ -489,14 +489,10 @@ func (g *Game) LoadRoom(roomID int64) (*Room, error) {
 // processCombatMovements handles all combat movement for characters in the room
 func (r *Room) processCombatMovements() {
 	r.mutex.RLock()
-	charactersToMove := make([]*Character, 0)
-	for _, char := range r.characters {
+	charactersToMove := make([]*Character, 0, len(r.charactersToMove))
+	for _, char := range r.charactersToMove {
 		if char != nil {
-			char.mutex.RLock()
-			if char.combatMovement != nil {
-				charactersToMove = append(charactersToMove, char)
-			}
-			char.mutex.RUnlock()
+			charactersToMove = append(charactersToMove, char)
 		}
 	}
 	r.mutex.RUnlock()
@@ -537,6 +533,7 @@ func (r *Room) processCombatMovements() {
 
 			if target == nil || target.room != r {
 				// Target no longer in room
+				r.RemoveCharacterToMove(char)
 				char.combatMovement = nil
 				char.facing = nil
 				char.mutex.Unlock()
@@ -558,6 +555,7 @@ func (r *Room) processCombatMovements() {
 
 				// Check if reached target range
 				if newRange <= movement.targetRange {
+					r.RemoveCharacterToMove(char)
 					char.combatMovement = nil
 					rangeName := "close combat with"
 					if movement.targetRange == combatRangeMelee {
@@ -573,6 +571,7 @@ func (r *Room) processCombatMovements() {
 				}
 			} else {
 				// Already at or closer than target range
+				r.RemoveCharacterToMove(char)
 				char.combatMovement = nil
 			}
 
@@ -583,6 +582,7 @@ func (r *Room) processCombatMovements() {
 			r.mutex.RUnlock()
 
 			if ranges == nil || len(ranges) == 0 {
+				r.RemoveCharacterToMove(char)
 				char.combatMovement = nil
 				char.mutex.Unlock()
 				continue
@@ -616,6 +616,7 @@ func (r *Room) processCombatMovements() {
 			}
 
 			if allAtRange {
+				r.RemoveCharacterToMove(char)
 				char.combatMovement = nil
 				char.mutex.Unlock()
 				char.DisplayMessage("\n\rYou reach your desired distance.\n\r")
@@ -630,14 +631,10 @@ func (r *Room) processCombatMovements() {
 // processFlee handles flee attempts for characters
 func (r *Room) processFlee() {
 	r.mutex.RLock()
-	charactersToFlee := make([]*Character, 0)
-	for _, char := range r.characters {
+	charactersToFlee := make([]*Character, 0, len(r.charactersToFlee))
+	for _, char := range r.charactersToFlee {
 		if char != nil {
-			char.mutex.RLock()
-			if char.fleeTarget != nil {
-				charactersToFlee = append(charactersToFlee, char)
-			}
-			char.mutex.RUnlock()
+			charactersToFlee = append(charactersToFlee, char)
 		}
 	}
 	r.mutex.RUnlock()
@@ -740,6 +737,7 @@ func (r *Room) processFlee() {
 // handleFleeTimeout handles when a flee attempt times out
 func (r *Room) handleFleeTimeout(char *Character, fleeState *FleeState) {
 	char.mutex.Lock()
+	r.RemoveCharacterToFlee(char)
 	char.fleeTarget = nil
 	exitDirection := fleeState.exitDirection
 	char.mutex.Unlock()
@@ -779,6 +777,7 @@ func (r *Room) handleFleeTimeout(char *Character, fleeState *FleeState) {
 // completeFlee completes a successful flee attempt
 func (r *Room) completeFlee(char *Character, fleeState *FleeState) {
 	char.mutex.Lock()
+	r.RemoveCharacterToFlee(char)
 	char.fleeTarget = nil
 	exitDirection := fleeState.exitDirection
 	char.mutex.Unlock()

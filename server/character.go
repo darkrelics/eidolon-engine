@@ -344,6 +344,8 @@ func (c *Character) Stop() {
 
 		c.room.mutex.Lock()
 		delete(c.room.characters, c.id)
+		delete(c.room.charactersToMove, c.id)
+		delete(c.room.charactersToFlee, c.id)
 		c.room.lastActive = time.Now() // Update the timestamp when character leaves
 		c.room.mutex.Unlock()
 	}
