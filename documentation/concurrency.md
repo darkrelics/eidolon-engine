@@ -3,6 +3,7 @@
 This document outlines the concurrency patterns and lock ordering hierarchy used in the Eidolon Engine to prevent deadlocks and ensure thread-safe operations.
 
 The engine is architecturally divided into two **independent domains**:
+
 1.  **System/Session Domain**: Manages network connections, I/O, and player sessions.
 2.  **Game World Domain**: Manages the internal state of the game simulation.
 
@@ -10,7 +11,7 @@ These domains operate independently and have their own locking hierarchies.
 
 ## Lock Ordering Hierarchy
 
-To prevent deadlocks, all code must follow two primary rules: one for locking *within* a domain, and one for operations that need to *interact between* domains.
+To prevent deadlocks, all code must follow two primary rules: one for locking _within_ a domain, and one for operations that need to _interact between_ domains.
 
 ### The Cardinal Rule: The Two Domains are Separate
 
@@ -36,47 +37,58 @@ Within this domain, locks must be acquired in this order (from highest to lowest
 
 ### Golden Rules
 
--   **Never hold locks from both the System and Game World domains simultaneously.**
--   **Within a single domain, always acquire locks from high to low** in the hierarchy.
--   **Use explicit unlocks for high-level objects** (`Server`, `Game`) or long-running functions to improve system responsiveness.
--   **Use `defer` for simple, short functions** where lock scope matches function scope for safety.
--   **Minimize lock hold time:** acquire late, release early.
--   **Prefer `RLock()`** for read-only operations.
--   **Document complex locking** with inline comments.
+- **Never hold locks from both the System and Game World domains simultaneously.**
+- **Within a single domain, always acquire locks from high to low** in the hierarchy.
+- **Use explicit unlocks for high-level objects** (`Server`, `Game`) or long-running functions to improve system responsiveness.
+- **Use `defer` for simple, short functions** where lock scope matches function scope for safety.
+- **Minimize lock hold time:** acquire late, release early.
+- **Prefer `RLock()`** for read-only operations.
+- **Document complex locking** with inline comments.
 
 ## Mutex Usage by Component
 
 ### Server
+
 ```go
 type Server struct {
     mutex sync.RWMutex  // Protects server state, player connections
 }
 ```
+
 ### Player
+
 ```go
 type Player struct {
     mutex sync.RWMutex  // Protects connection state, channels
 }
 ```
+
 ### Game
+
 ```go
 type Game struct {
     mutex sync.RWMutex  // Protects rooms, characters, prototypes
 }
 ```
+
 ### Room
+
 ```go
 type Room struct {
     mutex sync.RWMutex  // Protects room state, exits, inventory
 }
 ```
+
 ### Character
+
 ```go
 type Character struct {
     mutex sync.RWMutex  // Protects character attributes, inventory
 }
 ```
+
 ### Item
+
 ```go
 type Item struct {
     mutex sync.RWMutex  // Protects item properties
@@ -313,6 +325,7 @@ func TestConcurrentMovement(t *testing.T) {
 This is the primary violation of the architecture. It creates an implicit, dangerous dependency between the two independent domains and is the most likely cause of a major deadlock.
 
 **Wrong:**
+
 ```go
 func adminAnnounce(server *Server, game *Game, message string) {
     server.mutex.Lock() // System lock held
@@ -326,6 +339,7 @@ func adminAnnounce(server *Server, game *Game, message string) {
 ```
 
 **Correct:**
+
 ```go
 func adminAnnounce(server *Server, game *Game, message string) {
     // 1. Get player list from Server.
@@ -345,6 +359,7 @@ func adminAnnounce(server *Server, game *Game, message string) {
 This remains a critical pitfall. I/O is slow and unpredictable. Holding any lock during I/O can cause cascading performance issues.
 
 **Wrong:**
+
 ```go
 character.mutex.Lock()
 database.Save(character) // BAD: I/O while holding a Game World lock.
@@ -355,7 +370,7 @@ character.mutex.Unlock()
 
 ### 3. Nested Function Calls Violating Hierarchy
 
-Ensure that a function holding a lock only calls other functions that acquire locks *lower* in the *same domain's hierarchy*, or functions that acquire no locks at all.
+Ensure that a function holding a lock only calls other functions that acquire locks _lower_ in the _same domain's hierarchy_, or functions that acquire no locks at all.
 
 ```go
 // If function A locks a Room and calls function B,
@@ -384,6 +399,7 @@ var (
 ### 2. Debugging Deadlocks
 
 If a deadlock occurs, get a full goroutine stack dump to analyze it.
+
 1.  Set the environment variable `GOTRACEBACK=all`.
 2.  Send a `SIGQUIT` signal to your running process (`kill -QUIT <pid>`).
 3.  Examine the stack traces for circular lock dependencies.
@@ -400,7 +416,7 @@ For certain subsystems, an actor-based model (where each component is a goroutin
 
 ## References
 
--   [Go Memory Model](https://golang.org/ref/mem)
--   [Effective Go - Concurrency](https://golang.org/doc/effective_go#concurrency)
--   [Go Concurrency Patterns](https://go.dev/blog/pipelines)
--   [Deadlock Prevention Algorithms](https://en.wikipedia.org/wiki/Deadlock_prevention_algorithms)
+- [Go Memory Model](https://golang.org/ref/mem)
+- [Effective Go - Concurrency](https://golang.org/doc/effective_go#concurrency)
+- [Go Concurrency Patterns](https://go.dev/blog/pipelines)
+- [Deadlock Prevention Algorithms](https://en.wikipedia.org/wiki/Deadlock_prevention_algorithms)
