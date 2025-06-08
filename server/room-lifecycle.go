@@ -507,19 +507,28 @@ func (g *Game) LoadRoom(roomID int64) (*Room, error) {
 
 // processCombatMovements handles all combat movement for characters in the room
 func (r *Room) processCombatMovements() {
-	// Process each character's movement directly from the map
+	// Create a snapshot of characters to move to avoid race conditions
+	r.mutex.Lock()
+	charactersToProcess := make(map[uuid.UUID]*Character)
 	for charID, char := range r.charactersToMove {
+		charactersToProcess[charID] = char
+	}
+	r.mutex.Unlock()
+
+	// Process each character's movement from the snapshot
+	for _, char := range charactersToProcess {
 		if char == nil {
-			// Clean up nil entry
-			delete(r.charactersToMove, charID)
+			// Clean up nil entry - use original charID which is uuid.UUID
 			continue
 		}
 		char.mutex.Lock()
 		movement := char.combatMovement
 		if movement == nil {
 			// Character no longer has combat movement, remove from list
-			delete(r.charactersToMove, charID)
 			char.mutex.Unlock()
+			r.mutex.Lock()
+			delete(r.charactersToMove, char.id)
+			r.mutex.Unlock()
 			continue
 		}
 
@@ -647,19 +656,28 @@ func (r *Room) processCombatMovements() {
 
 // processFlee handles flee attempts for characters
 func (r *Room) processFlee() {
-	// Process each character's flee attempt directly from the map
+	// Create a snapshot of characters to flee to avoid race conditions
+	r.mutex.Lock()
+	charactersToProcess := make(map[uuid.UUID]*Character)
 	for charID, char := range r.charactersToFlee {
+		charactersToProcess[charID] = char
+	}
+	r.mutex.Unlock()
+
+	// Process each character's flee attempt from the snapshot
+	for _, char := range charactersToProcess {
 		if char == nil {
-			// Clean up nil entry
-			delete(r.charactersToFlee, charID)
+			// Clean up nil entry - skip since we're iterating over a snapshot
 			continue
 		}
 		char.mutex.Lock()
 		fleeState := char.fleeTarget
 		if fleeState == nil {
 			// Character no longer has flee state, remove from list
-			delete(r.charactersToFlee, charID)
 			char.mutex.Unlock()
+			r.mutex.Lock()
+			delete(r.charactersToFlee, char.id)
+			r.mutex.Unlock()
 			continue
 		}
 
