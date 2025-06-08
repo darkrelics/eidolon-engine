@@ -31,34 +31,34 @@ import (
 
 // Room represents the in-memory structure for a room
 type Room struct {
-	roomID         int64
-	area           string
-	title          string
-	description    string
-	exits          map[uuid.UUID]*Exit
-	characters     map[uuid.UUID]*Character
-	items          map[uuid.UUID]*Item
-	persistent     bool                                // Flag indicating if room should remain loaded when empty
-	scriptID       string                              // ID of the script that defines room-specific behaviors
-	combatRanges    map[uuid.UUID]map[uuid.UUID]float64 // Combat ranges between characters (outer: attacker, inner: target -> range)
-	charactersToMove map[uuid.UUID]*Character           // Characters with active combat movement
-	charactersToFlee map[uuid.UUID]*Character           // Characters with active flee state
-	mutex           sync.RWMutex
-	lastEdited     time.Time
-	lastSaved      time.Time
-	lastActive     time.Time             // Timestamp of last activity in the room
-	idleCounter    int                   // Counter for tracking idle time (increments per game tick)
-	scriptActive   bool                  // Flag indicating if room scripts are currently active
-	ctx            context.Context       // Context for room goroutine lifecycle
-	cancel         context.CancelFunc    // Cancel function for room context
-	running        bool                  // Flag indicating if room goroutine is running
-	commandIn      chan *CommandRequest  // Channel for commands sent to the room
-	commandOut     chan *CommandResponse // Channel for responses from the room
-	gameCommandOut chan *CommandRequest  // Channel for commands the room escalates to the game
-	gameCommandIn  chan *CommandResponse // Channel for responses from the game to the room
-	done           chan struct{}         // Channel signaled when room goroutine completes
-	ready          chan struct{}         // Channel signaled when room is ready to accept characters
-	isReady        bool                  // Flag indicating if room is ready
+	roomID           int64
+	area             string
+	title            string
+	description      string
+	exits            map[uuid.UUID]*Exit
+	characters       map[uuid.UUID]*Character
+	items            map[uuid.UUID]*Item
+	persistent       bool                                // Flag indicating if room should remain loaded when empty
+	scriptID         string                              // ID of the script that defines room-specific behaviors
+	combatRanges     map[uuid.UUID]map[uuid.UUID]float64 // Combat ranges between characters (outer: attacker, inner: target -> range)
+	charactersToMove map[uuid.UUID]*Character            // Characters with active combat movement
+	charactersToFlee map[uuid.UUID]*Character            // Characters with active flee state
+	mutex            sync.RWMutex
+	lastEdited       time.Time
+	lastSaved        time.Time
+	lastActive       time.Time             // Timestamp of last activity in the room
+	idleCounter      int                   // Counter for tracking idle time (increments per game tick)
+	scriptActive     bool                  // Flag indicating if room scripts are currently active
+	ctx              context.Context       // Context for room goroutine lifecycle
+	cancel           context.CancelFunc    // Cancel function for room context
+	running          bool                  // Flag indicating if room goroutine is running
+	commandIn        chan *CommandRequest  // Channel for commands sent to the room
+	commandOut       chan *CommandResponse // Channel for responses from the room
+	gameCommandOut   chan *CommandRequest  // Channel for commands the room escalates to the game
+	gameCommandIn    chan *CommandResponse // Channel for responses from the game to the room
+	done             chan struct{}         // Channel signaled when room goroutine completes
+	ready            chan struct{}         // Channel signaled when room is ready to accept characters
+	isReady          bool                  // Flag indicating if room is ready
 }
 
 // RoomData represents the structure for storing room data in DynamoDB
@@ -82,34 +82,34 @@ func NewRoom(ctx context.Context, roomID int64, area, title, description string,
 	roomCtx, cancel := context.WithCancel(ctx)
 
 	return &Room{
-		roomID:         roomID,
-		area:           area,
-		title:          title,
-		description:    description,
-		exits:          make(map[uuid.UUID]*Exit),
-		characters:     make(map[uuid.UUID]*Character),
-		items:          make(map[uuid.UUID]*Item),
-		persistent:     persistent,
-		scriptID:       scriptID,
+		roomID:           roomID,
+		area:             area,
+		title:            title,
+		description:      description,
+		exits:            make(map[uuid.UUID]*Exit),
+		characters:       make(map[uuid.UUID]*Character),
+		items:            make(map[uuid.UUID]*Item),
+		persistent:       persistent,
+		scriptID:         scriptID,
 		combatRanges:     make(map[uuid.UUID]map[uuid.UUID]float64),
 		charactersToMove: make(map[uuid.UUID]*Character),
 		charactersToFlee: make(map[uuid.UUID]*Character),
 		mutex:            sync.RWMutex{},
-		lastEdited:     now,
-		lastSaved:      now,
-		lastActive:     now,
-		idleCounter:    0,
-		scriptActive:   scriptID != "", // Initialize script as active if a script is assigned
-		ctx:            roomCtx,
-		cancel:         cancel,
-		running:        false,
-		isReady:        false,
-		commandIn:      make(chan *CommandRequest, 50),  // Buffer for incoming commands - sized for burst handling
-		commandOut:     make(chan *CommandResponse, 50), // Buffer for outgoing responses
-		gameCommandOut: make(chan *CommandRequest, 10),  // Buffer for commands to game
-		gameCommandIn:  make(chan *CommandResponse, 10), // Buffer for responses from game
-		done:           make(chan struct{}),             // Channel to signal goroutine completion
-		ready:          make(chan struct{}),             // Channel to signal room is ready
+		lastEdited:       now,
+		lastSaved:        now,
+		lastActive:       now,
+		idleCounter:      0,
+		scriptActive:     scriptID != "", // Initialize script as active if a script is assigned
+		ctx:              roomCtx,
+		cancel:           cancel,
+		running:          false,
+		isReady:          false,
+		commandIn:        make(chan *CommandRequest, 50),  // Buffer for incoming commands - sized for burst handling
+		commandOut:       make(chan *CommandResponse, 50), // Buffer for outgoing responses
+		gameCommandOut:   make(chan *CommandRequest, 10),  // Buffer for commands to game
+		gameCommandIn:    make(chan *CommandResponse, 10), // Buffer for responses from game
+		done:             make(chan struct{}),             // Channel to signal goroutine completion
+		ready:            make(chan struct{}),             // Channel to signal room is ready
 	}
 }
 
