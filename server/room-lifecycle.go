@@ -679,6 +679,9 @@ func (r *Room) processFlee() {
 
 		// Calculate movement speed (same as retreat)
 		moveSpeed := agility * 0.5 // Units per second
+		
+		// Release character lock while checking ranges
+		char.mutex.Unlock()
 
 		// Find closest adversary
 		minRange := float64(1000)
@@ -705,17 +708,20 @@ func (r *Room) processFlee() {
 
 		if !hasAdversary {
 			// No adversaries, complete flee immediately
-			char.mutex.Unlock()
 			r.completeFlee(char, fleeState)
 			continue
 		}
 
-		// Move away from all adversaries
+		// Move away from all adversaries and recalculate minimum range
 		r.mutex.Lock()
+		minRange = float64(1000)
 		if ranges, exists := r.combatRanges[char.id]; exists {
 			for targetID, currentRange := range ranges {
 				newRange := currentRange + moveSpeed*0.1 // 0.1 second tick
 				ranges[targetID] = newRange
+				if newRange < minRange {
+					minRange = newRange
+				}
 			}
 		}
 		// Also update ranges where character is the target
@@ -724,6 +730,9 @@ func (r *Room) processFlee() {
 				if currentRange, exists := targets[char.id]; exists {
 					newRange := currentRange + moveSpeed*0.1
 					targets[char.id] = newRange
+					if newRange < minRange {
+						minRange = newRange
+					}
 				}
 			}
 		}
@@ -733,20 +742,16 @@ func (r *Room) processFlee() {
 		if fleeState.hasDirection {
 			// With direction: flee at 20+ range
 			if minRange >= 20 {
-				char.mutex.Unlock()
 				r.completeFlee(char, fleeState)
 				continue
 			}
 		} else {
 			// Without direction: flee at 45+ range
 			if minRange >= 45 {
-				char.mutex.Unlock()
 				r.completeFlee(char, fleeState)
 				continue
 			}
 		}
-
-		char.mutex.Unlock()
 	}
 }
 

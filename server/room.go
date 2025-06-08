@@ -217,10 +217,13 @@ func (r *Room) GetDescription(character *Character) string {
 	roomInfo.WriteString(r.description)
 	roomInfo.WriteString("\n\r")
 
-	// Exits - collect while under lock
-	exits := make([]string, 0, len(r.exits))
+	// Exits - we need to collect for sorting
+	var exits []string
 	for _, exit := range r.exits {
 		if exit != nil && exit.visible {
+			if exits == nil {
+				exits = make([]string, 0, len(r.exits))
+			}
 			// Include exit description if available
 			if exit.description != "" {
 				exits = append(exits, fmt.Sprintf("%s (%s)", exit.direction, exit.description))
@@ -239,36 +242,37 @@ func (r *Room) GetDescription(character *Character) string {
 		roomInfo.WriteString("\n\r")
 	}
 
-	// Characters - collect while under lock, only visible ones
-	chars := make([]string, 0, len(r.characters))
+	// Characters - write directly without collecting
+	charCount := 0
 	for _, c := range r.characters {
 		if c != nil && c != character && c.IsVisibleTo(character) {
-			chars = append(chars, c.name)
+			if charCount == 0 {
+				roomInfo.WriteString(msgAlsoHere)
+			} else {
+				roomInfo.WriteString(", ")
+			}
+			roomInfo.WriteString(c.name)
+			charCount++
 		}
 	}
-
-	if len(chars) == 0 {
+	
+	if charCount == 0 {
 		roomInfo.WriteString(msgAlone)
 	} else {
-		roomInfo.WriteString(msgAlsoHere)
-		roomInfo.WriteString(strings.Join(chars, ", "))
 		roomInfo.WriteString("\n\r")
 	}
 
-	// Items - collect while under lock
-	items := make([]string, 0, len(r.items))
+	// Items - write directly without collecting
+	itemCount := 0
 	for _, item := range r.items {
 		if item != nil && item.canPickUp {
-			items = append(items, item.name)
-		}
-	}
-
-	if len(items) > 0 {
-		roomInfo.WriteString(msgItems)
-		for _, item := range items {
+			if itemCount == 0 {
+				roomInfo.WriteString(msgItems)
+			}
 			roomInfo.WriteString("- ")
-			roomInfo.WriteString(item)
+			roomInfo.WriteString(item.name)
 			roomInfo.WriteString("\n\r")
+			itemCount++
 		}
 	}
 

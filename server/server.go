@@ -212,19 +212,30 @@ func (s *Server) shutdown() error {
 }
 
 func (s *Server) stopAllPlayers() {
-	s.mutex.RLock()
-	playersCopy := make([]*Player, 0, len(s.players))
+	// During shutdown, we need to stop players but avoid the mutex deadlock
+	// First, nil out the server reference to prevent Stop() from trying to clean up
+	s.mutex.Lock()
 	for _, player := range s.players {
-		playersCopy = append(playersCopy, player)
+		if player != nil {
+			player.server = nil
+		}
 	}
-	s.mutex.RUnlock()
+	s.mutex.Unlock()
 
-	// Stop each player outside the main lock to avoid deadlocks
-	for _, player := range playersCopy {
+	// Now stop each player - they won't try to acquire server mutex
+	s.mutex.RLock()
+	for _, player := range s.players {
 		if player != nil {
 			player.Stop()
 		}
 	}
+	s.mutex.RUnlock()
+	
+	// Clear the maps since we're shutting down
+	s.mutex.Lock()
+	s.players = make(map[uint64]*Player)
+	s.playersByUUID = make(map[uuid.UUID]*Player)
+	s.mutex.Unlock()
 }
 
 func (s *Server) cleanupStaleSessions() {
@@ -346,21 +357,17 @@ func (s *Server) GetPlayer(uuid uuid.UUID) *Player {
 // BroadcastMessage sends a message to all connected players
 func (s *Server) BroadcastMessage(message string) {
 	s.mutex.RLock()
-	players := make([]*Player, 0, len(s.players))
+	defer s.mutex.RUnlock()
+
+	// Send messages directly while holding read lock - safe because sends are non-blocking
 	for _, player := range s.players {
 		if player != nil {
-			players = append(players, player)
-		}
-	}
-	s.mutex.RUnlock()
-
-	// Send messages outside the lock to avoid deadlocks
-	for _, player := range players {
-		select {
-		case player.commandOut <- message:
-			// Message sent successfully
-		default:
-			Logger.Warn("Failed to send broadcast message to player", "playerID", player.id.String())
+			select {
+			case player.commandOut <- message:
+				// Message sent successfully
+			default:
+				Logger.Warn("Failed to send broadcast message to player", "playerID", player.id.String())
+			}
 		}
 	}
 }
