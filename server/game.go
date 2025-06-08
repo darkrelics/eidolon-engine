@@ -426,34 +426,31 @@ func (g *Game) ValidateCharacterName(name string) error {
 }
 
 func (g *Game) saveAllCharacters() {
-	// Collect characters while holding the lock
-	g.mutex.RLock()
-	characters := make([]*Character, 0, len(g.characters))
-	for _, character := range g.characters {
-		if character != nil {
-			characters = append(characters, character)
-		}
-	}
-	g.mutex.RUnlock()
-
-	Logger.Info("Saving all characters during shutdown", "characterCount", len(characters))
-
-	// Save characters without holding the lock
 	// Use a separate context with timeout to ensure saves don't hang indefinitely
 	saveCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	g.mutex.RLock()
+	characterCount := len(g.characters)
+	g.mutex.RUnlock()
+	
+	Logger.Info("Saving all characters during shutdown", "characterCount", characterCount)
+
 	savedCount := 0
-	for _, character := range characters {
-		// Override character's game context with our save context to ensure DB operations succeed
-		if err := character.SaveWithContext(saveCtx); err != nil {
-			Logger.Error("Error saving character during shutdown", "characterName", character.name, "error", err)
-		} else {
-			savedCount++
+	g.mutex.RLock()
+	for _, character := range g.characters {
+		if character != nil {
+			// Override character's game context with our save context to ensure DB operations succeed
+			if err := character.SaveWithContext(saveCtx); err != nil {
+				Logger.Error("Error saving character during shutdown", "characterName", character.name, "error", err)
+			} else {
+				savedCount++
+			}
 		}
 	}
+	g.mutex.RUnlock()
 
-	Logger.Info("Completed saving characters during shutdown", "savedCount", savedCount, "totalCount", len(characters))
+	Logger.Info("Completed saving characters during shutdown", "savedCount", savedCount, "totalCount", characterCount)
 }
 
 func (g *Game) logoutAllCharacters() {

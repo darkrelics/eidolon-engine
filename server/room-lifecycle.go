@@ -241,14 +241,23 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 
 	// Increment the idle counter
 	r.idleCounter++
+	
+	// Store values for cleanup check
+	shouldCleanup := r.idleCounter%600 == 0 && r.idleCounter > 0
+	roomID := r.roomID
+	title := r.title
+	idleMinutes := r.idleCounter / 60
+	r.mutex.Unlock()
 
 	// Check for item cleanup every 10 minutes (600 ticks = 10 minutes @ 1 second per tick)
-	if r.idleCounter%600 == 0 && r.idleCounter > 0 {
-		Logger.Debug("Room item cleanup interval reached", "roomID", r.roomID, "title", r.title, "idleMinutes", r.idleCounter/60)
+	if shouldCleanup {
+		Logger.Debug("Room item cleanup interval reached", "roomID", roomID, "title", title, "idleMinutes", idleMinutes)
 
 		// Clean up marked items in the room
 		r.cleanupItems(game)
 	}
+	
+	r.mutex.Lock()
 
 	// Check if room unload threshold has been reached (3600 ticks = 60 minutes @ 1 second per tick)
 	if r.idleCounter >= 3600 {
@@ -266,25 +275,35 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			Logger.Info("Unloading non-persistent idle room", "roomID", r.roomID)
 
 			// Clean up ALL items in the room from game.items map
-			itemsToDelete := make([]string, 0)
-			itemIDsToDelete := make([]uuid.UUID, 0, len(r.items))
+			var itemsToDeleteFromDB []string
+			itemCount := len(r.items)
+			
+			// Must unlock before calling game methods to avoid lock hierarchy issues
+			r.mutex.Unlock()
+			
+			// Delete items from game map and collect DB items
+			game.mutex.Lock()
+			r.mutex.Lock()
 			for itemID, item := range r.items {
-				itemIDsToDelete = append(itemIDsToDelete, itemID)
+				delete(game.items, itemID)
 				// Track items that might need database cleanup
 				if item != nil && item.lastSaved.After(item.lastEdited) {
-					itemsToDelete = append(itemsToDelete, itemID.String())
+					if itemsToDeleteFromDB == nil {
+						itemsToDeleteFromDB = make([]string, 0)
+					}
+					itemsToDeleteFromDB = append(itemsToDeleteFromDB, itemID.String())
 				}
 			}
-			// Use thread-safe method to delete items
-			game.DeleteItems(itemIDsToDelete)
-			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", len(r.items))
-
-			// Must unlock before Stop to avoid deadlock
+			// Clear room's items map
+			r.items = make(map[uuid.UUID]*Item)
 			r.mutex.Unlock()
+			game.mutex.Unlock()
+			
+			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", itemCount)
 
 			// Delete items from database if needed (minimize DB access)
-			if len(itemsToDelete) > 0 {
-				r.deleteItemsFromDatabase(game, itemsToDelete)
+			if len(itemsToDeleteFromDB) > 0 {
+				r.deleteItemsFromDatabase(game, itemsToDeleteFromDB)
 			}
 
 			r.Stop()
