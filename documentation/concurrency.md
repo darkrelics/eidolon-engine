@@ -11,7 +11,7 @@ These domains operate independently and have their own locking hierarchies.
 
 ## Lock Ordering Hierarchy
 
-To prevent deadlocks, all code must follow two primary rules: one for locking *within* a domain, and one for operations that need to *interact between* domains.
+To prevent deadlocks, all code must follow two primary rules: one for locking _within_ a domain, and one for operations that need to _interact between_ domains.
 
 ### The Cardinal Rule: The Two Domains are Separate
 
@@ -37,13 +37,13 @@ Within this domain, locks must be acquired in this order (from highest to lowest
 
 ### Golden Rules
 
-* **Never hold locks from both the System and Game World domains simultaneously.**
-* **Within a single domain, always acquire locks from high to low** in the hierarchy.
-* **Use explicit unlocks for high‑level objects** (`Server`, `Game`) or long‑running functions to improve system responsiveness.
-* **Use `defer` for simple, short functions** where lock scope matches function scope for safety.
-* **Minimize lock hold time:** acquire late, release early.
-* **Prefer `RLock()`** for read‑only operations.
-* **Document complex locking** with inline comments.
+- **Never hold locks from both the System and Game World domains simultaneously.**
+- **Within a single domain, always acquire locks from high to low** in the hierarchy.
+- **Use explicit unlocks for high‑level objects** (`Server`, `Game`) or long‑running functions to improve system responsiveness.
+- **Use `defer` for simple, short functions** where lock scope matches function scope for safety.
+- **Minimize lock hold time:** acquire late, release early.
+- **Prefer `RLock()`** for read‑only operations.
+- **Document complex locking** with inline comments.
 
 ## Mutex Usage by Component
 
@@ -348,7 +348,7 @@ Use the snapshot pattern from **Pattern 4** instead.
 
 ### 3. Nested Function Calls Violating Hierarchy
 
-Ensure that a function holding a lock only calls other functions that acquire locks *lower* in the *same domain's hierarchy*, or functions that acquire no locks at all.
+Ensure that a function holding a lock only calls other functions that acquire locks _lower_ in the _same domain's hierarchy_, or functions that acquire no locks at all.
 
 ```go
 // If function A locks a Room and calls function B,
@@ -394,7 +394,7 @@ For certain subsystems, an actor‑based model (where each component is a gorout
 
 ## References
 
-* [Go Memory Model](https://golang.org/ref/mem)
-* [Effective Go – Concurrency](https://golang.org/doc/effective_go#concurrency)
-* [Go Concurrency Patterns](https://go.dev/blog/pipelines)
-* [Deadlock Prevention Algorithms](https://en.wikipedia.org/wiki/Deadlock_prevention_algorithms)
+- [Go Memory Model](https://golang.org/ref/mem)
+- [Effective Go – Concurrency](https://golang.org/doc/effective_go#concurrency)
+- [Go Concurrency Patterns](https://go.dev/blog/pipelines)
+- [Deadlock Prevention Algorithms](https://en.wikipedia.org/wiki/Deadlock_prevention_algorithms)
