@@ -284,61 +284,47 @@ func (g *Game) tick() error {
 }
 
 func (g *Game) processGameCommands() {
-	// Collect active rooms and characters while holding the lock
+	// Process commands from rooms and characters with single read lock
 	g.mutex.RLock()
-
-	// Make a slice of rooms to process
-	activeRooms := make([]*Room, 0, len(g.rooms))
+	defer g.mutex.RUnlock()
+	
+	// Room command collection prevents blocking
 	for _, room := range g.rooms {
 		if room != nil && room.running {
-			activeRooms = append(activeRooms, room)
-		}
-	}
-
-	// Make a slice of characters to process
-	activeCharacters := make([]*Character, 0, len(g.characters))
-	for _, character := range g.characters {
-		if character != nil {
-			activeCharacters = append(activeCharacters, character)
-		}
-	}
-
-	g.mutex.RUnlock()
-
-	// Now process commands without holding the lock
-	// Room command collection prevents blocking
-	for _, room := range activeRooms {
-		// Non-blocking check for commands from this room
-		select {
-		case cmd, ok := <-room.gameCommandOut:
-			if !ok {
-				// Channel closed, skip this room
-				continue
+			// Non-blocking check for commands from this room
+			select {
+			case cmd, ok := <-room.gameCommandOut:
+				if !ok {
+					// Channel closed, skip this room
+					continue
+				}
+				// Async handling prevents command queue blocking
+				go RunWithPanicRecovery("game.handleCommand", func() {
+					g.handleGameCommand(cmd)
+				}, "verb", cmd.Verb, "character", cmd.Character.name)
+			default:
+				// No command waiting, continue to next room
 			}
-			// Async handling prevents command queue blocking
-			go RunWithPanicRecovery("game.handleCommand", func() {
-				g.handleGameCommand(cmd)
-			}, "verb", cmd.Verb, "character", cmd.Character.name)
-		default:
-			// No command waiting, continue to next room
 		}
 	}
 
 	// Direct character commands bypass room processing
-	for _, character := range activeCharacters {
-		// Non-blocking check for commands from this character
-		select {
-		case cmd, ok := <-character.gameCommandOut:
-			if !ok {
-				// Channel closed, skip this character
-				continue
+	for _, character := range g.characters {
+		if character != nil {
+			// Non-blocking check for commands from this character
+			select {
+			case cmd, ok := <-character.gameCommandOut:
+				if !ok {
+					// Channel closed, skip this character
+					continue
+				}
+				// Async handling prevents command queue blocking
+				go RunWithPanicRecovery("game.handleCommand", func() {
+					g.handleGameCommand(cmd)
+				}, "verb", cmd.Verb, "character", cmd.Character.name)
+			default:
+				// No command waiting, continue to next character
 			}
-			// Async handling prevents command queue blocking
-			go RunWithPanicRecovery("game.handleCommand", func() {
-				g.handleGameCommand(cmd)
-			}, "verb", cmd.Verb, "character", cmd.Character.name)
-		default:
-			// No command waiting, continue to next character
 		}
 	}
 }
