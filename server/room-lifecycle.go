@@ -488,20 +488,18 @@ func (g *Game) LoadRoom(roomID int64) (*Room, error) {
 
 // processCombatMovements handles all combat movement for characters in the room
 func (r *Room) processCombatMovements() {
-	r.mutex.RLock()
-	charactersToMove := make([]*Character, 0, len(r.charactersToMove))
-	for _, char := range r.charactersToMove {
-		if char != nil {
-			charactersToMove = append(charactersToMove, char)
+	// Process each character's movement directly from the map
+	for charID, char := range r.charactersToMove {
+		if char == nil {
+			// Clean up nil entry
+			delete(r.charactersToMove, charID)
+			continue
 		}
-	}
-	r.mutex.RUnlock()
-
-	// Process each character's movement
-	for _, char := range charactersToMove {
 		char.mutex.Lock()
 		movement := char.combatMovement
 		if movement == nil {
+			// Character no longer has combat movement, remove from list
+			delete(r.charactersToMove, charID)
 			char.mutex.Unlock()
 			continue
 		}
@@ -630,19 +628,18 @@ func (r *Room) processCombatMovements() {
 
 // processFlee handles flee attempts for characters
 func (r *Room) processFlee() {
-	r.mutex.RLock()
-	charactersToFlee := make([]*Character, 0, len(r.charactersToFlee))
-	for _, char := range r.charactersToFlee {
-		if char != nil {
-			charactersToFlee = append(charactersToFlee, char)
+	// Process each character's flee attempt directly from the map
+	for charID, char := range r.charactersToFlee {
+		if char == nil {
+			// Clean up nil entry
+			delete(r.charactersToFlee, charID)
+			continue
 		}
-	}
-	r.mutex.RUnlock()
-
-	for _, char := range charactersToFlee {
 		char.mutex.Lock()
 		fleeState := char.fleeTarget
 		if fleeState == nil {
+			// Character no longer has flee state, remove from list
+			delete(r.charactersToFlee, charID)
 			char.mutex.Unlock()
 			continue
 		}
