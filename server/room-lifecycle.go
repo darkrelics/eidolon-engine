@@ -242,13 +242,22 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 	// Increment the idle counter
 	r.idleCounter++
 
+	// Store values for cleanup check
+	shouldCleanup := r.idleCounter%600 == 0 && r.idleCounter > 0
+	roomID := r.roomID
+	title := r.title
+	idleMinutes := r.idleCounter / 60
+	r.mutex.Unlock()
+
 	// Check for item cleanup every 10 minutes (600 ticks = 10 minutes @ 1 second per tick)
-	if r.idleCounter%600 == 0 && r.idleCounter > 0 {
-		Logger.Debug("Room item cleanup interval reached", "roomID", r.roomID, "title", r.title, "idleMinutes", r.idleCounter/60)
+	if shouldCleanup {
+		Logger.Debug("Room item cleanup interval reached", "roomID", roomID, "title", title, "idleMinutes", idleMinutes)
 
 		// Clean up marked items in the room
 		r.cleanupItems(game)
 	}
+
+	r.mutex.Lock()
 
 	// Check if room unload threshold has been reached (3600 ticks = 60 minutes @ 1 second per tick)
 	if r.idleCounter >= 3600 {
@@ -266,25 +275,35 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			Logger.Info("Unloading non-persistent idle room", "roomID", r.roomID)
 
 			// Clean up ALL items in the room from game.items map
-			itemsToDelete := make([]string, 0)
-			itemIDsToDelete := make([]uuid.UUID, 0, len(r.items))
-			for itemID, item := range r.items {
-				itemIDsToDelete = append(itemIDsToDelete, itemID)
-				// Track items that might need database cleanup
-				if item != nil && item.lastSaved.After(item.lastEdited) {
-					itemsToDelete = append(itemsToDelete, itemID.String())
-				}
-			}
-			// Use thread-safe method to delete items
-			game.DeleteItems(itemIDsToDelete)
-			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", len(r.items))
+			var itemsToDeleteFromDB []string
+			itemCount := len(r.items)
 
-			// Must unlock before Stop to avoid deadlock
+			// Must unlock before calling game methods to avoid lock hierarchy issues
 			r.mutex.Unlock()
 
+			// Delete items from game map and collect DB items
+			game.mutex.Lock()
+			r.mutex.Lock()
+			for itemID, item := range r.items {
+				delete(game.items, itemID)
+				// Track items that might need database cleanup
+				if item != nil && item.lastSaved.After(item.lastEdited) {
+					if itemsToDeleteFromDB == nil {
+						itemsToDeleteFromDB = make([]string, 0)
+					}
+					itemsToDeleteFromDB = append(itemsToDeleteFromDB, itemID.String())
+				}
+			}
+			// Clear room's items map
+			r.items = make(map[uuid.UUID]*Item)
+			r.mutex.Unlock()
+			game.mutex.Unlock()
+
+			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", itemCount)
+
 			// Delete items from database if needed (minimize DB access)
-			if len(itemsToDelete) > 0 {
-				r.deleteItemsFromDatabase(game, itemsToDelete)
+			if len(itemsToDeleteFromDB) > 0 {
+				r.deleteItemsFromDatabase(game, itemsToDeleteFromDB)
 			}
 
 			r.Stop()
@@ -488,20 +507,18 @@ func (g *Game) LoadRoom(roomID int64) (*Room, error) {
 
 // processCombatMovements handles all combat movement for characters in the room
 func (r *Room) processCombatMovements() {
-	r.mutex.RLock()
-	charactersToMove := make([]*Character, 0, len(r.charactersToMove))
-	for _, char := range r.charactersToMove {
-		if char != nil {
-			charactersToMove = append(charactersToMove, char)
+	// Process each character's movement directly from the map
+	for charID, char := range r.charactersToMove {
+		if char == nil {
+			// Clean up nil entry
+			delete(r.charactersToMove, charID)
+			continue
 		}
-	}
-	r.mutex.RUnlock()
-
-	// Process each character's movement
-	for _, char := range charactersToMove {
 		char.mutex.Lock()
 		movement := char.combatMovement
 		if movement == nil {
+			// Character no longer has combat movement, remove from list
+			delete(r.charactersToMove, charID)
 			char.mutex.Unlock()
 			continue
 		}
@@ -630,19 +647,18 @@ func (r *Room) processCombatMovements() {
 
 // processFlee handles flee attempts for characters
 func (r *Room) processFlee() {
-	r.mutex.RLock()
-	charactersToFlee := make([]*Character, 0, len(r.charactersToFlee))
-	for _, char := range r.charactersToFlee {
-		if char != nil {
-			charactersToFlee = append(charactersToFlee, char)
+	// Process each character's flee attempt directly from the map
+	for charID, char := range r.charactersToFlee {
+		if char == nil {
+			// Clean up nil entry
+			delete(r.charactersToFlee, charID)
+			continue
 		}
-	}
-	r.mutex.RUnlock()
-
-	for _, char := range charactersToFlee {
 		char.mutex.Lock()
 		fleeState := char.fleeTarget
 		if fleeState == nil {
+			// Character no longer has flee state, remove from list
+			delete(r.charactersToFlee, charID)
 			char.mutex.Unlock()
 			continue
 		}
@@ -663,6 +679,9 @@ func (r *Room) processFlee() {
 
 		// Calculate movement speed (same as retreat)
 		moveSpeed := agility * 0.5 // Units per second
+
+		// Release character lock while checking ranges
+		char.mutex.Unlock()
 
 		// Find closest adversary
 		minRange := float64(1000)
@@ -689,17 +708,20 @@ func (r *Room) processFlee() {
 
 		if !hasAdversary {
 			// No adversaries, complete flee immediately
-			char.mutex.Unlock()
 			r.completeFlee(char, fleeState)
 			continue
 		}
 
-		// Move away from all adversaries
+		// Move away from all adversaries and recalculate minimum range
 		r.mutex.Lock()
+		minRange = float64(1000)
 		if ranges, exists := r.combatRanges[char.id]; exists {
 			for targetID, currentRange := range ranges {
 				newRange := currentRange + moveSpeed*0.1 // 0.1 second tick
 				ranges[targetID] = newRange
+				if newRange < minRange {
+					minRange = newRange
+				}
 			}
 		}
 		// Also update ranges where character is the target
@@ -708,6 +730,9 @@ func (r *Room) processFlee() {
 				if currentRange, exists := targets[char.id]; exists {
 					newRange := currentRange + moveSpeed*0.1
 					targets[char.id] = newRange
+					if newRange < minRange {
+						minRange = newRange
+					}
 				}
 			}
 		}
@@ -717,20 +742,16 @@ func (r *Room) processFlee() {
 		if fleeState.hasDirection {
 			// With direction: flee at 20+ range
 			if minRange >= 20 {
-				char.mutex.Unlock()
 				r.completeFlee(char, fleeState)
 				continue
 			}
 		} else {
 			// Without direction: flee at 45+ range
 			if minRange >= 45 {
-				char.mutex.Unlock()
 				r.completeFlee(char, fleeState)
 				continue
 			}
 		}
-
-		char.mutex.Unlock()
 	}
 }
 

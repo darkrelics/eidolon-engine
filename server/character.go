@@ -360,25 +360,31 @@ func (c *Character) Stop() {
 	}
 
 	// Clean up character inventory and hand items from game.items map
+	c.game.mutex.Lock()
 	c.mutex.Lock()
-	itemIDsToDelete := make([]uuid.UUID, 0, len(c.inventory)+2)
+
+	itemsDeleted := 0
 	for _, item := range c.inventory {
 		if item != nil {
-			itemIDsToDelete = append(itemIDsToDelete, item.id)
+			delete(c.game.items, item.id)
+			itemsDeleted++
 		}
 	}
 	// Also clean up hand items
 	if c.leftHand != nil {
-		itemIDsToDelete = append(itemIDsToDelete, c.leftHand.id)
+		delete(c.game.items, c.leftHand.id)
+		itemsDeleted++
 	}
 	if c.rightHand != nil {
-		itemIDsToDelete = append(itemIDsToDelete, c.rightHand.id)
+		delete(c.game.items, c.rightHand.id)
+		itemsDeleted++
 	}
-	c.mutex.Unlock()
 
-	if len(itemIDsToDelete) > 0 {
-		c.game.DeleteItems(itemIDsToDelete)
-		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", len(itemIDsToDelete))
+	c.mutex.Unlock()
+	c.game.mutex.Unlock()
+
+	if itemsDeleted > 0 {
+		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", itemsDeleted)
 	}
 
 	// Store a reference to the player before resetting
