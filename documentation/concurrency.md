@@ -1,26 +1,40 @@
 # Concurrency Guide
 
-This document outlines the concurrency patterns and lock ordering hierarchy used in the Eidolon Engine to prevent deadlocks and ensure thread-safe operations.
+This document outlines the concurrency patterns and lock ordering hierarchy used in the Eidolon Engine to prevent deadlocks and ensure thread-safe operations. The architecture is divided into two primary domains: the **System/Session Domain** (handling connections and I/O) and the **Game World Domain** (handling the simulation state).
 
 ## Lock Ordering Hierarchy
 
-To prevent deadlocks, all code must acquire locks in the following order (from highest to lowest):
+To prevent deadlocks, locks must be acquired according to a strict ordering. The two domains have their own internal hierarchies, and there is a strict rule for acquiring locks *between* domains.
 
-1. **Server** - System-level operations and SSH interface
-2. **Game** - Game-wide state and collections
-3. **Room** - Room-specific state and contents
-4. **Character** - Character state and attributes
-5. **Player** - Player connection and session state
-6. **Item** - Item properties and state
+**The Cardinal Rule: Never acquire a System/Session lock while holding a Game World lock.**
+
+This means you must always lock components from the System/Session domain *before* locking any components from the Game World domain.
+
+### 1. System/Session Domain Hierarchy
+
+This domain manages system-level operations, network connections, and player sessions. Locks must be acquired in this order:
+
+1.  **Server** - System-level operations and SSH interface
+2.  **Player** - Player connection and session state
+
+### 2. Game World Domain Hierarchy
+
+This domain manages the internal state of the game simulation. Locks must be acquired in this order:
+
+1.  **Game** - Game-wide state and collections (e.g., character or room lookups)
+2.  **Room** - Room-specific state and contents
+3.  **Character** - Character state and attributes
+4.  **Item** - Item properties and state
 
 ### Golden Rules
 
-- **Always acquire locks from high to low** in the hierarchy
-- **Never acquire a higher-level lock** while holding a lower-level lock
-- **Use defer** for unlock operations to ensure cleanup
-- **Minimize lock hold time** - acquire late, release early
-- **Prefer RLock()** for read-only operations
-- **Document complex locking** with inline comments
+-   **Lock across domains from System/Session to Game World.** Never the other way around.
+-   **Within a domain, always acquire locks from high to low** in the hierarchy.
+-   **Use explicit unlocks for high-level or long-running functions** to improve responsiveness by minimizing lock duration.
+-   **Use `defer` for simple, short functions** where lock scope matches function scope for safety and clarity.
+-   **Minimize lock hold time:** acquire late, release early.
+-   **Prefer `RLock()`** for read-only operations.
+-   **Document complex locking** with inline comments.
 
 ## Mutex Usage by Component
 
@@ -29,6 +43,14 @@ To prevent deadlocks, all code must acquire locks in the following order (from h
 ```go
 type Server struct {
     mutex sync.RWMutex  // Protects server state
+}
+```
+
+### Player
+
+```go
+type Player struct {
+    mutex sync.RWMutex  // Protects connection state, channels
 }
 ```
 
@@ -56,14 +78,6 @@ type Character struct {
 }
 ```
 
-### Player
-
-```go
-type Player struct {
-    mutex sync.RWMutex  // Protects connection state, channels
-}
-```
-
 ### Item
 
 ```go
@@ -74,43 +88,45 @@ type Item struct {
 
 ## Common Locking Patterns
 
-### Pattern 1: Character Movement
+### Pattern 1: Command Execution (Entry Point)
 
-When moving a character between rooms, follow this order:
+Commands from a player are the primary entry point where the two domains interact.
 
 ```go
-func moveCharacter(game *Game, character *Character, fromRoom *Room, toRoom *Room) error {
-    // 1. No game lock needed if rooms already resolved
+func executeCommand(game *Game, player *Player, command string) {
+    // 1. Parse command without any locks.
+    cmd, args := parseCommand(command)
 
-    // 2. Lock rooms in consistent order (by ID) to prevent deadlock
-    if fromRoom.RoomID < toRoom.RoomID {
-        fromRoom.mutex.Lock()
-        defer fromRoom.mutex.Unlock()
-        toRoom.mutex.Lock()
-        defer toRoom.mutex.Unlock()
-    } else {
-        toRoom.mutex.Lock()
-        defer toRoom.mutex.Unlock()
-        fromRoom.mutex.Lock()
-        defer fromRoom.mutex.Unlock()
+    // 2. Lock the Player (System Domain) to get the character reference.
+    // Release this lock as soon as possible to not block I/O.
+    player.mutex.RLock()
+    character := player.character
+    player.mutex.RUnlock() // Explicit unlock for responsiveness
+
+    if character == nil {
+        // Handle case where player has no character
+        return
     }
 
-    // 3. Lock character last
-    character.mutex.Lock()
-    defer character.mutex.Unlock()
-
-    // Perform movement operations
-    return nil
+    // 3. Now, acquire locks in the Game World Domain as needed.
+    switch cmd {
+    case "get":
+        // This function will lock Room -> Character -> Item
+        executeGet(game, character, args)
+    case "look":
+        // This function will lock Room -> Character
+        executeLook(game, character)
+    }
 }
 ```
 
-### Pattern 2: Item Transfer
+### Pattern 2: Item Transfer (Game World Only)
 
-When transferring items between containers (rooms, characters):
+When transferring items between containers, the hierarchy is entirely within the Game World.
 
 ```go
 func transferItem(fromRoom *Room, toCharacter *Character, item *Item) error {
-    // 1. Lock room first (higher in hierarchy)
+    // 1. Lock room first (higher in Game World hierarchy)
     fromRoom.mutex.Lock()
     defer fromRoom.mutex.Unlock()
 
@@ -127,71 +143,77 @@ func transferItem(fromRoom *Room, toCharacter *Character, item *Item) error {
 }
 ```
 
-### Pattern 3: Broadcasting Messages
+### Pattern 3: Character Movement (Game World Only)
 
-When broadcasting to multiple characters in a room:
+When moving a character, lock rooms in a consistent order (e.g., by ID) to prevent deadlocks between sibling `Room` locks.
+
+```go
+func moveCharacter(character *Character, fromRoom *Room, toRoom *Room) error {
+    // 1. Lock rooms in a consistent order (by ID) to prevent deadlock.
+    // This is an operation on sibling locks within the same level of the hierarchy.
+    if fromRoom.RoomID < toRoom.RoomID {
+        fromRoom.mutex.Lock()
+        defer fromRoom.mutex.Unlock()
+        toRoom.mutex.Lock()
+        defer toRoom.mutex.Unlock()
+    } else {
+        toRoom.mutex.Lock()
+        defer toRoom.mutex.Unlock()
+        fromRoom.mutex.Lock()
+        defer fromRoom.mutex.Unlock()
+    }
+
+    // 2. Lock character last (lower in hierarchy than Room).
+    character.mutex.Lock()
+    defer character.mutex.Unlock()
+
+    // Perform movement operations
+    return nil
+}
+```
+
+### Pattern 4: Broadcasting Messages
+
+To avoid holding locks during I/O, copy the necessary data first.
 
 ```go
 func broadcastToRoom(room *Room, message string) {
-    // 1. Lock room to get character list
+    // 1. Lock room to safely get the list of characters.
     room.mutex.RLock()
     characters := make([]*Character, len(room.characters))
     copy(characters, room.characters)
-    room.mutex.RUnlock()
+    room.mutex.RUnlock() // Release Room lock immediately
 
-    // 2. Send messages without holding locks
+    // 2. Iterate through the copy. For each character, get their player reference.
+    // This is safe because we only acquire a brief Character lock and do not
+    // acquire a Player lock, avoiding an inversion.
     for _, character := range characters {
         character.mutex.RLock()
         player := character.player
         character.mutex.RUnlock()
 
         if player != nil {
-            // Send message via player's channel
+            // The sendMessage function will handle its own Player lock internally
+            // without holding any Game World locks.
             player.sendMessage(message)
         }
     }
 }
 ```
 
-### Pattern 4: Saving Game State
+### Pattern 5: Saving Game State
 
-When saving to database, minimize lock time:
+Minimize lock duration by copying data before performing slow I/O operations.
 
 ```go
 func saveCharacter(character *Character) error {
-    // 1. Lock and copy data
+    // 1. Acquire read lock on the character to create a data snapshot.
     character.mutex.RLock()
     data := character.copyForSave()
-    character.mutex.RUnlock()
+    character.mutex.RUnlock() // Unlock immediately after copying.
 
-    // 2. Save without holding locks
+    // 2. Perform the database save operation without holding any locks.
     return database.SaveCharacter(data)
-}
-```
-
-### Pattern 5: Command Execution
-
-Commands should acquire locks in the proper order:
-
-```go
-func executeCommand(game *Game, player *Player, command string) {
-    // 1. Parse command without locks
-    cmd, args := parseCommand(command)
-
-    // 2. Get character reference
-    player.mutex.RLock()
-    character := player.character
-    player.mutex.RUnlock()
-
-    // 3. Execute with proper lock ordering
-    switch cmd {
-    case "get":
-        // Room -> Character -> Item
-        executeGet(character, args)
-    case "look":
-        // Room -> Character (for visibility)
-        executeLook(character)
-    }
 }
 ```
 
@@ -199,7 +221,7 @@ func executeCommand(game *Game, player *Player, command string) {
 
 ### Lock Multiple Rooms
 
-When locking multiple rooms, always use consistent ordering:
+When locking multiple rooms (siblings in the hierarchy), always use consistent ordering to prevent deadlocks.
 
 ```go
 func lockRoomsInOrder(rooms ...*Room) func() {
@@ -228,14 +250,14 @@ defer unlock()
 
 ### Safe Read Operations
 
-For read-only operations that need multiple locks:
+For read-only operations, copy data to release locks quickly and prevent race conditions with the returned slice.
 
 ```go
 func safeReadRoomCharacters(room *Room) []*Character {
     room.mutex.RLock()
     defer room.mutex.RUnlock()
 
-    // Return a copy to avoid holding lock
+    // Return a copy to avoid holding lock while the caller processes the data.
     result := make([]*Character, len(room.characters))
     copy(result, room.characters)
     return result
@@ -246,7 +268,7 @@ func safeReadRoomCharacters(room *Room) []*Character {
 
 ### 1. Timeout-based Lock Acquisition
 
-For operations that might block:
+For non-critical operations that might block, consider using a timeout. This is an advanced technique and should be used sparingly.
 
 ```go
 func tryLockWithTimeout(mu *sync.RWMutex, timeout time.Duration) bool {
@@ -267,7 +289,7 @@ func tryLockWithTimeout(mu *sync.RWMutex, timeout time.Duration) bool {
 
 ### 2. Lock-free Alternatives
 
-Use channels for some operations:
+For high-throughput systems, channels can be used to serialize operations on a resource, managed by a single goroutine.
 
 ```go
 // Instead of locking for updates
@@ -277,9 +299,10 @@ type updateRequest struct {
     done      chan error
 }
 
-// Process updates serially
+// Process updates serially in a dedicated goroutine
 func (g *Game) processUpdates(updates <-chan updateRequest) {
     for req := range updates {
+        // No lock needed here as this is the only goroutine modifying characters
         req.update(req.character)
         req.done <- nil
     }
@@ -290,7 +313,7 @@ func (g *Game) processUpdates(updates <-chan updateRequest) {
 
 ### 1. Race Detection
 
-Always test with race detection enabled:
+Always run tests with the `-race` flag to automatically detect race conditions.
 
 ```bash
 go test -race ./...
@@ -298,7 +321,7 @@ go test -race ./...
 
 ### 2. Deadlock Detection
 
-Use deadlock detection during development:
+During development and testing, consider using a deadlock detection library to find lock ordering violations.
 
 ```go
 // In development/test builds
@@ -306,104 +329,134 @@ import "github.com/sasha-s/go-deadlock"
 
 // Replace sync.RWMutex with deadlock.RWMutex
 type Game struct {
-    mutex deadlock.RWMutex
+    mutex deadlock.RWMutex // Use deadlock detection version in tests
 }
 ```
 
 ### 3. Stress Testing
 
-Create tests that stress concurrent operations:
+Create dedicated tests that simulate high contention on shared resources to uncover subtle bugs.
 
 ```go
 func TestConcurrentMovement(t *testing.T) {
-    game := NewGame()
+    game, room1, room2 := NewTestWorld()
 
-    // Create multiple goroutines moving characters
     var wg sync.WaitGroup
     for i := 0; i < 100; i++ {
         wg.Add(1)
-        go func(id int) {
+        go func() {
             defer wg.Done()
-            // Perform random movements
-        }(i)
+            // Create a character and move it back and forth
+            // between room1 and room2 hundreds of times.
+        }()
     }
 
     wg.Wait()
-    // Verify no deadlocks occurred
+    // Verify final state and that no deadlocks or panics occurred
 }
 ```
 
 ## Common Pitfalls
 
-### 1. Lock Inversion
+### 1. Lock Inversion (Game World -> System)
+
+This is the most critical error to avoid in this architecture.
 
 **Wrong:**
 
 ```go
 character.mutex.Lock()
-room.mutex.Lock()  // BAD: Room is higher in hierarchy
+// ... do some work ...
+player.mutex.Lock() // BAD: Acquiring System lock while holding Game World lock
 ```
 
 **Correct:**
 
 ```go
-room.mutex.Lock()
+player.mutex.Lock()
 character.mutex.Lock()
+// ... do work ...
+character.mutex.Unlock()
+player.mutex.Unlock()
 ```
 
 ### 2. Holding Locks During I/O
 
+Never perform slow operations like network or disk I/O while holding a lock.
+
 **Wrong:**
 
 ```go
 character.mutex.Lock()
-database.Save(character)  // BAD: I/O while holding lock
+database.Save(character)  // BAD: Slow I/O operation while holding a lock
 character.mutex.Unlock()
 ```
 
-**Correct:**
+**Correct:** (As shown in Pattern 5)
 
 ```go
-character.mutex.Lock()
+character.mutex.RLock()
 data := character.copyData()
-character.mutex.Unlock()
+character.mutex.RUnlock()
 database.Save(data)
 ```
 
-### 3. Nested Function Calls
+### 3. Unlocking Too Late
 
-Be careful with functions that acquire locks:
+Using `defer` can sometimes hold a lock for longer than necessary, impacting responsiveness.
+
+**Acceptable (but can be improved):**
 
 ```go
-// If function A locks X and calls B which locks Y,
-// ensure X is higher than Y in the hierarchy
+func processPlayerAndGame(player *Player, game *Game) {
+    player.mutex.Lock()
+    defer player.mutex.Unlock() // Lock held for the entire function
+
+    character := player.character
+    // Player lock is no longer needed after this point.
+
+    game.mutex.Lock()
+    defer game.mutex.Unlock()
+    // ... perform complex operations on the game state ...
+}
+```
+
+**Better (for responsiveness):**
+
+```go
+func processPlayerAndGame(player *Player, game *Game) {
+    player.mutex.RLock()
+    character := player.character
+    player.mutex.RUnlock() // Explicit unlock as soon as reference is obtained
+
+    game.mutex.Lock()
+    // ... perform complex operations on the game state ...
+    game.mutex.Unlock()
+}
 ```
 
 ## Performance Considerations
 
 ### 1. Read vs Write Locks
 
-- Use `RLock()` for read-only operations
-- Multiple readers can hold RLock simultaneously
-- Write locks are exclusive
+-   Use `RLock()` whenever possible for read-only operations to allow multiple readers to proceed concurrently.
+-   A `Lock()` for writing is exclusive and will block all other readers and writers.
 
 ### 2. Lock Granularity
 
-- Don't lock entire game for character-specific operations
-- Consider splitting large structures into smaller lockable units
-- Balance between granularity and complexity
+-   The separation of System and Game World locks is a form of high-level granularity that prevents I/O from blocking the game simulation.
+-   Avoid locking the entire `Game` object when a `Room` or `Character` lock will suffice.
 
-### 3. Lock Duration
+### 3. Lock Duration and Explicit Unlocks
 
-- Hold locks for minimum time necessary
-- Don't perform expensive operations while holding locks
-- Copy data and process outside of critical sections
+-   High-level locks (`Server`, `Game`) are points of high contention. Hold them for the shortest possible duration.
+-   In functions that interact with these objects, acquire the lock, get the data you need, and release the lock explicitly. Do not hold the lock while performing logic that doesn't depend on the protected state.
 
 ## Monitoring and Debugging
 
 ### 1. Lock Contention Metrics
 
-Track lock contention in production:
+In a production environment, use metrics to track how much time goroutines spend waiting for locks. This helps identify bottlenecks.
 
 ```go
 var (
@@ -412,27 +465,27 @@ var (
             Name: "lock_wait_duration_seconds",
             Help: "Time spent waiting for locks",
         },
-        []string{"lock_type"},
+        []string{"lock_name"}, // e.g., "game", "room", "player"
     )
 )
 ```
 
 ### 2. Debugging Deadlocks
 
-When debugging deadlocks:
-
-1. Enable `GOTRACEBACK=all` for full goroutine dumps
-2. Look for circular dependencies in stack traces
-3. Verify lock ordering matches hierarchy
-4. Check for locks held during blocking operations
+If a deadlock occurs, get a full goroutine stack dump to analyze it.
+1.  Set the environment variable `GOTRACEBACK=all`.
+2.  Send a `SIGQUIT` signal to your running process (`kill -QUIT <pid>`).
+3.  Examine the stack traces for circular lock dependencies.
 
 ### 3. Logging Lock Operations
 
-In debug mode, log lock acquisitions:
+In a debug build, adding logs for lock acquisition and release can help trace complex interactions.
 
 ```go
-if debug {
-    log.Printf("Acquiring lock: %s -> %s", currentLock, nextLock)
+func (r *Room) Lock() {
+    log.Printf("Acquiring lock for Room %d", r.ID)
+    r.mutex.Lock()
+    log.Printf("Acquired lock for Room %d", r.ID)
 }
 ```
 
@@ -440,31 +493,19 @@ if debug {
 
 ### 1. Lock-free Data Structures
 
-Consider lock-free alternatives for hot paths:
-
-- Atomic operations for counters
-- Lock-free queues for message passing
-- Copy-on-write for rarely modified data
+For performance-critical hot paths, explore using specialized lock-free data structures or atomic operations from the `sync/atomic` package.
 
 ### 2. Actor Model
 
-Consider actor model for some subsystems:
+For certain subsystems, an actor-based model (where each component is a goroutine processing messages from a channel) can eliminate the need for explicit locks entirely by serializing access.
 
-- Each entity processes messages serially
-- No shared state between actors
-- Communication via message passing
+### 3. Software Transactional Memory (STM)
 
-### 3. STM (Software Transactional Memory)
-
-For complex operations with multiple locks:
-
-- Automatic retry on conflicts
-- Composable transactions
-- Simplified reasoning about concurrency
+For very complex operations involving many objects, STM libraries can simplify development by making multi-object transactions appear atomic, though they may come with a performance overhead.
 
 ## References
 
-- [Go Memory Model](https://golang.org/ref/mem)
-- [Effective Go - Concurrency](https://golang.org/doc/effective_go#concurrency)
-- [Go Concurrency Patterns](https://go.dev/blog/pipelines)
-- [Deadlock Prevention Algorithms](https://en.wikipedia.org/wiki/Deadlock_prevention_algorithms)
+-   [Go Memory Model](https://golang.org/ref/mem)
+-   [Effective Go - Concurrency](https://golang.org/doc/effective_go#concurrency)
+-   [Go Concurrency Patterns](https://go.dev/blog/pipelines)
+-   [Deadlock Prevention Algorithms](https://en.wikipedia.org/wiki/Deadlock_prevention_algorithms)
