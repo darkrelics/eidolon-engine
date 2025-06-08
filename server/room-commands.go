@@ -638,7 +638,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		character.DisplayMessage(fmt.Sprintf("\n\rYou advance on %s.\n\r", targetName))
 		target.DisplayMessage(fmt.Sprintf("\n\r%s advances on you!\n\r", character.name))
 		SendRoomMessage(r, fmt.Sprintf("\n\r%s advances on %s.\n\r", character.name, targetName), character, target)
-		
+
 		character.mutex.Lock()
 	} else {
 		// No target specified - check if already facing someone or in combat

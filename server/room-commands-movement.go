@@ -261,7 +261,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		}
 	}
 	oldRoom.mutex.RUnlock()
-	
+
 	// Now update each character without holding the room lock
 	for _, char := range charactersToUpdate {
 		char.mutex.Lock()
