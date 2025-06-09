@@ -175,7 +175,6 @@ func setupTestCharacterConsole(_ *testing.T) (*Character, *Game, *mockPlayer, ch
 		inventory:        make(map[string]*Item),
 		lastSaved:        time.Now(),
 		lastEdited:       time.Now(),
-		combatRange:      make(map[uuid.UUID]float64),
 	}
 
 	done := make(chan bool, 1)

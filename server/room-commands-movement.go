@@ -204,6 +204,8 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 
 	// Remove from old room
 	delete(oldRoom.characters, character.id)
+	delete(oldRoom.charactersToMove, character.id)
+	delete(oldRoom.charactersToFlee, character.id)
 	oldRoom.lastActive = time.Now()
 
 	// Add to new room
@@ -245,10 +247,34 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 		SendRoomMessage(oldRoom, departureMsg, character)
 	}
 
-	// Update character's room reference
+	// Update character's room reference and clear facing
 	character.mutex.Lock()
 	character.room = newRoom
+	character.facing = nil // Clear facing when changing rooms
 	character.mutex.Unlock()
+
+	// Clear facing for any characters in the old room that were facing the departing character
+	// First, get a list of characters that need updating
+	oldRoom.mutex.RLock()
+	charactersToUpdate := make([]*Character, 0)
+	for _, char := range oldRoom.characters {
+		if char != nil && char != character {
+			charactersToUpdate = append(charactersToUpdate, char)
+		}
+	}
+	oldRoom.mutex.RUnlock()
+
+	// Now update each character without holding the room lock
+	for _, char := range charactersToUpdate {
+		char.mutex.Lock()
+		if char.facing == character {
+			char.facing = nil
+		}
+		char.mutex.Unlock()
+	}
+
+	// Remove combat ranges involving the departing character
+	oldRoom.removeCharacterFromCombat(character)
 
 	// Send arrival message using the exit's arrival text (only if visible)
 	if !character.IsHidden() {

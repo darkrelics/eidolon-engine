@@ -114,7 +114,6 @@ func (item *Item) Save(ctx context.Context, k *KeyPair) error {
 	}
 
 	item.mutex.RLock()
-	defer item.mutex.RUnlock()
 
 	Logger.Debug("Saving item", "itemID", item.id)
 
@@ -156,8 +155,13 @@ func (item *Item) Save(ctx context.Context, k *KeyPair) error {
 		return fmt.Errorf("error writing item data: %w", err)
 	}
 
+	// Need to save contents without holding lock to avoid potential deadlocks
+	contentsToSave := make([]*Item, len(item.contents))
+	copy(contentsToSave, item.contents)
+	item.mutex.RUnlock()
+
 	// Recursively save contained items
-	for _, content := range item.contents {
+	for _, content := range contentsToSave {
 		// Check context before each contained item save
 		select {
 		case <-ctx.Done():
@@ -172,7 +176,11 @@ func (item *Item) Save(ctx context.Context, k *KeyPair) error {
 		}
 	}
 
+	// Update lastSaved with write lock
+	item.mutex.Lock()
 	item.lastSaved = time.Now()
+	item.mutex.Unlock()
+
 	return nil
 }
 

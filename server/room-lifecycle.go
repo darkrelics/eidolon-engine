@@ -185,6 +185,12 @@ func (r *Room) runInternal(game *Game) {
 				}
 			}
 
+			// Process combat movements
+			r.processCombatMovements()
+
+			// Process flee attempts
+			r.processFlee()
+
 			// Increment idle counter if room is empty
 			r.mutex.RLock()
 			isEmpty := len(r.characters) == 0
@@ -236,13 +242,22 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 	// Increment the idle counter
 	r.idleCounter++
 
+	// Store values for cleanup check
+	shouldCleanup := r.idleCounter%600 == 0 && r.idleCounter > 0
+	roomID := r.roomID
+	title := r.title
+	idleMinutes := r.idleCounter / 60
+	r.mutex.Unlock()
+
 	// Check for item cleanup every 10 minutes (600 ticks = 10 minutes @ 1 second per tick)
-	if r.idleCounter%600 == 0 && r.idleCounter > 0 {
-		Logger.Debug("Room item cleanup interval reached", "roomID", r.roomID, "title", r.title, "idleMinutes", r.idleCounter/60)
+	if shouldCleanup {
+		Logger.Debug("Room item cleanup interval reached", "roomID", roomID, "title", title, "idleMinutes", idleMinutes)
 
 		// Clean up marked items in the room
 		r.cleanupItems(game)
 	}
+
+	r.mutex.Lock()
 
 	// Check if room unload threshold has been reached (3600 ticks = 60 minutes @ 1 second per tick)
 	if r.idleCounter >= 3600 {
@@ -260,25 +275,35 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 			Logger.Info("Unloading non-persistent idle room", "roomID", r.roomID)
 
 			// Clean up ALL items in the room from game.items map
-			itemsToDelete := make([]string, 0)
-			itemIDsToDelete := make([]uuid.UUID, 0, len(r.items))
-			for itemID, item := range r.items {
-				itemIDsToDelete = append(itemIDsToDelete, itemID)
-				// Track items that might need database cleanup
-				if item != nil && item.lastSaved.After(item.lastEdited) {
-					itemsToDelete = append(itemsToDelete, itemID.String())
-				}
-			}
-			// Use thread-safe method to delete items
-			game.DeleteItems(itemIDsToDelete)
-			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", len(r.items))
+			var itemsToDeleteFromDB []string
+			itemCount := len(r.items)
 
-			// Must unlock before Stop to avoid deadlock
+			// Must unlock before calling game methods to avoid lock hierarchy issues
 			r.mutex.Unlock()
 
+			// Delete items from game map and collect DB items
+			game.mutex.Lock()
+			r.mutex.Lock()
+			for itemID, item := range r.items {
+				delete(game.items, itemID)
+				// Track items that might need database cleanup
+				if item != nil && item.lastSaved.After(item.lastEdited) {
+					if itemsToDeleteFromDB == nil {
+						itemsToDeleteFromDB = make([]string, 0)
+					}
+					itemsToDeleteFromDB = append(itemsToDeleteFromDB, itemID.String())
+				}
+			}
+			// Clear room's items map
+			r.items = make(map[uuid.UUID]*Item)
+			r.mutex.Unlock()
+			game.mutex.Unlock()
+
+			Logger.Info("Cleaned up all room items", "roomID", r.roomID, "itemCount", itemCount)
+
 			// Delete items from database if needed (minimize DB access)
-			if len(itemsToDelete) > 0 {
-				r.deleteItemsFromDatabase(game, itemsToDelete)
+			if len(itemsToDeleteFromDB) > 0 {
+				r.deleteItemsFromDatabase(game, itemsToDeleteFromDB)
 			}
 
 			r.Stop()
@@ -298,6 +323,7 @@ func (r *Room) IncrementIdleCounter(game *Game) {
 
 // cleanupItems removes items that are marked for deletion from the room
 func (r *Room) cleanupItems(game *Game) {
+	r.mutex.Lock()
 	itemCount := len(r.items)
 
 	// Create temporary list of items to remove
@@ -311,21 +337,19 @@ func (r *Room) cleanupItems(game *Game) {
 			if item.lastSaved.After(item.lastEdited) {
 				itemsToDeleteFromDB = append(itemsToDeleteFromDB, id.String())
 			}
+			delete(r.items, id)
 		}
 	}
+	r.mutex.Unlock()
 
-	// Remove the items from room and game maps
+	// Remove from game's items map after releasing room lock
 	for _, id := range itemsToRemove {
-		delete(r.items, id)
-		// Also remove from game's items map
 		game.DeleteItem(id)
 	}
 
-	// Delete items from database if needed (batch operation to minimize DB access)
 	if len(itemsToDeleteFromDB) > 0 {
 		roomID := r.roomID // Capture for goroutine
 		go RunWithPanicRecovery("room.deleteItems", func() {
-			// Run database deletion asynchronously to avoid blocking room operations
 			r.deleteItemsFromDatabase(game, itemsToDeleteFromDB)
 		}, "roomID", roomID, "itemCount", len(itemsToDeleteFromDB))
 	}
@@ -479,4 +503,351 @@ func (g *Game) LoadRoom(roomID int64) (*Room, error) {
 
 	Logger.Info("Successfully loaded room", "roomID", roomID, "title", newRoom.title)
 	return newRoom, nil
+}
+
+// processCombatMovements handles all combat movement for characters in the room
+func (r *Room) processCombatMovements() {
+	// Create a snapshot of characters to move to avoid race conditions
+	r.mutex.Lock()
+	charactersToProcess := make(map[uuid.UUID]*Character)
+	for charID, char := range r.charactersToMove {
+		charactersToProcess[charID] = char
+	}
+	r.mutex.Unlock()
+
+	// Process each character's movement from the snapshot
+	for _, char := range charactersToProcess {
+		if char == nil {
+			// Clean up nil entry - use original charID which is uuid.UUID
+			continue
+		}
+		char.mutex.Lock()
+		movement := char.combatMovement
+		if movement == nil {
+			// Character no longer has combat movement, remove from list
+			char.mutex.Unlock()
+			r.mutex.Lock()
+			delete(r.charactersToMove, char.id)
+			r.mutex.Unlock()
+			continue
+		}
+
+		// Calculate movement speed based on agility
+		agility := char.attributes["agility"]
+		if agility < 0 {
+			agility = 0
+		} else if agility > 10 {
+			agility = 10
+		}
+		moveSpeed := agility * 3.0
+		if moveSpeed < 1.0 {
+			moveSpeed = 1.0
+		}
+
+		switch movement.mode {
+		case "advance":
+			// Find target
+			var target *Character
+			r.mutex.RLock()
+			for _, c := range r.characters {
+				if c != nil && c.id == movement.targetID {
+					target = c
+					break
+				}
+			}
+			r.mutex.RUnlock()
+
+			if target == nil || target.room != r {
+				// Target no longer in room
+				r.RemoveCharacterToMove(char)
+				char.combatMovement = nil
+				char.facing = nil
+				char.mutex.Unlock()
+				char.DisplayMessage("\n\rYour target is no longer here.\n\r")
+				continue
+			}
+
+			// Get current range
+			currentRange := r.getCombatRange(char, target)
+
+			// Move towards target
+			if currentRange > movement.targetRange {
+				newRange := currentRange - moveSpeed
+				if newRange < movement.targetRange {
+					newRange = movement.targetRange
+				}
+
+				r.setCombatRange(char, target, newRange)
+
+				// Check if reached target range
+				if newRange <= movement.targetRange {
+					r.RemoveCharacterToMove(char)
+					char.combatMovement = nil
+					rangeName := "close combat with"
+					if movement.targetRange == combatRangeMelee {
+						rangeName = "melee range with"
+					} else if movement.targetRange == combatRangePole {
+						rangeName = "pole range with"
+					}
+					char.mutex.Unlock()
+					char.DisplayMessage(fmt.Sprintf("\n\rYou reach %s %s.\n\r", rangeName, target.name))
+					target.DisplayMessage(fmt.Sprintf("\n\r%s reaches %s you.\n\r", char.name, rangeName))
+					SendRoomMessage(r, fmt.Sprintf("\n\r%s reaches %s %s.\n\r", char.name, rangeName, target.name), char, target)
+					continue
+				}
+			} else {
+				// Already at or closer than target range
+				r.RemoveCharacterToMove(char)
+				char.combatMovement = nil
+			}
+
+		case "retreat":
+			// Find all combat opponents
+			r.mutex.RLock()
+			ranges := r.combatRanges[char.id]
+			r.mutex.RUnlock()
+
+			if ranges == nil || len(ranges) == 0 {
+				r.RemoveCharacterToMove(char)
+				char.combatMovement = nil
+				char.mutex.Unlock()
+				continue
+			}
+
+			// Move away from all opponents
+			allAtRange := true
+			for opponentID, currentRange := range ranges {
+				if currentRange < movement.targetRange {
+					allAtRange = false
+					newRange := currentRange + moveSpeed
+					if newRange > movement.targetRange {
+						newRange = movement.targetRange
+					}
+
+					// Find opponent character
+					var opponent *Character
+					r.mutex.RLock()
+					for _, c := range r.characters {
+						if c != nil && c.id == opponentID {
+							opponent = c
+							break
+						}
+					}
+					r.mutex.RUnlock()
+
+					if opponent != nil {
+						r.setCombatRange(char, opponent, newRange)
+					}
+				}
+			}
+
+			if allAtRange {
+				r.RemoveCharacterToMove(char)
+				char.combatMovement = nil
+				char.mutex.Unlock()
+				char.DisplayMessage("\n\rYou reach your desired distance.\n\r")
+				continue
+			}
+		}
+
+		char.mutex.Unlock()
+	}
+}
+
+// processFlee handles flee attempts for characters
+func (r *Room) processFlee() {
+	// Create a snapshot of characters to flee to avoid race conditions
+	r.mutex.Lock()
+	charactersToProcess := make(map[uuid.UUID]*Character)
+	for charID, char := range r.charactersToFlee {
+		charactersToProcess[charID] = char
+	}
+	r.mutex.Unlock()
+
+	// Process each character's flee attempt from the snapshot
+	for _, char := range charactersToProcess {
+		if char == nil {
+			// Clean up nil entry - skip since we're iterating over a snapshot
+			continue
+		}
+		char.mutex.Lock()
+		fleeState := char.fleeTarget
+		if fleeState == nil {
+			// Character no longer has flee state, remove from list
+			char.mutex.Unlock()
+			r.mutex.Lock()
+			delete(r.charactersToFlee, char.id)
+			r.mutex.Unlock()
+			continue
+		}
+
+		// Check timeout (30 seconds)
+		elapsed := time.Since(fleeState.startTime).Seconds()
+		if elapsed >= 30 {
+			char.mutex.Unlock()
+			r.handleFleeTimeout(char, fleeState)
+			continue
+		}
+
+		// Get character's agility for movement speed
+		agility := char.attributes["agility"]
+		if agility < 1 {
+			agility = 1
+		}
+
+		// Calculate movement speed (same as retreat)
+		moveSpeed := agility * 0.5 // Units per second
+
+		// Release character lock while checking ranges
+		char.mutex.Unlock()
+
+		// Find closest adversary
+		minRange := float64(1000)
+		var hasAdversary bool
+		r.mutex.RLock()
+		if ranges, exists := r.combatRanges[char.id]; exists {
+			for _, range_ := range ranges {
+				if range_ < minRange {
+					minRange = range_
+					hasAdversary = true
+				}
+			}
+		}
+		// Also check if character is a target
+		for attackerID, targets := range r.combatRanges {
+			if attackerID != char.id {
+				if range_, exists := targets[char.id]; exists && range_ < minRange {
+					minRange = range_
+					hasAdversary = true
+				}
+			}
+		}
+		r.mutex.RUnlock()
+
+		if !hasAdversary {
+			// No adversaries, complete flee immediately
+			r.completeFlee(char, fleeState)
+			continue
+		}
+
+		// Move away from all adversaries and recalculate minimum range
+		r.mutex.Lock()
+		minRange = float64(1000)
+		if ranges, exists := r.combatRanges[char.id]; exists {
+			for targetID, currentRange := range ranges {
+				newRange := currentRange + moveSpeed*0.1 // 0.1 second tick
+				ranges[targetID] = newRange
+				if newRange < minRange {
+					minRange = newRange
+				}
+			}
+		}
+		// Also update ranges where character is the target
+		for attackerID, targets := range r.combatRanges {
+			if attackerID != char.id {
+				if currentRange, exists := targets[char.id]; exists {
+					newRange := currentRange + moveSpeed*0.1
+					targets[char.id] = newRange
+					if newRange < minRange {
+						minRange = newRange
+					}
+				}
+			}
+		}
+		r.mutex.Unlock()
+
+		// Check if flee conditions are met
+		if fleeState.hasDirection {
+			// With direction: flee at 20+ range
+			if minRange >= 20 {
+				r.completeFlee(char, fleeState)
+				continue
+			}
+		} else {
+			// Without direction: flee at 45+ range
+			if minRange >= 45 {
+				r.completeFlee(char, fleeState)
+				continue
+			}
+		}
+	}
+}
+
+// handleFleeTimeout handles when a flee attempt times out
+func (r *Room) handleFleeTimeout(char *Character, fleeState *FleeState) {
+	char.mutex.Lock()
+	r.RemoveCharacterToFlee(char)
+	char.fleeTarget = nil
+	exitDirection := fleeState.exitDirection
+	char.mutex.Unlock()
+
+	// Remove from combat
+	r.removeCharacterFromCombat(char)
+
+	if exitDirection != "" {
+		// Flee through specified exit
+		char.DisplayMessage(fmt.Sprintf("\n\rYou flee %s in panic!\n\r", exitDirection))
+		SendRoomMessage(r, fmt.Sprintf("\n\r%s flees %s in panic!\n\r", char.name, exitDirection), char)
+		r.forceMovementCommand(char, exitDirection)
+	} else {
+		// Flee through first available exit
+		r.mutex.RLock()
+		var firstExit *Exit
+		for _, exit := range r.exits {
+			if exit != nil && exit.visible {
+				firstExit = exit
+				break
+			}
+		}
+		r.mutex.RUnlock()
+
+		if firstExit != nil {
+			char.DisplayMessage(fmt.Sprintf("\n\rYou flee %s in panic!\n\r", firstExit.direction))
+			SendRoomMessage(r, fmt.Sprintf("\n\r%s flees %s in panic!\n\r", char.name, firstExit.direction), char)
+			r.forceMovementCommand(char, firstExit.direction)
+		} else {
+			// No exits available, just remove from combat
+			char.DisplayMessage("\n\rYou manage to escape from combat!\n\r")
+			SendRoomMessage(r, fmt.Sprintf("\n\r%s manages to escape from combat!\n\r", char.name), char)
+		}
+	}
+}
+
+// completeFlee completes a successful flee attempt
+func (r *Room) completeFlee(char *Character, fleeState *FleeState) {
+	char.mutex.Lock()
+	r.RemoveCharacterToFlee(char)
+	char.fleeTarget = nil
+	exitDirection := fleeState.exitDirection
+	char.mutex.Unlock()
+
+	if exitDirection != "" {
+		// Flee through specified exit
+		char.DisplayMessage(fmt.Sprintf("\n\rYou successfully flee %s!\n\r", exitDirection))
+		SendRoomMessage(r, fmt.Sprintf("\n\r%s flees %s!\n\r", char.name, exitDirection), char)
+		r.forceMovementCommand(char, exitDirection)
+	} else {
+		// Just remove from combat
+		r.removeCharacterFromCombat(char)
+		char.DisplayMessage("\n\rYou successfully escape from combat!\n\r")
+		SendRoomMessage(r, fmt.Sprintf("\n\r%s escapes from combat!\n\r", char.name), char)
+	}
+}
+
+// forceMovementCommand forces a character to move in a direction
+func (r *Room) forceMovementCommand(char *Character, direction string) {
+	// Create a movement command request
+	cmd := &CommandRequest{
+		ID:        uuid.Must(uuid.NewV4()),
+		Character: char,
+		Verb:      direction,
+		Args:      []string{direction},
+		Timestamp: time.Now(),
+	}
+
+	// Process the movement command
+	response := handleMovementCommand(cmd, char.game)
+	if !response.Success && response.Error != nil {
+		Logger.Error("Room: Failed to force movement", "character", char.name, "direction", direction, "error", response.Error)
+	}
 }
