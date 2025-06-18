@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Analyzes room and exit data structure for consistency.
 
@@ -10,7 +9,6 @@ This script checks for:
 """
 
 import json
-from collections import defaultdict
 
 
 def load_json_file(filepath: str) -> dict:
@@ -61,10 +59,11 @@ def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:
     """
     # Build room lookup
     rooms = {}
-    room_exits = defaultdict(list)
+    room_exits = {}
 
     for room in rooms_data["rooms"]:
         rooms[room["RoomID"]] = room
+        room_exits[room["RoomID"]] = []
         for exit_id in room.get("ExitID", []):
             room_exits[room["RoomID"]].append(exit_id)
 
@@ -74,8 +73,8 @@ def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:
         exits[exit_obj["ExitID"]] = exit_obj
 
     # Track connections
-    connections = defaultdict(list)  # source_room -> [(target_room, direction, exit_id)]
-    reverse_connections = defaultdict(list)  # target_room -> [(source_room, direction, exit_id)]
+    connections = {}  # source_room -> [(target_room, direction, exit_id)]
+    reverse_connections = {}  # target_room -> [(source_room, direction, exit_id)]
 
     print("=== ROOM AND EXIT ANALYSIS ===\n")
 
@@ -117,7 +116,15 @@ def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:
                 exit_obj = exits[exit_id]
                 target_room = exit_obj["TargetRoom"]
                 direction = exit_obj["Direction"]
+                
+                # Initialize connections for room_id if not present
+                if room_id not in connections:
+                    connections[room_id] = []
                 connections[room_id].append((target_room, direction, exit_id))
+                
+                # Initialize reverse_connections for target_room if not present
+                if target_room not in reverse_connections:
+                    reverse_connections[target_room] = []
                 reverse_connections[target_room].append((room_id, direction, exit_id))
 
     # 4. Check for one-way exits that should be bidirectional

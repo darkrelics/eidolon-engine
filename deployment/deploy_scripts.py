@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Eidolon Engine Lua Script Deployment
 
