@@ -94,10 +94,16 @@ Game:
   PortalS3Bucket: my-mud-portal-123456789012  # Auto-detected or created
   ScriptsS3Bucket: my-mud-scripts-123456789012  # Auto-detected or created
   ScriptsS3Prefix: scripts
+  PortalUrl: https://d1234567890.cloudfront.net  # Portal URL via CloudFront
 
 AWS:
   region: us-east-1
   contact_email: admin@example.com
+
+CloudFront:
+  distribution_id: E1234567890ABC
+  domain_name: d1234567890.cloudfront.net
+  portal_url: https://d1234567890.cloudfront.net
 
 Cognito:
   user_pool_id: us-east-1_xxxxxxxxx
@@ -146,6 +152,20 @@ Existing tables are automatically imported if they match the naming pattern.
 Log groups are created with configurable retention (default: 365 days).
 Existing log groups are imported and settings preserved.
 
+### CloudFront Distribution
+
+The system manages CloudFront for portal distribution:
+- **Existing distributions**: Can be imported by ID
+- **New distributions**: Created with optimized caching
+- **Security**: Uses Origin Access Identity for S3 access
+- **HTTPS**: Enforces secure connections
+
+To use an existing CloudFront distribution, add to `config.yml` before deployment:
+```yaml
+CloudFront:
+  distribution_id: E1234567890ABC
+```
+
 ## Deployment Workflow
 
 ### 1. Pre-Deployment Analysis
@@ -191,6 +211,37 @@ To deploy only Lua scripts:
 
 ```bash
 python deploy_scripts.py
+```
+
+## CI/CD Pipeline
+
+### Portal Deployment
+
+The CodeBuild project automatically builds and deploys the Flutter web portal when changes are pushed to the configured branch. The build process:
+
+1. **Builds the Flutter web application**
+2. **Syncs files to the S3 portal bucket**
+3. **Invalidates CloudFront cache** (if configured)
+
+### CloudFront Cache Invalidation
+
+When CloudFront is configured, the build process automatically:
+- Creates an invalidation for all paths (`/*`)
+- Ensures users immediately see updated content
+- No manual cache clearing required
+
+The invalidation only runs if a CloudFront distribution ID is available, making the process backward compatible with S3-only deployments.
+
+### Manual Portal Deployment
+
+If you need to trigger a portal build manually:
+
+```bash
+# Using AWS CLI
+aws codebuild start-build --project-name {game-name}-portal-build
+
+# Or through AWS Console
+# Navigate to CodeBuild → {game-name}-portal-build → Start build
 ```
 
 ## Migrating from CloudFormation

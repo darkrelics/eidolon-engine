@@ -1,6 +1,6 @@
 """AWS CodeBuild stack for building and deploying the web portal."""
 
-from aws_cdk import Stack, aws_codebuild as codebuild, aws_s3 as s3, CfnOutput
+from aws_cdk import Stack, aws_codebuild as codebuild, aws_s3 as s3, aws_iam as iam, CfnOutput
 from aws_cdk.aws_s3 import IBucket
 from constructs import Construct
 
@@ -19,6 +19,7 @@ class CodeBuildStack(Stack):
         cognito_user_pool_id: str,
         cognito_app_client_id: str,
         portal_bucket: IBucket,
+        cloudfront_distribution_id: str | None = None,
         **kwargs,
     ) -> None:
         """Initialize CodeBuild stack.
@@ -33,6 +34,7 @@ class CodeBuildStack(Stack):
             cognito_user_pool_id: Cognito User Pool ID
             cognito_app_client_id: Cognito App Client ID
             portal_bucket: S3 bucket for the web portal
+            cloudfront_distribution_id: CloudFront distribution ID for cache invalidation
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -65,6 +67,9 @@ class CodeBuildStack(Stack):
                 "COGNITO_USER_POOL_ID": codebuild.BuildEnvironmentVariable(value=cognito_user_pool_id),
                 "COGNITO_APP_CLIENT_ID": codebuild.BuildEnvironmentVariable(value=cognito_app_client_id),
                 "AWS_REGION": codebuild.BuildEnvironmentVariable(value=self.region),
+                "CLOUDFRONT_DISTRIBUTION_ID": codebuild.BuildEnvironmentVariable(
+                    value=cloudfront_distribution_id if cloudfront_distribution_id else ""
+                ),
             },
             build_spec=codebuild.BuildSpec.from_object(
                 {
@@ -92,6 +97,7 @@ class CodeBuildStack(Stack):
                             "commands": [
                                 "aws s3 sync build/web/ s3://$PORTAL_BUCKET/ --delete",
                                 "aws s3 cp build/web/index.html s3://$PORTAL_BUCKET/index.html --cache-control max-age=0",
+                                'if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then echo "Invalidating CloudFront cache..."; aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"; fi',
                             ]
                         },
                     },
@@ -101,6 +107,15 @@ class CodeBuildStack(Stack):
 
         # Grant CodeBuild permissions to write to S3
         self.portal_bucket.grant_read_write(self.build_project)
+
+        # Grant CodeBuild permissions to create CloudFront invalidations if distribution ID is provided
+        if cloudfront_distribution_id:
+            self.build_project.add_to_role_policy(
+                iam.PolicyStatement(
+                    actions=["cloudfront:CreateInvalidation"],
+                    resources=[f"arn:aws:cloudfront::{self.account}:distribution/{cloudfront_distribution_id}"],
+                )
+            )
 
         # Output values
         CfnOutput(self, "CodeBuildProjectName", value=self.build_project.project_name, description="CodeBuild project name")

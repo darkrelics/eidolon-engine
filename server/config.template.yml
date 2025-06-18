@@ -1,6 +1,10 @@
 # NOTE: Values marked with 'deployment-generated' are automatically updated by deployment/deploy.py
 AWS:
   Region: us-east-1 # deployment-generated
+CloudFront: # All CloudFront values are deployment-generated
+  distribution_id: E1234567890ABC
+  domain_name: d1234567890.cloudfront.net
+  portal_url: https://d1234567890.cloudfront.net
 CloudWatch:
   MetricsIntervalSeconds: 60
   MetricsTimeoutSeconds: 10
@@ -18,8 +22,10 @@ Game:
   StartingEssence: 3
   NamesPath: ../data/names.txt
   ObscenityPath: ../data/obscenity.txt
+  PortalS3Bucket: mud-portal # deployment-generated
   ScriptsS3Bucket: mud-scripts # deployment-generated
   ScriptsS3Prefix: scripts
+  PortalUrl: https://d1234567890.cloudfront.net # deployment-generated
   TickIntervalSeconds: 1
   RoomItemCleanupSeconds: 600 # 10 minutes
   RoomUnloadSeconds: 3600 # 60 minutes

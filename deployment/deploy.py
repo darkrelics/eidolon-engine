@@ -109,6 +109,9 @@ class IncrementalDeploymentOrchestrator:
             if "AWS" in config:
                 aws_config = config["AWS"]
                 params["contact_email"] = aws_config.get("contact_email", params["contact_email"])
+            if "CloudFront" in config:
+                cf_config = config["CloudFront"]
+                params["cloudfront_distribution_id"] = cf_config.get("distribution_id", params.get("cloudfront_distribution_id"))
 
         return params
 
@@ -372,6 +375,7 @@ class IncrementalDeploymentOrchestrator:
             f"{game_name}-dynamodb",
             f"{game_name}-cloudwatch",
             f"{game_name}-s3",
+            f"{game_name}-cloudfront",
             f"{game_name}-codebuild"
         ]
 
@@ -516,6 +520,7 @@ class IncrementalDeploymentOrchestrator:
             f"{game_name}-dynamodb",
             f"{game_name}-cloudwatch",
             f"{game_name}-s3",
+            f"{game_name}-cloudfront",
             f"{game_name}-codebuild"
         ]
 
@@ -556,6 +561,23 @@ class IncrementalDeploymentOrchestrator:
                             "PortalS3Bucket": outputs.get("PortalBucketName", ""),
                             "ScriptsS3Bucket": outputs.get("ScriptsBucketName", ""),
                             "ScriptsS3Prefix": "scripts",
+                        },
+                    )
+                elif "cloudfront" in stack_name:
+                    # Update CloudFront configuration
+                    self.config_manager.update_section(
+                        "CloudFront",
+                        {
+                            "distribution_id": outputs.get("DistributionId", ""),
+                            "domain_name": outputs.get("DistributionDomainName", ""),
+                            "portal_url": outputs.get("PortalUrl", ""),
+                        },
+                    )
+                    # Also update Game section with portal URL
+                    self.config_manager.update_section(
+                        "Game",
+                        {
+                            "PortalUrl": outputs.get("PortalUrl", ""),
                         },
                     )
 

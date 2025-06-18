@@ -19,6 +19,7 @@ from cdk.stacks.dynamodb_stack import DynamoDBStack
 from cdk.stacks.cloudwatch_stack import CloudWatchStack
 from cdk.stacks.codebuild_stack import CodeBuildStack
 from cdk.stacks.s3_stack import S3Stack
+from cdk.stacks.cloudfront_stack import CloudFrontStack
 from state_manager import ConfigurationManager, DeploymentState
 
 
@@ -87,6 +88,17 @@ class EidolonEngineApp:
             env=env,
         )
 
+        # Create CloudFront stack for portal distribution
+        self.cloudfront_stack = CloudFrontStack(
+            self.app,
+            f"{params['game_name']}-cloudfront",
+            game_name=params["game_name"],
+            portal_bucket=self.s3_stack.portal_bucket,
+            existing_distribution_id=params.get("cloudfront_distribution_id"),
+            env=env,
+        )
+        self.cloudfront_stack.add_dependency(self.s3_stack)
+
         # Create CodeBuild stack with dependencies
         self.codebuild_stack = CodeBuildStack(
             self.app,
@@ -98,10 +110,12 @@ class EidolonEngineApp:
             cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
             cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
             portal_bucket=self.s3_stack.portal_bucket,
+            cloudfront_distribution_id=self.cloudfront_stack.distribution.distribution_id,
             env=env,
         )
         self.codebuild_stack.add_dependency(self.cognito_stack)
         self.codebuild_stack.add_dependency(self.s3_stack)
+        self.codebuild_stack.add_dependency(self.cloudfront_stack)
 
     def _get_deployment_parameters(self) -> dict:
         """Get deployment parameters from config or state."""
