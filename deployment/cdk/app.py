@@ -33,12 +33,12 @@ class EidolonEngineApp:
         self.state_manager = DeploymentState()
 
         # Load configuration if exists
-        self.config = self._load_configuration()
+        self.config = self.load_configuration()
 
         # Create stacks with dependencies
-        self._create_stacks()
+        self.create_stacks()
 
-    def _load_configuration(self) -> dict:
+    def load_configuration(self) -> dict:
         """Load configuration from server/config.yml or use defaults."""
         if self.config_manager.exists():
             return self.config_manager.config
@@ -50,12 +50,12 @@ class EidolonEngineApp:
                     return yaml.safe_load(f) or {}
             return {}
 
-    def _create_stacks(self):
+    def create_stacks(self):
         """Create all CDK stacks with proper dependencies."""
         env = cdk.Environment(account=os.getenv("CDK_DEFAULT_ACCOUNT"), region=os.getenv("CDK_DEFAULT_REGION", "us-east-1"))
 
         # Get deployment parameters
-        params = self._get_deployment_parameters()
+        params = self.get_deployment_parameters()
 
         # Create Cognito stack
         self.cognito_stack = CognitoStack(
@@ -117,7 +117,7 @@ class EidolonEngineApp:
         self.codebuild_stack.add_dependency(self.s3_stack)
         self.codebuild_stack.add_dependency(self.cloudfront_stack)
 
-    def _get_deployment_parameters(self) -> dict:
+    def get_deployment_parameters(self) -> dict:
         """Get deployment parameters from config or state."""
         # Start with defaults
         params = {

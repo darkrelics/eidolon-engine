@@ -14,7 +14,6 @@ class CodeBuildStack(Stack):
         self,
         scope: Construct,
         construct_id: str,
-        game_name: str,
         github_owner: str,
         github_repo: str,
         github_branch: str,
@@ -29,7 +28,6 @@ class CodeBuildStack(Stack):
         Args:
             scope: CDK app scope
             construct_id: Stack identifier
-            game_name: Name of the game
             github_owner: GitHub repository owner
             github_repo: GitHub repository name
             github_branch: GitHub branch to build from

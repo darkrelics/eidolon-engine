@@ -34,19 +34,19 @@ class CloudFrontStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # Check if we should import an existing distribution
-        if existing_distribution_id and self._distribution_exists(existing_distribution_id):
+        if existing_distribution_id and self.distribution_exists(existing_distribution_id):
             # Import existing distribution
             self.distribution = cloudfront.Distribution.from_distribution_attributes(
                 self,
                 "portal-distribution",
                 distribution_id=existing_distribution_id,
-                domain_name=self._get_distribution_domain(existing_distribution_id),
+                domain_name=self.get_distribution_domain(existing_distribution_id),
             )
             print(f"Using existing CloudFront distribution: {existing_distribution_id}")
         else:
             # Create new distribution
-            self.distribution = self._create_distribution(game_name, portal_bucket)
-            print(f"Creating new CloudFront distribution for {game_name}")
+            self.distribution = self.create_distribution(portal_bucket)
+            print(f"Creating new CloudFront distribution")
 
         # Output values
         CfnOutput(
@@ -70,11 +70,10 @@ class CloudFrontStack(Stack):
             description="Portal URL via CloudFront",
         )
 
-    def _create_distribution(self, game_name: str, portal_bucket: s3.IBucket) -> cloudfront.Distribution:
+    def create_distribution(self, portal_bucket: s3.IBucket) -> cloudfront.Distribution:
         """Create a new CloudFront distribution.
 
         Args:
-            game_name: Name of the game
             portal_bucket: S3 bucket containing the portal
 
         Returns:
@@ -127,7 +126,7 @@ class CloudFrontStack(Stack):
 
         return distribution
 
-    def _distribution_exists(self, distribution_id: str) -> bool:
+    def distribution_exists(self, distribution_id: str) -> bool:
         """Check if a CloudFront distribution exists.
 
         Args:
@@ -148,7 +147,7 @@ class CloudFrontStack(Stack):
                 # Other errors - assume distribution doesn't exist
                 return False
 
-    def _get_distribution_domain(self, distribution_id: str) -> str:
+    def get_distribution_domain(self, distribution_id: str) -> str:
         """Get the domain name of an existing distribution.
 
         Args:

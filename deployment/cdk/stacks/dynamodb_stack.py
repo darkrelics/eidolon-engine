@@ -61,7 +61,7 @@ class DynamoDBStack(Stack):
                 self.tables[config["name"]] = table
             else:
                 # Check if table already exists
-                if self._table_exists(table_name):
+                if self.table_exists(table_name):
                     # Import the table
                     print(f"Found existing DynamoDB table: {table_name}, importing...")
                     table = dynamodb.Table.from_table_name(self, f"{config['name']}-imported", table_name)
@@ -143,7 +143,7 @@ class DynamoDBStack(Stack):
             description="ARN of the DynamoDB access policy",
         )
 
-    def _table_exists(self, table_name: str) -> bool:
+    def table_exists(self, table_name: str) -> bool:
         """Check if a DynamoDB table exists.
 
         Args:
