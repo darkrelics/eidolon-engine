@@ -42,7 +42,7 @@ class CloudFrontStack(Stack):
             # Import existing distribution
             self.distribution = cloudfront.Distribution.from_distribution_attributes(
                 self,
-                f"{game_name}-portal-distribution",
+                "portal-distribution",
                 distribution_id=existing_distribution_id,
                 domain_name=self._get_distribution_domain(existing_distribution_id),
             )
@@ -89,8 +89,8 @@ class CloudFrontStack(Stack):
         # Create Origin Access Identity for secure S3 access
         oai = cloudfront.OriginAccessIdentity(
             self,
-            f"{game_name}-portal-oai",
-            comment=f"OAI for {game_name} portal bucket",
+            "portal-oai",
+            comment="OAI for portal bucket",
         )
 
         # Grant CloudFront read access to the bucket
@@ -125,7 +125,7 @@ class CloudFrontStack(Stack):
                     ttl=Duration.minutes(5),
                 ),
             ],
-            comment=f"CloudFront distribution for {game_name} portal",
+            comment="CloudFront distribution for portal",
             enabled=True,
             http_version=cloudfront.HttpVersion.HTTP2_AND_3,
             price_class=cloudfront.PriceClass.PRICE_CLASS_100,  # US, Canada, Europe

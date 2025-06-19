@@ -45,8 +45,8 @@ class CodeBuildStack(Stack):
         # Create CodeBuild project
         self.build_project = codebuild.Project(
             self,
-            f"{game_name}-portal-build",
-            project_name=f"{game_name}-portal-build",
+            "portal-build",
+            project_name="portal-build",
             description="Build project for Eidolon Engine web portal",
             source=codebuild.Source.git_hub(
                 owner=github_owner,

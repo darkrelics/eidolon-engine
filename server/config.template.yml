@@ -22,8 +22,8 @@ Game:
   StartingEssence: 3
   NamesPath: ../data/names.txt
   ObscenityPath: ../data/obscenity.txt
-  PortalS3Bucket: mud-portal # deployment-generated
-  ScriptsS3Bucket: mud-scripts # deployment-generated
+  PortalS3Bucket: portal-123456789012 # deployment-generated
+  ScriptsS3Bucket: scripts-123456789012 # deployment-generated
   ScriptsS3Prefix: scripts
   PortalUrl: https://d1234567890.cloudfront.net # deployment-generated
   TickIntervalSeconds: 1
@@ -34,9 +34,9 @@ Game:
 Logging:
   ApplicationName: eidolon-engine
   LogLevel: 20
-  LogGroup: /eidolon/game-logs # deployment-generated (from CloudWatch stack)
+  LogGroup: /aws/eidolon/server # deployment-generated (from CloudWatch stack)
   LogStream: system
-  MetricNamespace: eidolon/application # deployment-generated (from CloudWatch stack)
+  MetricNamespace: eidolon/metrics # deployment-generated (from CloudWatch stack)
 SSH:
   Enabled: true
   PrivateKeyPath: ./server.key

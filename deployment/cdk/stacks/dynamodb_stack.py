@@ -47,7 +47,7 @@ class DynamoDBStack(Stack):
 
         # Create or import DynamoDB tables
         for config in table_configs:
-            table_name = f"{game_name}-{config['name']}"
+            table_name = config['name']
             
             # Check if we should use an existing table
             if config["name"] in self.existing_tables:
@@ -57,7 +57,7 @@ class DynamoDBStack(Stack):
                 
                 table = dynamodb.Table.from_table_name(
                     self,
-                    f"{game_name}-{config['name']}-imported",
+                    f"{config['name']}-imported",
                     existing_table_name
                 )
                 self.tables[config["name"]] = table
@@ -68,7 +68,7 @@ class DynamoDBStack(Stack):
                     print(f"Found existing DynamoDB table: {table_name}, importing...")
                     table = dynamodb.Table.from_table_name(
                         self,
-                        f"{game_name}-{config['name']}-imported",
+                        f"{config['name']}-imported",
                         table_name
                     )
                     self.tables[config["name"]] = table
@@ -136,8 +136,8 @@ class DynamoDBStack(Stack):
         # Create managed policy
         self.access_policy = iam.ManagedPolicy(
             self,
-            f"{game_name}-dynamodb-access",
-            managed_policy_name=f"{game_name}-dynamodb-access",
+            "dynamodb-access",
+            managed_policy_name="dynamodb-access",
             document=self.table_access_policy,
             description="Policy for accessing Eidolon Engine DynamoDB tables",
         )

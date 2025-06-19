@@ -16,7 +16,7 @@ This system enables incremental infrastructure updates by:
 - Executes CDK deployments via subprocess
 - Updates configuration files with deployment outputs
 - Handles CloudFormation to CDK migration
-- Provides rollback capabilities on failure
+- Implements fail-forward approach for error recovery
 
 ### 2. State Manager (`deployment/state_manager.py`)
 - Reads and writes infrastructure state to local cache
@@ -82,6 +82,7 @@ This system enables incremental infrastructure updates by:
    - Execute `cdk deploy --all` with appropriate parameters
    - CDK handles dependency resolution automatically
    - Monitor deployment progress
+   - On failure, stop and provide recovery guidance
 
 6. **Configuration Update**
    - Query deployed stack outputs
@@ -102,7 +103,7 @@ This system enables incremental infrastructure updates by:
 ## Key Benefits
 - No complete redeployment for minor changes
 - Faster deployment times
-- Better error handling and rollback
+- Fail-forward approach with clear recovery paths
 - Configuration drift detection
 - Minimal user input required
 - Infrastructure as code with type safety
@@ -127,9 +128,16 @@ The system supports three deployment scenarios:
 3. **Coexistence**: CDK stacks work alongside legacy CloudFormation stacks when adoption isn't possible
 
 ### Resource Naming
-- Legacy CloudFormation uses unprefixed resource names (e.g., `players`, `characters`)
-- New CDK system uses game-prefixed names (e.g., `{game-name}-players`)
-- The system handles mapping between these naming conventions automatically
+- All resources use simple, unprefixed names for clarity and consistency:
+  - DynamoDB tables: `players`, `characters`, `rooms`, `exits`, `items`, `prototypes`, `archetypes`, `motd`
+  - S3 buckets: `portal-{account}`, `scripts-{account}` (account suffix for global uniqueness)
+  - CloudWatch log group: `/aws/eidolon/server`
+  - Cognito user pool: `users`
+  - CodeBuild project: `portal-build`
+  - CloudFront: `portal-distribution`
+  - IAM policies: `dynamodb-access`, `cloudwatch-access`
+- Legacy CloudFormation stacks are still detected with `eidolon-` prefix for backward compatibility
+- CDK stack names are simple service names: `cognito`, `dynamodb`, `cloudwatch`, `s3`, `cloudfront`, `codebuild`
 
 ### CI/CD Integration
 The CodeBuild stack is integrated with CloudFront for seamless deployments:
@@ -139,3 +147,20 @@ The CodeBuild stack is integrated with CloudFront for seamless deployments:
 - **Backward compatibility**: Works with both CloudFront and S3-only deployments
 
 This ensures zero-downtime deployments with immediate content updates for end users.
+
+### Fail-Forward Approach
+
+The deployment system uses a fail-forward strategy rather than automatic rollback:
+
+1. **Partial Deployment Success**: If some stacks deploy successfully before a failure, they remain deployed
+2. **Incremental Recovery**: Failed deployments can be fixed and re-run without affecting successful stacks
+3. **State Preservation**: Deployment state tracks what succeeded for informed recovery decisions
+4. **CDK Stack Rollback**: Individual stack failures are rolled back by CDK, preventing broken stacks
+5. **Manual Intervention**: Requires human decision on whether to continue, fix, or destroy
+
+This approach:
+- **Preserves successful work**: Doesn't waste successfully deployed resources
+- **Enables debugging**: Failed stacks can be investigated in place
+- **Supports iteration**: Fix issues and redeploy only what failed
+- **Reduces risk**: No cascading rollback failures
+- **Maintains control**: Operators decide the recovery strategy

@@ -22,8 +22,8 @@ class CognitoStack(Stack):
         # Create User Pool
         self.user_pool = cognito.UserPool(
             self,
-            f"{game_name}-users",
-            user_pool_name=f"{game_name}-users",
+            "users",
+            user_pool_name="users",
             self_sign_up_enabled=True,
             sign_in_aliases=cognito.SignInAliases(email=True, username=False),
             auto_verify=cognito.AutoVerifiedAttrs(email=True),
@@ -37,7 +37,7 @@ class CognitoStack(Stack):
 
         # Create App Client
         self.app_client = self.user_pool.add_client(
-            f"{game_name}-app-client",
+            "app-client",
             auth_flows=cognito.AuthFlow(user_password=True, user_srp=True),
             generate_secret=False,
             prevent_user_existence_errors=True,
@@ -46,7 +46,7 @@ class CognitoStack(Stack):
         # Create IAM role for authenticated users
         self.authenticated_role = iam.Role(
             self,
-            f"{game_name}-authenticated-role",
+            "authenticated-role",
             assumed_by=iam.FederatedPrincipal(
                 "cognito-identity.amazonaws.com",
                 conditions={

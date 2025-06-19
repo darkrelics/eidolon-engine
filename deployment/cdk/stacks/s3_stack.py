@@ -34,16 +34,16 @@ class S3Stack(Stack):
         # Handle portal bucket
         # Note: When using CloudFront, we don't need public read or website hosting
         self.portal_bucket = self._get_or_create_bucket(
-            f"{game_name}-portal-bucket",
-            portal_bucket_name or f"{game_name}-portal-{self.account}",
+            "portal-bucket",
+            portal_bucket_name or f"portal-{self.account}",
             website_config=None,  # CloudFront will handle web serving
             public_read=False,  # CloudFront OAI will have access
         )
 
         # Handle scripts bucket
         self.scripts_bucket = self._get_or_create_bucket(
-            f"{game_name}-scripts-bucket",
-            scripts_bucket_name or f"{game_name}-scripts-{self.account}",
+            "scripts-bucket",
+            scripts_bucket_name or f"scripts-{self.account}",
             public_read=True,
         )
 

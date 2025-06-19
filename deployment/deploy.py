@@ -206,14 +206,14 @@ class IncrementalDeploymentOrchestrator:
         try:
             validator = ResourceValidatorFactory.create_validator("dynamodb_table", self.session)
             table_names = [
-                f"{game_name}-players",
-                f"{game_name}-characters",
-                f"{game_name}-rooms",
-                f"{game_name}-exits",
-                f"{game_name}-items",
-                f"{game_name}-prototypes",
-                f"{game_name}-archetypes",
-                f"{game_name}-motd",
+                "players",
+                "characters",
+                "rooms",
+                "exits",
+                "items",
+                "prototypes",
+                "archetypes",
+                "motd",
             ]
             
             for table_name in table_names:
@@ -229,7 +229,7 @@ class IncrementalDeploymentOrchestrator:
         # Validate CloudWatch log groups
         try:
             validator = ResourceValidatorFactory.create_validator("cloudwatch_log_group", self.session)
-            log_group_name = f"/aws/eidolon/{game_name}"
+            log_group_name = "/aws/eidolon/server"
             expected_config = {
                 "retention_days": params.get("log_retention_days", 365),
             }
@@ -241,7 +241,7 @@ class IncrementalDeploymentOrchestrator:
         # Validate CodeBuild project
         try:
             validator = ResourceValidatorFactory.create_validator("codebuild_project", self.session)
-            project_name = f"{game_name}-server-build"
+            project_name = "portal-build"
             expected_config = {
                 "source_type": "GITHUB",
                 "environment": {
@@ -259,7 +259,7 @@ class IncrementalDeploymentOrchestrator:
             validator = ResourceValidatorFactory.create_validator("s3_bucket", self.session)
             
             # Check portal bucket
-            portal_bucket = params.get("portal_bucket_name", f"{game_name}-portal-{self.session.client('sts').get_caller_identity()['Account']}")
+            portal_bucket = params.get("portal_bucket_name", f"portal-{self.session.client('sts').get_caller_identity()['Account']}")
             expected_config = {
                 "website_enabled": True,
                 "public_access_block": {
@@ -273,7 +273,7 @@ class IncrementalDeploymentOrchestrator:
             all_results[portal_bucket] = result
             
             # Check scripts bucket
-            scripts_bucket = params.get("scripts_bucket_name", f"{game_name}-scripts-{self.session.client('sts').get_caller_identity()['Account']}")
+            scripts_bucket = params.get("scripts_bucket_name", f"scripts-{self.session.client('sts').get_caller_identity()['Account']}")
             result = validator.validate(scripts_bucket, expected_config)
             all_results[scripts_bucket] = result
         except Exception as err:
@@ -369,14 +369,13 @@ class IncrementalDeploymentOrchestrator:
         cf_mapping = self.map_cloudformation_to_cdk(existing_stacks, params)
         
         # Expected CDK stack names
-        game_name = params["game_name"]
         expected_stacks = [
-            f"{game_name}-cognito",
-            f"{game_name}-dynamodb",
-            f"{game_name}-cloudwatch",
-            f"{game_name}-s3",
-            f"{game_name}-cloudfront",
-            f"{game_name}-codebuild"
+            "cognito",
+            "dynamodb",
+            "cloudwatch",
+            "s3",
+            "cloudfront",
+            "codebuild"
         ]
 
         plan = {

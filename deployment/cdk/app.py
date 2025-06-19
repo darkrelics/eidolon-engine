@@ -60,19 +60,19 @@ class EidolonEngineApp:
         # Create Cognito stack
         self.cognito_stack = CognitoStack(
             self.app,
-            f"{params['game_name']}-cognito",
+            "cognito",
             game_name=params["game_name"],
             contact_email=params["contact_email"],
             env=env,
         )
 
         # Create DynamoDB stack
-        self.dynamodb_stack = DynamoDBStack(self.app, f"{params['game_name']}-dynamodb", game_name=params["game_name"], env=env)
+        self.dynamodb_stack = DynamoDBStack(self.app, "dynamodb", game_name=params["game_name"], env=env)
 
         # Create CloudWatch stack
         self.cloudwatch_stack = CloudWatchStack(
             self.app,
-            f"{params['game_name']}-cloudwatch",
+            "cloudwatch",
             game_name=params["game_name"],
             retention_days=params.get("log_retention_days", 365),
             env=env,
@@ -81,7 +81,7 @@ class EidolonEngineApp:
         # Create S3 stack (handles existing buckets)
         self.s3_stack = S3Stack(
             self.app,
-            f"{params['game_name']}-s3",
+            "s3",
             game_name=params["game_name"],
             portal_bucket_name=params.get("portal_bucket_name"),
             scripts_bucket_name=params.get("scripts_bucket_name"),
@@ -91,7 +91,7 @@ class EidolonEngineApp:
         # Create CloudFront stack for portal distribution
         self.cloudfront_stack = CloudFrontStack(
             self.app,
-            f"{params['game_name']}-cloudfront",
+            "cloudfront",
             game_name=params["game_name"],
             portal_bucket=self.s3_stack.portal_bucket,
             existing_distribution_id=params.get("cloudfront_distribution_id"),
@@ -102,7 +102,7 @@ class EidolonEngineApp:
         # Create CodeBuild stack with dependencies
         self.codebuild_stack = CodeBuildStack(
             self.app,
-            f"{params['game_name']}-codebuild",
+            "codebuild",
             game_name=params["game_name"],
             github_owner=params["github_owner"],
             github_repo=params["github_repo"],

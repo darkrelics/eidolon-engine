@@ -78,7 +78,7 @@ Options:
 ### Initial Parameters
 
 During first deployment, you'll be prompted for:
-- **Game Name**: Unique identifier for your game (e.g., `my-mud`)
+- **Game Name**: Unique identifier for your game (default: `eidolon-engine`)
 - **Contact Email**: Administrator email for notifications
 - **GitHub Owner**: GitHub username or organization
 - **GitHub Repository**: Repository name containing the code
@@ -90,9 +90,9 @@ The system creates and maintains `server/config.yml`:
 
 ```yaml
 Game:
-  name: my-mud
-  PortalS3Bucket: my-mud-portal-123456789012  # Auto-detected or created
-  ScriptsS3Bucket: my-mud-scripts-123456789012  # Auto-detected or created
+  name: eidolon-engine
+  PortalS3Bucket: portal-123456789012  # Auto-detected or created
+  ScriptsS3Bucket: scripts-123456789012  # Auto-detected or created
   ScriptsS3Prefix: scripts
   PortalUrl: https://d1234567890.cloudfront.net  # Portal URL via CloudFront
 
@@ -111,16 +111,37 @@ Cognito:
 
 DynamoDB:
   tables:
-    players: my-mud-players
-    characters: my-mud-characters
-    rooms: my-mud-rooms
-    # ... other tables
+    players: players
+    characters: characters
+    rooms: rooms
+    exits: exits
+    items: items
+    prototypes: prototypes
+    archetypes: archetypes
+    motd: motd
 
 Logging:
   cloudwatch:
-    log_group: /aws/eidolon/my-mud
-    metrics_namespace: EidolonEngine/my-mud
+    log_group: /aws/eidolon/server
+    metrics_namespace: eidolon/metrics
 ```
+
+## Resource Naming Convention
+
+All AWS resources use simple, unprefixed names for clarity:
+
+| Resource Type | Naming Pattern | Example |
+|--------------|----------------|---------|
+| DynamoDB Tables | `{table_type}` | `players`, `characters`, `rooms` |
+| S3 Buckets | `{type}-{account}` | `portal-123456789012` |
+| CloudWatch Log Group | `/aws/eidolon/server` | `/aws/eidolon/server` |
+| Cognito User Pool | `users` | `users` |
+| CodeBuild Project | `portal-build` | `portal-build` |
+| CloudFront Distribution | `portal-distribution` | `portal-distribution` |
+| IAM Policies | `{service}-access` | `dynamodb-access` |
+| CDK Stack Names | `{service}` | `cognito`, `dynamodb`, `s3` |
+
+Legacy CloudFormation stacks with `eidolon-` prefix are still supported for backward compatibility.
 
 ## Resource Management
 
@@ -129,7 +150,7 @@ Logging:
 The system handles S3 buckets intelligently:
 - **Existing buckets**: Automatically detected and used
 - **New buckets**: Created only if they don't exist
-- **Naming**: `{game-name}-portal-{account-id}` and `{game-name}-scripts-{account-id}`
+- **Naming**: `portal-{account-id}` and `scripts-{account-id}`
 
 To use specific existing buckets, add to `config.yml` before deployment:
 ```yaml
@@ -238,10 +259,10 @@ If you need to trigger a portal build manually:
 
 ```bash
 # Using AWS CLI
-aws codebuild start-build --project-name {game-name}-portal-build
+aws codebuild start-build --project-name portal-build
 
 # Or through AWS Console
-# Navigate to CodeBuild → {game-name}-portal-build → Start build
+# Navigate to CodeBuild → portal-build → Start build
 ```
 
 ## Migrating from CloudFormation
@@ -254,6 +275,70 @@ If you have existing CloudFormation stacks (`eidolon-*`):
 4. **Cognito and CodeBuild will coexist** (manual migration needed)
 
 No need to delete CloudFormation stacks first - the system handles coexistence.
+
+## Deployment Recovery (Fail-Forward Approach)
+
+The deployment system uses a fail-forward strategy. When a deployment fails:
+
+### Understanding Deployment Failures
+
+1. **Partial Success**: Some stacks may have deployed successfully before the failure
+2. **CDK Behavior**: Failed stacks are automatically rolled back by CDK
+3. **State Preservation**: Successfully deployed stacks remain active
+
+### Recovery Steps
+
+#### 1. Assess the Failure
+
+```bash
+# Check which stacks were deployed
+aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE
+
+# Review the failure details
+cdk list
+```
+
+#### 2. Fix the Issue
+
+Common fixes:
+- **Permission errors**: Update IAM policies
+- **Resource conflicts**: Rename resources or import existing ones
+- **Limit exceeded**: Request AWS quota increases
+- **Invalid parameters**: Correct configuration values
+
+#### 3. Resume Deployment
+
+```bash
+# Re-run deployment (only failed stacks will be attempted)
+python deploy.py --region us-east-1
+
+# The system will:
+# - Skip already deployed stacks
+# - Attempt only the failed stacks
+# - Update configuration with new outputs
+```
+
+#### 4. Alternative: Clean Slate
+
+If you prefer to start over:
+
+```bash
+# List all stacks
+cdk list
+
+# Destroy specific stacks
+cdk destroy <stack-name>
+
+# Or destroy all stacks (careful!)
+cdk destroy --all
+```
+
+### Fail-Forward Benefits
+
+- **No data loss**: Successful deployments are preserved
+- **Faster recovery**: Fix only what's broken
+- **Learning opportunity**: Investigate failures in place
+- **Incremental progress**: Build infrastructure step by step
 
 ## Troubleshooting
 
@@ -279,7 +364,7 @@ Game:
 ### "Table already exists"
 
 The system should auto-import existing tables. If not:
-1. Ensure table follows naming convention: `{game-name}-{table-type}`
+1. Ensure table follows naming convention: `{table-type}` (e.g., `players`, `characters`)
 2. Check table is in the same region
 3. Verify AWS credentials have access
 
@@ -296,9 +381,17 @@ If drift is detected:
 
 1. **Always analyze first**: Use `--analyze-only` before deploying
 2. **Keep config.yml in version control**: Track infrastructure changes
-3. **Use consistent naming**: Stick to the game name across all resources
+3. **Use consistent naming**: Resources use simple, unprefixed names
 4. **Regular drift checks**: Run analysis periodically
 5. **Backup before major changes**: Export critical data
+
+### Fail-Forward Best Practices
+
+1. **Small incremental changes**: Deploy one feature at a time
+2. **Test in development first**: Use separate environments
+3. **Document dependencies**: Know which stacks depend on others
+4. **Monitor partial deployments**: Check health of deployed stacks
+5. **Plan recovery strategy**: Know how to fix common failures before they happen
 
 ## Advanced Usage
 
@@ -312,7 +405,7 @@ export CDK_DEFAULT_ACCOUNT=123456789012
 export CDK_DEFAULT_REGION=eu-west-1
 
 # Via context
-cdk deploy -c game_name=special-mud
+cdk deploy -c game_name=eidolon-engine
 ```
 
 ### Multi-Environment
