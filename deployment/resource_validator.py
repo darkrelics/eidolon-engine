@@ -617,9 +617,7 @@ class ResourceValidatorFactory:
         return validator_class(session)
 
 
-def validate_stack_resources(
-    session: boto3.Session, stack_name: str, expected_resources: dict
-) -> dict:
+def validate_stack_resources(session: boto3.Session, stack_name: str, expected_resources: dict) -> dict:
     """Validate all resources in a CloudFormation stack.
 
     Args:

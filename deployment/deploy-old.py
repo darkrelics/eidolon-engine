@@ -165,17 +165,13 @@ def update_configuration_file(config_updates, user_pool_name=None) -> None:
     # Update Logging configuration - preserve existing values
     logging_config = config.get("Logging", {})
     cloudwatch_updates = config_updates.get("CloudWatch", {})
-    
+
     logging_updates = {
         "ApplicationName": logging_config.get("ApplicationName", "Eidolon Engine"),
         "LogLevel": logging_config.get("LogLevel", 20),
-        "LogGroup": cloudwatch_updates.get(
-            "LogGroupName", logging_config.get("LogGroup", "/eidolon/game-logs")
-        ),
+        "LogGroup": cloudwatch_updates.get("LogGroupName", logging_config.get("LogGroup", "/eidolon/game-logs")),
         "LogStream": logging_config.get("LogStream", "application"),
-        "MetricNamespace": cloudwatch_updates.get(
-            "MetricNamespace", logging_config.get("MetricNamespace", "eidolon/application")
-        ),
+        "MetricNamespace": cloudwatch_updates.get("MetricNamespace", logging_config.get("MetricNamespace", "eidolon/application")),
     }
     logging_config.update(logging_updates)
     config["Logging"] = logging_config
