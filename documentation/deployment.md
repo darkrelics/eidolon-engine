@@ -5,6 +5,7 @@ This guide explains how to deploy and manage Eidolon Engine infrastructure using
 ## Overview
 
 The deployment system provides:
+
 - **Incremental deployments** - Deploy or update only what's needed
 - **Automatic resource detection** - Discovers and uses existing AWS resources
 - **Zero-downtime updates** - Works with existing infrastructure
@@ -23,6 +24,7 @@ python deploy.py --region us-east-1
 ```
 
 The system will:
+
 1. Prompt for required parameters (game name, email, GitHub details)
 2. Create all necessary AWS resources
 3. Save configuration to `server/config.yml`
@@ -41,6 +43,7 @@ python deploy.py --region us-east-1
 ```
 
 The system will:
+
 1. Detect existing CloudFormation stacks
 2. Find existing S3 buckets, DynamoDB tables, and other resources
 3. Import compatible resources (DynamoDB, CloudWatch, S3)
@@ -56,6 +59,7 @@ python incremental_deploy.py --region us-east-1
 ```
 
 The system will:
+
 1. Compare current state with desired state
 2. Apply only necessary changes
 3. Show drift report if manual changes were made
@@ -78,6 +82,7 @@ Options:
 ### Initial Parameters
 
 During first deployment, you'll be prompted for:
+
 - **Game Name**: Unique identifier for your game (default: `eidolon-engine`)
 - **Contact Email**: Administrator email for notifications
 - **GitHub Owner**: GitHub username or organization
@@ -91,10 +96,10 @@ The system creates and maintains `server/config.yml`:
 ```yaml
 Game:
   name: eidolon-engine
-  PortalS3Bucket: eidolon-portal  # Auto-detected or created
-  ScriptsS3Bucket: eidolon-scripts  # Auto-detected or created
+  PortalS3Bucket: eidolon-portal # Auto-detected or created
+  ScriptsS3Bucket: eidolon-scripts # Auto-detected or created
   ScriptsS3Prefix: scripts
-  PortalUrl: https://d1234567890.cloudfront.net  # Portal URL via CloudFront
+  PortalUrl: https://d1234567890.cloudfront.net # Portal URL via CloudFront
 
 AWS:
   region: us-east-1
@@ -130,16 +135,16 @@ Logging:
 
 All AWS resources use simple, unprefixed names for clarity:
 
-| Resource Type | Naming Pattern | Example |
-|--------------|----------------|---------|
-| DynamoDB Tables | `eidolon-{table_type}` | `eidolon-players`, `eidolon-characters`, `eidolon-rooms` |
-| S3 Buckets | `eidolon-{type}` | `eidolon-portal` |
-| CloudWatch Log Group | `/aws/eidolon/server` | `/aws/eidolon/server` |
-| Cognito User Pool | `users` | `users` |
-| CodeBuild Project | `eidolon-portal-build` | `eidolon-portal-build` |
-| CloudFront Distribution | `eidolon-portal-distribution` | `eidolon-portal-distribution` |
-| IAM Policies | `{service}-access` | `dynamodb-access` |
-| CDK Stack Names | `{service}` | `cognito`, `dynamodb`, `s3` |
+| Resource Type           | Naming Pattern                | Example                                                  |
+| ----------------------- | ----------------------------- | -------------------------------------------------------- |
+| DynamoDB Tables         | `eidolon-{table_type}`        | `eidolon-players`, `eidolon-characters`, `eidolon-rooms` |
+| S3 Buckets              | `eidolon-{type}`              | `eidolon-portal`                                         |
+| CloudWatch Log Group    | `/aws/eidolon/server`         | `/aws/eidolon/server`                                    |
+| Cognito User Pool       | `users`                       | `users`                                                  |
+| CodeBuild Project       | `eidolon-portal-build`        | `eidolon-portal-build`                                   |
+| CloudFront Distribution | `eidolon-portal-distribution` | `eidolon-portal-distribution`                            |
+| IAM Policies            | `{service}-access`            | `dynamodb-access`                                        |
+| CDK Stack Names         | `{service}`                   | `cognito`, `dynamodb`, `s3`                              |
 
 Legacy CloudFormation stacks with `eidolon-` prefix are still supported for backward compatibility.
 
@@ -148,11 +153,13 @@ Legacy CloudFormation stacks with `eidolon-` prefix are still supported for back
 ### S3 Buckets
 
 The system handles S3 buckets intelligently:
+
 - **Existing buckets**: Automatically detected and used
 - **New buckets**: Created only if they don't exist
 - **Naming**: `eidolon-portal` and `eidolon-scripts`
 
 To use specific existing buckets, add to `config.yml` before deployment:
+
 ```yaml
 Game:
   PortalS3Bucket: eidolon-portal
@@ -162,6 +169,7 @@ Game:
 ### DynamoDB Tables
 
 Tables are created with:
+
 - **Billing**: Pay-per-request (on-demand)
 - **Backup**: Point-in-time recovery enabled
 - **Retention**: Tables retained on stack deletion
@@ -176,12 +184,14 @@ Existing log groups are imported and settings preserved.
 ### CloudFront Distribution
 
 The system manages CloudFront for portal distribution:
+
 - **Existing distributions**: Can be imported by ID
 - **New distributions**: Created with optimized caching
 - **Security**: Uses Origin Access Identity for S3 access
 - **HTTPS**: Enforces secure connections
 
 To use an existing CloudFront distribution, add to `config.yml` before deployment:
+
 ```yaml
 CloudFront:
   distribution_id: E1234567890ABC
@@ -198,6 +208,7 @@ python deploy.py --analyze-only
 ```
 
 Output shows:
+
 - Existing CloudFormation stacks
 - Resources that can be adopted
 - Resources that need creation
@@ -247,6 +258,7 @@ The CodeBuild project automatically builds and deploys the Flutter web portal wh
 ### CloudFront Cache Invalidation
 
 When CloudFront is configured, the build process automatically:
+
 - Creates an invalidation for all paths (`/*`)
 - Ensures users immediately see updated content
 - No manual cache clearing required
@@ -301,6 +313,7 @@ cdk list
 #### 2. Fix the Issue
 
 Common fixes:
+
 - **Permission errors**: Update IAM policies
 - **Resource conflicts**: Rename resources or import existing ones
 - **Limit exceeded**: Request AWS quota increases
@@ -345,6 +358,7 @@ cdk destroy --all
 ### "Stack already exists"
 
 If you see CDK stack conflicts:
+
 ```bash
 # List existing stacks
 aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE
@@ -356,6 +370,7 @@ cdk destroy STACK_NAME
 ### "Bucket already exists"
 
 Add the bucket name to `config.yml` before deployment:
+
 ```yaml
 Game:
   PortalS3Bucket: existing-bucket-name
@@ -364,6 +379,7 @@ Game:
 ### "Table already exists"
 
 The system should auto-import existing tables. If not:
+
 1. Ensure table follows naming convention: `eidolon-{table-type}` (e.g., `eidolon-players`, `eidolon-characters`)
 2. Check table is in the same region
 3. Verify AWS credentials have access
@@ -371,6 +387,7 @@ The system should auto-import existing tables. If not:
 ### Resource Drift
 
 If drift is detected:
+
 1. Review the drift report
 2. Decide whether to:
    - Accept drift (update CDK to match reality)
@@ -423,6 +440,7 @@ AWS_PROFILE=prod python deploy.py --region eu-west-1
 ### State Management
 
 Deployment state is tracked in:
+
 - `.deployment_state.json` - Local state file
 - CloudFormation stack outputs - Resource identifiers
 - `server/config.yml` - Runtime configuration
@@ -430,6 +448,7 @@ Deployment state is tracked in:
 ## Legacy Systems
 
 The following systems are replaced by the CDK deployment:
+
 - `deployment/deploy-old.py` - Legacy CloudFormation deployment script
 - `cloudformation/*.yml` - CloudFormation templates (for reference only)
 - Manual resource creation in AWS Console
