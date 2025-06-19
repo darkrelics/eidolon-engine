@@ -242,7 +242,7 @@ Add script configuration to your `config.yml`:
 
 ```yaml
 game:
-  scriptsS3Bucket: "your-scripts-bucket"
+  scriptsS3Bucket: "eidolon-scripts"
   scriptsS3Prefix: "scripts/" # Optional, defaults to "scripts/"
 ```
 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Eidolon Engine Lua Script Deployment
 
@@ -112,9 +111,9 @@ def list_deployed_scripts(bucket_name, prefix="scripts"):
 
         scripts = []
         if "Contents" in response:
-            for obj in response["Contents"]:
-                if obj["Key"].endswith(".lua"):
-                    scripts.append({"key": obj["Key"], "size": obj["Size"], "modified": obj["LastModified"]})
+            for obj in response.get("Contents", []):
+                if obj.get("Key", "").endswith(".lua"):
+                    scripts.append({"key": obj.get("Key"), "size": obj.get("Size"), "modified": obj.get("LastModified")})
 
         if scripts:
             print(f"\nDeployed scripts in s3://{bucket_name}/{prefix}:")

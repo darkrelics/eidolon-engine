@@ -1,0 +1,154 @@
+"""AWS S3 stack for Eidolon Engine storage needs."""
+
+import boto3
+from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import aws_s3 as s3
+from aws_cdk.aws_s3 import IBucket
+from botocore.exceptions import ClientError
+from constructs import Construct
+
+
+class S3Stack(Stack):
+    """S3 stack for Eidolon Engine storage buckets."""
+
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        game_name: str,
+        portal_bucket_name: str | None = None,
+        scripts_bucket_name: str | None = None,
+        **kwargs,
+    ) -> None:
+        """Initialize S3 stack.
+
+        Args:
+            scope: CDK app scope
+            construct_id: Stack identifier
+            game_name: Name of the game
+            portal_bucket_name: Optional existing portal bucket name
+            scripts_bucket_name: Optional existing scripts bucket name
+            **kwargs: Additional stack properties
+        """
+        super().__init__(scope, construct_id, **kwargs)
+
+        # Handle portal bucket
+        # Note: When using CloudFront, we don't need public read or website hosting
+        self.portal_bucket = self._get_or_create_bucket(
+            "portal-bucket",
+            portal_bucket_name or "eidolon-portal",
+            website_config=None,  # CloudFront will handle web serving
+            public_read=False,  # CloudFront OAI will have access
+        )
+
+        # Handle scripts bucket
+        self.scripts_bucket = self._get_or_create_bucket(
+            "scripts-bucket",
+            scripts_bucket_name or "eidolon-scripts",
+            public_read=True,
+        )
+
+        # Output values
+        CfnOutput(
+            self,
+            "PortalBucketName",
+            value=self.portal_bucket.bucket_name,
+            description="S3 bucket name for web portal",
+        )
+
+        CfnOutput(
+            self,
+            "PortalWebsiteUrl",
+            value=(
+                self.portal_bucket.bucket_website_url
+                if hasattr(self.portal_bucket, "bucket_website_url")
+                else f"http://{self.portal_bucket.bucket_name}.s3-website-{self.region}.amazonaws.com"
+            ),
+            description="URL of the web portal",
+        )
+
+        CfnOutput(
+            self,
+            "ScriptsBucketName",
+            value=self.scripts_bucket.bucket_name,
+            description="S3 bucket name for game scripts",
+        )
+
+    def _get_or_create_bucket(
+        self,
+        logical_id: str,
+        bucket_name: str,
+        website_config: dict[str, str] | None = None,
+        public_read: bool = False,
+    ) -> IBucket:
+        """Get existing bucket or create a new one.
+
+        Args:
+            logical_id: Logical ID for the bucket in the stack
+            bucket_name: Name of the bucket
+            website_config: Optional website configuration
+            public_read: Whether to enable public read access
+
+        Returns:
+            S3 bucket (existing or newly created)
+        """
+        # Check if bucket exists
+        if self._bucket_exists(bucket_name):
+            # Import existing bucket
+            bucket = s3.Bucket.from_bucket_name(self, logical_id, bucket_name)
+
+            # Note: We cannot modify existing bucket configurations through CDK import
+            # The bucket must already have the correct configuration
+            print(f"Using existing S3 bucket: {bucket_name}")
+
+            return bucket
+        else:
+            # Create new bucket with desired configuration
+            bucket_props = {
+                "bucket_name": bucket_name,
+                "removal_policy": RemovalPolicy.RETAIN,
+                "auto_delete_objects": False,
+            }
+
+            if website_config:
+                bucket_props["website_index_document"] = website_config["index_document"]
+                bucket_props["website_error_document"] = website_config["error_document"]
+
+            if public_read:
+                bucket_props["public_read_access"] = True
+                bucket_props["block_public_access"] = s3.BlockPublicAccess(
+                    block_public_acls=False,
+                    block_public_policy=False,
+                    ignore_public_acls=False,
+                    restrict_public_buckets=False,
+                )
+
+            bucket = s3.Bucket(self, logical_id, **bucket_props)
+            print(f"Creating new S3 bucket: {bucket_name}")
+
+            return bucket
+
+    def _bucket_exists(self, bucket_name: str) -> bool:
+        """Check if an S3 bucket exists.
+
+        Args:
+            bucket_name: Name of the bucket to check
+
+        Returns:
+            True if bucket exists, False otherwise
+        """
+        try:
+            s3_client = boto3.client("s3", region_name=self.region)
+            s3_client.head_bucket(Bucket=bucket_name)
+            return True
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code")
+            if error_code in ["404", "NoSuchBucket"]:
+                return False
+            elif error_code == "403":
+                # Bucket exists but we don't have access
+                # Treat as existing to avoid trying to create it
+                return True
+            else:
+                # Other errors - assume bucket doesn't exist
+                return False
