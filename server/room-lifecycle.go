@@ -577,6 +577,13 @@ func (r *Room) processCombatMovements() {
 					newRange = movement.targetRange
 				}
 
+				// Check if crossing pole range threshold
+				if currentRange > combatRangePole && newRange <= combatRangePole {
+					char.DisplayMessage(fmt.Sprintf("\n\rYou reach pole range with %s.\n\r", target.name))
+					target.DisplayMessage(fmt.Sprintf("\n\r%s is advancing on you and has reached pole range.\n\r", char.name))
+					SendRoomMessage(r, fmt.Sprintf("\n\r%s reaches pole range with %s.\n\r", char.name, target.name), char, target)
+				}
+
 				r.setCombatRange(char, target, newRange)
 
 				// Check if reached target range
