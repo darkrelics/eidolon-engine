@@ -691,9 +691,9 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		r.AddCharacterToMove(character)
 
 		rangeName := "close combat"
-		if rangeType == "melee" {
+		if targetRange == combatRangeMelee {
 			rangeName = "melee range"
-		} else if rangeType == "pole" {
+		} else if targetRange == combatRangePole {
 			rangeName = "pole range"
 		}
 
