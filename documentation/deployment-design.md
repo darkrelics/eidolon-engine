@@ -129,13 +129,13 @@ The system supports three deployment scenarios:
 
 ### Resource Naming
 - All resources use simple, unprefixed names for clarity and consistency:
-  - DynamoDB tables: `players`, `characters`, `rooms`, `exits`, `items`, `prototypes`, `archetypes`, `motd`
-  - S3 buckets: `portal-{account}`, `scripts-{account}` (account suffix for global uniqueness)
+  - DynamoDB tables: `eidolon-players`, `eidolon-characters`, `eidolon-rooms`, `eidolon-exits`, `eidolon-items`, `eidolon-prototypes`, `eidolon-archetypes`, `eidolon-motd`
+  - S3 buckets: `eidolon-portal`, `eidolon-scripts`
   - CloudWatch log group: `/aws/eidolon/server`
-  - Cognito user pool: `users`
-  - CodeBuild project: `portal-build`
-  - CloudFront: `portal-distribution`
-  - IAM policies: `dynamodb-access`, `cloudwatch-access`
+  - Cognito user pool: `eidolon-users`
+  - CodeBuild project: `eidolon-portal-build`
+  - CloudFront: `eidolon-portal-distribution`
+  - IAM policies: `eidolon-dynamodb-access`, `eidolon-cloudwatch-access`
 - Legacy CloudFormation stacks are still detected with `eidolon-` prefix for backward compatibility
 - CDK stack names are simple service names: `cognito`, `dynamodb`, `cloudwatch`, `s3`, `cloudfront`, `codebuild`
 

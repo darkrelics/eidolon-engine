@@ -23,7 +23,7 @@ class CognitoStack(Stack):
         self.user_pool = cognito.UserPool(
             self,
             "users",
-            user_pool_name="users",
+            user_pool_name="eidolon-users",
             self_sign_up_enabled=True,
             sign_in_aliases=cognito.SignInAliases(email=True, username=False),
             auto_verify=cognito.AutoVerifiedAttrs(email=True),

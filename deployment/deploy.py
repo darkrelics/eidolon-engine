@@ -68,7 +68,7 @@ class IncrementalDeploymentOrchestrator:
         try:
             sts = self.session.client("sts")
             identity = sts.get_caller_identity()
-            print(f"✓ AWS Account: {identity['Account']}")
+            print(f"✓ AWS Account: {identity.get('Account', 'Unknown')}")
             print(f"✓ AWS Region: {self.region}")
         except Exception as err:
             print(f"ERROR: Unable to access AWS: {err}")
@@ -157,27 +157,27 @@ class IncrementalDeploymentOrchestrator:
         try:
             paginator = self.cfn_client.get_paginator("list_stacks")
             for page in paginator.paginate(StackStatusFilter=["CREATE_COMPLETE", "UPDATE_COMPLETE"]):
-                for stack in page["StackSummaries"]:
-                    stack_name = stack["StackName"]
+                for stack in page.get("StackSummaries", []):
+                    stack_name = stack.get("StackName")
                     # Get detailed stack info
                     try:
                         response = self.cfn_client.describe_stacks(StackName=stack_name)
-                        stack_detail = response["Stacks"][0]
+                        stack_detail = response.get("Stacks", [{}])[0]
                         
                         # Get stack resources for mapping
                         resources_response = self.cfn_client.list_stack_resources(StackName=stack_name)
                         resources = {}
                         for resource in resources_response.get("StackResourceSummaries", []):
-                            resources[resource["LogicalResourceId"]] = {
-                                "physical_id": resource["PhysicalResourceId"],
-                                "type": resource["ResourceType"],
+                            resources[resource.get("LogicalResourceId")] = {
+                                "physical_id": resource.get("PhysicalResourceId"),
+                                "type": resource.get("ResourceType"),
                             }
                         
                         existing_stacks[stack_name] = {
-                            "status": stack_detail["StackStatus"],
-                            "outputs": {output["OutputKey"]: output["OutputValue"] for output in stack_detail.get("Outputs", [])},
+                            "status": stack_detail.get("StackStatus"),
+                            "outputs": {output.get("OutputKey"): output.get("OutputValue") for output in stack_detail.get("Outputs", [])},
                             "parameters": {
-                                param["ParameterKey"]: param["ParameterValue"] for param in stack_detail.get("Parameters", [])
+                                param.get("ParameterKey"): param.get("ParameterValue") for param in stack_detail.get("Parameters", [])
                             },
                             "resources": resources,
                             "template_format": "CloudFormation",
@@ -206,14 +206,14 @@ class IncrementalDeploymentOrchestrator:
         try:
             validator = ResourceValidatorFactory.create_validator("dynamodb_table", self.session)
             table_names = [
-                "players",
-                "characters",
-                "rooms",
-                "exits",
-                "items",
-                "prototypes",
-                "archetypes",
-                "motd",
+                "eidolon-players",
+                "eidolon-characters",
+                "eidolon-rooms",
+                "eidolon-exits",
+                "eidolon-items",
+                "eidolon-prototypes",
+                "eidolon-archetypes",
+                "eidolon-motd",
             ]
             
             for table_name in table_names:
@@ -241,7 +241,7 @@ class IncrementalDeploymentOrchestrator:
         # Validate CodeBuild project
         try:
             validator = ResourceValidatorFactory.create_validator("codebuild_project", self.session)
-            project_name = "portal-build"
+            project_name = "eidolon-portal-build"
             expected_config = {
                 "source_type": "GITHUB",
                 "environment": {
@@ -259,7 +259,7 @@ class IncrementalDeploymentOrchestrator:
             validator = ResourceValidatorFactory.create_validator("s3_bucket", self.session)
             
             # Check portal bucket
-            portal_bucket = params.get("portal_bucket_name", f"portal-{self.session.client('sts').get_caller_identity()['Account']}")
+            portal_bucket = params.get("portal_bucket_name", "eidolon-portal")
             expected_config = {
                 "website_enabled": True,
                 "public_access_block": {
@@ -273,7 +273,7 @@ class IncrementalDeploymentOrchestrator:
             all_results[portal_bucket] = result
             
             # Check scripts bucket
-            scripts_bucket = params.get("scripts_bucket_name", f"scripts-{self.session.client('sts').get_caller_identity()['Account']}")
+            scripts_bucket = params.get("scripts_bucket_name", "eidolon-scripts")
             result = validator.validate(scripts_bucket, expected_config)
             all_results[scripts_bucket] = result
         except Exception as err:
@@ -311,24 +311,24 @@ class IncrementalDeploymentOrchestrator:
                 
                 # Map resources to CDK expectations
                 if legacy_name == "eidolon-cognito":
-                    if "UserPoolId" in stack_info["outputs"]:
-                        mapping["resource_mapping"]["cognito_user_pool_id"] = stack_info["outputs"]["UserPoolId"]
-                    if "AppClientId" in stack_info["outputs"]:
-                        mapping["resource_mapping"]["cognito_app_client_id"] = stack_info["outputs"]["AppClientId"]
+                    if "UserPoolId" in stack_info.get("outputs", {}):
+                        mapping["resource_mapping"]["cognito_user_pool_id"] = stack_info.get("outputs", {}).get("UserPoolId")
+                    if "AppClientId" in stack_info.get("outputs", {}):
+                        mapping["resource_mapping"]["cognito_app_client_id"] = stack_info.get("outputs", {}).get("AppClientId")
                 elif legacy_name == "eidolon-dynamodb":
                     # Map DynamoDB table names
-                    for key, value in stack_info["outputs"].items():
+                    for key, value in stack_info.get("outputs", {}).items():
                         if key.endswith("TableName"):
                             table_type = key.replace("TableName", "").lower()
                             mapping["resource_mapping"][f"dynamodb_{table_type}_table"] = value
                 elif legacy_name == "eidolon-cloudwatch":
-                    if "LogGroupName" in stack_info["outputs"]:
-                        mapping["resource_mapping"]["log_group_name"] = stack_info["outputs"]["LogGroupName"]
+                    if "LogGroupName" in stack_info.get("outputs", {}):
+                        mapping["resource_mapping"]["log_group_name"] = stack_info.get("outputs", {}).get("LogGroupName")
 
         # Determine migration strategy
         if mapping["cloudformation_stacks"]:
             # We have existing CloudFormation stacks
-            can_adopt_all = all(stack["can_adopt"] for stack in mapping["cloudformation_stacks"].values())
+            can_adopt_all = all(stack.get("can_adopt", False) for stack in mapping["cloudformation_stacks"].values())
             if can_adopt_all:
                 mapping["migration_strategy"] = "adopt"
             else:
@@ -392,7 +392,7 @@ class IncrementalDeploymentOrchestrator:
         if cf_mapping["cloudformation_stacks"]:
             print("\nDetected existing CloudFormation stacks:")
             for stack_name, info in cf_mapping["cloudformation_stacks"].items():
-                print(f"  • {stack_name} (can adopt: {info['can_adopt']})")
+                print(f"  • {stack_name} (can adopt: {info.get('can_adopt', False)})")
             
             if cf_mapping["migration_strategy"] == "adopt":
                 print("\nStrategy: Adopt existing resources into CDK stacks")
@@ -457,7 +457,7 @@ class IncrementalDeploymentOrchestrator:
 
         # Set environment variables for CDK
         env = os.environ.copy()
-        env["CDK_DEFAULT_ACCOUNT"] = self.session.client("sts").get_caller_identity()["Account"]
+        env["CDK_DEFAULT_ACCOUNT"] = self.session.client("sts").get_caller_identity().get("Account")
         env["CDK_DEFAULT_REGION"] = self.region
 
         # Add profile if specified
@@ -526,31 +526,43 @@ class IncrementalDeploymentOrchestrator:
         for stack_name in stacks_to_query:
             try:
                 response = self.cfn_client.describe_stacks(StackName=stack_name)
-                stack = response["Stacks"][0]
-                outputs = {output["OutputKey"]: output["OutputValue"] for output in stack.get("Outputs", [])}
+                stack = response.get("Stacks", [{}])[0]
+                outputs = {output.get("OutputKey"): output.get("OutputValue") for output in stack.get("Outputs", [])}
 
                 # Update config based on stack type
                 if "cognito" in stack_name:
                     self.config_manager.update_section(
-                        "Cognito", {"user_pool_id": outputs.get("UserPoolId", ""), "app_client_id": outputs.get("AppClientId", "")}
+                        "Cognito", {
+                            "UserPoolId": outputs.get("UserPoolId", ""),
+                            "UserPoolClientId": outputs.get("AppClientId", ""),
+                            "AuthenticatedRoleArn": outputs.get("AuthenticatedRoleArn", "")
+                        }
                     )
                 elif "dynamodb" in stack_name:
                     # Extract table names
                     tables = {}
                     for key, value in outputs.items():
                         if key.endswith("TableName"):
-                            table_type = key.replace("TableName", "").lower()
+                            # Convert PlayersTableName -> Players, CharactersTableName -> Characters, etc.
+                            table_type = key.replace("TableName", "")
                             tables[table_type] = value
-                    self.config_manager.update_section("DynamoDB", {"tables": tables})
+                    self.config_manager.update_section("DynamoDB", {
+                        "Tables": tables,
+                        "AccessPolicyArn": outputs.get("DynamoDBAccessPolicyArn", "")
+                    })
                 elif "cloudwatch" in stack_name:
                     self.config_manager.update_section(
                         "Logging",
                         {
-                            "cloudwatch": {
-                                "log_group": outputs.get("LogGroupName", ""),
-                                "metrics_namespace": outputs.get("MetricsNamespace", ""),
-                            }
+                            "LogGroup": outputs.get("LogGroupName", ""),
+                            "MetricNamespace": outputs.get("MetricsNamespace", ""),
                         },
+                    )
+                    self.config_manager.update_section(
+                        "CloudWatch",
+                        {
+                            "AccessPolicyArn": outputs.get("CloudWatchAccessPolicyArn", "")
+                        }
                     )
                 elif "s3" in stack_name:
                     # Update S3 bucket names in config
@@ -579,6 +591,14 @@ class IncrementalDeploymentOrchestrator:
                             "PortalUrl": outputs.get("PortalUrl", ""),
                         },
                     )
+                elif "codebuild" in stack_name:
+                    # Update CodeBuild configuration
+                    self.config_manager.update_section(
+                        "CodeBuild",
+                        {
+                            "ProjectName": outputs.get("CodeBuildProjectName", "")
+                        }
+                    )
 
             except Exception as err:
                 print(f"Warning: Could not get outputs for {stack_name}: {err}")
@@ -602,7 +622,7 @@ class IncrementalDeploymentOrchestrator:
         print("\nDeploying Lua scripts...")
 
         # Get S3 bucket name from parameters or config
-        bucket_name = params.get("scripts_bucket_name", params.get("scripts_s3_bucket", f"{params['game_name']}-scripts"))
+        bucket_name = params.get("scripts_bucket_name", params.get("scripts_s3_bucket", "eidolon-scripts"))
         prefix = params.get("scripts_s3_prefix", "scripts")
 
         scripts_dir = Path(__file__).parent.parent / "scripts_lua"

@@ -96,22 +96,22 @@ class DynamoDBTableValidator(ResourceValidator):
         try:
             # Get table description
             response = self.client.describe_table(TableName=resource_id)
-            table = response["Table"]
+            table = response.get("Table", {})
             result.exists = True
 
             # Extract actual configuration
             result.actual_config = {
-                "table_name": table["TableName"],
+                "table_name": table.get("TableName"),
                 "billing_mode": table.get("BillingModeSummary", {}).get("BillingMode", "PROVISIONED"),
-                "key_schema": table["KeySchema"],
-                "attribute_definitions": table["AttributeDefinitions"],
+                "key_schema": table.get("KeySchema", []),
+                "attribute_definitions": table.get("AttributeDefinitions", []),
                 "point_in_time_recovery": self._get_point_in_time_recovery(resource_id),
-                "table_status": table["TableStatus"],
+                "table_status": table.get("TableStatus"),
             }
 
             # Check table status
-            if table["TableStatus"] != "ACTIVE":
-                result.add_message(f"Table is not active (status: {table['TableStatus']})")
+            if table.get("TableStatus") != "ACTIVE":
+                result.add_message(f"Table is not active (status: {table.get('TableStatus')})")
                 result.valid = False
                 return result
 
@@ -140,7 +140,7 @@ class DynamoDBTableValidator(ResourceValidator):
             result.valid = True
 
         except ClientError as err:
-            if err.response["Error"]["Code"] == "ResourceNotFoundException":
+            if err.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
                 result.exists = False
                 result.add_message(f"Table {resource_id} does not exist")
             else:
@@ -178,11 +178,11 @@ class DynamoDBTableValidator(ResourceValidator):
             return False
 
         # Sort by attribute name for comparison
-        actual_sorted = sorted(actual, key=lambda x: x["AttributeName"])
-        expected_sorted = sorted(expected, key=lambda x: x["AttributeName"])
+        actual_sorted = sorted(actual, key=lambda x: x.get("AttributeName", ""))
+        expected_sorted = sorted(expected, key=lambda x: x.get("AttributeName", ""))
 
         for a, e in zip(actual_sorted, expected_sorted):
-            if a["AttributeName"] != e["AttributeName"] or a["KeyType"] != e["KeyType"]:
+            if a.get("AttributeName") != e.get("AttributeName") or a.get("KeyType") != e.get("KeyType"):
                 return False
 
         return True
@@ -204,13 +204,13 @@ class CognitoValidator(ResourceValidator):
         try:
             # Get user pool description
             response = self.client.describe_user_pool(UserPoolId=resource_id)
-            pool = response["UserPool"]
+            pool = response.get("UserPool", {})
             result.exists = True
 
             # Extract actual configuration
             result.actual_config = {
-                "pool_name": pool["Name"],
-                "status": pool["Status"],
+                "pool_name": pool.get("Name"),
+                "status": pool.get("Status"),
                 "mfa_configuration": pool.get("MfaConfiguration", "OFF"),
                 "password_policy": pool.get("Policies", {}).get("PasswordPolicy", {}),
                 "auto_verified_attributes": pool.get("AutoVerifiedAttributes", []),
@@ -218,8 +218,8 @@ class CognitoValidator(ResourceValidator):
             }
 
             # Check pool status
-            if pool["Status"] != "Enabled":
-                result.add_message(f"User pool is not enabled (status: {pool['Status']})")
+            if pool.get("Status") != "Enabled":
+                result.add_message(f"User pool is not enabled (status: {pool.get('Status')})")
                 result.valid = False
                 return result
 
@@ -240,7 +240,7 @@ class CognitoValidator(ResourceValidator):
             result.valid = True
 
         except ClientError as err:
-            if err.response["Error"]["Code"] == "ResourceNotFoundException":
+            if err.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
                 result.exists = False
                 result.add_message(f"User pool {resource_id} does not exist")
             else:
@@ -331,7 +331,7 @@ class CloudWatchValidator(ResourceValidator):
 
         for page in paginator.paginate(**kwargs):
             for group in page.get("logGroups", []):
-                log_groups.append(group["logGroupName"])
+                log_groups.append(group.get("logGroupName"))
 
         return log_groups
 
@@ -353,24 +353,24 @@ class CodeBuildValidator(ResourceValidator):
             # Get project description
             response = self.client.batch_get_projects(names=[resource_id])
 
-            if not response["projects"]:
+            if not response.get("projects", []):
                 result.exists = False
                 result.add_message(f"CodeBuild project {resource_id} does not exist")
                 return result
 
-            project = response["projects"][0]
+            project = response.get("projects", [{}])[0]
             result.exists = True
 
             # Extract actual configuration
             result.actual_config = {
-                "project_name": project["name"],
-                "source_type": project["source"]["type"],
+                "project_name": project.get("name"),
+                "source_type": project.get("source", {}).get("type"),
                 "environment": {
-                    "compute_type": project["environment"]["computeType"],
-                    "image": project["environment"]["image"],
-                    "type": project["environment"]["type"],
+                    "compute_type": project.get("environment", {}).get("computeType"),
+                    "image": project.get("environment", {}).get("image"),
+                    "type": project.get("environment", {}).get("type"),
                 },
-                "service_role": project["serviceRole"],
+                "service_role": project.get("serviceRole"),
             }
 
             # Validate source configuration
@@ -456,9 +456,9 @@ class S3BucketValidator(ResourceValidator):
 
             # Validate region
             if expected_config.get("region"):
-                if bucket_region != expected_config["region"]:
+                if bucket_region != expected_config.get("region"):
                     result.drift_detected = True
-                    result.add_message(f"Region mismatch: expected {expected_config['region']}, got {bucket_region}")
+                    result.add_message(f"Region mismatch: expected {expected_config.get('region')}, got {bucket_region}")
 
             # Validate versioning
             if "versioning" in expected_config:
@@ -486,7 +486,7 @@ class S3BucketValidator(ResourceValidator):
             result.valid = True
 
         except ClientError as err:
-            error_code = err.response["Error"]["Code"]
+            error_code = err.response.get("Error", {}).get("Code")
             if error_code in ["NoSuchBucket", "404"]:
                 result.exists = False
                 result.add_message(f"Bucket {resource_id} does not exist")
@@ -505,7 +505,7 @@ class S3BucketValidator(ResourceValidator):
         try:
             response = self.client.list_buckets()
             for bucket in response.get("Buckets", []):
-                buckets.append(bucket["Name"])
+                buckets.append(bucket.get("Name"))
 
             # Apply filters if provided
             if filter_params and "prefix" in filter_params:
@@ -538,7 +538,7 @@ class S3BucketValidator(ResourceValidator):
                 "restrict_public_buckets": config.get("RestrictPublicBuckets", False),
             }
         except ClientError as err:
-            if err.response["Error"]["Code"] == "NoSuchPublicAccessBlockConfiguration":
+            if err.response.get("Error", {}).get("Code") == "NoSuchPublicAccessBlockConfiguration":
                 # No public access block means all False
                 return {
                     "block_public_acls": False,
@@ -554,7 +554,7 @@ class S3BucketValidator(ResourceValidator):
             self.client.get_bucket_website(Bucket=bucket_name)
             return True
         except ClientError as err:
-            if err.response["Error"]["Code"] == "NoSuchWebsiteConfiguration":
+            if err.response.get("Error", {}).get("Code") == "NoSuchWebsiteConfiguration":
                 return False
             return False
 
@@ -564,7 +564,7 @@ class S3BucketValidator(ResourceValidator):
             self.client.get_bucket_cors(Bucket=bucket_name)
             return True
         except ClientError as err:
-            if err.response["Error"]["Code"] == "NoSuchCORSConfiguration":
+            if err.response.get("Error", {}).get("Code") == "NoSuchCORSConfiguration":
                 return False
             return False
 

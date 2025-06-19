@@ -47,7 +47,7 @@ class DynamoDBStack(Stack):
 
         # Create or import DynamoDB tables
         for config in table_configs:
-            table_name = config['name']
+            table_name = f"eidolon-{config['name']}"
             
             # Check if we should use an existing table
             if config["name"] in self.existing_tables:
@@ -137,7 +137,7 @@ class DynamoDBStack(Stack):
         self.access_policy = iam.ManagedPolicy(
             self,
             "dynamodb-access",
-            managed_policy_name="dynamodb-access",
+            managed_policy_name="eidolon-dynamodb-access",
             document=self.table_access_policy,
             description="Policy for accessing Eidolon Engine DynamoDB tables",
         )
@@ -163,7 +163,7 @@ class DynamoDBStack(Stack):
             dynamodb_client.describe_table(TableName=table_name)
             return True
         except ClientError as err:
-            if err.response["Error"]["Code"] == "ResourceNotFoundException":
+            if err.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
                 return False
             else:
                 # Assume table doesn't exist on other errors

@@ -91,8 +91,8 @@ The system creates and maintains `server/config.yml`:
 ```yaml
 Game:
   name: eidolon-engine
-  PortalS3Bucket: portal-123456789012  # Auto-detected or created
-  ScriptsS3Bucket: scripts-123456789012  # Auto-detected or created
+  PortalS3Bucket: eidolon-portal  # Auto-detected or created
+  ScriptsS3Bucket: eidolon-scripts  # Auto-detected or created
   ScriptsS3Prefix: scripts
   PortalUrl: https://d1234567890.cloudfront.net  # Portal URL via CloudFront
 
@@ -132,12 +132,12 @@ All AWS resources use simple, unprefixed names for clarity:
 
 | Resource Type | Naming Pattern | Example |
 |--------------|----------------|---------|
-| DynamoDB Tables | `{table_type}` | `players`, `characters`, `rooms` |
-| S3 Buckets | `{type}-{account}` | `portal-123456789012` |
+| DynamoDB Tables | `eidolon-{table_type}` | `eidolon-players`, `eidolon-characters`, `eidolon-rooms` |
+| S3 Buckets | `eidolon-{type}` | `eidolon-portal` |
 | CloudWatch Log Group | `/aws/eidolon/server` | `/aws/eidolon/server` |
 | Cognito User Pool | `users` | `users` |
-| CodeBuild Project | `portal-build` | `portal-build` |
-| CloudFront Distribution | `portal-distribution` | `portal-distribution` |
+| CodeBuild Project | `eidolon-portal-build` | `eidolon-portal-build` |
+| CloudFront Distribution | `eidolon-portal-distribution` | `eidolon-portal-distribution` |
 | IAM Policies | `{service}-access` | `dynamodb-access` |
 | CDK Stack Names | `{service}` | `cognito`, `dynamodb`, `s3` |
 
@@ -150,13 +150,13 @@ Legacy CloudFormation stacks with `eidolon-` prefix are still supported for back
 The system handles S3 buckets intelligently:
 - **Existing buckets**: Automatically detected and used
 - **New buckets**: Created only if they don't exist
-- **Naming**: `portal-{account-id}` and `scripts-{account-id}`
+- **Naming**: `eidolon-portal` and `eidolon-scripts`
 
 To use specific existing buckets, add to `config.yml` before deployment:
 ```yaml
 Game:
-  PortalS3Bucket: my-existing-portal-bucket
-  ScriptsS3Bucket: my-existing-scripts-bucket
+  PortalS3Bucket: eidolon-portal
+  ScriptsS3Bucket: eidolon-scripts
 ```
 
 ### DynamoDB Tables
@@ -259,10 +259,10 @@ If you need to trigger a portal build manually:
 
 ```bash
 # Using AWS CLI
-aws codebuild start-build --project-name portal-build
+aws codebuild start-build --project-name eidolon-portal-build
 
 # Or through AWS Console
-# Navigate to CodeBuild → portal-build → Start build
+# Navigate to CodeBuild → eidolon-portal-build → Start build
 ```
 
 ## Migrating from CloudFormation
@@ -364,7 +364,7 @@ Game:
 ### "Table already exists"
 
 The system should auto-import existing tables. If not:
-1. Ensure table follows naming convention: `{table-type}` (e.g., `players`, `characters`)
+1. Ensure table follows naming convention: `eidolon-{table-type}` (e.g., `eidolon-players`, `eidolon-characters`)
 2. Check table is in the same region
 3. Verify AWS credentials have access
 

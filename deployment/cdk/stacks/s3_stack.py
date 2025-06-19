@@ -35,7 +35,7 @@ class S3Stack(Stack):
         # Note: When using CloudFront, we don't need public read or website hosting
         self.portal_bucket = self._get_or_create_bucket(
             "portal-bucket",
-            portal_bucket_name or f"portal-{self.account}",
+            portal_bucket_name or "eidolon-portal",
             website_config=None,  # CloudFront will handle web serving
             public_read=False,  # CloudFront OAI will have access
         )
@@ -43,7 +43,7 @@ class S3Stack(Stack):
         # Handle scripts bucket
         self.scripts_bucket = self._get_or_create_bucket(
             "scripts-bucket",
-            scripts_bucket_name or f"scripts-{self.account}",
+            scripts_bucket_name or "eidolon-scripts",
             public_read=True,
         )
 
@@ -137,7 +137,7 @@ class S3Stack(Stack):
             s3_client.head_bucket(Bucket=bucket_name)
             return True
         except ClientError as err:
-            error_code = err.response["Error"]["Code"]
+            error_code = err.response.get("Error", {}).get("Code")
             if error_code in ["404", "NoSuchBucket"]:
                 return False
             elif error_code == "403":

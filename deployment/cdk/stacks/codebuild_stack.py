@@ -46,7 +46,7 @@ class CodeBuildStack(Stack):
         self.build_project = codebuild.Project(
             self,
             "portal-build",
-            project_name="portal-build",
+            project_name="eidolon-portal-build",
             description="Build project for Eidolon Engine web portal",
             source=codebuild.Source.git_hub(
                 owner=github_owner,

@@ -99,7 +99,7 @@ class CloudFrontStack(Stack):
         # Create the distribution
         distribution = cloudfront.Distribution(
             self,
-            f"{game_name}-portal-distribution",
+            "eidolon-portal-distribution",
             default_root_object="index.html",
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origins.S3Origin(
@@ -147,7 +147,7 @@ class CloudFrontStack(Stack):
             cf_client.get_distribution(Id=distribution_id)
             return True
         except ClientError as err:
-            error_code = err.response["Error"]["Code"]
+            error_code = err.response.get("Error", {}).get("Code")
             if error_code in ["NoSuchDistribution", "DistributionNotFound"]:
                 return False
             else:

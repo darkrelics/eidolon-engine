@@ -52,7 +52,7 @@ class CloudWatchStack(Stack):
         self.access_policy = iam.ManagedPolicy(
             self,
             "cloudwatch-access",
-            managed_policy_name="cloudwatch-access",
+            managed_policy_name="eidolon-cloudwatch-access",
             document=self.cloudwatch_policy,
             description="Policy for accessing Eidolon Engine CloudWatch resources",
         )
