@@ -1,10 +1,11 @@
 """AWS S3 stack for Eidolon Engine storage needs."""
 
-from aws_cdk import Stack, aws_s3 as s3, CfnOutput, RemovalPolicy
-from aws_cdk.aws_s3 import IBucket
-from constructs import Construct
 import boto3
+from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import aws_s3 as s3
+from aws_cdk.aws_s3 import IBucket
 from botocore.exceptions import ClientError
+from constructs import Construct
 
 
 class S3Stack(Stack):
@@ -58,7 +59,11 @@ class S3Stack(Stack):
         CfnOutput(
             self,
             "PortalWebsiteUrl",
-            value=self.portal_bucket.bucket_website_url if hasattr(self.portal_bucket, "bucket_website_url") else f"http://{self.portal_bucket.bucket_name}.s3-website-{self.region}.amazonaws.com",
+            value=(
+                self.portal_bucket.bucket_website_url
+                if hasattr(self.portal_bucket, "bucket_website_url")
+                else f"http://{self.portal_bucket.bucket_name}.s3-website-{self.region}.amazonaws.com"
+            ),
             description="URL of the web portal",
         )
 
@@ -91,11 +96,11 @@ class S3Stack(Stack):
         if self._bucket_exists(bucket_name):
             # Import existing bucket
             bucket = s3.Bucket.from_bucket_name(self, logical_id, bucket_name)
-            
+
             # Note: We cannot modify existing bucket configurations through CDK import
             # The bucket must already have the correct configuration
             print(f"Using existing S3 bucket: {bucket_name}")
-            
+
             return bucket
         else:
             # Create new bucket with desired configuration
@@ -120,7 +125,7 @@ class S3Stack(Stack):
 
             bucket = s3.Bucket(self, logical_id, **bucket_props)
             print(f"Creating new S3 bucket: {bucket_name}")
-            
+
             return bucket
 
     def _bucket_exists(self, bucket_name: str) -> bool:

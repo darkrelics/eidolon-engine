@@ -14,12 +14,12 @@ import yaml
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cdk.stacks.cognito_stack import CognitoStack
-from cdk.stacks.dynamodb_stack import DynamoDBStack
+from cdk.stacks.cloudfront_stack import CloudFrontStack
 from cdk.stacks.cloudwatch_stack import CloudWatchStack
 from cdk.stacks.codebuild_stack import CodeBuildStack
+from cdk.stacks.cognito_stack import CognitoStack
+from cdk.stacks.dynamodb_stack import DynamoDBStack
 from cdk.stacks.s3_stack import S3Stack
-from cdk.stacks.cloudfront_stack import CloudFrontStack
 from state_manager import ConfigurationManager, DeploymentState
 
 
@@ -137,7 +137,7 @@ class EidolonEngineApp:
         if "Game" in self.config:
             game_config = self.config["Game"]
             params["game_name"] = game_config.get("name", params["game_name"])
-            
+
             # Check for existing bucket configurations
             if "PortalS3Bucket" in game_config:
                 params["portal_bucket_name"] = game_config["PortalS3Bucket"]

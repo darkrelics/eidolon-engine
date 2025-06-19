@@ -1,6 +1,8 @@
 """AWS Cognito stack for user authentication."""
 
-from aws_cdk import Stack, aws_cognito as cognito, aws_iam as iam, CfnOutput, RemovalPolicy
+from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_iam as iam
 from constructs import Construct
 
 

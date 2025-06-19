@@ -167,7 +167,11 @@ class DynamoDBTableValidator(ResourceValidator):
         """Check if point-in-time recovery is enabled."""
         try:
             response = self.client.describe_continuous_backups(TableName=table_name)
-            pitr_status = response.get("ContinuousBackupsDescription", {}).get("PointInTimeRecoveryDescription", {}).get("PointInTimeRecoveryStatus")
+            pitr_status = (
+                response.get("ContinuousBackupsDescription", {})
+                .get("PointInTimeRecoveryDescription", {})
+                .get("PointInTimeRecoveryStatus")
+            )
             return pitr_status == "ENABLED"
         except ClientError:
             return False
@@ -470,8 +474,9 @@ class S3BucketValidator(ResourceValidator):
 
             # Validate public access block
             if expected_config.get("public_access_block"):
-                if not self._compare_public_access_block(result.actual_config["public_access_block"], 
-                                                        expected_config["public_access_block"]):
+                if not self._compare_public_access_block(
+                    result.actual_config["public_access_block"], expected_config["public_access_block"]
+                ):
                     result.drift_detected = True
                     result.add_message("Public access block configuration mismatch")
 
@@ -512,7 +517,7 @@ class S3BucketValidator(ResourceValidator):
                 prefix = filter_params["prefix"]
                 buckets = [b for b in buckets if b.startswith(prefix)]
 
-        except ClientError as err:
+        except ClientError:
             # Return empty list on error
             pass
 
@@ -571,12 +576,12 @@ class S3BucketValidator(ResourceValidator):
     def _compare_public_access_block(self, actual: dict, expected: dict) -> bool:
         """Compare public access block configurations."""
         keys = ["block_public_acls", "block_public_policy", "ignore_public_acls", "restrict_public_buckets"]
-        
+
         for key in keys:
             if key in expected:
                 if actual.get(key, False) != expected.get(key):
                     return False
-        
+
         return True
 
 
@@ -612,7 +617,9 @@ class ResourceValidatorFactory:
         return validator_class(session)
 
 
-def validate_stack_resources(session: boto3.Session, stack_name: str, expected_resources: dict[str, dict[str, any]]) -> dict[str, ValidationResult]:
+def validate_stack_resources(
+    session: boto3.Session, stack_name: str, expected_resources: dict[str, dict[str, any]]
+) -> dict[str, ValidationResult]:
     """Validate all resources in a CloudFormation stack.
 
     Args:

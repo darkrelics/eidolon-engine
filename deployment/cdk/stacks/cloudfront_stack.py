@@ -1,16 +1,12 @@
 """AWS CloudFront stack for Eidolon Engine portal distribution."""
 
-from aws_cdk import (
-    Stack,
-    aws_cloudfront as cloudfront,
-    aws_cloudfront_origins as origins,
-    aws_s3 as s3,
-    CfnOutput,
-    Duration,
-)
-from constructs import Construct
 import boto3
+from aws_cdk import CfnOutput, Duration, Stack
+from aws_cdk import aws_cloudfront as cloudfront
+from aws_cdk import aws_cloudfront_origins as origins
+from aws_cdk import aws_s3 as s3
 from botocore.exceptions import ClientError
+from constructs import Construct
 
 
 class CloudFrontStack(Stack):
@@ -74,9 +70,7 @@ class CloudFrontStack(Stack):
             description="Portal URL via CloudFront",
         )
 
-    def _create_distribution(
-        self, game_name: str, portal_bucket: s3.IBucket
-    ) -> cloudfront.Distribution:
+    def _create_distribution(self, game_name: str, portal_bucket: s3.IBucket) -> cloudfront.Distribution:
         """Create a new CloudFront distribution.
 
         Args:

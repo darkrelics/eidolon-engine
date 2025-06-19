@@ -116,12 +116,12 @@ def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:
                 exit_obj = exits[exit_id]
                 target_room = exit_obj["TargetRoom"]
                 direction = exit_obj["Direction"]
-                
+
                 # Initialize connections for room_id if not present
                 if room_id not in connections:
                     connections[room_id] = []
                 connections[room_id].append((target_room, direction, exit_id))
-                
+
                 # Initialize reverse_connections for target_room if not present
                 if target_room not in reverse_connections:
                     reverse_connections[target_room] = []

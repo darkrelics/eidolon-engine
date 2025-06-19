@@ -1,6 +1,8 @@
 """AWS CloudWatch stack for logging and monitoring."""
 
-from aws_cdk import Stack, aws_logs as logs, aws_iam as iam, CfnOutput, RemovalPolicy
+from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_logs as logs
 from constructs import Construct
 
 

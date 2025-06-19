@@ -5,7 +5,6 @@ to enable incremental updates and configuration drift detection.
 """
 
 import json
-
 from datetime import datetime
 from pathlib import Path
 

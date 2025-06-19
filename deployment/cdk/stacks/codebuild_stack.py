@@ -1,6 +1,8 @@
 """AWS CodeBuild stack for building and deploying the web portal."""
 
-from aws_cdk import Stack, aws_codebuild as codebuild, aws_s3 as s3, aws_iam as iam, CfnOutput
+from aws_cdk import CfnOutput, Stack
+from aws_cdk import aws_codebuild as codebuild
+from aws_cdk import aws_iam as iam
 from aws_cdk.aws_s3 import IBucket
 from constructs import Construct
 

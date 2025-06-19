@@ -1,9 +1,11 @@
 """AWS DynamoDB stack for game data storage."""
 
-from aws_cdk import Stack, aws_dynamodb as dynamodb, aws_iam as iam, CfnOutput, RemovalPolicy
-from constructs import Construct
 import boto3
+from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import aws_dynamodb as dynamodb
+from aws_cdk import aws_iam as iam
 from botocore.exceptions import ClientError
+from constructs import Construct
 
 
 class DynamoDBStack(Stack):
@@ -19,7 +21,7 @@ class DynamoDBStack(Stack):
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
-        
+
         # Check for existing tables from context (passed from deploy.py)
         self.existing_tables = {}
         for i in range(8):  # We have 8 table types
@@ -48,34 +50,26 @@ class DynamoDBStack(Stack):
         # Create or import DynamoDB tables
         for config in table_configs:
             table_name = f"eidolon-{config['name']}"
-            
+
             # Check if we should use an existing table
             if config["name"] in self.existing_tables:
                 # Import existing table
                 existing_table_name = self.existing_tables[config["name"]]
                 print(f"Importing existing DynamoDB table: {existing_table_name}")
-                
-                table = dynamodb.Table.from_table_name(
-                    self,
-                    f"{config['name']}-imported",
-                    existing_table_name
-                )
+
+                table = dynamodb.Table.from_table_name(self, f"{config['name']}-imported", existing_table_name)
                 self.tables[config["name"]] = table
             else:
                 # Check if table already exists
                 if self._table_exists(table_name):
                     # Import the table
                     print(f"Found existing DynamoDB table: {table_name}, importing...")
-                    table = dynamodb.Table.from_table_name(
-                        self,
-                        f"{config['name']}-imported",
-                        table_name
-                    )
+                    table = dynamodb.Table.from_table_name(self, f"{config['name']}-imported", table_name)
                     self.tables[config["name"]] = table
                 else:
                     # Create new table
                     print(f"Creating new DynamoDB table: {table_name}")
-                    
+
                     # Define partition key
                     partition_key = dynamodb.Attribute(name=config["pk"], type=dynamodb.AttributeType.STRING)
 

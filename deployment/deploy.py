@@ -12,7 +12,6 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
-
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from state_manager import ConfigurationManager, DeploymentState
 
@@ -163,7 +162,7 @@ class IncrementalDeploymentOrchestrator:
                     try:
                         response = self.cfn_client.describe_stacks(StackName=stack_name)
                         stack_detail = response.get("Stacks", [{}])[0]
-                        
+
                         # Get stack resources for mapping
                         resources_response = self.cfn_client.list_stack_resources(StackName=stack_name)
                         resources = {}
@@ -172,12 +171,15 @@ class IncrementalDeploymentOrchestrator:
                                 "physical_id": resource.get("PhysicalResourceId"),
                                 "type": resource.get("ResourceType"),
                             }
-                        
+
                         existing_stacks[stack_name] = {
                             "status": stack_detail.get("StackStatus"),
-                            "outputs": {output.get("OutputKey"): output.get("OutputValue") for output in stack_detail.get("Outputs", [])},
+                            "outputs": {
+                                output.get("OutputKey"): output.get("OutputValue") for output in stack_detail.get("Outputs", [])
+                            },
                             "parameters": {
-                                param.get("ParameterKey"): param.get("ParameterValue") for param in stack_detail.get("Parameters", [])
+                                param.get("ParameterKey"): param.get("ParameterValue")
+                                for param in stack_detail.get("Parameters", [])
                             },
                             "resources": resources,
                             "template_format": "CloudFormation",
@@ -214,7 +216,7 @@ class IncrementalDeploymentOrchestrator:
                 "eidolon-archetypes",
                 "eidolon-motd",
             ]
-            
+
             for table_name in table_names:
                 expected_config = {
                     "billing_mode": "PAY_PER_REQUEST",
@@ -256,7 +258,7 @@ class IncrementalDeploymentOrchestrator:
         # Validate S3 buckets
         try:
             validator = ResourceValidatorFactory.create_validator("s3_bucket", self.session)
-            
+
             # Check portal bucket
             portal_bucket = params.get("portal_bucket_name", "eidolon-portal")
             expected_config = {
@@ -270,7 +272,7 @@ class IncrementalDeploymentOrchestrator:
             }
             result = validator.validate(portal_bucket, expected_config)
             all_results[portal_bucket] = result
-            
+
             # Check scripts bucket
             scripts_bucket = params.get("scripts_bucket_name", "eidolon-scripts")
             result = validator.validate(scripts_bucket, expected_config)
@@ -298,7 +300,7 @@ class IncrementalDeploymentOrchestrator:
 
         # Check for legacy CloudFormation stacks
         legacy_stacks = ["eidolon-cognito", "eidolon-dynamodb", "eidolon-cloudwatch", "eidolon-codebuild"]
-        
+
         for legacy_name in legacy_stacks:
             if legacy_name in existing_stacks:
                 stack_info = existing_stacks[legacy_name]
@@ -307,7 +309,7 @@ class IncrementalDeploymentOrchestrator:
                     "resources": stack_info["resources"],
                     "can_adopt": self._can_adopt_stack(legacy_name, stack_info),
                 }
-                
+
                 # Map resources to CDK expectations
                 if legacy_name == "eidolon-cognito":
                     if "UserPoolId" in stack_info.get("outputs", {}):
@@ -332,7 +334,7 @@ class IncrementalDeploymentOrchestrator:
                 mapping["migration_strategy"] = "adopt"
             else:
                 mapping["migration_strategy"] = "coexist"
-        
+
         return mapping
 
     def _can_adopt_stack(self, stack_name: str, stack_info: dict[str, any]) -> bool:
@@ -363,19 +365,12 @@ class IncrementalDeploymentOrchestrator:
 
         # Get existing stacks
         existing_stacks = self.get_existing_stacks()
-        
+
         # Map CloudFormation resources if they exist
         cf_mapping = self.map_cloudformation_to_cdk(existing_stacks, params)
-        
+
         # Expected CDK stack names
-        expected_stacks = [
-            "cognito",
-            "dynamodb",
-            "cloudwatch",
-            "s3",
-            "cloudfront",
-            "codebuild"
-        ]
+        expected_stacks = ["cognito", "dynamodb", "cloudwatch", "s3", "cloudfront", "codebuild"]
 
         plan = {
             "create_stacks": [],
@@ -392,7 +387,7 @@ class IncrementalDeploymentOrchestrator:
             print("\nDetected existing CloudFormation stacks:")
             for stack_name, info in cf_mapping["cloudformation_stacks"].items():
                 print(f"  • {stack_name} (can adopt: {info.get('can_adopt', False)})")
-            
+
             if cf_mapping["migration_strategy"] == "adopt":
                 print("\nStrategy: Adopt existing resources into CDK stacks")
                 plan["adopt_resources"] = cf_mapping["resource_mapping"]
@@ -473,7 +468,7 @@ class IncrementalDeploymentOrchestrator:
         # Run CDK deploy
         print("\nDeploying infrastructure with CDK...")
         cdk_command = ["cdk", "deploy", "--all", "--require-approval", "never" if auto_approve else "broadening"]
-        
+
         # Add context for adopted resources
         if plan.get("adopt_resources"):
             for key, value in plan["adopt_resources"].items():
@@ -519,7 +514,7 @@ class IncrementalDeploymentOrchestrator:
             f"{game_name}-cloudwatch",
             f"{game_name}-s3",
             f"{game_name}-cloudfront",
-            f"{game_name}-codebuild"
+            f"{game_name}-codebuild",
         ]
 
         for stack_name in stacks_to_query:
@@ -531,11 +526,12 @@ class IncrementalDeploymentOrchestrator:
                 # Update config based on stack type
                 if "cognito" in stack_name:
                     self.config_manager.update_section(
-                        "Cognito", {
+                        "Cognito",
+                        {
                             "UserPoolId": outputs.get("UserPoolId", ""),
                             "UserPoolClientId": outputs.get("AppClientId", ""),
-                            "AuthenticatedRoleArn": outputs.get("AuthenticatedRoleArn", "")
-                        }
+                            "AuthenticatedRoleArn": outputs.get("AuthenticatedRoleArn", ""),
+                        },
                     )
                 elif "dynamodb" in stack_name:
                     # Extract table names
@@ -545,10 +541,9 @@ class IncrementalDeploymentOrchestrator:
                             # Convert PlayersTableName -> Players, CharactersTableName -> Characters, etc.
                             table_type = key.replace("TableName", "")
                             tables[table_type] = value
-                    self.config_manager.update_section("DynamoDB", {
-                        "Tables": tables,
-                        "AccessPolicyArn": outputs.get("DynamoDBAccessPolicyArn", "")
-                    })
+                    self.config_manager.update_section(
+                        "DynamoDB", {"Tables": tables, "AccessPolicyArn": outputs.get("DynamoDBAccessPolicyArn", "")}
+                    )
                 elif "cloudwatch" in stack_name:
                     self.config_manager.update_section(
                         "Logging",
@@ -558,10 +553,7 @@ class IncrementalDeploymentOrchestrator:
                         },
                     )
                     self.config_manager.update_section(
-                        "CloudWatch",
-                        {
-                            "AccessPolicyArn": outputs.get("CloudWatchAccessPolicyArn", "")
-                        }
+                        "CloudWatch", {"AccessPolicyArn": outputs.get("CloudWatchAccessPolicyArn", "")}
                     )
                 elif "s3" in stack_name:
                     # Update S3 bucket names in config
@@ -592,12 +584,7 @@ class IncrementalDeploymentOrchestrator:
                     )
                 elif "codebuild" in stack_name:
                     # Update CodeBuild configuration
-                    self.config_manager.update_section(
-                        "CodeBuild",
-                        {
-                            "ProjectName": outputs.get("CodeBuildProjectName", "")
-                        }
-                    )
+                    self.config_manager.update_section("CodeBuild", {"ProjectName": outputs.get("CodeBuildProjectName", "")})
 
             except Exception as err:
                 print(f"Warning: Could not get outputs for {stack_name}: {err}")
@@ -632,28 +619,23 @@ class IncrementalDeploymentOrchestrator:
         try:
             # Check if bucket exists
             self.s3_client.head_bucket(Bucket=bucket_name)
-            
+
             # Upload scripts
             lua_files = list(scripts_dir.glob("*.lua"))
             if not lua_files:
                 print("No Lua scripts found to deploy")
                 return True
-                
+
             print(f"Deploying {len(lua_files)} scripts to s3://{bucket_name}/{prefix}/")
-            
+
             for lua_file in lua_files:
                 key = f"{prefix}/{lua_file.name}"
                 with open(lua_file, "rb") as f:
-                    self.s3_client.put_object(
-                        Bucket=bucket_name,
-                        Key=key,
-                        Body=f,
-                        ContentType="text/x-lua"
-                    )
+                    self.s3_client.put_object(Bucket=bucket_name, Key=key, Body=f, ContentType="text/x-lua")
                 print(f"  ✓ Uploaded {lua_file.name}")
-                
+
             return True
-            
+
         except ClientError as err:
             print(f"Error deploying scripts: {err}")
             return False
@@ -680,7 +662,7 @@ class IncrementalDeploymentOrchestrator:
 
         # Analyze what needs to be deployed
         plan = self.analyze_changes(params)
-        
+
         # If analyze-only, stop here
         if analyze_only:
             print("\n=== ANALYSIS COMPLETE ===")
