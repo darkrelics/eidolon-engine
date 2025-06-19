@@ -3,38 +3,30 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      nodejs: 22
+      nodejs: 18
     commands:
-      - apt-get update -y -q
-      - apt-get install -y clang cmake ninja-build libgtk-3-dev -q
-      - echo Installing Flutter...
-      - git clone https://github.com/flutter/flutter.git -b stable
-      - export PATH="$PATH:`pwd`/flutter/bin"
-      - flutter config --no-analytics
+      - cd portal
+      - curl -fsSL https://flutter.dev/release/stable/linux | tar xJ -C /opt
+      - export PATH="$PATH:/opt/flutter/bin"
       - flutter doctor
-      - flutter config --enable-web --no-enable-android --no-enable-ios
 
   pre_build:
     commands:
-      - cd portal
       - flutter pub get
-      - dart fix --apply
-      - dart analyze
+      - echo 'const String cognitoUserPoolId = "$COGNITO_USER_POOL_ID";' > lib/config.dart
+      - echo 'const String cognitoAppClientId = "$COGNITO_APP_CLIENT_ID";' >> lib/config.dart
+      - echo 'const String awsRegion = "$AWS_REGION";' >> lib/config.dart
 
   build:
     commands:
-      - echo Building web application...
-      - echo "Current directory:"
-      - pwd
-      - echo "Building with USER_POOL_ID=$USER_POOL_ID and CLIENT_ID=$CLIENT_ID"
-      - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID
+      - flutter build web --release
 
   post_build:
     commands:
-      - echo Uploading to S3...
-      - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive --cache-control "max-age=86400"
-
-artifacts:
-  base-directory: portal/build/web
-  files:
-    - "**/*"
+      - aws s3 sync build/web/ s3://$PORTAL_BUCKET/ --delete
+      - aws s3 cp build/web/index.html s3://$PORTAL_BUCKET/index.html --cache-control max-age=0
+      - |
+        if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then 
+          echo "Invalidating CloudFront cache..."
+          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
+        fi
