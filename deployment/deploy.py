@@ -40,6 +40,7 @@ CLOUDWATCH_TEMPLATE_PATH = "../cloudformation/cloudwatch.yml"
 CONFIG_PATH = "../server/config.yml"
 CONFIG_TEMPLATE_PATH = "../server/config.template.yml"
 ENV_FILE_PATH = "../portal/.env"
+SCRIPTS_PATH = "../scripts_lua"
 
 
 def load_config() -> dict:
@@ -192,6 +193,11 @@ def update_configuration_file(config_updates, user_pool_name=None) -> None:
             }
         )
 
+        # Update Game configuration with script settings
+        game_updates = config_updates.get("Game", {})
+        if game_updates:
+            config["Game"].update(game_updates)
+
         with open(CONFIG_PATH, "w", encoding="utf-8") as file:
             yaml.dump(config, file, default_flow_style=False)
 
@@ -202,32 +208,50 @@ def update_configuration_file(config_updates, user_pool_name=None) -> None:
         print("Current config:", config)
 
 
-def generate_env_file(config_updates) -> None:
+def deploy_scripts(bucket_name, prefix="scripts") -> bool:
     """
-    Generate a .env file for local Flutter development based on deployed resources.
+    Deploy Lua scripts to S3.
     """
     try:
-        cognito_updates = config_updates.get("Cognito", {})
+        s3_client = boto3.client("s3")
 
-        # Create content for .env file
-        env_content = f"""# Eidolon Engine local development configuration
-        # DO NOT COMMIT THIS FILE TO VERSION CONTROL
+        # Check if scripts directory exists
+        if not os.path.exists(SCRIPTS_PATH):
+            print(f"Scripts directory not found: {SCRIPTS_PATH}")
+            return False
 
-        USER_POOL_ID={cognito_updates.get("UserPoolId", "")}
-        CLIENT_ID={cognito_updates.get("UserPoolClientId", "")}
-        """
+        # Find all .lua files
+        lua_files = []
+        for filename in os.listdir(SCRIPTS_PATH):
+            if filename.endswith(".lua"):
+                lua_files.append(filename)
 
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(ENV_FILE_PATH), exist_ok=True)
+        if not lua_files:
+            print(f"No .lua files found in {SCRIPTS_PATH}")
+            return True
 
-        # Write .env file
-        with open(ENV_FILE_PATH, "w", encoding="utf-8") as env_file:
-            env_file.write(env_content)
+        print(f"Found {len(lua_files)} Lua scripts to deploy")
 
-        print(f"Generated .env file at {ENV_FILE_PATH}")
+        # Upload each script
+        success_count = 0
+        for filename in lua_files:
+            local_path = os.path.join(SCRIPTS_PATH, filename)
+            s3_key = f"{prefix}/{filename}"
 
-    except IOError as err:
-        print(f"Error generating .env file: {err}")
+            try:
+                with open(local_path, "rb") as file_data:
+                    s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=file_data, ContentType="text/x-lua")
+                print(f"Uploaded: {filename} -> s3://{bucket_name}/{s3_key}")
+                success_count += 1
+            except ClientError as err:
+                print(f"Failed to upload {filename}: {err}")
+
+        print(f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded")
+        return success_count == len(lua_files)
+
+    except Exception as err:
+        print(f"Error deploying scripts: {err}")
+        return False
 
 
 def gather_all_parameters() -> dict:
@@ -241,17 +265,8 @@ def gather_all_parameters() -> dict:
         or "contact@darkrelics.net",
     }
 
-    # DynamoDB parameters (empty for now)
+    # DynamoDB parameters
     parameters["dynamo"] = {}
-
-    # CodeBuild parameters
-    parameters["codebuild"] = {
-        "GitHubSourceRepo": input(
-            "Enter the GitHub repository URL for the source code [default: https://github.com/robinje/eidolon-engine]: "
-        )
-        or "https://github.com/robinje/eidolon-engine",
-        "S3BucketName": input("Enter the name of the existing S3 bucket for build artifacts: "),
-    }
 
     # CloudWatch parameters
     parameters["cloudwatch"] = {
@@ -259,6 +274,22 @@ def gather_all_parameters() -> dict:
         or "/eidolon/game-logs",
         "MetricNamespace": input("Enter the namespace for CloudWatch Metrics [default: eidolon/application]: ")
         or "eidolon/application",
+    }
+
+    # CodeBuild parameters
+    parameters["codebuild"] = {
+        "GitHubSourceRepo": input(
+            "Enter the GitHub repository URL for the source code [default: https://github.com/robinje/eidolon-engine]: "
+        )
+        or "https://github.com/robinje/eidolon-engine",
+        "S3BucketName": input("Enter the name of the existing S3 bucket for build artifacts [default: mud-web-site]: ")
+        or "mud-web-site",
+    }
+
+    # Scripts parameters
+    parameters["scripts"] = {
+        "S3BucketName": input("Enter the S3 bucket name for Lua scripts [default: mud-scripts]: ") or "mud-scripts",
+        "S3Prefix": input("Enter the S3 prefix for Lua scripts [default: scripts]: ") or "scripts",
     }
 
     return parameters
@@ -325,17 +356,31 @@ def main() -> None:
 
         cloudwatch_outputs: dict = get_stack_outputs(cloudformation_client, CLOUDWATCH_STACK_NAME)
 
-        # Update configuration file with outputs from all stacks
+        # Deploy Lua scripts to S3
+        scripts_bucket = all_parameters["scripts"]["S3BucketName"]
+        scripts_prefix = all_parameters["scripts"]["S3Prefix"]
+
+        # Validate scripts bucket exists
+        if not validate_s3_bucket(scripts_bucket):
+            print(f"Invalid or inaccessible S3 bucket for scripts: {scripts_bucket}. Exiting...")
+            return
+
+        # Deploy scripts
+        if not deploy_scripts(scripts_bucket, scripts_prefix):
+            print("Warning: Some scripts failed to deploy, but continuing with deployment...")
+
+        # Update configuration file with outputs from all stacks and scripts configuration
         config_updates: dict = {
             "Cognito": cognito_outputs,
             "Dynamo": dynamo_outputs,
             "CodeBuild": codebuild_outputs,
             "CloudWatch": cloudwatch_outputs,
+            "Game": {
+                "ScriptsS3Bucket": scripts_bucket,
+                "ScriptsS3Prefix": scripts_prefix,
+            },
         }
         update_configuration_file(config_updates, all_parameters["cognito"]["UserPoolName"])
-
-        # Generate .env file for local Flutter development
-        generate_env_file(config_updates)
 
         print("Deployment completed successfully.")
     except Exception as err:

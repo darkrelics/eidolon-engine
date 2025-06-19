@@ -26,31 +26,39 @@ import (
 	"time"
 )
 
+// applyRoundTime applies round time to a character if the command generates one
+func applyRoundTime(character *Character, cmdInfo CommandInfo) {
+	if cmdInfo.roundTime > 0 {
+		character.SetCommandWaitTime(time.Duration(cmdInfo.roundTime) * time.Second)
+	}
+}
+
+// checkRoundTime checks if a character can execute a command based on round time
+// Returns (canExecute bool, errorMessage string)
+func checkRoundTime(character *Character, cmdInfo CommandInfo) (bool, string) {
+	// Only check for commands that care about round time (roundTime >= 0)
+	if cmdInfo.roundTime >= 0 {
+		return character.CanExecuteCommand()
+	}
+	return true, ""
+}
+
 // ProcessCommand determines command tier and routes it appropriately
 func ProcessCommand(ctx context.Context, character *Character, input string) (bool, error) {
-	// Limit input to 240 characters
-	if len(input) > 240 {
-		return false, errors.New("\n\rCommand too long. Maximum 240 characters allowed.\n\r")
-	}
-
 	// Parse and validate the command
-	verb, tokens, err := ValidateCommand(character, input)
+	verb, tokens, userMsg, err := ValidateCommand(character, input)
 	if err != nil {
 		return false, err
 	}
 
-	if character == nil || character.game == nil {
-		return false, errors.New("\n\rInvalid character state.\n\r")
+	// If there's a user message, display it and return
+	if userMsg != "" {
+		character.DisplayMessage(userMsg)
+		return false, nil
 	}
 
-	// Check if the character is waiting for a command timeout
-	canExecute, reason := character.CanExecuteCommand()
-	if !canExecute {
-		// Allow certain commands even when waiting
-		if verb != "look" && verb != "help" && verb != "who" && verb != "quit" {
-			return false, fmt.Errorf("\n\r%s\n\r", reason)
-		}
-		// These commands are allowed during wait time
+	if character == nil || character.game == nil {
+		return false, errors.New("invalid character state")
 	}
 
 	// Retrieve the command info
@@ -60,6 +68,12 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 
 	if !exists {
 		return false, fmt.Errorf("command '%s' not understood", verb)
+	}
+
+	// Check if the character is waiting for a command timeout
+	canExecute, reason := checkRoundTime(character, cmdInfo)
+	if !canExecute {
+		return false, fmt.Errorf("%s", reason)
 	}
 
 	// Special case handling for "quit" command - always process immediately
@@ -73,20 +87,16 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	// Step 1: Try character-level handler first (both timed and untimed)
 	if cmdInfo.handler != nil {
 		Logger.Debug("Executing character-tier command", "verb", verb, "character", character.name)
-		if cmdInfo.timed {
-			// For timed character commands, still respect timing but execute directly
-			err := cmdInfo.handler(character, tokens)
-			return false, err
-		} else {
-			// Execute untimed commands immediately
-			return false, cmdInfo.handler(character, tokens)
-		}
+		err := cmdInfo.handler(character, tokens)
+		// Apply round time if command generates one
+		applyRoundTime(character, cmdInfo)
+		return false, err
 	}
 
 	// Step 2: Character doesn't handle this command, escalate to room
 	Logger.Debug("Escalating command to room", "verb", verb, "character", character.name)
 
-	// Create command request for room processing
+	// Room-tier request enables location-based command handling
 	cmdReq := &CommandRequest{
 		ID:        GenerateUUIDv7(),
 		Character: character,
@@ -107,26 +117,34 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	retryTimer := time.NewTimer(50 * time.Millisecond)
 	defer retryTimer.Stop()
 
+	Logger.Debug("Sending command to room", "roomID", character.room.roomID, "verb", verb, "character", character.name)
+
 	select {
 	case character.room.commandIn <- cmdReq:
+		Logger.Debug("Command sent successfully to room", "roomID", character.room.roomID, "verb", verb)
 		// Command sent successfully to room
 	case <-retryTimer.C:
 		// Brief retry after 50ms
 		select {
 		case character.room.commandIn <- cmdReq:
+			Logger.Debug("Command sent successfully to room on retry", "roomID", character.room.roomID, "verb", verb)
 			// Command sent successfully on retry
 		default:
 			Logger.Warn("Room command buffer full after retry",
 				"roomID", character.room.roomID,
 				"characterName", character.name,
 				"verb", verb)
-			return false, fmt.Errorf("\n\rThe room is processing too many commands. Please wait a moment and try again.\n\r")
+			character.DisplayMessage("The room is processing too many commands. Please wait a moment and try again.")
+			return false, nil
 		}
 	}
 
 	// Wait for response or timeout
+	Logger.Debug("Waiting for command response", "roomID", character.room.roomID, "verb", verb)
+
 	select {
 	case resp := <-cmdReq.Response:
+		Logger.Debug("Got command response", "roomID", character.room.roomID, "verb", verb, "success", resp.Success)
 		if resp.Error != nil {
 			// If room doesn't handle it, escalate to game
 			if strings.Contains(resp.Error.Error(), "unknown room command") {
@@ -136,11 +154,15 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 			return false, resp.Error
 		}
 		if resp.Message != "" {
-			character.player.commandOut <- resp.Message
+			character.DisplayMessage(resp.Message)
 		}
+		// Apply round time if command generates one
+		applyRoundTime(character, cmdInfo)
 		return false, nil
 	case <-time.After(5 * time.Second):
-		return false, fmt.Errorf("\n\rcommand timed out\n\r")
+		Logger.Error("Command timed out waiting for response", "roomID", character.room.roomID, "verb", verb, "character", character.name)
+		character.DisplayMessage("Command timed out. Please try again.")
+		return false, nil
 	case <-ctx.Done():
 		return false, ctx.Err()
 	}
@@ -148,7 +170,11 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 
 // escalateToGame handles commands that neither character nor room can process
 func escalateToGame(ctx context.Context, character *Character, verb string, tokens []string) (bool, error) {
-	// Create command request for game processing
+	// Get command info for round time application
+	character.game.mutex.RLock()
+	cmdInfo := character.game.commands[verb]
+	character.game.mutex.RUnlock()
+	// Game-tier request handles global commands
 	cmdReq := &CommandRequest{
 		ID:        GenerateUUIDv7(),
 		Character: character,
@@ -160,15 +186,14 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 		Response:  make(chan *CommandResponse, 1),
 	}
 
-	// Send command to the game
+	// Game submission routes to global handler
 	select {
 	case character.gameCommandOut <- cmdReq:
 		// Command sent successfully to game
 	default:
-		Logger.Warn("Game command buffer full",
-			"characterName", character.name,
-			"verb", verb)
-		return false, fmt.Errorf("\n\rThe game is processing too many commands. Please wait a moment and try again.\n\r")
+		Logger.Warn("Game command buffer full", "characterName", character.name, "verb", verb)
+		character.DisplayMessage("The game is processing too many commands. Please wait a moment and try again.")
+		return false, nil
 	}
 
 	// Wait for response or timeout
@@ -178,11 +203,14 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 			return false, resp.Error
 		}
 		if resp.Message != "" {
-			character.player.commandOut <- resp.Message
+			character.DisplayMessage(resp.Message)
 		}
+		// Apply round time if command generates one
+		applyRoundTime(character, cmdInfo)
 		return false, nil
 	case <-time.After(5 * time.Second):
-		return false, fmt.Errorf("\n\rcommand timed out\n\r")
+		character.DisplayMessage("Command timed out. Please try again.")
+		return false, nil
 	case <-ctx.Done():
 		return false, ctx.Err()
 	}

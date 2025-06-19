@@ -132,10 +132,10 @@ func (c *CloudWatch) SendAuthenticationBlock(blockType string, identifier string
 		},
 	}
 
-	// Send block count metric
+	// Block count tracking monitors security events
 	c.SendSecurityMetric("AuthenticationBlocks", 1, types.StandardUnitCount, dimensions)
 
-	// Send ban duration metric
+	// Ban duration helps analyze attack patterns
 	c.SendSecurityMetric("AuthenticationBanDuration", banDuration.Minutes(), types.StandardUnitSeconds, dimensions)
 
 	// Log the block event separately (not as a normal log)
@@ -163,7 +163,7 @@ func (c *CloudWatch) SendRateLimitViolation(limitType string) {
 	c.SendSecurityMetric("RateLimitViolations", 1, types.StandardUnitCount, dimensions)
 }
 
-// Run handles periodic metric submission and log processing
+// Run manages CloudWatch metric batching and submission cycles
 func (c *CloudWatch) Run(errChan chan error) error {
 	var runErr error
 	RunWithPanicRecoveryCallback("cloudwatch.Run", func() {

@@ -28,11 +28,11 @@ import (
 
 // Room command messages
 const (
-	msgNoExits     = "There are no visible exits.\n\r"
-	msgNoDirection = "\n\rWhich direction do you want to go?\n\r"
-	msgCantEscape  = "\n\rYou can't escape!\n\r"
-	msgInvalidDir  = "\n\rYou cannot go that way.\n\r"
-	msgPathNowhere = "\n\rThe path leads nowhere.\n\r"
+	msgNoExits     = "There are no visible exits."
+	msgNoDirection = "Which direction do you want to go?"
+	msgCantEscape  = "You can't escape!"
+	msgInvalidDir  = "You cannot go that way."
+	msgPathNowhere = "The path leads nowhere."
 )
 
 // Stealth system constants
@@ -42,6 +42,14 @@ const (
 	hideRateLimit      = 10 * time.Second // Cooldown between hide attempts
 	sneakActionTime    = 5 * time.Second  // Time blocked after sneak attempt
 	searchActionTime   = 3 * time.Second  // Time blocked after search attempt
+)
+
+// Combat range constants
+const (
+	combatRangeClose   = 0.0  // Close combat range
+	combatRangeMelee   = 3.0  // Melee weapon range
+	combatRangePole    = 10.0 // Pole weapon range
+	combatRangeDefault = 30.0 // Default starting combat range
 )
 
 // processRoomCommand handles commands at the room level
@@ -65,6 +73,24 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 		RequestID: cmd.ID,
 		Success:   false,
 		Timestamp: time.Now(),
+	}
+
+	// Try script commands first if room has an active script
+	Logger.Info("Room script state check", "roomID", r.roomID, "scriptID", r.scriptID, "scriptActive", r.scriptActive, "scriptMgrNil", ScriptMgr == nil)
+
+	if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
+		Logger.Info("Attempting script command execution", "roomID", r.roomID, "scriptID", r.scriptID, "command", cmd.Verb)
+		handled, err := ScriptMgr.ExecuteRoomCommand(r, cmd)
+		if err != nil {
+			Logger.Error("Script command execution error", "error", err, "roomID", r.roomID, "command", cmd.Verb)
+		}
+		Logger.Info("Script command result", "roomID", r.roomID, "command", cmd.Verb, "handled", handled)
+		if handled {
+			response.Success = true
+			return response
+		}
+	} else {
+		Logger.Info("Script conditions not met for command", "roomID", r.roomID, "command", cmd.Verb)
 	}
 
 	// Try to handle common room commands
@@ -106,13 +132,29 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 		return response
 	}
 
+	// Combat commands
+	if verb == "face" {
+		return handleFaceCommand(cmd, r)
+	}
+	if verb == "advance" {
+		return handleAdvanceCommand(cmd, r)
+	}
+	if verb == "retreat" {
+		return handleRetreatCommand(cmd, r)
+	}
+	if verb == "assess" {
+		return handleAssessCommand(cmd)
+	}
+	if verb == "flee" {
+		return handleFleeCommand(cmd, r)
+	}
+
 	// Unknown command at room level
 	Logger.Debug("Room cannot handle command, will escalate", "verb", cmd.Verb, "roomID", r.roomID)
 	response.Error = fmt.Errorf("unknown room command: %s", cmd.Verb)
 	return response
 }
 
-// handleSayCommand processes say/talk commands
 func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 	character := cmd.Character
 
@@ -129,8 +171,8 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 	if len(cmd.Args) < 2 {
 		return &CommandResponse{
 			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("what do you want to say?"),
+			Success:   true,
+			Message:   "\n\rWhat do you want to say?\n\r",
 			Timestamp: time.Now(),
 		}
 	}
@@ -150,7 +192,7 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 	}
 
 	// Send message to everyone else in the room
-	SendRoomMessageExcept(character.room, roomMessage, character)
+	SendRoomMessage(character.room, roomMessage, character)
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
@@ -165,8 +207,8 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 	if len(cmd.Args) < 2 {
 		return &CommandResponse{
 			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("what do you want to %s?", cmd.Verb),
+			Success:   true,
+			Message:   fmt.Sprintf("\n\rWhat do you want to %s?\n\r", cmd.Verb),
 			Timestamp: time.Now(),
 		}
 	}
@@ -175,10 +217,10 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 	character := cmd.Character
 	if character != nil && character.IsHidden() {
 		character.SetHidden(false)
-		character.playerCommandOut <- "\n\rYou reveal yourself as you interact with items.\n\r"
+		character.DisplayMessage("You reveal yourself as you interact with items.")
 
 		if character.room != nil {
-			SendRoomMessageExcept(character.room,
+			SendRoomMessage(character.room,
 				fmt.Sprintf("\n\r%s suddenly appears!\n\r", character.name),
 				character,
 			)
@@ -217,1534 +259,6 @@ func handleItemCommand(cmd *CommandRequest) *CommandResponse {
 	}
 }
 
-// handlePutCommand processes the "put [item] in [container]" command
-func handlePutCommand(cmd *CommandRequest) *CommandResponse {
-	if len(cmd.Args) < 4 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("put what in what?"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Find "in" keyword position
-	inIndex := -1
-	for i, arg := range cmd.Args {
-		if strings.ToLower(arg) == "in" {
-			inIndex = i
-			break
-		}
-	}
-
-	if inIndex < 2 || inIndex >= len(cmd.Args)-1 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("usage: put [item] in [container]"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Extract item and container names
-	itemName := strings.ToLower(strings.Join(cmd.Args[1:inIndex], " "))
-	containerName := strings.ToLower(strings.Join(cmd.Args[inIndex+1:], " "))
-
-	// Check for "my" prefix on container
-	isMyContainer := false
-	if strings.HasPrefix(containerName, "my ") {
-		isMyContainer = true
-		containerName = strings.TrimPrefix(containerName, "my ")
-	}
-
-	// Parse ordinals for both item and container
-	itemPosition, itemBaseName, itemHasOrdinal := ParseTargetWithOrdinal(itemName)
-	containerPosition, containerBaseName, containerHasOrdinal := ParseTargetWithOrdinal(containerName)
-
-	character := cmd.Character
-	if character == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid character state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Find matching items in character's inventory and hands
-	character.mutex.Lock()
-	var matchingItems []struct {
-		item     *Item
-		slot     string
-		isInHand bool
-	}
-
-	// Check hands first
-	if character.rightHand != nil && MatchesTarget(character.rightHand.name, itemBaseName) {
-		matchingItems = append(matchingItems, struct {
-			item     *Item
-			slot     string
-			isInHand bool
-		}{character.rightHand, "right_hand", true})
-	}
-	if character.leftHand != nil && MatchesTarget(character.leftHand.name, itemBaseName) {
-		matchingItems = append(matchingItems, struct {
-			item     *Item
-			slot     string
-			isInHand bool
-		}{character.leftHand, "left_hand", true})
-	}
-
-	// Then check inventory
-	for slot, item := range character.inventory {
-		if item != nil && MatchesTarget(item.name, itemBaseName) {
-			matchingItems = append(matchingItems, struct {
-				item     *Item
-				slot     string
-				isInHand bool
-			}{item, slot, false})
-		}
-	}
-
-	// Check if we found any matches
-	if len(matchingItems) == 0 {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you don't have that"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// If multiple matches and no ordinal specified, inform the player
-	if len(matchingItems) > 1 && !itemHasOrdinal {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error: fmt.Errorf("which %s? You have %d. Try 'put first %s in %s'",
-				itemBaseName, len(matchingItems), itemBaseName, containerName),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if position is valid
-	if itemPosition > len(matchingItems) {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you don't have that many %ss", itemBaseName),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Get the specific item
-	targetMatch := matchingItems[itemPosition-1]
-	itemToPut := targetMatch.item
-	itemSlot := targetMatch.slot
-
-	// Check if worn (with proper mutex protection)
-	itemToPut.mutex.RLock()
-	isWorn := itemToPut.isWorn
-	itemToPut.mutex.RUnlock()
-
-	if isWorn {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you need to remove that first"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Remove item from inventory or hand before unlocking
-	if targetMatch.isInHand {
-		if targetMatch.slot == "right_hand" {
-			character.rightHand = nil
-		} else if targetMatch.slot == "left_hand" {
-			character.leftHand = nil
-		}
-	} else {
-		delete(character.inventory, itemSlot)
-	}
-	character.mutex.Unlock()
-
-	// Find the container
-	var container *Item
-	var matchingContainers []*Item
-
-	if isMyContainer {
-		// Look in character's inventory
-		character.mutex.RLock()
-		for _, item := range character.inventory {
-			if item != nil && MatchesTarget(item.name, containerBaseName) {
-				matchingContainers = append(matchingContainers, item)
-			}
-		}
-		character.mutex.RUnlock()
-
-		if len(matchingContainers) == 0 {
-			// Put the item back where it was
-			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
-
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("you don't have a '%s'", containerName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		// If multiple matches and no ordinal specified, inform the player
-		if len(matchingContainers) > 1 && !containerHasOrdinal {
-			// Put the item back where it was
-			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
-
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error: fmt.Errorf("which %s? You have %d. Try 'put %s in first %s'",
-					containerBaseName, len(matchingContainers), itemName, containerBaseName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		// Check if position is valid
-		if containerPosition > len(matchingContainers) {
-			// Put the item back where it was
-			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
-
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("you don't have that many %ss", containerBaseName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		container = matchingContainers[containerPosition-1]
-	} else {
-		// Look in room
-		if character.room == nil {
-			// Put the item back where it was
-			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
-
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("invalid room state"),
-				Timestamp: time.Now(),
-			}
-		}
-
-		character.room.mutex.RLock()
-		for _, item := range character.room.items {
-			if item != nil && MatchesTarget(item.name, containerBaseName) {
-				matchingContainers = append(matchingContainers, item)
-			}
-		}
-		character.room.mutex.RUnlock()
-
-		if len(matchingContainers) == 0 {
-			// Put the item back where it was
-			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
-
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("you don't see a '%s' here", containerName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		// If multiple matches and no ordinal specified, inform the player
-		if len(matchingContainers) > 1 && !containerHasOrdinal {
-			// Put the item back where it was
-			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
-
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error: fmt.Errorf("which %s? There are %d here. Try 'put %s in first %s'",
-					containerBaseName, len(matchingContainers), itemName, containerBaseName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		// Check if position is valid
-		if containerPosition > len(matchingContainers) {
-			// Put the item back where it was
-			restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
-
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("there aren't that many %ss here", containerBaseName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		container = matchingContainers[containerPosition-1]
-	}
-
-	// Check if container is actually a container
-	if !container.container {
-		// Put the item back where it was
-		restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
-
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("the %s is not a container", container.name),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Add item to container
-	err := container.AddItemToContainer(itemToPut)
-	if err != nil {
-		// Put the item back where it was
-		restoreItemToOriginalLocation(character, itemToPut, targetMatch.slot, targetMatch.isInHand)
-
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     err,
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Success message
-	message := fmt.Sprintf("\n\rYou put %s in %s.\n\r", itemToPut.name, container.name)
-
-	// Notify room
-	if character.room != nil {
-		SendRoomMessageExcept(character.room,
-			fmt.Sprintf("\n\r%s puts %s in %s.\n\r", character.name, itemToPut.name, container.name),
-			character)
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   message,
-		Timestamp: time.Now(),
-	}
-}
-
-// handleTakeFromCommand processes the "take [item] from [container]" command
-func handleTakeFromCommand(cmd *CommandRequest) *CommandResponse {
-	// Args format: ["take", "item", "from", "container"]
-	if len(cmd.Args) < 4 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("take what from what?"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Find "from" keyword position
-	fromIndex := -1
-	for i, arg := range cmd.Args {
-		if strings.ToLower(arg) == "from" {
-			fromIndex = i
-			break
-		}
-	}
-
-	if fromIndex < 2 || fromIndex >= len(cmd.Args)-1 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("usage: take [item] from [container]"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Extract item and container names
-	itemName := strings.ToLower(strings.Join(cmd.Args[1:fromIndex], " "))
-	containerName := strings.ToLower(strings.Join(cmd.Args[fromIndex+1:], " "))
-
-	// Check for "my" prefix on container
-	isMyContainer := false
-	if strings.HasPrefix(containerName, "my ") {
-		isMyContainer = true
-		containerName = strings.TrimPrefix(containerName, "my ")
-	}
-
-	// Parse ordinals for both item and container
-	itemPosition, itemBaseName, itemHasOrdinal := ParseTargetWithOrdinal(itemName)
-	containerPosition, containerBaseName, containerHasOrdinal := ParseTargetWithOrdinal(containerName)
-
-	character := cmd.Character
-	if character == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid character state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Find the container
-	var container *Item
-	var matchingContainers []*Item
-
-	if isMyContainer {
-		// Look in character's inventory
-		character.mutex.RLock()
-		for _, item := range character.inventory {
-			if item != nil && MatchesTarget(item.name, containerBaseName) {
-				matchingContainers = append(matchingContainers, item)
-			}
-		}
-		character.mutex.RUnlock()
-
-		if len(matchingContainers) == 0 {
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("you don't have a '%s'", containerName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		// If multiple matches and no ordinal specified, inform the player
-		if len(matchingContainers) > 1 && !containerHasOrdinal {
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error: fmt.Errorf("which %s? You have %d. Try 'take %s from first %s'",
-					containerBaseName, len(matchingContainers), itemName, containerBaseName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		// Check if position is valid
-		if containerPosition > len(matchingContainers) {
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("you don't have that many %ss", containerBaseName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		container = matchingContainers[containerPosition-1]
-	} else {
-		// Look in room
-		if character.room == nil {
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("invalid room state"),
-				Timestamp: time.Now(),
-			}
-		}
-
-		character.room.mutex.RLock()
-		for _, item := range character.room.items {
-			if item != nil && MatchesTarget(item.name, containerBaseName) {
-				matchingContainers = append(matchingContainers, item)
-			}
-		}
-		character.room.mutex.RUnlock()
-
-		if len(matchingContainers) == 0 {
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("you don't see a '%s' here", containerName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		// If multiple matches and no ordinal specified, inform the player
-		if len(matchingContainers) > 1 && !containerHasOrdinal {
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error: fmt.Errorf("which %s? There are %d here. Try 'take %s from first %s'",
-					containerBaseName, len(matchingContainers), itemName, containerBaseName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		// Check if position is valid
-		if containerPosition > len(matchingContainers) {
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("there aren't that many %ss here", containerBaseName),
-				Timestamp: time.Now(),
-			}
-		}
-
-		container = matchingContainers[containerPosition-1]
-	}
-
-	// Check if container is actually a container
-	if !container.container {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("the %s is not a container", container.name),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Find all matching items in container
-	var matchingItems []*Item
-	container.mutex.RLock()
-	for _, item := range container.contents {
-		if item != nil && MatchesTarget(item.name, itemBaseName) {
-			matchingItems = append(matchingItems, item)
-		}
-	}
-	container.mutex.RUnlock()
-
-	if len(matchingItems) == 0 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("there's no '%s' in the %s", itemBaseName, container.name),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// If multiple matches and no ordinal specified, inform the player
-	if len(matchingItems) > 1 && !itemHasOrdinal {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error: fmt.Errorf("which %s? There are %d in the %s. Try 'take first %s from %s'",
-				itemBaseName, len(matchingItems), container.name, itemBaseName, container.name),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if position is valid
-	if itemPosition > len(matchingItems) {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("there aren't that many %ss in the %s", itemBaseName, container.name),
-			Timestamp: time.Now(),
-		}
-	}
-
-	itemToTake := matchingItems[itemPosition-1]
-
-	// Remove from container
-	removedItem, err := container.RemoveItemFromContainer(itemToTake.id)
-	if err != nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     err,
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Try to put item in a hand
-	character.mutex.Lock()
-	var placedInHand bool
-	var handUsed string
-
-	// Try right hand first (dominant hand)
-	if character.rightHand == nil {
-		character.rightHand = removedItem
-		placedInHand = true
-		handUsed = "right hand"
-	} else if character.leftHand == nil {
-		// Try left hand if right is full
-		character.leftHand = removedItem
-		placedInHand = true
-		handUsed = "left hand"
-	}
-	character.mutex.Unlock()
-
-	// If both hands are full, put the item back in the container
-	if !placedInHand {
-		// Put item back in container
-		err := container.AddItemToContainer(removedItem)
-		if err != nil {
-			Logger.Error("Failed to return item to container after hands full", "error", err)
-		}
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("your hands are full"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Success message
-	message := fmt.Sprintf("\n\rYou take %s from %s and hold it in your %s.\n\r", removedItem.name, container.name, handUsed)
-
-	// Notify room
-	if character.room != nil {
-		SendRoomMessageExcept(character.room,
-			fmt.Sprintf("\n\r%s takes %s from %s.\n\r", character.name, removedItem.name, container.name),
-			character)
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   message,
-		Timestamp: time.Now(),
-	}
-}
-
-// handleGetCommand processes the get/take command
-func handleGetCommand(cmd *CommandRequest, targetName string) *CommandResponse {
-	character := cmd.Character
-	room := character.room
-
-	// Check if room or character is valid
-	if room == nil || character == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid room or character state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Parse ordinal from target
-	position, itemName, hasOrdinal := ParseTargetWithOrdinal(targetName)
-
-	// Find all matching items first
-	var matchingItems []struct {
-		item *Item
-		id   uuid.UUID
-	}
-
-	// Lock room briefly to search for items
-	room.mutex.Lock()
-	for id, item := range room.items {
-		if item != nil && MatchesTarget(item.name, itemName) {
-			matchingItems = append(matchingItems, struct {
-				item *Item
-				id   uuid.UUID
-			}{item, id})
-		}
-	}
-	room.mutex.Unlock()
-
-	// Check if we found any matches
-	if len(matchingItems) == 0 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you don't see that here"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// If multiple matches and no ordinal specified, inform the player
-	if len(matchingItems) > 1 && !hasOrdinal {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error: fmt.Errorf("which %s? There are %d here. Try 'get first %s' or 'get second %s'",
-				itemName, len(matchingItems), itemName, itemName),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if position is valid
-	if position > len(matchingItems) {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("there aren't that many %ss here", itemName),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Get the specific item (position is 1-based)
-	targetMatch := matchingItems[position-1]
-	targetItem := targetMatch.item
-	targetItemID := targetMatch.id
-
-	// Check if item can be picked up
-	if !targetItem.canPickUp {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you cannot pick that up"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Try to put item in a hand
-	character.mutex.Lock()
-	var placedInHand bool
-	var handUsed string
-
-	// Try right hand first (dominant hand)
-	if character.rightHand == nil {
-		character.rightHand = targetItem
-		placedInHand = true
-		handUsed = "right hand"
-	} else if character.leftHand == nil {
-		// Try left hand if right is full
-		character.leftHand = targetItem
-		placedInHand = true
-		handUsed = "left hand"
-	}
-	character.mutex.Unlock()
-
-	// If both hands are full, cannot pick up the item
-	if !placedInHand {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("your hands are full"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Remove from room after character operation
-	room.mutex.Lock()
-	delete(room.items, targetItemID)
-	room.mutex.Unlock()
-
-	// Create success message
-	message := fmt.Sprintf("\n\rYou pick up %s in your %s.\n\r", targetItem.name, handUsed)
-
-	// Notify the room
-	SendRoomMessageExcept(room, fmt.Sprintf("\n\r%s picks up %s.\n\r", character.name, targetItem.name), character)
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   message,
-		Timestamp: time.Now(),
-	}
-}
-
-// handleDropCommand processes the drop command
-func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse {
-	character := cmd.Character
-	room := character.room
-
-	// Check if room or character is valid
-	if room == nil || character == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid room or character state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Parse ordinal from target
-	position, itemName, hasOrdinal := ParseTargetWithOrdinal(targetName)
-
-	// Find matching items in the character's inventory and hands
-	character.mutex.Lock()
-	var matchingItems []struct {
-		item     *Item
-		slot     string
-		isInHand bool
-	}
-
-	// Check hands first
-	if character.rightHand != nil && MatchesTarget(character.rightHand.name, itemName) {
-		matchingItems = append(matchingItems, struct {
-			item     *Item
-			slot     string
-			isInHand bool
-		}{character.rightHand, "right_hand", true})
-	}
-	if character.leftHand != nil && MatchesTarget(character.leftHand.name, itemName) {
-		matchingItems = append(matchingItems, struct {
-			item     *Item
-			slot     string
-			isInHand bool
-		}{character.leftHand, "left_hand", true})
-	}
-
-	// Then check inventory
-	for slot, item := range character.inventory {
-		if item != nil && MatchesTarget(item.name, itemName) {
-			matchingItems = append(matchingItems, struct {
-				item     *Item
-				slot     string
-				isInHand bool
-			}{item, slot, false})
-		}
-	}
-
-	// Check if we found any matches
-	if len(matchingItems) == 0 {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you don't have that"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// If multiple matches and no ordinal specified, inform the player
-	if len(matchingItems) > 1 && !hasOrdinal {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error: fmt.Errorf("which %s? You have %d. Try 'drop first %s' or 'drop second %s'",
-				itemName, len(matchingItems), itemName, itemName),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if position is valid
-	if position > len(matchingItems) {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you don't have that many %ss", itemName),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Get the specific item (position is 1-based)
-	targetMatch := matchingItems[position-1]
-	itemToRemove := targetMatch.item
-	slotToRemove := targetMatch.slot
-
-	// Check if worn (with proper mutex protection)
-	itemToRemove.mutex.RLock()
-	isWorn := itemToRemove.isWorn
-	itemToRemove.mutex.RUnlock()
-
-	if isWorn {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you need to remove that first"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Remove from inventory or hand
-	if targetMatch.isInHand {
-		if targetMatch.slot == "right_hand" {
-			character.rightHand = nil
-		} else if targetMatch.slot == "left_hand" {
-			character.leftHand = nil
-		}
-	} else {
-		delete(character.inventory, slotToRemove)
-	}
-	character.mutex.Unlock()
-
-	// Add to room
-	room.mutex.Lock()
-	room.items[itemToRemove.id] = itemToRemove
-	room.mutex.Unlock()
-
-	// Create success message
-	message := fmt.Sprintf("\n\rYou drop %s.\n\r", itemToRemove.name)
-
-	// Notify the room
-	SendRoomMessageExcept(room, fmt.Sprintf("\n\r%s drops %s.\n\r", character.name, itemToRemove.name), character)
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   message,
-		Timestamp: time.Now(),
-	}
-}
-
-// handleWearCommand processes the wear/equip command
-func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse {
-	// Check if cmd is valid
-	if cmd == nil {
-		return &CommandResponse{
-			Success:   false,
-			Error:     fmt.Errorf("invalid command request"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	character := cmd.Character
-
-	// Check if character is valid
-	if character == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid character state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Find the item in the character's inventory or hands
-	var itemToWear *Item
-	var fromHand string // Track which hand the item came from
-
-	// Lock only for inventory and hand search
-	character.mutex.Lock()
-
-	// First check inventory
-	for _, item := range character.inventory {
-		if item != nil && MatchesTarget(item.name, targetName) {
-			itemToWear = item
-			break
-		}
-	}
-
-	// If not found in inventory, check hands
-	if itemToWear == nil {
-		if character.rightHand != nil && MatchesTarget(character.rightHand.name, targetName) {
-			itemToWear = character.rightHand
-			fromHand = "right"
-		} else if character.leftHand != nil && MatchesTarget(character.leftHand.name, targetName) {
-			itemToWear = character.leftHand
-			fromHand = "left"
-		}
-	}
-	character.mutex.Unlock()
-
-	// Check if item exists
-	if itemToWear == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you don't have that"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if item is already worn (with proper mutex protection)
-	itemToWear.mutex.RLock()
-	isWorn := itemToWear.isWorn
-	itemToWear.mutex.RUnlock()
-
-	if isWorn {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you're already wearing that"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if item is wearable
-	if !itemToWear.wearable || len(itemToWear.wornOn) == 0 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you can't wear that"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Validate that the wear locations are valid
-	for _, location := range itemToWear.wornOn {
-		if !WearLocations[location] {
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("invalid wear location: %s", location),
-				Timestamp: time.Now(),
-			}
-		}
-	}
-
-	// Check if wear locations are already occupied
-	// Build a map of worn locations (with proper mutex protection)
-	wornLocations := make(map[string]bool)
-
-	// Lock character briefly to check worn items
-	character.mutex.Lock()
-	for _, item := range character.inventory {
-		if item == nil {
-			continue
-		}
-
-		item.mutex.RLock()
-		isWorn := item.isWorn
-		wornOn := make([]string, len(item.wornOn))
-		copy(wornOn, item.wornOn)
-		item.mutex.RUnlock()
-
-		if isWorn {
-			for _, loc := range wornOn {
-				wornLocations[loc] = true
-			}
-		}
-	}
-	character.mutex.Unlock()
-
-	// Special handling for finger and wrist items - map to specific left/right locations
-	var finalWearLocations []string
-	for _, location := range itemToWear.wornOn {
-		if location == "finger" {
-			// Check left finger first, then right finger
-			if !wornLocations["left_finger"] {
-				finalWearLocations = append(finalWearLocations, "left_finger")
-			} else if !wornLocations["right_finger"] {
-				finalWearLocations = append(finalWearLocations, "right_finger")
-			} else {
-				return &CommandResponse{
-					RequestID: cmd.ID,
-					Success:   false,
-					Error:     fmt.Errorf("both your fingers are already occupied"),
-					Timestamp: time.Now(),
-				}
-			}
-		} else if location == "wrist" {
-			// Check left wrist first, then right wrist
-			if !wornLocations["left_wrist"] {
-				finalWearLocations = append(finalWearLocations, "left_wrist")
-			} else if !wornLocations["right_wrist"] {
-				finalWearLocations = append(finalWearLocations, "right_wrist")
-			} else {
-				return &CommandResponse{
-					RequestID: cmd.ID,
-					Success:   false,
-					Error:     fmt.Errorf("both your wrists are already occupied"),
-					Timestamp: time.Now(),
-				}
-			}
-		} else {
-			// For all other locations, check for conflicts normally
-			if wornLocations[location] {
-				return &CommandResponse{
-					RequestID: cmd.ID,
-					Success:   false,
-					Error:     fmt.Errorf("you're already wearing something on your %s", location),
-					Timestamp: time.Now(),
-				}
-			}
-			finalWearLocations = append(finalWearLocations, location)
-		}
-	}
-
-	// If item is from a hand, remove it from that hand and add to inventory
-	if fromHand != "" {
-		character.mutex.Lock()
-
-		// Check if the inventory slot is already occupied
-		slotKey := itemToWear.id.String()
-		if existingItem, exists := character.inventory[slotKey]; exists && existingItem != nil {
-			character.mutex.Unlock()
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("this item is already in your inventory"),
-				Timestamp: time.Now(),
-			}
-		}
-
-		// Safe to proceed - remove from hand and add to inventory
-		if fromHand == "right" {
-			character.rightHand = nil
-		} else {
-			character.leftHand = nil
-		}
-
-		// Add to inventory using the item's ID as the slot
-		character.inventory[slotKey] = itemToWear
-		character.mutex.Unlock()
-	}
-
-	// Update the item's state with proper mutex protection
-	itemToWear.mutex.Lock()
-	itemToWear.wornOn = finalWearLocations
-	itemToWear.isWorn = true
-
-	// Create success message while we still have the lock
-	wearLocations := strings.Join(itemToWear.wornOn, " and ")
-	message := fmt.Sprintf("\n\rYou wear %s on your %s.\n\r", itemToWear.name, wearLocations)
-
-	itemToWear.mutex.Unlock()
-
-	// Apply trait modifications
-	if len(itemToWear.traitMods) > 0 {
-		character.ApplyItemTraitMods(itemToWear)
-	}
-
-	// Notify the room
-	if character.room != nil {
-		SendRoomMessageExcept(character.room,
-			fmt.Sprintf("\n\r%s wears %s.\n\r", character.name, itemToWear.name),
-			character)
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   message,
-		Timestamp: time.Now(),
-	}
-}
-
-// handleRemoveCommand processes the remove/unwear command
-func handleRemoveCommand(cmd *CommandRequest, targetName string) *CommandResponse {
-	if cmd == nil {
-		return &CommandResponse{
-			Success:   false,
-			Error:     fmt.Errorf("invalid command request"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	character := cmd.Character
-	if character == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid character state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	character.mutex.Lock()
-	var itemToRemove *Item
-
-	if character.inventory != nil {
-		for _, item := range character.inventory {
-			if item == nil {
-				continue
-			}
-
-			// Safely check item state with mutex
-			item.mutex.RLock()
-			isWorn := item.isWorn
-			name := item.name
-			item.mutex.RUnlock()
-
-			if isWorn && MatchesTarget(name, targetName) {
-				itemToRemove = item
-				break
-			}
-		}
-	}
-
-	// Check if item exists
-	if itemToRemove == nil {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you're not wearing that"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if we have a free hand to put the item in
-	var targetHand string
-	if character.rightHand == nil {
-		targetHand = "right"
-	} else if character.leftHand == nil {
-		targetHand = "left"
-	} else {
-		// Both hands are full, cannot remove
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("your hands are full"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Find which slot the item is in
-	var itemSlot string
-	for slot, item := range character.inventory {
-		if item == itemToRemove {
-			itemSlot = slot
-			break
-		}
-	}
-
-	// Move item to hand
-	if targetHand == "right" {
-		character.rightHand = itemToRemove
-	} else {
-		character.leftHand = itemToRemove
-	}
-
-	// Remove from inventory slot
-	if itemSlot != "" {
-		delete(character.inventory, itemSlot)
-	}
-
-	// Mark item as not worn (with proper mutex protection)
-	itemToRemove.mutex.Lock()
-	itemToRemove.isWorn = false
-	itemName := itemToRemove.name
-	hasTraitMods := len(itemToRemove.traitMods) > 0
-	itemToRemove.mutex.Unlock()
-
-	// Unlock character before trait modifications
-	character.mutex.Unlock()
-
-	// Remove trait modifications after unlocking
-	if hasTraitMods {
-		character.RemoveItemTraitMods(itemToRemove)
-	}
-
-	// Create success message
-	handName := "right hand"
-	if targetHand == "left" {
-		handName = "left hand"
-	}
-	message := fmt.Sprintf("\n\rYou remove %s and hold it in your %s.\n\r", itemName, handName)
-
-	// Notify the room
-	if character.room != nil {
-		SendRoomMessageExcept(character.room,
-			fmt.Sprintf("\n\r%s removes %s.\n\r", character.name, itemToRemove.name),
-			character)
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   message,
-		Timestamp: time.Now(),
-	}
-}
-
-// handleSwitchCommand processes the switch hands command
-func handleSwitchCommand(cmd *CommandRequest, targetName string) *CommandResponse {
-	if cmd == nil {
-		return &CommandResponse{
-			Success:   false,
-			Error:     fmt.Errorf("invalid command request"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	character := cmd.Character
-	if character == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid character state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if the user provided an argument
-	if targetName != "" {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("usage: switch (no arguments needed)"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Lock the character to check and modify hand contents
-	character.mutex.Lock()
-
-	// Check if both hands are empty
-	if character.rightHand == nil && character.leftHand == nil {
-		character.mutex.Unlock()
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("your hands are empty"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Get references to items before switching
-	rightItem := character.rightHand
-	leftItem := character.leftHand
-
-	// Perform the switch
-	character.rightHand = leftItem
-	character.leftHand = rightItem
-
-	character.mutex.Unlock()
-
-	// Create appropriate success message based on what was switched
-	var message string
-	if rightItem != nil && leftItem != nil {
-		// Both hands had items
-		message = fmt.Sprintf("\n\rYou switch %s to your right hand and %s to your left hand.\n\r",
-			leftItem.name, rightItem.name)
-	} else if rightItem != nil {
-		// Only right hand had an item
-		message = fmt.Sprintf("\n\rYou switch %s to your left hand.\n\r", rightItem.name)
-	} else {
-		// Only left hand had an item
-		message = fmt.Sprintf("\n\rYou switch %s to your right hand.\n\r", leftItem.name)
-	}
-
-	// Notify the room
-	if character.room != nil {
-		SendRoomMessageExcept(character.room,
-			fmt.Sprintf("\n\r%s switches the items in their hands.\n\r", character.name),
-			character)
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   message,
-		Timestamp: time.Now(),
-	}
-}
-
-// restoreItemToOriginalLocation restores an item to its original location (hand or inventory)
-func restoreItemToOriginalLocation(character *Character, item *Item, slot string, isInHand bool) {
-	character.mutex.Lock()
-	defer character.mutex.Unlock()
-
-	if isInHand {
-		if slot == "right_hand" {
-			character.rightHand = item
-		} else if slot == "left_hand" {
-			character.leftHand = item
-		}
-	} else {
-		character.inventory[slot] = item
-	}
-}
-
-// handleMovementCommand processes movement commands (go/move)
-func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
-	character := cmd.Character
-
-	if character == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid character"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// If this is not a sneak command and character is hidden, reveal them
-	if cmd.Verb != "sneak" && character.IsHidden() {
-		character.SetHidden(false)
-		character.playerCommandOut <- "\n\rYou reveal yourself as you move.\n\r"
-
-		if character.room != nil {
-			SendRoomMessageExcept(character.room,
-				fmt.Sprintf("\n\r%s suddenly appears!\n\r", character.name),
-				character,
-			)
-		}
-	}
-
-	room := character.room
-	if room == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid room state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if character state allows movement
-	if character.charState != "standing" {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you must be standing to move. You are currently %s", character.charState),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if a direction was provided
-	if len(cmd.Args) < 2 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("which direction do you want to go?"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Get the direction from the command
-	direction := strings.ToLower(strings.Join(cmd.Args[1:], " "))
-	Logger.Debug("Player attempting to move", "characterName", character.name, "direction", direction)
-
-	// Parse ordinal from direction
-	position, exitName, hasOrdinal := ParseTargetWithOrdinal(direction)
-
-	// Look for matching exits
-	room.mutex.RLock()
-	var matchingExits []*Exit
-
-	for _, exit := range room.exits {
-		if exit != nil && MatchesTarget(exit.direction, exitName) {
-			matchingExits = append(matchingExits, exit)
-		}
-	}
-	room.mutex.RUnlock()
-
-	// Check if we found any matches
-	if len(matchingExits) == 0 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you cannot go that way"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// If multiple matches and no ordinal specified, inform the player
-	if len(matchingExits) > 1 && !hasOrdinal {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error: fmt.Errorf("which way? There are %d exits %s. Try 'go first %s' or 'go second %s'",
-				len(matchingExits), exitName, exitName, exitName),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if position is valid
-	if position > len(matchingExits) {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("there aren't that many exits %s", exitName),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Get the specific exit (position is 1-based)
-	targetExit := matchingExits[position-1]
-
-	// Check if target room exists and load it if necessary
-	targetRoom := targetExit.targetRoom
-
-	// Check if we have a room reference but it's not running (stale reference)
-	if targetRoom != nil && !targetRoom.running {
-		Logger.Debug("Exit has stale room reference, clearing it",
-			"exitID", targetExit.exitID,
-			"targetRoomID", targetExit.targetRoomID)
-		targetRoom = nil
-		targetExit.targetRoom = nil
-	}
-
-	if targetRoom == nil {
-		// Try to load the room using the target room ID
-		loadedRoom, err := game.LoadRoom(targetExit.targetRoomID)
-		if err != nil {
-			Logger.Warn("Could not load target room for movement",
-				"targetRoomID", targetExit.targetRoomID,
-				"direction", direction,
-				"characterName", character.name,
-				"error", err)
-			return &CommandResponse{
-				RequestID: cmd.ID,
-				Success:   false,
-				Error:     fmt.Errorf("the way is barred"),
-				Timestamp: time.Now(),
-			}
-		}
-		targetRoom = loadedRoom
-		// Update the exit's room reference for future use
-		targetExit.targetRoom = targetRoom
-	}
-
-	// Ensure target room is running
-	if !targetRoom.running {
-		targetRoom.Start(game)
-	}
-
-	// Get references before the move
-	oldRoom := room
-	newRoom := targetRoom
-
-	Logger.Info("Character moving between rooms",
-		"characterName", character.name,
-		"fromRoom", oldRoom.roomID,
-		"toRoom", newRoom.roomID,
-		"direction", direction)
-
-	// Prepare departure message - only if visible
-	var departureMsg string
-	if !character.IsHidden() {
-		departureMsg = fmt.Sprintf("%s leaves %s.", character.name, direction)
-	}
-
-	// Perform room transitions atomically to prevent deadlocks
-	// Lock in consistent order: oldRoom, newRoom, then character
-	if oldRoom.roomID < newRoom.roomID {
-		oldRoom.mutex.Lock()
-		newRoom.mutex.Lock()
-	} else if oldRoom.roomID > newRoom.roomID {
-		newRoom.mutex.Lock()
-		oldRoom.mutex.Lock()
-	} else {
-		// Same room (shouldn't happen, but handle gracefully)
-		oldRoom.mutex.Lock()
-	}
-
-	// Remove from old room
-	delete(oldRoom.characters, character.id)
-	oldRoom.lastActive = time.Now()
-
-	// Add to new room
-	newRoom.characters[character.id] = character
-	newRoom.lastActive = time.Now()
-	newRoom.idleCounter = 0
-
-	// If room has a script ID, activate scripts
-	if newRoom.persistent && newRoom.scriptID != "" && !newRoom.scriptActive {
-		newRoom.scriptActive = true
-		Logger.Info("Activating scripts for persistent room with character entry", "roomID", newRoom.roomID)
-	}
-
-	// Unlock rooms before updating character
-	if oldRoom.roomID != newRoom.roomID {
-		oldRoom.mutex.Unlock()
-		newRoom.mutex.Unlock()
-	} else {
-		oldRoom.mutex.Unlock()
-	}
-
-	// Send departure message to remaining characters (only if visible)
-	if departureMsg != "" {
-		SendRoomMessageExcept(oldRoom, departureMsg, character)
-	}
-
-	// Update character's room reference
-	character.mutex.Lock()
-	character.room = newRoom
-	character.mutex.Unlock()
-
-	// Send arrival message using the exit's arrival text (only if visible)
-	if !character.IsHidden() {
-		arrivalMsg := fmt.Sprintf("%s %s.", character.name, targetExit.arrivalText)
-		SendRoomMessageExcept(newRoom, arrivalMsg, character)
-	}
-
-	// Get the room description for the character
-	description := newRoom.GetDescription(character)
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   description,
-		Timestamp: time.Now(),
-	}
-}
-
 // stripArticles removes common articles and possessives from the beginning of a string
 func stripArticles(input string) string {
 	// List of common articles and possessives to strip
@@ -1760,423 +274,611 @@ func stripArticles(input string) string {
 	return input
 }
 
-// handleHideCommand processes the hide command
-func handleHideCommand(cmd *CommandRequest, room *Room) *CommandResponse {
-	character := cmd.Character
-	if character == nil || room == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid character or room state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Verify character is actually in this room
-	if character.room != room {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("character room mismatch"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Rate limiting: 10-second cooldown prevents hide spam
-	character.mutex.RLock()
-	timeSinceLastHide := time.Since(character.lastHideAttempt)
-	character.mutex.RUnlock()
-
-	if timeSinceLastHide < hideRateLimit {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you must wait before attempting to hide again"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	character.SetCommandWaitTime(hideActionTime)
-
-	character.mutex.Lock()
-	character.lastHideAttempt = time.Now()
-	character.mutex.Unlock()
-
-	if character.IsHidden() {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you are already hidden"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	outcome := ResolveStaticCheckWithXP(character, "stealth", "agility", hideBaseDifficulty)
-
-	if !outcome.Success {
-		message := "\n\rYou attempt to hide but fail to find adequate concealment.\n\r"
-
-		SendRoomMessageExcept(room,
-			fmt.Sprintf("\n\r%s attempts to hide but remains visible.\n\r", character.name),
-			character,
-		)
-
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   true, // Command executed successfully, even if hiding failed
-			Message:   message,
-			Timestamp: time.Now(),
-		}
-	}
-
-	character.SetHidden(true)
-	message := "\n\rYou slip into the shadows and hide.\n\r"
-
-	// Detection phase: observers immediately attempt to spot the hiding character
-	room.mutex.RLock()
-	observers := make([]*Character, 0, len(room.characters))
-	for _, observer := range room.characters {
-		if observer != nil && observer != character {
-			observers = append(observers, observer)
-		}
-	}
-	room.mutex.RUnlock()
-
-	// Check if each observer detects the hidden character
-	// Use atomic detection to prevent race conditions
-	var detectedBy []*Character
-	var detectionMessages []string
-
-	for _, observer := range observers {
-		if observer == nil || observer.player == nil {
-			continue // Skip invalid observers
-		}
-
-		// Re-verify character is still hidden before each check
-		if !character.IsHidden() {
-			break // Character already revealed by previous detection
-		}
-
-		// Perception & Investigation vs Stealth & Agility
-		detectOutcome := ResolveOpposedCheckWithXP(
-			observer, character,
-			"investigation", "perception",
-			"stealth", "agility",
-		)
-
-		if detectOutcome.Success {
-			detectedBy = append(detectedBy, observer)
-			detectionMessages = append(detectionMessages,
-				fmt.Sprintf("\n\rYou notice %s trying to hide.\n\r", character.name))
-		}
-	}
-
-	// If detected by anyone, reveal immediately with proper coordination
-	if len(detectedBy) > 0 && character.IsHidden() {
-		character.SetHidden(false)
-		message = "\n\rYou attempt to hide but are spotted!\n\r"
-
-		// Send detection messages only to those who detected
-		for i, detector := range detectedBy {
-			if i < len(detectionMessages) && detector.player != nil {
-				SafeSendString(detector.player.commandOut, detectionMessages[i], detector.name)
-			}
-		}
-
-		// Notify others that someone was discovered (without details)
-		for _, observer := range observers {
-			if observer == nil || observer.player == nil {
-				continue
-			}
-			wasDetector := false
-			for _, detector := range detectedBy {
-				if observer == detector {
-					wasDetector = true
-					break
-				}
-			}
-			if !wasDetector {
-				SafeSendString(observer.player.commandOut, "\n\rSomeone notices movement in the shadows.\n\r", observer.name)
-			}
-		}
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   message,
-		Timestamp: time.Now(),
-	}
-}
-
-// handleSneakCommand processes the sneak command for hidden movement
-func handleSneakCommand(cmd *CommandRequest, game *Game) *CommandResponse {
+// handleFaceCommand processes the FACE command to target a character for combat
+func handleFaceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	character := cmd.Character
 	if character == nil {
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
-			Error:     fmt.Errorf("invalid character state"),
+			Error:     fmt.Errorf("invalid character"),
 			Timestamp: time.Now(),
 		}
 	}
 
-	if !character.IsHidden() {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you must be hidden to sneak"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	outcome := ResolveStaticCheckWithXP(character, "stealth", "agility", hideBaseDifficulty)
-
-	if !outcome.Success {
-		character.SetHidden(false)
-		character.SetCommandWaitTime(hideActionTime)
-
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you stumble and reveal yourself"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Store original verb and use movement handler
-	originalVerb := cmd.Verb
-	cmd.Verb = "sneak" // Keep as sneak so movement handler knows not to reveal
-	moveResponse := handleMovementCommand(cmd, game)
-	cmd.Verb = originalVerb // Restore original verb
-
-	if !moveResponse.Success {
-		// Movement failed, remain hidden
-		return moveResponse
-	}
-
-	// Movement succeeded, character remains hidden
-	// Perform detection checks in the new room
-	newRoom := character.room
-	newRoom.mutex.RLock()
-	observers := make([]*Character, 0, len(newRoom.characters))
-	for _, observer := range newRoom.characters {
-		if observer != nil && observer != character {
-			observers = append(observers, observer)
-		}
-	}
-	newRoom.mutex.RUnlock()
-
-	// Check if each observer detects the hidden character
-	for _, observer := range observers {
-		// Perception & Investigation vs Stealth & Agility
-		detectOutcome := ResolveOpposedCheckWithXP(
-			observer, character,
-			"investigation", "perception",
-			"stealth", "agility",
-		)
-
-		if detectOutcome.Success {
-			character.SetHidden(false)
-			SafeSendString(observer.player.commandOut, fmt.Sprintf("\n\rYou spot %s sneaking in!\n\r", character.name), observer.name)
-
-			// Notify others
-			SendRoomMessageExcept(newRoom,
-				fmt.Sprintf("\n\r%s points out %s who was sneaking in.\n\r", observer.name, character.name),
-				observer,
-			)
-			break
-		}
-	}
-
-	character.SetCommandWaitTime(sneakActionTime)
-
-	return moveResponse
-}
-
-// handleSearchCommand processes the search command to find hidden characters
-func handleSearchCommand(cmd *CommandRequest, room *Room) *CommandResponse {
-	character := cmd.Character
-	if character == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid character state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	character.SetCommandWaitTime(hideActionTime)
-
-	// Find all hidden characters in the room
-	room.mutex.RLock()
-	var hiddenCharacters []*Character
-	for _, other := range room.characters {
-		if other != nil && other != character && other.IsHidden() {
-			hiddenCharacters = append(hiddenCharacters, other)
-		}
-	}
-	room.mutex.RUnlock()
-
-	if len(hiddenCharacters) == 0 {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   true,
-			Message:   "\n\rYou search carefully but find no one hiding.\n\r",
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Announce the search
-	SafeSendString(character.player.commandOut, "\n\rYou begin searching for hidden characters...\n\r", character.name)
-	SendRoomMessageExcept(room,
-		fmt.Sprintf("\n\r%s begins searching the area carefully.\n\r", character.name),
-		character,
-	)
-
-	// Check against each hidden character - find only one per search
-	var foundAny bool
-	var foundCharacter *Character
-
-	for _, hidden := range hiddenCharacters {
-		if hidden == nil || hidden.player == nil {
-			continue
-		}
-
-		// Perception & Investigation vs Stealth & Agility
-		detectOutcome := ResolveOpposedCheckWithXP(
-			character, hidden,
-			"investigation", "perception",
-			"stealth", "agility",
-		)
-
-		if detectOutcome.Success {
-			foundAny = true
-			foundCharacter = hidden
-			break // Only find one character per search attempt
-		}
-	}
-
-	// Process the discovery if any character was found
-	if foundAny && foundCharacter != nil {
-		foundCharacter.SetHidden(false)
-
-		SafeSendString(character.player.commandOut, fmt.Sprintf("\n\rYou discover %s hiding!\n\r", foundCharacter.name), character.name)
-		SafeSendString(foundCharacter.player.commandOut, fmt.Sprintf("\n\r%s discovers your hiding place!\n\r", character.name), foundCharacter.name)
-
-		// Notify others
-		SendRoomMessageExcept(room,
-			fmt.Sprintf("\n\r%s discovers %s hiding!\n\r", character.name, foundCharacter.name),
-			character,
-		)
-	}
-
-	if !foundAny {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   true,
-			Message:   "\n\rYour search reveals nothing.\n\r",
-			Timestamp: time.Now(),
-		}
-	}
-
-	return &CommandResponse{
-		RequestID: cmd.ID,
-		Success:   true,
-		Message:   "", // Messages already sent
-		Timestamp: time.Now(),
-	}
-}
-
-// handlePointCommand processes the point command to reveal a hidden character
-func handlePointCommand(cmd *CommandRequest, room *Room) *CommandResponse {
-	character := cmd.Character
-	if character == nil {
-		return &CommandResponse{
-			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("invalid character state"),
-			Timestamp: time.Now(),
-		}
-	}
-
-	// Check if target was specified
+	// Check if a target was provided
 	if len(cmd.Args) < 2 {
 		return &CommandResponse{
 			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("point at whom?"),
+			Success:   true,
+			Message:   "\n\rWho do you want to face?\n\r",
 			Timestamp: time.Now(),
 		}
 	}
 
+	// Get the target name
 	targetName := strings.ToLower(strings.Join(cmd.Args[1:], " "))
+	targetName = stripArticles(targetName)
 
-	// Find the target character
-	room.mutex.RLock()
+	// Look for the target in the room
+	r.mutex.RLock()
 	var target *Character
-	for _, other := range room.characters {
-		if other != nil && other != character && MatchesTarget(other.name, targetName) {
-			target = other
+	for _, char := range r.characters {
+		if char != nil && char != character && strings.Contains(strings.ToLower(char.name), targetName) {
+			target = char
 			break
 		}
 	}
-	room.mutex.RUnlock()
+	r.mutex.RUnlock()
 
 	if target == nil {
 		return &CommandResponse{
 			RequestID: cmd.ID,
-			Success:   false,
-			Error:     fmt.Errorf("you don't see anyone by that name here"),
+			Success:   true,
+			Message:   "\n\rYou don't see anyone here by that name.\n\r",
 			Timestamp: time.Now(),
 		}
 	}
 
-	// Check if the character can see the target
-	if target.IsHidden() && !character.IsHidden() {
-		// Perform detection check first
-		detectOutcome := ResolveOpposedCheckWithXP(
-			character, target,
-			"investigation", "perception",
-			"stealth", "agility",
-		)
+	// Clear any existing facing targets that are no longer in the same room
+	character.mutex.Lock()
+	if character.facing != nil && character.facing.room != character.room {
+		character.facing = nil
+	}
+	character.facing = target
+	character.mutex.Unlock()
 
-		if !detectOutcome.Success {
+	// Clear the target's facing if they were facing someone not in the room
+	target.mutex.Lock()
+	if target.facing != nil && target.facing.room != target.room {
+		target.facing = nil
+	}
+	target.mutex.Unlock()
+
+	// Initialize combat ranges with default combatRangeDefault if no existing range
+	r.mutex.Lock()
+	if r.combatRanges[character.id] == nil {
+		r.combatRanges[character.id] = make(map[uuid.UUID]float64)
+	}
+	if r.combatRanges[target.id] == nil {
+		r.combatRanges[target.id] = make(map[uuid.UUID]float64)
+	}
+
+	// Only set default range if no existing range between these characters
+	if _, exists := r.combatRanges[character.id][target.id]; !exists {
+		r.combatRanges[character.id][target.id] = combatRangeDefault
+		r.combatRanges[target.id][character.id] = combatRangeDefault
+	}
+	r.mutex.Unlock()
+
+	// Send messages
+	character.DisplayMessage(fmt.Sprintf("\n\rYou turn to face %s.\n\r", target.name))
+	target.DisplayMessage(fmt.Sprintf("\n\r%s turns to face you!\n\r", character.name))
+	SendRoomMessage(r, fmt.Sprintf("\n\r%s turns to face %s.\n\r", character.name, target.name), character, target)
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Timestamp: time.Now(),
+	}
+}
+
+// handleAssessCommand shows the room's current combat situation
+func handleAssessCommand(cmd *CommandRequest) *CommandResponse {
+	character := cmd.Character
+	if character == nil || character.room == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character or room"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	room := character.room
+	var message strings.Builder
+
+	// Check personal facing status
+	character.mutex.RLock()
+	facing := character.facing
+	character.mutex.RUnlock()
+
+	if facing != nil && facing.room == character.room {
+		message.WriteString(fmt.Sprintf("\n\rYou are facing %s.\n\r", facing.name))
+	} else {
+		// Clear stale facing if target is no longer in the same room
+		if facing != nil {
+			character.mutex.Lock()
+			character.facing = nil
+			character.mutex.Unlock()
+		}
+		message.WriteString("\n\rYou are not currently facing anyone.\n\r")
+	}
+
+	// Show room combat situation
+	room.mutex.RLock()
+	hasAnyCombat := false
+
+	// Check if this character is in combat with others
+	if ranges, exists := room.combatRanges[character.id]; exists && len(ranges) > 0 {
+		hasAnyCombat = true
+		message.WriteString("\n\rYou are in combat with:\n\r")
+		for targetID, distance := range ranges {
+			if target, found := room.characters[targetID]; found {
+				rangeDesc := getRangeDescription(distance)
+				message.WriteString(fmt.Sprintf("  %s (%s)\n\r", target.name, rangeDesc))
+			}
+		}
+	}
+
+	// Show other combat pairs in the room (excluding those involving this character)
+	otherCombatPairs := make(map[string]bool) // Track pairs to avoid duplicates
+	for attackerID, targets := range room.combatRanges {
+		if attackerID == character.id {
+			continue // Skip this character's combat ranges
+		}
+
+		if attacker, found := room.characters[attackerID]; found {
+			for targetID, distance := range targets {
+				if targetID == character.id {
+					continue // Skip combat involving this character
+				}
+
+				if target, found := room.characters[targetID]; found {
+					// Create a normalized pair key to avoid duplicates
+					var pairKey string
+					if attackerID.String() < targetID.String() {
+						pairKey = fmt.Sprintf("%s-%s", attackerID.String(), targetID.String())
+					} else {
+						pairKey = fmt.Sprintf("%s-%s", targetID.String(), attackerID.String())
+					}
+
+					if !otherCombatPairs[pairKey] {
+						if !hasAnyCombat {
+							message.WriteString("\n\rOther combat in the room:\n\r")
+							hasAnyCombat = true
+						}
+						rangeDesc := getRangeDescription(distance)
+						message.WriteString(fmt.Sprintf("  %s vs %s (%s)\n\r", attacker.name, target.name, rangeDesc))
+						otherCombatPairs[pairKey] = true
+					}
+				}
+			}
+		}
+	}
+	room.mutex.RUnlock()
+
+	if !hasAnyCombat {
+		message.WriteString("\n\rNo combat is currently taking place in this room.\n\r")
+	}
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
+		Message:   message.String(),
+		Timestamp: time.Now(),
+	}
+}
+
+// getRangeDescription returns the range category based on distance
+func getRangeDescription(distance float64) string {
+	if distance < 5.0 {
+		return "melee"
+	} else if distance <= 15.0 {
+		return "pole"
+	} else {
+		return "far"
+	}
+}
+
+// initiateCombat sets up combat ranges between two characters at the specified distance
+// TODO: Currently unused - placeholder for future combat system features
+func (r *Room) initiateCombat(char1, char2 *Character, distance float64) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if r.combatRanges[char1.id] == nil {
+		r.combatRanges[char1.id] = make(map[uuid.UUID]float64)
+	}
+	if r.combatRanges[char2.id] == nil {
+		r.combatRanges[char2.id] = make(map[uuid.UUID]float64)
+	}
+
+	r.combatRanges[char1.id][char2.id] = distance
+	r.combatRanges[char2.id][char1.id] = distance
+}
+
+// removeCombatRange removes combat range between two specific characters
+// TODO: Currently unused - placeholder for future combat system features
+// removeCharacterFromCombat removes all combat ranges for a specific character
+func (r *Room) removeCharacterFromCombat(character *Character) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// Remove the character's outgoing combat ranges
+	delete(r.combatRanges, character.id)
+
+	// Remove the character from other characters' combat ranges
+	for _, targets := range r.combatRanges {
+		if targets != nil {
+			delete(targets, character.id)
+		}
+	}
+}
+
+// getCombatRange returns the combat range between two characters, or -1 if not in combat
+// TODO: Currently unused - placeholder for future combat system features
+func (r *Room) getCombatRange(char1, char2 *Character) float64 {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	if ranges, exists := r.combatRanges[char1.id]; exists {
+		if distance, found := ranges[char2.id]; found {
+			return distance
+		}
+	}
+	return -1
+}
+
+// setCombatRange updates the combat range between two characters
+func (r *Room) setCombatRange(char1, char2 *Character, distance float64) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if r.combatRanges[char1.id] != nil {
+		r.combatRanges[char1.id][char2.id] = distance
+	}
+	if r.combatRanges[char2.id] != nil {
+		r.combatRanges[char2.id][char1.id] = distance
+	}
+}
+
+// handleAdvanceCommand processes the ADVANCE command
+func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check round time
+	if time.Now().Before(character.waitUntil) {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rYou are still recovering from your last action.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Parse arguments: ADVANCE [target] [range]
+	var targetName string
+	var rangeType string
+
+	if len(cmd.Args) > 1 {
+		targetName = strings.ToLower(strings.Join(cmd.Args[1:], " "))
+		// Check if last argument is a range type
+		lastArg := strings.ToLower(cmd.Args[len(cmd.Args)-1])
+		if lastArg == "pole" || lastArg == "melee" {
+			rangeType = lastArg
+			// Reconstruct target name without range
+			if len(cmd.Args) > 2 {
+				targetName = strings.ToLower(strings.Join(cmd.Args[1:len(cmd.Args)-1], " "))
+			} else {
+				targetName = ""
+			}
+		}
+	}
+
+	// Strip articles from target name
+	if targetName != "" {
+		targetName = stripArticles(targetName)
+	}
+
+	// Determine target range based on range type
+	var targetRange float64
+	switch rangeType {
+	case "pole":
+		targetRange = combatRangePole
+	case "melee":
+		targetRange = combatRangeMelee
+	case "":
+		targetRange = combatRangeClose
+	default:
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rValid range options are: melee, pole, or omit for close combat.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	character.mutex.Lock()
+
+	// If target specified, execute face command first
+	if targetName != "" {
+		// Find target in room
+		r.mutex.RLock()
+		var target *Character
+		for _, c := range r.characters {
+			if c != nil && c != character && strings.Contains(strings.ToLower(c.name), targetName) {
+				target = c
+				break
+			}
+		}
+		r.mutex.RUnlock()
+
+		if target == nil {
+			character.mutex.Unlock()
 			return &CommandResponse{
 				RequestID: cmd.ID,
 				Success:   false,
-				Error:     fmt.Errorf("you don't see anyone by that name here"),
+				Message:   fmt.Sprintf("\n\rYou don't see anyone here by that name.\n\r"),
+				Timestamp: time.Now(),
+			}
+		}
+
+		// Clear any existing facing targets that are no longer in the same room
+		if character.facing != nil && character.facing.room != character.room {
+			character.facing = nil
+		}
+		character.facing = target
+
+		// Initialize combat if needed
+		// Store target info before unlocking
+		targetName := target.name
+		character.mutex.Unlock()
+		r.initiateCombat(character, target, combatRangeDefault)
+
+		// Send facing messages with advance context
+		character.DisplayMessage(fmt.Sprintf("\n\rYou advance on %s.\n\r", targetName))
+		target.DisplayMessage(fmt.Sprintf("\n\r%s advances on you!\n\r", character.name))
+		SendRoomMessage(r, fmt.Sprintf("\n\r%s advances on %s.\n\r", character.name, targetName), character, target)
+
+		character.mutex.Lock()
+	} else {
+		// No target specified - check if already facing someone or in combat
+		if character.facing == nil {
+			// Check if character is in combat ranges
+			r.mutex.RLock()
+			var potentialTarget *Character
+			if ranges, exists := r.combatRanges[character.id]; exists && len(ranges) > 0 {
+				// Find first character facing this character
+				for targetID := range ranges {
+					for _, c := range r.characters {
+						if c != nil && c.id == targetID {
+							c.mutex.RLock()
+							if c.facing == character {
+								potentialTarget = c
+								c.mutex.RUnlock()
+								break
+							}
+							c.mutex.RUnlock()
+						}
+					}
+					if potentialTarget != nil {
+						break
+					}
+				}
+			}
+			r.mutex.RUnlock()
+
+			if potentialTarget == nil {
+				character.mutex.Unlock()
+				return &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Message:   "\n\rThere isn't anybody to advance on.\n\r",
+					Timestamp: time.Now(),
+				}
+			}
+
+			character.facing = potentialTarget
+		}
+	}
+
+	// Set combat movement
+	if character.facing != nil {
+		character.combatMovement = &CombatMovement{
+			mode:        "advance",
+			targetID:    character.facing.id,
+			targetRange: targetRange,
+		}
+		r.AddCharacterToMove(character)
+
+		rangeName := "close combat"
+		if rangeType == "melee" {
+			rangeName = "melee range"
+		} else if rangeType == "pole" {
+			rangeName = "pole range"
+		}
+
+		character.mutex.Unlock()
+
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   true,
+			Message:   fmt.Sprintf("\n\rYou begin advancing to %s.\n\r", rangeName),
+			Timestamp: time.Now(),
+		}
+	} else {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rThere isn't anybody to advance on.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+}
+
+// handleRetreatCommand processes the RETREAT command
+func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Check round time
+	if time.Now().Before(character.waitUntil) {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rYou are still recovering from your last action.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Parse range argument
+	var targetRange float64 = 45.0
+
+	if len(cmd.Args) > 1 {
+		rangeType := strings.ToLower(cmd.Args[1])
+		switch rangeType {
+		case "melee":
+			targetRange = 5.0
+		case "pole":
+			targetRange = combatRangePole
+		case "far":
+			targetRange = 30.0
+		default:
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Message:   "\n\rValid range options are: melee, pole, far, or omit for maximum distance.\n\r",
 				Timestamp: time.Now(),
 			}
 		}
 	}
 
-	// If target is hidden, reveal them
-	if target.IsHidden() {
-		target.SetHidden(false)
+	character.mutex.Lock()
 
-		SafeSendString(character.player.commandOut, fmt.Sprintf("\n\rYou point at %s, revealing their location!\n\r", target.name), character.name)
-		SafeSendString(target.player.commandOut, fmt.Sprintf("\n\r%s points at you, revealing your location!\n\r", character.name), target.name)
-
-		SendRoomMessageExcept(room,
-			fmt.Sprintf("\n\r%s points at %s, revealing their location!\n\r", character.name, target.name),
-			character,
-		)
-	} else {
-		// Target is not hidden, just point normally
-		SafeSendString(character.player.commandOut, fmt.Sprintf("\n\rYou point at %s.\n\r", target.name), character.name)
-		SafeSendString(target.player.commandOut, fmt.Sprintf("\n\r%s points at you.\n\r", character.name), target.name)
-
-		SendRoomMessageExcept(room,
-			fmt.Sprintf("\n\r%s points at %s.\n\r", character.name, target.name),
-			character,
-		)
+	// Check if in combat
+	inCombat := false
+	r.mutex.RLock()
+	if ranges, exists := r.combatRanges[character.id]; exists && len(ranges) > 0 {
+		inCombat = true
 	}
+	r.mutex.RUnlock()
+
+	if !inCombat {
+		character.mutex.Unlock()
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Message:   "\n\rYou are not in combat.\n\r",
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Set combat movement
+	character.combatMovement = &CombatMovement{
+		mode:        "retreat",
+		targetRange: targetRange,
+	}
+	r.AddCharacterToMove(character)
+
+	character.mutex.Unlock()
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
 		Success:   true,
-		Message:   "", // Messages already sent
+		Message:   "\n\rYou begin retreating.\n\r",
+		Timestamp: time.Now(),
+	}
+}
+
+// handleFleeCommand processes the FLEE command
+func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
+	character := cmd.Character
+	if character == nil {
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   false,
+			Error:     fmt.Errorf("invalid character"),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// FLEE has no round time requirement
+
+	// Parse optional exit argument
+	var exitDirection string
+	if len(cmd.Args) >= 2 {
+		exitDirection = strings.ToLower(cmd.Args[1])
+
+		// Verify exit exists if direction specified
+		r.mutex.RLock()
+		var targetExit *Exit
+		for _, exit := range r.exits {
+			if exit != nil && strings.EqualFold(exit.direction, exitDirection) {
+				targetExit = exit
+				break
+			}
+		}
+		r.mutex.RUnlock()
+
+		if targetExit == nil {
+			return &CommandResponse{
+				RequestID: cmd.ID,
+				Success:   false,
+				Message:   "\n\rThere is no exit in that direction.\n\r",
+				Timestamp: time.Now(),
+			}
+		}
+	}
+
+	character.mutex.Lock()
+
+	// Clear facing
+	if character.facing != nil {
+		oldFacing := character.facing
+		character.facing = nil
+
+		// Clear reciprocal facing
+		oldFacing.mutex.Lock()
+		if oldFacing.facing == character {
+			oldFacing.facing = nil
+		}
+		oldFacing.mutex.Unlock()
+	}
+
+	// Set flee state
+	character.fleeTarget = &FleeState{
+		exitDirection: exitDirection,
+		startTime:     time.Now(),
+		hasDirection:  exitDirection != "",
+	}
+	r.AddCharacterToFlee(character)
+
+	// Clear any combat movement
+	if character.combatMovement != nil {
+		r.RemoveCharacterToMove(character)
+		character.combatMovement = nil
+	}
+
+	character.mutex.Unlock()
+
+	// Send messages
+	if exitDirection != "" {
+		character.DisplayMessage(fmt.Sprintf("\n\rYou attempt to flee %s!\n\r", exitDirection))
+	} else {
+		character.DisplayMessage("\n\rYou attempt to flee from combat!\n\r")
+	}
+	SendRoomMessage(r, fmt.Sprintf("\n\r%s attempts to flee!\n\r", character.name), character)
+
+	return &CommandResponse{
+		RequestID: cmd.ID,
+		Success:   true,
 		Timestamp: time.Now(),
 	}
 }

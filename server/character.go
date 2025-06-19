@@ -33,7 +33,7 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	// Check if character and associated objects are valid
+	// Validation prevents operations on nil references
 	if c.player == nil {
 		return false, "Character not properly connected."
 	}
@@ -44,8 +44,8 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 
 	// Check wait time
 	if time.Now().Before(c.waitUntil) {
-		waitTime := time.Until(c.waitUntil).Round(time.Second)
-		return false, fmt.Sprintf("You must wait %v before your next action.", waitTime)
+		waitTime := time.Until(c.waitUntil).Seconds()
+		return false, fmt.Sprintf("You must wait %.1f seconds before your next action.", waitTime)
 	}
 
 	// Check character state if needed
@@ -66,7 +66,6 @@ func (c *Character) SetCommandWaitTime(duration time.Duration) {
 	c.waitUntil = time.Now().Add(duration)
 }
 
-// Save saves the character to the database
 func (c *Character) Save() error {
 	return c.SaveWithContext(c.game.ctx)
 }
@@ -78,6 +77,11 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 	Logger.Debug("Saving character", "characterName", c.name)
 
 	kp := c.game.database
+	if kp == nil || kp.db == nil {
+		Logger.Error("Database not available, skipping save", "characterName", c.name)
+		c.lastSaved = time.Now()
+		return nil
+	}
 
 	// Convert inventory to ID map
 	inventoryIDs := make(map[string]string)
@@ -102,7 +106,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 	}
 	c.mutex.RUnlock()
 
-	// Create character data for storage
+	// Character data structure matches DynamoDB schema
 	characterData := &CharacterData{
 		CharacterID:   c.id.String(),
 		PlayerID:      c.player.id.String(),
@@ -118,7 +122,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		Hidden:        c.hidden,
 	}
 
-	// Save character and inventory transactionally
+	// Transactional save ensures data consistency
 	err := kp.SaveCharacterWithInventory(ctx, characterData, inventoryCopy)
 	if err != nil {
 		Logger.Error("Error saving character and inventory", "characterName", c.name, "error", err)
@@ -160,9 +164,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		health:           float64(p.server.game.startingHealth),  // Default from config
 		inventory:        make(map[string]*Item),
 		mutex:            sync.RWMutex{},
-		advancing:        false,
 		facing:           nil,
-		combatRange:      make(map[uuid.UUID]float64),
 		lastEdited:       time.Now(),
 		charState:        "standing", // Default character state
 		waitUntil:        time.Now(), // No initial wait time
@@ -183,7 +185,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 	// Ensure cleanup of channels on error
 	defer func() {
 		if needsCleanup && err != nil {
-			// Close all channels to prevent leaks
+			// Channel cleanup prevents goroutine leaks
 			close(character.roomCommandOut)
 			close(character.roomCommandIn)
 			close(character.gameCommandOut)
@@ -222,7 +224,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 				return nil, fmt.Errorf("no valid starting room available")
 			}
 
-			// Create starting items from prototypes
+			// Prototype instantiation creates unique item instances
 			Logger.Debug("Processing starting items for archetype", "archetype", archetype, "itemCount", len(archetypeObj.StartingItems))
 			if len(archetypeObj.StartingItems) > 0 {
 				for i, startingItem := range archetypeObj.StartingItems {
@@ -250,7 +252,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 						continue
 					}
 
-					// Create item from prototype
+					// Item creation copies prototype properties
 					item, err := CreateItemFromPrototype(prototype, p.server.game)
 					if err != nil {
 						Logger.Error("Failed to create item from prototype", "prototypeID", startingItem.PrototypeID, "error", err)
@@ -259,17 +261,13 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 					// Items will be saved transactionally with character
 
-					// Set worn state if specified
+					// Worn state determines equipment vs inventory
 					if startingItem.IsWorn && item.wearable {
 						item.isWorn = true
 
-						// Apply trait mods if item is worn
-						if len(item.traitMods) > 0 {
-							character.ApplyItemTraitMods(item)
-						}
 					}
 
-					// Add to character's inventory
+					// Inventory addition establishes ownership
 					character.inventory[startingItem.Slot] = item
 					Logger.Debug("Added starting item to character", "characterName", character.name, "itemName", item.name, "slot", startingItem.Slot)
 				}
@@ -303,7 +301,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 	return character, nil
 }
 
-// Run is the main loop that handles player commands.
+// Run manages the character's command processing lifecycle
 // This is now a simple wrapper around RunConsole for backward compatibility
 func (c *Character) Run(done chan bool) {
 	Logger.Debug("Starting character run", "characterName", c.name)
@@ -326,48 +324,67 @@ func (c *Character) Stop() {
 
 	// Notify the room of departure before removing the character
 	if c.room != nil {
-		SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has left.\n\r", c.name), c)
+		SendRoomMessage(c.room, fmt.Sprintf("\n\r%s has left.\n\r", c.name), c)
 	}
 
-	// Remove character from room and update room activity timestamp
-	if c.room != nil {
-		c.room.mutex.Lock()
-		delete(c.room.characters, c.id)
-		c.room.lastActive = time.Now() // Update the timestamp when character leaves
-		c.room.mutex.Unlock()
-	}
-
-	// Remove character from game's active characters
+	// Follow lock hierarchy: Game -> Room -> Character
+	// Game removal must happen first to maintain hierarchy
 	c.game.mutex.Lock()
 	delete(c.game.characters, c.id)
 	c.game.mutex.Unlock()
 
-	// Save character state
-	err := c.Save()
+	// Room removal prevents ghost character references
+	if c.room != nil {
+		// Trigger onCharacterLeave event before removing character
+		if c.room.scriptID != "" && c.room.scriptActive && ScriptMgr != nil {
+			if err := ScriptMgr.ExecuteRoomEvent(c.room, "onCharacterLeave", c); err != nil {
+				Logger.Error("Error executing onCharacterLeave during character stop", "roomID", c.room.roomID, "characterName", c.name, "error", err)
+			}
+		}
+
+		c.room.mutex.Lock()
+		delete(c.room.characters, c.id)
+		delete(c.room.charactersToMove, c.id)
+		delete(c.room.charactersToFlee, c.id)
+		c.room.lastActive = time.Now() // Update the timestamp when character leaves
+		c.room.mutex.Unlock()
+	}
+
+	// State persistence preserves player progress
+	// Use a fresh context for shutdown saves to ensure they complete
+	saveCtx := context.Background()
+
+	err := c.SaveWithContext(saveCtx)
 	if err != nil {
 		Logger.Error("Error saving character during shutdown", "characterName", c.name, "error", err)
 	}
 
 	// Clean up character inventory and hand items from game.items map
+	c.game.mutex.Lock()
 	c.mutex.Lock()
-	itemIDsToDelete := make([]uuid.UUID, 0, len(c.inventory)+2)
+
+	itemsDeleted := 0
 	for _, item := range c.inventory {
 		if item != nil {
-			itemIDsToDelete = append(itemIDsToDelete, item.id)
+			delete(c.game.items, item.id)
+			itemsDeleted++
 		}
 	}
 	// Also clean up hand items
 	if c.leftHand != nil {
-		itemIDsToDelete = append(itemIDsToDelete, c.leftHand.id)
+		delete(c.game.items, c.leftHand.id)
+		itemsDeleted++
 	}
 	if c.rightHand != nil {
-		itemIDsToDelete = append(itemIDsToDelete, c.rightHand.id)
+		delete(c.game.items, c.rightHand.id)
+		itemsDeleted++
 	}
-	c.mutex.Unlock()
 
-	if len(itemIDsToDelete) > 0 {
-		c.game.DeleteItems(itemIDsToDelete)
-		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", len(itemIDsToDelete))
+	c.mutex.Unlock()
+	c.game.mutex.Unlock()
+
+	if itemsDeleted > 0 {
+		Logger.Info("Cleaned up character inventory items", "characterName", c.name, "itemCount", itemsDeleted)
 	}
 
 	// Store a reference to the player before resetting
@@ -425,7 +442,7 @@ func FormatCharacterDescription(target *Character, viewer *Character) string {
 	// Basic appearance info
 	desc.WriteString("You see a ")
 
-	// Add more descriptive elements here based on character attributes, equipment, etc.
+	// Future: equipment and attributes will enhance descriptions
 	// This is placeholder logic
 	if target.health < float64(target.game.startingHealth)/2 {
 		desc.WriteString("wounded ")

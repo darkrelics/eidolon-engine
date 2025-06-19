@@ -53,28 +53,28 @@ func createTestGameForCommands() *Game {
 
 	// Register test commands
 	g.commands["look"] = CommandInfo{
-		timed:       false,
+		roundTime:   -1, // Doesn't care about round time
 		handler:     mockLookCommand,
 		description: "Look around",
 		usage:       "look",
 	}
 
 	g.commands["quit"] = CommandInfo{
-		timed:       false,
+		roundTime:   -1, // Doesn't care about round time
 		handler:     mockQuitCommand,
 		description: "Exit game",
 		usage:       "quit",
 	}
 
 	g.commands["get"] = CommandInfo{
-		timed:       true,
+		roundTime:   0, // Blocked by round time but doesn't generate it
 		handler:     mockTimedCommand,
 		description: "Get item",
 		usage:       "get <item>",
 	}
 
 	g.commands["go"] = CommandInfo{
-		timed:       true,
+		roundTime:   0,   // Blocked by round time but doesn't generate it
 		handler:     nil, // Escalates to room
 		description: "Move",
 		usage:       "go <direction>",
@@ -143,8 +143,9 @@ func TestProcessCommand_InputValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ProcessCommand(ctx, char, tt.input)
 			if tt.expectedError != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.expectedError) {
-					t.Errorf("Expected error containing %q, got %v", tt.expectedError, err)
+				// Input validation errors are now user messages, not errors
+				if err != nil {
+					t.Errorf("Expected no error (user message), got %v", err)
 				}
 			} else if err != nil {
 				t.Errorf("Unexpected error: %v", err)
@@ -164,12 +165,12 @@ func TestProcessCommand_CharacterState(t *testing.T) {
 		{
 			name:          "Nil character",
 			character:     nil,
-			expectedError: "Invalid character state",
+			expectedError: "invalid character state",
 		},
 		{
 			name:          "Character with nil game",
 			character:     &Character{name: "Test"},
-			expectedError: "Invalid character state",
+			expectedError: "invalid character state",
 		},
 	}
 
@@ -301,10 +302,10 @@ func TestEscalateToGame_BufferFull(t *testing.T) {
 		char.gameCommandOut <- &CommandRequest{}
 	}
 
-	// Try to escalate - should fail immediately
+	// Try to escalate - should return nil (message displayed to user)
 	_, err := escalateToGame(ctx, char, "test", []string{"test"})
-	if err == nil || !strings.Contains(err.Error(), "processing too many commands") {
-		t.Errorf("Expected buffer full error, got %v", err)
+	if err != nil {
+		t.Errorf("Expected nil error (user message), got %v", err)
 	}
 }
 
@@ -318,8 +319,8 @@ func TestEscalateToGame_Timeout(t *testing.T) {
 	_, err := escalateToGame(ctx, char, "test", []string{"test"})
 	elapsed := time.Since(start)
 
-	if err == nil || !strings.Contains(err.Error(), "command timed out") {
-		t.Errorf("Expected timeout error, got %v", err)
+	if err != nil {
+		t.Errorf("Expected nil error (user message), got %v", err)
 	}
 
 	// Should timeout after ~5 seconds

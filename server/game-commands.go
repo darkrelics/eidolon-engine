@@ -38,7 +38,7 @@ func (g *Game) ProcessGameCommand(cmd *CommandRequest) *CommandResponse {
 		"verb", cmd.Verb,
 		"character", cmd.Character.name)
 
-	// Process command based on verb
+	// Verb-based routing directs to appropriate handler
 	switch cmd.Verb {
 	default:
 		// Command not understood by the engine - log it

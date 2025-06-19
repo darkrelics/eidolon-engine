@@ -35,54 +35,89 @@ func (c *Character) RunConsole(done chan bool) {
 		return
 	}
 
-	// Ensure character is properly stopped when the function exits
+	// Defer ensures cleanup even if panic occurs
 	defer c.cleanupAndSignalDone(done)
 
 	Logger.Debug("Starting character console", "characterName", c.name)
 
-	// If the room is nil, move the character to room 0
-	if c.room == nil {
-		Logger.Warn("Character room is nil, defaulting to room ID 0", "characterName", c.name)
-		if defaultRoom, ok := c.game.rooms[0]; ok {
-			c.room = defaultRoom
-		} else {
+	// Follow lock hierarchy: Game -> Room -> Character
+	// First handle room assignment if needed
+	c.mutex.Lock()
+	needsDefaultRoom := c.room == nil
+	c.mutex.Unlock()
+
+	if needsDefaultRoom {
+		// Need to look up default room from game
+		c.game.mutex.RLock()
+		defaultRoom, hasDefaultRoom := c.game.rooms[0]
+		c.game.mutex.RUnlock()
+
+		if !hasDefaultRoom {
 			Logger.Error("No default room available", "characterName", c.name)
 			done <- true
 			return
 		}
+
+		Logger.Warn("Character room is nil, defaulting to room ID 0", "characterName", c.name)
+		c.mutex.Lock()
+		c.room = defaultRoom
+		c.mutex.Unlock()
 	}
 
-	// Add character to game's active characters
+	// Now register character following hierarchy: Game -> Room
+	// Game registration enables global character tracking
 	c.game.mutex.Lock()
 	c.game.characters[c.id] = c
+
+	// While holding game lock, we can safely check room status
+	// This maintains hierarchy since Game is higher than Room
+	targetRoom := c.room
 	c.game.mutex.Unlock()
 
-	// Add character to the room
-	c.room.mutex.Lock()
-	if c.room.characters == nil {
-		c.room.characters = make(map[uuid.UUID]*Character)
+	// Check if room needs to be started
+	targetRoom.mutex.RLock()
+	roomRunning := targetRoom.running
+	targetRoom.mutex.RUnlock()
+
+	if !roomRunning {
+		Logger.Info("Starting room for character entry", "roomID", targetRoom.roomID, "characterName", c.name)
+		targetRoom.Start(c.game)
+		// Ready state indicates room can accept characters
+		targetRoom.WaitReady()
 	}
-	c.room.characters[c.id] = c
-	// Update room activity timestamp
-	c.room.lastActive = time.Now()
-	c.room.mutex.Unlock()
+
+	// Room addition enables location-based interactions
+	targetRoom.mutex.Lock()
+	if targetRoom.characters == nil {
+		targetRoom.characters = make(map[uuid.UUID]*Character)
+	}
+	targetRoom.characters[c.id] = c
+	// Activity tracking prevents idle room cleanup
+	targetRoom.lastActive = time.Now()
+	targetRoom.mutex.Unlock()
 
 	// Call HandleCharacterEntry to reset idle counter and activate scripts
-	c.room.HandleCharacterEntry()
+	// Timing prevents race conditions with room scripts
+	c.room.HandleCharacterEntry(c)
 
-	// Notify room of arrival (without holding locks)
-	SendRoomMessageExcept(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
-
-	// Show initial room description
-	if err := executeLookCommand(c, []string{"look"}); err != nil {
-		Logger.Warn("Failed to show initial room", "characterName", c.name, "error", err)
+	// Script events provide dynamic room behaviors
+	if c.room.scriptID != "" && c.room.scriptActive && ScriptMgr != nil {
+		if err := ScriptMgr.ExecuteRoomEvent(c.room, "onCharacterEnter", c); err != nil {
+			Logger.Error("Error executing onCharacterEnter", "roomID", c.room.roomID, "characterName", c.name, "error", err)
+		}
 	}
+
+	// Arrival notification informs other players
+	SendRoomMessage(c.room, fmt.Sprintf("\n\r%s has arrived.\n\r", c.name), c)
+
+	// Initial view orients player to their location
+	c.safeExecuteLookCommand()
 
 	const idleTimeout = 30 * time.Second
 	timer := time.NewTimer(idleTimeout)
 	defer timer.Stop()
 
-	// Channel to track when a command is processing
+	// Processing signal prevents command overlap
 	commandProcessing := make(chan struct{}, 1)
 
 	for {
@@ -95,44 +130,39 @@ func (c *Character) RunConsole(done chan bool) {
 				return
 			}
 
-			// Signal that a command is processing
+			// Non-blocking send prevents deadlock on full channel
 			select {
 			case commandProcessing <- struct{}{}:
 			default:
-				// Channel already has a value, which is fine
+				// Existing signal means command already processing
 			}
 
-			// Process the command
+			// Command processing may modify game state
 			isQuit, err := ProcessCommand(c.game.ctx, c, strings.TrimSpace(inputLine))
 			if err != nil {
-				// Send error message to player
-				c.player.commandOut <- err.Error() + "\n\r"
+				// Send error message to player - these are typically user-friendly messages
+				c.DisplayMessage(err.Error())
+				// Log at debug level since command errors (like typos) are normal gameplay
+				Logger.Debug("Command not recognized", "characterName", c.name, "command", inputLine, "message", err.Error())
 			} else {
-				// Command processed successfully
+				// Success path continues normal game flow
 				Logger.Debug("Command processed", "characterName", c.name, "command", inputLine)
 			}
 
-			// If the quit command was processed, exit the loop
+			// Quit command triggers graceful session termination
 			if isQuit {
 				Logger.Info("Quit command processed, exiting character loop", "characterName", c.name)
 				return
 			}
 
-			// Clear the processing signal
+			// Signal clearing allows next command to process
 			select {
 			case <-commandProcessing:
 			default:
-				// Channel already empty, which is fine
+				// Empty channel expected during normal operation
 			}
 
-			// Always send prompt after processing a command
-			select {
-			case c.player.commandOut <- c.prompt:
-				// Prompt sent successfully
-			default:
-				// Channel full or closed, likely during shutdown
-				Logger.Debug("Failed to send prompt, channel full or closed", "characterName", c.name)
-			}
+			// Prompt is now automatically restored by Player's SendMessageWithBuffer
 
 		case _, ok := <-c.end:
 			if !ok {
@@ -143,7 +173,10 @@ func (c *Character) RunConsole(done chan bool) {
 			return
 
 		case <-timer.C:
-			if c.player == nil {
+			c.mutex.RLock()
+			player := c.player
+			c.mutex.RUnlock()
+			if player == nil {
 				Logger.Warn("Player connection lost", "characterName", c.name)
 				return
 			}
@@ -159,14 +192,14 @@ func (c *Character) DisplayHelp(specific string) error {
 
 	var helpMsg strings.Builder
 
-	// If a specific command was requested
+	// Specific command help provides targeted assistance
 	if specific != "" {
 		c.game.mutex.RLock()
 		cmdInfo, exists := c.game.commands[specific]
 		c.game.mutex.RUnlock()
 
 		if !exists {
-			c.player.commandOut <- fmt.Sprintf("\n\rNo help available for '%s'. Command not found.\n\r", specific)
+			c.DisplayMessage(fmt.Sprintf("\n\rNo help available for '%s'. Command not found.\n\r", specific))
 			return nil
 		}
 
@@ -174,7 +207,7 @@ func (c *Character) DisplayHelp(specific string) error {
 		helpMsg.WriteString(fmt.Sprintf("Description: %s\n\r", cmdInfo.description))
 		helpMsg.WriteString(fmt.Sprintf("Usage: %s\n\r", cmdInfo.usage))
 
-		c.player.commandOut <- helpMsg.String()
+		c.DisplayMessage(helpMsg.String())
 		return nil
 	}
 
@@ -188,7 +221,7 @@ func (c *Character) DisplayHelp(specific string) error {
 
 	c.game.mutex.RUnlock()
 
-	// Sort commands alphabetically
+	// Alphabetical order improves command discovery
 	sort.Strings(commandNames)
 
 	helpMsg.WriteString("\n\rAvailable Commands:\n\r\n\r")
@@ -204,7 +237,7 @@ func (c *Character) DisplayHelp(specific string) error {
 
 	helpMsg.WriteString("\n\rType 'help <command>' for more information on a specific command.\n\r")
 
-	c.player.commandOut <- helpMsg.String()
+	c.DisplayMessage(helpMsg.String())
 	return nil
 }
 
@@ -233,11 +266,47 @@ func (c *Character) SetPrompt(newPrompt string) {
 	}
 }
 
-// DisplayMessage displays a message to the character
+// DisplayMessage displays a message to the character with proper formatting and buffer preservation
 func (c *Character) DisplayMessage(message string) {
-	if c == nil || c.player == nil {
+	if c == nil {
 		return
 	}
 
-	c.player.commandOut <- message
+	c.mutex.RLock()
+	player := c.player
+	c.mutex.RUnlock()
+
+	if player == nil {
+		return
+	}
+
+	// Get current buffer content to preserve what the user was typing
+	bufferContent := ""
+	if player.inputBuffer != nil {
+		bufferContent = player.inputBuffer.String()
+	}
+
+	// Build the complete message with formatting
+	var completeMessage string
+	if len(bufferContent) > 0 && player.echo {
+		// Clear current line, send message, prompt, and restore buffer
+		completeMessage = "\r\033[K\n\r" + message + "\n\r" + c.prompt + bufferContent
+	} else {
+		// Just send message with prompt
+		completeMessage = "\n\r" + message + "\n\r" + c.prompt
+	}
+
+	player.commandOut <- completeMessage
+}
+
+// safeExecuteLookCommand safely executes the initial look command with panic recovery
+func (c *Character) safeExecuteLookCommand() {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic during initial look command", "characterName", c.name, "roomID", c.room.roomID, "panic", r)
+		}
+	}()
+	if err := executeLookCommand(c, []string{"look"}); err != nil {
+		Logger.Warn("Failed to show initial room", "characterName", c.name, "error", err)
+	}
 }

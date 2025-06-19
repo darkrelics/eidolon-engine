@@ -56,15 +56,11 @@ type Game struct {
 	autoSaveInterval     uint16
 }
 
-// Initalize the game engine
-
 func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
-	Logger.Info("New Game...Initalizing Game...")
+	Logger.Info("New Game...Initializing Game...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
-
-	// Create a new game object
 
 	game := &Game{
 		config:           config,
@@ -90,8 +86,6 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	game.characterCount.Store(0)
 
-	// Initialize Game Database Interface
-
 	database, err := NewKeyPair(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("database init error: %w", err)
@@ -99,23 +93,24 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 
 	game.database = database
 
-	// Load Character Bloom Filter
-
 	if err := game.InitCharacterBloomFilter(); err != nil {
 		Logger.Warn("Error initializing character bloom filter", "error", err)
 	}
 
-	// Create Default Room
+	// Initialize script manager BEFORE loading rooms
+	Logger.Info("Initializing Script Manager...")
+	if err := InitScriptManager(config); err != nil {
+		Logger.Error("Script manager initialization failed - continuing without scripting", "error", err)
+		Logger.Error("AWS credentials or configuration may be missing", "scriptsS3Bucket", config.Game.ScriptsS3Bucket, "awsRegion", config.AWS.Region)
+	} else {
+		Logger.Info("Script manager initialized successfully")
+	}
 
 	game.rooms[0] = NewRoom(ctx, 0, "The Void", "The Void", "Default void room.", true, "") // Default room is always persistent, no script
-
-	// Load Rooms
 
 	if err := game.LoadRooms(); err != nil {
 		Logger.Error("Error loading rooms", "error", err)
 	}
-
-	// Load Item Prototypes
 
 	prototypes, err := LoadPrototypes(ctx, game.database)
 	if err != nil {
@@ -129,13 +124,9 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		}
 	}
 
-	// Load Archetypes
-
 	if err := game.LoadArchetypes(); err != nil {
 		Logger.Error("Error loading archetypes", "error", err)
 	}
-
-	// Build Archetype Options
 
 	game.BuildArchetypeOptions()
 
@@ -148,8 +139,6 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 	return game, nil
 
 }
-
-// Load names from the database.
 
 func (g *Game) LoadCharacterNames() ([]string, error) {
 
@@ -167,8 +156,6 @@ func (g *Game) LoadCharacterNames() ([]string, error) {
 
 	return names, nil
 }
-
-// Load names from a file.
 
 func LoadNameFromFile(path string) ([]string, error) {
 
@@ -194,8 +181,6 @@ func LoadNameFromFile(path string) ([]string, error) {
 
 	return names, nil
 }
-
-// Initialize Character Name Bloom Filter
 
 func (g *Game) InitCharacterBloomFilter() error {
 
@@ -255,8 +240,6 @@ func (g *Game) Stop() error {
 
 }
 
-// Run the game engine
-
 func (g *Game) Run(errChan chan error) error {
 	var runErr error
 	RunWithPanicRecoveryCallback("game.Run", func() {
@@ -271,8 +254,6 @@ func (g *Game) Run(errChan chan error) error {
 func (g *Game) runInternal(errChan chan error) error {
 	Logger.Info("Starting game engine...")
 
-	// Start Game Heart Beat
-
 	g.ticker = time.NewTicker(time.Second)
 	defer g.ticker.Stop()
 
@@ -282,7 +263,7 @@ func (g *Game) runInternal(errChan chan error) error {
 			Logger.Info("Game shutdown requested")
 			return nil
 		case <-g.ticker.C:
-			// Run game logic
+			// Game tick processes time-based events
 			err := g.tick()
 			if err != nil {
 				Logger.Error("Error running game logic", "error", err)
@@ -294,78 +275,60 @@ func (g *Game) runInternal(errChan chan error) error {
 	}
 }
 
-// Game heart beat
-
 func (g *Game) tick() error {
-	// Process any pending game-tier commands
+	// Command processing handles global game actions
 	g.processGameCommands()
 
-	// Run other game logic
+	// Additional game logic placeholder for future features
 	return nil
 }
 
-// processGameCommands processes any commands that have been escalated to game tier
 func (g *Game) processGameCommands() {
-	// Collect active rooms and characters while holding the lock
+	// Process commands from rooms and characters with single read lock
 	g.mutex.RLock()
+	defer g.mutex.RUnlock()
 
-	// Make a slice of rooms to process
-	activeRooms := make([]*Room, 0, len(g.rooms))
+	// Room command collection prevents blocking
 	for _, room := range g.rooms {
 		if room != nil && room.running {
-			activeRooms = append(activeRooms, room)
+			// Non-blocking check for commands from this room
+			select {
+			case cmd, ok := <-room.gameCommandOut:
+				if !ok {
+					// Channel closed, skip this room
+					continue
+				}
+				// Async handling prevents command queue blocking
+				go RunWithPanicRecovery("game.handleCommand", func() {
+					g.handleGameCommand(cmd)
+				}, "verb", cmd.Verb, "character", cmd.Character.name)
+			default:
+				// No command waiting, continue to next room
+			}
 		}
 	}
 
-	// Make a slice of characters to process
-	activeCharacters := make([]*Character, 0, len(g.characters))
+	// Direct character commands bypass room processing
 	for _, character := range g.characters {
 		if character != nil {
-			activeCharacters = append(activeCharacters, character)
-		}
-	}
-
-	g.mutex.RUnlock()
-
-	// Now process commands without holding the lock
-	// Process commands from all active rooms
-	for _, room := range activeRooms {
-		// Non-blocking check for commands from this room
-		select {
-		case cmd, ok := <-room.gameCommandOut:
-			if !ok {
-				// Channel closed, skip this room
-				continue
+			// Non-blocking check for commands from this character
+			select {
+			case cmd, ok := <-character.gameCommandOut:
+				if !ok {
+					// Channel closed, skip this character
+					continue
+				}
+				// Async handling prevents command queue blocking
+				go RunWithPanicRecovery("game.handleCommand", func() {
+					g.handleGameCommand(cmd)
+				}, "verb", cmd.Verb, "character", cmd.Character.name)
+			default:
+				// No command waiting, continue to next character
 			}
-			// Handle the command asynchronously
-			go RunWithPanicRecovery("game.handleCommand", func() {
-				g.handleGameCommand(cmd)
-			}, "verb", cmd.Verb, "character", cmd.Character.name)
-		default:
-			// No command waiting, continue to next room
-		}
-	}
-
-	// Process commands from characters directly
-	for _, character := range activeCharacters {
-		// Non-blocking check for commands from this character
-		select {
-		case cmd, ok := <-character.gameCommandOut:
-			if !ok {
-				// Channel closed, skip this character
-				continue
-			}
-			// Handle the command asynchronously
-			go RunWithPanicRecovery("game.handleCommand", func() {
-				g.handleGameCommand(cmd)
-			}, "verb", cmd.Verb, "character", cmd.Character.name)
-		default:
-			// No command waiting, continue to next character
 		}
 	}
 }
 
-// handleGameCommand processes a command at the game tier
 func (g *Game) handleGameCommand(cmd *CommandRequest) {
 	if cmd == nil {
 		Logger.Error("Received nil command request in game handler")
@@ -377,21 +340,19 @@ func (g *Game) handleGameCommand(cmd *CommandRequest) {
 	// Update command state
 	cmd.State = CommandProcessing
 
-	// Process the command using our game command handler
+	// Game handler processes global-scope commands
 	response := g.ProcessGameCommand(cmd)
 
-	// Send response
+	// Response delivery completes command cycle
 	g.sendCommandResponse(cmd, response)
 }
 
-// DeleteItem safely removes an item from the game's items map
 func (g *Game) DeleteItem(itemID uuid.UUID) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 	delete(g.items, itemID)
 }
 
-// DeleteItems safely removes multiple items from the game's items map
 func (g *Game) DeleteItems(itemIDs []uuid.UUID) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
@@ -400,7 +361,6 @@ func (g *Game) DeleteItems(itemIDs []uuid.UUID) {
 	}
 }
 
-// clearExitReferencesToRoom clears all exit references to a specific room
 func (g *Game) clearExitReferencesToRoom(roomID int64) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
@@ -416,7 +376,6 @@ func (g *Game) clearExitReferencesToRoom(roomID int64) {
 	Logger.Debug("Cleared exit references to room", "roomID", roomID)
 }
 
-// sendCommandResponse sends a response to a command request
 func (g *Game) sendCommandResponse(cmd *CommandRequest, response *CommandResponse) {
 	if cmd == nil || response == nil {
 		return
@@ -466,39 +425,34 @@ func (g *Game) ValidateCharacterName(name string) error {
 	return nil
 }
 
-// saveAllCharacters saves all active characters
 func (g *Game) saveAllCharacters() {
-	// Collect characters while holding the lock
-	g.mutex.RLock()
-	characters := make([]*Character, 0, len(g.characters))
-	for _, character := range g.characters {
-		if character != nil {
-			characters = append(characters, character)
-		}
-	}
-	g.mutex.RUnlock()
-
-	Logger.Info("Saving all characters during shutdown", "characterCount", len(characters))
-
-	// Save characters without holding the lock
 	// Use a separate context with timeout to ensure saves don't hang indefinitely
 	saveCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	g.mutex.RLock()
+	characterCount := len(g.characters)
+	g.mutex.RUnlock()
+
+	Logger.Info("Saving all characters during shutdown", "characterCount", characterCount)
+
 	savedCount := 0
-	for _, character := range characters {
-		// Override character's game context with our save context to ensure DB operations succeed
-		if err := character.SaveWithContext(saveCtx); err != nil {
-			Logger.Error("Error saving character during shutdown", "characterName", character.name, "error", err)
-		} else {
-			savedCount++
+	g.mutex.RLock()
+	for _, character := range g.characters {
+		if character != nil {
+			// Override character's game context with our save context to ensure DB operations succeed
+			if err := character.SaveWithContext(saveCtx); err != nil {
+				Logger.Error("Error saving character during shutdown", "characterName", character.name, "error", err)
+			} else {
+				savedCount++
+			}
 		}
 	}
+	g.mutex.RUnlock()
 
-	Logger.Info("Completed saving characters during shutdown", "savedCount", savedCount, "totalCount", len(characters))
+	Logger.Info("Completed saving characters during shutdown", "savedCount", savedCount, "totalCount", characterCount)
 }
 
-// logoutAllCharacters logs out all active characters
 func (g *Game) logoutAllCharacters() {
 	// Collect characters while holding the lock
 	g.mutex.RLock()

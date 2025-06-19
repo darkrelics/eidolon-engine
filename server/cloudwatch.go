@@ -67,13 +67,13 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		return nil, fmt.Errorf("error loading AWS config: %w", err)
 	}
 
-	// Create a temporary console logger for bootstrapping
+	// Temporary logger needed before CloudWatch initialization
 	tempHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: parseLogLevel(cfg.Logging.LogLevel),
 	})
 	tempLogger := slog.New(tempHandler)
 
-	// Set temporary logger
+	// Global logger assignment enables immediate logging
 	Logger = tempLogger
 	slog.SetDefault(tempLogger)
 
@@ -93,10 +93,10 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		metrics:       make(chan types.MetricDatum, 100),
 	}
 
-	// Create the CloudWatch handler that implements slog.Handler
+	// CloudWatch handler routes logs to AWS
 	cwHandler := NewCloudWatchHandler(cloudWatch, parseLogLevel(cfg.Logging.LogLevel), true)
 
-	// Create and set the final logger
+	// Final logger replaces temporary console logger
 	finalLogger := slog.New(cwHandler)
 	Logger = finalLogger
 	slog.SetDefault(finalLogger)

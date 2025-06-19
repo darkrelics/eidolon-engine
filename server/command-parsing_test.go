@@ -489,31 +489,31 @@ func TestValidateCommand(t *testing.T) {
 			name:          "Empty input",
 			character:     mockChar,
 			input:         "",
-			expectedError: "\n\rNo command entered.\n\r",
+			expectedError: "No command entered.",
 		},
 		{
 			name:          "Only spaces",
 			character:     mockChar,
 			input:         "   ",
-			expectedError: "\n\rNo command entered.\n\r",
+			expectedError: "No command entered.",
 		},
 		{
 			name:          "Input too long",
 			character:     mockChar,
 			input:         strings.Repeat("a", 241),
-			expectedError: "\n\rCommand too long. Maximum 240 characters allowed.\n\r",
+			expectedError: "Command too long. Maximum 240 characters allowed.",
 		},
 		{
 			name:          "Nil character",
 			character:     nil,
 			input:         "look",
-			expectedError: "\n\rInvalid character state.\n\r",
+			expectedError: "Invalid character state.",
 		},
 		{
 			name:          "Character with nil game",
 			character:     &Character{name: "Test"},
 			input:         "look",
-			expectedError: "\n\rInvalid character state.\n\r",
+			expectedError: "Invalid character state.",
 		},
 		{
 			name:         "Fuzzy match high confidence",
@@ -533,7 +533,7 @@ func TestValidateCommand(t *testing.T) {
 			name:          "No match",
 			character:     mockChar,
 			input:         "xyz",
-			expectedError: "\n\rCommand 'xyz' not understood.\n\r",
+			expectedError: "Command 'xyz' not understood.",
 		},
 		{
 			name:         "Command with arguments",
@@ -546,13 +546,20 @@ func TestValidateCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			verb, tokens, err := ValidateCommand(tt.character, tt.input)
+			verb, tokens, msg, err := ValidateCommand(tt.character, tt.input)
 
+			// Check for programmatic errors first
 			if tt.expectedError != "" {
-				if err == nil {
-					t.Errorf("ValidateCommand() expected error %q, got nil", tt.expectedError)
-				} else if err.Error() != tt.expectedError {
-					t.Errorf("ValidateCommand() error = %q, expected %q", err.Error(), tt.expectedError)
+				// For tests expecting state errors (nil character, etc)
+				if tt.expectedError == "Invalid character state." {
+					if err == nil {
+						t.Errorf("ValidateCommand() expected error, got nil")
+					}
+					return
+				}
+				// Otherwise it's a user message
+				if msg != tt.expectedError {
+					t.Errorf("ValidateCommand() message = %q, expected %q", msg, tt.expectedError)
 				}
 				return
 			}
