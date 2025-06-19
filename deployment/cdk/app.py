@@ -67,7 +67,13 @@ class EidolonEngineApp:
         )
 
         # Create DynamoDB stack
-        self.dynamodb_stack = DynamoDBStack(self.app, "dynamodb", game_name=params["game_name"], env=env)
+        self.dynamodb_stack = DynamoDBStack(
+            self.app, 
+            "dynamodb", 
+            game_name=params["game_name"], 
+            table_names=params.get("dynamodb_tables"),
+            env=env
+        )
 
         # Create CloudWatch stack
         self.cloudwatch_stack = CloudWatchStack(
@@ -110,6 +116,7 @@ class EidolonEngineApp:
             cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
             cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
             portal_bucket=self.s3_stack.portal_bucket,
+            buildspec_path=params.get("portal_buildspec_path", "buildspec/portal.yml"),
             cloudfront_distribution_id=self.cloudfront_stack.distribution.distribution_id,
             env=env,
         )
@@ -143,6 +150,16 @@ class EidolonEngineApp:
                 params["portal_bucket_name"] = game_config["PortalS3Bucket"]
             if "ScriptsS3Bucket" in game_config:
                 params["scripts_bucket_name"] = game_config["ScriptsS3Bucket"]
+        
+        # Check for existing DynamoDB table configurations
+        if "DynamoDB" in self.config and "Tables" in self.config["DynamoDB"]:
+            params["dynamodb_tables"] = self.config["DynamoDB"]["Tables"]
+        
+        # Check for CodeBuild configuration
+        if "CodeBuild" in self.config:
+            codebuild_config = self.config["CodeBuild"]
+            if "PortalBuildspecPath" in codebuild_config:
+                params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
 
         return params
 

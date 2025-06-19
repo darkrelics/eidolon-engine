@@ -112,6 +112,13 @@ class IncrementalDeploymentOrchestrator:
             if "CloudFront" in config:
                 cf_config = config["CloudFront"]
                 params["cloudfront_distribution_id"] = cf_config.get("distribution_id", params.get("cloudfront_distribution_id"))
+            if "DynamoDB" in config and "Tables" in config["DynamoDB"]:
+                # Load existing DynamoDB table names if configured
+                params["dynamodb_tables"] = config["DynamoDB"]["Tables"]
+            if "CodeBuild" in config:
+                codebuild_config = config["CodeBuild"]
+                if "PortalBuildspecPath" in codebuild_config:
+                    params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
 
         return params
 
@@ -207,16 +214,20 @@ class IncrementalDeploymentOrchestrator:
         # Validate DynamoDB tables
         try:
             validator = ResourceValidatorFactory.create_validator("dynamodb_table", self.session)
-            table_names = [
-                "eidolon-players",
-                "eidolon-characters",
-                "eidolon-rooms",
-                "eidolon-exits",
-                "eidolon-items",
-                "eidolon-prototypes",
-                "eidolon-archetypes",
-                "eidolon-motd",
-            ]
+            # Use table names from params if provided, otherwise use defaults
+            if "dynamodb_tables" in params:
+                table_names = list(params["dynamodb_tables"].values())
+            else:
+                table_names = [
+                    "eidolon-players",
+                    "eidolon-characters",
+                    "eidolon-rooms",
+                    "eidolon-exits",
+                    "eidolon-items",
+                    "eidolon-prototypes",
+                    "eidolon-archetypes",
+                    "eidolon-motd",
+                ]
 
             for table_name in table_names:
                 expected_config = {
@@ -576,16 +587,13 @@ class IncrementalDeploymentOrchestrator:
                             "portal_url": outputs.get("PortalUrl", ""),
                         },
                     )
-                    # Also update Game section with portal URL
-                    self.config_manager.update_section(
-                        "Game",
-                        {
-                            "PortalUrl": outputs.get("PortalUrl", ""),
-                        },
-                    )
                 elif "codebuild" in stack_name:
                     # Update CodeBuild configuration
-                    self.config_manager.update_section("CodeBuild", {"ProjectName": outputs.get("CodeBuildProjectName", "")})
+                    codebuild_config = {"ProjectName": outputs.get("CodeBuildProjectName", "")}
+                    # Add buildspec path if it was provided
+                    if "portal_buildspec_path" in params:
+                        codebuild_config["PortalBuildspecPath"] = params["portal_buildspec_path"]
+                    self.config_manager.update_section("CodeBuild", codebuild_config)
 
             except Exception as err:
                 print(f"Warning: Could not get outputs for {stack_name}: {err}")

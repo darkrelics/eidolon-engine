@@ -3,30 +3,43 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      nodejs: 18
+      nodejs: 22
     commands:
-      - cd portal
-      - curl -fsSL https://flutter.dev/release/stable/linux | tar xJ -C /opt
-      - export PATH="$PATH:/opt/flutter/bin"
+      - apt-get update -y -q
+      - apt-get install -y clang cmake ninja-build libgtk-3-dev -q
+      - echo Installing Flutter...
+      - git clone https://github.com/flutter/flutter.git -b stable
+      - export PATH="$PATH:`pwd`/flutter/bin"
+      - flutter config --no-analytics
       - flutter doctor
-
+      - flutter config --enable-web --no-enable-android --no-enable-ios
+      
   pre_build:
     commands:
+      - cd portal
+      - echo "Installing dependencies..."
       - flutter pub get
-      - echo 'const String cognitoUserPoolId = "$COGNITO_USER_POOL_ID";' > lib/config.dart
-      - echo 'const String cognitoAppClientId = "$COGNITO_APP_CLIENT_ID";' >> lib/config.dart
-      - echo 'const String awsRegion = "$AWS_REGION";' >> lib/config.dart
-
+      - dart fix --apply
+      
   build:
     commands:
-      - flutter build web --release
-
+      - echo Building web application...
+      - echo "Building with USER_POOL_ID=$USER_POOL_ID and CLIENT_ID=$CLIENT_ID"
+      - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID
+      
   post_build:
     commands:
-      - aws s3 sync build/web/ s3://$PORTAL_BUCKET/ --delete
-      - aws s3 cp build/web/index.html s3://$PORTAL_BUCKET/index.html --cache-control max-age=0
+      - echo "Deploying to S3..."
+      - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive --cache-control "max-age=86400"
       - |
         if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then 
           echo "Invalidating CloudFront cache..."
           aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
+        else
+          echo "No CloudFront distribution ID provided, skipping cache invalidation"
         fi
+
+artifacts:
+  base-directory: portal/build/web
+  files:
+    - "**/*"
