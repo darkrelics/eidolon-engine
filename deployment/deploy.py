@@ -12,6 +12,7 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
+
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from state_manager import ConfigurationManager, DeploymentState
 
@@ -75,7 +76,7 @@ class IncrementalDeploymentOrchestrator:
 
         return True
 
-    def load_parameters(self) -> dict[str, any]:
+    def load_parameters(self) -> dict:
         """Load deployment parameters from various sources.
 
         Returns:
@@ -114,7 +115,7 @@ class IncrementalDeploymentOrchestrator:
 
         return params
 
-    def prompt_missing_parameters(self, params: dict[str, any]) -> dict[str, any]:
+    def prompt_missing_parameters(self, params: dict) -> dict:
         """Prompt user for any missing required parameters.
 
         Args:
@@ -145,7 +146,7 @@ class IncrementalDeploymentOrchestrator:
 
         return params
 
-    def get_existing_stacks(self) -> dict[str, dict[str, any]]:
+    def get_existing_stacks(self) -> dict:
         """Get information about existing CloudFormation stacks.
 
         Returns:
@@ -192,7 +193,7 @@ class IncrementalDeploymentOrchestrator:
 
         return existing_stacks
 
-    def validate_resources(self, params: dict[str, any]) -> dict[str, any]:
+    def validate_resources(self, params: dict) -> dict:
         """Validate AWS resources for drift detection.
 
         Args:
@@ -282,7 +283,7 @@ class IncrementalDeploymentOrchestrator:
 
         return all_results
 
-    def map_cloudformation_to_cdk(self, existing_stacks: dict[str, dict[str, any]], params: dict[str, any]) -> dict[str, any]:
+    def map_cloudformation_to_cdk(self, existing_stacks: dict, params: dict) -> dict:
         """Map existing CloudFormation stacks to CDK stacks.
 
         Args:
@@ -337,7 +338,7 @@ class IncrementalDeploymentOrchestrator:
 
         return mapping
 
-    def _can_adopt_stack(self, stack_name: str, stack_info: dict[str, any]) -> bool:
+    def _can_adopt_stack(self, stack_name: str, stack_info: dict) -> bool:
         """Check if a CloudFormation stack can be adopted by CDK.
 
         Args:
@@ -352,7 +353,7 @@ class IncrementalDeploymentOrchestrator:
         adoptable_stacks = ["eidolon-dynamodb", "eidolon-cloudwatch"]
         return stack_name in adoptable_stacks
 
-    def analyze_changes(self, params: dict[str, any]) -> dict[str, any]:
+    def analyze_changes(self, params: dict) -> dict:
         """Analyze what changes need to be deployed.
 
         Args:
@@ -414,7 +415,7 @@ class IncrementalDeploymentOrchestrator:
 
         return plan
 
-    def execute_deployment(self, plan: dict[str, any], auto_approve: bool = False) -> bool:
+    def execute_deployment(self, plan: dict, auto_approve: bool = False) -> bool:
         """Execute the deployment plan.
 
         Args:
@@ -498,7 +499,7 @@ class IncrementalDeploymentOrchestrator:
             print(f"\n✗ Deployment failed: {err}")
             return False
 
-    def update_configuration(self, params: dict[str, any]) -> None:
+    def update_configuration(self, params: dict) -> None:
         """Update server configuration file with deployment outputs.
 
         Args:
@@ -596,7 +597,7 @@ class IncrementalDeploymentOrchestrator:
         self.config_manager.save_config()
         print(f"✓ Configuration saved to {self.config_manager.config_path}")
 
-    def deploy_scripts(self, params: dict[str, any]) -> bool:
+    def deploy_scripts(self, params: dict) -> bool:
         """Deploy Lua scripts to S3.
 
         Args:
