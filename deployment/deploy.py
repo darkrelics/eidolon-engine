@@ -182,7 +182,7 @@ class IncrementalDeploymentOrchestrator:
                             "resources": resources,
                             "template_format": "CloudFormation",
                         }
-                    except:
+                    except Exception:
                         # Stack might have been deleted between list and describe
                         pass
         except Exception as err:
@@ -199,7 +199,6 @@ class IncrementalDeploymentOrchestrator:
         Returns:
             Dictionary of resource validation results
         """
-        game_name = params["game_name"]
         all_results = {}
 
         # Validate DynamoDB tables
