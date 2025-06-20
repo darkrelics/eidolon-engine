@@ -53,14 +53,14 @@ func NewKeyPair(ctx context.Context, cfg *Configuration) (*KeyPair, error) {
 
 	// Create table name mapping from configuration
 	tableNames := map[string]string{
-		"players":     cfg.DynamoDB.Tables.Players,
-		"characters":  cfg.DynamoDB.Tables.Characters,
-		"rooms":       cfg.DynamoDB.Tables.Rooms,
-		"exits":       cfg.DynamoDB.Tables.Exits,
-		"items":       cfg.DynamoDB.Tables.Items,
-		"prototypes":  cfg.DynamoDB.Tables.Prototypes,
-		"archetypes":  cfg.DynamoDB.Tables.Archetypes,
-		"motd":        cfg.DynamoDB.Tables.Motd,
+		"players":    cfg.DynamoDB.Tables.Players,
+		"characters": cfg.DynamoDB.Tables.Characters,
+		"rooms":      cfg.DynamoDB.Tables.Rooms,
+		"exits":      cfg.DynamoDB.Tables.Exits,
+		"items":      cfg.DynamoDB.Tables.Items,
+		"prototypes": cfg.DynamoDB.Tables.Prototypes,
+		"archetypes": cfg.DynamoDB.Tables.Archetypes,
+		"motd":       cfg.DynamoDB.Tables.Motd,
 	}
 
 	// Use defaults if not configured

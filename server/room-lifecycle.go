@@ -590,11 +590,14 @@ func (r *Room) processCombatMovements() {
 				if newRange <= movement.targetRange {
 					r.RemoveCharacterToMove(char)
 					char.combatMovement = nil
-					rangeName := "close combat with"
-					if movement.targetRange == combatRangeMelee {
+					var rangeName string
+					switch movement.targetRange {
+					case combatRangeMelee:
 						rangeName = "melee range with"
-					} else if movement.targetRange == combatRangePole {
+					case combatRangePole:
 						rangeName = "pole range with"
+					default:
+						rangeName = "close combat with"
 					}
 					char.mutex.Unlock()
 					char.DisplayMessage(fmt.Sprintf("\n\rYou reach %s %s.\n\r", rangeName, target.name))
@@ -614,7 +617,7 @@ func (r *Room) processCombatMovements() {
 			ranges := r.combatRanges[char.id]
 			r.mutex.RUnlock()
 
-			if ranges == nil || len(ranges) == 0 {
+			if len(ranges) == 0 {
 				r.RemoveCharacterToMove(char)
 				char.combatMovement = nil
 				char.mutex.Unlock()

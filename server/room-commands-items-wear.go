@@ -148,7 +148,8 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 	// Special handling for finger and wrist items - map to specific left/right locations
 	var finalWearLocations []string
 	for _, location := range itemToWear.wornOn {
-		if location == "finger" {
+		switch location {
+		case "finger":
 			// Check left finger first, then right finger
 			if !wornLocations["left_finger"] {
 				finalWearLocations = append(finalWearLocations, "left_finger")
@@ -162,7 +163,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 					Timestamp: time.Now(),
 				}
 			}
-		} else if location == "wrist" {
+		case "wrist":
 			// Check left wrist first, then right wrist
 			if !wornLocations["left_wrist"] {
 				finalWearLocations = append(finalWearLocations, "left_wrist")
@@ -176,7 +177,7 @@ func handleWearCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 					Timestamp: time.Now(),
 				}
 			}
-		} else {
+		default:
 			// For all other locations, check for conflicts normally
 			if wornLocations[location] {
 				return &CommandResponse{
