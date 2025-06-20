@@ -16,7 +16,6 @@ Cognito: # All Cognito values are deployment-generated
   UserPoolClientId: xxxxxxxxxxxxxxxxxxxxxxxxxx
   UserPoolDomain: eidolon-users
   UserPoolArn: arn:aws:cognito-idp:us-east-1:999999999999:userpool/us-east-1_xxxxxxxxx
-  AuthenticatedRoleArn: arn:aws:iam::999999999999:role/eidolon-authenticated-role
 CodeBuild: # All CodeBuild values are deployment-generated
   ProjectName: eidolon-portal-build
 DynamoDB: # All DynamoDB values are deployment-generated

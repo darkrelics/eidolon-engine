@@ -542,7 +542,6 @@ class IncrementalDeploymentOrchestrator:
                         {
                             "UserPoolId": outputs.get("UserPoolId", ""),
                             "UserPoolClientId": outputs.get("AppClientId", ""),
-                            "AuthenticatedRoleArn": outputs.get("AuthenticatedRoleArn", ""),
                         },
                     )
                 elif "dynamodb" in stack_name:
