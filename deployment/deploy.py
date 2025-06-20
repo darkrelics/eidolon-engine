@@ -12,7 +12,6 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
-
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from state_manager import ConfigurationManager, DeploymentState
 

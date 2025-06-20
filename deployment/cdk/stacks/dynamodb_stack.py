@@ -52,10 +52,10 @@ class DynamoDBStack(Stack):
         # Create or import DynamoDB tables
         for config in table_configs:
             # Use custom table name if provided, otherwise use default
-            if config['name'].capitalize() in self.custom_table_names:
-                table_name = self.custom_table_names[config['name'].capitalize()]
-            elif config['name'] in self.custom_table_names:
-                table_name = self.custom_table_names[config['name']]
+            if config["name"].capitalize() in self.custom_table_names:
+                table_name = self.custom_table_names[config["name"].capitalize()]
+            elif config["name"] in self.custom_table_names:
+                table_name = self.custom_table_names[config["name"]]
             else:
                 table_name = f"eidolon-{config['name']}"
 

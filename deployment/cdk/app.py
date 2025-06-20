@@ -69,11 +69,7 @@ class EidolonEngineApp:
 
         # Create DynamoDB stack
         self.dynamodb_stack = DynamoDBStack(
-            self.app, 
-            "dynamodb", 
-            game_name=params["game_name"], 
-            table_names=params.get("dynamodb_tables"),
-            env=env
+            self.app, "dynamodb", game_name=params["game_name"], table_names=params.get("dynamodb_tables"), env=env
         )
 
         # Create CloudWatch stack
@@ -163,11 +159,11 @@ class EidolonEngineApp:
                 params["portal_bucket_name"] = game_config["PortalS3Bucket"]
             if "ScriptsS3Bucket" in game_config:
                 params["scripts_bucket_name"] = game_config["ScriptsS3Bucket"]
-        
+
         # Check for existing DynamoDB table configurations
         if "DynamoDB" in self.config and "Tables" in self.config["DynamoDB"]:
             params["dynamodb_tables"] = self.config["DynamoDB"]["Tables"]
-        
+
         # Check for CodeBuild configuration
         if "CodeBuild" in self.config:
             codebuild_config = self.config["CodeBuild"]
