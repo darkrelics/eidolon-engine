@@ -23,14 +23,13 @@ phases:
       
   build:
     commands:
-      - echo Building web application...
-      - echo "Building with USER_POOL_ID=$USER_POOL_ID and CLIENT_ID=$CLIENT_ID"
+      - echo "Building web application with configured credentials..."
       - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID
       
   post_build:
     commands:
       - echo "Deploying to S3..."
-      - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive --cache-control "max-age=86400"
+      - aws s3 sync build/web s3://$S3_BUCKET_NAME/ --delete --cache-control "max-age=86400"
       - |
         if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then 
           echo "Invalidating CloudFront cache..."

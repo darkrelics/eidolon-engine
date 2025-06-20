@@ -65,9 +65,9 @@ class CodeBuildStack(Stack):
                 build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.MEDIUM
             ),
             environment_variables={
-                "PORTAL_BUCKET": codebuild.BuildEnvironmentVariable(value=self.portal_bucket.bucket_name),
-                "COGNITO_USER_POOL_ID": codebuild.BuildEnvironmentVariable(value=cognito_user_pool_id),
-                "COGNITO_APP_CLIENT_ID": codebuild.BuildEnvironmentVariable(value=cognito_app_client_id),
+                "S3_BUCKET_NAME": codebuild.BuildEnvironmentVariable(value=self.portal_bucket.bucket_name),
+                "USER_POOL_ID": codebuild.BuildEnvironmentVariable(value=cognito_user_pool_id),
+                "CLIENT_ID": codebuild.BuildEnvironmentVariable(value=cognito_app_client_id),
                 "AWS_REGION": codebuild.BuildEnvironmentVariable(value=self.region),
                 "CLOUDFRONT_DISTRIBUTION_ID": codebuild.BuildEnvironmentVariable(
                     value=cloudfront_distribution_id if cloudfront_distribution_id else ""
