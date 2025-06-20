@@ -384,7 +384,7 @@ func (g *Game) LoadRooms() error {
 	Logger.Info("Load Rooms...Loading Rooms...")
 
 	var roomsData []RoomData
-	err := g.database.Scan(g.ctx, "rooms", &roomsData)
+	err := g.database.Scan(g.ctx, g.database.tableNames["rooms"], &roomsData)
 	if err != nil {
 		Logger.Error("Error scanning rooms table", "error", err)
 		return fmt.Errorf("error scanning rooms: %w", err)
@@ -467,7 +467,7 @@ func (g *Game) LoadRoom(roomID int64) (*Room, error) {
 		"RoomID": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", roomID)},
 	}
 
-	err := g.database.Get(g.ctx, "rooms", key, roomData)
+	err := g.database.Get(g.ctx, g.database.tableNames["rooms"], key, roomData)
 	if err != nil {
 		Logger.Warn("Could not load room from database", "roomID", roomID, "error", err)
 		return nil, fmt.Errorf("room not found: %w", err)

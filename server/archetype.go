@@ -79,7 +79,7 @@ func (g *Game) LoadArchetypes() error {
 
 	var archetypes []Archetype
 
-	err := g.database.Scan(g.ctx, "archetypes", &archetypes)
+	err := g.database.Scan(g.ctx, g.database.tableNames["archetypes"], &archetypes)
 	if err != nil {
 		Logger.Error("Load Archetypes: Error Scanning Archetypes Table", "error", err)
 		return fmt.Errorf("error scanning archetypes table: %w", err)
