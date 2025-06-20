@@ -19,6 +19,7 @@ from cdk.stacks.cloudwatch_stack import CloudWatchStack
 from cdk.stacks.codebuild_stack import CodeBuildStack
 from cdk.stacks.cognito_stack import CognitoStack
 from cdk.stacks.dynamodb_stack import DynamoDBStack
+from cdk.stacks.iam_stack import IAMStack
 from cdk.stacks.s3_stack import S3Stack
 from state_manager import ConfigurationManager, DeploymentState
 
@@ -83,6 +84,18 @@ class EidolonEngineApp:
             retention_days=params.get("log_retention_days", 365),
             env=env,
         )
+
+        # Create IAM stack with server execution role
+        self.iam_stack = IAMStack(
+            self.app,
+            "iam",
+            game_name=params["game_name"],
+            cloudwatch_policy_arn=self.cloudwatch_stack.access_policy.managed_policy_arn,
+            dynamodb_policy_arn=self.dynamodb_stack.access_policy.managed_policy_arn,
+            env=env,
+        )
+        self.iam_stack.add_dependency(self.cloudwatch_stack)
+        self.iam_stack.add_dependency(self.dynamodb_stack)
 
         # Create S3 stack (handles existing buckets)
         self.s3_stack = S3Stack(

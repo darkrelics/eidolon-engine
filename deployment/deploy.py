@@ -527,6 +527,7 @@ class IncrementalDeploymentOrchestrator:
             f"{game_name}-s3",
             f"{game_name}-cloudfront",
             f"{game_name}-codebuild",
+            f"{game_name}-iam",
         ]
 
         for stack_name in stacks_to_query:
@@ -593,6 +594,14 @@ class IncrementalDeploymentOrchestrator:
                     if "portal_buildspec_path" in params:
                         codebuild_config["PortalBuildspecPath"] = params["portal_buildspec_path"]
                     self.config_manager.update_section("CodeBuild", codebuild_config)
+                elif "iam" in stack_name:
+                    # Update AWS configuration with server execution role
+                    self.config_manager.update_section(
+                        "AWS",
+                        {
+                            "ServerExecutionRoleArn": outputs.get("ServerExecutionRoleArn", ""),
+                        },
+                    )
 
             except Exception as err:
                 print(f"Warning: Could not get outputs for {stack_name}: {err}")
