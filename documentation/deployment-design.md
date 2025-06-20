@@ -4,7 +4,7 @@
 
 This system enables incremental infrastructure updates by:
 
-1. Reading existing `server/config.yml` if present
+1. Reading existing `config.yml` if present
 2. Validating current AWS resource states
 3. Deploying only changed or missing resources
 4. Updating configuration incrementally
@@ -48,7 +48,7 @@ This system enables incremental infrastructure updates by:
 
 ### 5. Configuration Manager (within `state_manager.py`)
 
-- Reads and updates `server/config.yml`
+- Reads and updates `config.yml`
 - Manages configuration sections (Game, AWS, Cognito, DynamoDB, etc.)
 - Ensures configuration consistency with deployed resources
 
@@ -69,7 +69,7 @@ This system enables incremental infrastructure updates by:
 2. **Parameter Loading**
 
    - Load saved parameters from state manager
-   - Read existing `server/config.yml` if present
+   - Read existing `config.yml` if present
    - Extract S3 bucket names and other configurations
    - Prompt user for any missing required parameters
 
@@ -100,7 +100,7 @@ This system enables incremental infrastructure updates by:
 6. **Configuration Update**
 
    - Query deployed stack outputs
-   - Update `server/config.yml` with:
+   - Update `config.yml` with:
      - Cognito user pool and client IDs
      - DynamoDB table names
      - CloudWatch log groups

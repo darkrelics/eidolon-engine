@@ -144,7 +144,7 @@ class DeploymentState:
 class ConfigurationManager:
     """Manages server configuration file operations."""
 
-    def __init__(self, config_path: str = "server/config.yml"):
+    def __init__(self, config_path: str = "../config.yml"):
         """Initialize configuration manager.
 
         Args:

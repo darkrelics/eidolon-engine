@@ -37,8 +37,8 @@ CODEBUILD_TEMPLATE_PATH = "../cloudformation/codebuild.yml"
 CLOUDWATCH_TEMPLATE_PATH = "../cloudformation/cloudwatch.yml"
 
 # Configuration file paths
-CONFIG_PATH = "../server/config.yml"
-CONFIG_TEMPLATE_PATH = "../server/config.template.yml"
+CONFIG_PATH = "../config.yml"
+CONFIG_TEMPLATE_PATH = "../config.template.yml"
 ENV_FILE_PATH = "../portal/.env"
 SCRIPTS_PATH = "../scripts_lua"
 

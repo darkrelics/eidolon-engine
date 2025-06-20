@@ -39,7 +39,7 @@ class EidolonEngineApp:
         self.create_stacks()
 
     def load_configuration(self) -> dict:
-        """Load configuration from server/config.yml or use defaults."""
+        """Load configuration from config.yml or use defaults."""
         if self.config_manager.exists():
             return self.config_manager.config
         else:
