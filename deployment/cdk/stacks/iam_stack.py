@@ -9,13 +9,7 @@ class IAMStack(Stack):
     """IAM stack for Eidolon Engine server execution role."""
 
     def __init__(
-        self,
-        scope: Construct,
-        construct_id: str,
-        game_name: str,
-        cloudwatch_policy_arn: str,
-        dynamodb_policy_arn: str,
-        **kwargs
+        self, scope: Construct, construct_id: str, game_name: str, cloudwatch_policy_arn: str, dynamodb_policy_arn: str, **kwargs
     ) -> None:
         """Initialize IAM stack.
 
@@ -42,15 +36,11 @@ class IAMStack(Stack):
         )
 
         # Attach the CloudWatch managed policy
-        cloudwatch_policy = iam.ManagedPolicy.from_managed_policy_arn(
-            self, "imported-cloudwatch-policy", cloudwatch_policy_arn
-        )
+        cloudwatch_policy = iam.ManagedPolicy.from_managed_policy_arn(self, "imported-cloudwatch-policy", cloudwatch_policy_arn)
         self.execution_role.add_managed_policy(cloudwatch_policy)
 
         # Attach the DynamoDB managed policy
-        dynamodb_policy = iam.ManagedPolicy.from_managed_policy_arn(
-            self, "imported-dynamodb-policy", dynamodb_policy_arn
-        )
+        dynamodb_policy = iam.ManagedPolicy.from_managed_policy_arn(self, "imported-dynamodb-policy", dynamodb_policy_arn)
         self.execution_role.add_managed_policy(dynamodb_policy)
 
         # Create instance profile for EC2 use

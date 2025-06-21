@@ -46,7 +46,7 @@ class CloudFrontStack(Stack):
         else:
             # Create new distribution
             self.distribution = self.create_distribution(portal_bucket)
-            print(f"Creating new CloudFront distribution")
+            print("Creating new CloudFront distribution")
 
         # Output values
         CfnOutput(
