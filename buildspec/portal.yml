@@ -13,19 +13,19 @@ phases:
       - flutter config --no-analytics
       - flutter doctor
       - flutter config --enable-web --no-enable-android --no-enable-ios
-      
+
   pre_build:
     commands:
       - cd portal
       - echo "Installing dependencies..."
       - flutter pub get
       - dart fix --apply
-      
+
   build:
     commands:
       - echo "Building web application with configured credentials..."
       - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID
-      
+
   post_build:
     commands:
       - echo "Deploying to S3..."
