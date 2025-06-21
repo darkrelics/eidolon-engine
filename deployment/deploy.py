@@ -102,8 +102,6 @@ class IncrementalDeploymentOrchestrator:
                 game_config = config["Game"]
                 params["game_name"] = game_config.get("name", params["game_name"])
                 # Check for existing S3 buckets
-                if "PortalS3Bucket" in game_config:
-                    params["portal_bucket_name"] = game_config["PortalS3Bucket"]
                 if "ScriptsS3Bucket" in game_config:
                     params["scripts_bucket_name"] = game_config["ScriptsS3Bucket"]
             if "AWS" in config:
@@ -119,6 +117,8 @@ class IncrementalDeploymentOrchestrator:
                 codebuild_config = config["CodeBuild"]
                 if "PortalBuildspecPath" in codebuild_config:
                     params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
+                if "PortalS3Bucket" in codebuild_config:
+                    params["portal_bucket_name"] = codebuild_config["PortalS3Bucket"]
 
         return params
 
@@ -572,9 +572,15 @@ class IncrementalDeploymentOrchestrator:
                     self.config_manager.update_section(
                         "Game",
                         {
-                            "PortalS3Bucket": outputs.get("PortalBucketName", ""),
                             "ScriptsS3Bucket": outputs.get("ScriptsBucketName", ""),
                             "ScriptsS3Prefix": "scripts",
+                        },
+                    )
+                    # Update CodeBuild with portal bucket
+                    self.config_manager.update_section(
+                        "CodeBuild",
+                        {
+                            "PortalS3Bucket": outputs.get("PortalBucketName", ""),
                         },
                     )
                 elif "cloudfront" in stack_name:
