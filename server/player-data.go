@@ -49,7 +49,7 @@ func (p *Player) Load(playerID uuid.UUID) error {
 	p.characterList = make(map[string]uuid.UUID)
 	p.seenMotD = make([]uuid.UUID, 0)
 
-	err := database.Get(p.server.ctx, "players", key, &playerData)
+	err := database.Get(p.server.ctx, database.tableNames["players"], key, &playerData)
 	if err != nil {
 		if strings.Contains(err.Error(), "item not found") {
 			Logger.Info("New player", "player_id", playerID.String(), "email", p.email)
@@ -120,7 +120,7 @@ func (p *Player) SaveWithContext(ctx context.Context) error {
 		playerData.SeenMotDs[i] = motdID.String()
 	}
 
-	err := database.Put(ctx, "players", playerData)
+	err := database.Put(ctx, database.tableNames["players"], playerData)
 	if err != nil {
 		Logger.Error("Error saving player data", "error", err)
 		SafeSendString(p.commandOut, "Error saving player data. Please contact an administrator.\n", p.id.String())

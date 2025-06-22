@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-var CONFIGURATION_FILE string = "config.yml"
+var CONFIGURATION_FILE string = "../config.yml"
 
 func main() {
 

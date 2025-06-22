@@ -99,7 +99,7 @@ func (s *Server) LoadMOTDs() error {
 
 	var motdDataList []MOTDData
 
-	err := s.database.Scan(s.ctx, "motd", &motdDataList)
+	err := s.database.Scan(s.ctx, s.database.tableNames["motd"], &motdDataList)
 	if err != nil {
 		Logger.Error("Error scanning MOTDs table", "error", err)
 		return fmt.Errorf("error scanning MOTDs: %w", err)

@@ -21,12 +21,12 @@ class DeploymentState:
             state_file: Path to state file for persistence
         """
         self.state_file = Path(state_file)
-        self.state: dict[str, any] = self._load_state()
+        self.state: dict = self._load_state()
 
-    def _load_state(self) -> dict[str, any]:
+    def _load_state(self) -> dict:
         """Load state from file or create new state."""
         if self.state_file.exists():
-            with open(self.state_file, "r") as f:
+            with open(self.state_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         return {
             "version": "1.0",
@@ -40,10 +40,10 @@ class DeploymentState:
     def save_state(self) -> None:
         """Persist current state to file."""
         self.state["last_deployment"] = datetime.now().isoformat()
-        with open(self.state_file, "w") as f:
+        with open(self.state_file, "w", encoding="utf-8") as f:
             json.dump(self.state, f, indent=2, default=str)
 
-    def add_stack(self, stack_name: str, stack_info: dict[str, any]) -> None:
+    def add_stack(self, stack_name: str, stack_info: dict) -> None:
         """Record CloudFormation stack deployment.
 
         Args:
@@ -59,7 +59,7 @@ class DeploymentState:
             "status": stack_info.get("status", "CREATE_COMPLETE"),
         }
 
-    def get_stack(self, stack_name: str) -> dict[str, any] | None:
+    def get_stack(self, stack_name: str) -> dict | None:
         """Get information about a deployed stack.
 
         Args:
@@ -70,7 +70,7 @@ class DeploymentState:
         """
         return self.state["stacks"].get(stack_name)
 
-    def add_resource(self, resource_type: str, resource_id: str, resource_info: dict[str, any]) -> None:
+    def add_resource(self, resource_type: str, resource_id: str, resource_info: dict) -> None:
         """Track individual AWS resource.
 
         Args:
@@ -88,7 +88,7 @@ class DeploymentState:
             "physical_id": resource_info.get("physical_id"),
         }
 
-    def get_resource(self, resource_type: str, resource_id: str) -> dict[str, any] | None:
+    def get_resource(self, resource_type: str, resource_id: str) -> dict | None:
         """Get information about a deployed resource.
 
         Args:
@@ -100,7 +100,7 @@ class DeploymentState:
         """
         return self.state["resources"].get(resource_type, {}).get(resource_id)
 
-    def update_parameters(self, parameters: dict[str, any]) -> None:
+    def update_parameters(self, parameters: dict) -> None:
         """Update deployment parameters.
 
         Args:
@@ -108,11 +108,11 @@ class DeploymentState:
         """
         self.state["parameters"].update(parameters)
 
-    def get_parameters(self) -> dict[str, any]:
+    def get_parameters(self) -> dict:
         """Get all stored deployment parameters."""
         return self.state["parameters"].copy()
 
-    def add_deployment_event(self, event_type: str, event_data: dict[str, any]) -> None:
+    def add_deployment_event(self, event_type: str, event_data: dict) -> None:
         """Add entry to deployment history.
 
         Args:
@@ -131,7 +131,7 @@ class DeploymentState:
         """Get set of all deployed stack names."""
         return set(self.state["stacks"].keys())
 
-    def get_deployment_summary(self) -> dict[str, any]:
+    def get_deployment_summary(self) -> dict:
         """Get summary of current deployment state."""
         return {
             "last_deployment": self.state["last_deployment"],
@@ -144,29 +144,29 @@ class DeploymentState:
 class ConfigurationManager:
     """Manages server configuration file operations."""
 
-    def __init__(self, config_path: str = "server/config.yml"):
+    def __init__(self, config_path: str = "../config.yml"):
         """Initialize configuration manager.
 
         Args:
             config_path: Path to server configuration file
         """
         self.config_path = Path(config_path)
-        self.config: dict[str, any] = self._load_config()
+        self.config: dict = self._load_config()
 
-    def _load_config(self) -> dict[str, any]:
+    def _load_config(self) -> dict:
         """Load configuration from file."""
         if self.config_path.exists():
-            with open(self.config_path, "r") as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         return {}
 
     def save_config(self) -> None:
         """Save configuration to file."""
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.config_path, "w") as f:
+        with open(self.config_path, "w", encoding="utf-8") as f:
             yaml.dump(self.config, f, default_flow_style=False, sort_keys=False)
 
-    def update_section(self, section: str, values: dict[str, any]) -> None:
+    def update_section(self, section: str, values: dict) -> None:
         """Update a configuration section.
 
         Args:
@@ -177,7 +177,7 @@ class ConfigurationManager:
             self.config[section] = {}
         self.config[section].update(values)
 
-    def get_section(self, section: str) -> dict[str, any]:
+    def get_section(self, section: str) -> dict:
         """Get a configuration section.
 
         Args:
@@ -192,7 +192,7 @@ class ConfigurationManager:
         """Check if configuration file exists."""
         return self.config_path.exists()
 
-    def get_aws_config(self) -> dict[str, any]:
+    def get_aws_config(self) -> dict:
         """Get AWS-specific configuration."""
         return self.config.get("AWS", {})
 
@@ -203,14 +203,14 @@ class ConfigurationManager:
             template_path: Path to configuration template
         """
         if Path(template_path).exists():
-            with open(template_path, "r") as f:
+            with open(template_path, "r", encoding="utf-8") as f:
                 template = yaml.safe_load(f) or {}
 
             # Deep merge template with existing config
             self._deep_merge(template, self.config)
             self.config = template
 
-    def _deep_merge(self, base: dict[str, any], override: dict[str, any]) -> None:
+    def _deep_merge(self, base: dict, override: dict) -> None:
         """Deep merge override dict into base dict.
 
         Args:

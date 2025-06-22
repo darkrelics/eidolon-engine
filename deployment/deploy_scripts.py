@@ -26,8 +26,8 @@ import yaml
 from botocore.exceptions import ClientError
 
 # Configuration file paths
-CONFIG_PATH = "../server/config.yml"
-CONFIG_TEMPLATE_PATH = "../server/config.template.yml"
+CONFIG_PATH = "../config.yml"
+CONFIG_TEMPLATE_PATH = "../config.template.yml"
 SCRIPTS_PATH = "../scripts_lua"
 
 

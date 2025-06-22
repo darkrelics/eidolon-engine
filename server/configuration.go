@@ -40,6 +40,20 @@ type Configuration struct {
 		UserPoolARN      string `yaml:"UserPoolArn"`
 	} `yaml:"Cognito"`
 
+	// DynamoDB database settings
+	DynamoDB struct {
+		Tables struct {
+			Players    string `yaml:"Players"`
+			Characters string `yaml:"Characters"`
+			Rooms      string `yaml:"Rooms"`
+			Exits      string `yaml:"Exits"`
+			Items      string `yaml:"Items"`
+			Prototypes string `yaml:"Prototypes"`
+			Archetypes string `yaml:"Archetypes"`
+			Motd       string `yaml:"Motd"`
+		} `yaml:"Tables"`
+	} `yaml:"DynamoDB"`
+
 	// Game mechanics settings
 	Game struct {
 		Balance                  float64 `yaml:"Balance"`

@@ -15,7 +15,6 @@ class S3Stack(Stack):
         self,
         scope: Construct,
         construct_id: str,
-        game_name: str,
         portal_bucket_name: str | None = None,
         scripts_bucket_name: str | None = None,
         **kwargs,
@@ -25,7 +24,6 @@ class S3Stack(Stack):
         Args:
             scope: CDK app scope
             construct_id: Stack identifier
-            game_name: Name of the game
             portal_bucket_name: Optional existing portal bucket name
             scripts_bucket_name: Optional existing scripts bucket name
             **kwargs: Additional stack properties
@@ -34,7 +32,7 @@ class S3Stack(Stack):
 
         # Handle portal bucket
         # Note: When using CloudFront, we don't need public read or website hosting
-        self.portal_bucket = self._get_or_create_bucket(
+        self.portal_bucket = self.get_or_create_bucket(
             "portal-bucket",
             portal_bucket_name or "eidolon-portal",
             website_config=None,  # CloudFront will handle web serving
@@ -42,7 +40,7 @@ class S3Stack(Stack):
         )
 
         # Handle scripts bucket
-        self.scripts_bucket = self._get_or_create_bucket(
+        self.scripts_bucket = self.get_or_create_bucket(
             "scripts-bucket",
             scripts_bucket_name or "eidolon-scripts",
             public_read=True,
@@ -74,11 +72,11 @@ class S3Stack(Stack):
             description="S3 bucket name for game scripts",
         )
 
-    def _get_or_create_bucket(
+    def get_or_create_bucket(
         self,
         logical_id: str,
         bucket_name: str,
-        website_config: dict[str, str] | None = None,
+        website_config: dict | None = None,
         public_read: bool = False,
     ) -> IBucket:
         """Get existing bucket or create a new one.

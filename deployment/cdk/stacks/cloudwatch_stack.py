@@ -9,7 +9,7 @@ from constructs import Construct
 class CloudWatchStack(Stack):
     """CloudWatch stack for Eidolon Engine logging and metrics."""
 
-    def __init__(self, scope: Construct, construct_id: str, game_name: str, retention_days: int = 365, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, dynamodb_policy_arn: str, retention_days: int = 365, **kwargs) -> None:
         """Initialize CloudWatch stack.
 
         Args:

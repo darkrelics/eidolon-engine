@@ -1,6 +1,7 @@
 # NOTE: Values marked with 'deployment-generated' are automatically updated by deployment/deploy.py
 AWS:
   Region: us-east-1 # deployment-generated
+  ServerExecutionRoleArn: arn:aws:iam::999999999999:role/eidolon-engine-server-execution-role # deployment-generated
 CloudFront: # All CloudFront values are deployment-generated
   distribution_id: E1234567890ABC
   domain_name: d1234567890.cloudfront.net
@@ -16,9 +17,9 @@ Cognito: # All Cognito values are deployment-generated
   UserPoolClientId: xxxxxxxxxxxxxxxxxxxxxxxxxx
   UserPoolDomain: eidolon-users
   UserPoolArn: arn:aws:cognito-idp:us-east-1:999999999999:userpool/us-east-1_xxxxxxxxx
-  AuthenticatedRoleArn: arn:aws:iam::999999999999:role/eidolon-authenticated-role
 CodeBuild: # All CodeBuild values are deployment-generated
   ProjectName: eidolon-portal-build
+  PortalS3Bucket: eidolon-portal
 DynamoDB: # All DynamoDB values are deployment-generated
   Tables:
     Players: eidolon-players
@@ -37,10 +38,8 @@ Game:
   StartingEssence: 3
   NamesPath: ../data/names.txt
   ObscenityPath: ../data/obscenity.txt
-  PortalS3Bucket: eidolon-portal # deployment-generated
   ScriptsS3Bucket: eidolon-scripts # deployment-generated
   ScriptsS3Prefix: scripts
-  PortalUrl: https://d1234567890.cloudfront.net # deployment-generated
   TickIntervalSeconds: 1
   RoomItemCleanupSeconds: 600 # 10 minutes
   RoomUnloadSeconds: 3600 # 60 minutes

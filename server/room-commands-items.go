@@ -263,9 +263,10 @@ func handleDropCommand(cmd *CommandRequest, targetName string) *CommandResponse 
 
 	// Remove from inventory or hand
 	if targetMatch.isInHand {
-		if targetMatch.slot == "right_hand" {
+		switch targetMatch.slot {
+		case "right_hand":
 			character.rightHand = nil
-		} else if targetMatch.slot == "left_hand" {
+		case "left_hand":
 			character.leftHand = nil
 		}
 	} else {
@@ -298,9 +299,10 @@ func restoreItemToOriginalLocation(character *Character, item *Item, slot string
 	defer character.mutex.Unlock()
 
 	if isInHand {
-		if slot == "right_hand" {
+		switch slot {
+		case "right_hand":
 			character.rightHand = item
-		} else if slot == "left_hand" {
+		case "left_hand":
 			character.leftHand = item
 		}
 	} else {

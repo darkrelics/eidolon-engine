@@ -73,3 +73,11 @@ CLAUDE.md
 **/claude_logs/
 .cache/
 **/claude_cache/
+
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.pdb

@@ -11,16 +11,18 @@ from constructs import Construct
 class DynamoDBStack(Stack):
     """DynamoDB stack for Eidolon Engine game data."""
 
-    def __init__(self, scope: Construct, construct_id: str, game_name: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, game_name: str, table_names: dict | None = None, **kwargs) -> None:
         """Initialize DynamoDB stack.
 
         Args:
             scope: CDK app scope
             construct_id: Stack identifier
             game_name: Name of the game
+            table_names: Optional dictionary of table type to table name mappings
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
+        self.custom_table_names = table_names or {}
 
         # Check for existing tables from context (passed from deploy.py)
         self.existing_tables = {}
@@ -49,7 +51,13 @@ class DynamoDBStack(Stack):
 
         # Create or import DynamoDB tables
         for config in table_configs:
-            table_name = f"eidolon-{config['name']}"
+            # Use custom table name if provided, otherwise use default
+            if config["name"].capitalize() in self.custom_table_names:
+                table_name = self.custom_table_names[config["name"].capitalize()]
+            elif config["name"] in self.custom_table_names:
+                table_name = self.custom_table_names[config["name"]]
+            else:
+                table_name = f"eidolon-{config['name']}"
 
             # Check if we should use an existing table
             if config["name"] in self.existing_tables:
@@ -61,7 +69,7 @@ class DynamoDBStack(Stack):
                 self.tables[config["name"]] = table
             else:
                 # Check if table already exists
-                if self._table_exists(table_name):
+                if self.table_exists(table_name):
                     # Import the table
                     print(f"Found existing DynamoDB table: {table_name}, importing...")
                     table = dynamodb.Table.from_table_name(self, f"{config['name']}-imported", table_name)
@@ -143,7 +151,7 @@ class DynamoDBStack(Stack):
             description="ARN of the DynamoDB access policy",
         )
 
-    def _table_exists(self, table_name: str) -> bool:
+    def table_exists(self, table_name: str) -> bool:
         """Check if a DynamoDB table exists.
 
         Args:

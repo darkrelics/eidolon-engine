@@ -23,15 +23,15 @@ class ValidationResult:
         self.exists = False
         self.valid = False
         self.drift_detected = False
-        self.messages: list[str] = []
-        self.actual_config: dict[str, any] = {}
-        self.expected_config: dict[str, any] = {}
+        self.messages: list = []
+        self.actual_config: dict = {}
+        self.expected_config: dict = {}
 
     def add_message(self, message: str) -> None:
         """Add a validation message."""
         self.messages.append(message)
 
-    def to_dict(self) -> dict[str, any]:
+    def to_dict(self) -> dict:
         """Convert to dictionary representation."""
         return {
             "resource_id": self.resource_id,
@@ -56,7 +56,7 @@ class ResourceValidator:
         """
         self.session = session
 
-    def validate(self, resource_id: str, expected_config: dict[str, any]) -> ValidationResult:
+    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate a specific resource.
 
         Args:
@@ -68,7 +68,7 @@ class ResourceValidator:
         """
         raise NotImplementedError("Subclasses must implement validate()")
 
-    def list_resources(self, filter_params: dict[str, any] | None = None) -> list[str]:
+    def list_resources(self, filter_params: dict | None = None) -> list:
         """List all resources of this type.
 
         Args:
@@ -88,7 +88,7 @@ class DynamoDBTableValidator(ResourceValidator):
         super().__init__(session)
         self.client = session.client("dynamodb")
 
-    def validate(self, resource_id: str, expected_config: dict[str, any]) -> ValidationResult:
+    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate a DynamoDB table configuration."""
         result = ValidationResult(resource_id, "dynamodb_table")
         result.expected_config = expected_config
@@ -148,7 +148,7 @@ class DynamoDBTableValidator(ResourceValidator):
 
         return result
 
-    def list_resources(self, filter_params: dict[str, any] | None = None) -> list[str]:
+    def list_resources(self, filter_params: dict | None = None) -> list:
         """List all DynamoDB tables."""
         tables = []
         paginator = self.client.get_paginator("list_tables")
@@ -176,7 +176,7 @@ class DynamoDBTableValidator(ResourceValidator):
         except ClientError:
             return False
 
-    def _compare_key_schemas(self, actual: list[dict], expected: list[dict]) -> bool:
+    def _compare_key_schemas(self, actual: list, expected: list) -> bool:
         """Compare key schemas for equality."""
         if len(actual) != len(expected):
             return False
@@ -200,7 +200,7 @@ class CognitoValidator(ResourceValidator):
         super().__init__(session)
         self.client = session.client("cognito-idp")
 
-    def validate(self, resource_id: str, expected_config: dict[str, any]) -> ValidationResult:
+    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate a Cognito user pool."""
         result = ValidationResult(resource_id, "cognito_user_pool")
         result.expected_config = expected_config
@@ -252,7 +252,7 @@ class CognitoValidator(ResourceValidator):
 
         return result
 
-    def list_resources(self, filter_params: dict[str, any] | None = None) -> list[str]:
+    def list_resources(self, filter_params: dict | None = None) -> list:
         """List all Cognito user pools."""
         pools = []
         paginator = self.client.get_paginator("list_user_pools")
@@ -283,7 +283,7 @@ class CloudWatchValidator(ResourceValidator):
         super().__init__(session)
         self.logs_client = session.client("logs")
 
-    def validate(self, resource_id: str, expected_config: dict[str, any]) -> ValidationResult:
+    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate a CloudWatch log group."""
         result = ValidationResult(resource_id, "cloudwatch_log_group")
         result.expected_config = expected_config
@@ -324,7 +324,7 @@ class CloudWatchValidator(ResourceValidator):
 
         return result
 
-    def list_resources(self, filter_params: dict[str, any] | None = None) -> list[str]:
+    def list_resources(self, filter_params: dict | None = None) -> list:
         """List all CloudWatch log groups."""
         log_groups = []
         paginator = self.logs_client.get_paginator("describe_log_groups")
@@ -348,7 +348,7 @@ class CodeBuildValidator(ResourceValidator):
         super().__init__(session)
         self.client = session.client("codebuild")
 
-    def validate(self, resource_id: str, expected_config: dict[str, any]) -> ValidationResult:
+    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate a CodeBuild project."""
         result = ValidationResult(resource_id, "codebuild_project")
         result.expected_config = expected_config
@@ -398,7 +398,7 @@ class CodeBuildValidator(ResourceValidator):
 
         return result
 
-    def list_resources(self, filter_params: dict[str, any] | None = None) -> list[str]:
+    def list_resources(self, filter_params: dict | None = None) -> list:
         """List all CodeBuild projects."""
         projects = []
         paginator = self.client.get_paginator("list_projects")
@@ -434,7 +434,7 @@ class S3BucketValidator(ResourceValidator):
         self.client = session.client("s3")
         self.region = session.region_name
 
-    def validate(self, resource_id: str, expected_config: dict[str, any]) -> ValidationResult:
+    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate an S3 bucket configuration."""
         result = ValidationResult(resource_id, "s3_bucket")
         result.expected_config = expected_config
@@ -504,7 +504,7 @@ class S3BucketValidator(ResourceValidator):
 
         return result
 
-    def list_resources(self, filter_params: dict[str, any] | None = None) -> list[str]:
+    def list_resources(self, filter_params: dict | None = None) -> list:
         """List all S3 buckets."""
         buckets = []
         try:
@@ -531,7 +531,7 @@ class S3BucketValidator(ResourceValidator):
         except ClientError:
             return "Unknown"
 
-    def _get_public_access_block(self, bucket_name: str) -> dict[str, bool]:
+    def _get_public_access_block(self, bucket_name: str) -> dict:
         """Get public access block configuration."""
         try:
             response = self.client.get_public_access_block(Bucket=bucket_name)
@@ -617,9 +617,7 @@ class ResourceValidatorFactory:
         return validator_class(session)
 
 
-def validate_stack_resources(
-    session: boto3.Session, stack_name: str, expected_resources: dict[str, dict[str, any]]
-) -> dict[str, ValidationResult]:
+def validate_stack_resources(session: boto3.Session, stack_name: str, expected_resources: dict) -> dict:
     """Validate all resources in a CloudFormation stack.
 
     Args:
@@ -650,7 +648,7 @@ def validate_stack_resources(
     return results
 
 
-def generate_drift_report(validation_results: dict[str, ValidationResult]) -> str:
+def generate_drift_report(validation_results: dict) -> str:
     """Generate a human-readable drift report.
 
     Args:

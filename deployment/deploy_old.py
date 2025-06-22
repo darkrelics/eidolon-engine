@@ -37,8 +37,8 @@ CODEBUILD_TEMPLATE_PATH = "../cloudformation/codebuild.yml"
 CLOUDWATCH_TEMPLATE_PATH = "../cloudformation/cloudwatch.yml"
 
 # Configuration file paths
-CONFIG_PATH = "../server/config.yml"
-CONFIG_TEMPLATE_PATH = "../server/config.template.yml"
+CONFIG_PATH = "../config.yml"
+CONFIG_TEMPLATE_PATH = "../config.template.yml"
 ENV_FILE_PATH = "../portal/.env"
 SCRIPTS_PATH = "../scripts_lua"
 
@@ -136,74 +136,83 @@ def get_stack_outputs(client, stack_name) -> dict:
 def update_configuration_file(config_updates, user_pool_name=None) -> None:
     try:
         config: dict = load_config()
+    except (IOError, yaml.YAMLError) as err:
+        print(f"Error loading configuration file: {err}")
+        return
 
-        # Ensure top-level keys exist
-        for key in ["Server", "AWS", "Cognito", "Game", "Logging", "SSH", "CloudWatch"]:
-            if key not in config or config[key] is None:
-                config[key] = {}
+    # Ensure top-level keys exist
+    for key in ["Server", "AWS", "Cognito", "Game", "Logging", "SSH", "CloudWatch"]:
+        if key not in config or config[key] is None:
+            config[key] = {}
 
-        # Update AWS configuration
-        if "Region" not in config["AWS"]:
-            config["AWS"]["Region"] = "us-east-1"
+    # Update AWS configuration
+    if "Region" not in config.get("AWS", {}):
+        config["AWS"]["Region"] = "us-east-1"
 
-        # Update Game configuration - only set defaults if not present
-        game_defaults = {
-            "Balance": 0.25,
-            "AutoSave": 5,
-            "StartingHealth": 10,
-            "StartingEssence": 3,
+    # Update Game configuration - only set defaults if not present
+    game_config = config.get("Game", {})
+    game_defaults = {
+        "Balance": 0.25,
+        "AutoSave": 5,
+        "StartingHealth": 10,
+        "StartingEssence": 3,
+    }
+    for key, value in game_defaults.items():
+        if key not in game_config:
+            game_config[key] = value
+    config["Game"] = game_config
+
+    # Update Logging configuration - preserve existing values
+    logging_config = config.get("Logging", {})
+    cloudwatch_updates = config_updates.get("CloudWatch", {})
+
+    logging_updates = {
+        "ApplicationName": logging_config.get("ApplicationName", "Eidolon Engine"),
+        "LogLevel": logging_config.get("LogLevel", 20),
+        "LogGroup": cloudwatch_updates.get("LogGroupName", logging_config.get("LogGroup", "/eidolon/game-logs")),
+        "LogStream": logging_config.get("LogStream", "application"),
+        "MetricNamespace": cloudwatch_updates.get("MetricNamespace", logging_config.get("MetricNamespace", "eidolon/application")),
+    }
+    logging_config.update(logging_updates)
+    config["Logging"] = logging_config
+
+    # Update Cognito configuration
+    cognito_updates = config_updates.get("Cognito", {})
+    cognito_config = config.get("Cognito", {})
+
+    # Generate UserPoolDomain from UserPoolId if not explicitly provided
+    user_pool_id = cognito_updates.get("UserPoolId", "")
+    user_pool_domain = ""
+    if user_pool_id:
+        # Extract region from the UserPoolId (format: region_xxxxx)
+        region_prefix = user_pool_id.split("_")[0]
+        # Create domain name using the user pool name if provided
+        if user_pool_name:
+            user_pool_domain = f"{region_prefix}-{user_pool_name}"
+
+    cognito_config.update(
+        {
+            "UserPoolId": user_pool_id,
+            "UserPoolClientId": cognito_updates.get("UserPoolClientId", ""),
+            "UserPoolDomain": user_pool_domain,
+            "UserPoolArn": cognito_updates.get("UserPoolArn", ""),
         }
-        for key, value in game_defaults.items():
-            if key not in config["Game"]:
-                config["Game"][key] = value
+    )
+    config["Cognito"] = cognito_config
 
-        # Update Logging configuration - preserve existing values
-        logging_updates = {
-            "ApplicationName": config["Logging"].get("ApplicationName", "Eidolon Engine"),
-            "LogLevel": config["Logging"].get("LogLevel", 20),
-            "LogGroup": config_updates.get("CloudWatch", {}).get(
-                "LogGroupName", config["Logging"].get("LogGroup", "/eidolon/game-logs")
-            ),
-            "LogStream": config["Logging"].get("LogStream", "application"),
-            "MetricNamespace": config_updates.get("CloudWatch", {}).get(
-                "MetricNamespace", config["Logging"].get("MetricNamespace", "eidolon/application")
-            ),
-        }
-        config["Logging"].update(logging_updates)
+    # Update Game configuration with script settings
+    game_updates = config_updates.get("Game", {})
+    if game_updates:
+        game_config = config.get("Game", {})
+        game_config.update(game_updates)
+        config["Game"] = game_config
 
-        # Update Cognito configuration
-        cognito_updates = config_updates.get("Cognito", {})
-
-        # Generate UserPoolDomain from UserPoolId if not explicitly provided
-        user_pool_id = cognito_updates.get("UserPoolId", "")
-        user_pool_domain = ""
-        if user_pool_id:
-            # Extract region from the UserPoolId (format: region_xxxxx)
-            region_prefix = user_pool_id.split("_")[0]
-            # Create domain name using the user pool name if provided
-            if user_pool_name:
-                user_pool_domain = f"{region_prefix}-{user_pool_name}"
-
-        config["Cognito"].update(
-            {
-                "UserPoolId": user_pool_id,
-                "UserPoolClientId": cognito_updates.get("UserPoolClientId", ""),
-                "UserPoolDomain": user_pool_domain,
-                "UserPoolArn": cognito_updates.get("UserPoolArn", ""),
-            }
-        )
-
-        # Update Game configuration with script settings
-        game_updates = config_updates.get("Game", {})
-        if game_updates:
-            config["Game"].update(game_updates)
-
+    try:
         with open(CONFIG_PATH, "w", encoding="utf-8") as file:
             yaml.dump(config, file, default_flow_style=False)
-
         print("Configuration file updated successfully.")
     except (IOError, yaml.YAMLError) as err:
-        print(f"Error updating configuration file: {err}")
+        print(f"Error writing configuration file: {err}")
         print("Current config_updates:", config_updates)
         print("Current config:", config)
 

@@ -2,14 +2,13 @@
 
 from aws_cdk import CfnOutput, RemovalPolicy, Stack
 from aws_cdk import aws_cognito as cognito
-from aws_cdk import aws_iam as iam
 from constructs import Construct
 
 
 class CognitoStack(Stack):
     """Cognito stack for Eidolon Engine user authentication."""
 
-    def __init__(self, scope: Construct, construct_id: str, game_name: str, contact_email: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, contact_email: str, **kwargs) -> None:
         """Initialize Cognito stack.
 
         Args:
@@ -45,25 +44,7 @@ class CognitoStack(Stack):
             prevent_user_existence_errors=True,
         )
 
-        # Create IAM role for authenticated users
-        self.authenticated_role = iam.Role(
-            self,
-            "authenticated-role",
-            assumed_by=iam.FederatedPrincipal(
-                "cognito-identity.amazonaws.com",
-                conditions={
-                    "StringEquals": {"cognito-identity.amazonaws.com:aud": self.user_pool.user_pool_id},
-                    "ForAnyValue:StringLike": {"cognito-identity.amazonaws.com:amr": "authenticated"},
-                },
-            ),
-            description="Role for authenticated Eidolon Engine users",
-        )
-
         # Output values
         CfnOutput(self, "UserPoolId", value=self.user_pool.user_pool_id, description="Cognito User Pool ID")
 
         CfnOutput(self, "AppClientId", value=self.app_client.user_pool_client_id, description="Cognito App Client ID")
-
-        CfnOutput(
-            self, "AuthenticatedRoleArn", value=self.authenticated_role.role_arn, description="IAM role ARN for authenticated users"
-        )

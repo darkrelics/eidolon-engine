@@ -130,7 +130,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
 	}
 
-	if err := game.database.Get(game.ctx, "characters", key, cd); err != nil {
+	if err := game.database.Get(game.ctx, game.database.tableNames["characters"], key, cd); err != nil {
 		return nil, fmt.Errorf("error loading character data: %w", err)
 	}
 
@@ -239,7 +239,7 @@ func (p *Player) DeleteCharacter(characterID uuid.UUID) error {
 			"CharacterID": &types.AttributeValueMemberS{Value: characterID.String()},
 		}
 		var charData CharacterData
-		err := p.server.database.Get(p.server.ctx, "characters", charKey, &charData)
+		err := p.server.database.Get(p.server.ctx, p.server.database.tableNames["characters"], charKey, &charData)
 		if err == nil {
 			inventoryItems = charData.Inventory
 			if charData.LeftHandID != "" {

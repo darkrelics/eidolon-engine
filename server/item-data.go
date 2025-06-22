@@ -149,7 +149,7 @@ func (item *Item) Save(ctx context.Context, k *KeyPair) error {
 	}
 
 	// Write to database
-	err := k.Put(ctx, "items", itemData)
+	err := k.Put(ctx, k.tableNames["items"], itemData)
 	if err != nil {
 		Logger.Error("Error writing item data", "itemID", item.id, "error", err)
 		return fmt.Errorf("error writing item data: %w", err)
@@ -226,7 +226,7 @@ func (p *Prototype) Save(ctx context.Context, k *KeyPair) error {
 	}
 
 	// Write to database
-	err := k.Put(ctx, "prototypes", prototypeData)
+	err := k.Put(ctx, k.tableNames["prototypes"], prototypeData)
 	if err != nil {
 		Logger.Error("Error writing prototype data", "prototypeID", p.id, "error", err)
 		return fmt.Errorf("error writing prototype data: %w", err)
@@ -250,7 +250,7 @@ func LoadPrototypes(ctx context.Context, k *KeyPair) (map[uuid.UUID]*Prototype, 
 	prototypes := make(map[uuid.UUID]*Prototype)
 
 	var prototypesData []PrototypeData
-	err := k.Scan(ctx, "prototypes", &prototypesData)
+	err := k.Scan(ctx, k.tableNames["prototypes"], &prototypesData)
 	if err != nil {
 		return prototypes, fmt.Errorf("error scanning prototypes: %w", err)
 	}
@@ -353,7 +353,7 @@ func LoadItem(ctx context.Context, id string, k *KeyPair) (*Item, error) {
 
 	// Retrieve item data from DynamoDB
 	var itemData ItemData
-	err := k.Get(ctx, "items", key, &itemData)
+	err := k.Get(ctx, k.tableNames["items"], key, &itemData)
 	if err != nil {
 		Logger.Error("Error loading item data", "itemID", id, "error", err)
 		return nil, fmt.Errorf("error loading item data: %w", err)
@@ -378,7 +378,7 @@ func LoadPrototype(ctx context.Context, id string, k *KeyPair) (*Prototype, erro
 
 	// Retrieve prototype data from DynamoDB
 	var prototypeData PrototypeData
-	err := k.Get(ctx, "prototypes", key, &prototypeData)
+	err := k.Get(ctx, k.tableNames["prototypes"], key, &prototypeData)
 	if err != nil {
 		Logger.Error("Error loading prototype data", "prototypeID", id, "error", err)
 		return nil, fmt.Errorf("error loading prototype data: %w", err)
@@ -461,7 +461,7 @@ func LoadItemWithContents(ctx context.Context, id string, k *KeyPair, loadedItem
 		}
 
 		var itemData ItemData
-		err := k.Get(ctx, "items", key, &itemData)
+		err := k.Get(ctx, k.tableNames["items"], key, &itemData)
 		if err != nil {
 			Logger.Warn("Failed to reload item data for container contents", "itemID", id, "error", err)
 			return item, nil // Return item without contents rather than failing completely

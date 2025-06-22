@@ -52,30 +52,19 @@ class IncrementalDeploymentOrchestrator:
         """
         print("Checking prerequisites...")
 
-        # Check if CDK is installed
-        try:
-            result = subprocess.run(["cdk", "--version"], capture_output=True, text=True)
-            if result.returncode != 0:
-                print("ERROR: AWS CDK is not installed. Please install it with: npm install -g aws-cdk")
-                return False
-            print(f"✓ AWS CDK version: {result.stdout.strip()}")
-        except FileNotFoundError:
-            print("ERROR: AWS CDK is not installed. Please install it with: npm install -g aws-cdk")
-            return False
-
         # Check AWS credentials
         try:
             sts = self.session.client("sts")
             identity = sts.get_caller_identity()
-            print(f"✓ AWS Account: {identity.get('Account', 'Unknown')}")
-            print(f"✓ AWS Region: {self.region}")
+            print(f"AWS Account: {identity.get('Account', 'Unknown')}")
+            print(f"AWS Region: {self.region}")
         except Exception as err:
             print(f"ERROR: Unable to access AWS: {err}")
             return False
 
         return True
 
-    def load_parameters(self) -> dict[str, any]:
+    def load_parameters(self) -> dict:
         """Load deployment parameters from various sources.
 
         Returns:
@@ -101,8 +90,6 @@ class IncrementalDeploymentOrchestrator:
                 game_config = config["Game"]
                 params["game_name"] = game_config.get("name", params["game_name"])
                 # Check for existing S3 buckets
-                if "PortalS3Bucket" in game_config:
-                    params["portal_bucket_name"] = game_config["PortalS3Bucket"]
                 if "ScriptsS3Bucket" in game_config:
                     params["scripts_bucket_name"] = game_config["ScriptsS3Bucket"]
             if "AWS" in config:
@@ -111,10 +98,19 @@ class IncrementalDeploymentOrchestrator:
             if "CloudFront" in config:
                 cf_config = config["CloudFront"]
                 params["cloudfront_distribution_id"] = cf_config.get("distribution_id", params.get("cloudfront_distribution_id"))
+            if "DynamoDB" in config and "Tables" in config["DynamoDB"]:
+                # Load existing DynamoDB table names if configured
+                params["dynamodb_tables"] = config["DynamoDB"]["Tables"]
+            if "CodeBuild" in config:
+                codebuild_config = config["CodeBuild"]
+                if "PortalBuildspecPath" in codebuild_config:
+                    params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
+                if "PortalS3Bucket" in codebuild_config:
+                    params["portal_bucket_name"] = codebuild_config["PortalS3Bucket"]
 
         return params
 
-    def prompt_missing_parameters(self, params: dict[str, any]) -> dict[str, any]:
+    def prompt_missing_parameters(self, params: dict) -> dict:
         """Prompt user for any missing required parameters.
 
         Args:
@@ -145,7 +141,7 @@ class IncrementalDeploymentOrchestrator:
 
         return params
 
-    def get_existing_stacks(self) -> dict[str, dict[str, any]]:
+    def get_existing_stacks(self) -> dict:
         """Get information about existing CloudFormation stacks.
 
         Returns:
@@ -192,7 +188,7 @@ class IncrementalDeploymentOrchestrator:
 
         return existing_stacks
 
-    def validate_resources(self, params: dict[str, any]) -> dict[str, any]:
+    def validate_resources(self, params: dict) -> dict:
         """Validate AWS resources for drift detection.
 
         Args:
@@ -206,16 +202,20 @@ class IncrementalDeploymentOrchestrator:
         # Validate DynamoDB tables
         try:
             validator = ResourceValidatorFactory.create_validator("dynamodb_table", self.session)
-            table_names = [
-                "eidolon-players",
-                "eidolon-characters",
-                "eidolon-rooms",
-                "eidolon-exits",
-                "eidolon-items",
-                "eidolon-prototypes",
-                "eidolon-archetypes",
-                "eidolon-motd",
-            ]
+            # Use table names from params if provided, otherwise use defaults
+            if "dynamodb_tables" in params:
+                table_names = list(params["dynamodb_tables"].values())
+            else:
+                table_names = [
+                    "eidolon-players",
+                    "eidolon-characters",
+                    "eidolon-rooms",
+                    "eidolon-exits",
+                    "eidolon-items",
+                    "eidolon-prototypes",
+                    "eidolon-archetypes",
+                    "eidolon-motd",
+                ]
 
             for table_name in table_names:
                 expected_config = {
@@ -282,7 +282,7 @@ class IncrementalDeploymentOrchestrator:
 
         return all_results
 
-    def map_cloudformation_to_cdk(self, existing_stacks: dict[str, dict[str, any]], params: dict[str, any]) -> dict[str, any]:
+    def map_cloudformation_to_cdk(self, existing_stacks: dict, _params: dict) -> dict:
         """Map existing CloudFormation stacks to CDK stacks.
 
         Args:
@@ -337,7 +337,7 @@ class IncrementalDeploymentOrchestrator:
 
         return mapping
 
-    def _can_adopt_stack(self, stack_name: str, stack_info: dict[str, any]) -> bool:
+    def _can_adopt_stack(self, stack_name: str, _stack_info: dict) -> bool:
         """Check if a CloudFormation stack can be adopted by CDK.
 
         Args:
@@ -352,7 +352,7 @@ class IncrementalDeploymentOrchestrator:
         adoptable_stacks = ["eidolon-dynamodb", "eidolon-cloudwatch"]
         return stack_name in adoptable_stacks
 
-    def analyze_changes(self, params: dict[str, any]) -> dict[str, any]:
+    def analyze_changes(self, params: dict) -> dict:
         """Analyze what changes need to be deployed.
 
         Args:
@@ -414,7 +414,7 @@ class IncrementalDeploymentOrchestrator:
 
         return plan
 
-    def execute_deployment(self, plan: dict[str, any], auto_approve: bool = False) -> bool:
+    def execute_deployment(self, plan: dict, auto_approve: bool = False) -> bool:
         """Execute the deployment plan.
 
         Args:
@@ -498,7 +498,7 @@ class IncrementalDeploymentOrchestrator:
             print(f"\n✗ Deployment failed: {err}")
             return False
 
-    def update_configuration(self, params: dict[str, any]) -> None:
+    def update_configuration(self, params: dict) -> None:
         """Update server configuration file with deployment outputs.
 
         Args:
@@ -515,6 +515,7 @@ class IncrementalDeploymentOrchestrator:
             f"{game_name}-s3",
             f"{game_name}-cloudfront",
             f"{game_name}-codebuild",
+            f"{game_name}-iam",
         ]
 
         for stack_name in stacks_to_query:
@@ -530,7 +531,6 @@ class IncrementalDeploymentOrchestrator:
                         {
                             "UserPoolId": outputs.get("UserPoolId", ""),
                             "UserPoolClientId": outputs.get("AppClientId", ""),
-                            "AuthenticatedRoleArn": outputs.get("AuthenticatedRoleArn", ""),
                         },
                     )
                 elif "dynamodb" in stack_name:
@@ -560,9 +560,15 @@ class IncrementalDeploymentOrchestrator:
                     self.config_manager.update_section(
                         "Game",
                         {
-                            "PortalS3Bucket": outputs.get("PortalBucketName", ""),
                             "ScriptsS3Bucket": outputs.get("ScriptsBucketName", ""),
                             "ScriptsS3Prefix": "scripts",
+                        },
+                    )
+                    # Update CodeBuild with portal bucket
+                    self.config_manager.update_section(
+                        "CodeBuild",
+                        {
+                            "PortalS3Bucket": outputs.get("PortalBucketName", ""),
                         },
                     )
                 elif "cloudfront" in stack_name:
@@ -575,16 +581,21 @@ class IncrementalDeploymentOrchestrator:
                             "portal_url": outputs.get("PortalUrl", ""),
                         },
                     )
-                    # Also update Game section with portal URL
-                    self.config_manager.update_section(
-                        "Game",
-                        {
-                            "PortalUrl": outputs.get("PortalUrl", ""),
-                        },
-                    )
                 elif "codebuild" in stack_name:
                     # Update CodeBuild configuration
-                    self.config_manager.update_section("CodeBuild", {"ProjectName": outputs.get("CodeBuildProjectName", "")})
+                    codebuild_config = {"ProjectName": outputs.get("CodeBuildProjectName", "")}
+                    # Add buildspec path if it was provided
+                    if "portal_buildspec_path" in params:
+                        codebuild_config["PortalBuildspecPath"] = params["portal_buildspec_path"]
+                    self.config_manager.update_section("CodeBuild", codebuild_config)
+                elif "iam" in stack_name:
+                    # Update AWS configuration with server execution role
+                    self.config_manager.update_section(
+                        "AWS",
+                        {
+                            "ServerExecutionRoleArn": outputs.get("ServerExecutionRoleArn", ""),
+                        },
+                    )
 
             except Exception as err:
                 print(f"Warning: Could not get outputs for {stack_name}: {err}")
@@ -596,7 +607,7 @@ class IncrementalDeploymentOrchestrator:
         self.config_manager.save_config()
         print(f"✓ Configuration saved to {self.config_manager.config_path}")
 
-    def deploy_scripts(self, params: dict[str, any]) -> bool:
+    def deploy_scripts(self, params: dict) -> bool:
         """Deploy Lua scripts to S3.
 
         Args:

@@ -617,7 +617,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 			return &CommandResponse{
 				RequestID: cmd.ID,
 				Success:   false,
-				Message:   fmt.Sprintf("\n\rYou don't see anyone here by that name.\n\r"),
+				Message:   "\n\rYou don't see anyone here by that name.\n\r",
 				Timestamp: time.Now(),
 			}
 		}
@@ -690,11 +690,14 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		}
 		r.AddCharacterToMove(character)
 
-		rangeName := "close combat"
-		if targetRange == combatRangeMelee {
+		var rangeName string
+		switch targetRange {
+		case combatRangeMelee:
 			rangeName = "melee range"
-		} else if targetRange == combatRangePole {
+		case combatRangePole:
 			rangeName = "pole range"
+		default:
+			rangeName = "close combat"
 		}
 
 		character.mutex.Unlock()

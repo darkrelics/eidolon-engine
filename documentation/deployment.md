@@ -27,7 +27,7 @@ The system will:
 
 1. Prompt for required parameters (game name, email, GitHub details)
 2. Create all necessary AWS resources
-3. Save configuration to `server/config.yml`
+3. Save configuration to `config.yml`
 4. Deploy Lua scripts to S3
 
 ### 2. Existing Infrastructure Deployment
@@ -91,7 +91,7 @@ During first deployment, you'll be prompted for:
 
 ### Configuration File
 
-The system creates and maintains `server/config.yml`:
+The system creates and maintains `config.yml`:
 
 ```yaml
 Game:
@@ -443,7 +443,7 @@ Deployment state is tracked in:
 
 - `.deployment_state.json` - Local state file
 - CloudFormation stack outputs - Resource identifiers
-- `server/config.yml` - Runtime configuration
+- `config.yml` - Runtime configuration
 
 ## Legacy Systems
 
