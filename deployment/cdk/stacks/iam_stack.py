@@ -28,15 +28,12 @@ class IAMStack(Stack):
             statements=[
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
-                    principals=[
-                        iam.ServicePrincipal("ec2.amazonaws.com"),
-                        iam.ServicePrincipal("ecs-tasks.amazonaws.com")
-                    ],
-                    actions=["sts:AssumeRole"]
+                    principals=[iam.ServicePrincipal("ec2.amazonaws.com"), iam.ServicePrincipal("ecs-tasks.amazonaws.com")],
+                    actions=["sts:AssumeRole"],
                 )
             ]
         )
-        
+
         # Create execution role with the trust policy
         self.execution_role = iam.Role(
             self,
