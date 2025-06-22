@@ -26,7 +26,7 @@ class IAMStack(Stack):
         # Create principals for EC2 and Fargate
         ec2_principal = iam.ServicePrincipal("ec2.amazonaws.com")
         ecs_principal = iam.ServicePrincipal("ecs-tasks.amazonaws.com")
-        
+
         # Create execution role with trust policy for EC2 and Fargate
         self.execution_role = iam.Role(
             self,
