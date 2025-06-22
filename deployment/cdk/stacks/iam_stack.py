@@ -23,15 +23,16 @@ class IAMStack(Stack):
         """
         super().__init__(scope, construct_id, **kwargs)
 
+        # Create principals for EC2 and Fargate
+        ec2_principal = iam.ServicePrincipal("ec2.amazonaws.com")
+        ecs_principal = iam.ServicePrincipal("ecs-tasks.amazonaws.com")
+        
         # Create execution role with trust policy for EC2 and Fargate
         self.execution_role = iam.Role(
             self,
             "server-execution-role",
             role_name=f"{game_name}-server-execution-role",
-            assumed_by=iam.CompositePrincipal(
-                iam.ServicePrincipal("ec2.amazonaws.com"),
-                iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-            ),
+            assumed_by=iam.CompositePrincipal(ec2_principal, ecs_principal),
             description="Execution role for Eidolon Engine server on EC2 or Fargate",
         )
 
@@ -62,6 +63,6 @@ class IAMStack(Stack):
         CfnOutput(
             self,
             "ServerInstanceProfileName",
-            value=self.instance_profile.instance_profile_name,
+            value=self.instance_profile.instance_profile_name or f"{game_name}-server-instance-profile",
             description="Name of the EC2 instance profile",
         )
