@@ -30,8 +30,8 @@ class RegistrationScreen extends StatefulWidget {
 }
 
 class _RegistrationScreenState extends State<RegistrationScreen> {
-  static final _formKey = GlobalKey<FormState>();
-  static final _verificationFormKey = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
+  final _verificationFormKey = GlobalKey<FormState>();
   final _emailFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
   final _verificationFocusNode = FocusNode();
