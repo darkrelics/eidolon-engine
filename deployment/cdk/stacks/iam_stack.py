@@ -25,8 +25,8 @@ class IAMStack(Stack):
 
         # Create composite principal for both EC2 and ECS
         composite_principal = iam.CompositePrincipal(
-            iam.ServicePrincipal("ec2.amazonaws.com"),
-            iam.ServicePrincipal("ecs-tasks.amazonaws.com")
+            iam.ServicePrincipal("ec2.amazonaws.com"),  # type: ignore
+            iam.ServicePrincipal("ecs-tasks.amazonaws.com")  # type: ignore
         )
         
         # Create execution role with the composite principal
@@ -34,7 +34,7 @@ class IAMStack(Stack):
             self,
             "server-execution-role",
             role_name=f"{game_name}-server-execution-role",
-            assumed_by=composite_principal,
+            assumed_by=composite_principal,  # type: ignore
             description="Execution role for Eidolon Engine server on EC2 or Fargate",
         )
 
