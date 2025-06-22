@@ -71,6 +71,7 @@ class EidolonEngineApp:
         self.cloudwatch_stack = CloudWatchStack(
             self.app,
             "cloudwatch",
+            dynamodb_policy_arn=self.dynamodb_stack.access_policy.managed_policy_arn,
             retention_days=params.get("log_retention_days", 365),
             env=env,
         )
