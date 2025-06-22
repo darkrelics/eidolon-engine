@@ -31,7 +31,7 @@ class IAMStack(Stack):
             assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
             description="Execution role for Eidolon Engine server on EC2 or Fargate",
         )
-        
+
         # Also allow ECS tasks to assume this role
         self.execution_role.assume_role_policy.add_statements(
             iam.PolicyStatement(
