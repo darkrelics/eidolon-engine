@@ -23,17 +23,21 @@ class IAMStack(Stack):
         """
         super().__init__(scope, construct_id, **kwargs)
 
-        # Create principals for EC2 and Fargate
-        ec2_principal = iam.ServicePrincipal("ec2.amazonaws.com")
-        ecs_principal = iam.ServicePrincipal("ecs-tasks.amazonaws.com")
-
-        # Create execution role with trust policy for EC2 and Fargate
+        # Create execution role with trust policy for EC2
         self.execution_role = iam.Role(
             self,
             "server-execution-role",
             role_name=f"{game_name}-server-execution-role",
-            assumed_by=iam.CompositePrincipal(ec2_principal, ecs_principal),
+            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
             description="Execution role for Eidolon Engine server on EC2 or Fargate",
+        )
+
+        # Also allow ECS tasks to assume this role
+        self.execution_role.assume_role_policy.add_statements(
+            iam.PolicyStatement(
+                actions=["sts:AssumeRole"],
+                principals=[iam.ServicePrincipal("ecs-tasks.amazonaws.com")],
+            )
         )
 
         # Attach the CloudWatch managed policy
