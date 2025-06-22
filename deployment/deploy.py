@@ -52,17 +52,6 @@ class IncrementalDeploymentOrchestrator:
         """
         print("Checking prerequisites...")
 
-        # Check if CDK is installed
-        try:
-            result = subprocess.run(["cdk", "--version"], capture_output=True, text=True)
-            if result.returncode != 0:
-                print("ERROR: AWS CDK is not installed. Please install it with: npm install -g aws-cdk")
-                return False
-            print(f"✓ AWS CDK version: {result.stdout.strip()}")
-        except FileNotFoundError:
-            print("ERROR: AWS CDK is not installed. Please install it with: npm install -g aws-cdk")
-            return False
-
         # Check AWS credentials
         try:
             sts = self.session.client("sts")
@@ -293,7 +282,7 @@ class IncrementalDeploymentOrchestrator:
 
         return all_results
 
-    def map_cloudformation_to_cdk(self, existing_stacks: dict, params: dict) -> dict:
+    def map_cloudformation_to_cdk(self, existing_stacks: dict, _params: dict) -> dict:
         """Map existing CloudFormation stacks to CDK stacks.
 
         Args:
@@ -348,7 +337,7 @@ class IncrementalDeploymentOrchestrator:
 
         return mapping
 
-    def _can_adopt_stack(self, stack_name: str, stack_info: dict) -> bool:
+    def _can_adopt_stack(self, stack_name: str, _stack_info: dict) -> bool:
         """Check if a CloudFormation stack can be adopted by CDK.
 
         Args:
