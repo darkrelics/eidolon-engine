@@ -56,7 +56,11 @@ class _LoginScreenState extends State<LoginScreen> {
               // If authenticated, navigate to appropriate route
               if (authState.isAuthenticated) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _handleNavigation(context, widget.redirectRoute, widget.redirectArgs);
+                  _handleNavigation(
+                    context,
+                    widget.redirectRoute,
+                    widget.redirectArgs,
+                  );
                 });
                 return const Center(child: CircularProgressIndicator());
               }
@@ -142,11 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (FormStateUtil.validateForm(_formKey)) {
       await authState.signIn();
       if (authState.isAuthenticated && mounted) {
-        _handleNavigation(
-          context,
-          widget.redirectRoute,
-          widget.redirectArgs,
-        );
+        _handleNavigation(context, widget.redirectRoute, widget.redirectArgs);
       }
     }
   }
