@@ -56,8 +56,8 @@ class IncrementalDeploymentOrchestrator:
         try:
             sts = self.session.client("sts")
             identity = sts.get_caller_identity()
-            print(f"✓ AWS Account: {identity.get('Account', 'Unknown')}")
-            print(f"✓ AWS Region: {self.region}")
+            print(f"AWS Account: {identity.get('Account', 'Unknown')}")
+            print(f"AWS Region: {self.region}")
         except Exception as err:
             print(f"ERROR: Unable to access AWS: {err}")
             return False
