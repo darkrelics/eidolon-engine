@@ -47,7 +47,7 @@ class EidolonEngineApp:
             # Load from template if no config exists
             template_path = Path(__file__).parent.parent / "config.yml.template"
             if template_path.exists():
-                with open(template_path, "r") as f:
+                with open(template_path, "r", encoding="utf-8") as f:
                     return yaml.safe_load(f) or {}
             return {}
 
