@@ -22,11 +22,27 @@ import '../widgets/ui_components.dart';
 import '../utils/input_sanitizer.dart';
 import '../utils/form_state_provider.dart';
 
-class RegistrationScreen extends StatelessWidget {
+class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
 
+  @override
+  State<RegistrationScreen> createState() => _RegistrationScreenState();
+}
+
+class _RegistrationScreenState extends State<RegistrationScreen> {
   static final _formKey = GlobalKey<FormState>();
   static final _verificationFormKey = GlobalKey<FormState>();
+  final _emailFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+  final _verificationFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    _verificationFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +92,8 @@ class RegistrationScreen extends StatelessWidget {
                           autofillHints: const [AutofillHints.email],
                           validator: FieldValidators.email,
                           inputFormatters: [InputSanitizer.noXSSChars()],
+                          focusNode: _emailFocusNode,
+                          onSubmitted: (_) => _passwordFocusNode.requestFocus(),
                         ),
                         const SizedBox(height: 16),
                         AppTextField(
@@ -94,15 +112,13 @@ class RegistrationScreen extends StatelessWidget {
                                 checkComplexity: true,
                               ),
                           inputFormatters: [InputSanitizer.noXSSChars()],
+                          focusNode: _passwordFocusNode,
+                          onSubmitted: (_) => _handleCreateAccount(authState),
                         ),
                         const SizedBox(height: 32),
                         LoadingButton(
                           isLoading: authState.isLoading,
-                          onPressed: () async {
-                            if (FormStateUtil.validateForm(_formKey)) {
-                              await authState.signUp();
-                            }
-                          },
+                          onPressed: () => _handleCreateAccount(authState),
                           text: 'CREATE ACCOUNT',
                         ),
                         const SizedBox(height: 16),
@@ -144,32 +160,13 @@ class RegistrationScreen extends StatelessWidget {
                           hintText: 'Enter verification code',
                           validator: FieldValidators.verificationCode,
                           inputFormatters: [InputSanitizer.noXSSChars()],
+                          focusNode: _verificationFocusNode,
+                          onSubmitted: (_) => _handleVerification(authState),
                         ),
                         const SizedBox(height: 32),
                         LoadingButton(
                           isLoading: authState.isLoading,
-                          onPressed: () async {
-                            if (FormStateUtil.validateForm(
-                              _verificationFormKey,
-                            )) {
-                              await authState.confirmRegistration();
-
-                              // Check if user was verified and automatically logged in
-                              if (authState.isAuthenticated &&
-                                  context.mounted) {
-                                Navigator.of(
-                                  context,
-                                ).pushReplacementNamed('/character-management');
-                              }
-                              // If verification completed but not logged in, go to login screen
-                              else if (!authState.isVerificationMode &&
-                                  context.mounted) {
-                                Navigator.of(
-                                  context,
-                                ).pushReplacementNamed('/login');
-                              }
-                            }
-                          },
+                          onPressed: () => _handleVerification(authState),
                           text: 'VERIFY',
                         ),
                       ],
@@ -193,5 +190,26 @@ class RegistrationScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _handleCreateAccount(AuthState authState) async {
+    if (FormStateUtil.validateForm(_formKey)) {
+      await authState.signUp();
+    }
+  }
+
+  void _handleVerification(AuthState authState) async {
+    if (FormStateUtil.validateForm(_verificationFormKey)) {
+      await authState.confirmRegistration();
+
+      // Check if user was verified and automatically logged in
+      if (authState.isAuthenticated && mounted) {
+        Navigator.of(context).pushReplacementNamed('/character-management');
+      }
+      // If verification completed but not logged in, go to login screen
+      else if (!authState.isVerificationMode && mounted) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      }
+    }
   }
 }
