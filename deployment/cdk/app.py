@@ -4,10 +4,10 @@ This application defines all AWS resources needed for the Eidolon Engine
 game server using AWS CDK for infrastructure as code.
 """
 
-import os
 import json
-from pathlib import Path
+import os
 from datetime import datetime
+from pathlib import Path
 
 import aws_cdk as cdk
 import yaml
