@@ -9,7 +9,6 @@ from pathlib import Path
 
 import aws_cdk as cdk
 import yaml
-
 from stacks.cloudfront_stack import CloudFrontStack
 from stacks.cloudwatch_stack import CloudWatchStack
 from stacks.codebuild_stack import CodeBuildStack
