@@ -14,13 +14,13 @@ import yaml
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cdk.stacks.cloudfront_stack import CloudFrontStack
-from cdk.stacks.cloudwatch_stack import CloudWatchStack
-from cdk.stacks.codebuild_stack import CodeBuildStack
-from cdk.stacks.cognito_stack import CognitoStack
-from cdk.stacks.dynamodb_stack import DynamoDBStack
-from cdk.stacks.iam_stack import IAMStack
-from cdk.stacks.s3_stack import S3Stack
+from stacks.cloudfront_stack import CloudFrontStack
+from stacks.cloudwatch_stack import CloudWatchStack
+from stacks.codebuild_stack import CodeBuildStack
+from stacks.cognito_stack import CognitoStack
+from stacks.dynamodb_stack import DynamoDBStack
+from stacks.iam_stack import IAMStack
+from stacks.s3_stack import S3Stack
 from state_manager import ConfigurationManager, DeploymentState
 
 
