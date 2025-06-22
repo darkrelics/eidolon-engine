@@ -8,7 +8,7 @@ from constructs import Construct
 class CognitoStack(Stack):
     """Cognito stack for Eidolon Engine user authentication."""
 
-    def __init__(self, scope: Construct, construct_id: str, game_name: str, contact_email: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, contact_email: str, **kwargs) -> None:
         """Initialize Cognito stack.
 
         Args:

@@ -71,7 +71,6 @@ class EidolonEngineApp:
         self.cloudwatch_stack = CloudWatchStack(
             self.app,
             "cloudwatch",
-            game_name=params["game_name"],
             retention_days=params.get("log_retention_days", 365),
             env=env,
         )
