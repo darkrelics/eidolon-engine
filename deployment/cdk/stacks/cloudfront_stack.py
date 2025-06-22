@@ -16,7 +16,6 @@ class CloudFrontStack(Stack):
         self,
         scope: Construct,
         construct_id: str,
-        game_name: str,
         portal_bucket: s3.IBucket,
         existing_distribution_id: str | None = None,
         **kwargs,
