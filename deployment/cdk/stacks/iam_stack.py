@@ -25,10 +25,9 @@ class IAMStack(Stack):
 
         # Create composite principal for both EC2 and ECS
         composite_principal = iam.CompositePrincipal(
-            iam.ServicePrincipal("ec2.amazonaws.com"),
-            iam.ServicePrincipal("ecs-tasks.amazonaws.com")
+            iam.ServicePrincipal("ec2.amazonaws.com"), iam.ServicePrincipal("ecs-tasks.amazonaws.com")
         )
-        
+
         # Create execution role with the composite principal
         self.execution_role = iam.Role(
             self,
