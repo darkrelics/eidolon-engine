@@ -26,7 +26,7 @@ class DeploymentState:
     def _load_state(self) -> dict:
         """Load state from file or create new state."""
         if self.state_file.exists():
-            with open(self.state_file, "r") as f:
+            with open(self.state_file, "r", encoding='utf-8') as f:
                 return json.load(f)
         return {
             "version": "1.0",
@@ -40,7 +40,7 @@ class DeploymentState:
     def save_state(self) -> None:
         """Persist current state to file."""
         self.state["last_deployment"] = datetime.now().isoformat()
-        with open(self.state_file, "w") as f:
+        with open(self.state_file, "w", encoding='utf-8') as f:
             json.dump(self.state, f, indent=2, default=str)
 
     def add_stack(self, stack_name: str, stack_info: dict) -> None:
@@ -156,14 +156,14 @@ class ConfigurationManager:
     def _load_config(self) -> dict:
         """Load configuration from file."""
         if self.config_path.exists():
-            with open(self.config_path, "r") as f:
+            with open(self.config_path, "r", encoding='utf-8') as f:
                 return yaml.safe_load(f) or {}
         return {}
 
     def save_config(self) -> None:
         """Save configuration to file."""
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.config_path, "w") as f:
+        with open(self.config_path, "w", encoding='utf-8') as f:
             yaml.dump(self.config, f, default_flow_style=False, sort_keys=False)
 
     def update_section(self, section: str, values: dict) -> None:
@@ -203,7 +203,7 @@ class ConfigurationManager:
             template_path: Path to configuration template
         """
         if Path(template_path).exists():
-            with open(template_path, "r") as f:
+            with open(template_path, "r", encoding='utf-8') as f:
                 template = yaml.safe_load(f) or {}
 
             # Deep merge template with existing config

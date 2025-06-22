@@ -5,14 +5,10 @@ game server using AWS CDK for infrastructure as code.
 """
 
 import os
-import sys
 from pathlib import Path
 
 import aws_cdk as cdk
 import yaml
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from stacks.cloudfront_stack import CloudFrontStack
 from stacks.cloudwatch_stack import CloudWatchStack
