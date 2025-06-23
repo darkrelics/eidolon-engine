@@ -54,6 +54,11 @@ const (
 
 // processRoomCommand handles commands at the room level
 func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandResponse {
+	Logger.Info("ProcessRoomCommand START", "roomID", r.roomID, "verb", cmd.Verb)
+	defer func() {
+		Logger.Info("ProcessRoomCommand END", "roomID", r.roomID, "verb", cmd.Verb)
+	}()
+	
 	if cmd == nil {
 		Logger.Error("Received nil command in room", "roomID", r.roomID)
 		return &CommandResponse{
@@ -89,44 +94,55 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 			response.Success = true
 			return response
 		}
+		// Script didn't handle command, continue to room command processing
+		Logger.Info("Script didn't handle command, continuing to room processing", "roomID", r.roomID, "command", cmd.Verb)
 	} else {
 		Logger.Info("Script conditions not met for command", "roomID", r.roomID, "command", cmd.Verb)
 	}
 
 	// Try to handle common room commands
 	verb := strings.ToLower(cmd.Verb)
+	Logger.Info("Checking room command handlers", "roomID", r.roomID, "verb", verb)
 
 	// Movement commands
 	if verb == "go" || verb == "move" {
+		Logger.Info("Handling movement command", "roomID", r.roomID, "verb", verb)
 		return handleMovementCommand(cmd, game)
 	}
 
 	// Item commands
 	if verb == "get" || verb == "take" || verb == "drop" || verb == "put" || verb == "wear" || verb == "equip" || verb == "remove" || verb == "switch" {
+		Logger.Info("Handling item command", "roomID", r.roomID, "verb", verb)
 		return handleItemCommand(cmd)
 	}
 
 	// Communication commands
 	if verb == "say" || verb == "\"" || verb == "'" {
+		Logger.Info("Handling say command", "roomID", r.roomID, "verb", verb)
 		return handleSayCommand(cmd)
 	}
 
 	// Stealth commands
 	if verb == "hide" {
+		Logger.Info("Handling hide command", "roomID", r.roomID, "verb", verb)
 		return handleHideCommand(cmd, r)
 	}
 	if verb == "sneak" {
+		Logger.Info("Handling sneak command", "roomID", r.roomID, "verb", verb)
 		return handleSneakCommand(cmd, game)
 	}
 	if verb == "search" {
+		Logger.Info("Handling search command", "roomID", r.roomID, "verb", verb)
 		return handleSearchCommand(cmd, r)
 	}
 	if verb == "point" {
+		Logger.Info("Handling point command", "roomID", r.roomID, "verb", verb)
 		return handlePointCommand(cmd, r)
 	}
 
 	// Look command (room-level effects)
 	if verb == "look" || verb == "l" {
+		Logger.Info("Handling look command", "roomID", r.roomID, "verb", verb)
 		// This is typically handled at the character level, but might have room-level effects
 		response.Success = true
 		return response
@@ -134,18 +150,23 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 
 	// Combat commands
 	if verb == "face" {
+		Logger.Info("Handling face command", "roomID", r.roomID, "verb", verb)
 		return handleFaceCommand(cmd, r)
 	}
 	if verb == "advance" {
+		Logger.Info("Handling advance command", "roomID", r.roomID, "verb", verb)
 		return handleAdvanceCommand(cmd, r)
 	}
 	if verb == "retreat" {
+		Logger.Info("Handling retreat command", "roomID", r.roomID, "verb", verb)
 		return handleRetreatCommand(cmd, r)
 	}
 	if verb == "assess" {
+		Logger.Info("Handling assess command", "roomID", r.roomID, "verb", verb)
 		return handleAssessCommand(cmd)
 	}
 	if verb == "flee" {
+		Logger.Info("Handling flee command", "roomID", r.roomID, "verb", verb)
 		return handleFleeCommand(cmd, r)
 	}
 
@@ -365,6 +386,7 @@ func handleFaceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 
 // handleAssessCommand shows the room's current combat situation
 func handleAssessCommand(cmd *CommandRequest) *CommandResponse {
+	Logger.Info("handleAssessCommand called", "character", cmd.Character.name)
 	character := cmd.Character
 	if character == nil || character.room == nil {
 		return &CommandResponse{
@@ -640,6 +662,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		SendRoomMessage(r, fmt.Sprintf("\n\r%s advances on %s.\n\r", character.name, targetName), character, target)
 
 		character.mutex.Lock()
+		// Note: mutex was unlocked above and re-locked here for the rest of the function
 	} else {
 		// No target specified - check if already facing someone or in combat
 		if character.facing == nil {

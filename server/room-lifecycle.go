@@ -235,14 +235,16 @@ func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 	Logger.Debug("Room processCommand: Processing command", "roomID", r.roomID, "verb", cmd.Verb, "character", cmd.Character.name)
 
 	// Process the command using the room command handler
+	Logger.Info("Room processCommand: About to call ProcessRoomCommand", "roomID", r.roomID, "verb", cmd.Verb)
 	response := r.ProcessRoomCommand(cmd, game)
 
-	Logger.Debug("Room processCommand: Got response", "roomID", r.roomID, "verb", cmd.Verb, "success", response.Success, "hasError", response.Error != nil)
+	Logger.Info("Room processCommand: Got response from ProcessRoomCommand", "roomID", r.roomID, "verb", cmd.Verb, "success", response != nil && response.Success, "hasError", response != nil && response.Error != nil)
 
 	// Send response back to character
+	Logger.Info("Room processCommand: About to send response", "roomID", r.roomID, "verb", cmd.Verb)
 	select {
 	case cmd.Response <- response:
-		Logger.Debug("Room processCommand: Response sent", "roomID", r.roomID, "verb", cmd.Verb)
+		Logger.Info("Room processCommand: Response sent successfully", "roomID", r.roomID, "verb", cmd.Verb)
 	default:
 		Logger.Error("Room processCommand: Failed to send response - channel full or closed", "roomID", r.roomID, "verb", cmd.Verb)
 	}
