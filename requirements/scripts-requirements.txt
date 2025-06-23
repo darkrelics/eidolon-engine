@@ -1,6 +1,6 @@
 #Required
 PyYAML==6.0.2
-boto3==1.38.36
+boto3==1.38.41
 aws-cdk-lib==2.201.0
 constructs==10.4.2
 
