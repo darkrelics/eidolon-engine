@@ -314,7 +314,21 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 		return false, nil // Script should have been loaded during room startup
 	}
 
+	// Ensure we have a valid Lua state
+	if L == nil {
+		Logger.Error("GetRoomScript returned nil Lua state", "roomID", room.roomID, "scriptID", room.scriptID)
+		return false, nil
+	}
+
 	Logger.Info("Script retrieved successfully", "scriptID", room.scriptID, "luaState", L != nil)
+
+	// Ensure Lua stack is cleaned up properly on exit
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic in ExecuteRoomCommand", "error", r, "roomID", room.roomID, "verb", verb)
+			L.SetTop(0) // Clean the stack
+		}
+	}()
 
 	// Build function name from command verb (e.g., "pull" -> "onCommandPull")
 	caser := cases.Title(language.English)
@@ -322,10 +336,12 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 
 	Logger.Info("Looking for function in script", "scriptID", room.scriptID, "functionName", functionName)
 
-	// Check if handler exists
+	// Check if handler exists - this should be fast and non-blocking
 	handler := L.GetGlobal(functionName)
 	if handler == lua.LNil {
 		Logger.Info("No handler found for command in script", "scriptID", room.scriptID, "functionName", functionName)
+		// Clean up the stack before returning
+		L.SetTop(0)
 		return false, nil // No handler for this command
 	}
 
@@ -350,12 +366,18 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 	}, charTable, argsTable)
 
 	if err != nil {
+		Logger.Error("Error executing command handler", "functionName", functionName, "error", err)
+		// Ensure stack is clean after error
+		L.SetTop(0)
 		return false, fmt.Errorf("error executing command handler %s: %w", functionName, err)
 	}
 
 	// Check if command was handled (function should return true/false)
 	ret := L.Get(-1) // Get the return value
 	L.Pop(1)         // Remove it from stack
+
+	// Ensure stack is clean
+	L.SetTop(0)
 
 	if handled, ok := ret.(lua.LBool); ok {
 		return bool(handled), nil

@@ -162,8 +162,10 @@ func (r *Room) runInternal(game *Game) {
 				return
 			}
 
+			Logger.Debug("Room received command from channel", "roomID", r.roomID, "verb", cmd.Verb)
 			// Process the command
 			r.processCommand(cmd, game)
+			Logger.Debug("Room finished processing command", "roomID", r.roomID, "verb", cmd.Verb)
 
 		case <-ticker.C:
 			// Execute periodic script tick if room has an active script
@@ -206,6 +208,25 @@ func (r *Room) runInternal(game *Game) {
 
 // processCommand handles a command request within the room context
 func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
+	// Add panic recovery to prevent room goroutine from dying
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			Logger.Error("Panic in processCommand", "error", recovered, "roomID", r.roomID, "verb", cmd.Verb)
+			// Send error response to prevent timeout
+			if cmd != nil && cmd.Response != nil {
+				select {
+				case cmd.Response <- &CommandResponse{
+					RequestID: cmd.ID,
+					Success:   false,
+					Error:     fmt.Errorf("internal error processing command"),
+					Timestamp: time.Now(),
+				}:
+				default:
+				}
+			}
+		}
+	}()
+
 	if cmd == nil {
 		Logger.Error("Received nil command in room", "roomID", r.roomID)
 		return
