@@ -62,7 +62,8 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		config.WithRetryMaxAttempts(3),
 	)
 	if err != nil {
-		Logger.Info("Error loading AWS config", "error", err)
+		// Can't use Logger here as it's not initialized yet
+		fmt.Printf("Error loading AWS config: %v\n", err)
 		cancel()
 		return nil, fmt.Errorf("error loading AWS config: %w", err)
 	}
@@ -74,7 +75,8 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		Limit: aws.Int32(1),
 	})
 	if err != nil {
-		Logger.Info("Failed to verify AWS credentials", "error", err)
+		// Can't use Logger here as it's not initialized yet
+		fmt.Printf("Failed to verify AWS credentials: %v\n", err)
 		cancel()
 		return nil, fmt.Errorf("insufficient AWS credentials or permissions: %w", err)
 	}
