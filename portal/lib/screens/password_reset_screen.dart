@@ -114,6 +114,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                   autofillHints: const [AutofillHints.email],
                   validator: FieldValidators.email,
                   inputFormatters: [InputSanitizer.noXSSChars()],
+                  onSubmitted: (_) => _requestPasswordReset(),
                 ),
                 const SizedBox(height: 32),
                 LoadingButton(
