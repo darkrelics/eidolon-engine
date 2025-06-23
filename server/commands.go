@@ -109,7 +109,7 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	}
 
 	// Ensure room is running
-	if !character.room.running {
+	if !character.room.IsRunning() {
 		character.room.Start(character.game)
 	}
 

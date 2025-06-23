@@ -162,6 +162,14 @@ func (r *Room) GetScriptID() string {
 	return r.scriptID
 }
 
+// IsRunning returns whether the room goroutine is running
+func (r *Room) IsRunning() bool {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	return r.running
+}
+
 // SendRoomMessage sends a message to all characters in a room except one
 func SendRoomMessage(room *Room, message string, except ...*Character) {
 	if room == nil {
@@ -201,10 +209,17 @@ func (r *Room) WaitReady() {
 		r.mutex.RUnlock()
 		return
 	}
+	roomID := r.roomID
 	r.mutex.RUnlock()
 
-	// Wait for ready signal
-	<-r.ready
+	Logger.Debug("Waiting for room to be ready", "roomID", roomID)
+	// Wait for ready signal with timeout
+	select {
+	case <-r.ready:
+		Logger.Debug("Room is ready", "roomID", roomID)
+	case <-time.After(10 * time.Second):
+		Logger.Error("Room failed to become ready in time", "roomID", roomID)
+	}
 }
 
 // GetDescription returns a formatted string description of the room

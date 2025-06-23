@@ -95,7 +95,7 @@ func (r *Room) run(game *Game) {
 
 // runInternal contains the actual room processing logic
 func (r *Room) runInternal(game *Game) {
-	Logger.Debug("Room goroutine started", "roomID", r.roomID, "title", r.title)
+	Logger.Info("Room goroutine started", "roomID", r.roomID, "title", r.title, "persistent", r.persistent)
 
 	// Signal completion when this function returns - do this at the very end instead of defer
 	defer func() {
@@ -144,6 +144,7 @@ func (r *Room) runInternal(game *Game) {
 	defer ticker.Stop()
 
 	// Room processing loop
+	Logger.Info("Room entering main processing loop", "roomID", r.roomID)
 	for {
 		select {
 		case <-r.ctx.Done():
@@ -156,9 +157,11 @@ func (r *Room) runInternal(game *Game) {
 			if !ok {
 				return
 			}
+			Logger.Debug("Room received command", "roomID", r.roomID, "verb", cmd.Verb, "character", cmd.Character.name)
 			r.processCommand(cmd, game)
 
 		case <-ticker.C:
+			Logger.Debug("Room ticker processing", "roomID", r.roomID)
 			// Execute periodic script tick if room has an active script
 			if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
 				// Check if script has periodic events
@@ -203,6 +206,7 @@ func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
 		return
 	}
 
+	Logger.Debug("Room processing command", "roomID", r.roomID, "verb", cmd.Verb, "character", cmd.Character.name)
 	// Process the command using the room command handler
 	response := r.ProcessRoomCommand(cmd, game)
 
