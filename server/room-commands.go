@@ -628,7 +628,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		character.mutex.RLock()
 		currentFacing := character.facing
 		character.mutex.RUnlock()
-		
+
 		if currentFacing == nil {
 			// Check if character is in combat ranges
 			r.mutex.RLock()
@@ -675,7 +675,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	character.mutex.RLock()
 	facingTarget := character.facing
 	character.mutex.RUnlock()
-	
+
 	if facingTarget != nil {
 		// Set combat movement - only lock for the actual update
 		character.mutex.Lock()
@@ -685,7 +685,7 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 			targetRange: targetRange,
 		}
 		character.mutex.Unlock()
-		
+
 		// Add to movement list
 		r.AddCharacterToMove(character)
 
@@ -781,7 +781,7 @@ func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		targetRange: targetRange,
 	}
 	character.mutex.Unlock()
-	
+
 	// Add to movement list
 	r.AddCharacterToMove(character)
 
@@ -857,7 +857,7 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		}
 		oldFacing.mutex.Unlock()
 	}
-	
+
 	// Update room lists
 	r.AddCharacterToFlee(character)
 	if hadCombatMovement {

@@ -520,7 +520,7 @@ func (r *Room) processCombatMovements() {
 		movementMode := movement.mode
 		targetID := movement.targetID
 		targetRange := movement.targetRange
-		
+
 		// Calculate movement speed based on agility
 		agility := char.attributes["agility"]
 		if agility < 0 {
@@ -578,7 +578,7 @@ func (r *Room) processCombatMovements() {
 					char.mutex.Lock()
 					char.combatMovement = nil
 					char.mutex.Unlock()
-					
+
 					var rangeName string
 					switch targetRange {
 					case combatRangeMelee:
@@ -668,7 +668,7 @@ func (r *Room) processFlee() {
 		if char == nil {
 			continue
 		}
-		
+
 		// Get flee state and character data
 		char.mutex.RLock()
 		fleeState := char.fleeTarget
@@ -677,7 +677,7 @@ func (r *Room) processFlee() {
 			r.RemoveCharacterToFlee(char)
 			continue
 		}
-		
+
 		// Extract needed data
 		startTime := fleeState.startTime
 		hasDirection := fleeState.hasDirection
@@ -773,11 +773,11 @@ func (r *Room) processFlee() {
 // handleFleeTimeout handles when a flee attempt times out
 func (r *Room) handleFleeTimeout(char *Character, fleeState *FleeState) {
 	exitDirection := fleeState.exitDirection
-	
+
 	char.mutex.Lock()
 	char.fleeTarget = nil
 	char.mutex.Unlock()
-	
+
 	r.RemoveCharacterToFlee(char)
 
 	// Remove from combat
@@ -815,11 +815,11 @@ func (r *Room) handleFleeTimeout(char *Character, fleeState *FleeState) {
 // completeFlee completes a successful flee attempt
 func (r *Room) completeFlee(char *Character, fleeState *FleeState) {
 	exitDirection := fleeState.exitDirection
-	
+
 	char.mutex.Lock()
 	char.fleeTarget = nil
 	char.mutex.Unlock()
-	
+
 	r.RemoveCharacterToFlee(char)
 
 	if exitDirection != "" {
