@@ -144,28 +144,15 @@ func (r *Room) runInternal(game *Game) {
 		select {
 		case <-r.ctx.Done():
 			// Context was canceled, shut down the room
-			Logger.Info("Room context canceled, shutting down", "roomID", r.roomID)
+			Logger.Info("Room shutting down", "roomID", r.roomID)
 			return
 
 		case cmd, ok := <-r.commandIn:
 			// Handle incoming command requests
 			if !ok {
-				// Check if this is an intentional shutdown
-				select {
-				case <-r.ctx.Done():
-					// Context was canceled, this is expected during shutdown
-					Logger.Debug("Room command channel closed during shutdown", "roomID", r.roomID)
-				default:
-					// Context not canceled, this is unexpected
-					Logger.Warn("Room command channel closed unexpectedly", "roomID", r.roomID)
-				}
 				return
 			}
-
-			Logger.Debug("Room received command from channel", "roomID", r.roomID, "verb", cmd.Verb)
-			// Process the command
 			r.processCommand(cmd, game)
-			Logger.Debug("Room finished processing command", "roomID", r.roomID, "verb", cmd.Verb)
 
 		case <-ticker.C:
 			// Execute periodic script tick if room has an active script
@@ -208,45 +195,19 @@ func (r *Room) runInternal(game *Game) {
 
 // processCommand handles a command request within the room context
 func (r *Room) processCommand(cmd *CommandRequest, game *Game) {
-	// Add panic recovery to prevent room goroutine from dying
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			Logger.Error("Panic in processCommand", "error", recovered, "roomID", r.roomID, "verb", cmd.Verb)
-			// Send error response to prevent timeout
-			if cmd != nil && cmd.Response != nil {
-				select {
-				case cmd.Response <- &CommandResponse{
-					RequestID: cmd.ID,
-					Success:   false,
-					Error:     fmt.Errorf("internal error processing command"),
-					Timestamp: time.Now(),
-				}:
-				default:
-				}
-			}
-		}
-	}()
-
 	if cmd == nil {
-		Logger.Error("Received nil command in room", "roomID", r.roomID)
 		return
 	}
 
-	Logger.Debug("Room processCommand: Processing command", "roomID", r.roomID, "verb", cmd.Verb, "character", cmd.Character.name)
-
 	// Process the command using the room command handler
-	Logger.Info("Room processCommand: About to call ProcessRoomCommand", "roomID", r.roomID, "verb", cmd.Verb)
 	response := r.ProcessRoomCommand(cmd, game)
 
-	Logger.Info("Room processCommand: Got response from ProcessRoomCommand", "roomID", r.roomID, "verb", cmd.Verb, "success", response != nil && response.Success, "hasError", response != nil && response.Error != nil)
-
 	// Send response back to character
-	Logger.Info("Room processCommand: About to send response", "roomID", r.roomID, "verb", cmd.Verb)
 	select {
 	case cmd.Response <- response:
-		Logger.Info("Room processCommand: Response sent successfully", "roomID", r.roomID, "verb", cmd.Verb)
+		// Response sent successfully
 	default:
-		Logger.Error("Room processCommand: Failed to send response - channel full or closed", "roomID", r.roomID, "verb", cmd.Verb)
+		Logger.Error("Failed to send command response - channel closed", "roomID", r.roomID, "verb", cmd.Verb)
 	}
 }
 
@@ -540,18 +501,12 @@ func (r *Room) processCombatMovements() {
 
 	// Process each character's movement from the snapshot
 	for _, char := range charactersToProcess {
-		if char == nil {
-			// Clean up nil entry - use original charID which is uuid.UUID
-			continue
-		}
 		char.mutex.Lock()
 		movement := char.combatMovement
 		if movement == nil {
 			// Character no longer has combat movement, remove from list
 			char.mutex.Unlock()
-			r.mutex.Lock()
-			delete(r.charactersToMove, char.id)
-			r.mutex.Unlock()
+			r.RemoveCharacterToMove(char)
 			continue
 		}
 
@@ -572,12 +527,7 @@ func (r *Room) processCombatMovements() {
 			// Find target
 			var target *Character
 			r.mutex.RLock()
-			for _, c := range r.characters {
-				if c != nil && c.id == movement.targetID {
-					target = c
-					break
-				}
-			}
+			target = r.characters[movement.targetID]
 			r.mutex.RUnlock()
 
 			if target == nil || target.room != r {
