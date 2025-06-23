@@ -51,6 +51,15 @@ func NewKeyPair(ctx context.Context, cfg *Configuration) (*KeyPair, error) {
 
 	client := dynamodb.NewFromConfig(awsConfig)
 
+	// Test AWS credentials by attempting to list tables
+	// This works with both IAM users and EC2 instance profiles
+	_, err = client.ListTables(ctx, &dynamodb.ListTablesInput{
+		Limit: aws.Int32(1),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("insufficient AWS credentials or permissions for DynamoDB: %w", err)
+	}
+
 	// Create table name mapping from configuration
 	tableNames := map[string]string{
 		"players":    cfg.DynamoDB.Tables.Players,
