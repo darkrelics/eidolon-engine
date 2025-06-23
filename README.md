@@ -74,7 +74,6 @@ Room scripts are managed through a central Script system:
 The command system is structured in a three-tier hierarchy to efficiently handle different types of player interactions. Each tier is now implemented in a dedicated file to maintain clear separation of concerns:
 
 1. **Character Tier (Fast, Local)** - In `character-commands.go`:
-
    - Status checks, inventory viewing, equipment status, and character stats
    - No wait time, providing immediate feedback to players
    - Entirely local to the character with no external dependencies
@@ -83,7 +82,6 @@ The command system is structured in a three-tier hierarchy to efficiently handle
    - Self-contained with no external dependencies beyond the character object itself
 
 2. **Room Tier (Medium, Localized)** - In `room-commands.go`:
-
    - Social interactions (say, emote, whisper), local interactions, and item manipulation
    - Moderate wait times based on command complexity
    - Processed asynchronously in room goroutines
@@ -116,7 +114,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
 ### Completed Tasks
 
 - [x] Core Server and Infrastructure
-
   - [x] Create the SSH server for client connections
   - [x] Implement a text parser for user input
   - [x] Add Cloudwatch Logs and Metrics integration
@@ -128,7 +125,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Context-based coordination system
 
 - [x] Player and Character Management
-
   - [x] Implement player authentication system
   - [x] Create character creation and selection system
   - [x] Build interactive password change system
@@ -141,7 +137,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Character persistence with DynamoDB
 
 - [x] Command System
-
   - [x] Implement the three-tier command architecture
   - [x] Develop command timeout systems
   - [x] Add help command
@@ -151,7 +146,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Command wait time system for actions
 
 - [x] Room System
-
   - [x] Implement movement commands with room state changes
   - [x] GO and MOVE commands for character movement
   - [x] Support for both cardinal directions and object-based exits
@@ -170,7 +164,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Exit visibility controls for hidden paths
 
 - [x] Item System Foundation
-
   - [x] Basic item data structures
   - [x] Item persistence in DynamoDB
   - [x] Item trait system for modifications
@@ -180,7 +173,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Switch command to swap items between hands
 
 - [x] Communication System
-
   - [x] Say command with room-wide communication
   - [x] Shout command for server-wide messages
   - [x] Announce command for GM announcements
@@ -195,7 +187,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
 #### High Priority - Core Functionality
 
 - [ ] Item System Completion
-
   - [x] Implement inventory command to view items and hands
   - [x] Add get/take commands for picking up items (to hands)
   - [x] Add drop command for dropping items (from hands or inventory)
@@ -207,20 +198,17 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [ ] Create item prototype factory function
 
 - [ ] Administrative Features
-
   - [ ] Implement privilege/permission system
   - [ ] Add @shutdown command for admins
   - [ ] Add @broadcast command for system messages
   - [ ] Create GM-only command prefix handling
 
 - [ ] Command Rate Limiting
-
   - [ ] Implement per-player command rate limiting (5/second)
   - [ ] Add command frequency tracking
   - [ ] Implement queue/drop strategy for excess commands
 
 - [ ] Build & Deploy Automation
-
   - [ ] Create server build script with version stamping
   - [ ] Implement automated deployment (systemd/Docker)
   - [ ] Set up CodeBuild pipeline for server compilation
@@ -229,20 +217,17 @@ Testing will primarily be conducted through live user interaction, with unit tes
 #### Medium Priority - Enhanced Features
 
 - [ ] Logging & Audit Trail
-
   - [ ] Implement dedicated audit logging for commands
   - [ ] Add command origin tracking (player ID, IP, session)
   - [ ] Create separate audit log stream
 
 - [ ] Character Features
-
   - [ ] Implement auto-save functionality
   - [ ] Add dynamic prompt with HP/status
   - [ ] Expand character states (sitting, prone, dead)
   - [ ] Add whisper command for private communication
 
 - [ ] Room System Extension
-
   - [ ] Create Script management system with S3 storage
   - [ ] Implement room script loading from S3
   - [ ] Validate graph of loaded rooms and exits
@@ -491,7 +476,6 @@ A Flutter application for player registration and self-service.
 ### AWS Infrastructure Setup
 
 1. Ensure you have the following installed:
-
    - Go 1.24 or later
    - Python 3.12 or later
    - Flutter 3.29 or later
