@@ -29,15 +29,19 @@ import (
 // Start begins the room goroutine to process room-level commands
 func (r *Room) Start(game *Game) {
 	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	if r.running {
-		Logger.Warn("Attempted to start an already running room", "roomID", r.roomID)
+		roomID := r.roomID
+		r.mutex.Unlock()
+		Logger.Warn("Attempted to start an already running room", "roomID", roomID)
 		return
 	}
 
-	Logger.Info("Starting room goroutine", "roomID", r.roomID, "title", r.title)
+	roomID := r.roomID
+	title := r.title
 	r.running = true
+	r.mutex.Unlock()
+
+	Logger.Info("Starting room goroutine", "roomID", roomID, "title", title)
 
 	// Start the room goroutine FIRST - let it handle script loading internally
 	go r.run(game)
@@ -501,15 +505,18 @@ func (r *Room) processCombatMovements() {
 
 	// Process each character's movement from the snapshot
 	for _, char := range charactersToProcess {
-		char.mutex.Lock()
+		// Get movement info and calculate speed
+		char.mutex.RLock()
 		movement := char.combatMovement
 		if movement == nil {
-			// Character no longer has combat movement, remove from list
-			char.mutex.Unlock()
+			char.mutex.RUnlock()
 			r.RemoveCharacterToMove(char)
 			continue
 		}
-
+		movementMode := movement.mode
+		targetID := movement.targetID
+		targetRange := movement.targetRange
+		
 		// Calculate movement speed based on agility
 		agility := char.attributes["agility"]
 		if agility < 0 {
@@ -521,18 +528,20 @@ func (r *Room) processCombatMovements() {
 		if moveSpeed < 1.0 {
 			moveSpeed = 1.0
 		}
+		char.mutex.RUnlock()
 
-		switch movement.mode {
+		switch movementMode {
 		case "advance":
 			// Find target
 			var target *Character
 			r.mutex.RLock()
-			target = r.characters[movement.targetID]
+			target = r.characters[targetID]
 			r.mutex.RUnlock()
 
 			if target == nil || target.room != r {
 				// Target no longer in room
 				r.RemoveCharacterToMove(char)
+				char.mutex.Lock()
 				char.combatMovement = nil
 				char.facing = nil
 				char.mutex.Unlock()
@@ -544,10 +553,10 @@ func (r *Room) processCombatMovements() {
 			currentRange := r.getCombatRange(char, target)
 
 			// Move towards target
-			if currentRange > movement.targetRange {
+			if currentRange > targetRange {
 				newRange := currentRange - moveSpeed
-				if newRange < movement.targetRange {
-					newRange = movement.targetRange
+				if newRange < targetRange {
+					newRange = targetRange
 				}
 
 				// Check if crossing pole range threshold
@@ -560,11 +569,14 @@ func (r *Room) processCombatMovements() {
 				r.setCombatRange(char, target, newRange)
 
 				// Check if reached target range
-				if newRange <= movement.targetRange {
+				if newRange <= targetRange {
 					r.RemoveCharacterToMove(char)
+					char.mutex.Lock()
 					char.combatMovement = nil
+					char.mutex.Unlock()
+					
 					var rangeName string
-					switch movement.targetRange {
+					switch targetRange {
 					case combatRangeMelee:
 						rangeName = "melee range with"
 					case combatRangePole:
@@ -572,16 +584,16 @@ func (r *Room) processCombatMovements() {
 					default:
 						rangeName = "close combat with"
 					}
-					char.mutex.Unlock()
 					char.DisplayMessage(fmt.Sprintf("\n\rYou reach %s %s.\n\r", rangeName, target.name))
 					target.DisplayMessage(fmt.Sprintf("\n\r%s reaches %s you.\n\r", char.name, rangeName))
 					SendRoomMessage(r, fmt.Sprintf("\n\r%s reaches %s %s.\n\r", char.name, rangeName, target.name), char, target)
-					continue
 				}
 			} else {
 				// Already at or closer than target range
 				r.RemoveCharacterToMove(char)
+				char.mutex.Lock()
 				char.combatMovement = nil
+				char.mutex.Unlock()
 			}
 
 		case "retreat":
@@ -592,6 +604,7 @@ func (r *Room) processCombatMovements() {
 
 			if len(ranges) == 0 {
 				r.RemoveCharacterToMove(char)
+				char.mutex.Lock()
 				char.combatMovement = nil
 				char.mutex.Unlock()
 				continue
@@ -600,11 +613,11 @@ func (r *Room) processCombatMovements() {
 			// Move away from all opponents
 			allAtRange := true
 			for opponentID, currentRange := range ranges {
-				if currentRange < movement.targetRange {
+				if currentRange < targetRange {
 					allAtRange = false
 					newRange := currentRange + moveSpeed
-					if newRange > movement.targetRange {
-						newRange = movement.targetRange
+					if newRange > targetRange {
+						newRange = targetRange
 					}
 
 					// Find opponent character
@@ -626,14 +639,13 @@ func (r *Room) processCombatMovements() {
 
 			if allAtRange {
 				r.RemoveCharacterToMove(char)
+				char.mutex.Lock()
 				char.combatMovement = nil
 				char.mutex.Unlock()
 				char.DisplayMessage("\n\rYou reach your desired distance.\n\r")
 				continue
 			}
 		}
-
-		char.mutex.Unlock()
 	}
 }
 
@@ -650,45 +662,43 @@ func (r *Room) processFlee() {
 	// Process each character's flee attempt from the snapshot
 	for _, char := range charactersToProcess {
 		if char == nil {
-			// Clean up nil entry - skip since we're iterating over a snapshot
 			continue
 		}
-		char.mutex.Lock()
+		
+		// Get flee state and character data
+		char.mutex.RLock()
 		fleeState := char.fleeTarget
 		if fleeState == nil {
-			// Character no longer has flee state, remove from list
-			char.mutex.Unlock()
-			r.mutex.Lock()
-			delete(r.charactersToFlee, char.id)
-			r.mutex.Unlock()
+			char.mutex.RUnlock()
+			r.RemoveCharacterToFlee(char)
 			continue
 		}
+		
+		// Extract needed data
+		startTime := fleeState.startTime
+		hasDirection := fleeState.hasDirection
+		agility := char.attributes["agility"]
+		charID := char.id
+		char.mutex.RUnlock()
 
 		// Check timeout (30 seconds)
-		elapsed := time.Since(fleeState.startTime).Seconds()
+		elapsed := time.Since(startTime).Seconds()
 		if elapsed >= 30 {
-			char.mutex.Unlock()
 			r.handleFleeTimeout(char, fleeState)
 			continue
 		}
 
-		// Get character's agility for movement speed
-		agility := char.attributes["agility"]
+		// Calculate movement speed
 		if agility < 1 {
 			agility = 1
 		}
-
-		// Calculate movement speed (same as retreat)
 		moveSpeed := agility * 0.5 // Units per second
-
-		// Release character lock while checking ranges
-		char.mutex.Unlock()
 
 		// Find closest adversary
 		minRange := float64(1000)
 		var hasAdversary bool
 		r.mutex.RLock()
-		if ranges, exists := r.combatRanges[char.id]; exists {
+		if ranges, exists := r.combatRanges[charID]; exists {
 			for _, range_ := range ranges {
 				if range_ < minRange {
 					minRange = range_
@@ -698,8 +708,8 @@ func (r *Room) processFlee() {
 		}
 		// Also check if character is a target
 		for attackerID, targets := range r.combatRanges {
-			if attackerID != char.id {
-				if range_, exists := targets[char.id]; exists && range_ < minRange {
+			if attackerID != charID {
+				if range_, exists := targets[charID]; exists && range_ < minRange {
 					minRange = range_
 					hasAdversary = true
 				}
@@ -716,7 +726,7 @@ func (r *Room) processFlee() {
 		// Move away from all adversaries and recalculate minimum range
 		r.mutex.Lock()
 		minRange = float64(1000)
-		if ranges, exists := r.combatRanges[char.id]; exists {
+		if ranges, exists := r.combatRanges[charID]; exists {
 			for targetID, currentRange := range ranges {
 				newRange := currentRange + moveSpeed*0.1 // 0.1 second tick
 				ranges[targetID] = newRange
@@ -727,10 +737,10 @@ func (r *Room) processFlee() {
 		}
 		// Also update ranges where character is the target
 		for attackerID, targets := range r.combatRanges {
-			if attackerID != char.id {
-				if currentRange, exists := targets[char.id]; exists {
+			if attackerID != charID {
+				if currentRange, exists := targets[charID]; exists {
 					newRange := currentRange + moveSpeed*0.1
-					targets[char.id] = newRange
+					targets[charID] = newRange
 					if newRange < minRange {
 						minRange = newRange
 					}
@@ -740,7 +750,7 @@ func (r *Room) processFlee() {
 		r.mutex.Unlock()
 
 		// Check if flee conditions are met
-		if fleeState.hasDirection {
+		if hasDirection {
 			// With direction: flee at 20+ range
 			if minRange >= 20 {
 				r.completeFlee(char, fleeState)
@@ -758,11 +768,13 @@ func (r *Room) processFlee() {
 
 // handleFleeTimeout handles when a flee attempt times out
 func (r *Room) handleFleeTimeout(char *Character, fleeState *FleeState) {
-	char.mutex.Lock()
-	r.RemoveCharacterToFlee(char)
-	char.fleeTarget = nil
 	exitDirection := fleeState.exitDirection
+	
+	char.mutex.Lock()
+	char.fleeTarget = nil
 	char.mutex.Unlock()
+	
+	r.RemoveCharacterToFlee(char)
 
 	// Remove from combat
 	r.removeCharacterFromCombat(char)
@@ -798,11 +810,13 @@ func (r *Room) handleFleeTimeout(char *Character, fleeState *FleeState) {
 
 // completeFlee completes a successful flee attempt
 func (r *Room) completeFlee(char *Character, fleeState *FleeState) {
-	char.mutex.Lock()
-	r.RemoveCharacterToFlee(char)
-	char.fleeTarget = nil
 	exitDirection := fleeState.exitDirection
+	
+	char.mutex.Lock()
+	char.fleeTarget = nil
 	char.mutex.Unlock()
+	
+	r.RemoveCharacterToFlee(char)
 
 	if exitDirection != "" {
 		// Flee through specified exit
