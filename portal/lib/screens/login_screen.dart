@@ -22,13 +22,27 @@ import '../widgets/ui_components.dart';
 import '../utils/input_sanitizer.dart';
 import '../utils/form_state_provider.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   final String? redirectRoute;
   final Object? redirectArgs;
 
   const LoginScreen({super.key, this.redirectRoute, this.redirectArgs});
 
-  static final _formKey = GlobalKey<FormState>();
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +56,11 @@ class LoginScreen extends StatelessWidget {
               // If authenticated, navigate to appropriate route
               if (authState.isAuthenticated) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _handleNavigation(context, redirectRoute, redirectArgs);
+                  _handleNavigation(
+                    context,
+                    widget.redirectRoute,
+                    widget.redirectArgs,
+                  );
                 });
                 return const Center(child: CircularProgressIndicator());
               }
@@ -63,6 +81,8 @@ class LoginScreen extends StatelessWidget {
                         autofillHints: const [AutofillHints.email],
                         validator: FieldValidators.email,
                         inputFormatters: [InputSanitizer.noXSSChars()],
+                        focusNode: _emailFocusNode,
+                        onSubmitted: (_) => _passwordFocusNode.requestFocus(),
                       ),
                       const SizedBox(height: 16),
                       AppTextField(
@@ -74,22 +94,13 @@ class LoginScreen extends StatelessWidget {
                         autofillHints: const [AutofillHints.password],
                         validator: FieldValidators.password,
                         inputFormatters: [InputSanitizer.noXSSChars()],
+                        focusNode: _passwordFocusNode,
+                        onSubmitted: (_) => _handleSignIn(authState),
                       ),
                       const SizedBox(height: 32),
                       LoadingButton(
                         isLoading: authState.isLoading,
-                        onPressed: () async {
-                          if (FormStateUtil.validateForm(_formKey)) {
-                            await authState.signIn();
-                            if (authState.isAuthenticated && context.mounted) {
-                              _handleNavigation(
-                                context,
-                                redirectRoute,
-                                redirectArgs,
-                              );
-                            }
-                          }
-                        },
+                        onPressed: () => _handleSignIn(authState),
                         text: 'SIGN IN',
                       ),
                       const SizedBox(height: 16),
@@ -129,6 +140,15 @@ class LoginScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _handleSignIn(AuthState authState) async {
+    if (FormStateUtil.validateForm(_formKey)) {
+      await authState.signIn();
+      if (authState.isAuthenticated && mounted) {
+        _handleNavigation(context, widget.redirectRoute, widget.redirectArgs);
+      }
+    }
   }
 
   void _handleNavigation(

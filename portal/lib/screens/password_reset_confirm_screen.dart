@@ -39,6 +39,9 @@ class _PasswordResetConfirmScreenState
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _codeFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+  final _confirmPasswordFocusNode = FocusNode();
   bool _isLoading = false;
   String _message = '';
   bool _isError = false;
@@ -48,6 +51,9 @@ class _PasswordResetConfirmScreenState
     _codeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _codeFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    _confirmPasswordFocusNode.dispose();
     super.dispose();
   }
 
@@ -173,6 +179,8 @@ class _PasswordResetConfirmScreenState
                     return null;
                   },
                   inputFormatters: [InputSanitizer.noXSSChars()],
+                  focusNode: _codeFocusNode,
+                  onSubmitted: (_) => _passwordFocusNode.requestFocus(),
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
@@ -183,6 +191,8 @@ class _PasswordResetConfirmScreenState
                   obscureText: true,
                   validator: FieldValidators.password,
                   inputFormatters: [InputSanitizer.noXSSChars()],
+                  focusNode: _passwordFocusNode,
+                  onSubmitted: (_) => _confirmPasswordFocusNode.requestFocus(),
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
@@ -198,6 +208,8 @@ class _PasswordResetConfirmScreenState
                     return null;
                   },
                   inputFormatters: [InputSanitizer.noXSSChars()],
+                  focusNode: _confirmPasswordFocusNode,
+                  onSubmitted: (_) => _confirmPasswordReset(),
                 ),
                 const SizedBox(height: 32),
                 LoadingButton(

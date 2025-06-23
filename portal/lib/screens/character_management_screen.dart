@@ -108,7 +108,7 @@ class CharacterManagementScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'This feature will connect to AWS Lambda functions to manage character creation, stats, inventory, and progression within the Eidolon Engine world.',
+                          'Create and manage your characters, track their stats, inventory, and progression within the Eidolon Engine world.',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurface.withValues(alpha: 0.7),
                           ),
