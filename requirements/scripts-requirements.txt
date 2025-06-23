@@ -1,7 +1,7 @@
 #Required
 PyYAML==6.0.2
 boto3==1.38.36
-aws-cdk-lib==2.201.0
+aws-cdk-lib==2.202.0
 constructs==10.4.2
 
 #Dependancies
