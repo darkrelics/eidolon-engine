@@ -48,11 +48,16 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 		return false, fmt.Sprintf("You must wait %.1f seconds before your next action.", waitTime)
 	}
 
-	// Check character state if needed
-	// Currently just check if there's a state set at all
 	if c.charState == "" {
-		// Default state is standing
-		c.charState = "standing"
+		c.charState = CharStateStanding
+	}
+
+	if c.charState == CharStateDead {
+		return false, "You cannot do that while dead."
+	}
+
+	if c.charState == CharStateUnconscious {
+		return false, "You cannot do that while unconscious."
 	}
 
 	return true, ""
@@ -115,6 +120,8 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		Skills:        c.skills,
 		Essence:       c.essence,
 		Health:        c.health,
+		MaxHealth:     c.maxHealth,
+		Wounds:        c.wounds,
 		RoomID:        c.room.roomID,
 		Inventory:     inventoryIDs,
 		LeftHandID:    leftHandID,
@@ -161,12 +168,14 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		attributes:       make(map[string]float64),
 		skills:           make(map[string]float64),
 		essence:          float64(p.server.game.startingEssence), // Default from config
-		health:           float64(p.server.game.startingHealth),  // Default from config
+		health:           int(p.server.game.startingHealth),      // Default from config
+		maxHealth:        int(p.server.game.startingHealth),      // Default from config
+		wounds:           []Wound{},                              // Start with no wounds
 		inventory:        make(map[string]*Item),
 		mutex:            sync.RWMutex{},
 		facing:           nil,
 		lastEdited:       time.Now(),
-		charState:        "standing", // Default character state
+		charState:        CharStateStanding,
 		waitUntil:        time.Now(), // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
@@ -209,7 +218,8 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 			// Use archetype's Health and Essence if specified, otherwise keep defaults
 			if archetypeObj.Health > 0 {
-				character.health = float64(archetypeObj.Health)
+				character.health = int(archetypeObj.Health)
+				character.maxHealth = int(archetypeObj.Health)
 			}
 			if archetypeObj.Essence > 0 {
 				character.essence = float64(archetypeObj.Essence)
@@ -442,9 +452,12 @@ func FormatCharacterDescription(target *Character, viewer *Character) string {
 	// Basic appearance info
 	desc.WriteString("You see a ")
 
-	// Future: equipment and attributes will enhance descriptions
-	// This is placeholder logic
-	if target.health < float64(target.game.startingHealth)/2 {
+	// State and health descriptions
+	if target.charState == CharStateUnconscious {
+		desc.WriteString("unconscious ")
+	} else if target.charState == CharStateDead {
+		desc.WriteString("dead ")
+	} else if target.health < target.maxHealth/2 {
 		desc.WriteString("wounded ")
 	}
 
