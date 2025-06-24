@@ -19,7 +19,6 @@ limitations under the License.
 package main
 
 import (
-	"context"
 	"strings"
 	"sync"
 	"testing"
@@ -374,59 +373,24 @@ func TestDeadCharacterNoHealing(t *testing.T) {
 }
 
 func TestOfflineHealing(t *testing.T) {
-	game := &Game{
-		ctx:        context.Background(),
-		mutex:      sync.RWMutex{},
-		rooms:      map[int64]*Room{0: {roomID: 0}},
-		characters: make(map[uuid.UUID]*Character),
-	}
-
-	player := &Player{
-		id: uuid.Must(uuid.NewV4()),
-		server: &Server{game: game},
-	}
-
-	// Create character data with old wounds
-	now := time.Now()
-	cd := &CharacterData{
-		CharacterID: uuid.Must(uuid.NewV4()).String(),
-		PlayerID:    player.id.String(),
-		CharacterName: "TestChar",
-		Health:      5,
-		MaxHealth:   10,
-		Wounds: []Wound{
-			{DamageType: DamageTypeBashing, HealAt: now.Add(-1 * time.Hour)}, // Should heal
-			{DamageType: DamageTypeLethal, HealAt: now.Add(1 * time.Hour)},   // Should remain
-		},
-		RoomID: 0,
-		Attributes: make(map[string]float64),
-		Skills:     make(map[string]float64),
-		Inventory:  make(map[string]string),
-	}
-
-	// Load character (which triggers offline healing)
-	char, err := LoadCharacter(player, uuid.Must(uuid.FromString(cd.CharacterID)))
-	if err == nil {
-		t.Error("Expected error loading non-existent character")
-	}
-
-	// Instead, test by creating character manually
-	char = &Character{
-		game:             game,
-		player:           player,
+	char := &Character{
+		id:               uuid.Must(uuid.NewV4()),
+		name:             "TestChar",
+		health:           5,
+		maxHealth:        10,
+		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
+		charState:        CharStateStanding,
 		playerCommandOut: make(chan string, 10),
-		attributes:       make(map[string]float64),
-		skills:           make(map[string]float64),
-		inventory:        make(map[string]*Item),
+		player:           &Player{},
 	}
 
-	// Manually set data
-	char.id = uuid.Must(uuid.FromString(cd.CharacterID))
-	char.name = cd.CharacterName
-	char.health = cd.Health
-	char.maxHealth = cd.MaxHealth
-	char.wounds = cd.Wounds
+	// Add wounds with different heal times
+	now := time.Now()
+	char.wounds = []Wound{
+		{DamageType: DamageTypeBashing, HealAt: now.Add(-1 * time.Hour)}, // Should heal
+		{DamageType: DamageTypeLethal, HealAt: now.Add(1 * time.Hour)},   // Should remain
+	}
 
 	// Calculate offline healing
 	char.CalculateCurrentHealth()
@@ -439,5 +403,15 @@ func TestOfflineHealing(t *testing.T) {
 	// Health should be updated
 	if char.health != 9 {
 		t.Errorf("Expected health 9 after offline healing, got %d", char.health)
+	}
+
+	// Check healing message was sent
+	select {
+	case msg := <-char.playerCommandOut:
+		if !strings.Contains(msg, "heal") {
+			t.Error("Expected healing message")
+		}
+	default:
+		t.Error("No healing message received")
 	}
 }
