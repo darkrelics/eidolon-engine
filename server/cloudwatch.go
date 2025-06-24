@@ -62,9 +62,23 @@ func NewCloudWatch(ctx context.Context, cfg *Configuration) (*CloudWatch, error)
 		config.WithRetryMaxAttempts(3),
 	)
 	if err != nil {
-		Logger.Info("Error loading AWS config", "error", err)
+		// Can't use Logger here as it's not initialized yet
+		fmt.Printf("Error loading AWS config: %v\n", err)
 		cancel()
 		return nil, fmt.Errorf("error loading AWS config: %w", err)
+	}
+
+	// Test AWS credentials by attempting to describe log groups
+	// This works with both IAM users and EC2 instance profiles
+	testClient := cloudwatchlogs.NewFromConfig(awsConfig)
+	_, err = testClient.DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
+		Limit: aws.Int32(1),
+	})
+	if err != nil {
+		// Can't use Logger here as it's not initialized yet
+		fmt.Printf("Failed to verify AWS credentials: %v\n", err)
+		cancel()
+		return nil, fmt.Errorf("insufficient AWS credentials or permissions: %w", err)
 	}
 
 	// Temporary logger needed before CloudWatch initialization

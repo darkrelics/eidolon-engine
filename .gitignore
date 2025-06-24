@@ -81,3 +81,7 @@ CLAUDE.md
 **/*.pyo
 **/*.pyd
 **/*.pdb
+
+
+# Apple Problems
+**/.DS_Store
