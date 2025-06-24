@@ -48,19 +48,14 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 		return false, fmt.Sprintf("You must wait %.1f seconds before your next action.", waitTime)
 	}
 
-	// Check character state if needed
-	// Currently just check if there's a state set at all
 	if c.charState == "" {
-		// Default state is standing
-		c.charState = "standing"
+		c.charState = CharStateStanding
 	}
 
-	// Check if character is dead
 	if c.charState == CharStateDead {
 		return false, "You cannot do that while dead."
 	}
 
-	// Check if character is unconscious
 	if c.charState == CharStateUnconscious {
 		return false, "You cannot do that while unconscious."
 	}
@@ -180,7 +175,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		mutex:            sync.RWMutex{},
 		facing:           nil,
 		lastEdited:       time.Now(),
-		charState:        "standing", // Default character state
+		charState:        CharStateStanding,
 		waitUntil:        time.Now(), // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),

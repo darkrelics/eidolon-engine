@@ -276,19 +276,15 @@ func (g *Game) runInternal(errChan chan error) error {
 }
 
 func (g *Game) tick() error {
-	// Command processing handles global game actions
 	g.processGameCommands()
 
-	// Check healing for all active characters every 30 seconds
 	if time.Now().Unix()%30 == 0 {
 		g.processCharacterHealing()
 	}
 
-	// Additional game logic placeholder for future features
 	return nil
 }
 
-// processCharacterHealing checks all characters for healed wounds
 func (g *Game) processCharacterHealing() {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()

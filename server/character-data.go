@@ -156,10 +156,8 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	}
 	character.hidden = cd.Hidden
 
-	// Calculate offline healing
 	character.CalculateCurrentHealth()
 
-	// Room assignment determines character's location
 	room, exists := game.rooms[cd.RoomID]
 	if !exists {
 		Logger.Warn("Room not found, defaulting to room ID 0", "roomID", cd.RoomID)
@@ -170,14 +168,12 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	}
 	character.room = room
 
-	// Inventory restoration equips saved items
 	inventory, err := LoadItemsForCharacter(game.ctx, cd.Inventory, game.database)
 	if err != nil {
 		Logger.Warn("Error loading character inventory", "characterID", characterID, "error", err)
 	}
 	character.inventory = inventory
 
-	// Hand item loading restores wielded equipment
 	if cd.LeftHandID != "" {
 		leftHandID, err := uuid.FromString(cd.LeftHandID)
 		if err == nil {

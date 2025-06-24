@@ -47,7 +47,6 @@ type Wound struct {
 	HealAt     time.Time `json:"heal_at" dynamodbav:"heal_at"`
 }
 
-// GetHealingDuration returns the healing time for a damage type
 func GetHealingDuration(damageType string) time.Duration {
 	switch damageType {
 	case DamageTypeBashing:
@@ -57,99 +56,109 @@ func GetHealingDuration(damageType string) time.Duration {
 	case DamageTypeAggravated:
 		return AggravatedHealTime
 	default:
-		return BashingHealTime // Default to fastest healing
+		return BashingHealTime
 	}
 }
 
-// TakeDamage applies damage of the specified type to the character
 func (c *Character) TakeDamage(damageType string, amount int) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// Handle damage conversion for unconscious characters
+	originalAmount := amount
+	
 	if c.charState == CharStateUnconscious {
-		if damageType == DamageTypeBashing {
-			// Bashing converts to lethal when unconscious
-			damageType = DamageTypeLethal
-		} else if damageType == DamageTypeLethal || damageType == DamageTypeAggravated {
-			// Lethal/Aggravated replaces bashing wounds first
-			bashingCount := 0
-			for _, wound := range c.wounds {
-				if wound.DamageType == DamageTypeBashing {
-					bashingCount++
-				}
-			}
-			
-			// Replace bashing wounds with new damage type
-			replacements := min(amount, bashingCount)
-			if replacements > 0 {
-				newWounds := []Wound{}
-				replaced := 0
-				now := time.Now()
-				healDuration := GetHealingDuration(damageType)
-				
-				// Keep non-bashing wounds and replace bashing with new damage type
-				for _, wound := range c.wounds {
-					if wound.DamageType == DamageTypeBashing && replaced < replacements {
-						// Replace this bashing wound with the new damage type
-						newWounds = append(newWounds, Wound{
-							DamageType: damageType,
-							HealAt:     now.Add(healDuration),
-						})
-						replaced++
-					} else {
-						newWounds = append(newWounds, wound)
-					}
-				}
-				
-				c.wounds = newWounds
-				amount -= replacements
-			}
-		}
+		amount = c.handleUnconsciousDamage(damageType, amount)
+		damageType = c.convertUnconsciousDamageType(damageType)
 	}
 
-	now := time.Now()
-	healDuration := GetHealingDuration(damageType)
-
-	// Add remaining wounds
-	for i := 0; i < amount; i++ {
-		wound := Wound{
-			DamageType: damageType,
-			HealAt:     now.Add(healDuration),
-		}
-		c.wounds = append(c.wounds, wound)
-	}
-
-	// Update current health
+	c.addWounds(damageType, amount)
 	c.health = c.maxHealth - len(c.wounds)
 
-	// Notify the player
 	damageMsg := fmt.Sprintf("You take %d %s damage! Health: %d/%d\n\r", 
-		amount, damageType, c.health, c.maxHealth)
+		originalAmount, damageType, c.health, c.maxHealth)
 	c.playerCommandOut <- damageMsg
 
-	// Check for unconscious or death
 	if c.health <= 0 {
-		// Check if any bashing wounds remain
-		hasBashing := false
-		for _, wound := range c.wounds {
-			if wound.DamageType == DamageTypeBashing {
-				hasBashing = true
-				break
-			}
-		}
-
-		if hasBashing && c.charState != CharStateDead {
-			c.charState = CharStateUnconscious
-			c.playerCommandOut <- ApplyColor("yellow", "You fall unconscious!\n\r")
-		} else {
-			c.charState = CharStateDead
-			c.playerCommandOut <- ApplyColor("red", "You have died!\n\r")
-		}
+		c.updateStateWhenHealthZero()
 	}
 }
 
-// Helper function for min value
+func (c *Character) handleUnconsciousDamage(damageType string, amount int) int {
+	if damageType != DamageTypeLethal && damageType != DamageTypeAggravated {
+		return amount
+	}
+
+	bashingCount := c.countWoundType(DamageTypeBashing)
+	replacements := min(amount, bashingCount)
+	
+	if replacements > 0 {
+		c.replaceBashingWounds(replacements, damageType)
+		return amount - replacements
+	}
+	
+	return amount
+}
+
+func (c *Character) convertUnconsciousDamageType(damageType string) string {
+	if damageType == DamageTypeBashing {
+		return DamageTypeLethal
+	}
+	return damageType
+}
+
+func (c *Character) countWoundType(woundType string) int {
+	count := 0
+	for _, wound := range c.wounds {
+		if wound.DamageType == woundType {
+			count++
+		}
+	}
+	return count
+}
+
+func (c *Character) replaceBashingWounds(amount int, newType string) {
+	newWounds := []Wound{}
+	replaced := 0
+	now := time.Now()
+	healDuration := GetHealingDuration(newType)
+	
+	for _, wound := range c.wounds {
+		if wound.DamageType == DamageTypeBashing && replaced < amount {
+			newWounds = append(newWounds, Wound{
+				DamageType: newType,
+				HealAt:     now.Add(healDuration),
+			})
+			replaced++
+		} else {
+			newWounds = append(newWounds, wound)
+		}
+	}
+	
+	c.wounds = newWounds
+}
+
+func (c *Character) addWounds(damageType string, amount int) {
+	now := time.Now()
+	healDuration := GetHealingDuration(damageType)
+	
+	for i := 0; i < amount; i++ {
+		c.wounds = append(c.wounds, Wound{
+			DamageType: damageType,
+			HealAt:     now.Add(healDuration),
+		})
+	}
+}
+
+func (c *Character) updateStateWhenHealthZero() {
+	if c.countWoundType(DamageTypeBashing) > 0 && c.charState != CharStateDead {
+		c.charState = CharStateUnconscious
+		c.playerCommandOut <- ApplyColor("yellow", "You fall unconscious!\n\r")
+	} else {
+		c.charState = CharStateDead
+		c.playerCommandOut <- ApplyColor("red", "You have died!\n\r")
+	}
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -157,7 +166,6 @@ func min(a, b int) int {
 	return b
 }
 
-// CalculateCurrentHealth recalculates health based on wounds that have healed
 func (c *Character) CalculateCurrentHealth() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -165,28 +173,22 @@ func (c *Character) CalculateCurrentHealth() {
 	now := time.Now()
 	activeWounds := []Wound{}
 
-	// Keep only wounds that haven't healed yet
 	for _, wound := range c.wounds {
 		if wound.HealAt.After(now) {
 			activeWounds = append(activeWounds, wound)
 		}
 	}
 
-	// Update wounds and health if any healing occurred
 	if len(activeWounds) != len(c.wounds) {
 		healed := len(c.wounds) - len(activeWounds)
 		c.wounds = activeWounds
 		oldHealth := c.health
 		c.health = c.maxHealth - len(c.wounds)
 		
-		// Check for state transitions
-		if oldHealth <= 0 && c.health > 0 {
-			// Regaining consciousness
-			if c.charState == CharStateUnconscious {
-				c.charState = CharStateStanding
-				if c.player != nil {
-					c.playerCommandOut <- ApplyColor("green", "You regain consciousness!\n\r")
-				}
+		if oldHealth <= 0 && c.health > 0 && c.charState == CharStateUnconscious {
+			c.charState = CharStateStanding
+			if c.player != nil {
+				c.playerCommandOut <- ApplyColor("green", "You regain consciousness!\n\r")
 			}
 		}
 		
@@ -197,7 +199,6 @@ func (c *Character) CalculateCurrentHealth() {
 	}
 }
 
-// GetWoundsByType returns count of wounds by damage type
 func (c *Character) GetWoundsByType() map[string]int {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
@@ -209,7 +210,6 @@ func (c *Character) GetWoundsByType() map[string]int {
 	return counts
 }
 
-// Helper function for pluralization
 func pluralize(count int) string {
 	if count == 1 {
 		return ""
