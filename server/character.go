@@ -56,8 +56,13 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 	}
 
 	// Check if character is dead
-	if c.charState == "dead" {
+	if c.charState == CharStateDead {
 		return false, "You cannot do that while dead."
+	}
+
+	// Check if character is unconscious
+	if c.charState == CharStateUnconscious {
+		return false, "You cannot do that while unconscious."
 	}
 
 	return true, ""
@@ -452,9 +457,12 @@ func FormatCharacterDescription(target *Character, viewer *Character) string {
 	// Basic appearance info
 	desc.WriteString("You see a ")
 
-	// Future: equipment and attributes will enhance descriptions
-	// This is placeholder logic
-	if target.health < target.maxHealth/2 {
+	// State and health descriptions
+	if target.charState == CharStateUnconscious {
+		desc.WriteString("unconscious ")
+	} else if target.charState == CharStateDead {
+		desc.WriteString("dead ")
+	} else if target.health < target.maxHealth/2 {
 		desc.WriteString("wounded ")
 	}
 

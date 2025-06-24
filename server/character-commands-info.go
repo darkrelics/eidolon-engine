@@ -138,6 +138,13 @@ func (c *Character) GetCharacterInfo() string {
 	// Core stats provide combat and survival metrics
 	info.WriteString(fmt.Sprintf("Health: %d/%d\n\r", c.health, c.maxHealth))
 	
+	// Show character state if not standing
+	if c.charState == CharStateUnconscious {
+		info.WriteString(ApplyColor("yellow", "Status: UNCONSCIOUS\n\r"))
+	} else if c.charState == CharStateDead {
+		info.WriteString(ApplyColor("red", "Status: DEAD\n\r"))
+	}
+	
 	// Show wound breakdown if injured
 	if len(c.wounds) > 0 {
 		woundCounts := c.GetWoundsByType()
