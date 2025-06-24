@@ -170,6 +170,10 @@ func (c *Character) CalculateCurrentHealth() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	if c.charState == CharStateDead {
+		return
+	}
+
 	now := time.Now()
 	activeWounds := []Wound{}
 

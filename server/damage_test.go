@@ -334,6 +334,45 @@ func TestHealingFromUnconscious(t *testing.T) {
 	}
 }
 
+func TestDeadCharacterNoHealing(t *testing.T) {
+	char := &Character{
+		id:               uuid.Must(uuid.NewV4()),
+		name:             "TestChar",
+		health:           0,
+		maxHealth:        10,
+		wounds:           []Wound{},
+		mutex:            sync.RWMutex{},
+		charState:        CharStateDead,
+		playerCommandOut: make(chan string, 10),
+		player:           &Player{},
+	}
+
+	// Add wounds that would normally heal
+	now := time.Now()
+	char.wounds = []Wound{
+		{DamageType: DamageTypeBashing, HealAt: now.Add(-1 * time.Hour)},
+		{DamageType: DamageTypeLethal, HealAt: now.Add(-1 * time.Hour)},
+	}
+
+	// Try to calculate healing
+	char.CalculateCurrentHealth()
+
+	// Should still have 2 wounds (no healing for dead characters)
+	if len(char.wounds) != 2 {
+		t.Errorf("Expected 2 wounds (no healing), got %d", len(char.wounds))
+	}
+
+	// Health should remain 0
+	if char.health != 0 {
+		t.Errorf("Expected health 0, got %d", char.health)
+	}
+
+	// State should remain dead
+	if char.charState != CharStateDead {
+		t.Errorf("Expected dead state, got %s", char.charState)
+	}
+}
+
 func TestOfflineHealing(t *testing.T) {
 	game := &Game{
 		ctx:        context.Background(),
