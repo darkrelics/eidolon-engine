@@ -29,7 +29,7 @@ import (
 
 func TestDamageTypes(t *testing.T) {
 	tests := []struct {
-		damageType     string
+		damageType       string
 		expectedDuration time.Duration
 	}{
 		{DamageTypeBashing, BashingHealTime},

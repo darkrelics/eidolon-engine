@@ -65,7 +65,7 @@ func (c *Character) TakeDamage(damageType string, amount int) {
 	defer c.mutex.Unlock()
 
 	originalAmount := amount
-	
+
 	if c.charState == CharStateUnconscious {
 		amount = c.handleUnconsciousDamage(damageType, amount)
 		damageType = c.convertUnconsciousDamageType(damageType)
@@ -74,7 +74,7 @@ func (c *Character) TakeDamage(damageType string, amount int) {
 	c.addWounds(damageType, amount)
 	c.health = c.maxHealth - len(c.wounds)
 
-	damageMsg := fmt.Sprintf("You take %d %s damage! Health: %d/%d\n\r", 
+	damageMsg := fmt.Sprintf("You take %d %s damage! Health: %d/%d\n\r",
 		originalAmount, damageType, c.health, c.maxHealth)
 	c.playerCommandOut <- damageMsg
 
@@ -90,12 +90,12 @@ func (c *Character) handleUnconsciousDamage(damageType string, amount int) int {
 
 	bashingCount := c.countWoundType(DamageTypeBashing)
 	replacements := min(amount, bashingCount)
-	
+
 	if replacements > 0 {
 		c.replaceBashingWounds(replacements, damageType)
 		return amount - replacements
 	}
-	
+
 	return amount
 }
 
@@ -121,7 +121,7 @@ func (c *Character) replaceBashingWounds(amount int, newType string) {
 	replaced := 0
 	now := time.Now()
 	healDuration := GetHealingDuration(newType)
-	
+
 	for _, wound := range c.wounds {
 		if wound.DamageType == DamageTypeBashing && replaced < amount {
 			newWounds = append(newWounds, Wound{
@@ -133,14 +133,14 @@ func (c *Character) replaceBashingWounds(amount int, newType string) {
 			newWounds = append(newWounds, wound)
 		}
 	}
-	
+
 	c.wounds = newWounds
 }
 
 func (c *Character) addWounds(damageType string, amount int) {
 	now := time.Now()
 	healDuration := GetHealingDuration(damageType)
-	
+
 	for i := 0; i < amount; i++ {
 		c.wounds = append(c.wounds, Wound{
 			DamageType: damageType,
@@ -188,14 +188,14 @@ func (c *Character) CalculateCurrentHealth() {
 		c.wounds = activeWounds
 		oldHealth := c.health
 		c.health = c.maxHealth - len(c.wounds)
-		
+
 		if oldHealth <= 0 && c.health > 0 && c.charState == CharStateUnconscious {
 			c.charState = CharStateStanding
 			if c.player != nil {
 				c.playerCommandOut <- ApplyColor("green", "You regain consciousness!\n\r")
 			}
 		}
-		
+
 		if healed > 0 && c.player != nil {
 			c.playerCommandOut <- fmt.Sprintf("You heal %d wound%s. Health: %d/%d\n\r",
 				healed, pluralize(healed), c.health, c.maxHealth)
