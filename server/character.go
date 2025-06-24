@@ -55,6 +55,11 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 		c.charState = "standing"
 	}
 
+	// Check if character is dead
+	if c.charState == "dead" {
+		return false, "You cannot do that while dead."
+	}
+
 	return true, ""
 }
 
@@ -116,6 +121,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		Essence:       c.essence,
 		Health:        c.health,
 		MaxHealth:     c.maxHealth,
+		Wounds:        c.wounds,
 		RoomID:        c.room.roomID,
 		Inventory:     inventoryIDs,
 		LeftHandID:    leftHandID,
@@ -164,6 +170,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		essence:          float64(p.server.game.startingEssence), // Default from config
 		health:           int(p.server.game.startingHealth),      // Default from config
 		maxHealth:        int(p.server.game.startingHealth),      // Default from config
+		wounds:           []Wound{},                              // Start with no wounds
 		inventory:        make(map[string]*Item),
 		mutex:            sync.RWMutex{},
 		facing:           nil,

@@ -137,6 +137,22 @@ func (c *Character) GetCharacterInfo() string {
 
 	// Core stats provide combat and survival metrics
 	info.WriteString(fmt.Sprintf("Health: %d/%d\n\r", c.health, c.maxHealth))
+	
+	// Show wound breakdown if injured
+	if len(c.wounds) > 0 {
+		woundCounts := c.GetWoundsByType()
+		info.WriteString("Wounds: ")
+		first := true
+		for damageType, count := range woundCounts {
+			if !first {
+				info.WriteString(", ")
+			}
+			info.WriteString(fmt.Sprintf("%d %s", count, damageType))
+			first = false
+		}
+		info.WriteString("\n\r")
+	}
+	
 	info.WriteString(fmt.Sprintf("Essence: %d\n\r", int(c.essence)))
 
 	// Attributes

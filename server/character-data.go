@@ -44,6 +44,7 @@ type Character struct {
 	essence          float64
 	health           int
 	maxHealth        int
+	wounds           []Wound
 	room             *Room
 	inventory        map[string]*Item
 	leftHand         *Item // Item held in left hand
@@ -86,6 +87,7 @@ type CharacterData struct {
 	Essence       float64            `json:"Essence" dynamodbav:"Essence"`
 	Health        int                `json:"Health" dynamodbav:"Health"`
 	MaxHealth     int                `json:"MaxHealth" dynamodbav:"MaxHealth"`
+	Wounds        []Wound            `json:"Wounds" dynamodbav:"Wounds"`
 	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
 	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
 	LeftHandID    string             `json:"LeftHandID,omitempty" dynamodbav:"LeftHandID,omitempty"`
@@ -148,7 +150,14 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	character.essence = cd.Essence
 	character.health = cd.Health
 	character.maxHealth = cd.MaxHealth
+	character.wounds = cd.Wounds
+	if character.wounds == nil {
+		character.wounds = []Wound{}
+	}
 	character.hidden = cd.Hidden
+
+	// Calculate offline healing
+	character.CalculateCurrentHealth()
 
 	// Room assignment determines character's location
 	room, exists := game.rooms[cd.RoomID]
