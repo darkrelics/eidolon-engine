@@ -42,7 +42,8 @@ type Character struct {
 	attributes       map[string]float64
 	skills           map[string]float64
 	essence          float64
-	health           float64
+	health           int
+	maxHealth        int
 	room             *Room
 	inventory        map[string]*Item
 	leftHand         *Item // Item held in left hand
@@ -83,7 +84,8 @@ type CharacterData struct {
 	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
 	Skills        map[string]float64 `json:"Skills" dynamodbav:"Skills"`
 	Essence       float64            `json:"Essence" dynamodbav:"Essence"`
-	Health        float64            `json:"Health" dynamodbav:"Health"`
+	Health        int                `json:"Health" dynamodbav:"Health"`
+	MaxHealth     int                `json:"MaxHealth" dynamodbav:"MaxHealth"`
 	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
 	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
 	LeftHandID    string             `json:"LeftHandID,omitempty" dynamodbav:"LeftHandID,omitempty"`
@@ -145,6 +147,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	character.skills = cd.Skills
 	character.essence = cd.Essence
 	character.health = cd.Health
+	character.maxHealth = cd.MaxHealth
 	character.hidden = cd.Hidden
 
 	// Room assignment determines character's location

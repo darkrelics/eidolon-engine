@@ -136,7 +136,7 @@ func (c *Character) GetCharacterInfo() string {
 	info.WriteString("----------------\n\r")
 
 	// Core stats provide combat and survival metrics
-	info.WriteString(fmt.Sprintf("Health: %d\n\r", int(c.health)))
+	info.WriteString(fmt.Sprintf("Health: %d/%d\n\r", c.health, c.maxHealth))
 	info.WriteString(fmt.Sprintf("Essence: %d\n\r", int(c.essence)))
 
 	// Attributes

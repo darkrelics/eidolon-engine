@@ -115,6 +115,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		Skills:        c.skills,
 		Essence:       c.essence,
 		Health:        c.health,
+		MaxHealth:     c.maxHealth,
 		RoomID:        c.room.roomID,
 		Inventory:     inventoryIDs,
 		LeftHandID:    leftHandID,
@@ -161,7 +162,8 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		attributes:       make(map[string]float64),
 		skills:           make(map[string]float64),
 		essence:          float64(p.server.game.startingEssence), // Default from config
-		health:           float64(p.server.game.startingHealth),  // Default from config
+		health:           int(p.server.game.startingHealth),      // Default from config
+		maxHealth:        int(p.server.game.startingHealth),      // Default from config
 		inventory:        make(map[string]*Item),
 		mutex:            sync.RWMutex{},
 		facing:           nil,
@@ -209,7 +211,8 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 			// Use archetype's Health and Essence if specified, otherwise keep defaults
 			if archetypeObj.Health > 0 {
-				character.health = float64(archetypeObj.Health)
+				character.health = int(archetypeObj.Health)
+				character.maxHealth = int(archetypeObj.Health)
 			}
 			if archetypeObj.Essence > 0 {
 				character.essence = float64(archetypeObj.Essence)
@@ -444,7 +447,7 @@ func FormatCharacterDescription(target *Character, viewer *Character) string {
 
 	// Future: equipment and attributes will enhance descriptions
 	// This is placeholder logic
-	if target.health < float64(target.game.startingHealth)/2 {
+	if target.health < target.maxHealth/2 {
 		desc.WriteString("wounded ")
 	}
 
