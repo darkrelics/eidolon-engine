@@ -2,7 +2,7 @@ name: eidolon_incremental
 description: "An incremental RPG game introducing players to the Eidolon Engine world"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -34,25 +34,25 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  
+
   # State management
   provider: ^6.1.2
-  
+
   # AWS integration
   amazon_cognito_identity_dart_2: ^3.6.4
-  
+
   # Local storage
   shared_preferences: ^2.3.4
-  
+
   # HTTP requests
   http: ^1.2.2
-  
+
   # JSON serialization
   json_annotation: ^4.9.0
-  
+
   # Animations
   flutter_animate: ^4.5.0
-  
+
   # Utilities
   intl: ^0.19.0
   uuid: ^4.5.1
@@ -67,7 +67,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
-  
+
   # JSON code generation
   build_runner: ^2.4.13
   json_serializable: ^6.8.0
@@ -77,7 +77,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
