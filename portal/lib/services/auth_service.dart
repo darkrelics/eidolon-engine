@@ -557,4 +557,37 @@ class AuthService {
 
   /// Gets the current session
   CognitoUserSession? get session => _session;
+
+  /// Deletes the current user's account permanently
+  Future<void> deleteUser() async {
+    try {
+      // User must be authenticated
+      if (_currentUser == null || _session == null) {
+        throw CognitoClientException('User must be signed in to delete account');
+      }
+
+      // Check if session is valid, refresh if needed
+      if (!_session!.isValid()) {
+        final refreshed = await _refreshSession();
+        if (!refreshed) {
+          throw CognitoClientException('Session expired. Please sign in again');
+        }
+      }
+
+      // Delete the user account
+      await _currentUser!.deleteUser();
+
+      // Clear local session and tokens
+      _currentUser = null;
+      _session = null;
+      await _clearTokens();
+    } on CognitoClientException catch (e) {
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(e),
+      );
+    } catch (e) {
+      _logError('Account deletion failed');
+      rethrow;
+    }
+  }
 }

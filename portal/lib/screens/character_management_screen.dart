@@ -42,6 +42,12 @@ class CharacterManagementScreen extends StatelessWidget {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.of(context).pushNamed('/account-settings');
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
               // Show confirmation dialog
