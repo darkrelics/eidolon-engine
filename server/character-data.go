@@ -42,7 +42,9 @@ type Character struct {
 	attributes       map[string]float64
 	skills           map[string]float64
 	essence          float64
-	health           float64
+	health           int
+	maxHealth        int
+	wounds           []Wound
 	room             *Room
 	inventory        map[string]*Item
 	leftHand         *Item // Item held in left hand
@@ -83,7 +85,9 @@ type CharacterData struct {
 	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
 	Skills        map[string]float64 `json:"Skills" dynamodbav:"Skills"`
 	Essence       float64            `json:"Essence" dynamodbav:"Essence"`
-	Health        float64            `json:"Health" dynamodbav:"Health"`
+	Health        int                `json:"Health" dynamodbav:"Health"`
+	MaxHealth     int                `json:"MaxHealth" dynamodbav:"MaxHealth"`
+	Wounds        []Wound            `json:"Wounds" dynamodbav:"Wounds"`
 	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
 	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
 	LeftHandID    string             `json:"LeftHandID,omitempty" dynamodbav:"LeftHandID,omitempty"`
@@ -145,9 +149,15 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	character.skills = cd.Skills
 	character.essence = cd.Essence
 	character.health = cd.Health
+	character.maxHealth = cd.MaxHealth
+	character.wounds = cd.Wounds
+	if character.wounds == nil {
+		character.wounds = []Wound{}
+	}
 	character.hidden = cd.Hidden
 
-	// Room assignment determines character's location
+	character.CalculateCurrentHealth()
+
 	room, exists := game.rooms[cd.RoomID]
 	if !exists {
 		Logger.Warn("Room not found, defaulting to room ID 0", "roomID", cd.RoomID)
@@ -158,14 +168,12 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	}
 	character.room = room
 
-	// Inventory restoration equips saved items
 	inventory, err := LoadItemsForCharacter(game.ctx, cd.Inventory, game.database)
 	if err != nil {
 		Logger.Warn("Error loading character inventory", "characterID", characterID, "error", err)
 	}
 	character.inventory = inventory
 
-	// Hand item loading restores wielded equipment
 	if cd.LeftHandID != "" {
 		leftHandID, err := uuid.FromString(cd.LeftHandID)
 		if err == nil {

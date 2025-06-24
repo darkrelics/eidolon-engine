@@ -276,11 +276,24 @@ func (g *Game) runInternal(errChan chan error) error {
 }
 
 func (g *Game) tick() error {
-	// Command processing handles global game actions
 	g.processGameCommands()
 
-	// Additional game logic placeholder for future features
+	if time.Now().Unix()%30 == 0 {
+		g.processCharacterHealing()
+	}
+
 	return nil
+}
+
+func (g *Game) processCharacterHealing() {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+
+	for _, character := range g.characters {
+		if character != nil && character.player != nil {
+			character.CalculateCurrentHealth()
+		}
+	}
 }
 
 func (g *Game) processGameCommands() {
