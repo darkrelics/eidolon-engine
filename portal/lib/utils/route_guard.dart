@@ -26,6 +26,7 @@ class RouteGuard {
     '/inventory',
     '/profile',
     '/settings',
+    '/account-settings',
     '/quests',
     '/guild',
     '/achievements',
