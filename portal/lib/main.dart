@@ -150,9 +150,7 @@ class MyApp extends StatelessWidget {
           builder: (_) => const CharacterManagementScreen(),
         );
       case '/account-settings':
-        return MaterialPageRoute(
-          builder: (_) => const AccountSettingsScreen(),
-        );
+        return MaterialPageRoute(builder: (_) => const AccountSettingsScreen());
       default:
         return MaterialPageRoute(
           builder: (_) => const ErrorScreen(message: 'Route not found'),

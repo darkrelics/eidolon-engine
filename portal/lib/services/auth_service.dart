@@ -563,7 +563,9 @@ class AuthService {
     try {
       // User must be authenticated
       if (_currentUser == null || _session == null) {
-        throw CognitoClientException('User must be signed in to delete account');
+        throw CognitoClientException(
+          'User must be signed in to delete account',
+        );
       }
 
       // Check if session is valid, refresh if needed

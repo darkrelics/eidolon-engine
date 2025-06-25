@@ -142,7 +142,7 @@ class AccountSettingsScreen extends StatelessWidget {
       builder: (BuildContext context) {
         final emailController = TextEditingController();
         final authState = Provider.of<AuthState>(context, listen: false);
-        
+
         return AlertDialog(
           title: const Text('Confirm Account Deletion'),
           content: Column(
@@ -196,9 +196,7 @@ class AccountSettingsScreen extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return const Center(
-          child: CircularProgressIndicator(),
-        );
+        return const Center(child: CircularProgressIndicator());
       },
     );
 
@@ -212,15 +210,10 @@ class AccountSettingsScreen extends StatelessWidget {
       Navigator.of(context).pop();
 
       // Navigate to goodbye/splash screen
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        '/',
-        (route) => false,
-      );
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Your account has been deleted'),
-        ),
+        const SnackBar(content: Text('Your account has been deleted')),
       );
     } catch (e) {
       if (!context.mounted) return;
