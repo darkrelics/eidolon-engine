@@ -169,7 +169,7 @@ class AccountSettingsScreen extends StatelessWidget {
             ),
             TextButton(
               onPressed: () {
-                if (emailController.text == authState.userEmail) {
+                if (emailController.text.trim() == authState.userEmail) {
                   Navigator.of(context).pop(true);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
