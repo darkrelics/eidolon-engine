@@ -44,7 +44,7 @@ type Player struct {
 	connection    ssh.Channel
 	consoleWidth  int
 	consoleHeight int
-	characterList map[string]uuid.UUID
+	characterList map[string]*PlayerCharacterInfo
 	seenMotD      []uuid.UUID
 	character     *Character
 	login         time.Time
@@ -234,6 +234,21 @@ func (p *Player) Stop() {
 		close(p.commandIn)
 		close(p.playerError)
 	})
+}
+
+func (p *Player) MarkCharacterDead(characterName string) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if characterInfo, exists := p.characterList[characterName]; exists {
+		characterInfo.Dead = true
+		p.lastEdited = time.Now()
+		
+		// Save player data
+		if err := p.Save(); err != nil {
+			Logger.Error("Failed to save player data after character death", "player", p.id, "character", characterName, "error", err)
+		}
+	}
 }
 
 func (s *Server) RemovePlayer(playerID uint64) error {
