@@ -1,7 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'providers/auth_provider.dart';
+import 'screens/login_screen.dart';
+import 'screens/registration_screen.dart';
+import 'screens/password_reset_screen.dart';
+import 'screens/password_reset_confirm_screen.dart';
+import 'screens/account_settings_screen.dart';
 
 void main() {
-  runApp(const EidolonIncrementalApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ],
+      child: const EidolonIncrementalApp(),
+    ),
+  );
 }
 
 class EidolonIncrementalApp extends StatelessWidget {
@@ -10,17 +24,55 @@ class EidolonIncrementalApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-        title: 'Eidolon Incremental',
-        theme: ThemeData(
+      title: 'Eidolon Incremental',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
           brightness: Brightness.dark,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple,
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
         ),
-        home: const MainGameScreen(),
-      );
+        useMaterial3: true,
+      ),
+      home: const AuthWrapper(),
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/register': (context) => const RegistrationScreen(),
+        '/forgot-password': (context) => const PasswordResetScreen(),
+        '/password-reset-confirm': (context) => const PasswordResetConfirmScreen(),
+        '/account-settings': (context) => const AccountSettingsScreen(),
+        '/game': (context) => const MainGameScreen(),
+      },
+    );
+  }
+}
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        switch (authProvider.status) {
+          case AuthStatus.uninitialized:
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          case AuthStatus.unauthenticated:
+            return const LoginScreen();
+          case AuthStatus.authenticated:
+            return const MainGameScreen();
+          case AuthStatus.loading:
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+        }
+      },
+    );
   }
 }
 
@@ -36,6 +88,17 @@ class _MainGameScreenState extends State<MainGameScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: AppBar(
+        title: const Text('Eidolon Incremental'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.pushNamed(context, '/account-settings');
+            },
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Row(
           children: [
