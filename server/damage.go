@@ -158,7 +158,7 @@ func (c *Character) updateStateWhenHealthZero() {
 		previousState := c.charState
 		c.charState = CharStateDead
 		c.playerCommandOut <- ApplyColor("red", "You have died!\n\r")
-		
+
 		// Update the player's character list to mark this character as dead
 		if previousState != CharStateDead && c.player != nil {
 			c.player.MarkCharacterDead(c.name)

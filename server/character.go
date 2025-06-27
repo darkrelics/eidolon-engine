@@ -493,7 +493,7 @@ func (c *Character) dropAllItems() error {
 
 	c.mutex.Lock()
 	itemsToDrop := make(map[uuid.UUID]*Item)
-	
+
 	// Collect all inventory items
 	for slot, item := range c.inventory {
 		if item != nil {
@@ -523,12 +523,12 @@ func (c *Character) dropHeldItems() error {
 
 	c.mutex.Lock()
 	var leftItem, rightItem *Item
-	
+
 	if c.leftHand != nil {
 		leftItem = c.leftHand
 		c.leftHand = nil
 	}
-	
+
 	if c.rightHand != nil {
 		rightItem = c.rightHand
 		c.rightHand = nil

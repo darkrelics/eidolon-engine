@@ -243,7 +243,7 @@ func (p *Player) MarkCharacterDead(characterName string) {
 	if characterInfo, exists := p.characterList[characterName]; exists {
 		characterInfo.Dead = true
 		p.lastEdited = time.Now()
-		
+
 		// Save player data
 		if err := p.Save(); err != nil {
 			Logger.Error("Failed to save player data after character death", "player", p.id, "character", characterName, "error", err)

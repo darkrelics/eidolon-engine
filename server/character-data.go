@@ -156,7 +156,7 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		character.wounds = []Wound{}
 	}
 	character.hidden = cd.Hidden
-	
+
 	// Restore character state, defaulting to standing if not set
 	if cd.CharState != "" {
 		character.charState = cd.CharState

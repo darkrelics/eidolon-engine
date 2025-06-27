@@ -287,10 +287,10 @@ func (p *Player) buildCharacterOptions() []string {
 func (p *Player) displayCharacterOptions(options []string) {
 	p.commandOut <- "\nSelect a character:\n"
 	p.commandOut <- "0) Return to menu\n"
-	
+
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
-	
+
 	for i, name := range options {
 		characterInfo := p.characterList[name]
 		if characterInfo.Dead {
@@ -311,7 +311,7 @@ func (p *Player) HandleCharacterDeletion() {
 
 	p.commandOut <- "\nSelect a character to delete:\n"
 	p.commandOut <- "0) Cancel\n"
-	
+
 	p.mutex.RLock()
 	for i, name := range options {
 		characterInfo := p.characterList[name]
@@ -322,7 +322,7 @@ func (p *Player) HandleCharacterDeletion() {
 		}
 	}
 	p.mutex.RUnlock()
-	
+
 	p.commandOut <- "\nEnter your choice: "
 
 	choice, ok := <-p.commandIn
