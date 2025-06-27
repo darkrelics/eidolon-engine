@@ -136,3 +136,46 @@ func executeUnhideCommand(character *Character, tokens []string) error {
 
 	return nil
 }
+
+// executeDepartCommand handles the depart command for dead characters
+func executeDepartCommand(character *Character, tokens []string) error {
+	if character == nil {
+		return errors.New("invalid character state")
+	}
+
+	// Only dead characters can depart
+	if character.charState != CharStateDead {
+		SafeSendString(character.player.commandOut, "\n\rYou can only depart when you are dead.\n\r", character.name)
+		return nil
+	}
+
+	Logger.Info("Character departing as ghost", "characterName", character.name)
+
+	// Drop all inventory items to the room
+	if err := character.dropAllItems(); err != nil {
+		Logger.Error("Failed to drop items during depart", "character", character.name, "error", err)
+	}
+
+	// Drop held items
+	if err := character.dropHeldItems(); err != nil {
+		Logger.Error("Failed to drop held items during depart", "character", character.name, "error", err)
+	}
+
+	// Transition to ghost state
+	character.mutex.Lock()
+	character.charState = CharStateGhost
+	character.mutex.Unlock()
+
+	// Notify the departing player
+	SafeSendString(character.player.commandOut,
+		ApplyColor("cyan", "\n\rYour spirit is released from your body, leaving your mortal possessions behind.\n\r"),
+		character.name)
+
+	// Notify others in the room
+	SendRoomMessage(character.room,
+		fmt.Sprintf("\n\r%s's body rots aways and returns to the earth.\n\r", character.name),
+		character,
+	)
+
+	return nil
+}

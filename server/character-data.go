@@ -367,5 +367,10 @@ func (c *Character) IsVisibleTo(observer *Character) bool {
 		return true // Always visible to self
 	}
 
+	// Ghosts are invisible to others
+	if c.charState == CharStateGhost {
+		return false
+	}
+
 	return !c.hidden
 }

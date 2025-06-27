@@ -33,6 +33,7 @@ const (
 	CharStateStanding    = "standing"
 	CharStateUnconscious = "unconscious"
 	CharStateDead        = "dead"
+	CharStateGhost       = "ghost"
 )
 
 const (

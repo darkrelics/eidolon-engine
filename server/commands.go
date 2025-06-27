@@ -71,9 +71,12 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	}
 
 	// Check if the character is waiting for a command timeout
-	canExecute, reason := checkRoundTime(character, cmdInfo)
-	if !canExecute {
-		return false, fmt.Errorf("%s", reason)
+	// Special case: depart command can be used when dead
+	if verb != "depart" {
+		canExecute, reason := checkRoundTime(character, cmdInfo)
+		if !canExecute {
+			return false, fmt.Errorf("%s", reason)
+		}
 	}
 
 	// Special case handling for "quit" command - always process immediately
