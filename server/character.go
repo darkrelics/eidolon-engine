@@ -131,6 +131,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		LeftHandID:    leftHandID,
 		RightHandID:   rightHandID,
 		Hidden:        c.hidden,
+		CharState:     c.charState,
 	}
 
 	// Transactional save ensures data consistency

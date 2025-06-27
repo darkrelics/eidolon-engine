@@ -93,6 +93,7 @@ type CharacterData struct {
 	LeftHandID    string             `json:"LeftHandID,omitempty" dynamodbav:"LeftHandID,omitempty"`
 	RightHandID   string             `json:"RightHandID,omitempty" dynamodbav:"RightHandID,omitempty"`
 	Hidden        bool               `json:"Hidden" dynamodbav:"Hidden"`
+	CharState     string             `json:"CharState" dynamodbav:"CharState"`
 }
 
 func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
@@ -155,6 +156,13 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		character.wounds = []Wound{}
 	}
 	character.hidden = cd.Hidden
+	
+	// Restore character state, defaulting to standing if not set
+	if cd.CharState != "" {
+		character.charState = cd.CharState
+	} else {
+		character.charState = CharStateStanding
+	}
 
 	character.CalculateCurrentHealth()
 
