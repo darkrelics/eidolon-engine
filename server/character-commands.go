@@ -177,7 +177,7 @@ func performDepart(character *Character) error {
 
 	// Notify others in the room
 	SendRoomMessage(character.room,
-		fmt.Sprintf("\n\r%s's body rots aways and returns to the earth.\n\r", character.name),
+		fmt.Sprintf("\n\r%s's body rots away and returns to the earth.\n\r", character.name),
 		character,
 	)
 
