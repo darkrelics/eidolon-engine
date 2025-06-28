@@ -168,6 +168,17 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 	// Join all arguments after the command to form the message
 	message := strings.Join(cmd.Args[1:], " ")
 
+	// Check if character is dead or a ghost
+	if character.charState == CharStateDead || character.charState == CharStateGhost {
+		// Dead/ghost trying to speak
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   true,
+			Message:   ApplyColor("cyan", "\n\rYour voice cannot cross the veil of death.\n\r"),
+			Timestamp: time.Now(),
+		}
+	}
+
 	// Message for the speaker
 	speakerMessage := fmt.Sprintf("\n\rYou say '%s'\n\r", message)
 

@@ -60,6 +60,10 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 		return false, "You cannot do that while unconscious."
 	}
 
+	if c.charState == CharStateGhost {
+		return false, "You cannot do that as a ghost."
+	}
+
 	return true, ""
 }
 
@@ -127,6 +131,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		LeftHandID:    leftHandID,
 		RightHandID:   rightHandID,
 		Hidden:        c.hidden,
+		CharState:     c.charState,
 	}
 
 	// Transactional save ensures data consistency
@@ -478,4 +483,67 @@ func FormatCharacterDescription(target *Character, viewer *Character) string {
 	}
 
 	return desc.String()
+}
+
+// dropAllItems drops all inventory items to the room
+func (c *Character) dropAllItems() error {
+	if c.room == nil {
+		return fmt.Errorf("character not in a room")
+	}
+
+	c.mutex.Lock()
+	itemsToDrop := make(map[uuid.UUID]*Item)
+
+	// Collect all inventory items
+	for slot, item := range c.inventory {
+		if item != nil {
+			itemsToDrop[item.id] = item
+			delete(c.inventory, slot)
+		}
+	}
+	c.mutex.Unlock()
+
+	// Add items to room
+	if len(itemsToDrop) > 0 {
+		c.room.mutex.Lock()
+		for id, item := range itemsToDrop {
+			c.room.items[id] = item
+		}
+		c.room.mutex.Unlock()
+	}
+
+	return nil
+}
+
+// dropHeldItems drops items from both hands to the room
+func (c *Character) dropHeldItems() error {
+	if c.room == nil {
+		return fmt.Errorf("character not in a room")
+	}
+
+	c.mutex.Lock()
+	var leftItem, rightItem *Item
+
+	if c.leftHand != nil {
+		leftItem = c.leftHand
+		c.leftHand = nil
+	}
+
+	if c.rightHand != nil {
+		rightItem = c.rightHand
+		c.rightHand = nil
+	}
+	c.mutex.Unlock()
+
+	// Add items to room
+	c.room.mutex.Lock()
+	if leftItem != nil {
+		c.room.items[leftItem.id] = leftItem
+	}
+	if rightItem != nil {
+		c.room.items[rightItem.id] = rightItem
+	}
+	c.room.mutex.Unlock()
+
+	return nil
 }
