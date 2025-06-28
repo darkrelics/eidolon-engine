@@ -53,21 +53,6 @@ Resources:
           ARCHETYPES_TABLE_NAME: !Ref ArchetypesTableName
       Description: "Returns player-available archetypes from cached data"
 
-  # Lambda Function URL (for direct HTTP access)
-  ArchetypesFunctionUrl:
-    Type: AWS::Lambda::FunctionUrl
-    Properties:
-      FunctionName: !Ref GetPlayerArchetypesFunction
-      AuthType: NONE # Change to AWS_IAM for authenticated access
-      Cors:
-        AllowOrigins:
-          - "*" # Configure based on your needs
-        AllowMethods:
-          - GET
-        AllowHeaders:
-          - Content-Type
-        MaxAge: 300
-
   # CloudWatch Log Group
   ArchetypesLogGroup:
     Type: AWS::Logs::LogGroup
@@ -130,10 +115,6 @@ Outputs:
   LambdaFunctionArn:
     Description: ARN of the Lambda function
     Value: !GetAtt GetPlayerArchetypesFunction.Arn
-
-  LambdaFunctionUrl:
-    Description: Direct URL for the Lambda function
-    Value: !GetAtt ArchetypesFunctionUrl.FunctionUrl
 
   ApiGatewayUrl:
     Description: API Gateway URL for accessing archetypes

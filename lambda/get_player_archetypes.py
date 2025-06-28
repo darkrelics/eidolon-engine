@@ -45,30 +45,28 @@ cache_loaded = False
 def load_player_archetypes():
     """
     Load all archetypes from DynamoDB and filter for player-available ones.
-    
+
     Returns:
         List of player archetypes with their data
     """
     global player_archetypes_cache, cache_loaded
-    
+
     if cache_loaded:
         logger.info("Returning cached player archetypes")
         return player_archetypes_cache
-    
+
     try:
         logger.info("Loading archetypes from DynamoDB")
-        
+
         # Scan the archetypes table
         response = archetypes_table.scan()
         items = response.get("Items", [])
-        
+
         # Handle pagination if necessary
         while "LastEvaluatedKey" in response:
-            response = archetypes_table.scan(
-                ExclusiveStartKey=response["LastEvaluatedKey"]
-            )
+            response = archetypes_table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
             items.extend(response.get("Items", []))
-        
+
         # Filter for player archetypes
         player_archetypes = []
         for item in items:
@@ -76,35 +74,33 @@ def load_player_archetypes():
             if item.get("Player", False):
                 # Normalize attribute and skill keys to lowercase
                 if "Attributes" in item:
-                    item["Attributes"] = {
-                        k.lower(): v for k, v in item["Attributes"].items()
-                    }
+                    item["Attributes"] = {k.lower(): v for k, v in item["Attributes"].items()}
                 if "Skills" in item:
-                    item["Skills"] = {
-                        k.lower(): v for k, v in item["Skills"].items()
+                    item["Skills"] = {k.lower(): v for k, v in item["Skills"].items()}
+
+                player_archetypes.append(
+                    {
+                        "ArchetypeName": item.get("ArchetypeName", ""),
+                        "Description": item.get("Description", ""),
+                        "Attributes": item.get("Attributes", {}),
+                        "Skills": item.get("Skills", {}),
+                        "StartRoom": item.get("StartRoom", 0),
+                        "StartingItems": item.get("StartingItems", []),
+                        "Health": item.get("Health", 0),
+                        "Essence": item.get("Essence", 0),
                     }
-                
-                player_archetypes.append({
-                    "ArchetypeName": item.get("ArchetypeName", ""),
-                    "Description": item.get("Description", ""),
-                    "Attributes": item.get("Attributes", {}),
-                    "Skills": item.get("Skills", {}),
-                    "StartRoom": item.get("StartRoom", 0),
-                    "StartingItems": item.get("StartingItems", []),
-                    "Health": item.get("Health", 0),
-                    "Essence": item.get("Essence", 0),
-                })
-        
+                )
+
         # Sort by archetype name for consistent ordering
         player_archetypes.sort(key=lambda x: x["ArchetypeName"])
-        
+
         # Cache the results
         player_archetypes_cache = player_archetypes
         cache_loaded = True
-        
+
         logger.info(f"Loaded {len(player_archetypes)} player archetypes")
         return player_archetypes
-        
+
     except ClientError as err:
         logger.error(f"Error loading archetypes from DynamoDB: {err}")
         raise
@@ -116,18 +112,18 @@ def load_player_archetypes():
 def lambda_handler(_, __):
     """
     Lambda handler to return player-available archetypes.
-    
+
     Args:
         _: API Gateway event or direct invocation event (unused)
         __: Lambda context (unused)
-        
+
     Returns:
         API Gateway response with player archetypes
     """
     try:
         # Load player archetypes (from cache if available)
         player_archetypes = load_player_archetypes()
-        
+
         # Return successful response
         return {
             "statusCode": 200,
@@ -135,12 +131,14 @@ def lambda_handler(_, __):
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",  # Configure based on your needs
             },
-            "body": json.dumps({
-                "archetypes": player_archetypes,
-                "count": len(player_archetypes),
-            }),
+            "body": json.dumps(
+                {
+                    "archetypes": player_archetypes,
+                    "count": len(player_archetypes),
+                }
+            ),
         }
-        
+
     except Exception as err:
         logger.error(f"Error in lambda_handler: {err}")
         return {
@@ -149,8 +147,10 @@ def lambda_handler(_, __):
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",
             },
-            "body": json.dumps({
-                "error": "Internal server error",
-                "message": str(err),
-            }),
+            "body": json.dumps(
+                {
+                    "error": "Internal server error",
+                    "message": str(err),
+                }
+            ),
         }

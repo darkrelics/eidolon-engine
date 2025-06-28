@@ -365,10 +365,7 @@ class EidolonEngineApp:
         self.lambda_stack.add_dependency(self.cognito_stack)
 
         # Add Cognito Lambda trigger
-        self.cognito_stack.add_lambda_trigger(
-            "PostConfirmation",
-            self.lambda_stack.cognito_new_player_function
-        )
+        self.cognito_stack.add_lambda_trigger("PostConfirmation", self.lambda_stack.cognito_new_player_function)
 
     def get_deployment_parameters(self) -> dict:
         """Get deployment parameters from config or state."""
@@ -413,7 +410,7 @@ class EidolonEngineApp:
             params["domain_name"] = api_config.get("Domain")
             params["api_subdomain"] = api_config.get("Subdomain", "api")
             params["hosted_zone_id"] = api_config.get("HostedZoneId")
-            
+
             # Validate required API parameters
             if not params["domain_name"]:
                 raise ValueError("API.Domain is required in configuration")

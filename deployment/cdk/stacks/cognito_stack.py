@@ -52,13 +52,10 @@ class CognitoStack(Stack):
 
     def add_lambda_trigger(self, trigger_type: str, lambda_function: lambda_.IFunction) -> None:
         """Add a Lambda trigger to the user pool.
-        
+
         Args:
             trigger_type: Type of trigger (e.g., 'PostConfirmation')
             lambda_function: Lambda function to trigger
         """
         if trigger_type == "PostConfirmation":
-            self.user_pool.add_trigger(
-                cognito.UserPoolOperation.POST_CONFIRMATION,
-                lambda_function
-            )
+            self.user_pool.add_trigger(cognito.UserPoolOperation.POST_CONFIRMATION, lambda_function)

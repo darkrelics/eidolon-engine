@@ -54,48 +54,48 @@ MAX_NAME_LENGTH = 20
 def validate_character_name(name):
     """
     Validate character name according to game rules.
-    
+
     Args:
         name: Character name to validate
-        
+
     Returns:
         tuple: (is_valid, error_message)
     """
     if not name:
         return False, "Name cannot be empty"
-    
+
     if len(name) < MIN_NAME_LENGTH:
         return False, f"Name must be at least {MIN_NAME_LENGTH} characters"
-    
+
     if len(name) > MAX_NAME_LENGTH:
         return False, f"Name must be {MAX_NAME_LENGTH} characters or fewer"
-    
+
     if not NAME_PATTERN.match(name):
         return False, "Name must contain only letters, hyphens, and apostrophes"
-    
+
     # Check for special characters at start/end
     if name[0] in "-'" or name[-1] in "-'":
         return False, "Name cannot start or end with special characters"
-    
+
     # Check for consecutive special characters
     for i in range(len(name) - 1):
         if name[i] in "-'" and name[i + 1] in "-'":
             return False, "Name cannot have consecutive special characters"
-    
+
     # Check for excessive repetition
     for i in range(len(name) - 2):
         if name[i] == name[i + 1] == name[i + 2]:
             return False, "Name cannot have more than 2 consecutive identical characters"
-    
+
     # Check letter ratio for short names with special chars
     if len(name) <= 3 and any(c in "-'" for c in name):
         return False, "Short names cannot contain special characters"
-    
+
     # Ensure reasonable letter-to-special-character ratio
     letter_count = sum(1 for c in name if c.isalpha())
     if letter_count / len(name) < 0.5:
         return False, "Name must be primarily letters"
-    
+
     return True, None
 
 
@@ -109,31 +109,29 @@ def generate_character_id():
 def get_archetype(archetype_name):
     """
     Retrieve and validate an archetype from DynamoDB.
-    
+
     Args:
         archetype_name: Name of the archetype
-        
+
     Returns:
         Archetype data or None if not found/not player-available
     """
     try:
-        response = archetypes_table.get_item(
-            Key={"ArchetypeName": archetype_name}
-        )
-        
+        response = archetypes_table.get_item(Key={"ArchetypeName": archetype_name})
+
         if "Item" not in response:
             logger.warning(f"Archetype not found: {archetype_name}")
             return None
-        
+
         archetype = response["Item"]
-        
+
         # Check if archetype is available to players
         if not archetype.get("Player", False):
             logger.warning(f"Archetype not available to players: {archetype_name}")
             return None
-        
+
         return archetype
-        
+
     except ClientError as err:
         logger.error(f"Error retrieving archetype: {err}")
         return None
@@ -142,31 +140,29 @@ def get_archetype(archetype_name):
 def check_character_limit(player_id):
     """
     Check if player has reached character limit.
-    
+
     Args:
         player_id: Cognito user ID
-        
+
     Returns:
         tuple: (can_create, current_count)
     """
     max_characters = int(os.environ.get("MAX_CHARACTERS_PER_PLAYER", "10"))
-    
+
     try:
         # Get player record
-        response = players_table.get_item(
-            Key={"PlayerID": player_id}
-        )
-        
+        response = players_table.get_item(Key={"PlayerID": player_id})
+
         if "Item" not in response:
             logger.error(f"Player not found: {player_id}")
             return False, 0
-        
+
         player = response["Item"]
         character_list = player.get("CharacterList", {})
         current_count = len(character_list)
-        
+
         return current_count < max_characters, current_count
-        
+
     except ClientError as err:
         logger.error(f"Error checking character limit: {err}")
         return False, 0
@@ -175,10 +171,10 @@ def check_character_limit(player_id):
 def check_name_exists(character_name):
     """
     Check if character name already exists.
-    
+
     Args:
         character_name: Name to check
-        
+
     Returns:
         bool: True if name exists
     """
@@ -189,11 +185,11 @@ def check_name_exists(character_name):
             FilterExpression="CharacterName = :name",
             ExpressionAttributeValues={":name": character_name},
             ProjectionExpression="CharacterID",
-            Limit=1
+            Limit=1,
         )
-        
+
         return len(response.get("Items", [])) > 0
-        
+
     except ClientError as err:
         logger.error(f"Error checking name existence: {err}")
         return True  # Assume exists on error for safety
@@ -202,19 +198,19 @@ def check_name_exists(character_name):
 def create_character(player_id, character_name, archetype_name, archetype_data):
     """
     Create a new character in DynamoDB.
-    
+
     Args:
         player_id: Cognito user ID
         character_name: Name of the character
         archetype_name: Name of the archetype
         archetype_data: Archetype data from DynamoDB
-        
+
     Returns:
         Character ID if successful, None otherwise
     """
     character_id = generate_character_id()
     timestamp = datetime.utcnow().isoformat()
-    
+
     # Convert float values to Decimal for DynamoDB
     def convert_to_decimal(obj):
         if isinstance(obj, float):
@@ -224,7 +220,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         elif isinstance(obj, list):
             return [convert_to_decimal(v) for v in obj]
         return obj
-    
+
     # Build character record
     character_item = {
         "CharacterID": character_id,
@@ -245,31 +241,25 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "UpdatedAt": timestamp,
         "LastPlayed": timestamp,
     }
-    
+
     try:
         # Start a transaction to update both tables atomically
         # Update player's character list with PlayerCharacterInfo structure
-        character_info = {
-            "UUID": character_id,
-            "Dead": False  # New characters start alive
-        }
-        
+        character_info = {"UUID": character_id, "Dead": False}  # New characters start alive
+
         players_table.update_item(
             Key={"PlayerID": player_id},
             UpdateExpression="SET CharacterList.#name = :info, UpdatedAt = :timestamp",
             ExpressionAttributeNames={"#name": character_name},
-            ExpressionAttributeValues={
-                ":info": character_info,
-                ":timestamp": timestamp
-            }
+            ExpressionAttributeValues={":info": character_info, ":timestamp": timestamp},
         )
-        
+
         # Create character record
         characters_table.put_item(Item=character_item)
-        
+
         logger.info(f"Created character {character_name} ({character_id}) for player {player_id}")
         return character_id
-        
+
     except ClientError as err:
         logger.error(f"Error creating character: {err}")
         # Attempt to rollback player update
@@ -277,21 +267,21 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
             players_table.update_item(
                 Key={"PlayerID": player_id},
                 UpdateExpression="REMOVE CharacterList.#name",
-                ExpressionAttributeNames={"#name": character_name}
+                ExpressionAttributeNames={"#name": character_name},
             )
-        except:
-            pass
+        except ClientError as rollback_err:
+            logger.error(f"Failed to rollback player update: {rollback_err}")
         return None
 
 
 def lambda_handler(event, _):
     """
     Lambda handler for character creation API.
-    
+
     Args:
         event: API Gateway event with Cognito authorizer
         _: Lambda context (unused)
-        
+
     Returns:
         API Gateway response
     """
@@ -299,14 +289,14 @@ def lambda_handler(event, _):
         # Extract player ID from Cognito authorizer
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
         player_id = claims.get("sub")
-        
+
         if not player_id:
             return {
                 "statusCode": 401,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Unauthorized"})
+                "body": json.dumps({"error": "Unauthorized"}),
             }
-        
+
         # Parse request body
         try:
             body = json.loads(event.get("body", "{}"))
@@ -314,67 +304,64 @@ def lambda_handler(event, _):
             return {
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Invalid JSON"})
+                "body": json.dumps({"error": "Invalid JSON"}),
             }
-        
+
         # Extract and validate required fields
         character_name = body.get("characterName", "").strip()
         archetype_name = body.get("archetype", "").strip()
-        
+
         if not character_name or not archetype_name:
             return {
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Missing required fields"})
+                "body": json.dumps({"error": "Missing required fields"}),
             }
-        
+
         # Validate character name
         is_valid, error_msg = validate_character_name(character_name)
         if not is_valid:
             return {
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": f"Invalid character name: {error_msg}"})
+                "body": json.dumps({"error": f"Invalid character name: {error_msg}"}),
             }
-        
+
         # Check character limit
         can_create, current_count = check_character_limit(player_id)
         if not can_create:
             return {
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({
-                    "error": f"Character limit reached ({current_count})",
-                    "currentCount": current_count
-                })
+                "body": json.dumps({"error": f"Character limit reached ({current_count})", "currentCount": current_count}),
             }
-        
+
         # Check if name already exists
         if check_name_exists(character_name):
             return {
                 "statusCode": 409,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Character name already exists"})
+                "body": json.dumps({"error": "Character name already exists"}),
             }
-        
+
         # Validate archetype
         archetype_data = get_archetype(archetype_name)
         if not archetype_data:
             return {
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Invalid or unavailable archetype"})
+                "body": json.dumps({"error": "Invalid or unavailable archetype"}),
             }
-        
+
         # Create the character
         character_id = create_character(player_id, character_name, archetype_name, archetype_data)
         if not character_id:
             return {
                 "statusCode": 500,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Failed to create character"})
+                "body": json.dumps({"error": "Failed to create character"}),
             }
-        
+
         # Return success response
         return {
             "statusCode": 201,
@@ -382,18 +369,20 @@ def lambda_handler(event, _):
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",
             },
-            "body": json.dumps({
-                "characterId": character_id,
-                "characterName": character_name,
-                "archetype": archetype_name,
-                "message": "Character created successfully"
-            })
+            "body": json.dumps(
+                {
+                    "characterId": character_id,
+                    "characterName": character_name,
+                    "archetype": archetype_name,
+                    "message": "Character created successfully",
+                }
+            ),
         }
-        
+
     except Exception as err:
         logger.error(f"Unexpected error in lambda_handler: {err}")
         return {
             "statusCode": 500,
             "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Internal server error"})
+            "body": json.dumps({"error": "Internal server error"}),
         }

@@ -7,7 +7,6 @@ import aws_cdk as cdk
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cognito as cognito
-from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_logs as logs
@@ -70,9 +69,7 @@ class LambdaStack(cdk.Stack):
             f"{game_name}-cognito-lambda-role",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWSLambdaBasicExecutionRole"
-                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
             ],
         )
 
@@ -81,9 +78,7 @@ class LambdaStack(cdk.Stack):
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:PutItem"],
-                resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{players_table_name}"
-                ],
+                resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{players_table_name}"],
             )
         )
 
@@ -106,13 +101,7 @@ class LambdaStack(cdk.Stack):
 
         # Grant Cognito permission to invoke the Lambda function
         self.cognito_new_player_function.grant_invoke(
-            iam.ServicePrincipal("cognito-idp.amazonaws.com",
-                conditions={
-                    "ArnLike": {
-                        "aws:SourceArn": cognito_user_pool_arn
-                    }
-                }
-            )
+            iam.ServicePrincipal("cognito-idp.amazonaws.com", conditions={"ArnLike": {"aws:SourceArn": cognito_user_pool_arn}})
         )
 
         # Create IAM role for Archetypes Lambda
@@ -121,9 +110,7 @@ class LambdaStack(cdk.Stack):
             f"{game_name}-archetypes-lambda-role",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWSLambdaBasicExecutionRole"
-                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
             ],
         )
 
@@ -132,9 +119,7 @@ class LambdaStack(cdk.Stack):
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:Scan", "dynamodb:Query", "dynamodb:GetItem"],
-                resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{archetypes_table_name}"
-                ],
+                resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{archetypes_table_name}"],
             )
         )
 
@@ -155,16 +140,13 @@ class LambdaStack(cdk.Stack):
             description="Returns player-available archetypes from cached data",
         )
 
-
         # Create IAM role for Save Character Lambda
         save_character_lambda_role = iam.Role(
             self,
             f"{game_name}-save-character-lambda-role",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWSLambdaBasicExecutionRole"
-                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
             ],
         )
 
@@ -172,13 +154,7 @@ class LambdaStack(cdk.Stack):
         save_character_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
-                actions=[
-                    "dynamodb:GetItem",
-                    "dynamodb:PutItem",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:Query",
-                    "dynamodb:Scan"
-                ],
+                actions=["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan"],
                 resources=[
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{players_table_name}",
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{characters_table_name}",
@@ -213,9 +189,7 @@ class LambdaStack(cdk.Stack):
             f"{game_name}-list-characters-lambda-role",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWSLambdaBasicExecutionRole"
-                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
             ],
         )
 
@@ -223,10 +197,7 @@ class LambdaStack(cdk.Stack):
         list_characters_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
-                actions=[
-                    "dynamodb:GetItem",
-                    "dynamodb:Query"
-                ],
+                actions=["dynamodb:GetItem", "dynamodb:Query"],
                 resources=[
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{players_table_name}",
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{characters_table_name}",
@@ -258,9 +229,7 @@ class LambdaStack(cdk.Stack):
             f"{game_name}-delete-character-lambda-role",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWSLambdaBasicExecutionRole"
-                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
             ],
         )
 
@@ -268,11 +237,7 @@ class LambdaStack(cdk.Stack):
         delete_character_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
-                actions=[
-                    "dynamodb:GetItem",
-                    "dynamodb:DeleteItem",
-                    "dynamodb:UpdateItem"
-                ],
+                actions=["dynamodb:GetItem", "dynamodb:DeleteItem", "dynamodb:UpdateItem"],
                 resources=[
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{players_table_name}",
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{characters_table_name}",
@@ -317,9 +282,7 @@ class LambdaStack(cdk.Stack):
         self.cognito_authorizer = apigateway.CognitoUserPoolsAuthorizer(
             self,
             f"{game_name}-api-authorizer",
-            cognito_user_pools=[
-                cognito.UserPool.from_user_pool_arn(self, "imported-user-pool", cognito_user_pool_arn)
-            ],
+            cognito_user_pools=[cognito.UserPool.from_user_pool_arn(self, "imported-user-pool", cognito_user_pool_arn)],
             authorizer_name=f"{game_name}-api-authorizer",
             identity_source="method.request.header.Authorization",
         )
@@ -335,7 +298,7 @@ class LambdaStack(cdk.Stack):
 
         # Add characters resource and methods (authenticated endpoints)
         characters_resource = self.api.root.add_resource("characters")
-        
+
         # POST /characters - Create new character
         characters_resource.add_method(
             "POST",
@@ -343,7 +306,7 @@ class LambdaStack(cdk.Stack):
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
         )
-        
+
         # GET /characters - List player's characters
         characters_resource.add_method(
             "GET",
@@ -351,7 +314,7 @@ class LambdaStack(cdk.Stack):
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
         )
-        
+
         # DELETE /characters - Delete a character
         characters_resource.add_method(
             "DELETE",
@@ -405,9 +368,7 @@ class LambdaStack(cdk.Stack):
             f"{game_name}-api-record",
             zone=hosted_zone,
             record_name=api_subdomain,
-            target=route53.RecordTarget.from_alias(
-                targets.ApiGatewayDomain(custom_domain)
-            ),
+            target=route53.RecordTarget.from_alias(targets.ApiGatewayDomain(custom_domain)),
         )
 
         # Output the custom domain URL
@@ -473,7 +434,6 @@ class LambdaStack(cdk.Stack):
             value=self.get_player_archetypes_function.function_arn,
             description="ARN of the get player archetypes Lambda function",
         )
-
 
         cdk.CfnOutput(
             self,

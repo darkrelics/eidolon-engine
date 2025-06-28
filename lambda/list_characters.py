@@ -41,11 +41,11 @@ players_table = dynamodb.Table(players_table_name)
 def lambda_handler(event, _):
     """
     Lambda handler for listing player characters.
-    
+
     Args:
         event: API Gateway event with Cognito authorizer
         _: Lambda context (unused)
-        
+
     Returns:
         API Gateway response
     """
@@ -56,55 +56,46 @@ def lambda_handler(event, _):
             return {
                 "statusCode": 401,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Unauthorized"})
+                "body": json.dumps({"error": "Unauthorized"}),
             }
-        
+
         # Get player data from players table
         response = players_table.get_item(Key={"PlayerID": player_id})
-        
+
         if "Item" not in response:
             return {
                 "statusCode": 404,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Player not found"})
+                "body": json.dumps({"error": "Player not found"}),
             }
-        
+
         player_data = response["Item"]
         character_list = player_data.get("CharacterList", {})
-        
+
         # Build character list with name and death status
         characters = []
         for char_name, char_info in character_list.items():
-            characters.append({
-                "name": char_name,
-                "dead": char_info.get("Dead", False)
-            })
-        
+            characters.append({"name": char_name, "dead": char_info.get("Dead", False)})
+
         # Sort by name for consistent ordering
         characters.sort(key=lambda x: x["name"])
-        
+
         return {
             "statusCode": 200,
             "headers": {
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",
             },
-            "body": json.dumps({
-                "characters": characters
-            })
+            "body": json.dumps({"characters": characters}),
         }
-        
+
     except ClientError as err:
         logger.error(f"DynamoDB error: {err}")
-        return {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Database error"})
-        }
+        return {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": "Database error"})}
     except Exception as err:
         logger.error(f"Unexpected error: {err}")
         return {
             "statusCode": 500,
             "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Internal server error"})
+            "body": json.dumps({"error": "Internal server error"}),
         }

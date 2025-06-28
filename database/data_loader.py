@@ -176,7 +176,7 @@ def store_archetypes(dynamodb, archetypes_data):
                 "StartingItems": archetype.get("StartingItems", []),
                 "Player": archetype.get("Player", False),
             }
-            
+
             # Add optional Health and Essence fields if present
             if "Health" in archetype:
                 archetype_item["Health"] = archetype["Health"]
