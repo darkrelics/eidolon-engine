@@ -5,10 +5,13 @@ This stack creates Lambda functions and layers for the game server.
 
 import aws_cdk as cdk
 from aws_cdk import aws_apigateway as apigateway
+from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_logs as logs
+from aws_cdk import aws_route53 as route53
+from aws_cdk import aws_route53_targets as targets
 from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
@@ -25,6 +28,9 @@ class LambdaStack(cdk.Stack):
         players_table_name: str,
         archetypes_table_name: str,
         cognito_user_pool_arn: str,
+        domain_name: str,
+        hosted_zone_id: str,
+        api_subdomain: str = "api",
         **kwargs,
     ) -> None:
         """Initialize the Lambda stack.
@@ -37,6 +43,9 @@ class LambdaStack(cdk.Stack):
             players_table_name: Name of the players DynamoDB table
             archetypes_table_name: Name of the archetypes DynamoDB table
             cognito_user_pool_arn: ARN of the Cognito user pool
+            domain_name: Domain name for API (required)
+            hosted_zone_id: Route53 hosted zone ID (required)
+            api_subdomain: Subdomain for API (default: "api")
             **kwargs: Additional stack properties
         """
         super().__init__(scope, id, **kwargs)
@@ -88,6 +97,17 @@ class LambdaStack(cdk.Stack):
                 "PLAYERS_TABLE_NAME": players_table_name,
             },
             description="Creates new player records after Cognito user confirmation",
+        )
+
+        # Grant Cognito permission to invoke the Lambda function
+        self.cognito_new_player_function.grant_invoke(
+            iam.ServicePrincipal("cognito-idp.amazonaws.com",
+                conditions={
+                    "ArnLike": {
+                        "aws:SourceArn": cognito_user_pool_arn
+                    }
+                }
+            )
         )
 
         # Create IAM role for Archetypes Lambda
@@ -160,6 +180,64 @@ class LambdaStack(cdk.Stack):
             "GET",
             apigateway.LambdaIntegration(self.get_player_archetypes_function),
             authorization_type=apigateway.AuthorizationType.NONE,
+        )
+
+        # Configure custom domain (required)
+        # Import the existing hosted zone
+        hosted_zone = route53.HostedZone.from_hosted_zone_attributes(
+            self,
+            f"{game_name}-hosted-zone",
+            hosted_zone_id=hosted_zone_id,
+            zone_name=domain_name,
+        )
+
+        # Create the full domain name for the API
+        api_domain_name = f"{api_subdomain}.{domain_name}"
+
+        # Create ACM certificate for the API domain
+        certificate = acm.Certificate(
+            self,
+            f"{game_name}-api-certificate",
+            domain_name=api_domain_name,
+            validation=acm.CertificateValidation.from_dns(hosted_zone),
+        )
+
+        # Create custom domain for API Gateway
+        custom_domain = apigateway.DomainName(
+            self,
+            f"{game_name}-api-domain",
+            domain_name=api_domain_name,
+            certificate=certificate,
+            endpoint_type=apigateway.EndpointType.REGIONAL,
+            security_policy=apigateway.SecurityPolicy.TLS_1_2,
+        )
+
+        # Map the API to the custom domain
+        apigateway.BasePathMapping(
+            self,
+            f"{game_name}-api-mapping",
+            domain_name=custom_domain,
+            rest_api=self.archetypes_api,
+            base_path="",  # Map to root of domain
+        )
+
+        # Create Route53 alias record for the custom domain
+        route53.ARecord(
+            self,
+            f"{game_name}-api-record",
+            zone=hosted_zone,
+            record_name=api_subdomain,
+            target=route53.RecordTarget.from_alias(
+                targets.ApiGatewayDomain(custom_domain)
+            ),
+        )
+
+        # Output the custom domain URL
+        cdk.CfnOutput(
+            self,
+            "ApiCustomDomainUrl",
+            value=f"https://{api_domain_name}/archetypes",
+            description="Custom domain URL for accessing archetypes API",
         )
 
         # Create CloudWatch log groups with retention

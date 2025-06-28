@@ -2,6 +2,7 @@
 
 from aws_cdk import CfnOutput, RemovalPolicy, Stack
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_lambda as lambda_
 from constructs import Construct
 
 
@@ -48,3 +49,16 @@ class CognitoStack(Stack):
         CfnOutput(self, "UserPoolId", value=self.user_pool.user_pool_id, description="Cognito User Pool ID")
 
         CfnOutput(self, "AppClientId", value=self.app_client.user_pool_client_id, description="Cognito App Client ID")
+
+    def add_lambda_trigger(self, trigger_type: str, lambda_function: lambda_.IFunction) -> None:
+        """Add a Lambda trigger to the user pool.
+        
+        Args:
+            trigger_type: Type of trigger (e.g., 'PostConfirmation')
+            lambda_function: Lambda function to trigger
+        """
+        if trigger_type == "PostConfirmation":
+            self.user_pool.add_trigger(
+                cognito.UserPoolOperation.POST_CONFIRMATION,
+                lambda_function
+            )

@@ -45,6 +45,10 @@ Game:
   RoomUnloadSeconds: 3600 # 60 minutes
   CommandTimeoutSeconds: 5
   PlayerIdleTimeoutSeconds: 900 # 15 minutes
+API: # Required - API Gateway custom domain configuration
+  Domain: example.com # Your domain name (REQUIRED)
+  Subdomain: api # Subdomain for API (default: api)
+  HostedZoneId: Z1234567890ABC # Route53 hosted zone ID for the domain (REQUIRED)
 Logging:
   ApplicationName: eidolon-engine
   LogLevel: 20

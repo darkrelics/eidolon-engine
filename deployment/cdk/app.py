@@ -353,11 +353,20 @@ class EidolonEngineApp:
             players_table_name=params.get("dynamodb_tables", {}).get("Players", "players"),
             archetypes_table_name=params.get("dynamodb_tables", {}).get("Archetypes", "archetypes"),
             cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
+            domain_name=params.get("domain_name"),
+            api_subdomain=params.get("api_subdomain", "api"),
+            hosted_zone_id=params.get("hosted_zone_id"),
             env=env,
         )
         self.lambda_stack.add_dependency(self.s3_stack)
         self.lambda_stack.add_dependency(self.dynamodb_stack)
         self.lambda_stack.add_dependency(self.cognito_stack)
+
+        # Add Cognito Lambda trigger
+        self.cognito_stack.add_lambda_trigger(
+            "PostConfirmation",
+            self.lambda_stack.cognito_new_player_function
+        )
 
     def get_deployment_parameters(self) -> dict:
         """Get deployment parameters from config or state."""
@@ -395,6 +404,21 @@ class EidolonEngineApp:
             codebuild_config = self.config["CodeBuild"]
             if "PortalBuildspecPath" in codebuild_config:
                 params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
+
+        # Check for API configuration (required)
+        if "API" in self.config:
+            api_config = self.config["API"]
+            params["domain_name"] = api_config.get("Domain")
+            params["api_subdomain"] = api_config.get("Subdomain", "api")
+            params["hosted_zone_id"] = api_config.get("HostedZoneId")
+            
+            # Validate required API parameters
+            if not params["domain_name"]:
+                raise ValueError("API.Domain is required in configuration")
+            if not params["hosted_zone_id"]:
+                raise ValueError("API.HostedZoneId is required in configuration")
+        else:
+            raise ValueError("API configuration section is required")
 
         return params
 
