@@ -240,6 +240,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "RoomID": archetype_data.get("StartRoom", 0),
         "Inventory": [],
         "Hidden": False,
+        "CharState": "Standing",  # Default character state
         "CreatedAt": timestamp,
         "UpdatedAt": timestamp,
         "LastPlayed": timestamp,
@@ -247,13 +248,18 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
     
     try:
         # Start a transaction to update both tables atomically
-        # Update player's character list
+        # Update player's character list with PlayerCharacterInfo structure
+        character_info = {
+            "UUID": character_id,
+            "Dead": False  # New characters start alive
+        }
+        
         players_table.update_item(
             Key={"PlayerID": player_id},
-            UpdateExpression="SET CharacterList.#name = :id, UpdatedAt = :timestamp",
+            UpdateExpression="SET CharacterList.#name = :info, UpdatedAt = :timestamp",
             ExpressionAttributeNames={"#name": character_name},
             ExpressionAttributeValues={
-                ":id": character_id,
+                ":info": character_info,
                 ":timestamp": timestamp
             }
         )
@@ -291,7 +297,9 @@ def lambda_handler(event, _):
     """
     try:
         # Extract player ID from Cognito authorizer
-        player_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("sub")
+        claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
+        player_id = claims.get("sub")
+        
         if not player_id:
             return {
                 "statusCode": 401,

@@ -38,36 +38,6 @@ players_table_name = os.environ.get("PLAYERS_TABLE_NAME", "players")
 players_table = dynamodb.Table(players_table_name)
 
 
-def get_player_data(player_id):
-    """
-    Get player data including character list and death status.
-    
-    Args:
-        player_id: Cognito user ID
-        
-    Returns:
-        tuple: (character_list, dead_characters)
-    """
-    try:
-        response = players_table.get_item(
-            Key={"PlayerID": player_id}
-        )
-        
-        if "Item" not in response:
-            logger.warning(f"Player not found: {player_id}")
-            return {}, []
-        
-        player = response["Item"]
-        character_list = player.get("CharacterList", {})
-        dead_characters = player.get("DeadCharacters", [])
-        
-        return character_list, dead_characters
-        
-    except ClientError as err:
-        logger.error(f"Error getting player data: {err}")
-        return {}, []
-
-
 def lambda_handler(event, _):
     """
     Lambda handler for listing player characters.
@@ -89,48 +59,30 @@ def lambda_handler(event, _):
                 "body": json.dumps({"error": "Unauthorized"})
             }
         
-        # Get player's character list
-        character_list = get_player_characters(player_id)
+        # Get player data from players table
+        response = players_table.get_item(Key={"PlayerID": player_id})
         
-        if not character_list:
-            # Return empty list if no characters
+        if "Item" not in response:
             return {
-                "statusCode": 200,
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*",
-                },
-                "body": json.dumps({
-                    "characters": [],
-                    "count": 0,
-                    "message": "No characters found"
-                })
+                "statusCode": 404,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"error": "Player not found"})
             }
         
-        # Get details for each character
+        player_data = response["Item"]
+        character_list = player_data.get("CharacterList", {})
+        
+        # Build character list with name and death status
         characters = []
-        for character_name, character_id in character_list.items():
-            character_details = get_character_details(character_id)
-            if character_details:
-                characters.append(character_details)
-            else:
-                # Include placeholder for missing characters
-                characters.append({
-                    "characterId": character_id,
-                    "characterName": character_name,
-                    "error": "Character data not found"
-                })
+        for char_name, char_info in character_list.items():
+            characters.append({
+                "name": char_name,
+                "dead": char_info.get("Dead", False)
+            })
         
-        # Sort by last played date (most recent first)
-        characters.sort(
-            key=lambda x: x.get("lastPlayed", ""),
-            reverse=True
-        )
+        # Sort by name for consistent ordering
+        characters.sort(key=lambda x: x["name"])
         
-        # Convert any Decimal values to float for JSON serialization
-        characters = decimal_to_float(characters)
-        
-        # Return character list
         return {
             "statusCode": 200,
             "headers": {
@@ -138,14 +90,19 @@ def lambda_handler(event, _):
                 "Access-Control-Allow-Origin": "*",
             },
             "body": json.dumps({
-                "characters": characters,
-                "count": len(characters),
-                "playerId": player_id
+                "characters": characters
             })
         }
         
+    except ClientError as err:
+        logger.error(f"DynamoDB error: {err}")
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"error": "Database error"})
+        }
     except Exception as err:
-        logger.error(f"Unexpected error in lambda_handler: {err}")
+        logger.error(f"Unexpected error: {err}")
         return {
             "statusCode": 500,
             "headers": {"Content-Type": "application/json"},
