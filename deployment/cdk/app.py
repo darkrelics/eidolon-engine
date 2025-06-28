@@ -17,6 +17,7 @@ from stacks.codebuild_stack import CodeBuildStack
 from stacks.cognito_stack import CognitoStack
 from stacks.dynamodb_stack import DynamoDBStack
 from stacks.iam_stack import IAMStack
+from stacks.lambda_stack import LambdaStack
 from stacks.s3_stack import S3Stack
 
 
@@ -336,11 +337,35 @@ class EidolonEngineApp:
             portal_bucket=self.s3_stack.portal_bucket,
             buildspec_path=params.get("portal_buildspec_path", "buildspec/portal.yml"),
             cloudfront_distribution_id=self.cloudfront_stack.distribution.distribution_id,
+            lambda_bucket=self.s3_stack.lambda_bucket,
             env=env,
         )
         self.codebuild_stack.add_dependency(self.cognito_stack)
         self.codebuild_stack.add_dependency(self.s3_stack)
         self.codebuild_stack.add_dependency(self.cloudfront_stack)
+
+        # Create Lambda stack with dependencies
+        self.lambda_stack = LambdaStack(
+            self.app,
+            "lambda",
+            game_name=params["game_name"],
+            lambda_bucket=self.s3_stack.lambda_bucket,
+            players_table_name=params.get("dynamodb_tables", {}).get("Players", "players"),
+            characters_table_name=params.get("dynamodb_tables", {}).get("Characters", "characters"),
+            items_table_name=params.get("dynamodb_tables", {}).get("Items", "items"),
+            archetypes_table_name=params.get("dynamodb_tables", {}).get("Archetypes", "archetypes"),
+            cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
+            domain_name=params.get("domain_name"),
+            api_subdomain=params.get("api_subdomain", "api"),
+            hosted_zone_id=params.get("hosted_zone_id"),
+            env=env,
+        )
+        self.lambda_stack.add_dependency(self.s3_stack)
+        self.lambda_stack.add_dependency(self.dynamodb_stack)
+        self.lambda_stack.add_dependency(self.cognito_stack)
+
+        # Add Cognito Lambda trigger
+        self.cognito_stack.add_lambda_trigger("PostConfirmation", self.lambda_stack.cognito_new_player_function)
 
     def get_deployment_parameters(self) -> dict:
         """Get deployment parameters from config or state."""
@@ -378,6 +403,21 @@ class EidolonEngineApp:
             codebuild_config = self.config["CodeBuild"]
             if "PortalBuildspecPath" in codebuild_config:
                 params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
+
+        # Check for API configuration (required)
+        if "API" in self.config:
+            api_config = self.config["API"]
+            params["domain_name"] = api_config.get("Domain")
+            params["api_subdomain"] = api_config.get("Subdomain", "api")
+            params["hosted_zone_id"] = api_config.get("HostedZoneId")
+
+            # Validate required API parameters
+            if not params["domain_name"]:
+                raise ValueError("API.Domain is required in configuration")
+            if not params["hosted_zone_id"]:
+                raise ValueError("API.HostedZoneId is required in configuration")
+        else:
+            raise ValueError("API configuration section is required")
 
         return params
 

@@ -1,0 +1,48 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - echo Installing tools for Lambda function packaging
+
+  build:
+    commands:
+      - echo Building Lambda functions
+      - cd lambda
+
+      # Package cognito_new_player function
+      - zip cognito_new_player.zip cognito_new_player.py
+
+      # Package get_player_archetypes function
+      - zip get_player_archetypes.zip get_player_archetypes.py
+
+      # Package save_character function
+      - zip save_character.zip save_character.py
+
+      # Package list_characters function
+      - zip list_characters.zip list_characters.py
+
+      # Package delete_character function
+      - zip delete_character.zip delete_character.py
+
+      - cd ..
+
+  post_build:
+    commands:
+      - echo Uploading Lambda functions to S3
+      - aws s3 cp lambda/cognito_new_player.zip s3://$S3_BUCKET_NAME/cognito_new_player.zip
+      - aws s3 cp lambda/get_player_archetypes.zip s3://$S3_BUCKET_NAME/get_player_archetypes.zip
+      - aws s3 cp lambda/save_character.zip s3://$S3_BUCKET_NAME/save_character.zip
+      - aws s3 cp lambda/list_characters.zip s3://$S3_BUCKET_NAME/list_characters.zip
+      - aws s3 cp lambda/delete_character.zip s3://$S3_BUCKET_NAME/delete_character.zip
+
+artifacts:
+  files:
+    - lambda/cognito_new_player.zip
+    - lambda/get_player_archetypes.zip
+    - lambda/save_character.zip
+    - lambda/list_characters.zip
+    - lambda/delete_character.zip
+  name: lambda-functions

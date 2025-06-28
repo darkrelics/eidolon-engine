@@ -66,6 +66,7 @@ func createValidArchetype(name string) *Archetype {
 		StartingItems: []ArchetypeItem{},
 		Health:        100,
 		Essence:       50,
+		Player:        true,
 	}
 }
 
@@ -329,28 +330,41 @@ func TestAttributeNormalization(t *testing.T) {
 func TestBuildArchetypeOptions(t *testing.T) {
 	game := createTestGame()
 
-	// Add test archetypes
+	// Add test archetypes - mix of player and NPC archetypes
 	game.archetypes["Warrior"] = &Archetype{
 		ArchetypeName: "Warrior",
 		Description:   "A mighty fighter",
+		Player:        true,
 	}
 	game.archetypes["Mage"] = &Archetype{
 		ArchetypeName: "Mage",
 		Description:   "A powerful spellcaster",
+		Player:        true,
 	}
 	game.archetypes["Rogue"] = &Archetype{
 		ArchetypeName: "Rogue",
 		Description:   "A stealthy thief",
+		Player:        true,
+	}
+	game.archetypes["Goblin"] = &Archetype{
+		ArchetypeName: "Goblin",
+		Description:   "A mischievous creature",
+		Player:        false, // NPC archetype
+	}
+	game.archetypes["Guard"] = &Archetype{
+		ArchetypeName: "Guard",
+		Description:   "A castle guard",
+		Player:        false, // NPC archetype
 	}
 
 	game.BuildArchetypeOptions()
 
-	// Check that options are built correctly
+	// Check that only player archetypes are included
 	if len(game.archetypeOptions) != 3 {
-		t.Errorf("Expected 3 archetype options, got %d", len(game.archetypeOptions))
+		t.Errorf("Expected 3 player archetype options, got %d", len(game.archetypeOptions))
 	}
 
-	// Check that options are sorted
+	// Check that options are sorted and only contain player archetypes
 	expectedOptions := []string{
 		"Mage - A powerful spellcaster",
 		"Rogue - A stealthy thief",
@@ -364,6 +378,13 @@ func TestBuildArchetypeOptions(t *testing.T) {
 		}
 		if game.archetypeOptions[i] != expected {
 			t.Errorf("Option %d: expected '%s', got '%s'", i, expected, game.archetypeOptions[i])
+		}
+	}
+
+	// Ensure NPC archetypes are not in the options
+	for _, option := range game.archetypeOptions {
+		if strings.Contains(option, "Goblin") || strings.Contains(option, "Guard") {
+			t.Errorf("NPC archetype found in player options: %s", option)
 		}
 	}
 }
