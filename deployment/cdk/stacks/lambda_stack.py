@@ -6,6 +6,7 @@ This stack creates Lambda functions and layers for the game server.
 import aws_cdk as cdk
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_certificatemanager as acm
+from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
@@ -26,6 +27,7 @@ class LambdaStack(cdk.Stack):
         game_name: str,
         lambda_bucket: s3.IBucket,
         players_table_name: str,
+        characters_table_name: str,
         archetypes_table_name: str,
         cognito_user_pool_arn: str,
         domain_name: str,
@@ -41,6 +43,7 @@ class LambdaStack(cdk.Stack):
             game_name: Name of the game
             lambda_bucket: S3 bucket containing Lambda deployment packages
             players_table_name: Name of the players DynamoDB table
+            characters_table_name: Name of the characters DynamoDB table
             archetypes_table_name: Name of the archetypes DynamoDB table
             cognito_user_pool_arn: ARN of the Cognito user pool
             domain_name: Domain name for API (required)
@@ -150,36 +153,98 @@ class LambdaStack(cdk.Stack):
             description="Returns player-available archetypes from cached data",
         )
 
-        # Create Lambda function URL for direct access
-        self.archetypes_function_url = self.get_player_archetypes_function.add_function_url(
-            auth_type=lambda_.FunctionUrlAuthType.NONE,
-            cors=lambda_.FunctionUrlCorsOptions(
-                allowed_origins=["*"],  # Configure based on your needs
-                allowed_methods=[lambda_.HttpMethod.GET],
-                allowed_headers=["Content-Type"],
-                max_age=cdk.Duration.seconds(300),
-            ),
+
+        # Create IAM role for Save Character Lambda
+        save_character_lambda_role = iam.Role(
+            self,
+            f"{game_name}-save-character-lambda-role",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"
+                ),
+            ],
         )
 
-        # Create API Gateway for archetypes
-        self.archetypes_api = apigateway.RestApi(
+        # Add DynamoDB permissions for save character function
+        save_character_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                ],
+                resources=[
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{players_table_name}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{characters_table_name}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{archetypes_table_name}",
+                ],
+            )
+        )
+
+        # Create save character Lambda function
+        self.save_character_function = lambda_.Function(
             self,
-            f"{game_name}-archetypes-api",
-            rest_api_name=f"{game_name}-archetypes-api",
-            description="API for accessing player archetypes",
+            f"{game_name}-save-character",
+            runtime=lambda_.Runtime.PYTHON_3_11,
+            handler="save_character.lambda_handler",
+            code=lambda_.Code.from_bucket(lambda_bucket, "save_character.zip"),
+            layers=[self.dependencies_layer],
+            role=save_character_lambda_role,
+            timeout=cdk.Duration.seconds(30),
+            memory_size=256,
+            environment={
+                "PLAYERS_TABLE_NAME": players_table_name,
+                "CHARACTERS_TABLE_NAME": characters_table_name,
+                "ARCHETYPES_TABLE_NAME": archetypes_table_name,
+                "MAX_CHARACTERS_PER_PLAYER": "10",
+            },
+            description="Creates new character for authenticated players",
+        )
+
+        # Create API Gateway
+        self.api = apigateway.RestApi(
+            self,
+            f"{game_name}-api",
+            rest_api_name=f"{game_name}-api",
+            description="API for Eidolon Engine game services",
             default_cors_preflight_options=apigateway.CorsOptions(
                 allow_origins=["*"],  # Configure based on your needs
-                allow_methods=["GET"],
-                allow_headers=["Content-Type"],
+                allow_methods=["GET", "POST", "OPTIONS"],
+                allow_headers=["Content-Type", "Authorization"],
             ),
         )
 
-        # Add archetypes resource and method
-        archetypes_resource = self.archetypes_api.root.add_resource("archetypes")
+        # Create Cognito authorizer
+        self.cognito_authorizer = apigateway.CognitoUserPoolsAuthorizer(
+            self,
+            f"{game_name}-api-authorizer",
+            cognito_user_pools=[
+                cognito.UserPool.from_user_pool_arn(self, "imported-user-pool", cognito_user_pool_arn)
+            ],
+            authorizer_name=f"{game_name}-api-authorizer",
+            identity_source="method.request.header.Authorization",
+        )
+
+        # Add archetypes resource and method (authenticated endpoint)
+        archetypes_resource = self.api.root.add_resource("archetypes")
         archetypes_resource.add_method(
             "GET",
             apigateway.LambdaIntegration(self.get_player_archetypes_function),
-            authorization_type=apigateway.AuthorizationType.NONE,
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
+        )
+
+        # Add characters resource and method (authenticated endpoint)
+        characters_resource = self.api.root.add_resource("characters")
+        characters_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.save_character_function),
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
         )
 
         # Configure custom domain (required)
@@ -217,7 +282,7 @@ class LambdaStack(cdk.Stack):
             self,
             f"{game_name}-api-mapping",
             domain_name=custom_domain,
-            rest_api=self.archetypes_api,
+            rest_api=self.api,
             base_path="",  # Map to root of domain
         )
 
@@ -257,6 +322,14 @@ class LambdaStack(cdk.Stack):
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
 
+        logs.LogGroup(
+            self,
+            f"{game_name}-save-character-lambda-logs",
+            log_group_name=f"/aws/lambda/{self.save_character_function.function_name}",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+        )
+
         # Output values
         cdk.CfnOutput(
             self,
@@ -272,16 +345,31 @@ class LambdaStack(cdk.Stack):
             description="ARN of the get player archetypes Lambda function",
         )
 
+
         cdk.CfnOutput(
             self,
-            "ArchetypesFunctionUrl",
-            value=self.archetypes_function_url.url,
-            description="Direct URL for the archetypes Lambda function",
+            "SaveCharacterLambdaFunctionArn",
+            value=self.save_character_function.function_arn,
+            description="ARN of the save character Lambda function",
         )
 
         cdk.CfnOutput(
             self,
-            "ArchetypesApiUrl",
-            value=self.archetypes_api.url_for_path("/archetypes"),
-            description="API Gateway URL for accessing archetypes",
+            "ApiGatewayUrl",
+            value=self.api.url,
+            description="API Gateway base URL",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "ArchetypesEndpoint",
+            value=self.api.url_for_path("/archetypes"),
+            description="API Gateway URL for accessing archetypes (requires authentication)",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "CharactersEndpoint",
+            value=self.api.url_for_path("/characters"),
+            description="API Gateway URL for creating characters (requires authentication)",
         )

@@ -351,6 +351,7 @@ class EidolonEngineApp:
             game_name=params["game_name"],
             lambda_bucket=self.s3_stack.lambda_bucket,
             players_table_name=params.get("dynamodb_tables", {}).get("Players", "players"),
+            characters_table_name=params.get("dynamodb_tables", {}).get("Characters", "characters"),
             archetypes_table_name=params.get("dynamodb_tables", {}).get("Archetypes", "archetypes"),
             cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
             domain_name=params.get("domain_name"),

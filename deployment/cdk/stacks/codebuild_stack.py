@@ -155,6 +155,7 @@ class CodeBuildStack(Stack):
                     resources=[
                         f"{self.lambda_bucket.bucket_arn}/cognito_new_player.zip",
                         f"{self.lambda_bucket.bucket_arn}/get_player_archetypes.zip",
+                        f"{self.lambda_bucket.bucket_arn}/save_character.zip",
                     ],
                 )
             )
