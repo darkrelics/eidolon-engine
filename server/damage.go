@@ -33,6 +33,7 @@ const (
 	CharStateStanding    = "standing"
 	CharStateUnconscious = "unconscious"
 	CharStateDead        = "dead"
+	CharStateGhost       = "ghost"
 )
 
 const (
@@ -154,8 +155,14 @@ func (c *Character) updateStateWhenHealthZero() {
 		c.charState = CharStateUnconscious
 		c.playerCommandOut <- ApplyColor("yellow", "You fall unconscious!\n\r")
 	} else {
+		previousState := c.charState
 		c.charState = CharStateDead
 		c.playerCommandOut <- ApplyColor("red", "You have died!\n\r")
+
+		// Update the player's character list to mark this character as dead
+		if previousState != CharStateDead && c.player != nil {
+			c.player.MarkCharacterDead(c.name)
+		}
 	}
 }
 
