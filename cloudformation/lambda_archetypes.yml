@@ -58,10 +58,10 @@ Resources:
     Type: AWS::Lambda::FunctionUrl
     Properties:
       FunctionName: !Ref GetPlayerArchetypesFunction
-      AuthType: NONE  # Change to AWS_IAM for authenticated access
+      AuthType: NONE # Change to AWS_IAM for authenticated access
       Cors:
         AllowOrigins:
-          - "*"  # Configure based on your needs
+          - "*" # Configure based on your needs
         AllowMethods:
           - GET
         AllowHeaders:
@@ -98,7 +98,7 @@ Resources:
       RestApiId: !Ref ArchetypesApi
       ResourceId: !Ref ArchetypesResource
       HttpMethod: GET
-      AuthorizationType: NONE  # Change to AWS_IAM or COGNITO_USER_POOLS as needed
+      AuthorizationType: NONE # Change to AWS_IAM or COGNITO_USER_POOLS as needed
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST

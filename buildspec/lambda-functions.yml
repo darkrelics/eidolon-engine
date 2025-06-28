@@ -11,22 +11,22 @@ phases:
     commands:
       - echo Building Lambda functions
       - cd lambda
-      
+
       # Package cognito_new_player function
       - zip cognito_new_player.zip cognito_new_player.py
-      
+
       # Package get_player_archetypes function
       - zip get_player_archetypes.zip get_player_archetypes.py
-      
+
       # Package save_character function
       - zip save_character.zip save_character.py
-      
+
       # Package list_characters function
       - zip list_characters.zip list_characters.py
-      
+
       # Package delete_character function
       - zip delete_character.zip delete_character.py
-      
+
       - cd ..
 
   post_build:
