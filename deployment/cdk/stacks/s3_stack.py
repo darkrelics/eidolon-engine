@@ -15,8 +15,10 @@ class S3Stack(Stack):
         self,
         scope: Construct,
         construct_id: str,
-        portal_bucket_name: str | None = None,
-        scripts_bucket_name: str | None = None,
+        game_name: str = "eidolon",
+        portal_bucket_name: str = None,
+        scripts_bucket_name: str = None,
+        lambda_bucket_name: str = None,
         **kwargs,
     ) -> None:
         """Initialize S3 stack.
@@ -24,8 +26,10 @@ class S3Stack(Stack):
         Args:
             scope: CDK app scope
             construct_id: Stack identifier
+            game_name: Name of the game
             portal_bucket_name: Optional existing portal bucket name
             scripts_bucket_name: Optional existing scripts bucket name
+            lambda_bucket_name: Optional existing lambda bucket name
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -44,6 +48,13 @@ class S3Stack(Stack):
             "scripts-bucket",
             scripts_bucket_name or "eidolon-scripts",
             public_read=True,
+        )
+
+        # Handle lambda bucket
+        self.lambda_bucket = self.get_or_create_bucket(
+            "lambda-bucket",
+            lambda_bucket_name or f"{game_name}-lambda-{self.account}",
+            public_read=False,
         )
 
         # Output values
@@ -70,6 +81,13 @@ class S3Stack(Stack):
             "ScriptsBucketName",
             value=self.scripts_bucket.bucket_name,
             description="S3 bucket name for game scripts",
+        )
+
+        CfnOutput(
+            self,
+            "LambdaBucketName",
+            value=self.lambda_bucket.bucket_name,
+            description="S3 bucket name for Lambda deployment packages",
         )
 
     def get_or_create_bucket(

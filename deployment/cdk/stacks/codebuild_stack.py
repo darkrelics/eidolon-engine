@@ -3,6 +3,7 @@
 from aws_cdk import CfnOutput, Stack
 from aws_cdk import aws_codebuild as codebuild
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_s3 as s3
 from aws_cdk.aws_s3 import IBucket
 from constructs import Construct
 
@@ -21,7 +22,8 @@ class CodeBuildStack(Stack):
         cognito_app_client_id: str,
         portal_bucket: IBucket,
         buildspec_path: str = "buildspec/portal.yml",
-        cloudfront_distribution_id: str | None = None,
+        cloudfront_distribution_id: str = None,
+        lambda_bucket: IBucket = None,
         **kwargs,
     ) -> None:
         """Initialize CodeBuild stack.
@@ -37,6 +39,7 @@ class CodeBuildStack(Stack):
             portal_bucket: S3 bucket for the web portal
             buildspec_path: Path to buildspec file relative to repository root
             cloudfront_distribution_id: CloudFront distribution ID for cache invalidation
+            lambda_bucket: S3 bucket for Lambda deployment packages
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -88,5 +91,77 @@ class CodeBuildStack(Stack):
                 )
             )
 
+        # Create Lambda layer build project if lambda bucket is provided
+        if lambda_bucket:
+            self.lambda_bucket = lambda_bucket
+            
+            # Lambda layer build project
+            self.lambda_layer_project = codebuild.Project(
+                self,
+                "lambda-layer-build",
+                project_name="eidolon-lambda-layer-build",
+                description="Build project for Eidolon Engine Lambda layer",
+                source=codebuild.Source.git_hub(
+                    owner=github_owner,
+                    repo=github_repo,
+                    branch_or_ref=github_branch,
+                ),
+                environment=codebuild.BuildEnvironment(
+                    build_image=codebuild.LinuxBuildImage.STANDARD_7_0,
+                    compute_type=codebuild.ComputeType.SMALL
+                ),
+                environment_variables={
+                    "S3_BUCKET_NAME": codebuild.BuildEnvironmentVariable(value=self.lambda_bucket.bucket_name),
+                },
+                build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-layer.yml"),
+                artifacts=codebuild.Artifacts.s3(
+                    bucket=self.lambda_bucket,
+                    include_build_id=False,
+                    package_zip=False,
+                    path="",
+                    name="lambda-layer.zip",
+                ),
+            )
+            
+            # Lambda functions build project
+            self.lambda_functions_project = codebuild.Project(
+                self,
+                "lambda-functions-build",
+                project_name="eidolon-lambda-functions-build",
+                description="Build project for Eidolon Engine Lambda functions",
+                source=codebuild.Source.git_hub(
+                    owner=github_owner,
+                    repo=github_repo,
+                    branch_or_ref=github_branch,
+                ),
+                environment=codebuild.BuildEnvironment(
+                    build_image=codebuild.LinuxBuildImage.STANDARD_7_0,
+                    compute_type=codebuild.ComputeType.SMALL
+                ),
+                environment_variables={
+                    "S3_BUCKET_NAME": codebuild.BuildEnvironmentVariable(value=self.lambda_bucket.bucket_name),
+                },
+                build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-functions.yml"),
+            )
+            
+            # Grant permissions to write to Lambda S3 bucket
+            self.lambda_bucket.grant_read_write(self.lambda_layer_project)
+            self.lambda_bucket.grant_read_write(self.lambda_functions_project)
+            
+            # Add Lambda functions build to upload individual zip files
+            self.lambda_functions_project.add_to_role_policy(
+                iam.PolicyStatement(
+                    actions=["s3:PutObject"],
+                    resources=[
+                        f"{self.lambda_bucket.bucket_arn}/cognito_new_player.zip",
+                        f"{self.lambda_bucket.bucket_arn}/get_player_archetypes.zip",
+                    ],
+                )
+            )
+
         # Output values
         CfnOutput(self, "CodeBuildProjectName", value=self.build_project.project_name, description="CodeBuild project name")
+        
+        if lambda_bucket:
+            CfnOutput(self, "LambdaLayerProjectName", value=self.lambda_layer_project.project_name, description="Lambda layer build project name")
+            CfnOutput(self, "LambdaFunctionsProjectName", value=self.lambda_functions_project.project_name, description="Lambda functions build project name")

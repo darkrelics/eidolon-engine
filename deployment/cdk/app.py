@@ -17,6 +17,7 @@ from stacks.codebuild_stack import CodeBuildStack
 from stacks.cognito_stack import CognitoStack
 from stacks.dynamodb_stack import DynamoDBStack
 from stacks.iam_stack import IAMStack
+from stacks.lambda_stack import LambdaStack
 from stacks.s3_stack import S3Stack
 
 
@@ -336,11 +337,27 @@ class EidolonEngineApp:
             portal_bucket=self.s3_stack.portal_bucket,
             buildspec_path=params.get("portal_buildspec_path", "buildspec/portal.yml"),
             cloudfront_distribution_id=self.cloudfront_stack.distribution.distribution_id,
+            lambda_bucket=self.s3_stack.lambda_bucket,
             env=env,
         )
         self.codebuild_stack.add_dependency(self.cognito_stack)
         self.codebuild_stack.add_dependency(self.s3_stack)
         self.codebuild_stack.add_dependency(self.cloudfront_stack)
+
+        # Create Lambda stack with dependencies
+        self.lambda_stack = LambdaStack(
+            self.app,
+            "lambda",
+            game_name=params["game_name"],
+            lambda_bucket=self.s3_stack.lambda_bucket,
+            players_table_name=params.get("dynamodb_tables", {}).get("Players", "players"),
+            archetypes_table_name=params.get("dynamodb_tables", {}).get("Archetypes", "archetypes"),
+            cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
+            env=env,
+        )
+        self.lambda_stack.add_dependency(self.s3_stack)
+        self.lambda_stack.add_dependency(self.dynamodb_stack)
+        self.lambda_stack.add_dependency(self.cognito_stack)
 
     def get_deployment_parameters(self) -> dict:
         """Get deployment parameters from config or state."""
