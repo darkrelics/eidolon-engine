@@ -28,6 +28,7 @@ class LambdaStack(cdk.Stack):
         lambda_bucket: s3.IBucket,
         players_table_name: str,
         characters_table_name: str,
+        items_table_name: str,
         archetypes_table_name: str,
         cognito_user_pool_arn: str,
         domain_name: str,
@@ -44,6 +45,7 @@ class LambdaStack(cdk.Stack):
             lambda_bucket: S3 bucket containing Lambda deployment packages
             players_table_name: Name of the players DynamoDB table
             characters_table_name: Name of the characters DynamoDB table
+            items_table_name: Name of the items DynamoDB table
             archetypes_table_name: Name of the archetypes DynamoDB table
             cognito_user_pool_arn: ARN of the Cognito user pool
             domain_name: Domain name for API (required)
@@ -250,6 +252,54 @@ class LambdaStack(cdk.Stack):
             description="Lists all characters for authenticated players",
         )
 
+        # Create IAM role for Delete Character Lambda
+        delete_character_lambda_role = iam.Role(
+            self,
+            f"{game_name}-delete-character-lambda-role",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"
+                ),
+            ],
+        )
+
+        # Add DynamoDB permissions for delete character function
+        delete_character_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "dynamodb:GetItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:UpdateItem"
+                ],
+                resources=[
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{players_table_name}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{characters_table_name}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{items_table_name}",
+                ],
+            )
+        )
+
+        # Create delete character Lambda function
+        self.delete_character_function = lambda_.Function(
+            self,
+            f"{game_name}-delete-character",
+            runtime=lambda_.Runtime.PYTHON_3_11,
+            handler="delete_character.lambda_handler",
+            code=lambda_.Code.from_bucket(lambda_bucket, "delete_character.zip"),
+            layers=[self.dependencies_layer],
+            role=delete_character_lambda_role,
+            timeout=cdk.Duration.seconds(30),
+            memory_size=256,
+            environment={
+                "PLAYERS_TABLE_NAME": players_table_name,
+                "CHARACTERS_TABLE_NAME": characters_table_name,
+                "ITEMS_TABLE_NAME": items_table_name,
+            },
+            description="Deletes a character for authenticated players",
+        )
+
         # Create API Gateway
         self.api = apigateway.RestApi(
             self,
@@ -258,7 +308,7 @@ class LambdaStack(cdk.Stack):
             description="API for Eidolon Engine game services",
             default_cors_preflight_options=apigateway.CorsOptions(
                 allow_origins=["*"],  # Configure based on your needs
-                allow_methods=["GET", "POST", "OPTIONS"],
+                allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
                 allow_headers=["Content-Type", "Authorization"],
             ),
         )
@@ -298,6 +348,14 @@ class LambdaStack(cdk.Stack):
         characters_resource.add_method(
             "GET",
             apigateway.LambdaIntegration(self.list_characters_function),
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
+        )
+        
+        # DELETE /characters - Delete a character
+        characters_resource.add_method(
+            "DELETE",
+            apigateway.LambdaIntegration(self.delete_character_function),
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
         )
@@ -393,6 +451,14 @@ class LambdaStack(cdk.Stack):
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
 
+        logs.LogGroup(
+            self,
+            f"{game_name}-delete-character-lambda-logs",
+            log_group_name=f"/aws/lambda/{self.delete_character_function.function_name}",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+        )
+
         # Output values
         cdk.CfnOutput(
             self,
@@ -421,6 +487,13 @@ class LambdaStack(cdk.Stack):
             "ListCharactersLambdaFunctionArn",
             value=self.list_characters_function.function_arn,
             description="ARN of the list characters Lambda function",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "DeleteCharacterLambdaFunctionArn",
+            value=self.delete_character_function.function_arn,
+            description="ARN of the delete character Lambda function",
         )
 
         cdk.CfnOutput(

@@ -157,6 +157,7 @@ class CodeBuildStack(Stack):
                         f"{self.lambda_bucket.bucket_arn}/get_player_archetypes.zip",
                         f"{self.lambda_bucket.bucket_arn}/save_character.zip",
                         f"{self.lambda_bucket.bucket_arn}/list_characters.zip",
+                        f"{self.lambda_bucket.bucket_arn}/delete_character.zip",
                     ],
                 )
             )
