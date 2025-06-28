@@ -50,6 +50,7 @@ type Archetype struct {
 	StartingItems []ArchetypeItem    `json:"StartingItems" dynamodbav:"startingItems"`
 	Health        uint16             `json:"Health,omitempty" dynamodbav:"health,omitempty"`
 	Essence       uint16             `json:"Essence,omitempty" dynamodbav:"essence,omitempty"`
+	Player        bool               `json:"Player" dynamodbav:"player"`
 }
 
 // Display Archetypes for debugging purposes.
@@ -115,7 +116,9 @@ func (g *Game) BuildArchetypeOptions() {
 	options := make([]string, 0, len(g.archetypes))
 
 	for name, archetype := range g.archetypes {
-		options = append(options, name+" - "+archetype.Description)
+		if archetype.Player {
+			options = append(options, name+" - "+archetype.Description)
+		}
 	}
 
 	sort.Strings(options)

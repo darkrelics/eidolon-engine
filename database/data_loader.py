@@ -174,7 +174,14 @@ def store_archetypes(dynamodb, archetypes_data):
                 "Skills": skills,
                 "StartRoom": archetype.get("StartRoom", 0),
                 "StartingItems": archetype.get("StartingItems", []),
+                "Player": archetype.get("Player", False),
             }
+            
+            # Add optional Health and Essence fields if present
+            if "Health" in archetype:
+                archetype_item["Health"] = archetype["Health"]
+            if "Essence" in archetype:
+                archetype_item["Essence"] = archetype["Essence"]
 
             # Build update expression dynamically
             update_expression = "SET "
