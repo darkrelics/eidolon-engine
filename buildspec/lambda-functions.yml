@@ -21,6 +21,9 @@ phases:
       # Package save_character function
       - zip save_character.zip save_character.py
       
+      # Package list_characters function
+      - zip list_characters.zip list_characters.py
+      
       - cd ..
 
   post_build:
@@ -29,10 +32,12 @@ phases:
       - aws s3 cp lambda/cognito_new_player.zip s3://$S3_BUCKET_NAME/cognito_new_player.zip
       - aws s3 cp lambda/get_player_archetypes.zip s3://$S3_BUCKET_NAME/get_player_archetypes.zip
       - aws s3 cp lambda/save_character.zip s3://$S3_BUCKET_NAME/save_character.zip
+      - aws s3 cp lambda/list_characters.zip s3://$S3_BUCKET_NAME/list_characters.zip
 
 artifacts:
   files:
     - lambda/cognito_new_player.zip
     - lambda/get_player_archetypes.zip
     - lambda/save_character.zip
+    - lambda/list_characters.zip
   name: lambda-functions

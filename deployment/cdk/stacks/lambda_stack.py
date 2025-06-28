@@ -205,6 +205,51 @@ class LambdaStack(cdk.Stack):
             description="Creates new character for authenticated players",
         )
 
+        # Create IAM role for List Characters Lambda
+        list_characters_lambda_role = iam.Role(
+            self,
+            f"{game_name}-list-characters-lambda-role",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"
+                ),
+            ],
+        )
+
+        # Add DynamoDB permissions for list characters function
+        list_characters_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "dynamodb:GetItem",
+                    "dynamodb:Query"
+                ],
+                resources=[
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{players_table_name}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{characters_table_name}",
+                ],
+            )
+        )
+
+        # Create list characters Lambda function
+        self.list_characters_function = lambda_.Function(
+            self,
+            f"{game_name}-list-characters",
+            runtime=lambda_.Runtime.PYTHON_3_11,
+            handler="list_characters.lambda_handler",
+            code=lambda_.Code.from_bucket(lambda_bucket, "list_characters.zip"),
+            layers=[self.dependencies_layer],
+            role=list_characters_lambda_role,
+            timeout=cdk.Duration.seconds(30),
+            memory_size=256,
+            environment={
+                "PLAYERS_TABLE_NAME": players_table_name,
+                "CHARACTERS_TABLE_NAME": characters_table_name,
+            },
+            description="Lists all characters for authenticated players",
+        )
+
         # Create API Gateway
         self.api = apigateway.RestApi(
             self,
@@ -238,11 +283,21 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
         )
 
-        # Add characters resource and method (authenticated endpoint)
+        # Add characters resource and methods (authenticated endpoints)
         characters_resource = self.api.root.add_resource("characters")
+        
+        # POST /characters - Create new character
         characters_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.save_character_function),
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
+        )
+        
+        # GET /characters - List player's characters
+        characters_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.list_characters_function),
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
         )
@@ -330,6 +385,14 @@ class LambdaStack(cdk.Stack):
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
 
+        logs.LogGroup(
+            self,
+            f"{game_name}-list-characters-lambda-logs",
+            log_group_name=f"/aws/lambda/{self.list_characters_function.function_name}",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+        )
+
         # Output values
         cdk.CfnOutput(
             self,
@@ -351,6 +414,13 @@ class LambdaStack(cdk.Stack):
             "SaveCharacterLambdaFunctionArn",
             value=self.save_character_function.function_arn,
             description="ARN of the save character Lambda function",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "ListCharactersLambdaFunctionArn",
+            value=self.list_characters_function.function_arn,
+            description="ARN of the list characters Lambda function",
         )
 
         cdk.CfnOutput(
