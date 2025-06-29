@@ -41,10 +41,10 @@ Resources:
     Properties:
       FunctionName: eidolon-get-player-archetypes
       Runtime: python3.11
-      Handler: get_player_archetypes.lambda_handler
+      Handler: api_get_archetypes.lambda_handler
       Code:
         S3Bucket: !Sub "eidolon-lambda-${AWS::AccountId}"
-        S3Key: get_player_archetypes.zip
+        S3Key: api_get_archetypes.zip
       Role: !GetAtt ArchetypesLambdaRole.Arn
       Timeout: 30
       MemorySize: 256

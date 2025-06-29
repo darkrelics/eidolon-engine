@@ -124,12 +124,12 @@ class LambdaStack(cdk.Stack):
         )
 
         # Create get player archetypes Lambda function
-        self.get_player_archetypes_function = lambda_.Function(
+        self.api_get_archetypes_function = lambda_.Function(
             self,
             f"{game_name}-get-player-archetypes",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="get_player_archetypes.lambda_handler",
-            code=lambda_.Code.from_bucket(lambda_bucket, "get_player_archetypes.zip"),
+            handler="api_get_archetypes.lambda_handler",
+            code=lambda_.Code.from_bucket(lambda_bucket, "api_get_archetypes.zip"),
             layers=[self.dependencies_layer],
             role=archetypes_lambda_role,
             timeout=cdk.Duration.seconds(30),
@@ -141,7 +141,7 @@ class LambdaStack(cdk.Stack):
         )
 
         # Create IAM role for Save Character Lambda
-        save_character_lambda_role = iam.Role(
+        api_save_character_lambda_role = iam.Role(
             self,
             f"{game_name}-save-character-lambda-role",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -151,7 +151,7 @@ class LambdaStack(cdk.Stack):
         )
 
         # Add DynamoDB permissions for save character function
-        save_character_lambda_role.add_to_policy(
+        api_save_character_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan"],
@@ -164,14 +164,14 @@ class LambdaStack(cdk.Stack):
         )
 
         # Create save character Lambda function
-        self.save_character_function = lambda_.Function(
+        self.api_save_character_function = lambda_.Function(
             self,
             f"{game_name}-save-character",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="save_character.lambda_handler",
-            code=lambda_.Code.from_bucket(lambda_bucket, "save_character.zip"),
+            handler="api_save_character.lambda_handler",
+            code=lambda_.Code.from_bucket(lambda_bucket, "api_save_character.zip"),
             layers=[self.dependencies_layer],
-            role=save_character_lambda_role,
+            role=api_save_character_lambda_role,
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
@@ -184,7 +184,7 @@ class LambdaStack(cdk.Stack):
         )
 
         # Create IAM role for List Characters Lambda
-        list_characters_lambda_role = iam.Role(
+        api_list_characters_lambda_role = iam.Role(
             self,
             f"{game_name}-list-characters-lambda-role",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -194,7 +194,7 @@ class LambdaStack(cdk.Stack):
         )
 
         # Add DynamoDB permissions for list characters function
-        list_characters_lambda_role.add_to_policy(
+        api_list_characters_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:Query"],
@@ -210,10 +210,10 @@ class LambdaStack(cdk.Stack):
             self,
             f"{game_name}-list-characters",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="list_characters.lambda_handler",
-            code=lambda_.Code.from_bucket(lambda_bucket, "list_characters.zip"),
+            handler="api_list_characters.lambda_handler",
+            code=lambda_.Code.from_bucket(lambda_bucket, "api_list_characters.zip"),
             layers=[self.dependencies_layer],
-            role=list_characters_lambda_role,
+            role=api_list_characters_lambda_role,
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
@@ -224,7 +224,7 @@ class LambdaStack(cdk.Stack):
         )
 
         # Create IAM role for Delete Character Lambda
-        delete_character_lambda_role = iam.Role(
+        api_delete_character_lambda_role = iam.Role(
             self,
             f"{game_name}-delete-character-lambda-role",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -234,7 +234,7 @@ class LambdaStack(cdk.Stack):
         )
 
         # Add DynamoDB permissions for delete character function
-        delete_character_lambda_role.add_to_policy(
+        api_delete_character_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:DeleteItem", "dynamodb:UpdateItem"],
@@ -247,14 +247,14 @@ class LambdaStack(cdk.Stack):
         )
 
         # Create delete character Lambda function
-        self.delete_character_function = lambda_.Function(
+        self.api_delete_character_function = lambda_.Function(
             self,
             f"{game_name}-delete-character",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="delete_character.lambda_handler",
-            code=lambda_.Code.from_bucket(lambda_bucket, "delete_character.zip"),
+            handler="api_delete_character.lambda_handler",
+            code=lambda_.Code.from_bucket(lambda_bucket, "api_delete_character.zip"),
             layers=[self.dependencies_layer],
-            role=delete_character_lambda_role,
+            role=api_delete_character_lambda_role,
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
@@ -291,7 +291,7 @@ class LambdaStack(cdk.Stack):
         archetypes_resource = self.api.root.add_resource("archetypes")
         archetypes_resource.add_method(
             "GET",
-            apigateway.LambdaIntegration(self.get_player_archetypes_function),
+            apigateway.LambdaIntegration(self.api_get_archetypes_function),
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
         )
@@ -302,7 +302,7 @@ class LambdaStack(cdk.Stack):
         # POST /characters - Create new character
         characters_resource.add_method(
             "POST",
-            apigateway.LambdaIntegration(self.save_character_function),
+            apigateway.LambdaIntegration(self.api_save_character_function),
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
         )
@@ -310,7 +310,7 @@ class LambdaStack(cdk.Stack):
         # GET /characters - List player's characters
         characters_resource.add_method(
             "GET",
-            apigateway.LambdaIntegration(self.list_characters_function),
+            apigateway.LambdaIntegration(self.api_list_characters_function),
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
         )
@@ -318,7 +318,7 @@ class LambdaStack(cdk.Stack):
         # DELETE /characters - Delete a character
         characters_resource.add_method(
             "DELETE",
-            apigateway.LambdaIntegration(self.delete_character_function),
+            apigateway.LambdaIntegration(self.api_delete_character_function),
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO_USER_POOLS,
         )
@@ -391,7 +391,7 @@ class LambdaStack(cdk.Stack):
         logs.LogGroup(
             self,
             f"{game_name}-archetypes-lambda-logs",
-            log_group_name=f"/aws/lambda/{self.get_player_archetypes_function.function_name}",
+            log_group_name=f"/aws/lambda/{self.api_get_archetypes_function.function_name}",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
@@ -399,7 +399,7 @@ class LambdaStack(cdk.Stack):
         logs.LogGroup(
             self,
             f"{game_name}-save-character-lambda-logs",
-            log_group_name=f"/aws/lambda/{self.save_character_function.function_name}",
+            log_group_name=f"/aws/lambda/{self.api_save_character_function.function_name}",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
@@ -407,7 +407,7 @@ class LambdaStack(cdk.Stack):
         logs.LogGroup(
             self,
             f"{game_name}-list-characters-lambda-logs",
-            log_group_name=f"/aws/lambda/{self.list_characters_function.function_name}",
+            log_group_name=f"/aws/lambda/{self.api_list_characters_function.function_name}",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
@@ -415,7 +415,7 @@ class LambdaStack(cdk.Stack):
         logs.LogGroup(
             self,
             f"{game_name}-delete-character-lambda-logs",
-            log_group_name=f"/aws/lambda/{self.delete_character_function.function_name}",
+            log_group_name=f"/aws/lambda/{self.api_delete_character_function.function_name}",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
@@ -431,21 +431,21 @@ class LambdaStack(cdk.Stack):
         cdk.CfnOutput(
             self,
             "ArchetypesLambdaFunctionArn",
-            value=self.get_player_archetypes_function.function_arn,
+            value=self.api_get_archetypes_function.function_arn,
             description="ARN of the get player archetypes Lambda function",
         )
 
         cdk.CfnOutput(
             self,
             "SaveCharacterLambdaFunctionArn",
-            value=self.save_character_function.function_arn,
+            value=self.api_save_character_function.function_arn,
             description="ARN of the save character Lambda function",
         )
 
         cdk.CfnOutput(
             self,
             "ListCharactersLambdaFunctionArn",
-            value=self.list_characters_function.function_arn,
+            value=self.api_list_characters_function.function_arn,
             description="ARN of the list characters Lambda function",
         )
 
