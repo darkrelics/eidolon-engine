@@ -17,5 +17,5 @@ publication==0.0.3
 python-dateutil==2.9.0.post0
 s3transfer==0.13.0
 six==1.17.0
-typeguard==2.13.3
+typeguard==4.4.4
 urllib3==2.5.0
