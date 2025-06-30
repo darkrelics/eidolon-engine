@@ -1,0 +1,294 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Eidolon Engine Incremental Story Format",
+  "description": "Schema for story content compatible with Twine exports and incremental game mechanics",
+  "type": "object",
+  "required": ["name", "startNode", "passages"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The title of the story"
+    },
+    "startNode": {
+      "type": "string",
+      "description": "ID of the starting passage"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Story metadata from Twine export",
+      "properties": {
+        "creator": { "type": "string" },
+        "creatorVersion": { "type": "string" },
+        "ifid": { 
+          "type": "string",
+          "description": "Interactive Fiction IDentifier"
+        },
+        "exportedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "author": { "type": "string" },
+        "description": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "passages": {
+      "type": "array",
+      "description": "All passages/segments in the story",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "text"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the passage (from Twine pid)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable name of the passage"
+          },
+          "text": {
+            "type": "string",
+            "description": "The narrative content of the passage"
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Tags from Twine for categorization"
+          },
+          "position": {
+            "type": "object",
+            "description": "Visual position in Twine editor",
+            "properties": {
+              "x": { "type": "number" },
+              "y": { "type": "number" }
+            }
+          },
+          "links": {
+            "type": "array",
+            "description": "Choices/links to other passages",
+            "items": {
+              "type": "object",
+              "required": ["text", "target"],
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "description": "Display text for the choice"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "Name of the target passage"
+                },
+                "targetId": {
+                  "type": "string",
+                  "description": "ID of the target passage"
+                }
+              }
+            }
+          },
+          "gameData": {
+            "type": "object",
+            "description": "Incremental game mechanics for this passage",
+            "required": ["duration", "challenge", "outcomes"],
+            "properties": {
+              "duration": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Time in seconds to complete this segment"
+              },
+              "requirements": {
+                "type": "object",
+                "description": "Requirements to start this segment",
+                "properties": {
+                  "resources": {
+                    "type": "object",
+                    "description": "Resource costs",
+                    "additionalProperties": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "progress": {
+                    "type": "object",
+                    "description": "Progress flags required",
+                    "additionalProperties": true
+                  },
+                  "level": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Minimum player level"
+                  }
+                }
+              },
+              "challenge": {
+                "type": "object",
+                "description": "Challenge that determines the outcome of this segment",
+                "required": ["skill", "attribute", "difficulty"],
+                "properties": {
+                  "skill": {
+                    "type": "string",
+                    "description": "Skill being tested",
+                    "enum": ["Melee", "Archery", "Brawling", "Dodge", "Parry", "Stealth", "Investigation", "Tumbling", "Climbing", "Lockpicking", "Mythos", "Arcane", "FirstAid", "Foraging", "Appraise"]
+                  },
+                  "attribute": {
+                    "type": "string",
+                    "description": "Attribute that supports the skill",
+                    "enum": ["Strength", "Agility", "Endurance", "Charisma", "Intrigue", "Presence", "Perception", "Intelligence", "Cunning"]
+                  },
+                  "difficulty": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Difficulty rating (skill + attribute must meet or exceed)"
+                  }
+                }
+              },
+              "outcomes": {
+                "type": "object",
+                "description": "Possible outcomes based on challenge result",
+                "required": ["success", "failure"],
+                "properties": {
+                  "success": {
+                    "type": "object",
+                    "description": "Outcome when challenge is passed",
+                    "properties": {
+                      "text": {
+                        "type": "string",
+                        "description": "Text displayed on success"
+                      },
+                      "rewards": {
+                        "type": "object",
+                        "properties": {
+                          "resources": {
+                            "type": "object",
+                            "additionalProperties": { "type": "integer" }
+                          },
+                          "progress": {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          "skillXP": {
+                            "type": "object",
+                            "description": "XP awarded to specific skills used",
+                            "additionalProperties": { "type": "number" }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "failure": {
+                    "type": "object",
+                    "description": "Outcome when challenge is failed",
+                    "properties": {
+                      "text": {
+                        "type": "string",
+                        "description": "Text displayed on failure"
+                      },
+                      "penalties": {
+                        "type": "object",
+                        "properties": {
+                          "resources": {
+                            "type": "object",
+                            "additionalProperties": { "type": "integer" }
+                          },
+                          "progress": {
+                            "type": "object",
+                            "additionalProperties": true
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "criticalSuccess": {
+                    "type": "object",
+                    "description": "Optional outcome for critical success",
+                    "properties": {
+                      "text": {
+                        "type": "string",
+                        "description": "Text displayed on critical success"
+                      },
+                      "rewards": {
+                        "type": "object",
+                        "properties": {
+                          "resources": {
+                            "type": "object",
+                            "additionalProperties": { "type": "integer" }
+                          },
+                          "progress": {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          "skillXP": {
+                            "type": "object",
+                            "description": "XP awarded to specific skills used",
+                            "additionalProperties": { "type": "number" }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "criticalFailure": {
+                    "type": "object",
+                    "description": "Optional outcome for critical failure",
+                    "properties": {
+                      "text": {
+                        "type": "string",
+                        "description": "Text displayed on critical failure"
+                      },
+                      "penalties": {
+                        "type": "object",
+                        "properties": {
+                          "resources": {
+                            "type": "object",
+                            "additionalProperties": { "type": "integer" }
+                          },
+                          "progress": {
+                            "type": "object",
+                            "additionalProperties": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "restAllowed": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether player can rest instead of continuing"
+              },
+              "abandonPenalty": {
+                "type": "object",
+                "description": "Penalties for abandoning the story",
+                "properties": {
+                  "resources": {
+                    "type": "object",
+                    "additionalProperties": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "globalSettings": {
+      "type": "object",
+      "description": "Story-wide settings for the incremental game",
+      "properties": {
+        "restDuration": {
+          "type": "integer",
+          "default": 3600,
+          "description": "Default rest duration in seconds"
+        },
+        "defaultAbandonPenalty": {
+          "type": "object",
+          "description": "Default penalty for abandoning if not specified per passage"
+        }
+      }
+    }
+  }
+}
