@@ -345,13 +345,6 @@ func TestSendArrivalMessage(t *testing.T) {
 						tt.expectedMessage, mockObserver.GetMessages())
 				}
 
-				// Verify arriving character didn't receive the message
-				if tt.character != nil && tt.character.player != nil &&
-					tt.name == "Arriving character excluded from message" {
-					// The arriving character's mock would have been created above
-					// We can't easily check it here due to the test structure
-					// but the real SendRoomMessage function handles the exclusion
-				}
 			}
 		})
 	}

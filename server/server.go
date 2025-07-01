@@ -271,7 +271,9 @@ func (s *Server) cleanupStaleSessions() {
 
 	// Remove stale players outside the main lock
 	for _, id := range stalePlayerIDs {
-		s.RemovePlayer(id)
+		if err := s.RemovePlayer(id); err != nil {
+			Logger.Error("Server: Failed to remove stale player", "error", err, "player_id", id)
+		}
 	}
 
 	if len(stalePlayerIDs) > 0 {

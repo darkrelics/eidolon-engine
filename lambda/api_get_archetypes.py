@@ -34,8 +34,8 @@ logger.setLevel(logging.INFO)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-table_name = os.environ.get("ARCHETYPES_TABLE_NAME", "archetypes")
-archetypes_table = dynamodb.Table(table_name)  # type: ignore
+ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
+archetypes_table = dynamodb.Table(ARCHETYPES_TABLE)  # type: ignore
 
 # Cache for player archetypes
 player_archetypes_cache = []

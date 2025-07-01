@@ -57,9 +57,8 @@ func (mp *mockPlayer) close() {
 
 func (mp *mockPlayer) captureOutput() {
 	defer func() {
-		if r := recover(); r != nil {
-			// Ignore panics from closed channels during test cleanup
-		}
+		// Ignore panics from closed channels during test cleanup
+		_ = recover()
 	}()
 	for msg := range mp.commandOut {
 		mp.mutex.Lock()

@@ -311,8 +311,8 @@ def main() -> None:
         all_parameters: dict = gather_all_parameters()
 
         # Validate S3 bucket
-        s3_bucket_name = all_parameters["codebuild"]["S3BucketName"]
-        if not validate_s3_bucket(s3_bucket_name):
+        S3_BUCKET = all_parameters["codebuild"]["S3BucketName"]
+        if not validate_s3_bucket(S3_BUCKET):
             print("Invalid or inaccessible S3 bucket. Exiting...")
             return
 

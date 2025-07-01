@@ -33,13 +33,13 @@ logger.setLevel(logging.INFO)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-players_table_name = os.environ.get("PLAYERS_TABLE_NAME", "players")
-characters_table_name = os.environ.get("CHARACTERS_TABLE_NAME", "characters")
-items_table_name = os.environ.get("ITEMS_TABLE_NAME", "items")
+players_table = os.environ.get("PLAYERS_TABLE", "players")
+characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
+items_table = os.environ.get("ITEMS_TABLE", "items")
 
-players_table = dynamodb.Table(players_table_name)
-characters_table = dynamodb.Table(characters_table_name)
-items_table = dynamodb.Table(items_table_name)
+players_table = dynamodb.Table(players_table)
+characters_table = dynamodb.Table(characters_table)
+items_table = dynamodb.Table(items_table)
 
 
 def verify_character_ownership(player_id, character_name):

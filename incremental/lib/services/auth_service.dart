@@ -309,6 +309,30 @@ class AuthService {
     }
   }
 
+  /// Gets the current ID token for API authentication
+  Future<String?> getIdToken() async {
+    await _ensureInitialized();
+
+    try {
+      if (_currentUser == null || _session == null) {
+        final restored = await _restoreSession();
+        if (!restored) return null;
+      }
+
+      if (_session == null) return null;
+
+      if (!_session!.isValid()) {
+        final refreshed = await _refreshSession();
+        if (!refreshed) return null;
+      }
+
+      return _session!.getIdToken().getJwtToken();
+    } catch (err) {
+      _logError('Failed to get ID token', err);
+      return null;
+    }
+  }
+
   /// Resends the confirmation code
   Future<void> resendConfirmationCode(String email) async {
     await _ensureInitialized();

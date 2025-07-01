@@ -1,0 +1,62 @@
+# Eidolon Engine Configuration Template
+# This template separates MUD and Incremental deployments
+
+Game:
+  name: eidolon-engine
+
+# Deployment configuration - which applications to deploy
+Deployment:
+  MUD: true          # Deploy MUD Portal infrastructure
+  Incremental: false # Deploy Incremental game infrastructure
+
+# Shared DynamoDB tables used by both applications
+DynamoDB:
+  SharedTables:
+    Players: players  # Shared player table
+
+  # MUD-specific tables
+  MUDTables:
+    Characters: mud-characters
+    Items: mud-items
+    Archetypes: mud-archetypes
+
+  # Incremental-specific tables
+  IncrementalTables:
+    Progress: incremental-progress
+    Resources: incremental-resources
+
+# API configuration (required)
+API:
+  Domain: example.com
+  HostedZoneId: Z1234567890ABC
+  MUDSubdomain: mud-api         # mud-api.example.com
+  IncrementalSubdomain: inc-api # inc-api.example.com
+
+# CodeBuild configuration
+CodeBuild:
+  PortalBuildspecPath: buildspec/portal.yml
+  IncrementalBuildspecPath: buildspec/incremental.yml
+
+# CloudFront distributions (optional - will create new if not specified)
+CloudFront:
+  MUDDistributionId: ""         # Existing distribution ID for MUD
+  IncrementalDistributionId: ""  # Existing distribution ID for Incremental
+
+# S3 buckets (optional - will create new if not specified)
+S3:
+  PortalBucket: ""    # Shared portal bucket
+  ScriptsBucket: ""   # Shared scripts bucket
+
+# CloudWatch log retention
+CloudWatch:
+  LogRetentionDays: 365
+
+# GitHub configuration
+GitHub:
+  Owner: robinje
+  Repo: eidolon-engine
+  Branch: main
+
+# Contact email for Cognito
+Contact:
+  Email: admin@example.com

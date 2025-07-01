@@ -1,223 +1,321 @@
-# Eidolon Engine - Incremental Game
+# Eidolon Engine - Incremental Module
 
-A modern incremental RPG game built with Flutter, inspired by Progress Quest, designed to introduce players to the Eidolon Engine world and mechanics.
+A server-authoritative incremental RPG module built with Lambda functions and DynamoDB, designed to introduce players to the Eidolon Engine world through story-driven progression.
 
 ## Overview
 
-This incremental game serves as a gateway to the Eidolon Engine universe, providing players with a simplified, automated RPG experience that showcases the core mechanics and lore of the main game. Players create characters that automatically progress through quests, battles, and equipment upgrades while learning about the game world.
+This incremental module serves as a gateway to the Eidolon Engine universe, providing players with an automated RPG experience driven by story segments. Players progress through time-gated narrative segments, with all game logic enforced server-side to prevent cheating and ensure consistent gameplay.
 
-## Key Features
+## Architecture
 
-- **Automated Progression**: Characters automatically perform actions, complete quests, and battle monsters
-- **Modern UI**: Progress bars, animations, and visual feedback for all actions
-- **Character Development**: Skills, attributes, and equipment that improve over time
-- **Quest System**: Procedurally generated quests that introduce world lore
-- **Equipment Tiers**: Progressively better gear with visual representation
-- **Zone Progression**: Unlock new areas as character power increases
-- **Shared Authentication**: Uses the same Cognito authentication as the main game
-- **Character Export**: Eventually allow exporting characters to the main game
+### Server-Authoritative Design
 
-## Technical Architecture
+- **Time Authority**: Lambda functions control all timing - no client-side progression
+- **Story Content**: JSON documents stored in S3, referenced by DynamoDB
+- **State Management**: Character progression stored in DynamoDB with conditional writes
+- **Content Delivery**: Stories loaded from S3 via signed URLs
+- **Security**: All rewards and progression calculated server-side
+- **No Client Trust**: Flutter app only displays server-calculated results
 
-### Frontend (Flutter Web)
+### Technical Stack
 
-- **State Management**: Provider/Riverpod for reactive UI updates
-- **Data Models**: Simplified versions of server models
-- **Local Storage**: IndexedDB for offline progression
-- **Real-time Updates**: WebSocket connection for live data
+- **Backend**: Python Lambda functions for game logic
+- **Database**: DynamoDB for character state and story metadata
+- **Storage**: S3 for story JSON content
+- **Client**: Flutter Web (mobile apps in future phases)
+- **Monitoring**: CloudWatch metrics and EMF logging
+- **Authentication**: AWS Cognito (shared with main game)
 
-### Backend Integration
+## Development Plan
 
-- **Authentication**: AWS Cognito (shared with main server)
-- **Data Storage**: DynamoDB for character persistence
-- **Metrics**: CloudWatch for player analytics
-- **Content Delivery**: JSON-based content that can be updated
+### Phase 0 – Foundation [COMPLETED]
 
-### Core Game Systems
+**Goal**: Establish common development environment and contracts
 
-#### 1. Character System
+- Repository structure: `/incremental` with `lambda/`, `schemas/`, `lib/`, `test/`
+- Story schema JSON (story.schema.json) defining segment structure with Twine compatibility
+- Flutter client foundation with authentication via AWS Cognito
+- Character model based on server archetypes from `/data/test_archetypes.json`
 
-- **Attributes**:
-  - Physical: Strength, Agility, Endurance
-  - Mental: Intelligence, Perception, Cunning
-  - Social: Charisma, Presence, Intrigue
-- **Skills**:
-  - Combat: Melee, Archery, Brawling, Dodge, Parry
-  - Stealth: Stealth, Investigation, Tumbling, Climbing, Lockpicking
-  - Magic: Mythos, Arcane
-  - Survival: First Aid, Foraging, Appraise
-- **Vitals**: Health, Essence (Mana), Experience
-- **Equipment Slots**: Head, Chest, Hands, Feet, Weapon, Shield, Back, Finger, Book, Potion
+**Deliverable**: Schema defined, Flutter models implemented, authentication working
 
-#### 2. Character Archetypes
+### Phase 1 – Core Loop MVP
 
-- **Wizard**: High Intelligence, focus on Mythos/Arcane skills, low Health/high Essence
-- **Rogue**: Balanced Agility/Cunning, specialized in Stealth skills, medium Health/Essence
-- **Warrior**: High Strength/Endurance, combat-focused skills, high Health/low Essence
-- Each archetype starts with unique equipment and progresses differently
+**Goal**: Make the game playable with server-side authority
 
-#### 3. Progression Loop
+- **Character Management** (#664): Create/retrieve character Lambda functions
+- **StartSegment Lambda** (#660): Validate character, set segment timer, return end time
+- **ConcludeSegment Lambda** (#661): Validate completion time, evaluate outcome, apply rewards
+- **S3 Story Integration** (#645): Modify Lambdas to fetch stories from S3
+- **Example Story** (#662): Tutorial story demonstrating all mechanics
+- **DynamoDB Tables**:
+  - IncrementalCharacters (player progression)
+  - ActiveSegments (time-gated segments)
+  - StoryRegistry (S3 object references) (#644)
+  - StoryManifest (browsing metadata) (#644)
+  - CharacterHistory (completion tracking)
+- **S3 Story Storage** (#643): Configure bucket for story content
+- **Cognito Identity Pool** (#646): Enable direct S3 access
+- **Flutter Timer UI** (#663): Countdown timer and outcome display
+- **Observability**: CloudWatch metrics for segments started/completed
 
-1. **Quest Selection**: Automatically picks appropriate quest
-2. **Travel Time**: Visual journey to quest location
-3. **Action Resolution**: Combat/skill checks with visual feedback
-   - Uses skill + attribute for effective score
-   - Opposed checks: Your score vs opponent score
-   - Static checks: Your score vs difficulty rating
-   - Cryptographically secure random resolution
-   - Higher scores shift probability of success
-4. **Rewards**: Experience, gold, items
-5. **Equipment Upgrade**: Auto-equip better items
-6. **Zone Unlock**: Access new areas at power thresholds
+**Deliverable**: Complete game loop with example story from S3
 
-#### 4. Experience System
+### Phase 2 – Content Pipeline
 
-Based on the Eidolon Engine's sophisticated XP mechanics:
+**Goal**: Enable dynamic content without backend changes
 
-- **Base XP**: 0.25 per action (success or failure)
-- **Variance Modifier**: Rewards based on challenge difficulty
+- **Twine Converter** (#640): Create twine2idle tool for Twee/HTML conversion
+- **Git-to-S3 Pipeline**: GitHub Action for story publishing
+- **Story Manifest Updates**: Auto-generate browsing index
+- **Client Story Loading**: Dynamic story list from S3
+- **Revision Handling**: Support hot-patching live stories
+- **Content Validation**: JSON schema validation on commit
+- **Author Documentation** (#619): Story writing handbook
+
+**Deliverable**: Non-developers can publish stories; live updates work
+
+### Phase 3 – Progression Features
+
+**Goal**: Add depth with branching and rest mechanics
+
+- **Branching Paths** (#610): Weighted random story branches
+- **Rest & Abandon** (#611): Alternative segment outcomes
+- **Extended Analytics**: Detailed metrics for balancing
+- **Replay Prevention**: CharacterHistory tracking
+- **Achievement System**: Story completion rewards
+- **QA Test Suite** (#618): Automated progression testing
+
+**Deliverable**: Complete idle RPG loop with meaningful progression
+
+### Phase 4 – Scale Hardening
+
+**Goal**: Production readiness
+
+- Lambda provisioned concurrency
+- CloudWatch Synthetics monitoring
+- Cost controls and autoscaling
+- Security review and WAF
+
+**Deliverable**: SLA-ready module supporting 100k DAU
+
+## Game Systems
+
+### Story Structure
+
+Stories are JSON documents stored in S3, following the story.schema.json specification:
+
+- Metadata (name, author, tags, Twine export info)
+- Passages array with Twine-compatible structure
+- Each passage includes:
+  - Narrative text and duration
+  - Links to other passages
+  - gameData with incremental mechanics:
+    - Challenge definition (skill + attribute vs difficulty)
+    - Requirements (resources, progress flags)
+    - Outcomes (criticalSuccess, success, failure, criticalFailure)
+    - Rewards and penalties
+
+### Character Progression
+
+Based on the Eidolon Engine MUD mechanics, using archetypes from `/data/test_archetypes.json`:
+
+#### Attributes
+
+- **Physical**: Strength, Agility, Endurance
+- **Mental**: Intelligence, Perception, Cunning
+- **Social**: Charisma, Presence, Intrigue
+
+#### Skills
+
+- **Combat**: Melee, Archery, Brawling, Dodge, Parry
+- **Stealth**: Stealth, Investigation, Tumbling, Climbing, Lockpicking
+- **Magic**: Mythos, Arcane
+- **Survival**: FirstAid, Foraging, Appraise
+
+#### Character Creation
+
+- Players select from available archetypes (Wizard, Rogue, Warrior, etc.)
+- Each archetype defines starting attributes, skills, health, and essence
+- No level system - progression is purely through skill/attribute improvements
+
+#### Experience System
+
+Challenges in story segments use the MUD's XP mechanics:
+
+- **Base XP**: 0.25 per action
+- **Variance Modifier**: Based on challenge difficulty
   - Fighting stronger opponents = more XP (up to 4x)
   - Fighting weaker opponents = less XP (down to 0.25x)
-  - Formula: (min_score/max_score)^2
+  - Formula: (min_score/max_score)²
 - **Failure Penalty**: 50% XP on failed actions
-- **Skill Progression**:
-  - XP Required = 10 × 3.5^(current_score)
-  - Exponential growth: Score 0→1 needs 10 XP, 1→2 needs 35 XP, etc.
-  - Maximum score: 10.0
+- **Skill Progression**: XP Required = 10 × 3.5^(current_score)
 - **Attribute Growth**: Attributes gain 10% of skill XP
-- **Incremental Advancement**: Partial progress toward next level
 
-##### XP Examples:
+### Segment Resolution
 
-- Novice (score 0) vs Novice: 0.25 XP on success
-- Novice (score 0) vs Expert (score 5): 0.01 XP on success
-- Expert (score 5) vs Novice (score 0): 1.0 XP on success
-- Equal opponents always give base XP (0.25)
+1. **StartSegment**: Player begins a story segment
+   - Lambda validates character can attempt it
+   - Sets timer based on segment duration
+   - Returns end timestamp to client
 
-#### 5. Incremental Game Adaptations
+2. **ConcludeSegment**: Timer expires, player claims rewards
+   - Lambda validates time has passed
+   - Evaluates challenge (skill + attribute vs difficulty)
+   - Determines outcome (critSuccess/success/neutral/fail/death)
+   - Applies XP and rewards based on outcome
+   - Advances to next segment or branch
 
-The incremental game simplifies and automates the core mechanics:
+### Incremental Adaptations
 
-- **Auto-Combat**: Characters automatically use optimal skill/attribute combinations
-- **Visual Progress**: Real-time progress bars showing action completion
-- **Accelerated XP**: Faster progression to maintain engagement (2-4x base rates)
-- **Offline Progress**: Continue gaining XP while away (at reduced rate)
-- **Prestige System**: Reset character for permanent bonuses (future feature)
-- **Achievement Multipliers**: Earn XP bonuses for reaching milestones
+- **Automated Play**: No manual actions required during segments
+- **Time Gates**: Real-world timers enforce pacing
+- **Offline Progress**: Stories continue while away
+- **Visual Progress**: Countdown timers and progress bars
+- **Server Authority**: All progression calculations happen in Lambda functions
+- **Story Focus**: Content drives engagement, not prestige mechanics
 
-#### 6. Content Structure
+## Content Management
 
-- **Zones**: Tutorial Village → Forest → Mountains → Dark Caverns → etc.
-- **Quest Types**: Kill X monsters, Gather Y items, Explore location, Defeat boss
-- **Monster Tiers**: Scaled to zone with appropriate rewards
-- **Item Rarity**: Common → Uncommon → Rare → Epic → Legendary
+### Story Publishing Workflow
 
-## Development Phases
+1. Authors write stories in JSON format
+2. Validate against schema locally
+3. Push to Git repository
+4. GitHub Actions validates and publishes
+5. Stories available immediately to players
 
-### Phase 1: Core Systems (Current)
+### Story Design Guidelines
 
-- [x] Project setup and architecture planning
-- [ ] Basic Flutter app structure
-- [ ] Character data models
-- [ ] Game loop implementation
-- [ ] Basic UI with progress bars
+- Segments should be 30 seconds to 24 hours
+- Include variety of challenge types
+- Balance risk/reward for different outcomes
+- Support both linear and branching narratives
+- Test with game balance simulator
 
-### Phase 2: Content & Polish
+## API Endpoints
 
-- [ ] Quest generation system
-- [ ] Monster and item databases
-- [ ] Zone progression logic
-- [ ] Visual effects and animations
-- [ ] Sound effects and music
+### Lambda Functions
 
-### Phase 3: Integration
+- `POST /start-segment`: Begin a story segment
+- `POST /conclude-segment`: Complete segment and claim rewards
+- `POST /abandon`: Cancel current story run with penalty
+- `POST /rest`: Rest instead of continuing story
 
-- [ ] Cognito authentication
-- [ ] DynamoDB persistence
-- [ ] CloudWatch metrics
-- [ ] Character export functionality
-- [ ] Achievement system
+### Data Models
 
-### Phase 4: Platform Expansion
+Data models follow the story.schema.json specification and DynamoDB table structure defined in cloudformation/dynamo.yml
 
-- [ ] Google Play deployment
-- [ ] iOS App Store deployment
-- [ ] Platform-specific optimizations
-- [ ] Push notifications
+## Implementation Status
 
-## Content Loading System
+### Completed
 
-Content is loaded from JSON files that can be updated without app releases:
+- Story schema definition with Twine compatibility
+- Flutter character models (display-only)
+- Archetype loading system
+- API service for Lambda calls
+- DynamoDB table definitions
+- Authentication integration
 
-```json
-{
-  "zones": [
-    {
-      "id": "tutorial_village",
-      "name": "Starter Village",
-      "level_range": [1, 5],
-      "monsters": ["rat", "spider", "wolf"],
-      "quest_types": ["kill", "gather"]
-    }
-  ],
-  "monsters": [
-    {
-      "id": "rat",
-      "name": "Giant Rat",
-      "level": 1,
-      "attributes": { "strength": 2, "agility": 3, "perception": 1 },
-      "loot_table": ["rat_tail", "copper_coin"]
-    }
-  ]
-}
-```
+### Next Steps
 
-## UI/UX Design
+- Implement StartSegment Lambda function
+- Implement ConcludeSegment Lambda function
+- Create example story content
+- Build timer UI in Flutter
+- Add story browsing interface
 
-### Main Screen Layout
+## Development Setup
 
-1. **Character Panel** (Left)
-   - Name, Class, Level
-   - Attribute bars
-   - Equipment display
+### Prerequisites
 
-2. **Action Panel** (Center)
-   - Current quest/action
-   - Progress bar
-   - Combat log
-   - Recent rewards
+- Go 1.21+
+- Flutter 3.0+
+- AWS CLI configured
+- Docker for DynamoDB Local
 
-3. **Inventory Panel** (Right)
-   - Equipment grid
-   - Item details
-   - Gold counter
-
-### Visual Style
-
-- Dark fantasy theme with glowing accents
-- Smooth animations for all progressions
-- Particle effects for level-ups and rare drops
-- Responsive design for mobile and desktop
-
-## Getting Started
+### Local Development
 
 ```bash
-cd incremental
-flutter pub get
-flutter run -d chrome
+# Start local environment
+make dev
+
+# Run Lambda tests
+cd lambda && go test ./...
+
+# Run Flutter client
+cd client/idle && flutter run -d chrome
 ```
 
-## Testing
+### Story Validation
 
 ```bash
-flutter test
-flutter analyze
+# Validate a story file
+make validate-story STORY=stories/tutorial.json
+
+# Validate all stories
+make validate-stories
 ```
 
-## Building for Production
+## Testing Strategy
 
-```bash
-flutter build web --release
-flutter build apk --release
-flutter build ios --release
-```
+- **Unit Tests**: Lambda function logic
+- **Integration Tests**: Full flow with DynamoDB Local
+- **Load Tests**: Simulate 10k concurrent players
+- **Story Tests**: Automated play-through of all paths
+- **Client Tests**: Flutter widget and integration tests
+
+## Monitoring
+
+### Key Metrics
+
+- `SegmentsStarted`: Count per story
+- `SegmentsCompleted`: Success rate tracking
+- `ConcludeLatency`: P50/P95/P99
+- `PrestigeEvents`: Progression tracking
+- `ActivePlayers`: Concurrent users
+- `StoryCompletionRate`: Full story completion
+
+### Dashboards
+
+- Real-time player activity
+- Story performance metrics
+- Error rates and latency
+- Cost per player metrics
+
+## Success Criteria
+
+### Technical
+
+- All time enforcement in Lambda
+- No client-side exploits possible
+- > 99.9% availability under synthetics
+- P95 cold start <120ms
+
+### Operational
+
+- P95 conclude latency <150ms
+- Daily AWS cost <$15 at 100k DAU
+- 3-minute content deployment
+
+### Player Experience
+
+- Zero client crashes
+- Smooth progression curve
+- Engaging story content
+- Clear feedback on all actions
+
+## Future Enhancements
+
+- Mobile apps (iOS/Android)
+- Character export to main game
+- Seasonal story events
+- Guild/social features
+- Achievement system
+- Leaderboards
+
+## Contributing
+
+See [Story Author Handbook](docs/story-author-handbook.md) for content creation guidelines.
+
+For code contributions, ensure all tests pass and follow the style guide in CLAUDE.md.

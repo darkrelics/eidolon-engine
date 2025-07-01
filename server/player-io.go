@@ -53,19 +53,25 @@ func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Reques
 			p.mutex.Lock()
 			switch req.Type {
 			case "shell":
-				req.Reply(true, nil)
+				if err := req.Reply(true, nil); err != nil {
+					Logger.Error("Player-IO: Failed to reply to shell request", "error", err)
+				}
 			case "pty-req":
 				termLen := req.Payload[3]
 				w, h := ParseDims(req.Payload[termLen+4:])
 				p.consoleWidth = w
 				p.consoleHeight = h
-				req.Reply(true, nil)
+				if err := req.Reply(true, nil); err != nil {
+					Logger.Error("Player-IO: Failed to reply to pty-req", "error", err)
+				}
 			case "window-change":
 				w, h := ParseDims(req.Payload)
 				p.consoleWidth = w
 				p.consoleHeight = h
 			default:
-				req.Reply(false, nil)
+				if err := req.Reply(false, nil); err != nil {
+					Logger.Error("Player-IO: Failed to reply to unknown request", "type", req.Type, "error", err)
+				}
 			}
 			p.mutex.Unlock()
 		}
@@ -179,7 +185,9 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 					select {
 					case p.commandIn <- input:
 						if p.echo {
-							p.connection.Write([]byte("\r\n"))
+							if _, err := p.connection.Write([]byte("\r\n")); err != nil {
+								Logger.Error("Player-IO: Failed to write newline", "error", err)
+							}
 						}
 						p.inputBuffer.Clear()
 					case <-ctx.Done():
@@ -189,14 +197,20 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				} else {
 					// Handle empty input - just show prompt again
 					if p.echo {
-						p.connection.Write([]byte("\r\n"))
-						p.connection.Write([]byte(p.prompt))
+						if _, err := p.connection.Write([]byte("\r\n")); err != nil {
+							Logger.Error("Player-IO: Failed to write newline", "error", err)
+						}
+						if _, err := p.connection.Write([]byte(p.prompt)); err != nil {
+							Logger.Error("Player-IO: Failed to write prompt", "error", err)
+						}
 					}
 				}
 
 			case '\b', 127: // Backspace
 				if p.inputBuffer.RemoveLast() && p.echo {
-					p.connection.Write([]byte("\b \b"))
+					if _, err := p.connection.Write([]byte("\b \b")); err != nil {
+						Logger.Error("Player-IO: Failed to write backspace", "error", err)
+					}
 				}
 
 			case '\x03': // Ctrl-C
@@ -207,7 +221,9 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				// Filter input to only allow printable ASCII (32-126)
 				if r >= 32 && r <= 126 {
 					if p.inputBuffer.Append(r) && p.echo {
-						p.connection.Write([]byte(string(r)))
+						if _, err := p.connection.Write([]byte(string(r))); err != nil {
+							Logger.Error("Player-IO: Failed to echo character", "error", err)
+						}
 					}
 				}
 			}

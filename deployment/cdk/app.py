@@ -1,7 +1,8 @@
 """AWS CDK application for Eidolon Engine infrastructure.
 
 This application defines all AWS resources needed for the Eidolon Engine
-game server using AWS CDK for infrastructure as code.
+game server using AWS CDK for infrastructure as code. Separates MUD
+and Incremental deployments.
 """
 
 import json
@@ -11,13 +12,15 @@ from pathlib import Path
 
 import aws_cdk as cdk
 import yaml
+from stacks.base_lambda_stack import BaseLambdaStack
 from stacks.cloudfront_stack import CloudFrontStack
 from stacks.cloudwatch_stack import CloudWatchStack
 from stacks.codebuild_stack import CodeBuildStack
 from stacks.cognito_stack import CognitoStack
 from stacks.dynamodb_stack import DynamoDBStack
 from stacks.iam_stack import IAMStack
-from stacks.lambda_stack import LambdaStack
+from stacks.incremental_lambda_stack import IncrementalLambdaStack
+from stacks.mud_lambda_stack import MudLambdaStack
 from stacks.s3_stack import S3Stack
 
 
@@ -268,7 +271,13 @@ class EidolonEngineApp:
         # Get deployment parameters
         params = self.get_deployment_parameters()
 
-        # Create Cognito stack
+        # Determine which applications to deploy
+        deploy_mud = params.get("deploy_mud", True)
+        deploy_incremental = params.get("deploy_incremental", False)
+
+        # Create shared infrastructure stacks
+
+        # Create Cognito stack (shared)
         self.cognito_stack = CognitoStack(
             self.app,
             "cognito",
@@ -277,31 +286,21 @@ class EidolonEngineApp:
             env=env,
         )
 
-        # Create DynamoDB stack
-        self.dynamodb_stack = DynamoDBStack(
-            self.app, "dynamodb", game_name=params["game_name"], table_names=params.get("dynamodb_tables"), env=env
+        # Create shared DynamoDB tables
+        shared_tables = {"Players": params.get("shared_dynamodb_tables", {}).get("Players", "players")}
+
+        self.shared_dynamodb_stack = DynamoDBStack(
+            self.app, "shared-dynamodb", game_name="shared", table_names=shared_tables, env=env
         )
 
         # Create CloudWatch stack
         self.cloudwatch_stack = CloudWatchStack(
             self.app,
             "cloudwatch",
-            dynamodb_policy_arn=self.dynamodb_stack.access_policy.managed_policy_arn,
+            dynamodb_policy_arn=self.shared_dynamodb_stack.access_policy.managed_policy_arn,
             retention_days=params.get("log_retention_days", 365),
             env=env,
         )
-
-        # Create IAM stack with server execution role
-        self.iam_stack = IAMStack(
-            self.app,
-            "iam",
-            game_name=params["game_name"],
-            cloudwatch_policy_arn=self.cloudwatch_stack.access_policy.managed_policy_arn,
-            dynamodb_policy_arn=self.dynamodb_stack.access_policy.managed_policy_arn,
-            env=env,
-        )
-        self.iam_stack.add_dependency(self.cloudwatch_stack)
-        self.iam_stack.add_dependency(self.dynamodb_stack)
 
         # Create S3 stack (handles existing buckets)
         self.s3_stack = S3Stack(
@@ -313,59 +312,148 @@ class EidolonEngineApp:
             env=env,
         )
 
-        # Create CloudFront stack for portal distribution
-        self.cloudfront_stack = CloudFrontStack(
+        # Create base Lambda stack for shared functions
+        self.base_lambda_stack = BaseLambdaStack(
             self.app,
-            "cloudfront",
-            game_name=params["game_name"],
-            portal_bucket=self.s3_stack.portal_bucket,
-            existing_distribution_id=params.get("cloudfront_distribution_id"),
-            env=env,
-        )
-        self.cloudfront_stack.add_dependency(self.s3_stack)
-
-        # Create CodeBuild stack with dependencies
-        self.codebuild_stack = CodeBuildStack(
-            self.app,
-            "codebuild",
-            game_name=params["game_name"],
-            github_owner=params["github_owner"],
-            github_repo=params["github_repo"],
-            github_branch=params.get("github_branch", "main"),
-            cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
-            cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
-            portal_bucket=self.s3_stack.portal_bucket,
-            buildspec_path=params.get("portal_buildspec_path", "buildspec/portal.yml"),
-            cloudfront_distribution_id=self.cloudfront_stack.distribution.distribution_id,
+            "base-lambda",
             lambda_bucket=self.s3_stack.lambda_bucket,
-            env=env,
-        )
-        self.codebuild_stack.add_dependency(self.cognito_stack)
-        self.codebuild_stack.add_dependency(self.s3_stack)
-        self.codebuild_stack.add_dependency(self.cloudfront_stack)
-
-        # Create Lambda stack with dependencies
-        self.lambda_stack = LambdaStack(
-            self.app,
-            "lambda",
-            game_name=params["game_name"],
-            lambda_bucket=self.s3_stack.lambda_bucket,
-            players_table_name=params.get("dynamodb_tables", {}).get("Players", "players"),
-            characters_table_name=params.get("dynamodb_tables", {}).get("Characters", "characters"),
-            items_table_name=params.get("dynamodb_tables", {}).get("Items", "items"),
-            archetypes_table_name=params.get("dynamodb_tables", {}).get("Archetypes", "archetypes"),
+            shared_players_table=shared_tables["Players"],
             cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
-            domain_name=params.get("domain_name"),
-            api_subdomain=params.get("api_subdomain", "api"),
-            hosted_zone_id=params.get("hosted_zone_id"),
             env=env,
         )
-        self.lambda_stack.add_dependency(self.s3_stack)
-        self.lambda_stack.add_dependency(self.dynamodb_stack)
-        self.lambda_stack.add_dependency(self.cognito_stack)
+        self.base_lambda_stack.add_dependency(self.s3_stack)
+        self.base_lambda_stack.add_dependency(self.shared_dynamodb_stack)
+        self.base_lambda_stack.add_dependency(self.cognito_stack)
 
         # Add Cognito Lambda trigger
-        self.cognito_stack.add_lambda_trigger("PostConfirmation", self.lambda_stack.cognito_new_player_function)
+        self.cognito_stack.add_lambda_trigger("PostConfirmation", self.base_lambda_stack.cognito_new_player_function)
+
+        # Deploy MUD-specific infrastructure
+        if deploy_mud:
+            # Create MUD DynamoDB tables
+            mud_tables = params.get("mud_dynamodb_tables", {})
+            self.mud_dynamodb_stack = DynamoDBStack(self.app, "mud-dynamodb", game_name="mud", table_names=mud_tables, env=env)
+
+            # Create MUD Lambda stack
+            self.mud_lambda_stack = MudLambdaStack(
+                self.app,
+                "mud-lambda",
+                lambda_bucket=self.s3_stack.lambda_bucket,
+                shared_players_table=shared_tables["Players"],
+                mud_characters_table=mud_tables.get("Characters", "mud-characters"),
+                mud_items_table=mud_tables.get("Items", "mud-items"),
+                mud_ARCHETYPES_TABLE=mud_tables.get("Archetypes", "mud-archetypes"),
+                cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
+                shared_dependencies_layer_arn=self.base_lambda_stack.dependencies_layer.layer_version_arn,
+                domain_name=params.get("domain_name"),
+                hosted_zone_id=params.get("hosted_zone_id"),
+                api_subdomain=params.get("mud_api_subdomain", "mud-api"),
+                env=env,
+            )
+            self.mud_lambda_stack.add_dependency(self.base_lambda_stack)
+            self.mud_lambda_stack.add_dependency(self.mud_dynamodb_stack)
+            self.mud_lambda_stack.add_dependency(self.cognito_stack)
+
+            # Create CloudFront stack for MUD portal
+            self.mud_cloudfront_stack = CloudFrontStack(
+                self.app,
+                "mud-cloudfront",
+                game_name="mud-portal",
+                portal_bucket=self.s3_stack.portal_bucket,
+                existing_distribution_id=params.get("mud_cloudfront_distribution_id"),
+                env=env,
+            )
+            self.mud_cloudfront_stack.add_dependency(self.s3_stack)
+
+            # Create CodeBuild stack for MUD
+            self.mud_codebuild_stack = CodeBuildStack(
+                self.app,
+                "mud-codebuild",
+                game_name="mud-portal",
+                github_owner=params["github_owner"],
+                github_repo=params["github_repo"],
+                github_branch=params.get("github_branch", "main"),
+                cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
+                cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
+                portal_bucket=self.s3_stack.portal_bucket,
+                buildspec_path=params.get("portal_buildspec_path", "buildspec/portal.yml"),
+                cloudfront_distribution_id=self.mud_cloudfront_stack.distribution.distribution_id,
+                lambda_bucket=self.s3_stack.lambda_bucket,
+                env=env,
+            )
+            self.mud_codebuild_stack.add_dependency(self.cognito_stack)
+            self.mud_codebuild_stack.add_dependency(self.s3_stack)
+            self.mud_codebuild_stack.add_dependency(self.mud_cloudfront_stack)
+
+        # Deploy Incremental-specific infrastructure
+        if deploy_incremental:
+            # Create Incremental DynamoDB tables
+            incremental_tables = params.get("incremental_dynamodb_tables", {})
+            self.incremental_dynamodb_stack = DynamoDBStack(
+                self.app, "incremental-dynamodb", game_name="incremental", table_names=incremental_tables, env=env
+            )
+
+            # Create Incremental Lambda stack
+            self.incremental_lambda_stack = IncrementalLambdaStack(
+                self.app,
+                "incremental-lambda",
+                lambda_bucket=self.s3_stack.lambda_bucket,
+                shared_players_table=shared_tables["Players"],
+                incremental_progress_table_name=incremental_tables.get("Progress", "incremental-progress"),
+                incremental_resources_table_name=incremental_tables.get("Resources", "incremental-resources"),
+                cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
+                shared_dependencies_layer_arn=self.base_lambda_stack.dependencies_layer.layer_version_arn,
+                domain_name=params.get("domain_name"),
+                hosted_zone_id=params.get("hosted_zone_id"),
+                api_subdomain=params.get("incremental_api_subdomain", "incremental-api"),
+                env=env,
+            )
+            self.incremental_lambda_stack.add_dependency(self.base_lambda_stack)
+            self.incremental_lambda_stack.add_dependency(self.incremental_dynamodb_stack)
+            self.incremental_lambda_stack.add_dependency(self.cognito_stack)
+
+            # Create CloudFront stack for Incremental portal
+            self.incremental_cloudfront_stack = CloudFrontStack(
+                self.app,
+                "incremental-cloudfront",
+                game_name="incremental",
+                portal_bucket=self.s3_stack.portal_bucket,  # Could use separate bucket
+                existing_distribution_id=params.get("incremental_cloudfront_distribution_id"),
+                env=env,
+            )
+            self.incremental_cloudfront_stack.add_dependency(self.s3_stack)
+
+            # Create CodeBuild stack for Incremental
+            self.incremental_codebuild_stack = CodeBuildStack(
+                self.app,
+                "incremental-codebuild",
+                game_name="incremental",
+                github_owner=params["github_owner"],
+                github_repo=params["github_repo"],
+                github_branch=params.get("github_branch", "main"),
+                cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
+                cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
+                portal_bucket=self.s3_stack.portal_bucket,
+                buildspec_path=params.get("incremental_buildspec_path", "buildspec/incremental.yml"),
+                cloudfront_distribution_id=self.incremental_cloudfront_stack.distribution.distribution_id,
+                lambda_bucket=self.s3_stack.lambda_bucket,
+                env=env,
+            )
+            self.incremental_codebuild_stack.add_dependency(self.cognito_stack)
+            self.incremental_codebuild_stack.add_dependency(self.s3_stack)
+            self.incremental_codebuild_stack.add_dependency(self.incremental_cloudfront_stack)
+
+        # Create IAM stack with server execution role
+        self.iam_stack = IAMStack(
+            self.app,
+            "iam",
+            game_name=params["game_name"],
+            cloudwatch_policy_arn=self.cloudwatch_stack.access_policy.managed_policy_arn,
+            dynamodb_policy_arn=self.shared_dynamodb_stack.access_policy.managed_policy_arn,
+            env=env,
+        )
+        self.iam_stack.add_dependency(self.cloudwatch_stack)
+        self.iam_stack.add_dependency(self.shared_dynamodb_stack)
 
     def get_deployment_parameters(self) -> dict:
         """Get deployment parameters from config or state."""
@@ -377,6 +465,8 @@ class EidolonEngineApp:
             "github_repo": "eidolon-engine",
             "github_branch": "main",
             "log_retention_days": 365,
+            "deploy_mud": True,
+            "deploy_incremental": False,
         }
 
         # Override with stored parameters
@@ -394,22 +484,39 @@ class EidolonEngineApp:
             if "ScriptsS3Bucket" in game_config:
                 params["scripts_bucket_name"] = game_config["ScriptsS3Bucket"]
 
-        # Check for existing DynamoDB table configurations
-        if "DynamoDB" in self.config and "Tables" in self.config["DynamoDB"]:
-            params["dynamodb_tables"] = self.config["DynamoDB"]["Tables"]
+        # Check for deployment configuration
+        if "Deployment" in self.config:
+            deploy_config = self.config["Deployment"]
+            params["deploy_mud"] = deploy_config.get("MUD", True)
+            params["deploy_incremental"] = deploy_config.get("Incremental", False)
+
+        # Check for shared DynamoDB table configurations
+        if "DynamoDB" in self.config and "SharedTables" in self.config["DynamoDB"]:
+            params["shared_dynamodb_tables"] = self.config["DynamoDB"]["SharedTables"]
+
+        # Check for MUD-specific DynamoDB tables
+        if "DynamoDB" in self.config and "MUDTables" in self.config["DynamoDB"]:
+            params["mud_dynamodb_tables"] = self.config["DynamoDB"]["MUDTables"]
+
+        # Check for Incremental-specific DynamoDB tables
+        if "DynamoDB" in self.config and "IncrementalTables" in self.config["DynamoDB"]:
+            params["incremental_dynamodb_tables"] = self.config["DynamoDB"]["IncrementalTables"]
 
         # Check for CodeBuild configuration
         if "CodeBuild" in self.config:
             codebuild_config = self.config["CodeBuild"]
             if "PortalBuildspecPath" in codebuild_config:
                 params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
+            if "IncrementalBuildspecPath" in codebuild_config:
+                params["incremental_buildspec_path"] = codebuild_config["IncrementalBuildspecPath"]
 
         # Check for API configuration (required)
         if "API" in self.config:
             api_config = self.config["API"]
             params["domain_name"] = api_config.get("Domain")
-            params["api_subdomain"] = api_config.get("Subdomain", "api")
             params["hosted_zone_id"] = api_config.get("HostedZoneId")
+            params["mud_api_subdomain"] = api_config.get("MUDSubdomain", "mud-api")
+            params["incremental_api_subdomain"] = api_config.get("IncrementalSubdomain", "incremental-api")
 
             # Validate required API parameters
             if not params["domain_name"]:

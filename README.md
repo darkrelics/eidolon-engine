@@ -50,6 +50,59 @@ Characters have two hands (left and right) for holding items:
 - **Inventory Display**: Shows hand contents separately from worn/carried items
 - **INFO Command**: Displays what you're holding in a natural format
 
+### Stealth System
+
+A comprehensive stealth mechanic allowing characters to hide and move unseen:
+
+- **Hide/Unhide**: Characters can attempt to hide, becoming invisible to others
+- **Sneak**: Move while hidden, with skill checks to remain undetected
+- **Search**: Active searching to reveal hidden characters
+- **Point**: Reveal a hidden character to everyone in the room
+- **Detection**: Automatic perception checks when hidden characters act
+- **Skill-Based**: Success depends on stealth skill vs perception
+
+### Combat System (Basic Implementation)
+
+Range-based combat mechanics with positioning:
+
+- **Face**: Target another character for combat
+- **Assess**: Evaluate combat situation and distances
+- **Advance/Retreat**: Move closer or farther from opponents
+- **Flee**: Attempt to escape combat by leaving the room
+- **Range Categories**: Melee, close, near, far, distant
+- **Engagement**: Combat state tracking who is fighting whom
+
+### Death and Ghost System
+
+Character death and revival mechanics:
+
+- **Death State**: Characters can die from combat or other causes
+- **Ghost Form**: Dead characters become ghosts with limited actions
+- **Depart Command**: Ghosts can depart to designated revival points
+- **State Restrictions**: Different commands available based on alive/dead state
+
+### Experience and Skill System
+
+XP-based progression through skill usage:
+
+- **Skill Checks**: Opposed and static checks using skills + attributes
+- **XP Rewards**: Gain experience from successful (and failed) actions
+- **Variance Modifier**: More XP for challenging opponents, less for easy ones
+- **Skill Progression**: Exponential XP requirements (10 × 3.5^level)
+- **Attribute Growth**: Attributes gain 10% of related skill XP
+- **Cryptographic RNG**: Secure random number generation for fair outcomes
+
+### Mechanics Resolution System
+
+Advanced dice-less resolution for all game actions:
+
+- **Opposed Checks**: Character vs character with skill + attribute scores
+- **Static Checks**: Character vs difficulty rating
+- **Normal Distribution**: Results based on bell curve probability
+- **Advantage System**: Higher scores shift probability of success
+- **No Dice**: Pure statistical resolution without random dice
+- **Secure Randomness**: Uses crypto/rand for unpredictable results
+
 ### Room System
 
 Each active room runs in its own goroutine, handling commands and state for all characters and items within it. Rooms can be marked as persistent or non-persistent:
@@ -101,7 +154,7 @@ The main `commands.go` file now serves as the command registration and routing s
 
 Command processing includes a timeout system where different commands have varying "wait periods" during which certain other commands cannot be executed. Character states (standing, sitting, prone, dead) affect command availability, with state-appropriate commands always accessible regardless of timeout status. The system currently implements a basic "standing" state by default, with plans to expand to sitting, prone, and dead states to influence command availability and character interactions.
 
-Character sessions process commands through a strict parser that accepts only basic letters, numbers, and common special symbols, discarding any unrecognized input. Each command is evaluated to determine appropriate tier handling (character, room, or game) and routed accordingly through a structured channel system using CommandRequest and CommandResponse objects. Room commands are processed asynchronously in room-specific goroutines, while game-tier commands are escalated to the central game routine. This tiered approach ensures that only the appropriate components process each command, optimizing performance and ensuring proper state consistency. The proper cleanup and removal of characters from the game is a critical priority.
+Character sessions process commands through a strict parser that accepts only basic letters, numbers, and common special symbols, discarding any unrecognized input. Player input is managed through a thread-safe buffer system (player-buffer.go) that handles concurrent reads and writes with proper synchronization. Each command is evaluated to determine appropriate tier handling (character, room, or game) and routed accordingly through a structured channel system using CommandRequest and CommandResponse objects. Room commands are processed asynchronously in room-specific goroutines, while game-tier commands are escalated to the central game routine. This tiered approach ensures that only the appropriate components process each command, optimizing performance and ensuring proper state consistency. The proper cleanup and removal of characters from the game is a critical priority.
 
 The game routine serves as the authoritative source for world state, managing all characters, rooms, items, and game mechanics including the passage of time. It handles all database operations through DynamoDB, using RAM caching to minimize database access and prevent blocking operations. While initially designed as a single routine, the architecture supports future scaling to multiple game routines, though this will require additional communication mechanisms.
 
@@ -174,8 +227,39 @@ Testing will primarily be conducted through live user interaction, with unit tes
 
 - [x] Communication System
   - [x] Say command with room-wide communication
-  - [x] Shout command for server-wide messages
-  - [x] Announce command for GM announcements
+  - [ ] Shout command for server-wide messages
+  - [ ] Announce command for GM announcements
+  - [ ] Whisper command for private messages
+
+- [x] Stealth System
+  - [x] Hide command to become invisible
+  - [x] Unhide command to become visible
+  - [x] Sneak command for stealthy movement
+  - [x] Search command to find hidden characters
+  - [x] Point command to reveal hidden characters
+  - [x] Perception-based detection mechanics
+
+- [x] Combat System (Basic)
+  - [x] Face command to target opponents
+  - [x] Assess command for combat situation
+  - [x] Advance/Retreat for range management
+  - [x] Flee command to escape combat
+  - [x] Range-based combat positioning
+  - [ ] Attack and damage resolution
+  - [ ] Weapon and armor mechanics
+
+- [x] Death and Revival System
+  - [x] Character death states
+  - [x] Ghost form for dead characters
+  - [x] Depart command for revival
+  - [x] State-based command restrictions
+
+- [x] Experience and Skills
+  - [x] Skill-based resolution system
+  - [x] XP rewards from actions
+  - [x] Variance-based XP modifiers
+  - [x] Skill progression mechanics
+  - [x] Attribute advancement
 
 - [x] Security Features
   - [x] SSH authentication rate limiting
@@ -193,9 +277,23 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Add wear/remove commands for equipment
   - [x] Add switch command for swapping hand items
   - [ ] Add examine command for detailed item inspection
-  - [ ] Implement item verb interactions
+  - [ ] Implement item USE verb interactions
   - [ ] Load item prototypes at startup
   - [ ] Create item prototype factory function
+
+- [ ] Combat System Completion
+  - [x] Face/assess/advance/retreat positioning
+  - [ ] Attack command implementation
+  - [ ] Damage calculation and application
+  - [ ] Weapon skill integration
+  - [ ] Armor and defense mechanics
+  - [ ] Combat rounds and timing
+
+- [ ] Communication Commands
+  - [ ] Implement shout for server-wide messages
+  - [ ] Implement announce for admin messages
+  - [ ] Implement whisper for private messages
+  - [ ] Add emote system
 
 - [ ] Administrative Features
   - [ ] Implement privilege/permission system
@@ -224,14 +322,13 @@ Testing will primarily be conducted through live user interaction, with unit tes
 - [ ] Character Features
   - [ ] Implement auto-save functionality
   - [ ] Add dynamic prompt with HP/status
-  - [ ] Expand character states (sitting, prone, dead)
-  - [ ] Add whisper command for private communication
+  - [x] Character states implemented (standing, sitting, prone, dead, ghost)
 
 - [ ] Room System Extension
-  - [ ] Create Script management system with S3 storage
-  - [ ] Implement room script loading from S3
+  - [x] S3-based script storage implemented
+  - [ ] Additional script event types
   - [ ] Validate graph of loaded rooms and exits
-  - [ ] Add Lua scripting support
+  - [ ] Expand Lua scripting API capabilities
 
 #### Low Priority - Advanced Features
 
@@ -267,7 +364,8 @@ Basic Movement:
 - [ ] CLIMB: Climb an object like a tree or ladder.
 - [ ] SWIM: Swim through water.
 - [ ] JUMP: Jump over an object.
-- [ ] SNEAK: Move quietly.
+- [x] SNEAK: Move quietly while hidden.
+- [x] FLEE: Escape from combat.
 
 Objects and Inventory:
 
@@ -293,10 +391,10 @@ Communication:
 
 Combat:
 
-- [ ] FACE: Face another player or NPC.
-- [ ] ADVACE: Move towards another player or NPC.
-- [ ] RETREAT: Move away from another player or NPC.
-- [ ] ASSESS: Assess the situation.
+- [x] FACE: Face another player or NPC.
+- [x] ADVANCE: Move towards another player or NPC.
+- [x] RETREAT: Move away from another player or NPC.
+- [x] ASSESS: Assess the situation.
 - [ ] ATTACK: Attack another player or NPC.
 - [ ] LOAD: Load a weapon.
 - [ ] FIRE: Fire a weapon.
@@ -341,12 +439,17 @@ Session Management:
 - [x] QUIT: Exit the game.
 - [ ] SETTINGS: Change your settings.
 
+Stealth:
+
+- [x] HIDE: Hide from other players.
+- [x] SEARCH: Search for hidden objects or players.
+- [x] UNHIDE: Reveal yourself.
+- [x] POINT: Reveal a hidden character to everyone.
+
 OTHER:
 
-- [ ] HIDE: Hide from other players.
-- [ ] SEARCH: Search for hidden objects.
-- [ ] UNHIDE: Reveal yourself.
 - [ ] USE: Use an object.
+- [x] DEPART: Ghost command to return to life at a revival point.
 
 ## Implementation Status
 
@@ -373,10 +476,12 @@ OTHER:
 
 ### Scripting System
 
-- [ ] Script struct implementation
-- [ ] S3-based script storage
-- [ ] In-memory script caching
-- [ ] Lua integration for room and item scripts
+- [x] Script struct implementation
+- [x] S3-based script storage and retrieval
+- [x] In-memory script caching
+- [x] Lua integration for room and item scripts
+- [x] Basic scripting API (scripting-api.go)
+- [ ] Additional script event hooks (onTimer, etc.)
 
 ### Interfaces
 
@@ -412,12 +517,19 @@ OTHER:
   - [x] Modular file organization (character-commands.go, room-commands.go, game-commands.go)
   - [x] Command routing and tier determination
   - [x] Command error handling and validation
+  - [x] Sub-modules for specialized commands:
+    - [x] room-commands-stealth.go (hide/search mechanics)
+    - [x] room-commands-items.go (item manipulation)
+    - [x] room-commands-movement.go (movement system)
+    - [x] room-commands-item-containers.go (container interactions)
 - [x] Command wait time system
-- [x] Basic character state tracking (standing)
-- [ ] Advanced character states (sitting, prone, dead)
+- [x] Character states (standing, sitting, prone, dead, ghost)
 - [x] I/O buffering with channel limits
+- [x] Thread-safe player input buffer (player-buffer.go)
 - [x] Character state persistence
 - [x] Character cleanup on disconnect
+- [x] Experience and skill progression
+- [x] Mechanics resolution system
 
 ### Game World
 
@@ -448,7 +560,7 @@ OTHER:
 - [x] CloudWatch for metrics and logging
 - [x] Cognito for authentication
 - [x] DynamoDB for persistence
-- [ ] S3 for script storage
+- [x] S3 for script storage
 - [x] CloudFormation deployment scripts
 - [x] CodeBuild for portal deployment
 
@@ -461,11 +573,12 @@ OTHER:
 
 ### Primary Technical Debt
 
-1. **Item System Partially Complete** - Basic commands implemented, scripting and verbs needed
-2. **No Script System** - Room/item scripting not implemented
-3. **Limited State Management** - Only "standing" state implemented
-4. **No Combat System** - Combat commands and mechanics not implemented
-5. **Missing Admin Tools** - No in-game administration capabilities
+1. **Item System Partially Complete** - Basic commands implemented, examine and use verbs needed
+2. **Script System Partially Complete** - Basic Lua scripting works but additional event types needed
+3. **Combat System Partially Complete** - Positioning implemented but attack/damage resolution missing
+4. **Missing Admin Tools** - No in-game administration capabilities (@shutdown, @broadcast)
+5. **Communication Commands Incomplete** - Shout, announce, whisper not implemented
+6. **No Command Rate Limiting** - Per-player rate limiting system not implemented
 
 ## Web Portal
 

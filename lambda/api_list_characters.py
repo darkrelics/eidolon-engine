@@ -33,9 +33,9 @@ logger.setLevel(logging.INFO)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-players_table_name = os.environ.get("PLAYERS_TABLE_NAME", "players")
+players_table = os.environ.get("PLAYERS_TABLE", "players")
 
-players_table = dynamodb.Table(players_table_name)
+players_table = dynamodb.Table(players_table)
 
 
 def lambda_handler(event, _):
