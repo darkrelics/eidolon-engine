@@ -1,5 +1,5 @@
 """
-Eidolon Engine
+Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason Robinson
 
@@ -16,8 +16,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 
-Lambda function to save a new character for a player.
-Validates character data and ensures it matches an allowed archetype.
+Lambda function to add a new character for the incremental game.
+Simplified version without name collision checks since incremental
+allows duplicate names.
 """
 
 import json
@@ -38,7 +39,7 @@ logger.setLevel(logging.INFO)
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
 players_table_name = os.environ.get("PLAYERS_TABLE_NAME", "players")
-characters_table_name = os.environ.get("CHARACTERS_TABLE_NAME", "characters")
+characters_table_name = os.environ.get("CHARACTERS_TABLE_NAME", "incremental_characters")
 archetypes_table_name = os.environ.get("ARCHETYPES_TABLE_NAME", "archetypes")
 
 players_table = dynamodb.Table(players_table_name)
@@ -100,9 +101,7 @@ def validate_character_name(name):
 
 
 def generate_character_id():
-    """Generate a UUID v7 for the character ID."""
-    # UUID v7 includes timestamp for natural ordering
-    # Using uuid4 for now as uuid7 requires newer Python version
+    """Generate a UUID v4 for the character ID."""
     return str(uuid.uuid4())
 
 
@@ -168,36 +167,9 @@ def check_character_limit(player_id):
         return False, 0
 
 
-def check_name_exists(character_name):
-    """
-    Check if character name already exists.
-
-    Args:
-        character_name: Name to check
-
-    Returns:
-        bool: True if name exists
-    """
-    try:
-        # Query characters table by name (assuming GSI on CharacterName)
-        # For now, we'll scan - in production, use a GSI or bloom filter
-        response = characters_table.scan(
-            FilterExpression="CharacterName = :name",
-            ExpressionAttributeValues={":name": character_name},
-            ProjectionExpression="CharacterID",
-            Limit=1,
-        )
-
-        return len(response.get("Items", [])) > 0
-
-    except ClientError as err:
-        logger.error(f"Error checking name existence: {err}")
-        return True  # Assume exists on error for safety
-
-
 def create_character(player_id, character_name, archetype_name, archetype_data):
     """
-    Create a new character in DynamoDB.
+    Create a new incremental character in DynamoDB.
 
     Args:
         player_id: Cognito user ID
@@ -232,20 +204,25 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "Health": archetype_data.get("Health", 10),
         "MaxHealth": archetype_data.get("Health", 10),
         "Essence": convert_to_decimal(archetype_data.get("Essence", 3)),
+        "MaxEssence": convert_to_decimal(archetype_data.get("Essence", 3)),
         "Wounds": [],
-        "RoomID": archetype_data.get("StartRoom", 0),
+        "RoomID": 0,  # Always room 0 for incremental
         "Inventory": [],
+        "Resources": {
+            "gold": 0,
+            "supplies": 10,
+            "reputation": 0
+        },
         "Hidden": False,
-        "CharState": "Standing",  # Default character state
+        "CharState": "Standing",
         "CreatedAt": timestamp,
         "UpdatedAt": timestamp,
         "LastPlayed": timestamp,
     }
 
     try:
-        # Start a transaction to update both tables atomically
-        # Update player's character list with PlayerCharacterInfo structure
-        character_info = {"UUID": character_id, "Dead": False}  # New characters start alive
+        # Update player's character list
+        character_info = {"UUID": character_id, "Dead": False}
 
         players_table.update_item(
             Key={"PlayerID": player_id},
@@ -257,7 +234,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         # Create character record
         characters_table.put_item(Item=character_item)
 
-        logger.info(f"Created character {character_name} ({character_id}) for player {player_id}")
+        logger.info(f"Created incremental character {character_name} ({character_id}) for player {player_id}")
         return character_id
 
     except ClientError as err:
@@ -276,7 +253,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
 
 def lambda_handler(event, _):
     """
-    Lambda handler for character creation API.
+    Lambda handler for incremental character creation API.
 
     Args:
         event: API Gateway event with Cognito authorizer
@@ -334,14 +311,6 @@ def lambda_handler(event, _):
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": f"Character limit reached ({current_count})", "currentCount": current_count}),
-            }
-
-        # Check if name already exists
-        if check_name_exists(character_name):
-            return {
-                "statusCode": 409,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Character name already exists"}),
             }
 
         # Validate archetype
