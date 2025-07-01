@@ -127,7 +127,6 @@ Room scripts are managed through a central Script system:
 The command system is structured in a three-tier hierarchy to efficiently handle different types of player interactions. Each tier is now implemented in a dedicated file to maintain clear separation of concerns:
 
 1. **Character Tier (Fast, Local)** - In `character-commands.go`:
-
    - Status checks, inventory viewing, equipment status, and character stats
    - No wait time, providing immediate feedback to players
    - Entirely local to the character with no external dependencies
@@ -136,7 +135,6 @@ The command system is structured in a three-tier hierarchy to efficiently handle
    - Self-contained with no external dependencies beyond the character object itself
 
 2. **Room Tier (Medium, Localized)** - In `room-commands.go`:
-
    - Social interactions (say, emote, whisper), local interactions, and item manipulation
    - Moderate wait times based on command complexity
    - Processed asynchronously in room goroutines
@@ -169,7 +167,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
 ### Completed Tasks
 
 - [x] Core Server and Infrastructure
-
   - [x] Create the SSH server for client connections
   - [x] Implement a text parser for user input
   - [x] Add Cloudwatch Logs and Metrics integration
@@ -181,7 +178,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Context-based coordination system
 
 - [x] Player and Character Management
-
   - [x] Implement player authentication system
   - [x] Create character creation and selection system
   - [x] Build interactive password change system
@@ -194,7 +190,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Character persistence with DynamoDB
 
 - [x] Command System
-
   - [x] Implement the three-tier command architecture
   - [x] Develop command timeout systems
   - [x] Add help command
@@ -204,7 +199,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Command wait time system for actions
 
 - [x] Room System
-
   - [x] Implement movement commands with room state changes
   - [x] GO and MOVE commands for character movement
   - [x] Support for both cardinal directions and object-based exits
@@ -223,7 +217,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Exit visibility controls for hidden paths
 
 - [x] Item System Foundation
-
   - [x] Basic item data structures
   - [x] Item persistence in DynamoDB
   - [x] Item trait system for modifications
@@ -233,14 +226,12 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Switch command to swap items between hands
 
 - [x] Communication System
-
   - [x] Say command with room-wide communication
   - [ ] Shout command for server-wide messages
   - [ ] Announce command for GM announcements
   - [ ] Whisper command for private messages
 
 - [x] Stealth System
-
   - [x] Hide command to become invisible
   - [x] Unhide command to become visible
   - [x] Sneak command for stealthy movement
@@ -249,7 +240,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [x] Perception-based detection mechanics
 
 - [x] Combat System (Basic)
-
   - [x] Face command to target opponents
   - [x] Assess command for combat situation
   - [x] Advance/Retreat for range management
@@ -259,14 +249,12 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [ ] Weapon and armor mechanics
 
 - [x] Death and Revival System
-
   - [x] Character death states
   - [x] Ghost form for dead characters
   - [x] Depart command for revival
   - [x] State-based command restrictions
 
 - [x] Experience and Skills
-
   - [x] Skill-based resolution system
   - [x] XP rewards from actions
   - [x] Variance-based XP modifiers
@@ -283,7 +271,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
 #### High Priority - Core Functionality
 
 - [ ] Item System Completion
-
   - [x] Implement inventory command to view items and hands
   - [x] Add get/take commands for picking up items (to hands)
   - [x] Add drop command for dropping items (from hands or inventory)
@@ -295,7 +282,6 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [ ] Create item prototype factory function
 
 - [ ] Combat System Completion
-
   - [x] Face/assess/advance/retreat positioning
   - [ ] Attack command implementation
   - [ ] Damage calculation and application
@@ -304,21 +290,18 @@ Testing will primarily be conducted through live user interaction, with unit tes
   - [ ] Combat rounds and timing
 
 - [ ] Communication Commands
-
   - [ ] Implement shout for server-wide messages
   - [ ] Implement announce for admin messages
   - [ ] Implement whisper for private messages
   - [ ] Add emote system
 
 - [ ] Administrative Features
-
   - [ ] Implement privilege/permission system
   - [ ] Add @shutdown command for admins
   - [ ] Add @broadcast command for system messages
   - [ ] Create GM-only command prefix handling
 
 - [ ] Command Rate Limiting
-
   - [ ] Implement per-player command rate limiting (5/second)
   - [ ] Add command frequency tracking
   - [ ] Implement queue/drop strategy for excess commands
@@ -332,13 +315,11 @@ Testing will primarily be conducted through live user interaction, with unit tes
 #### Medium Priority - Enhanced Features
 
 - [ ] Logging & Audit Trail
-
   - [ ] Implement dedicated audit logging for commands
   - [ ] Add command origin tracking (player ID, IP, session)
   - [ ] Create separate audit log stream
 
 - [ ] Character Features
-
   - [ ] Implement auto-save functionality
   - [ ] Add dynamic prompt with HP/status
   - [x] Character states implemented (standing, sitting, prone, dead, ghost)
@@ -608,7 +589,6 @@ A Flutter application for player registration and self-service.
 ### AWS Infrastructure Setup
 
 1. Ensure you have the following installed:
-
    - Go 1.24 or later
    - Python 3.12 or later
    - Flutter 3.29 or later
