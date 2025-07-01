@@ -28,7 +28,7 @@ This incremental module serves as a gateway to the Eidolon Engine universe, prov
 
 ## Development Plan
 
-### Phase 0 – Foundation (½ sprint) [COMPLETED]
+### Phase 0 – Foundation [COMPLETED]
 
 **Goal**: Establish common development environment and contracts
 
@@ -39,48 +39,56 @@ This incremental module serves as a gateway to the Eidolon Engine universe, prov
 
 **Deliverable**: Schema defined, Flutter models implemented, authentication working
 
-### Phase 1 – Core Loop MVP (1 sprint)
+### Phase 1 – Core Loop MVP
 
 **Goal**: Make the game playable with server-side authority
 
-- **StartSegment Lambda**: Validate character, set segment timer, return end time
-- **ConcludeSegment Lambda**: Validate completion time, evaluate outcome, apply rewards
+- **Character Management** (#664): Create/retrieve character Lambda functions
+- **StartSegment Lambda** (#660): Validate character, set segment timer, return end time
+- **ConcludeSegment Lambda** (#661): Validate completion time, evaluate outcome, apply rewards
+- **S3 Story Integration** (#645): Modify Lambdas to fetch stories from S3
+- **Example Story** (#662): Tutorial story demonstrating all mechanics
 - **DynamoDB Tables**: 
   - IncrementalCharacters (player progression)
   - ActiveSegments (time-gated segments)
-  - StoryRegistry (S3 object references)
-  - StoryManifest (browsing metadata)
+  - StoryRegistry (S3 object references) (#644)
+  - StoryManifest (browsing metadata) (#644)
   - CharacterHistory (completion tracking)
-- **Minimal Client**: Flutter countdown timer and outcome display
+- **S3 Story Storage** (#643): Configure bucket for story content
+- **Cognito Identity Pool** (#646): Enable direct S3 access
+- **Flutter Timer UI** (#663): Countdown timer and outcome display
 - **Observability**: CloudWatch metrics for segments started/completed
 
 **Deliverable**: Complete game loop with example story from S3
 
-### Phase 2 – Content Pipeline (1 sprint)
+### Phase 2 – Content Pipeline
 
 **Goal**: Enable dynamic content without backend changes
 
-- Git-to-S3 story publishing on merge
-- Story index manifest for browsing
-- Client dynamic story loading
-- Revision handling for live updates
-- Content validation hooks
+- **Twine Converter** (#640): Create twine2idle tool for Twee/HTML conversion
+- **Git-to-S3 Pipeline**: GitHub Action for story publishing
+- **Story Manifest Updates**: Auto-generate browsing index
+- **Client Story Loading**: Dynamic story list from S3
+- **Revision Handling**: Support hot-patching live stories
+- **Content Validation**: JSON schema validation on commit
+- **Author Documentation** (#619): Story writing handbook
 
 **Deliverable**: Non-developers can publish stories; live updates work
 
-### Phase 3 – Progression Features (2 sprints)
+### Phase 3 – Progression Features
 
 **Goal**: Add depth with branching and rest mechanics
 
-- Branching story paths (weighted random selection)
-- Rest and abandon mechanics
-- Extended analytics for game balance
-- Story replay restrictions via CharacterHistory
-- Achievement system for story completions
+- **Branching Paths** (#610): Weighted random story branches
+- **Rest & Abandon** (#611): Alternative segment outcomes
+- **Extended Analytics**: Detailed metrics for balancing
+- **Replay Prevention**: CharacterHistory tracking
+- **Achievement System**: Story completion rewards
+- **QA Test Suite** (#618): Automated progression testing
 
 **Deliverable**: Complete idle RPG loop with meaningful progression
 
-### Phase 4 – Scale Hardening (as needed)
+### Phase 4 – Scale Hardening
 
 **Goal**: Production readiness
 
