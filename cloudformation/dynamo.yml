@@ -98,6 +98,79 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
 
+  # Incremental Game Tables
+  IncrementalCharactersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: incremental_characters
+      AttributeDefinitions:
+        - AttributeName: PlayerID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PlayerID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  ActiveSegmentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: active_segments
+      AttributeDefinitions:
+        - AttributeName: PlayerID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PlayerID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  StoryRegistryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: story_registry
+      AttributeDefinitions:
+        - AttributeName: StoryID
+          AttributeType: S
+        - AttributeName: Version
+          AttributeType: N
+      KeySchema:
+        - AttributeName: StoryID
+          KeyType: HASH
+        - AttributeName: Version
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  StoryManifestTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: story_manifest
+      AttributeDefinitions:
+        - AttributeName: ManifestType
+          AttributeType: S
+        - AttributeName: StoryID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ManifestType
+          KeyType: HASH
+        - AttributeName: StoryID
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  CharacterHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: character_history
+      AttributeDefinitions:
+        - AttributeName: PlayerID
+          AttributeType: S
+        - AttributeName: Timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: PlayerID
+          KeyType: HASH
+        - AttributeName: Timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
   EidolonDynamoDBPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -124,6 +197,11 @@ Resources:
               - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/prototypes"
               - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/archetypes"
               - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/motd"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/incremental_characters"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/active_segments"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/story_registry"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/story_manifest"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/character_history"
 
 Outputs:
   PlayersTableArn:
@@ -157,6 +235,26 @@ Outputs:
   MOTDTableArn:
     Description: "ARN of the MotD table"
     Value: !GetAtt MOTDTable.Arn
+
+  IncrementalCharactersTableArn:
+    Description: "ARN of the Incremental Characters table"
+    Value: !GetAtt IncrementalCharactersTable.Arn
+
+  ActiveSegmentsTableArn:
+    Description: "ARN of the Active Segments table"
+    Value: !GetAtt ActiveSegmentsTable.Arn
+
+  StoryRegistryTableArn:
+    Description: "ARN of the Story Registry table"
+    Value: !GetAtt StoryRegistryTable.Arn
+
+  StoryManifestTableArn:
+    Description: "ARN of the Story Manifest table"
+    Value: !GetAtt StoryManifestTable.Arn
+
+  CharacterHistoryTableArn:
+    Description: "ARN of the Character History table"
+    Value: !GetAtt CharacterHistoryTable.Arn
 
   EidolonDynamoDBPolicyArn:
     Description: "ARN of the Eidolon Engine DynamoDB Read/Write Policy"

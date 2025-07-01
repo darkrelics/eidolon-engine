@@ -11,31 +11,33 @@ This incremental module serves as a gateway to the Eidolon Engine universe, prov
 ### Server-Authoritative Design
 
 - **Time Authority**: Lambda functions control all timing - no client-side progression
-- **Story Blobs**: JSON documents in DynamoDB define complete story content
+- **Story Content**: JSON documents stored in S3, referenced by DynamoDB
 - **State Management**: Character progression stored in DynamoDB with conditional writes
-- **Content Delivery**: Stories loaded from DynamoDB (with future S3/CloudFront option)
+- **Content Delivery**: Stories loaded from S3 via signed URLs
 - **Security**: All rewards and progression calculated server-side
+- **No Client Trust**: Flutter app only displays server-calculated results
 
 ### Technical Stack
 
-- **Backend**: Go Lambda functions for game logic
-- **Database**: DynamoDB for character sheets and story content
+- **Backend**: Python Lambda functions for game logic
+- **Database**: DynamoDB for character state and story metadata
+- **Storage**: S3 for story JSON content
 - **Client**: Flutter Web (mobile apps in future phases)
 - **Monitoring**: CloudWatch metrics and EMF logging
 - **Authentication**: AWS Cognito (shared with main game)
 
 ## Development Plan
 
-### Phase 0 – Foundation (½ sprint)
+### Phase 0 – Foundation (½ sprint) [COMPLETED]
 
 **Goal**: Establish common development environment and contracts
 
-- Repository structure: `/idle` with `lambda/`, `schemas/`, `stories/`, `client/idle`
-- Development tooling: `make dev` for local DynamoDB and Lambda testing
-- Story blob JSON Schema (draft 2020-12) defining segment structure
-- CI pipeline for story validation and Lambda tests
+- Repository structure: `/incremental` with `lambda/`, `schemas/`, `lib/`, `test/`
+- Story schema JSON (story.schema.json) defining segment structure with Twine compatibility
+- Flutter client foundation with authentication via AWS Cognito
+- Character model based on server archetypes from `/data/test_archetypes.json`
 
-**Deliverable**: Agreed contracts, one-command local stack, green CI
+**Deliverable**: Schema defined, Flutter models implemented, authentication working
 
 ### Phase 1 – Core Loop MVP (1 sprint)
 
@@ -43,11 +45,16 @@ This incremental module serves as a gateway to the Eidolon Engine universe, prov
 
 - **StartSegment Lambda**: Validate character, set segment timer, return end time
 - **ConcludeSegment Lambda**: Validate completion time, evaluate outcome, apply rewards
-- **DynamoDB Tables**: StoryBlob (stories) and CharacterSheet (player state)
+- **DynamoDB Tables**: 
+  - IncrementalCharacters (player progression)
+  - ActiveSegments (time-gated segments)
+  - StoryRegistry (S3 object references)
+  - StoryManifest (browsing metadata)
+  - CharacterHistory (completion tracking)
 - **Minimal Client**: Flutter countdown timer and outcome display
 - **Observability**: CloudWatch metrics for segments started/completed
 
-**Deliverable**: Complete game loop with one hard-coded story
+**Deliverable**: Complete game loop with example story from S3
 
 ### Phase 2 – Content Pipeline (1 sprint)
 
@@ -63,12 +70,13 @@ This incremental module serves as a gateway to the Eidolon Engine universe, prov
 
 ### Phase 3 – Progression Features (2 sprints)
 
-**Goal**: Add depth with prestige and branching
+**Goal**: Add depth with branching and rest mechanics
 
-- Prestige system with multipliers
-- Branching story paths (weighted random)
+- Branching story paths (weighted random selection)
 - Rest and abandon mechanics
 - Extended analytics for game balance
+- Story replay restrictions via CharacterHistory
+- Achievement system for story completions
 
 **Deliverable**: Complete idle RPG loop with meaningful progression
 
@@ -87,19 +95,22 @@ This incremental module serves as a gateway to the Eidolon Engine universe, prov
 
 ### Story Structure
 
-Stories are JSON documents containing:
+Stories are JSON documents stored in S3, following the story.schema.json specification:
 
-- Metadata (title, minLevel, heroImageUrl)
-- Ordered array of segments
-- Each segment includes:
-  - Display text and duration
-  - Challenge definition (skill/attribute requirements)
-  - Outcomes (critSuccess, success, neutral, fail, death)
-  - Rewards and next segment references
+- Metadata (name, author, tags, Twine export info)
+- Passages array with Twine-compatible structure
+- Each passage includes:
+  - Narrative text and duration
+  - Links to other passages
+  - gameData with incremental mechanics:
+    - Challenge definition (skill + attribute vs difficulty)
+    - Requirements (resources, progress flags)
+    - Outcomes (criticalSuccess, success, failure, criticalFailure)
+    - Rewards and penalties
 
 ### Character Progression
 
-Based on the Eidolon Engine MUD mechanics:
+Based on the Eidolon Engine MUD mechanics, using archetypes from `/data/test_archetypes.json`:
 
 #### Attributes
 
@@ -112,7 +123,13 @@ Based on the Eidolon Engine MUD mechanics:
 - **Combat**: Melee, Archery, Brawling, Dodge, Parry
 - **Stealth**: Stealth, Investigation, Tumbling, Climbing, Lockpicking
 - **Magic**: Mythos, Arcane
-- **Survival**: First Aid, Foraging, Appraise
+- **Survival**: FirstAid, Foraging, Appraise
+
+#### Character Creation
+
+- Players select from available archetypes (Wizard, Rogue, Warrior, etc.)
+- Each archetype defines starting attributes, skills, health, and essence
+- No level system - progression is purely through skill/attribute improvements
 
 #### Experience System
 
@@ -148,7 +165,8 @@ Challenges in story segments use the MUD's XP mechanics:
 - **Time Gates**: Real-world timers enforce pacing
 - **Offline Progress**: Stories continue while away
 - **Visual Progress**: Countdown timers and progress bars
-- **Prestige System**: Reset for permanent multipliers
+- **Server Authority**: All progression calculations happen in Lambda functions
+- **Story Focus**: Content drives engagement, not prestige mechanics
 
 ## Content Management
 
@@ -174,65 +192,29 @@ Challenges in story segments use the MUD's XP mechanics:
 
 - `POST /start-segment`: Begin a story segment
 - `POST /conclude-segment`: Complete segment and claim rewards
-- `POST /prestige`: Reset character with multipliers
-- `POST /abandon`: Cancel current segment with penalty
+- `POST /abandon`: Cancel current story run with penalty
+- `POST /rest`: Rest instead of continuing story
 
 ### Data Models
 
-#### CharacterSheet
+Data models follow the story.schema.json specification and DynamoDB table structure defined in cloudformation/dynamo.yml
 
-```json
-{
-  "playerId": "string",
-  "attributes": {
-    /* strength, agility, etc. */
-  },
-  "skills": {
-    /* melee, stealth, etc. */
-  },
-  "inventory": {
-    /* items and currencies */
-  },
-  "activeStory": {
-    "storyId": "string",
-    "segmentId": "string",
-    "endsAt": "timestamp",
-    "revision": "number"
-  },
-  "prestigeLevel": 0,
-  "lockToken": "string"
-}
-```
+## Implementation Status
 
-#### StoryBlob
+### Completed
+- Story schema definition with Twine compatibility
+- Flutter character models (display-only)
+- Archetype loading system
+- API service for Lambda calls
+- DynamoDB table definitions
+- Authentication integration
 
-```json
-{
-  "storyId": "string",
-  "title": "string",
-  "minLevel": 1,
-  "revision": 1,
-  "segments": [
-    {
-      "id": "string",
-      "text": "string",
-      "duration": 300,
-      "challenge": {
-        "skill": "melee",
-        "attribute": "strength",
-        "difficulty": 5
-      },
-      "outcomes": {
-        "critSuccess": { "xp": 1.0, "gold": 10, "next": "segment2" },
-        "success": { "xp": 0.25, "gold": 5, "next": "segment2" },
-        "neutral": { "xp": 0.125, "gold": 2, "next": "segment2" },
-        "fail": { "xp": 0.125, "gold": 0, "next": "segment2" },
-        "death": { "xp": 0, "gold": 0, "next": "respawn" }
-      }
-    }
-  ]
-}
-```
+### Next Steps
+- Implement StartSegment Lambda function
+- Implement ConcludeSegment Lambda function
+- Create example story content
+- Build timer UI in Flutter
+- Add story browsing interface
 
 ## Development Setup
 
