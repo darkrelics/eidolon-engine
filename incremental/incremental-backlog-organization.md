@@ -3,6 +3,7 @@
 ## Step 1: GitHub Backlog Trimming
 
 ### Keep in Alpha Milestone (Basic Stability)
+
 These issues are essential for system stability and should remain prioritized:
 
 1. **#498** - Implement Heartbeat, Stale Session Detection, and Dead Socket Reaping ✓
@@ -14,6 +15,7 @@ These issues are essential for system stability and should remain prioritized:
 7. **#507** - Implement @broadcast Administrative Command ✓
 
 ### Create New Incremental-MVP Epic
+
 Consolidate incremental game essentials:
 
 1. **#595** - Create /idle directory structure for incremental module
@@ -25,6 +27,7 @@ Consolidate incremental game essentials:
 7. **#604** - Build Git-to-S3 content publication pipeline (modified for Twine)
 
 ### Downgrade Priority (Future Enhancements)
+
 Move these to a "Future Features" milestone:
 
 - All MUD-specific issues (#620-639: combat, NPCs, crafting, etc.)
@@ -34,6 +37,7 @@ Move these to a "Future Features" milestone:
 - Security hardening beyond MVP (#616)
 
 ### New Issues to Create
+
 For the Twine integration:
 
 1. **Create twine2idle converter tool** - Parse Twee files with metadata blocks

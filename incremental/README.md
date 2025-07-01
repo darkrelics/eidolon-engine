@@ -48,7 +48,7 @@ This incremental module serves as a gateway to the Eidolon Engine universe, prov
 - **ConcludeSegment Lambda** (#661): Validate completion time, evaluate outcome, apply rewards
 - **S3 Story Integration** (#645): Modify Lambdas to fetch stories from S3
 - **Example Story** (#662): Tutorial story demonstrating all mechanics
-- **DynamoDB Tables**: 
+- **DynamoDB Tables**:
   - IncrementalCharacters (player progression)
   - ActiveSegments (time-gated segments)
   - StoryRegistry (S3 object references) (#644)
@@ -210,6 +210,7 @@ Data models follow the story.schema.json specification and DynamoDB table struct
 ## Implementation Status
 
 ### Completed
+
 - Story schema definition with Twine compatibility
 - Flutter character models (display-only)
 - Archetype loading system
@@ -218,6 +219,7 @@ Data models follow the story.schema.json specification and DynamoDB table struct
 - Authentication integration
 
 ### Next Steps
+
 - Implement StartSegment Lambda function
 - Implement ConcludeSegment Lambda function
 - Create example story content

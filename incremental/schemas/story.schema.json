@@ -19,7 +19,7 @@
       "properties": {
         "creator": { "type": "string" },
         "creatorVersion": { "type": "string" },
-        "ifid": { 
+        "ifid": {
           "type": "string",
           "description": "Interactive Fiction IDentifier"
         },
@@ -32,6 +32,11 @@
         "tags": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "version": { "type": "string" },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },
@@ -58,14 +63,6 @@
             "type": "array",
             "items": { "type": "string" },
             "description": "Tags from Twine for categorization"
-          },
-          "position": {
-            "type": "object",
-            "description": "Visual position in Twine editor",
-            "properties": {
-              "x": { "type": "number" },
-              "y": { "type": "number" }
-            }
           },
           "links": {
             "type": "array",
@@ -115,11 +112,6 @@
                     "type": "object",
                     "description": "Progress flags required",
                     "additionalProperties": true
-                  },
-                  "level": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Minimum player level"
                   }
                 }
               },
@@ -131,12 +123,38 @@
                   "skill": {
                     "type": "string",
                     "description": "Skill being tested",
-                    "enum": ["Melee", "Archery", "Brawling", "Dodge", "Parry", "Stealth", "Investigation", "Tumbling", "Climbing", "Lockpicking", "Mythos", "Arcane", "FirstAid", "Foraging", "Appraise"]
+                    "enum": [
+                      "Melee",
+                      "Archery",
+                      "Brawling",
+                      "Dodge",
+                      "Parry",
+                      "Stealth",
+                      "Investigation",
+                      "Tumbling",
+                      "Climbing",
+                      "Lockpicking",
+                      "Mythos",
+                      "Arcane",
+                      "FirstAid",
+                      "Foraging",
+                      "Appraise"
+                    ]
                   },
                   "attribute": {
                     "type": "string",
                     "description": "Attribute that supports the skill",
-                    "enum": ["Strength", "Agility", "Endurance", "Charisma", "Intrigue", "Presence", "Perception", "Intelligence", "Cunning"]
+                    "enum": [
+                      "Strength",
+                      "Agility",
+                      "Endurance",
+                      "Charisma",
+                      "Intrigue",
+                      "Presence",
+                      "Perception",
+                      "Intelligence",
+                      "Cunning"
+                    ]
                   },
                   "difficulty": {
                     "type": "integer",
