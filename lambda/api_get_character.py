@@ -44,10 +44,10 @@ active_segments_table = dynamodb.Table(active_segments_table)
 def decimal_to_float(obj):
     """
     Convert DynamoDB Decimal types to Python float for JSON serialization.
-    
+
     Args:
         obj: Object to convert
-        
+
     Returns:
         Converted object
     """
@@ -63,31 +63,29 @@ def decimal_to_float(obj):
 def get_character_by_id(character_id, player_id):
     """
     Get character by UUID and verify ownership.
-    
+
     Args:
         character_id: Character UUID
         player_id: Cognito user ID for ownership verification
-        
+
     Returns:
         Character data or None if not found or not owned by player
     """
     try:
-        response = characters_table.get_item(
-            Key={"CharacterID": character_id}
-        )
-        
+        response = characters_table.get_item(Key={"CharacterID": character_id})
+
         if "Item" not in response:
             return None
-            
+
         character = response["Item"]
-        
+
         # Verify ownership
         if character.get("PlayerID") != player_id:
             logger.warning(f"Character {character_id} does not belong to player {player_id}")
             return None
-            
+
         return character
-        
+
     except ClientError as err:
         logger.error(f"Error getting character: {err}")
         return None
@@ -96,23 +94,21 @@ def get_character_by_id(character_id, player_id):
 def get_active_segment(player_id):
     """
     Get active segment for a player if any.
-    
+
     Args:
         player_id: Cognito user ID
-        
+
     Returns:
         Active segment data or None
     """
     try:
-        response = active_segments_table.get_item(
-            Key={"PlayerID": player_id}
-        )
-        
+        response = active_segments_table.get_item(Key={"PlayerID": player_id})
+
         if "Item" in response:
             return response["Item"]
-            
+
         return None
-        
+
     except ClientError as err:
         logger.error(f"Error getting active segment: {err}")
         return None
@@ -121,11 +117,11 @@ def get_active_segment(player_id):
 def lambda_handler(event, _):
     """
     Lambda handler for getting incremental character data.
-    
+
     Args:
         event: API Gateway event with Cognito authorizer
         _: Lambda context (unused)
-        
+
     Returns:
         API Gateway response
     """
@@ -133,43 +129,43 @@ def lambda_handler(event, _):
         # Extract player ID from Cognito authorizer
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
         player_id = claims.get("sub")
-        
+
         if not player_id:
             return {
                 "statusCode": 401,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Unauthorized"}),
             }
-        
+
         # Get character ID from query parameters
         character_id = event.get("queryStringParameters", {}).get("characterId", "").strip()
-        
+
         if not character_id:
             return {
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Missing character ID"}),
             }
-        
+
         # Get character data
         character = get_character_by_id(character_id, player_id)
-        
+
         if not character:
             return {
                 "statusCode": 404,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Character not found"}),
             }
-        
+
         # Get active segment if any
         active_segment = get_active_segment(player_id)
-        
+
         # Prepare response data
         response_data = {
             "character": decimal_to_float(character),
-            "activeSegment": decimal_to_float(active_segment) if active_segment else None
+            "activeSegment": decimal_to_float(active_segment) if active_segment else None,
         }
-        
+
         # Return success response
         return {
             "statusCode": 200,
@@ -177,9 +173,9 @@ def lambda_handler(event, _):
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",
             },
-            "body": json.dumps(response_data)
+            "body": json.dumps(response_data),
         }
-        
+
     except Exception as err:
         logger.error(f"Unexpected error in lambda_handler: {err}")
         return {

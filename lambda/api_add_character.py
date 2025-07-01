@@ -208,11 +208,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "Wounds": [],
         "RoomID": 0,  # Always room 0 for incremental
         "Inventory": [],
-        "Resources": {
-            "gold": 0,
-            "supplies": 10,
-            "reputation": 0
-        },
+        "Resources": {"gold": 0, "supplies": 10, "reputation": 0},
         "Hidden": False,
         "CharState": "Standing",
         "CreatedAt": timestamp,

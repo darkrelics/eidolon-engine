@@ -25,7 +25,6 @@ import json
 import logging
 import os
 from datetime import datetime
-from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
@@ -50,18 +49,16 @@ TABLES_CONFIG = {
 def delete_player_record(player_id):
     """
     Delete player record from players table.
-    
+
     Args:
         player_id: Cognito user ID
-        
+
     Returns:
         bool: True if deleted or not found, False on error
     """
     try:
         table = dynamodb.Table(TABLES_CONFIG["players"])
-        table.delete_item(
-            Key={"PlayerID": player_id}
-        )
+        table.delete_item(Key={"PlayerID": player_id})
         logger.info(f"Deleted player record for {player_id}")
         return True
     except ClientError as err:
@@ -75,54 +72,47 @@ def delete_player_record(player_id):
 def delete_mud_characters(player_id):
     """
     Delete all MUD characters owned by the player.
-    
+
     Args:
         player_id: Cognito user ID
-        
+
     Returns:
         int: Number of characters deleted
     """
     deleted_count = 0
     try:
         table = dynamodb.Table(TABLES_CONFIG["mud_characters"])
-        
+
         # Scan for all characters owned by this player
-        response = table.scan(
-            FilterExpression="PlayerID = :pid",
-            ExpressionAttributeValues={":pid": player_id}
-        )
-        
+        response = table.scan(FilterExpression="PlayerID = :pid", ExpressionAttributeValues={":pid": player_id})
+
         # Delete each character found
         for item in response.get("Items", []):
             try:
-                table.delete_item(
-                    Key={"CharacterID": item["CharacterID"]}
-                )
+                table.delete_item(Key={"CharacterID": item["CharacterID"]})
                 deleted_count += 1
                 logger.info(f"Deleted MUD character {item.get('CharacterName', 'Unknown')} ({item['CharacterID']})")
             except ClientError as err:
                 logger.error(f"Error deleting MUD character {item['CharacterID']}: {err}")
-        
+
         # Handle pagination
         while "LastEvaluatedKey" in response:
             response = table.scan(
                 FilterExpression="PlayerID = :pid",
                 ExpressionAttributeValues={":pid": player_id},
-                ExclusiveStartKey=response["LastEvaluatedKey"]
+                ExclusiveStartKey=response["LastEvaluatedKey"],
             )
-            
+
             for item in response.get("Items", []):
                 try:
-                    table.delete_item(
-                        Key={"CharacterID": item["CharacterID"]}
-                    )
+                    table.delete_item(Key={"CharacterID": item["CharacterID"]})
                     deleted_count += 1
                     logger.info(f"Deleted MUD character {item.get('CharacterName', 'Unknown')} ({item['CharacterID']})")
                 except ClientError as err:
                     logger.error(f"Error deleting MUD character {item['CharacterID']}: {err}")
-        
+
         return deleted_count
-        
+
     except ClientError as err:
         if err.response["Error"]["Code"] == "ResourceNotFoundException":
             logger.warning(f"MUD characters table not found: {TABLES_CONFIG['mud_characters']}")
@@ -134,28 +124,26 @@ def delete_mud_characters(player_id):
 def delete_incremental_characters(player_id):
     """
     Delete incremental game character for the player.
-    
+
     Args:
         player_id: Cognito user ID
-        
+
     Returns:
         bool: True if deleted or not found, False on error
     """
     try:
         table = dynamodb.Table(TABLES_CONFIG["incremental_characters"])
-        
+
         # Get character to log its name
         response = table.get_item(Key={"PlayerID": player_id})
         if "Item" in response:
             char_name = response["Item"].get("CharacterName", "Unknown")
             logger.info(f"Deleting incremental character {char_name} for player {player_id}")
-        
+
         # Delete the character
-        table.delete_item(
-            Key={"PlayerID": player_id}
-        )
+        table.delete_item(Key={"PlayerID": player_id})
         return True
-        
+
     except ClientError as err:
         if err.response["Error"]["Code"] == "ResourceNotFoundException":
             logger.warning(f"Incremental characters table not found: {TABLES_CONFIG['incremental_characters']}")
@@ -167,18 +155,16 @@ def delete_incremental_characters(player_id):
 def delete_active_segments(player_id):
     """
     Delete any active game segments for the player.
-    
+
     Args:
         player_id: Cognito user ID
-        
+
     Returns:
         bool: True if deleted or not found, False on error
     """
     try:
         table = dynamodb.Table(TABLES_CONFIG["active_segments"])
-        table.delete_item(
-            Key={"PlayerID": player_id}
-        )
+        table.delete_item(Key={"PlayerID": player_id})
         logger.info(f"Deleted active segments for {player_id}")
         return True
     except ClientError as err:
@@ -192,59 +178,46 @@ def delete_active_segments(player_id):
 def delete_character_history(player_id):
     """
     Delete all character history records for the player.
-    
+
     Args:
         player_id: Cognito user ID
-        
+
     Returns:
         int: Number of history records deleted
     """
     deleted_count = 0
     try:
         table = dynamodb.Table(TABLES_CONFIG["character_history"])
-        
+
         # Query all history records for this player
-        response = table.query(
-            KeyConditionExpression="PlayerID = :pid",
-            ExpressionAttributeValues={":pid": player_id}
-        )
-        
+        response = table.query(KeyConditionExpression="PlayerID = :pid", ExpressionAttributeValues={":pid": player_id})
+
         # Delete each history record
         for item in response.get("Items", []):
             try:
-                table.delete_item(
-                    Key={
-                        "PlayerID": player_id,
-                        "Timestamp": item["Timestamp"]
-                    }
-                )
+                table.delete_item(Key={"PlayerID": player_id, "Timestamp": item["Timestamp"]})
                 deleted_count += 1
             except ClientError as err:
                 logger.error(f"Error deleting history record: {err}")
-        
+
         # Handle pagination
         while "LastEvaluatedKey" in response:
             response = table.query(
                 KeyConditionExpression="PlayerID = :pid",
                 ExpressionAttributeValues={":pid": player_id},
-                ExclusiveStartKey=response["LastEvaluatedKey"]
+                ExclusiveStartKey=response["LastEvaluatedKey"],
             )
-            
+
             for item in response.get("Items", []):
                 try:
-                    table.delete_item(
-                        Key={
-                            "PlayerID": player_id,
-                            "Timestamp": item["Timestamp"]
-                        }
-                    )
+                    table.delete_item(Key={"PlayerID": player_id, "Timestamp": item["Timestamp"]})
                     deleted_count += 1
                 except ClientError as err:
                     logger.error(f"Error deleting history record: {err}")
-        
+
         logger.info(f"Deleted {deleted_count} history records for {player_id}")
         return deleted_count
-        
+
     except ClientError as err:
         if err.response["Error"]["Code"] == "ResourceNotFoundException":
             logger.warning(f"Character history table not found: {TABLES_CONFIG['character_history']}")
@@ -256,22 +229,22 @@ def delete_character_history(player_id):
 def lambda_handler(event, context):
     """
     Lambda handler for complete player data deletion.
-    
+
     Can be triggered by:
     1. Direct invocation with player_id in body
     2. CloudWatch Events from Cognito user deletion
     3. API Gateway with authenticated request
-    
+
     Args:
         event: Lambda event
         context: Lambda context
-        
+
     Returns:
         Response with deletion summary
     """
     try:
         player_id = None
-        
+
         # Extract player ID based on event source
         if "detail" in event and "requestParameters" in event.get("detail", {}):
             # CloudWatch Events from Cognito
@@ -287,16 +260,13 @@ def lambda_handler(event, context):
             # API Gateway with Cognito authorizer
             claims = event["requestContext"]["authorizer"].get("claims", {})
             player_id = claims.get("sub")
-        
+
         if not player_id:
             logger.error("No player ID provided in request")
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Player ID required"})
-            }
-        
+            return {"statusCode": 400, "body": json.dumps({"error": "Player ID required"})}
+
         logger.info(f"Starting deletion process for player {player_id}")
-        
+
         # Track deletion results
         results = {
             "player_id": player_id,
@@ -306,68 +276,65 @@ def lambda_handler(event, context):
                 "mud_characters": 0,
                 "incremental_character": False,
                 "active_segments": False,
-                "character_history": 0
+                "character_history": 0,
             },
-            "errors": []
+            "errors": [],
         }
-        
+
         # Delete from each table
         try:
             results["deletions"]["player_record"] = delete_player_record(player_id)
         except Exception as err:
             logger.error(f"Unexpected error deleting player record: {err}")
             results["errors"].append(f"Player record: {str(err)}")
-        
+
         try:
             results["deletions"]["mud_characters"] = delete_mud_characters(player_id)
         except Exception as err:
             logger.error(f"Unexpected error deleting MUD characters: {err}")
             results["errors"].append(f"MUD characters: {str(err)}")
-        
+
         try:
             results["deletions"]["incremental_character"] = delete_incremental_characters(player_id)
         except Exception as err:
             logger.error(f"Unexpected error deleting incremental character: {err}")
             results["errors"].append(f"Incremental character: {str(err)}")
-        
+
         try:
             results["deletions"]["active_segments"] = delete_active_segments(player_id)
         except Exception as err:
             logger.error(f"Unexpected error deleting active segments: {err}")
             results["errors"].append(f"Active segments: {str(err)}")
-        
+
         try:
             results["deletions"]["character_history"] = delete_character_history(player_id)
         except Exception as err:
             logger.error(f"Unexpected error deleting character history: {err}")
             results["errors"].append(f"Character history: {str(err)}")
-        
+
         # Log summary
         logger.info(f"Deletion summary for {player_id}: {json.dumps(results)}")
-        
+
         # Return appropriate response based on event source
         if "requestContext" in event:
             # API Gateway response format
             return {
                 "statusCode": 200 if not results["errors"] else 207,
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                },
-                "body": json.dumps(results)
+                "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
+                "body": json.dumps(results),
             }
         else:
             # Direct invocation response
             return results
-            
+
     except Exception as err:
         logger.error(f"Unexpected error in lambda_handler: {err}")
-        
+
         if "requestContext" in event:
             return {
                 "statusCode": 500,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Internal server error"})
+                "body": json.dumps({"error": "Internal server error"}),
             }
         else:
             raise

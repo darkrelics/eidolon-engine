@@ -7,9 +7,6 @@ import aws_cdk as cdk
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cognito as cognito
-from aws_cdk import aws_iam as iam
-from aws_cdk import aws_lambda as lambda_
-from aws_cdk import aws_logs as logs
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as targets
 from aws_cdk import aws_s3 as s3
@@ -53,9 +50,9 @@ class IncrementalLambdaStack(cdk.Stack):
         super().__init__(scope, id, **kwargs)
 
         # Import the shared dependencies layer
-        shared_dependencies_layer = lambda_.LayerVersion.from_layer_version_arn(
-            self, "imported-shared-layer", shared_dependencies_layer_arn
-        )
+        # shared_dependencies_layer = lambda_.LayerVersion.from_layer_version_arn(
+        #     self, "imported-shared-layer", shared_dependencies_layer_arn
+        # )
 
         # Create API Gateway
         self.api = apigateway.RestApi(
@@ -81,7 +78,7 @@ class IncrementalLambdaStack(cdk.Stack):
 
         # Example: Create get progress Lambda function
         # This is a template - actual functions will be added as the Incremental game is developed
-        
+
         # # Create IAM role for Get Progress Lambda
         # get_progress_lambda_role = iam.Role(
         #     self,
@@ -91,7 +88,7 @@ class IncrementalLambdaStack(cdk.Stack):
         #         iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
         #     ],
         # )
-        
+
         # # Add DynamoDB permissions
         # get_progress_lambda_role.add_to_policy(
         #     iam.PolicyStatement(
@@ -103,7 +100,7 @@ class IncrementalLambdaStack(cdk.Stack):
         #         ],
         #     )
         # )
-        
+
         # # Create get progress Lambda function
         # self.get_progress_function = lambda_.Function(
         #     self,
@@ -121,7 +118,7 @@ class IncrementalLambdaStack(cdk.Stack):
         #     },
         #     description="Gets player progress for Incremental game",
         # )
-        
+
         # # Add progress resource and method
         # progress_resource = self.api.root.add_resource("progress")
         # progress_resource.add_method(

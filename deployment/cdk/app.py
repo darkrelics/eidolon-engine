@@ -276,7 +276,7 @@ class EidolonEngineApp:
         deploy_incremental = params.get("deploy_incremental", False)
 
         # Create shared infrastructure stacks
-        
+
         # Create Cognito stack (shared)
         self.cognito_stack = CognitoStack(
             self.app,
@@ -288,7 +288,7 @@ class EidolonEngineApp:
 
         # Create shared DynamoDB tables
         shared_tables = {"Players": params.get("shared_dynamodb_tables", {}).get("Players", "players")}
-        
+
         self.shared_dynamodb_stack = DynamoDBStack(
             self.app, "shared-dynamodb", game_name="shared", table_names=shared_tables, env=env
         )
@@ -332,9 +332,7 @@ class EidolonEngineApp:
         if deploy_mud:
             # Create MUD DynamoDB tables
             mud_tables = params.get("mud_dynamodb_tables", {})
-            self.mud_dynamodb_stack = DynamoDBStack(
-                self.app, "mud-dynamodb", game_name="mud", table_names=mud_tables, env=env
-            )
+            self.mud_dynamodb_stack = DynamoDBStack(self.app, "mud-dynamodb", game_name="mud", table_names=mud_tables, env=env)
 
             # Create MUD Lambda stack
             self.mud_lambda_stack = MudLambdaStack(
@@ -543,4 +541,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
