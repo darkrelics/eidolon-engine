@@ -53,13 +53,17 @@ func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Reques
 			p.mutex.Lock()
 			switch req.Type {
 			case "shell":
-				req.Reply(true, nil)
+				if err := req.Reply(true, nil); err != nil {
+					Logger.Error("Player-IO: Failed to reply to shell request", "error", err)
+				}
 			case "pty-req":
 				termLen := req.Payload[3]
 				w, h := ParseDims(req.Payload[termLen+4:])
 				p.consoleWidth = w
 				p.consoleHeight = h
-				req.Reply(true, nil)
+				if err := req.Reply(true, nil); err != nil {
+					Logger.Error("Player-IO: Failed to reply to pty-req", "error", err)
+				}
 			case "window-change":
 				w, h := ParseDims(req.Payload)
 				p.consoleWidth = w
@@ -179,7 +183,9 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 					select {
 					case p.commandIn <- input:
 						if p.echo {
-							p.connection.Write([]byte("\r\n"))
+							if _, err := p.connection.Write([]byte("\r\n")); err != nil {
+								Logger.Error("Player-IO: Failed to write newline", "error", err)
+							}
 						}
 						p.inputBuffer.Clear()
 					case <-ctx.Done():
@@ -189,8 +195,12 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				} else {
 					// Handle empty input - just show prompt again
 					if p.echo {
-						p.connection.Write([]byte("\r\n"))
-						p.connection.Write([]byte(p.prompt))
+						if _, err := p.connection.Write([]byte("\r\n")); err != nil {
+							Logger.Error("Player-IO: Failed to write newline", "error", err)
+						}
+						if _, err := p.connection.Write([]byte(p.prompt)); err != nil {
+							Logger.Error("Player-IO: Failed to write prompt", "error", err)
+						}
 					}
 				}
 

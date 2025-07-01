@@ -351,6 +351,7 @@ func TestSendArrivalMessage(t *testing.T) {
 					// The arriving character's mock would have been created above
 					// We can't easily check it here due to the test structure
 					// but the real SendRoomMessage function handles the exclusion
+					// This check validates the test scenario is correctly configured
 				}
 			}
 		})

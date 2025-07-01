@@ -209,7 +209,9 @@ func (p *Player) Stop() {
 
 		// Save player data with fresh context for shutdown
 		saveCtx := context.Background()
-		p.SaveWithContext(saveCtx)
+		if err := p.SaveWithContext(saveCtx); err != nil {
+			Logger.Error("Player: Failed to save on disconnect", "error", err, "player", p.id)
+		}
 
 		// Close the connection
 		if p.connection != nil {

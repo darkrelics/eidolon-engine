@@ -59,6 +59,7 @@ func (mp *mockPlayer) captureOutput() {
 	defer func() {
 		if r := recover(); r != nil {
 			// Ignore panics from closed channels during test cleanup
+			// This is expected behavior when tests shut down
 		}
 	}()
 	for msg := range mp.commandOut {

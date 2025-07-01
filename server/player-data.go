@@ -58,7 +58,10 @@ func (p *Player) Load(playerID uuid.UUID) error {
 	if err != nil {
 		if strings.Contains(err.Error(), "item not found") {
 			Logger.Info("New player", "player_id", playerID.String(), "email", p.email)
-			p.Save()
+			if err := p.Save(); err != nil {
+				Logger.Error("Failed to save new player", "error", err)
+				return err
+			}
 			return nil
 		}
 		Logger.Error("Error loading player data", "error", err)

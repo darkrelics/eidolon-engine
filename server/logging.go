@@ -97,7 +97,10 @@ func (h *CloudWatchHandler) Enabled(ctx context.Context, level slog.Level) bool 
 func (h *CloudWatchHandler) Handle(ctx context.Context, record slog.Record) error {
 	// Also output to console JSON handler if enabled
 	if h.consoleJSON && h.jsonHandler != nil {
-		h.jsonHandler.Handle(ctx, record)
+		if err := h.jsonHandler.Handle(ctx, record); err != nil {
+			// Log to stderr since we can't use the logger here
+			fmt.Fprintf(os.Stderr, "CloudWatch: Failed to handle JSON log: %v\n", err)
+		}
 	}
 
 	// Skip if CloudWatch is not initialized
