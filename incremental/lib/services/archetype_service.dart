@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -45,7 +46,7 @@ class ArchetypeService {
       try {
         await _updateFromManifest();
       } catch (e) {
-        print('Failed to update archetypes: $e');
+        debugPrint('Failed to update archetypes: $e');
       }
     }
 
@@ -104,7 +105,7 @@ class ArchetypeService {
       cachedMap[id] = json;
       await _prefs.setString(_cachedArchetypesKey, jsonEncode(cachedMap));
     } catch (e) {
-      print('Failed to download archetype $id: $e');
+      debugPrint('Failed to download archetype $id: $e');
     }
   }
 
@@ -120,7 +121,7 @@ class ArchetypeService {
         _archetypeCache[entry.key] = archetype;
       }
     } catch (e) {
-      print('Failed to load cached archetypes: $e');
+      debugPrint('Failed to load cached archetypes: $e');
     }
   }
 
@@ -130,7 +131,7 @@ class ArchetypeService {
       final config = await AppConfig.instance;
       final path = config.testArchetypesPath;
       if (path == null) {
-        print('No test archetypes path configured');
+        debugPrint('No test archetypes path configured');
         return;
       }
       
@@ -143,7 +144,7 @@ class ArchetypeService {
         _archetypeCache[entry.key] = archetype;
       }
     } catch (e) {
-      print('Failed to load test archetypes: $e');
+      debugPrint('Failed to load test archetypes: $e');
     }
   }
 
