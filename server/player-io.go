@@ -69,7 +69,9 @@ func (p *Player) handleRequests(ctx context.Context, requests <-chan *ssh.Reques
 				p.consoleWidth = w
 				p.consoleHeight = h
 			default:
-				req.Reply(false, nil)
+				if err := req.Reply(false, nil); err != nil {
+					Logger.Error("Player-IO: Failed to reply to unknown request", "type", req.Type, "error", err)
+				}
 			}
 			p.mutex.Unlock()
 		}
@@ -206,7 +208,9 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 
 			case '\b', 127: // Backspace
 				if p.inputBuffer.RemoveLast() && p.echo {
-					p.connection.Write([]byte("\b \b"))
+					if _, err := p.connection.Write([]byte("\b \b")); err != nil {
+						Logger.Error("Player-IO: Failed to write backspace", "error", err)
+					}
 				}
 
 			case '\x03': // Ctrl-C
@@ -217,7 +221,9 @@ func (p *Player) handleInput(ctx context.Context, done chan error) {
 				// Filter input to only allow printable ASCII (32-126)
 				if r >= 32 && r <= 126 {
 					if p.inputBuffer.Append(r) && p.echo {
-						p.connection.Write([]byte(string(r)))
+						if _, err := p.connection.Write([]byte(string(r))); err != nil {
+							Logger.Error("Player-IO: Failed to echo character", "error", err)
+						}
 					}
 				}
 			}
