@@ -39,11 +39,11 @@ dynamodb = boto3.resource("dynamodb")
 
 # Table name configuration from environment variables with defaults
 TABLES_CONFIG = {
-    "players": os.environ.get("PLAYERS_TABLE_NAME", "players"),
-    "mud_characters": os.environ.get("MUD_CHARACTERS_TABLE_NAME", "characters"),
-    "incremental_characters": os.environ.get("INCREMENTAL_CHARACTERS_TABLE_NAME", "incremental_characters"),
-    "active_segments": os.environ.get("ACTIVE_SEGMENTS_TABLE_NAME", "active_segments"),
-    "character_history": os.environ.get("CHARACTER_HISTORY_TABLE_NAME", "character_history"),
+    "players": os.environ.get("PLAYERS_TABLE", "players"),
+    "mud_characters": os.environ.get("MUD_CHARACTERS_TABLE", "characters"),
+    "incremental_characters": os.environ.get("INCREMENTAL_CHARACTERS_TABLE", "incremental_characters"),
+    "active_segments": os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments"),
+    "character_history": os.environ.get("CHARACTER_HISTORY_TABLE", "character_history"),
 }
 
 

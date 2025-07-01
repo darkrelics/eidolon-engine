@@ -67,7 +67,7 @@ class CodeBuildStack(Stack):
                 build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.MEDIUM
             ),
             environment_variables={
-                "S3_BUCKET_NAME": codebuild.BuildEnvironmentVariable(value=self.portal_bucket.bucket_name),
+                "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.portal_bucket.bucket_name),
                 "USER_POOL_ID": codebuild.BuildEnvironmentVariable(value=cognito_user_pool_id),
                 "CLIENT_ID": codebuild.BuildEnvironmentVariable(value=cognito_app_client_id),
                 "AWS_REGION": codebuild.BuildEnvironmentVariable(value=self.region),
@@ -109,7 +109,7 @@ class CodeBuildStack(Stack):
                     build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
                 ),
                 environment_variables={
-                    "S3_BUCKET_NAME": codebuild.BuildEnvironmentVariable(value=self.lambda_bucket.bucket_name),
+                    "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.lambda_bucket.bucket_name),
                 },
                 build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-layer.yml"),
                 artifacts=codebuild.Artifacts.s3(
@@ -136,7 +136,7 @@ class CodeBuildStack(Stack):
                     build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
                 ),
                 environment_variables={
-                    "S3_BUCKET_NAME": codebuild.BuildEnvironmentVariable(value=self.lambda_bucket.bucket_name),
+                    "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.lambda_bucket.bucket_name),
                 },
                 build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-functions.yml"),
             )

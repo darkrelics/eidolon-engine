@@ -24,10 +24,10 @@ class MudLambdaStack(cdk.Stack):
         scope: Construct,
         id: str,
         lambda_bucket: s3.IBucket,
-        shared_players_table_name: str,
-        mud_characters_table_name: str,
-        mud_items_table_name: str,
-        mud_archetypes_table_name: str,
+        shared_players_table: str,
+        mud_characters_table: str,
+        mud_items_table: str,
+        mud_ARCHETYPES_TABLE: str,
         cognito_user_pool_arn: str,
         shared_dependencies_layer_arn: str,
         domain_name: str,
@@ -41,10 +41,10 @@ class MudLambdaStack(cdk.Stack):
             scope: CDK scope
             id: Stack ID
             lambda_bucket: S3 bucket containing Lambda deployment packages
-            shared_players_table_name: Name of the shared players DynamoDB table
-            mud_characters_table_name: Name of the MUD characters DynamoDB table
-            mud_items_table_name: Name of the MUD items DynamoDB table
-            mud_archetypes_table_name: Name of the MUD archetypes DynamoDB table
+            shared_players_table: Name of the shared players DynamoDB table
+            mud_characters_table: Name of the MUD characters DynamoDB table
+            mud_items_table: Name of the MUD items DynamoDB table
+            mud_ARCHETYPES_TABLE: Name of the MUD archetypes DynamoDB table
             cognito_user_pool_arn: ARN of the Cognito user pool
             shared_dependencies_layer_arn: ARN of the shared Lambda dependencies layer
             domain_name: Domain name for API (required)
@@ -74,7 +74,7 @@ class MudLambdaStack(cdk.Stack):
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:Scan", "dynamodb:Query", "dynamodb:GetItem"],
-                resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_archetypes_table_name}"],
+                resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_ARCHETYPES_TABLE}"],
             )
         )
 
@@ -90,7 +90,7 @@ class MudLambdaStack(cdk.Stack):
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
-                "ARCHETYPES_TABLE_NAME": mud_archetypes_table_name,
+                "ARCHETYPES_TABLE": mud_ARCHETYPES_TABLE,
             },
             description="Returns player-available archetypes for MUD",
         )
@@ -111,9 +111,9 @@ class MudLambdaStack(cdk.Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan"],
                 resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{shared_players_table_name}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_characters_table_name}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_archetypes_table_name}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{shared_players_table}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_characters_table}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_ARCHETYPES_TABLE}",
                 ],
             )
         )
@@ -130,9 +130,9 @@ class MudLambdaStack(cdk.Stack):
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
-                "PLAYERS_TABLE_NAME": shared_players_table_name,
-                "CHARACTERS_TABLE_NAME": mud_characters_table_name,
-                "ARCHETYPES_TABLE_NAME": mud_archetypes_table_name,
+                "players_table": shared_players_table,
+                "characters_table": mud_characters_table,
+                "ARCHETYPES_TABLE": mud_ARCHETYPES_TABLE,
                 "MAX_CHARACTERS_PER_PLAYER": "10",
             },
             description="Creates new character for MUD players",
@@ -154,8 +154,8 @@ class MudLambdaStack(cdk.Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:Query"],
                 resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{shared_players_table_name}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_characters_table_name}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{shared_players_table}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_characters_table}",
                 ],
             )
         )
@@ -172,8 +172,8 @@ class MudLambdaStack(cdk.Stack):
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
-                "PLAYERS_TABLE_NAME": shared_players_table_name,
-                "CHARACTERS_TABLE_NAME": mud_characters_table_name,
+                "players_table": shared_players_table,
+                "characters_table": mud_characters_table,
             },
             description="Lists all characters for MUD players",
         )
@@ -194,9 +194,9 @@ class MudLambdaStack(cdk.Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:DeleteItem", "dynamodb:UpdateItem"],
                 resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{shared_players_table_name}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_characters_table_name}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_items_table_name}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{shared_players_table}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_characters_table}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{mud_items_table}",
                 ],
             )
         )
@@ -213,9 +213,9 @@ class MudLambdaStack(cdk.Stack):
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
-                "PLAYERS_TABLE_NAME": shared_players_table_name,
-                "CHARACTERS_TABLE_NAME": mud_characters_table_name,
-                "ITEMS_TABLE_NAME": mud_items_table_name,
+                "players_table": shared_players_table,
+                "characters_table": mud_characters_table,
+                "items_table": mud_items_table,
             },
             description="Deletes a character for MUD players",
         )

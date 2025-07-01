@@ -38,13 +38,13 @@ logger.setLevel(logging.INFO)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-players_table_name = os.environ.get("PLAYERS_TABLE_NAME", "players")
-characters_table_name = os.environ.get("CHARACTERS_TABLE_NAME", "incremental_characters")
-archetypes_table_name = os.environ.get("ARCHETYPES_TABLE_NAME", "archetypes")
+players_table = os.environ.get("PLAYERS_TABLE", "players")
+characters_table = os.environ.get("CHARACTERS_TABLE", "incremental_characters")
+ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
 
-players_table = dynamodb.Table(players_table_name)
-characters_table = dynamodb.Table(characters_table_name)
-archetypes_table = dynamodb.Table(archetypes_table_name)
+players_table = dynamodb.Table(players_table)
+characters_table = dynamodb.Table(characters_table)
+archetypes_table = dynamodb.Table(ARCHETYPES_TABLE)
 
 # Character name validation regex (same as server)
 NAME_PATTERN = re.compile(r"^[a-zA-Z'-]+$")

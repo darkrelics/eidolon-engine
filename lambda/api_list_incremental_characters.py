@@ -17,7 +17,8 @@ limitations under the License.
 
 
 Lambda function to list incremental characters for an authenticated player.
-Returns character names and UUIDs from the incremental_characters table.
+Returns character names and UUIDs from the player's character list in the
+players table.
 """
 
 import json
@@ -33,54 +34,44 @@ logger.setLevel(logging.INFO)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-characters_table_name = os.environ.get("CHARACTERS_TABLE_NAME", "incremental_characters")
+players_table = os.environ.get("PLAYERS_TABLE", "players")
 
-characters_table = dynamodb.Table(characters_table_name)
+players_table = dynamodb.Table(players_table)
 
 
 def get_player_characters(player_id):
     """
-    Get all incremental characters for a player.
+    Get incremental character list from player record.
     
     Args:
         player_id: Cognito user ID
         
     Returns:
-        List of character summaries (name, uuid, archetype)
+        List of character names and UUIDs only
     """
     try:
-        # Query characters by PlayerID
-        # Consider adding a GSI on PlayerID for better performance
-        response = characters_table.scan(
-            FilterExpression="PlayerID = :pid",
-            ExpressionAttributeValues={":pid": player_id},
-            ProjectionExpression="CharacterID, CharacterName, Archetype, #h, MaxHealth",
-            ExpressionAttributeNames={"#h": "Health"}  # Health is a reserved word
-        )
+        # Get player data from players table
+        response = players_table.get_item(Key={"PlayerID": player_id})
         
-        items = response.get("Items", [])
+        if "Item" not in response:
+            logger.info(f"No player record found for {player_id}")
+            return []
         
-        # Handle pagination
-        while "LastEvaluatedKey" in response:
-            response = characters_table.scan(
-                FilterExpression="PlayerID = :pid",
-                ExpressionAttributeValues={":pid": player_id},
-                ProjectionExpression="CharacterID, CharacterName, Archetype, #h, MaxHealth",
-                ExpressionAttributeNames={"#h": "Health"},
-                ExclusiveStartKey=response["LastEvaluatedKey"]
-            )
-            items.extend(response.get("Items", []))
+        player_data = response["Item"]
+        character_list = player_data.get("CharacterList", {})
         
-        # Build character list
+        if not character_list:
+            return []
+        
+        # Build list of characters with just name and UUID
         characters = []
-        for item in items:
-            characters.append({
-                "characterId": item.get("CharacterID"),
-                "characterName": item.get("CharacterName"),
-                "archetype": item.get("Archetype"),
-                "health": float(item.get("Health", 0)),
-                "maxHealth": float(item.get("MaxHealth", 0))
-            })
+        for char_name, char_info in character_list.items():
+            # Only include characters that aren't dead for incremental game
+            if not char_info.get("Dead", False):
+                characters.append({
+                    "characterId": char_info.get("UUID"),
+                    "characterName": char_name
+                })
         
         # Sort by character name for consistent ordering
         characters.sort(key=lambda x: x["characterName"])

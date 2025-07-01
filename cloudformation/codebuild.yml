@@ -69,7 +69,7 @@ Resources:
             Value: !Ref UserPoolId
           - Name: CLIENT_ID
             Value: !Ref ClientId
-          - Name: S3_BUCKET_NAME
+          - Name: S3_BUCKET
             Value: !Ref S3BucketName
       Source:
         Type: GITHUB

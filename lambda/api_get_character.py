@@ -34,11 +34,11 @@ logger.setLevel(logging.INFO)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-characters_table_name = os.environ.get("CHARACTERS_TABLE_NAME", "incremental_characters")
-active_segments_table_name = os.environ.get("ACTIVE_SEGMENTS_TABLE_NAME", "active_segments")
+characters_table = os.environ.get("CHARACTERS_TABLE", "incremental_characters")
+active_segments_table = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
 
-characters_table = dynamodb.Table(characters_table_name)
-active_segments_table = dynamodb.Table(active_segments_table_name)
+characters_table = dynamodb.Table(characters_table)
+active_segments_table = dynamodb.Table(active_segments_table)
 
 
 def decimal_to_float(obj):

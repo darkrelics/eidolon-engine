@@ -29,7 +29,7 @@ phases:
   post_build:
     commands:
       - echo "Deploying to S3..."
-      - aws s3 sync build/web s3://$S3_BUCKET_NAME/ --delete --cache-control "max-age=86400"
+      - aws s3 sync build/web s3://$S3_BUCKET/ --delete --cache-control "max-age=86400"
       - |
         if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then 
           echo "Invalidating CloudFront cache..."
