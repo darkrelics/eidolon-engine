@@ -6,12 +6,12 @@ allowing for selective updates without full redeployment.
 
 import argparse
 import os
-import subprocess
 import sys
 from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
+from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from state_manager import ConfigurationManager, DeploymentState
 
@@ -43,6 +43,13 @@ class IncrementalDeploymentOrchestrator:
 
         # CDK app directory
         self.cdk_dir = Path(__file__).parent / "cdk"
+        
+        # Initialize CDK API integration
+        self.cdk_api = CDKApiIntegration(
+            cdk_dir=str(self.cdk_dir),
+            profile=profile,
+            region=region
+        )
 
     def check_prerequisites(self) -> bool:
         """Check if all prerequisites are met for deployment.
@@ -576,67 +583,64 @@ class IncrementalDeploymentOrchestrator:
         self.state_manager.update_parameters(plan["parameters"])
         self.state_manager.save_state()
 
-        # Set environment variables for CDK
-        env = os.environ.copy()
-        env["CDK_DEFAULT_ACCOUNT"] = self.session.client("sts").get_caller_identity().get("Account")
-        env["CDK_DEFAULT_REGION"] = self.region
-
-        # Add profile if specified
-        if self.profile:
-            env["AWS_PROFILE"] = self.profile
-
-        # Pass adopted resources to CDK via context
+        # Prepare CDK context
+        context = {}
+        
+        # Add adopted resources to context
         if plan.get("adopt_resources"):
             print("\nPreparing to adopt existing resources...")
             for key, value in plan["adopt_resources"].items():
-                env[f"CDK_CONTEXT_{key}"] = value
+                context[key] = value
                 print(f"  - {key}: {value}")
-
-        # Pass deployment selection to CDK
-        env["DEPLOY_MUD"] = str(plan["parameters"].get("deploy_mud", True))
-        env["DEPLOY_INCREMENTAL"] = str(plan["parameters"].get("deploy_incremental", False))
-
-        # Run CDK deploy
-        print("\nDeploying infrastructure with CDK...")
-        cdk_command = ["cdk", "deploy", "--all", "--require-approval", "never" if auto_approve else "broadening"]
-
-        # Add context for adopted resources
-        if plan.get("adopt_resources"):
-            for key, value in plan["adopt_resources"].items():
-                cdk_command.extend(["-c", f"{key}={value}"])
-
+        
         # Add deployment type context
-        cdk_command.extend(
-            [
-                "-c",
-                f"deploy_mud={plan['parameters'].get('deploy_mud', True)}",
-                "-c",
-                f"deploy_incremental={plan['parameters'].get('deploy_incremental', False)}",
-            ]
-        )
+        context["deploy_mud"] = str(plan["parameters"].get("deploy_mud", True))
+        context["deploy_incremental"] = str(plan["parameters"].get("deploy_incremental", False))
 
+        # Deploy using CDK Python API
+        print("\nDeploying infrastructure with CDK...")
+        
         try:
-            result = subprocess.run(cdk_command, cwd=self.cdk_dir, env=env, check=True)
-
-            if result.returncode == 0:
+            # Create progress reporter
+            progress_reporter = CDKProgressReporter()
+            
+            # Execute deployment
+            result = self.cdk_api.deploy(
+                stacks=None,  # Deploy all stacks
+                context=context,
+                require_approval="never" if auto_approve else "broadening",
+                progress_callback=progress_reporter
+            )
+            
+            if result["success"]:
                 print("\n[SUCCESS] Deployment completed successfully!")
-
-                # Update configuration file
+                
+                # Update configuration file with outputs
                 self.update_configuration(plan["parameters"])
-
+                
                 # Record deployment in state
                 self.state_manager.add_deployment_event(
-                    "deployment_complete", {"stacks_created": plan["create_stacks"], "stacks_updated": plan["update_stacks"]}
+                    "deployment_complete", 
+                    {
+                        "stacks_created": plan["create_stacks"], 
+                        "stacks_updated": plan["update_stacks"],
+                        "outputs": result.get("outputs", {})
+                    }
                 )
                 self.state_manager.save_state()
-
+                
                 return True
             else:
                 print("\n[ERROR] Deployment failed!")
                 return False
-
-        except subprocess.CalledProcessError as err:
+                
+        except CDKDeploymentError as err:
             print(f"\n[ERROR] Deployment failed: {err}")
+            if err.details:
+                print(f"Details: {err.details}")
+            return False
+        except Exception as err:
+            print(f"\n[ERROR] Unexpected error during deployment: {err}")
             return False
 
     def update_configuration(self, params: dict) -> None:
