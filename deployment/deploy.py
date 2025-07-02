@@ -83,30 +83,120 @@ class IncrementalDeploymentOrchestrator:
         saved_params = self.state_manager.get_parameters()
         params.update(saved_params)
 
-        # Load from config file
-        if self.config_manager.exists():
-            config = self.config_manager.config
-            if "Game" in config:
-                game_config = config["Game"]
-                params["game_name"] = game_config.get("name", params["game_name"])
-                # Check for existing S3 buckets
-                if "ScriptsS3Bucket" in game_config:
-                    params["scripts_bucket_name"] = game_config["ScriptsS3Bucket"]
-            if "AWS" in config:
-                aws_config = config["AWS"]
-                params["contact_email"] = aws_config.get("contact_email", params["contact_email"])
-            if "CloudFront" in config:
-                cf_config = config["CloudFront"]
-                params["cloudfront_distribution_id"] = cf_config.get("distribution_id", params.get("cloudfront_distribution_id"))
-            if "DynamoDB" in config and "Tables" in config["DynamoDB"]:
-                # Load existing DynamoDB table names if configured
-                params["dynamodb_tables"] = config["DynamoDB"]["Tables"]
-            if "CodeBuild" in config:
-                codebuild_config = config["CodeBuild"]
-                if "PortalBuildspecPath" in codebuild_config:
-                    params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
-                if "PortalS3Bucket" in codebuild_config:
-                    params["portal_bucket_name"] = codebuild_config["PortalS3Bucket"]
+        # Load from config file (which may have been initialized from template)
+        config = self.config_manager.config
+        if "Game" in config:
+            game_config = config["Game"]
+            params["game_name"] = game_config.get("name", params["game_name"])
+            # Check for existing S3 buckets
+            if "ScriptsS3Bucket" in game_config:
+                params["scripts_bucket_name"] = game_config["ScriptsS3Bucket"]
+        # Check both AWS and Contact sections for email (template uses Contact)
+        if "Contact" in config:
+            params["contact_email"] = config["Contact"].get("Email", params["contact_email"])
+        if "AWS" in config:
+            aws_config = config["AWS"]
+            params["contact_email"] = aws_config.get("contact_email", params["contact_email"])
+        if "CloudFront" in config:
+            cf_config = config["CloudFront"]
+            params["cloudfront_distribution_id"] = cf_config.get("distribution_id", params.get("cloudfront_distribution_id"))
+        if "DynamoDB" in config and "Tables" in config["DynamoDB"]:
+            # Load existing DynamoDB table names if configured
+            params["dynamodb_tables"] = config["DynamoDB"]["Tables"]
+        if "CodeBuild" in config:
+            codebuild_config = config["CodeBuild"]
+            if "PortalBuildspecPath" in codebuild_config:
+                params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
+            if "PortalS3Bucket" in codebuild_config:
+                params["portal_bucket_name"] = codebuild_config["PortalS3Bucket"]
+
+        # Load from template structure
+        if "GitHub" in config:
+            github_config = config["GitHub"]
+            params["github_owner"] = github_config.get("Owner", params["github_owner"])
+            params["github_repo"] = github_config.get("Repo", params["github_repo"])
+            params["github_branch"] = github_config.get("Branch", params["github_branch"])
+
+        if "CloudWatch" in config:
+            params["log_retention_days"] = config["CloudWatch"].get("LogRetentionDays", params["log_retention_days"])
+
+        if "S3" in config:
+            s3_config = config["S3"]
+            if s3_config.get("PortalBucket"):
+                params["portal_bucket_name"] = s3_config["PortalBucket"]
+            if s3_config.get("ScriptsBucket"):
+                params["scripts_bucket_name"] = s3_config["ScriptsBucket"]
+
+        # Load deployment type from config
+        if "Deployment" in config:
+            deploy_config = config["Deployment"]
+            params["deploy_mud"] = deploy_config.get("MUD", True)
+            params["deploy_incremental"] = deploy_config.get("Incremental", False)
+
+        return params
+
+    def handle_deployment_selection(
+        self, params: dict, deploy_mud: bool, deploy_incremental: bool, deploy_both: bool, non_interactive: bool
+    ) -> dict:
+        """Handle deployment type selection with interactive mode.
+
+        Args:
+            params: Current parameters
+            deploy_mud: CLI flag to deploy only MUD
+            deploy_incremental: CLI flag to deploy only Incremental
+            deploy_both: CLI flag to deploy both
+            non_interactive: Skip interactive prompts
+
+        Returns:
+            Updated parameters with deployment selection
+        """
+        # If any CLI flag is provided, use it
+        if deploy_mud:
+            params["deploy_mud"] = True
+            params["deploy_incremental"] = False
+            print("Deployment mode: MUD only")
+        elif deploy_incremental:
+            params["deploy_mud"] = False
+            params["deploy_incremental"] = True
+            print("Deployment mode: Incremental only")
+        elif deploy_both:
+            params["deploy_mud"] = True
+            params["deploy_incremental"] = True
+            print("Deployment mode: Both MUD and Incremental")
+        elif not non_interactive and "deploy_mud" not in params and "deploy_incremental" not in params:
+            # Interactive mode - ask user what to deploy
+            print("\n=== EIDOLON ENGINE DEPLOYMENT ===")
+            print("\nWhich game infrastructure would you like to deploy?")
+            print("1. MUD only (builds Portal frontend)")
+            print("2. Incremental Game only (builds Incremental frontend)")
+            print("3. Both MUD and Incremental (builds Incremental frontend)")
+
+            choice = input("\nSelect deployment type [1-3] (default: 3): ").strip()
+
+            if choice == "1":
+                params["deploy_mud"] = True
+                params["deploy_incremental"] = False
+                print("\n[OK] Selected: MUD only (Portal frontend)")
+            elif choice == "2":
+                params["deploy_mud"] = False
+                params["deploy_incremental"] = True
+                print("\n[OK] Selected: Incremental Game only")
+            else:  # Default to both
+                params["deploy_mud"] = True
+                params["deploy_incremental"] = True
+                print("\n[OK] Selected: Both games (Incremental frontend)")
+        else:
+            # Use existing params or defaults
+            if "deploy_mud" not in params and "deploy_incremental" not in params:
+                # Default to both if nothing specified
+                params["deploy_mud"] = True
+                params["deploy_incremental"] = True
+                print("Deployment mode: Both MUD and Incremental (default)")
+
+        # Update config manager with deployment choices
+        self.config_manager.update_section(
+            "Deployment", {"MUD": params.get("deploy_mud", True), "Incremental": params.get("deploy_incremental", False)}
+        )
 
         return params
 
@@ -119,25 +209,62 @@ class IncrementalDeploymentOrchestrator:
         Returns:
             Updated parameters with user input
         """
+        print("\n=== CONFIGURATION ===")
+
+        # Basic required parameters
         required_params = {
-            "game_name": "Game name (e.g., eidolon-engine)",
-            "contact_email": "Administrator contact email",
-            "github_owner": "GitHub repository owner",
-            "github_repo": "GitHub repository name",
-            "github_branch": "GitHub branch to deploy from",
+            "game_name": ("Game name", "eidolon-engine"),
+            "contact_email": ("Administrator contact email", "admin@example.com"),
+            "github_owner": ("GitHub repository owner", "robinje"),
+            "github_repo": ("GitHub repository name", "eidolon-engine"),
+            "github_branch": ("GitHub branch to deploy from", "main"),
         }
 
-        for param, description in required_params.items():
-            if not params.get(param):
-                value = input(f"{description} [{params.get(param, '')}]: ").strip()
-                if value:
-                    params[param] = value
-                elif param in params and params[param]:
-                    # Keep existing value
-                    pass
-                else:
-                    print(f"ERROR: {param} is required")
-                    sys.exit(1)
+        print("\nPlease provide the following configuration values:")
+        print("(Press Enter to accept the default value shown in brackets)\n")
+
+        for param, (description, default) in required_params.items():
+            current_value = params.get(param, default)
+            value = input(f"{description} [{current_value}]: ").strip()
+            if value:
+                params[param] = value
+            elif current_value:
+                params[param] = current_value
+            else:
+                print(f"ERROR: {param} is required")
+                sys.exit(1)
+
+        # API Configuration (required for Lambda deployments)
+        if params.get("deploy_mud") or params.get("deploy_incremental"):
+            print("\n=== API CONFIGURATION ===")
+            print("API Gateway requires a custom domain name and hosted zone.")
+            print("Skip this section if you don't have a domain configured in Route53.\n")
+
+            # Check if we have API config
+            if not params.get("domain_name"):
+                domain = input("Domain name (e.g., example.com) [skip to use default]: ").strip()
+                if domain and domain.lower() != "skip":
+                    params["domain_name"] = domain
+
+                    # Also need hosted zone ID
+                    zone_id = input("Route53 Hosted Zone ID [required if domain provided]: ").strip()
+                    if zone_id:
+                        params["hosted_zone_id"] = zone_id
+                    else:
+                        print("WARNING: Hosted Zone ID is required for custom domain. Skipping API Gateway setup.")
+                        params.pop("domain_name", None)
+
+        # Optional S3 bucket names
+        print("\n=== S3 BUCKETS ===")
+        print("Leave blank to create new buckets with auto-generated names.\n")
+
+        portal_bucket = input(f"Portal S3 bucket name [{params.get('portal_bucket_name', 'auto-generate')}]: ").strip()
+        if portal_bucket and portal_bucket != "auto-generate":
+            params["portal_bucket_name"] = portal_bucket
+
+        scripts_bucket = input(f"Scripts S3 bucket name [{params.get('scripts_bucket_name', 'auto-generate')}]: ").strip()
+        if scripts_bucket and scripts_bucket != "auto-generate":
+            params["scripts_bucket_name"] = scripts_bucket
 
         return params
 
@@ -386,7 +513,7 @@ class IncrementalDeploymentOrchestrator:
         if cf_mapping["cloudformation_stacks"]:
             print("\nDetected existing CloudFormation stacks:")
             for stack_name, info in cf_mapping["cloudformation_stacks"].items():
-                print(f"  • {stack_name} (can adopt: {info.get('can_adopt', False)})")
+                print(f"  - {stack_name} (can adopt: {info.get('can_adopt', False)})")
 
             if cf_mapping["migration_strategy"] == "adopt":
                 print("\nStrategy: Adopt existing resources into CDK stacks")
@@ -429,12 +556,12 @@ class IncrementalDeploymentOrchestrator:
         if plan["create_stacks"]:
             print(f"\nStacks to CREATE: {len(plan['create_stacks'])}")
             for stack in plan["create_stacks"]:
-                print(f"  • {stack}")
+                print(f"  - {stack}")
 
         if plan["update_stacks"]:
             print(f"\nStacks to UPDATE: {len(plan['update_stacks'])}")
             for stack in plan["update_stacks"]:
-                print(f"  • {stack}")
+                print(f"  - {stack}")
 
         if plan["unchanged_stacks"]:
             print(f"\nUnchanged stacks: {len(plan['unchanged_stacks'])}")
@@ -463,7 +590,11 @@ class IncrementalDeploymentOrchestrator:
             print("\nPreparing to adopt existing resources...")
             for key, value in plan["adopt_resources"].items():
                 env[f"CDK_CONTEXT_{key}"] = value
-                print(f"  • {key}: {value}")
+                print(f"  - {key}: {value}")
+
+        # Pass deployment selection to CDK
+        env["DEPLOY_MUD"] = str(plan["parameters"].get("deploy_mud", True))
+        env["DEPLOY_INCREMENTAL"] = str(plan["parameters"].get("deploy_incremental", False))
 
         # Run CDK deploy
         print("\nDeploying infrastructure with CDK...")
@@ -474,11 +605,21 @@ class IncrementalDeploymentOrchestrator:
             for key, value in plan["adopt_resources"].items():
                 cdk_command.extend(["-c", f"{key}={value}"])
 
+        # Add deployment type context
+        cdk_command.extend(
+            [
+                "-c",
+                f"deploy_mud={plan['parameters'].get('deploy_mud', True)}",
+                "-c",
+                f"deploy_incremental={plan['parameters'].get('deploy_incremental', False)}",
+            ]
+        )
+
         try:
             result = subprocess.run(cdk_command, cwd=self.cdk_dir, env=env, check=True)
 
             if result.returncode == 0:
-                print("\n✓ Deployment completed successfully!")
+                print("\n[SUCCESS] Deployment completed successfully!")
 
                 # Update configuration file
                 self.update_configuration(plan["parameters"])
@@ -491,11 +632,11 @@ class IncrementalDeploymentOrchestrator:
 
                 return True
             else:
-                print("\n✗ Deployment failed!")
+                print("\n[ERROR] Deployment failed!")
                 return False
 
         except subprocess.CalledProcessError as err:
-            print(f"\n✗ Deployment failed: {err}")
+            print(f"\n[ERROR] Deployment failed: {err}")
             return False
 
     def update_configuration(self, params: dict) -> None:
@@ -605,7 +746,7 @@ class IncrementalDeploymentOrchestrator:
 
         # Save configuration
         self.config_manager.save_config()
-        print(f"✓ Configuration saved to {self.config_manager.config_path}")
+        print(f"[OK] Configuration saved to {self.config_manager.config_path}")
 
     def deploy_scripts(self, params: dict) -> bool:
         """Deploy Lua scripts to S3.
@@ -643,7 +784,7 @@ class IncrementalDeploymentOrchestrator:
                 key = f"{prefix}/{lua_file.name}"
                 with open(lua_file, "rb") as f:
                     self.s3_client.put_object(Bucket=bucket_name, Key=key, Body=f, ContentType="text/x-lua")
-                print(f"  ✓ Uploaded {lua_file.name}")
+                print(f"  [OK] Uploaded {lua_file.name}")
 
             return True
 
@@ -651,24 +792,57 @@ class IncrementalDeploymentOrchestrator:
             print(f"Error deploying scripts: {err}")
             return False
 
-    def run(self, auto_approve: bool = False, skip_scripts: bool = False, analyze_only: bool = False) -> bool:
+    def run(
+        self,
+        auto_approve: bool = False,
+        skip_scripts: bool = False,
+        analyze_only: bool = False,
+        deploy_mud: bool = False,
+        deploy_incremental: bool = False,
+        deploy_both: bool = False,
+        non_interactive: bool = False,
+    ) -> bool:
         """Run the incremental deployment.
 
         Args:
             auto_approve: Skip confirmation prompts
             skip_scripts: Skip Lua script deployment
             analyze_only: Only analyze, don't deploy
+            deploy_mud: Deploy only MUD infrastructure
+            deploy_incremental: Deploy only Incremental infrastructure
+            deploy_both: Deploy both infrastructures
+            non_interactive: Run in non-interactive mode
 
         Returns:
             True if deployment succeeded
         """
+        # Show welcome message in interactive mode
+        if not non_interactive and not analyze_only:
+            print("========================================================")
+            print("         EIDOLON ENGINE DEPLOYMENT WIZARD             ")
+            print("========================================================")
+            print(f"\nRegion: {self.region}")
+            print("This wizard will guide you through deploying the")
+            print("Eidolon Engine infrastructure to AWS.\n")
+
         # Check prerequisites
         if not self.check_prerequisites():
             return False
 
         # Load and validate parameters
         params = self.load_parameters()
-        if not auto_approve and not analyze_only:
+
+        # Initialize config from template if config.yml doesn't exist
+        if not self.config_manager.exists():
+            template_path = Path(__file__).parent / "config.yml.template"
+            if template_path.exists():
+                print("Initializing configuration from template...")
+                self.config_manager.merge_with_template(str(template_path))
+
+        # Handle deployment type selection
+        params = self.handle_deployment_selection(params, deploy_mud, deploy_incremental, deploy_both, non_interactive)
+
+        if not auto_approve and not analyze_only and not non_interactive:
             params = self.prompt_missing_parameters(params)
 
         # Analyze what needs to be deployed
@@ -688,7 +862,29 @@ class IncrementalDeploymentOrchestrator:
         if not skip_scripts:
             self.deploy_scripts(params)
 
-        print("\n✓ Incremental deployment completed successfully!")
+        # Show deployment summary
+        print("\n========================================================")
+        print("            DEPLOYMENT COMPLETED SUCCESSFULLY          ")
+        print("========================================================")
+
+        if params.get("deploy_mud") and params.get("deploy_incremental"):
+            print("\n[OK] MUD backend infrastructure deployed")
+            print("[OK] Incremental Game infrastructure deployed")
+            print("[OK] Frontend build: Incremental (serves both games)")
+        elif params.get("deploy_mud"):
+            print("\n[OK] MUD infrastructure deployed")
+            print("[OK] Frontend build: Portal")
+        elif params.get("deploy_incremental"):
+            print("\n[OK] Incremental Game infrastructure deployed")
+            print("[OK] Frontend build: Incremental")
+
+        print(f"\nConfiguration saved to: {self.config_manager.config_path}")
+        print("\nNext steps:")
+        print("1. Review the generated config.yml file")
+        print("2. Deploy your game code using the CodeBuild project")
+        if not skip_scripts:
+            print("3. Lua scripts have been uploaded to S3")
+
         return True
 
 
@@ -700,12 +896,24 @@ def main():
     parser.add_argument("--auto-approve", action="store_true", help="Skip confirmation prompts")
     parser.add_argument("--skip-scripts", action="store_true", help="Skip Lua script deployment")
     parser.add_argument("--analyze-only", action="store_true", help="Only analyze existing infrastructure, don't deploy")
+    parser.add_argument("--deploy-mud", action="store_true", help="Deploy only MUD infrastructure")
+    parser.add_argument("--deploy-incremental", action="store_true", help="Deploy only Incremental infrastructure")
+    parser.add_argument("--deploy-both", action="store_true", help="Deploy both MUD and Incremental infrastructure (default)")
+    parser.add_argument("--non-interactive", action="store_true", help="Run in non-interactive mode")
 
     args = parser.parse_args()
 
     orchestrator = IncrementalDeploymentOrchestrator(profile=args.profile, region=args.region)
 
-    success = orchestrator.run(auto_approve=args.auto_approve, skip_scripts=args.skip_scripts, analyze_only=args.analyze_only)
+    success = orchestrator.run(
+        auto_approve=args.auto_approve,
+        skip_scripts=args.skip_scripts,
+        analyze_only=args.analyze_only,
+        deploy_mud=args.deploy_mud,
+        deploy_incremental=args.deploy_incremental,
+        deploy_both=args.deploy_both,
+        non_interactive=args.non_interactive,
+    )
 
     sys.exit(0 if success else 1)
 
