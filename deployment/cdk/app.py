@@ -271,9 +271,21 @@ class EidolonEngineApp:
         # Get deployment parameters
         params = self.get_deployment_parameters()
 
-        # Determine which applications to deploy
-        deploy_mud = params.get("deploy_mud", True)
-        deploy_incremental = params.get("deploy_incremental", False)
+        # Determine which applications to deploy from context or parameters
+        # Check CDK context first (from command line), then environment, then config
+        deploy_mud = self.app.node.try_get_context("deploy_mud")
+        if deploy_mud is not None:
+            deploy_mud = str(deploy_mud).lower() in ["true", "1", "yes"]
+        else:
+            deploy_mud = os.getenv("DEPLOY_MUD", str(params.get("deploy_mud", True))).lower() in ["true", "1", "yes"]
+        
+        deploy_incremental = self.app.node.try_get_context("deploy_incremental")
+        if deploy_incremental is not None:
+            deploy_incremental = str(deploy_incremental).lower() in ["true", "1", "yes"]
+        else:
+            deploy_incremental = os.getenv("DEPLOY_INCREMENTAL", str(params.get("deploy_incremental", False))).lower() in ["true", "1", "yes"]
+        
+        print(f"Deployment configuration: MUD={deploy_mud}, Incremental={deploy_incremental}")
 
         # Create shared infrastructure stacks
 
@@ -354,37 +366,6 @@ class EidolonEngineApp:
             self.mud_lambda_stack.add_dependency(self.mud_dynamodb_stack)
             self.mud_lambda_stack.add_dependency(self.cognito_stack)
 
-            # Create CloudFront stack for MUD portal
-            self.mud_cloudfront_stack = CloudFrontStack(
-                self.app,
-                "mud-cloudfront",
-                game_name="mud-portal",
-                portal_bucket=self.s3_stack.portal_bucket,
-                existing_distribution_id=params.get("mud_cloudfront_distribution_id"),
-                env=env,
-            )
-            self.mud_cloudfront_stack.add_dependency(self.s3_stack)
-
-            # Create CodeBuild stack for MUD
-            self.mud_codebuild_stack = CodeBuildStack(
-                self.app,
-                "mud-codebuild",
-                game_name="mud-portal",
-                github_owner=params["github_owner"],
-                github_repo=params["github_repo"],
-                github_branch=params.get("github_branch", "main"),
-                cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
-                cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
-                portal_bucket=self.s3_stack.portal_bucket,
-                buildspec_path=params.get("portal_buildspec_path", "buildspec/portal.yml"),
-                cloudfront_distribution_id=self.mud_cloudfront_stack.distribution.distribution_id,
-                lambda_bucket=self.s3_stack.lambda_bucket,
-                env=env,
-            )
-            self.mud_codebuild_stack.add_dependency(self.cognito_stack)
-            self.mud_codebuild_stack.add_dependency(self.s3_stack)
-            self.mud_codebuild_stack.add_dependency(self.mud_cloudfront_stack)
-
         # Deploy Incremental-specific infrastructure
         if deploy_incremental:
             # Create Incremental DynamoDB tables
@@ -412,36 +393,52 @@ class EidolonEngineApp:
             self.incremental_lambda_stack.add_dependency(self.incremental_dynamodb_stack)
             self.incremental_lambda_stack.add_dependency(self.cognito_stack)
 
-            # Create CloudFront stack for Incremental portal
-            self.incremental_cloudfront_stack = CloudFrontStack(
+        # Create unified CloudFront and CodeBuild stacks
+        # Logic: If deploying Incremental (with or without MUD), build Incremental
+        #        If deploying MUD only, build Portal
+        if deploy_mud or deploy_incremental:
+            # Determine which frontend to build
+            if deploy_incremental:
+                # Build Incremental frontend if Incremental is being deployed
+                frontend_type = "incremental"
+                buildspec_path = params.get("incremental_buildspec_path", "buildspec/incremental.yml")
+                distribution_id_param = "incremental_cloudfront_distribution_id"
+            else:
+                # Build Portal frontend if only MUD is being deployed
+                frontend_type = "portal"
+                buildspec_path = params.get("portal_buildspec_path", "buildspec/portal.yml")
+                distribution_id_param = "portal_cloudfront_distribution_id"
+            
+            # Create CloudFront stack
+            self.cloudfront_stack = CloudFrontStack(
                 self.app,
-                "incremental-cloudfront",
-                game_name="incremental",
-                portal_bucket=self.s3_stack.portal_bucket,  # Could use separate bucket
-                existing_distribution_id=params.get("incremental_cloudfront_distribution_id"),
+                "cloudfront",
+                game_name=frontend_type,
+                portal_bucket=self.s3_stack.portal_bucket,
+                existing_distribution_id=params.get(distribution_id_param),
                 env=env,
             )
-            self.incremental_cloudfront_stack.add_dependency(self.s3_stack)
+            self.cloudfront_stack.add_dependency(self.s3_stack)
 
-            # Create CodeBuild stack for Incremental
-            self.incremental_codebuild_stack = CodeBuildStack(
+            # Create CodeBuild stack
+            self.codebuild_stack = CodeBuildStack(
                 self.app,
-                "incremental-codebuild",
-                game_name="incremental",
+                "codebuild",
+                game_name=frontend_type,
                 github_owner=params["github_owner"],
                 github_repo=params["github_repo"],
                 github_branch=params.get("github_branch", "main"),
                 cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
                 cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
                 portal_bucket=self.s3_stack.portal_bucket,
-                buildspec_path=params.get("incremental_buildspec_path", "buildspec/incremental.yml"),
-                cloudfront_distribution_id=self.incremental_cloudfront_stack.distribution.distribution_id,
+                buildspec_path=buildspec_path,
+                cloudfront_distribution_id=self.cloudfront_stack.distribution.distribution_id,
                 lambda_bucket=self.s3_stack.lambda_bucket,
                 env=env,
             )
-            self.incremental_codebuild_stack.add_dependency(self.cognito_stack)
-            self.incremental_codebuild_stack.add_dependency(self.s3_stack)
-            self.incremental_codebuild_stack.add_dependency(self.incremental_cloudfront_stack)
+            self.codebuild_stack.add_dependency(self.cognito_stack)
+            self.codebuild_stack.add_dependency(self.s3_stack)
+            self.codebuild_stack.add_dependency(self.cloudfront_stack)
 
         # Create IAM stack with server execution role
         self.iam_stack = IAMStack(
@@ -487,8 +484,11 @@ class EidolonEngineApp:
         # Check for deployment configuration
         if "Deployment" in self.config:
             deploy_config = self.config["Deployment"]
-            params["deploy_mud"] = deploy_config.get("MUD", True)
-            params["deploy_incremental"] = deploy_config.get("Incremental", False)
+            # Only use config values if not already set by context
+            if self.app.node.try_get_context("deploy_mud") is None:
+                params["deploy_mud"] = deploy_config.get("MUD", True)
+            if self.app.node.try_get_context("deploy_incremental") is None:
+                params["deploy_incremental"] = deploy_config.get("Incremental", False)
 
         # Check for shared DynamoDB table configurations
         if "DynamoDB" in self.config and "SharedTables" in self.config["DynamoDB"]:
