@@ -109,24 +109,24 @@ class IncrementalDeploymentOrchestrator:
                 params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
             if "PortalS3Bucket" in codebuild_config:
                 params["portal_bucket_name"] = codebuild_config["PortalS3Bucket"]
-        
+
         # Load from template structure
         if "GitHub" in config:
             github_config = config["GitHub"]
             params["github_owner"] = github_config.get("Owner", params["github_owner"])
             params["github_repo"] = github_config.get("Repo", params["github_repo"])
             params["github_branch"] = github_config.get("Branch", params["github_branch"])
-        
+
         if "CloudWatch" in config:
             params["log_retention_days"] = config["CloudWatch"].get("LogRetentionDays", params["log_retention_days"])
-        
+
         if "S3" in config:
             s3_config = config["S3"]
             if s3_config.get("PortalBucket"):
                 params["portal_bucket_name"] = s3_config["PortalBucket"]
             if s3_config.get("ScriptsBucket"):
                 params["scripts_bucket_name"] = s3_config["ScriptsBucket"]
-        
+
         # Load deployment type from config
         if "Deployment" in config:
             deploy_config = config["Deployment"]
@@ -135,8 +135,9 @@ class IncrementalDeploymentOrchestrator:
 
         return params
 
-    def handle_deployment_selection(self, params: dict, deploy_mud: bool, deploy_incremental: bool, 
-                                   deploy_both: bool, non_interactive: bool) -> dict:
+    def handle_deployment_selection(
+        self, params: dict, deploy_mud: bool, deploy_incremental: bool, deploy_both: bool, non_interactive: bool
+    ) -> dict:
         """Handle deployment type selection with interactive mode.
 
         Args:
@@ -169,9 +170,9 @@ class IncrementalDeploymentOrchestrator:
             print("1. MUD only (builds Portal frontend)")
             print("2. Incremental Game only (builds Incremental frontend)")
             print("3. Both MUD and Incremental (builds Incremental frontend)")
-            
+
             choice = input("\nSelect deployment type [1-3] (default: 3): ").strip()
-            
+
             if choice == "1":
                 params["deploy_mud"] = True
                 params["deploy_incremental"] = False
@@ -191,13 +192,12 @@ class IncrementalDeploymentOrchestrator:
                 params["deploy_mud"] = True
                 params["deploy_incremental"] = True
                 print("Deployment mode: Both MUD and Incremental (default)")
-        
+
         # Update config manager with deployment choices
-        self.config_manager.update_section("Deployment", {
-            "MUD": params.get("deploy_mud", True),
-            "Incremental": params.get("deploy_incremental", False)
-        })
-        
+        self.config_manager.update_section(
+            "Deployment", {"MUD": params.get("deploy_mud", True), "Incremental": params.get("deploy_incremental", False)}
+        )
+
         return params
 
     def prompt_missing_parameters(self, params: dict) -> dict:
@@ -210,7 +210,7 @@ class IncrementalDeploymentOrchestrator:
             Updated parameters with user input
         """
         print("\n=== CONFIGURATION ===")
-        
+
         # Basic required parameters
         required_params = {
             "game_name": ("Game name", "eidolon-engine"),
@@ -233,19 +233,19 @@ class IncrementalDeploymentOrchestrator:
             else:
                 print(f"ERROR: {param} is required")
                 sys.exit(1)
-        
+
         # API Configuration (required for Lambda deployments)
         if params.get("deploy_mud") or params.get("deploy_incremental"):
             print("\n=== API CONFIGURATION ===")
             print("API Gateway requires a custom domain name and hosted zone.")
             print("Skip this section if you don't have a domain configured in Route53.\n")
-            
+
             # Check if we have API config
             if not params.get("domain_name"):
                 domain = input("Domain name (e.g., example.com) [skip to use default]: ").strip()
                 if domain and domain.lower() != "skip":
                     params["domain_name"] = domain
-                    
+
                     # Also need hosted zone ID
                     zone_id = input("Route53 Hosted Zone ID [required if domain provided]: ").strip()
                     if zone_id:
@@ -253,15 +253,15 @@ class IncrementalDeploymentOrchestrator:
                     else:
                         print("WARNING: Hosted Zone ID is required for custom domain. Skipping API Gateway setup.")
                         params.pop("domain_name", None)
-        
+
         # Optional S3 bucket names
         print("\n=== S3 BUCKETS ===")
         print("Leave blank to create new buckets with auto-generated names.\n")
-        
+
         portal_bucket = input(f"Portal S3 bucket name [{params.get('portal_bucket_name', 'auto-generate')}]: ").strip()
         if portal_bucket and portal_bucket != "auto-generate":
             params["portal_bucket_name"] = portal_bucket
-            
+
         scripts_bucket = input(f"Scripts S3 bucket name [{params.get('scripts_bucket_name', 'auto-generate')}]: ").strip()
         if scripts_bucket and scripts_bucket != "auto-generate":
             params["scripts_bucket_name"] = scripts_bucket
@@ -604,12 +604,16 @@ class IncrementalDeploymentOrchestrator:
         if plan.get("adopt_resources"):
             for key, value in plan["adopt_resources"].items():
                 cdk_command.extend(["-c", f"{key}={value}"])
-        
+
         # Add deployment type context
-        cdk_command.extend([
-            "-c", f"deploy_mud={plan['parameters'].get('deploy_mud', True)}",
-            "-c", f"deploy_incremental={plan['parameters'].get('deploy_incremental', False)}"
-        ])
+        cdk_command.extend(
+            [
+                "-c",
+                f"deploy_mud={plan['parameters'].get('deploy_mud', True)}",
+                "-c",
+                f"deploy_incremental={plan['parameters'].get('deploy_incremental', False)}",
+            ]
+        )
 
         try:
             result = subprocess.run(cdk_command, cwd=self.cdk_dir, env=env, check=True)
@@ -788,9 +792,16 @@ class IncrementalDeploymentOrchestrator:
             print(f"Error deploying scripts: {err}")
             return False
 
-    def run(self, auto_approve: bool = False, skip_scripts: bool = False, analyze_only: bool = False,
-            deploy_mud: bool = False, deploy_incremental: bool = False, deploy_both: bool = False,
-            non_interactive: bool = False) -> bool:
+    def run(
+        self,
+        auto_approve: bool = False,
+        skip_scripts: bool = False,
+        analyze_only: bool = False,
+        deploy_mud: bool = False,
+        deploy_incremental: bool = False,
+        deploy_both: bool = False,
+        non_interactive: bool = False,
+    ) -> bool:
         """Run the incremental deployment.
 
         Args:
@@ -813,24 +824,24 @@ class IncrementalDeploymentOrchestrator:
             print(f"\nRegion: {self.region}")
             print("This wizard will guide you through deploying the")
             print("Eidolon Engine infrastructure to AWS.\n")
-        
+
         # Check prerequisites
         if not self.check_prerequisites():
             return False
 
         # Load and validate parameters
         params = self.load_parameters()
-        
+
         # Initialize config from template if config.yml doesn't exist
         if not self.config_manager.exists():
             template_path = Path(__file__).parent / "config.yml.template"
             if template_path.exists():
                 print("Initializing configuration from template...")
                 self.config_manager.merge_with_template(str(template_path))
-        
+
         # Handle deployment type selection
         params = self.handle_deployment_selection(params, deploy_mud, deploy_incremental, deploy_both, non_interactive)
-        
+
         if not auto_approve and not analyze_only and not non_interactive:
             params = self.prompt_missing_parameters(params)
 
@@ -855,7 +866,7 @@ class IncrementalDeploymentOrchestrator:
         print("\n========================================================")
         print("            DEPLOYMENT COMPLETED SUCCESSFULLY          ")
         print("========================================================")
-        
+
         if params.get("deploy_mud") and params.get("deploy_incremental"):
             print("\n[OK] MUD backend infrastructure deployed")
             print("[OK] Incremental Game infrastructure deployed")
@@ -866,14 +877,14 @@ class IncrementalDeploymentOrchestrator:
         elif params.get("deploy_incremental"):
             print("\n[OK] Incremental Game infrastructure deployed")
             print("[OK] Frontend build: Incremental")
-        
+
         print(f"\nConfiguration saved to: {self.config_manager.config_path}")
         print("\nNext steps:")
         print("1. Review the generated config.yml file")
         print("2. Deploy your game code using the CodeBuild project")
         if not skip_scripts:
             print("3. Lua scripts have been uploaded to S3")
-        
+
         return True
 
 
@@ -894,9 +905,15 @@ def main():
 
     orchestrator = IncrementalDeploymentOrchestrator(profile=args.profile, region=args.region)
 
-    success = orchestrator.run(auto_approve=args.auto_approve, skip_scripts=args.skip_scripts, analyze_only=args.analyze_only,
-                             deploy_mud=args.deploy_mud, deploy_incremental=args.deploy_incremental, 
-                             deploy_both=args.deploy_both, non_interactive=args.non_interactive)
+    success = orchestrator.run(
+        auto_approve=args.auto_approve,
+        skip_scripts=args.skip_scripts,
+        analyze_only=args.analyze_only,
+        deploy_mud=args.deploy_mud,
+        deploy_incremental=args.deploy_incremental,
+        deploy_both=args.deploy_both,
+        non_interactive=args.non_interactive,
+    )
 
     sys.exit(0 if success else 1)
 

@@ -278,13 +278,17 @@ class EidolonEngineApp:
             deploy_mud = str(deploy_mud).lower() in ["true", "1", "yes"]
         else:
             deploy_mud = os.getenv("DEPLOY_MUD", str(params.get("deploy_mud", True))).lower() in ["true", "1", "yes"]
-        
+
         deploy_incremental = self.app.node.try_get_context("deploy_incremental")
         if deploy_incremental is not None:
             deploy_incremental = str(deploy_incremental).lower() in ["true", "1", "yes"]
         else:
-            deploy_incremental = os.getenv("DEPLOY_INCREMENTAL", str(params.get("deploy_incremental", False))).lower() in ["true", "1", "yes"]
-        
+            deploy_incremental = os.getenv("DEPLOY_INCREMENTAL", str(params.get("deploy_incremental", False))).lower() in [
+                "true",
+                "1",
+                "yes",
+            ]
+
         print(f"Deployment configuration: MUD={deploy_mud}, Incremental={deploy_incremental}")
 
         # Create shared infrastructure stacks
@@ -408,7 +412,7 @@ class EidolonEngineApp:
                 frontend_type = "portal"
                 buildspec_path = params.get("portal_buildspec_path", "buildspec/portal.yml")
                 distribution_id_param = "portal_cloudfront_distribution_id"
-            
+
             # Create CloudFront stack
             self.cloudfront_stack = CloudFrontStack(
                 self.app,
