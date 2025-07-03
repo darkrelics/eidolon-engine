@@ -335,6 +335,7 @@ class EidolonEngineApp:
             lambda_bucket=self.s3_stack.lambda_bucket,
             shared_players_table=shared_tables["Players"],
             cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
+            allowed_cors_origins=params.get("shared_cors_origins", []),
             env=env,
         )
         self.base_lambda_stack.add_dependency(self.s3_stack)
@@ -364,6 +365,7 @@ class EidolonEngineApp:
                 domain_name=params.get("domain_name"),
                 hosted_zone_id=params.get("hosted_zone_id"),
                 api_subdomain=params.get("mud_api_subdomain", "mud-api"),
+                allowed_cors_origins=params.get("mud_cors_origins", []),
                 env=env,
             )
             self.mud_lambda_stack.add_dependency(self.base_lambda_stack)
@@ -391,6 +393,7 @@ class EidolonEngineApp:
                 domain_name=params.get("domain_name"),
                 hosted_zone_id=params.get("hosted_zone_id"),
                 api_subdomain=params.get("incremental_api_subdomain", "incremental-api"),
+                allowed_cors_origins=params.get("incremental_cors_origins", []),
                 env=env,
             )
             self.incremental_lambda_stack.add_dependency(self.base_lambda_stack)
@@ -529,6 +532,17 @@ class EidolonEngineApp:
                 raise ValueError("API.HostedZoneId is required in configuration")
         else:
             raise ValueError("API configuration section is required")
+
+        # Check for CORS configuration
+        if "CORS" in self.config:
+            cors_config = self.config["CORS"]
+            params["mud_cors_origins"] = cors_config.get("MUDOrigins", [])
+            params["incremental_cors_origins"] = cors_config.get("IncrementalOrigins", [])
+            # Shared CORS origins include all configured origins
+            all_origins = []
+            all_origins.extend(params["mud_cors_origins"])
+            all_origins.extend(params["incremental_cors_origins"])
+            params["shared_cors_origins"] = list(set(all_origins))  # Remove duplicates
 
         return params
 

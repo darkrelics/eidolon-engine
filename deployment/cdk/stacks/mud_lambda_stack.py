@@ -33,6 +33,7 @@ class MudLambdaStack(cdk.Stack):
         domain_name: str,
         hosted_zone_id: str,
         api_subdomain: str = "mud-api",
+        allowed_cors_origins: list[str] | None = None,
         **kwargs,
     ) -> None:
         """Initialize the MUD Lambda stack.
@@ -50,9 +51,13 @@ class MudLambdaStack(cdk.Stack):
             domain_name: Domain name for API (required)
             hosted_zone_id: Route53 hosted zone ID (required)
             api_subdomain: Subdomain for API (default: "mud-api")
+            allowed_cors_origins: List of allowed CORS origins
             **kwargs: Additional stack properties
         """
         super().__init__(scope, id, **kwargs)
+
+        # Store CORS origins for Lambda environment
+        self.cors_origins_str = ",".join(allowed_cors_origins) if allowed_cors_origins else ""
 
         # Import the shared dependencies layer
         shared_dependencies_layer = lambda_.LayerVersion.from_layer_version_arn(
@@ -91,6 +96,7 @@ class MudLambdaStack(cdk.Stack):
             memory_size=256,
             environment={
                 "ARCHETYPES_TABLE": mud_ARCHETYPES_TABLE,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Returns player-available archetypes for MUD",
         )
@@ -174,6 +180,7 @@ class MudLambdaStack(cdk.Stack):
             environment={
                 "players_table": shared_players_table,
                 "characters_table": mud_characters_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Lists all characters for MUD players",
         )
@@ -216,6 +223,7 @@ class MudLambdaStack(cdk.Stack):
                 "players_table": shared_players_table,
                 "characters_table": mud_characters_table,
                 "items_table": mud_items_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Deletes a character for MUD players",
         )
@@ -227,9 +235,10 @@ class MudLambdaStack(cdk.Stack):
             rest_api_name="mud-portal-api",
             description="API for MUD Portal game services",
             default_cors_preflight_options=apigateway.CorsOptions(
-                allow_origins=["*"],  # Configure based on your needs
+                allow_origins=allowed_cors_origins if allowed_cors_origins else ["*"],
                 allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
                 allow_headers=["Content-Type", "Authorization"],
+                allow_credentials=True if allowed_cors_origins else False,
             ),
         )
 

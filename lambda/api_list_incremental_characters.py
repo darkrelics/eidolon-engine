@@ -22,15 +22,16 @@ players table.
 """
 
 import json
-import logging
 import os
 
 import boto3
 from botocore.exceptions import ClientError
 
+from eidolon.cors_handler import cors_handler
+from eidolon.logger import get_logger
+
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
@@ -54,7 +55,7 @@ def get_player_characters(player_id):
         response = players_table.get_item(Key={"PlayerID": player_id})
 
         if "Item" not in response:
-            logger.info(f"No player record found for {player_id}")
+            logger.info("No player record found", player_id=player_id)
             return []
 
         player_data = response["Item"]
@@ -76,49 +77,66 @@ def get_player_characters(player_id):
         return characters
 
     except ClientError as err:
-        logger.error(f"Error listing characters: {err}")
+        logger.error("Error listing characters", error=err)
         raise
 
 
-def lambda_handler(event, _):
+def lambda_handler(event, context):
     """
     Lambda handler for listing incremental characters.
 
     Args:
         event: API Gateway event with Cognito authorizer
-        _: Lambda context (unused)
+        context: Lambda context
 
     Returns:
         API Gateway response
     """
+    # Log Lambda invocation
+    logger.log_lambda_event(event, context)
+
+    # Handle preflight requests
+    if event.get("httpMethod") == "OPTIONS":
+        return cors_handler.handle_preflight(event)
+
     try:
         # Extract player ID from Cognito authorizer
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
         player_id = claims.get("sub")
 
         if not player_id:
-            return {
-                "statusCode": 401,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Unauthorized"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 401,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Unauthorized"}),
+                },
+                event,
+            )
 
         # Get player's characters
         characters = get_player_characters(player_id)
 
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
+        logger.log_response(200)
+        return cors_handler.add_cors_headers(
+            {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json",
+                },
+                "body": json.dumps({"characters": characters, "count": len(characters)}),
             },
-            "body": json.dumps({"characters": characters, "count": len(characters)}),
-        }
+            event,
+        )
 
     except Exception as err:
-        logger.error(f"Unexpected error in lambda_handler: {err}")
-        return {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Internal server error"}),
-        }
+        logger.error("Unexpected error in lambda_handler", error=err)
+        logger.log_response(500)
+        return cors_handler.add_cors_headers(
+            {
+                "statusCode": 500,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"error": "Internal server error"}),
+            },
+            event,
+        )

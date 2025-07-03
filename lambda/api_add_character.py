@@ -22,19 +22,20 @@ allows duplicate names.
 """
 
 import json
-import logging
 import os
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
 
+from eidolon.cors_handler import cors_handler
+from eidolon.logger import get_logger
+
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
@@ -119,20 +120,20 @@ def get_archetype(archetype_name):
         response = archetypes_table.get_item(Key={"ArchetypeName": archetype_name})
 
         if "Item" not in response:
-            logger.warning(f"Archetype not found: {archetype_name}")
+            logger.warning("Archetype not found", archetype_name=archetype_name)
             return None
 
         archetype = response["Item"]
 
         # Check if archetype is available to players
         if not archetype.get("Player", False):
-            logger.warning(f"Archetype not available to players: {archetype_name}")
+            logger.warning("Archetype not available to players", archetype_name=archetype_name)
             return None
 
         return archetype
 
     except ClientError as err:
-        logger.error(f"Error retrieving archetype: {err}")
+        logger.error("Error retrieving archetype", error=err, archetype_name=archetype_name)
         return None
 
 
@@ -153,7 +154,7 @@ def check_character_limit(player_id):
         response = players_table.get_item(Key={"PlayerID": player_id})
 
         if "Item" not in response:
-            logger.error(f"Player not found: {player_id}")
+            logger.error("Player not found", player_id=player_id)
             return False, 0
 
         player = response["Item"]
@@ -163,7 +164,7 @@ def check_character_limit(player_id):
         return current_count < max_characters, current_count
 
     except ClientError as err:
-        logger.error(f"Error checking character limit: {err}")
+        logger.error("Error checking character limit", error=err, player_id=player_id)
         return False, 0
 
 
@@ -181,7 +182,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         Character ID if successful, None otherwise
     """
     character_id = generate_character_id()
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
 
     # Convert float values to Decimal for DynamoDB
     def convert_to_decimal(obj):
@@ -230,11 +231,11 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         # Create character record
         characters_table.put_item(Item=character_item)
 
-        logger.info(f"Created incremental character {character_name} ({character_id}) for player {player_id}")
+        logger.info("Created incremental character", character_name=character_name, character_id=character_id, player_id=player_id)
         return character_id
 
     except ClientError as err:
-        logger.error(f"Error creating character: {err}")
+        logger.error("Error creating character", error=err, character_name=character_name, player_id=player_id)
         # Attempt to rollback player update
         try:
             players_table.update_item(
@@ -243,111 +244,146 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
                 ExpressionAttributeNames={"#name": character_name},
             )
         except ClientError as rollback_err:
-            logger.error(f"Failed to rollback player update: {rollback_err}")
+            logger.error("Failed to rollback player update", error=rollback_err, character_name=character_name)
         return None
 
 
-def lambda_handler(event, _):
+def lambda_handler(event, context):
     """
     Lambda handler for incremental character creation API.
 
     Args:
         event: API Gateway event with Cognito authorizer
-        _: Lambda context (unused)
+        context: Lambda context
 
     Returns:
         API Gateway response
     """
+    # Log Lambda invocation
+    logger.log_lambda_event(event, context)
+
+    # Handle preflight requests
+    if event.get("httpMethod") == "OPTIONS":
+        return cors_handler.handle_preflight(event)
+
     try:
         # Extract player ID from Cognito authorizer
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
         player_id = claims.get("sub")
 
         if not player_id:
-            return {
-                "statusCode": 401,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Unauthorized"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 401,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Unauthorized"}),
+                },
+                event,
+            )
 
         # Parse request body
         try:
             body = json.loads(event.get("body", "{}"))
         except json.JSONDecodeError:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Invalid JSON"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Invalid JSON"}),
+                },
+                event,
+            )
 
         # Extract and validate required fields
         character_name = body.get("characterName", "").strip()
         archetype_name = body.get("archetype", "").strip()
 
         if not character_name or not archetype_name:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Missing required fields"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Missing required fields"}),
+                },
+                event,
+            )
 
         # Validate character name
         is_valid, error_msg = validate_character_name(character_name)
         if not is_valid:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": f"Invalid character name: {error_msg}"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": f"Invalid character name: {error_msg}"}),
+                },
+                event,
+            )
 
         # Check character limit
         can_create, current_count = check_character_limit(player_id)
         if not can_create:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": f"Character limit reached ({current_count})", "currentCount": current_count}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": f"Character limit reached ({current_count})", "currentCount": current_count}),
+                },
+                event,
+            )
 
         # Validate archetype
         archetype_data = get_archetype(archetype_name)
         if not archetype_data:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Invalid or unavailable archetype"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Invalid or unavailable archetype"}),
+                },
+                event,
+            )
 
         # Create the character
         character_id = create_character(player_id, character_name, archetype_name, archetype_data)
         if not character_id:
-            return {
-                "statusCode": 500,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Failed to create character"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 500,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Failed to create character"}),
+                },
+                event,
+            )
 
         # Return success response
-        return {
-            "statusCode": 201,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
+        logger.log_response(201)
+        return cors_handler.add_cors_headers(
+            {
+                "statusCode": 201,
+                "headers": {
+                    "Content-Type": "application/json",
+                },
+                "body": json.dumps(
+                    {
+                        "characterId": character_id,
+                        "characterName": character_name,
+                        "archetype": archetype_name,
+                        "message": "Character created successfully",
+                    }
+                ),
             },
-            "body": json.dumps(
-                {
-                    "characterId": character_id,
-                    "characterName": character_name,
-                    "archetype": archetype_name,
-                    "message": "Character created successfully",
-                }
-            ),
-        }
+            event,
+        )
 
     except Exception as err:
-        logger.error(f"Unexpected error in lambda_handler: {err}")
-        return {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Internal server error"}),
-        }
+        logger.error("Unexpected error in lambda_handler", error=err)
+        logger.log_response(500)
+        return cors_handler.add_cors_headers(
+            {
+                "statusCode": 500,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"error": "Internal server error"}),
+            },
+            event,
+        )

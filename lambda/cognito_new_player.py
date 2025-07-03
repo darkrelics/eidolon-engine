@@ -19,34 +19,37 @@ limitations under the License.
 Lambda function to create a new player record in DynamoDB after user registration.
 """
 
-import json
-import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import boto3
 from botocore.exceptions import ClientError
 
+from eidolon.logger import get_logger
+
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
 player_table = dynamodb.Table("players")  # type: ignore
 
 
-def lambda_handler(event, _) -> dict:
+def lambda_handler(event, context) -> dict:
     """
     Lambda function triggered by Cognito Post Confirmation.
     Creates a new player record in DynamoDB using the Cognito user's UUID.
 
     Args:
         event: The event dict from Cognito trigger
+        context: Lambda context
 
     Returns:
         The original event for Cognito to continue processing
     """
-    logger.info(f"Received post confirmation event: {json.dumps(event)}")
+    # Log Lambda invocation (without exposing sensitive event data)
+    logger.info(
+        "Cognito post-confirmation trigger", trigger_source=event.get("triggerSource"), user_pool_id=event.get("userPoolId")
+    )
 
     try:
         # Extract user attributes from the Cognito event
@@ -64,14 +67,14 @@ def lambda_handler(event, _) -> dict:
         try:
             response = player_table.get_item(Key={"PlayerID": user_uuid})
             if "Item" in response:
-                logger.info(f"Player already exists: {user_uuid}")
+                logger.info("Player already exists", user_id=user_uuid)
                 return event
         except ClientError as err:
-            logger.error(f"Error checking for existing player: {err}")
+            logger.error("Error checking for existing player", error=err, user_id=user_uuid)
             return event
 
         # Create new player entry
-        timestamp: str = datetime.utcnow().isoformat()
+        timestamp: str = datetime.now(timezone.utc).isoformat()
 
         player_item: dict = {
             "PlayerID": user_uuid,
@@ -84,9 +87,9 @@ def lambda_handler(event, _) -> dict:
 
         # Write to DynamoDB
         player_table.put_item(Item=player_item)
-        logger.info(f"Created new player record for: {email} with UUID: {user_uuid}")
+        logger.info("Created new player record", email=email, user_id=user_uuid)
 
     except Exception as err:
-        logger.error(f"Error processing user registration: {str(err)}")
+        logger.error("Error processing user registration", error=err)
 
     return event

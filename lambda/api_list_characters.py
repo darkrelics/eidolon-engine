@@ -21,15 +21,15 @@ Returns only character names and death status from the player table.
 """
 
 import json
-import logging
 import os
 
 import boto3
 from botocore.exceptions import ClientError
 
+from eidolon.logger import get_logger
+
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
