@@ -29,6 +29,7 @@ class IncrementalLambdaStack(cdk.Stack):
         domain_name: str,
         hosted_zone_id: str,
         api_subdomain: str = "incremental-api",
+        allowed_cors_origins: list[str] | None = None,
         **kwargs,
     ) -> None:
         """Initialize the Incremental Lambda stack.
@@ -45,9 +46,13 @@ class IncrementalLambdaStack(cdk.Stack):
             domain_name: Domain name for API (required)
             hosted_zone_id: Route53 hosted zone ID (required)
             api_subdomain: Subdomain for API (default: "incremental-api")
+            allowed_cors_origins: List of allowed CORS origins
             **kwargs: Additional stack properties
         """
         super().__init__(scope, id, **kwargs)
+        
+        # Store CORS origins for Lambda environment
+        self.cors_origins_str = ",".join(allowed_cors_origins) if allowed_cors_origins else ""
 
         # Import the shared dependencies layer
         # shared_dependencies_layer = lambda_.LayerVersion.from_layer_version_arn(
@@ -61,9 +66,10 @@ class IncrementalLambdaStack(cdk.Stack):
             rest_api_name="incremental-game-api",
             description="API for Incremental game services",
             default_cors_preflight_options=apigateway.CorsOptions(
-                allow_origins=["*"],  # Configure based on your needs
+                allow_origins=allowed_cors_origins if allowed_cors_origins else ["*"],
                 allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                 allow_headers=["Content-Type", "Authorization"],
+                allow_credentials=True if allowed_cors_origins else False,
             ),
         )
 

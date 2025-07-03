@@ -22,6 +22,7 @@ class BaseLambdaStack(cdk.Stack):
         lambda_bucket: s3.IBucket,
         shared_players_table: str,
         cognito_user_pool_arn: str,
+        allowed_cors_origins: list[str] | None = None,
         **kwargs,
     ) -> None:
         """Initialize the base Lambda stack.
@@ -32,9 +33,13 @@ class BaseLambdaStack(cdk.Stack):
             lambda_bucket: S3 bucket containing Lambda deployment packages
             shared_players_table: Name of the shared players DynamoDB table
             cognito_user_pool_arn: ARN of the Cognito user pool
+            allowed_cors_origins: List of allowed CORS origins
             **kwargs: Additional stack properties
         """
         super().__init__(scope, id, **kwargs)
+        
+        # Store CORS origins for Lambda environment
+        self.cors_origins_str = ",".join(allowed_cors_origins) if allowed_cors_origins else ""
 
         # Create Lambda layer for shared dependencies
         self.dependencies_layer = lambda_.LayerVersion(
@@ -77,6 +82,7 @@ class BaseLambdaStack(cdk.Stack):
             memory_size=256,
             environment={
                 "players_table": shared_players_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Creates new player records after Cognito user confirmation (shared)",
         )

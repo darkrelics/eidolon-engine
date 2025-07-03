@@ -31,6 +31,15 @@ API:
   HostedZoneId: Z1234567890ABC
   MUDSubdomain: mud-api         # mud-api.example.com
   IncrementalSubdomain: inc-api # inc-api.example.com
+  
+# CORS configuration for API origins
+CORS:
+  MUDOrigins:
+    - https://mud.example.com
+    - https://portal.example.com
+  IncrementalOrigins:
+    - https://incremental.example.com
+    - https://idle.example.com
 
 # CodeBuild configuration
 CodeBuild:

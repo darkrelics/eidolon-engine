@@ -28,6 +28,8 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
+from cors_handler import cors_handler
+
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -91,34 +93,46 @@ def lambda_handler(event, _):
     Returns:
         API Gateway response
     """
+    # Handle preflight requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return cors_handler.handle_preflight(event)
+    
     try:
         # Extract player ID from Cognito authorizer
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
         player_id = claims.get("sub")
 
         if not player_id:
-            return {
-                "statusCode": 401,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Unauthorized"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 401,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Unauthorized"}),
+                },
+                event
+            )
 
         # Get player's characters
         characters = get_player_characters(player_id)
 
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
+        return cors_handler.add_cors_headers(
+            {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json",
+                },
+                "body": json.dumps({"characters": characters, "count": len(characters)}),
             },
-            "body": json.dumps({"characters": characters, "count": len(characters)}),
-        }
+            event
+        )
 
     except Exception as err:
         logger.error(f"Unexpected error in lambda_handler: {err}")
-        return {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Internal server error"}),
-        }
+        return cors_handler.add_cors_headers(
+            {
+                "statusCode": 500,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"error": "Internal server error"}),
+            },
+            event
+        )

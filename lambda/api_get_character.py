@@ -28,6 +28,8 @@ from decimal import Decimal
 import boto3
 from botocore.exceptions import ClientError
 
+from cors_handler import cors_handler
+
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -125,37 +127,50 @@ def lambda_handler(event, _):
     Returns:
         API Gateway response
     """
+    # Handle preflight requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return cors_handler.handle_preflight(event)
+    
     try:
         # Extract player ID from Cognito authorizer
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
         player_id = claims.get("sub")
 
         if not player_id:
-            return {
-                "statusCode": 401,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Unauthorized"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 401,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Unauthorized"}),
+                },
+                event
+            )
 
         # Get character ID from query parameters
         character_id = event.get("queryStringParameters", {}).get("characterId", "").strip()
 
         if not character_id:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Missing character ID"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Missing character ID"}),
+                },
+                event
+            )
 
         # Get character data
         character = get_character_by_id(character_id, player_id)
 
         if not character:
-            return {
-                "statusCode": 404,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Character not found"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 404,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Character not found"}),
+                },
+                event
+            )
 
         # Get active segment if any
         active_segment = get_active_segment(player_id)
@@ -167,19 +182,24 @@ def lambda_handler(event, _):
         }
 
         # Return success response
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
+        return cors_handler.add_cors_headers(
+            {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json",
+                },
+                "body": json.dumps(response_data),
             },
-            "body": json.dumps(response_data),
-        }
+            event
+        )
 
     except Exception as err:
         logger.error(f"Unexpected error in lambda_handler: {err}")
-        return {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Internal server error"}),
-        }
+        return cors_handler.add_cors_headers(
+            {
+                "statusCode": 500,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"error": "Internal server error"}),
+            },
+            event
+        )

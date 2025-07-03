@@ -32,6 +32,8 @@ from decimal import Decimal
 import boto3
 from botocore.exceptions import ClientError
 
+from cors_handler import cors_handler
+
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -258,96 +260,126 @@ def lambda_handler(event, _):
     Returns:
         API Gateway response
     """
+    # Handle preflight requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return cors_handler.handle_preflight(event)
+    
     try:
         # Extract player ID from Cognito authorizer
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
         player_id = claims.get("sub")
 
         if not player_id:
-            return {
-                "statusCode": 401,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Unauthorized"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 401,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Unauthorized"}),
+                },
+                event
+            )
 
         # Parse request body
         try:
             body = json.loads(event.get("body", "{}"))
         except json.JSONDecodeError:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Invalid JSON"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Invalid JSON"}),
+                },
+                event
+            )
 
         # Extract and validate required fields
         character_name = body.get("characterName", "").strip()
         archetype_name = body.get("archetype", "").strip()
 
         if not character_name or not archetype_name:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Missing required fields"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Missing required fields"}),
+                },
+                event
+            )
 
         # Validate character name
         is_valid, error_msg = validate_character_name(character_name)
         if not is_valid:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": f"Invalid character name: {error_msg}"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": f"Invalid character name: {error_msg}"}),
+                },
+                event
+            )
 
         # Check character limit
         can_create, current_count = check_character_limit(player_id)
         if not can_create:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": f"Character limit reached ({current_count})", "currentCount": current_count}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": f"Character limit reached ({current_count})", "currentCount": current_count}),
+                },
+                event
+            )
 
         # Validate archetype
         archetype_data = get_archetype(archetype_name)
         if not archetype_data:
-            return {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Invalid or unavailable archetype"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Invalid or unavailable archetype"}),
+                },
+                event
+            )
 
         # Create the character
         character_id = create_character(player_id, character_name, archetype_name, archetype_data)
         if not character_id:
-            return {
-                "statusCode": 500,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Failed to create character"}),
-            }
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 500,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Failed to create character"}),
+                },
+                event
+            )
 
         # Return success response
-        return {
-            "statusCode": 201,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
+        return cors_handler.add_cors_headers(
+            {
+                "statusCode": 201,
+                "headers": {
+                    "Content-Type": "application/json",
+                },
+                "body": json.dumps(
+                    {
+                        "characterId": character_id,
+                        "characterName": character_name,
+                        "archetype": archetype_name,
+                        "message": "Character created successfully",
+                    }
+                ),
             },
-            "body": json.dumps(
-                {
-                    "characterId": character_id,
-                    "characterName": character_name,
-                    "archetype": archetype_name,
-                    "message": "Character created successfully",
-                }
-            ),
-        }
+            event
+        )
 
     except Exception as err:
         logger.error(f"Unexpected error in lambda_handler: {err}")
-        return {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Internal server error"}),
-        }
+        return cors_handler.add_cors_headers(
+            {
+                "statusCode": 500,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"error": "Internal server error"}),
+            },
+            event
+        )
