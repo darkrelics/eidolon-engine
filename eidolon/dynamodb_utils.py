@@ -51,7 +51,7 @@ class DynamoDBTables:
         """
         table_name = os.environ.get(env_var, default)
         try:
-            self._tables[name] = self.dynamodb.Table(table_name) # type: ignore
+            self._tables[name] = self.dynamodb.Table(table_name)  # type: ignore
             logger.debug(f"Initialized table {name}: {table_name}")
         except Exception as err:
             logger.error(f"Failed to initialize table {name}", error=err, table_name=table_name)

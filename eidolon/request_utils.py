@@ -81,7 +81,7 @@ def get_required_field(body: dict, field: str, field_type: type = str):
     return value, None
 
 
-def get_optional_field(body: dict, field: str, field_type: type = str, default = None):
+def get_optional_field(body: dict, field: str, field_type: type = str, default=None):
     """
     Extract optional field from request body with type validation.
 
