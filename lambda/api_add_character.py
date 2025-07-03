@@ -22,21 +22,20 @@ allows duplicate names.
 """
 
 import json
-import logging
 import os
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
 
-from cors_handler import cors_handler
+from eidolon.cors_handler import cors_handler
+from eidolon.logger import get_logger
 
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
@@ -121,20 +120,20 @@ def get_archetype(archetype_name):
         response = archetypes_table.get_item(Key={"ArchetypeName": archetype_name})
 
         if "Item" not in response:
-            logger.warning(f"Archetype not found: {archetype_name}")
+            logger.warning("Archetype not found", archetype_name=archetype_name)
             return None
 
         archetype = response["Item"]
 
         # Check if archetype is available to players
         if not archetype.get("Player", False):
-            logger.warning(f"Archetype not available to players: {archetype_name}")
+            logger.warning("Archetype not available to players", archetype_name=archetype_name)
             return None
 
         return archetype
 
     except ClientError as err:
-        logger.error(f"Error retrieving archetype: {err}")
+        logger.error("Error retrieving archetype", error=err, archetype_name=archetype_name)
         return None
 
 
@@ -155,7 +154,7 @@ def check_character_limit(player_id):
         response = players_table.get_item(Key={"PlayerID": player_id})
 
         if "Item" not in response:
-            logger.error(f"Player not found: {player_id}")
+            logger.error("Player not found", player_id=player_id)
             return False, 0
 
         player = response["Item"]
@@ -165,7 +164,7 @@ def check_character_limit(player_id):
         return current_count < max_characters, current_count
 
     except ClientError as err:
-        logger.error(f"Error checking character limit: {err}")
+        logger.error("Error checking character limit", error=err, player_id=player_id)
         return False, 0
 
 
@@ -183,7 +182,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         Character ID if successful, None otherwise
     """
     character_id = generate_character_id()
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
 
     # Convert float values to Decimal for DynamoDB
     def convert_to_decimal(obj):
@@ -232,11 +231,11 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         # Create character record
         characters_table.put_item(Item=character_item)
 
-        logger.info(f"Created incremental character {character_name} ({character_id}) for player {player_id}")
+        logger.info("Created incremental character", character_name=character_name, character_id=character_id, player_id=player_id)
         return character_id
 
     except ClientError as err:
-        logger.error(f"Error creating character: {err}")
+        logger.error("Error creating character", error=err, character_name=character_name, player_id=player_id)
         # Attempt to rollback player update
         try:
             players_table.update_item(
@@ -245,21 +244,24 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
                 ExpressionAttributeNames={"#name": character_name},
             )
         except ClientError as rollback_err:
-            logger.error(f"Failed to rollback player update: {rollback_err}")
+            logger.error("Failed to rollback player update", error=rollback_err, character_name=character_name)
         return None
 
 
-def lambda_handler(event, _):
+def lambda_handler(event, context):
     """
     Lambda handler for incremental character creation API.
 
     Args:
         event: API Gateway event with Cognito authorizer
-        _: Lambda context (unused)
+        context: Lambda context
 
     Returns:
         API Gateway response
     """
+    # Log Lambda invocation
+    logger.log_lambda_event(event, context)
+    
     # Handle preflight requests
     if event.get('httpMethod') == 'OPTIONS':
         return cors_handler.handle_preflight(event)
@@ -355,6 +357,7 @@ def lambda_handler(event, _):
             )
 
         # Return success response
+        logger.log_response(201)
         return cors_handler.add_cors_headers(
             {
                 "statusCode": 201,
@@ -374,7 +377,8 @@ def lambda_handler(event, _):
         )
 
     except Exception as err:
-        logger.error(f"Unexpected error in lambda_handler: {err}")
+        logger.error("Unexpected error in lambda_handler", error=err)
+        logger.log_response(500)
         return cors_handler.add_cors_headers(
             {
                 "statusCode": 500,

@@ -22,16 +22,16 @@ compliance by removing all traces of user data.
 """
 
 import json
-import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import boto3
 from botocore.exceptions import ClientError
 
+from eidolon.logger import get_logger
+
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
@@ -59,7 +59,7 @@ def delete_player_record(player_id):
     try:
         table = dynamodb.Table(TABLES_CONFIG["players"])
         table.delete_item(Key={"PlayerID": player_id})
-        logger.info(f"Deleted player record for {player_id}")
+        logger.info("Deleted player record", player_id=player_id)
         return True
     except ClientError as err:
         if err.response["Error"]["Code"] == "ResourceNotFoundException":
@@ -198,7 +198,7 @@ def delete_character_history(player_id):
                 table.delete_item(Key={"PlayerID": player_id, "Timestamp": item["Timestamp"]})
                 deleted_count += 1
             except ClientError as err:
-                logger.error(f"Error deleting history record: {err}")
+                logger.error("Error deleting history record", error=err)
 
         # Handle pagination
         while "LastEvaluatedKey" in response:
@@ -213,16 +213,16 @@ def delete_character_history(player_id):
                     table.delete_item(Key={"PlayerID": player_id, "Timestamp": item["Timestamp"]})
                     deleted_count += 1
                 except ClientError as err:
-                    logger.error(f"Error deleting history record: {err}")
+                    logger.error("Error deleting history record", error=err)
 
-        logger.info(f"Deleted {deleted_count} history records for {player_id}")
+        logger.info("Deleted history records", count=deleted_count, player_id=player_id)
         return deleted_count
 
     except ClientError as err:
         if err.response["Error"]["Code"] == "ResourceNotFoundException":
-            logger.warning(f"Character history table not found: {TABLES_CONFIG['character_history']}")
+            logger.warning("Character history table not found", table_name=TABLES_CONFIG['character_history'])
             return 0
-        logger.error(f"Error querying character history: {err}")
+        logger.error("Error querying character history", error=err)
         return deleted_count
 
 

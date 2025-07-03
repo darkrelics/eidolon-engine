@@ -9,40 +9,51 @@ phases:
 
   build:
     commands:
-      - echo Building Lambda functions
-      - cd lambda
-
-      # Package cognito_new_player function
-      - zip cognito_new_player.zip cognito_new_player.py
-
-      # Package api_get_archetypes function
-      - zip api_get_archetypes.zip api_get_archetypes.py
-
-      # Package api_save_character function
-      - zip api_save_character.zip api_save_character.py
-
-      # Package api_list_characters function
-      - zip api_list_characters.zip api_list_characters.py
-
-      # Package api_delete_character function
-      - zip api_delete_character.zip api_delete_character.py
-
-      - cd ..
+      - echo Building Lambda functions with shared eidolon module
+      
+      # Create temporary directory for packaging
+      - mkdir -p build_temp
+      
+      # Package each Lambda function with eidolon module
+      - |
+        for func in lambda/*.py; do
+          if [ -f "$func" ]; then
+            func_name=$(basename "$func" .py)
+            echo "Packaging $func_name..."
+            
+            # Create function-specific directory
+            mkdir -p "build_temp/$func_name"
+            
+            # Copy the Lambda function
+            cp "$func" "build_temp/$func_name/"
+            
+            # Copy the eidolon module if the function uses it
+            if grep -q "from eidolon" "$func"; then
+              cp -r eidolon "build_temp/$func_name/"
+            fi
+            
+            # Create the zip file
+            cd "build_temp/$func_name"
+            zip -r "../../lambda/$func_name.zip" .
+            cd ../..
+          fi
+        done
+      
+      # Clean up
+      - rm -rf build_temp
 
   post_build:
     commands:
       - echo Uploading Lambda functions to S3
-      - aws s3 cp lambda/cognito_new_player.zip s3://$S3_BUCKET/cognito_new_player.zip
-      - aws s3 cp lambda/api_get_archetypes.zip s3://$S3_BUCKET/api_get_archetypes.zip
-      - aws s3 cp lambda/api_save_character.zip s3://$S3_BUCKET/api_save_character.zip
-      - aws s3 cp lambda/api_list_characters.zip s3://$S3_BUCKET/api_list_characters.zip
-      - aws s3 cp lambda/api_delete_character.zip s3://$S3_BUCKET/api_delete_character.zip
+      - |
+        for zip_file in lambda/*.zip; do
+          if [ -f "$zip_file" ]; then
+            echo "Uploading $zip_file to S3..."
+            aws s3 cp "$zip_file" "s3://$S3_BUCKET/$(basename $zip_file)"
+          fi
+        done
 
 artifacts:
   files:
-    - lambda/cognito_new_player.zip
-    - lambda/api_get_archetypes.zip
-    - lambda/api_save_character.zip
-    - lambda/api_list_characters.zip
-    - lambda/api_delete_character.zip
+    - lambda/*.zip
   name: lambda-functions

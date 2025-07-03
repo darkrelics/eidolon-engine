@@ -21,18 +21,17 @@ Returns the full character data including active segments if any.
 """
 
 import json
-import logging
 import os
 from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
 
-from cors_handler import cors_handler
+from eidolon.cors_handler import cors_handler
+from eidolon.logger import get_logger
 
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
@@ -83,13 +82,13 @@ def get_character_by_id(character_id, player_id):
 
         # Verify ownership
         if character.get("PlayerID") != player_id:
-            logger.warning(f"Character {character_id} does not belong to player {player_id}")
+            logger.warning("Character ownership mismatch", character_id=character_id, player_id=player_id)
             return None
 
         return character
 
     except ClientError as err:
-        logger.error(f"Error getting character: {err}")
+        logger.error("Error getting character", error=err, character_id=character_id)
         return None
 
 
@@ -112,21 +111,24 @@ def get_active_segment(player_id):
         return None
 
     except ClientError as err:
-        logger.error(f"Error getting active segment: {err}")
+        logger.error("Error getting active segment", error=err, player_id=player_id)
         return None
 
 
-def lambda_handler(event, _):
+def lambda_handler(event, context):
     """
     Lambda handler for getting incremental character data.
 
     Args:
         event: API Gateway event with Cognito authorizer
-        _: Lambda context (unused)
+        context: Lambda context
 
     Returns:
         API Gateway response
     """
+    # Log Lambda invocation
+    logger.log_lambda_event(event, context)
+    
     # Handle preflight requests
     if event.get('httpMethod') == 'OPTIONS':
         return cors_handler.handle_preflight(event)
@@ -182,6 +184,7 @@ def lambda_handler(event, _):
         }
 
         # Return success response
+        logger.log_response(200)
         return cors_handler.add_cors_headers(
             {
                 "statusCode": 200,
@@ -194,7 +197,8 @@ def lambda_handler(event, _):
         )
 
     except Exception as err:
-        logger.error(f"Unexpected error in lambda_handler: {err}")
+        logger.error("Unexpected error in lambda_handler", error=err)
+        logger.log_response(500)
         return cors_handler.add_cors_headers(
             {
                 "statusCode": 500,
