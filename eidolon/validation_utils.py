@@ -80,7 +80,7 @@ def validate_email(email: str) -> bool:
     Returns:
         True if valid email format, False otherwise
     """
-    pattern = re.compile(r"^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$")
+    pattern = re.compile(r"^[\w\.-]+@([\w-]+\.)+[\w-]{2,63}$")
     return bool(pattern.match(email))
 
 
