@@ -5,6 +5,7 @@ This document describes the migration from subprocess-based CDK execution to a m
 ## Changes Made
 
 ### 1. New Module: `cdk_api_integration.py`
+
 - Created a new module that provides a clean Python API for CDK operations
 - Replaces direct subprocess calls with a structured interface
 - Provides better error handling and progress monitoring
@@ -12,16 +13,19 @@ This document describes the migration from subprocess-based CDK execution to a m
 ### 2. Key Features
 
 #### Enhanced Error Handling
+
 - Custom `CDKDeploymentError` exception with detailed error information
 - Proper error propagation and context
 - Better debugging information for failed deployments
 
 #### Progress Monitoring
+
 - Real-time progress reporting during deployment
 - `CDKProgressReporter` class for structured progress events
 - Parse and display CloudFormation events as they occur
 
 #### Improved Security
+
 - Proper AWS session and credential management
 - Environment variable handling for AWS profiles and regions
 - No credential leakage in error messages
@@ -72,6 +76,7 @@ python test_cdk_api.py
 ```
 
 This will test:
+
 - CDK CLI availability
 - Stack listing
 - Synthesis

@@ -83,11 +83,13 @@ cdk deploy base-lambda mud-lambda incremental-lambda
 ### CORS Errors in Browser Console
 
 1. Check that the origin is in the allowed list:
+
    ```bash
    cat config.yml | grep -A 5 CORS
    ```
 
 2. Verify Lambda environment variables:
+
    ```bash
    aws lambda get-function-configuration --function-name mud-list-characters | grep ALLOWED_ORIGINS
    ```

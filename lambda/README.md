@@ -7,16 +7,19 @@ This directory contains AWS Lambda functions for the Eidolon Engine API.
 Lambda functions are organized by their purpose:
 
 ### Cognito Triggers
+
 - `cognito_new_player.py` - Post-confirmation trigger to create player records
 - `cognito_delete_player.py` - Pre-deletion trigger to clean up player data
 
 ### MUD API Functions
+
 - `api_list_characters.py` - List all MUD characters for a player
 - `api_delete_character.py` - Delete a MUD character
 - `api_get_archetypes.py` - Get available character archetypes
 - `api_save_character.py` - Save character state
 
 ### Incremental Game API Functions
+
 - `api_list_incremental_characters.py` - List incremental game characters
 - `api_get_character.py` - Get incremental character details
 - `api_add_character.py` - Create new incremental character
@@ -36,6 +39,7 @@ These modules are automatically included in the deployment package during the bu
 Each Lambda function may use the following environment variables:
 
 ### Database Tables
+
 - `players_table` - Shared players DynamoDB table
 - `characters_table` - Game-specific characters table
 - `items_table` - MUD items table
@@ -44,6 +48,7 @@ Each Lambda function may use the following environment variables:
 - `ACTIVE_SEGMENTS_TABLE` - Active game segments table
 
 ### CORS Configuration
+
 - `ALLOWED_ORIGINS` - Comma-separated list of allowed CORS origins
 
 ## Deployment

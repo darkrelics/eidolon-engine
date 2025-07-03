@@ -10,10 +10,10 @@ phases:
   build:
     commands:
       - echo Building Lambda functions with shared eidolon module
-      
+
       # Create temporary directory for packaging
       - mkdir -p build_temp
-      
+
       # Package each Lambda function with eidolon module
       - |
         for func in lambda/*.py; do
@@ -38,7 +38,7 @@ phases:
             cd ../..
           fi
         done
-      
+
       # Clean up
       - rm -rf build_temp
 

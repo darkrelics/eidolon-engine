@@ -3,6 +3,7 @@
 ## Critical Priority (Blocking MVP)
 
 ### Backend Implementation
+
 - [ ] **Create Lambda Functions**
   - [ ] `api_start_segment.py` - Start a new story segment
   - [ ] `api_conclude_segment.py` - Complete a segment and calculate outcomes
@@ -25,6 +26,7 @@
   - [ ] Add Lambda-to-DynamoDB permissions
 
 ### Frontend Implementation
+
 - [ ] **Character Management**
   - [ ] Create character selection screen
   - [ ] Implement character creation flow with archetype selection
@@ -40,6 +42,7 @@
 ## High Priority (Required for MVP)
 
 ### API Integration
+
 - [ ] **Connect Flutter to Lambda**
   - [ ] Update API endpoints in `api_service.dart` to match Lambda functions
   - [ ] Add error handling for all API calls
@@ -53,6 +56,7 @@
   - [ ] Implement proper error state handling
 
 ### Story System
+
 - [ ] **S3 Integration**
   - [ ] Create S3 bucket for story storage in CDK
   - [ ] Implement story upload pipeline
@@ -68,6 +72,7 @@
 ## Medium Priority (Post-MVP)
 
 ### Game Features
+
 - [ ] **Character Progression**
   - [ ] Implement XP application system
   - [ ] Add skill advancement UI
@@ -81,6 +86,7 @@
   - [ ] Add resource rewards system
 
 ### Quality of Life
+
 - [ ] **UI Polish**
   - [ ] Add animations for segment transitions
   - [ ] Implement proper loading screens
@@ -96,6 +102,7 @@
 ## Low Priority (Future Enhancement)
 
 ### Advanced Features
+
 - [ ] **Social Features**
   - [ ] Add leaderboards
   - [ ] Implement friend system
@@ -109,6 +116,7 @@
   - [ ] Add cosmetic purchases
 
 ### Content Tools
+
 - [ ] **Story Editor**
   - [ ] Create web-based story editor
   - [ ] Add Twine import tool
@@ -118,6 +126,7 @@
 ## Technical Debt
 
 ### Testing
+
 - [ ] **Unit Tests**
   - [ ] Add tests for all Lambda functions
   - [ ] Create Flutter widget tests
@@ -125,6 +134,7 @@
   - [ ] Implement load testing
 
 ### Documentation
+
 - [ ] **API Documentation**
   - [ ] Document all Lambda endpoints
   - [ ] Create API usage examples
@@ -132,6 +142,7 @@
   - [ ] Write integration guide
 
 ### Security
+
 - [ ] **Security Hardening**
   - [ ] Implement input validation in all Lambdas
   - [ ] Add rate limiting to APIs
@@ -139,6 +150,7 @@
   - [ ] Implement data encryption
 
 ### Monitoring
+
 - [ ] **Observability**
   - [ ] Create CloudWatch dashboards
   - [ ] Set up alerts for errors

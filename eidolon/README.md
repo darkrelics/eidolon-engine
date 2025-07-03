@@ -18,6 +18,7 @@ eidolon/
 Provides centralized CORS (Cross-Origin Resource Sharing) configuration and validation for API responses.
 
 **Usage:**
+
 ```python
 from eidolon.cors_handler import cors_handler
 
@@ -25,14 +26,15 @@ def lambda_handler(event, context):
     # Handle preflight requests
     if event.get('httpMethod') == 'OPTIONS':
         return cors_handler.handle_preflight(event)
-    
+
     # Your lambda logic here...
-    
+
     # Add CORS headers to response
     return cors_handler.add_cors_headers(response, event)
 ```
 
 **Features:**
+
 - Validates request origins against allowed list
 - Handles preflight OPTIONS requests
 - Configurable via environment variables
