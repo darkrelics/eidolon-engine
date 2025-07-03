@@ -23,7 +23,7 @@ compliance by removing all traces of user data.
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 
 import boto3
 from botocore.exceptions import ClientError
@@ -220,7 +220,7 @@ def delete_character_history(player_id):
 
     except ClientError as err:
         if err.response["Error"]["Code"] == "ResourceNotFoundException":
-            logger.warning("Character history table not found", table_name=TABLES_CONFIG['character_history'])
+            logger.warning("Character history table not found", table_name=TABLES_CONFIG["character_history"])
             return 0
         logger.error("Error querying character history", error=err)
         return deleted_count

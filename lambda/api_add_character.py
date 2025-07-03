@@ -261,11 +261,11 @@ def lambda_handler(event, context):
     """
     # Log Lambda invocation
     logger.log_lambda_event(event, context)
-    
+
     # Handle preflight requests
-    if event.get('httpMethod') == 'OPTIONS':
+    if event.get("httpMethod") == "OPTIONS":
         return cors_handler.handle_preflight(event)
-    
+
     try:
         # Extract player ID from Cognito authorizer
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
@@ -278,7 +278,7 @@ def lambda_handler(event, context):
                     "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({"error": "Unauthorized"}),
                 },
-                event
+                event,
             )
 
         # Parse request body
@@ -291,7 +291,7 @@ def lambda_handler(event, context):
                     "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({"error": "Invalid JSON"}),
                 },
-                event
+                event,
             )
 
         # Extract and validate required fields
@@ -305,7 +305,7 @@ def lambda_handler(event, context):
                     "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({"error": "Missing required fields"}),
                 },
-                event
+                event,
             )
 
         # Validate character name
@@ -317,7 +317,7 @@ def lambda_handler(event, context):
                     "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({"error": f"Invalid character name: {error_msg}"}),
                 },
-                event
+                event,
             )
 
         # Check character limit
@@ -329,7 +329,7 @@ def lambda_handler(event, context):
                     "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({"error": f"Character limit reached ({current_count})", "currentCount": current_count}),
                 },
-                event
+                event,
             )
 
         # Validate archetype
@@ -341,7 +341,7 @@ def lambda_handler(event, context):
                     "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({"error": "Invalid or unavailable archetype"}),
                 },
-                event
+                event,
             )
 
         # Create the character
@@ -353,7 +353,7 @@ def lambda_handler(event, context):
                     "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({"error": "Failed to create character"}),
                 },
-                event
+                event,
             )
 
         # Return success response
@@ -373,7 +373,7 @@ def lambda_handler(event, context):
                     }
                 ),
             },
-            event
+            event,
         )
 
     except Exception as err:
@@ -385,5 +385,5 @@ def lambda_handler(event, context):
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Internal server error"}),
             },
-            event
+            event,
         )

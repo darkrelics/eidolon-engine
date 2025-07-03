@@ -7,7 +7,6 @@ applications by updating the config.yml file.
 """
 
 import argparse
-import sys
 from pathlib import Path
 
 import yaml
@@ -29,7 +28,7 @@ def load_config(config_path: str) -> dict:
         else:
             print("Template file not found. Creating minimal configuration...")
             return {}
-    
+
     with open(path, "r") as f:
         return yaml.safe_load(f) or {}
 
@@ -44,14 +43,14 @@ def configure_cors(config: dict, app_type: str, origins: list[str], replace: boo
     """Configure CORS origins for specified application type."""
     if "CORS" not in config:
         config["CORS"] = {}
-    
+
     if app_type == "mud":
         key = "MUDOrigins"
     elif app_type == "incremental":
         key = "IncrementalOrigins"
     else:
         raise ValueError(f"Unknown application type: {app_type}")
-    
+
     if replace or key not in config["CORS"]:
         config["CORS"][key] = origins
     else:
@@ -59,59 +58,34 @@ def configure_cors(config: dict, app_type: str, origins: list[str], replace: boo
         existing = set(config["CORS"][key])
         existing.update(origins)
         config["CORS"][key] = list(existing)
-    
+
     return config
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Configure CORS origins for Eidolon Engine deployments"
-    )
+    parser = argparse.ArgumentParser(description="Configure CORS origins for Eidolon Engine deployments")
+    parser.add_argument("--config", default="config.yml", help="Path to configuration file (default: config.yml)")
+    parser.add_argument("--type", choices=["mud", "incremental", "both"], required=True, help="Application type to configure")
+    parser.add_argument("--origins", nargs="+", required=True, help="CORS origins to allow (e.g., https://example.com)")
+    parser.add_argument("--replace", action="store_true", help="Replace existing origins instead of adding to them")
+    parser.add_argument("--cloudfront", help="Add CloudFront distribution URL as an allowed origin")
     parser.add_argument(
-        "--config",
-        default="config.yml",
-        help="Path to configuration file (default: config.yml)"
+        "--localhost", action="store_true", help="Add localhost origins for development (http://localhost:3000, etc.)"
     )
-    parser.add_argument(
-        "--type",
-        choices=["mud", "incremental", "both"],
-        required=True,
-        help="Application type to configure"
-    )
-    parser.add_argument(
-        "--origins",
-        nargs="+",
-        required=True,
-        help="CORS origins to allow (e.g., https://example.com)"
-    )
-    parser.add_argument(
-        "--replace",
-        action="store_true",
-        help="Replace existing origins instead of adding to them"
-    )
-    parser.add_argument(
-        "--cloudfront",
-        help="Add CloudFront distribution URL as an allowed origin"
-    )
-    parser.add_argument(
-        "--localhost",
-        action="store_true",
-        help="Add localhost origins for development (http://localhost:3000, etc.)"
-    )
-    
+
     args = parser.parse_args()
-    
+
     # Load existing configuration
     config = load_config(args.config)
-    
+
     # Prepare origins list
     origins = list(args.origins)
-    
+
     # Add CloudFront origin if specified
     if args.cloudfront:
         origins.append(f"https://{args.cloudfront}")
-    
+
     # Add localhost origins if specified
     if args.localhost:
         localhost_origins = [
@@ -123,20 +97,20 @@ def main():
             "http://127.0.0.1:8000",
         ]
         origins.extend(localhost_origins)
-    
+
     # Remove duplicates
     origins = list(set(origins))
-    
+
     # Configure CORS
     if args.type == "both":
         config = configure_cors(config, "mud", origins, args.replace)
         config = configure_cors(config, "incremental", origins, args.replace)
     else:
         config = configure_cors(config, args.type, origins, args.replace)
-    
+
     # Save configuration
     save_config(args.config, config)
-    
+
     # Display configured origins
     print(f"CORS origins configured for {args.type}:")
     if args.type == "both":
@@ -150,7 +124,7 @@ def main():
         key = "MUDOrigins" if args.type == "mud" else "IncrementalOrigins"
         for origin in config["CORS"][key]:
             print(f"  - {origin}")
-    
+
     print(f"\nConfiguration saved to {args.config}")
     print("\nTo deploy with these CORS settings, run:")
     print("  cdk deploy --all")

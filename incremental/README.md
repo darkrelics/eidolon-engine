@@ -155,6 +155,7 @@ Challenges in story segments use the MUD's XP mechanics:
 ### Segment Resolution
 
 1. **StartSegment**: Player begins a story segment
+
    - Lambda validates character can attempt it
    - Sets timer based on segment duration
    - Returns end timestamp to client

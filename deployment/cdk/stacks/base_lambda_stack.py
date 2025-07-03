@@ -37,7 +37,7 @@ class BaseLambdaStack(cdk.Stack):
             **kwargs: Additional stack properties
         """
         super().__init__(scope, id, **kwargs)
-        
+
         # Store CORS origins for Lambda environment
         self.cors_origins_str = ",".join(allowed_cors_origins) if allowed_cors_origins else ""
 

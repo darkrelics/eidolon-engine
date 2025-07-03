@@ -5,7 +5,6 @@ allowing for selective updates without full redeployment.
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -43,13 +42,9 @@ class IncrementalDeploymentOrchestrator:
 
         # CDK app directory
         self.cdk_dir = Path(__file__).parent / "cdk"
-        
+
         # Initialize CDK API integration
-        self.cdk_api = CDKApiIntegration(
-            cdk_dir=str(self.cdk_dir),
-            profile=profile,
-            region=region
-        )
+        self.cdk_api = CDKApiIntegration(cdk_dir=str(self.cdk_dir), profile=profile, region=region)
 
     def check_prerequisites(self) -> bool:
         """Check if all prerequisites are met for deployment.
@@ -585,55 +580,55 @@ class IncrementalDeploymentOrchestrator:
 
         # Prepare CDK context
         context = {}
-        
+
         # Add adopted resources to context
         if plan.get("adopt_resources"):
             print("\nPreparing to adopt existing resources...")
             for key, value in plan["adopt_resources"].items():
                 context[key] = value
                 print(f"  - {key}: {value}")
-        
+
         # Add deployment type context
         context["deploy_mud"] = str(plan["parameters"].get("deploy_mud", True))
         context["deploy_incremental"] = str(plan["parameters"].get("deploy_incremental", False))
 
         # Deploy using CDK Python API
         print("\nDeploying infrastructure with CDK...")
-        
+
         try:
             # Create progress reporter
             progress_reporter = CDKProgressReporter()
-            
+
             # Execute deployment
             result = self.cdk_api.deploy(
                 stacks=None,  # Deploy all stacks
                 context=context,
                 require_approval="never" if auto_approve else "broadening",
-                progress_callback=progress_reporter
+                progress_callback=progress_reporter,
             )
-            
+
             if result["success"]:
                 print("\n[SUCCESS] Deployment completed successfully!")
-                
+
                 # Update configuration file with outputs
                 self.update_configuration(plan["parameters"])
-                
+
                 # Record deployment in state
                 self.state_manager.add_deployment_event(
-                    "deployment_complete", 
+                    "deployment_complete",
                     {
-                        "stacks_created": plan["create_stacks"], 
+                        "stacks_created": plan["create_stacks"],
                         "stacks_updated": plan["update_stacks"],
-                        "outputs": result.get("outputs", {})
-                    }
+                        "outputs": result.get("outputs", {}),
+                    },
                 )
                 self.state_manager.save_state()
-                
+
                 return True
             else:
                 print("\n[ERROR] Deployment failed!")
                 return False
-                
+
         except CDKDeploymentError as err:
             print(f"\n[ERROR] Deployment failed: {err}")
             if err.details:

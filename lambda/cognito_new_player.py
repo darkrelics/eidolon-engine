@@ -19,7 +19,6 @@ limitations under the License.
 Lambda function to create a new player record in DynamoDB after user registration.
 """
 
-import json
 from datetime import datetime, timezone
 
 import boto3
@@ -49,9 +48,7 @@ def lambda_handler(event, context) -> dict:
     """
     # Log Lambda invocation (without exposing sensitive event data)
     logger.info(
-        "Cognito post-confirmation trigger",
-        trigger_source=event.get('triggerSource'),
-        user_pool_id=event.get('userPoolId')
+        "Cognito post-confirmation trigger", trigger_source=event.get("triggerSource"), user_pool_id=event.get("userPoolId")
     )
 
     try:

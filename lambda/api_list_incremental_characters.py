@@ -94,11 +94,11 @@ def lambda_handler(event, context):
     """
     # Log Lambda invocation
     logger.log_lambda_event(event, context)
-    
+
     # Handle preflight requests
-    if event.get('httpMethod') == 'OPTIONS':
+    if event.get("httpMethod") == "OPTIONS":
         return cors_handler.handle_preflight(event)
-    
+
     try:
         # Extract player ID from Cognito authorizer
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
@@ -111,12 +111,12 @@ def lambda_handler(event, context):
                     "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({"error": "Unauthorized"}),
                 },
-                event
+                event,
             )
 
         # Get player's characters
         characters = get_player_characters(player_id)
-        
+
         logger.log_response(200)
         return cors_handler.add_cors_headers(
             {
@@ -126,7 +126,7 @@ def lambda_handler(event, context):
                 },
                 "body": json.dumps({"characters": characters, "count": len(characters)}),
             },
-            event
+            event,
         )
 
     except Exception as err:
@@ -138,5 +138,5 @@ def lambda_handler(event, context):
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Internal server error"}),
             },
-            event
+            event,
         )

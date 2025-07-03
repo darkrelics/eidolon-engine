@@ -11,10 +11,10 @@ from decimal import Decimal
 def decimal_to_json_serializable(obj):
     """
     Convert Decimal types to JSON serializable format.
-    
+
     Args:
         obj: Object to convert
-        
+
     Returns:
         JSON serializable object
     """
@@ -30,22 +30,22 @@ def decimal_to_json_serializable(obj):
 def success_response(data: dict | list | str | None = None, status_code: int = 200, headers: dict | None = None) -> dict:
     """
     Create standardized success response for API Gateway.
-    
+
     Args:
         data: Response data (will be JSON encoded)
         status_code: HTTP status code (default 200)
         headers: Additional headers to include
-        
+
     Returns:
         API Gateway response dict
     """
     response_headers = {
         "Content-Type": "application/json",
     }
-    
+
     if headers:
         response_headers.update(headers)
-    
+
     # Handle different data types
     if data is None:
         body = json.dumps({"success": True})
@@ -55,7 +55,7 @@ def success_response(data: dict | list | str | None = None, status_code: int = 2
         # Convert any Decimal types for JSON serialization
         data = decimal_to_json_serializable(data)
         body = json.dumps(data)
-    
+
     return {
         "statusCode": status_code,
         "headers": response_headers,
@@ -66,28 +66,28 @@ def success_response(data: dict | list | str | None = None, status_code: int = 2
 def error_response(error: str, status_code: int = 400, details: dict | None = None, headers: dict | None = None) -> dict:
     """
     Create standardized error response for API Gateway.
-    
+
     Args:
         error: Error message
         status_code: HTTP status code (default 400)
         details: Additional error details
         headers: Additional headers to include
-        
+
     Returns:
         API Gateway response dict
     """
     response_headers = {
         "Content-Type": "application/json",
     }
-    
+
     if headers:
         response_headers.update(headers)
-    
+
     error_body = {"error": error}
-    
+
     if details:
         error_body.update(details)
-    
+
     return {
         "statusCode": status_code,
         "headers": response_headers,
@@ -98,25 +98,25 @@ def error_response(error: str, status_code: int = 400, details: dict | None = No
 def created_response(data: dict, location: str | None = None) -> dict:
     """
     Create standardized 201 Created response.
-    
+
     Args:
         data: Created resource data
         location: Optional Location header value
-        
+
     Returns:
         API Gateway response dict
     """
     headers = {}
     if location:
         headers["Location"] = location
-    
+
     return success_response(data, status_code=201, headers=headers)
 
 
 def no_content_response() -> dict:
     """
     Create standardized 204 No Content response.
-    
+
     Returns:
         API Gateway response dict
     """
@@ -130,10 +130,10 @@ def no_content_response() -> dict:
 def not_found_response(resource: str | None = None) -> dict:
     """
     Create standardized 404 Not Found response.
-    
+
     Args:
         resource: Optional resource description
-        
+
     Returns:
         API Gateway response dict
     """
@@ -144,37 +144,29 @@ def not_found_response(resource: str | None = None) -> dict:
 def validation_error_response(field: str, message: str) -> dict:
     """
     Create standardized validation error response.
-    
+
     Args:
         field: Field that failed validation
         message: Validation error message
-        
+
     Returns:
         API Gateway response dict
     """
-    return error_response(
-        "Validation error",
-        status_code=400,
-        details={"field": field, "message": message}
-    )
+    return error_response("Validation error", status_code=400, details={"field": field, "message": message})
 
 
 def internal_error_response(request_id: str | None = None) -> dict:
     """
     Create standardized 500 Internal Server Error response.
-    
+
     Args:
         request_id: Optional request ID for error tracking
-        
+
     Returns:
         API Gateway response dict
     """
     details = {}
     if request_id:
         details["request_id"] = request_id
-    
-    return error_response(
-        "Internal server error",
-        status_code=500,
-        details=details
-    )
+
+    return error_response("Internal server error", status_code=500, details=details)

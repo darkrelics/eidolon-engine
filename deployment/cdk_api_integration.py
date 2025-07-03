@@ -5,13 +5,11 @@ replacing subprocess calls with direct Python API usage for better
 error handling, progress monitoring, and integration.
 """
 
-import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-import aws_cdk as cdk
 import boto3
 
 
@@ -173,7 +171,7 @@ class CDKApiIntegration:
                stacks: list[str] | None = None,
                context: dict | None = None,
                require_approval: str = "broadening",
-               progress_callback: callable | None = None) -> dict:
+               progress_callback = None) -> dict:
         """Deploy CDK stacks with enhanced progress monitoring.
         
         Args:
@@ -220,7 +218,7 @@ class CDKApiIntegration:
             
             # Monitor output and call progress callback
             deployed_stacks = []
-            for line in iter(process.stdout.readline, ''):
+            for line in iter(process.stdout.readline, ''): # type: ignore
                 line = line.rstrip()
                 if line:
                     print(line)
@@ -463,7 +461,6 @@ class CDKProgressReporter:
             event: CDK progress event
         """
         # Extract event information
-        event_type = event.get("type", "")
         stack_name = event.get("stackName", "")
         logical_id = event.get("logicalId", "")
         status = event.get("status", "")

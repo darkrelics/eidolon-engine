@@ -532,7 +532,7 @@ class EidolonEngineApp:
                 raise ValueError("API.HostedZoneId is required in configuration")
         else:
             raise ValueError("API configuration section is required")
-        
+
         # Check for CORS configuration
         if "CORS" in self.config:
             cors_config = self.config["CORS"]

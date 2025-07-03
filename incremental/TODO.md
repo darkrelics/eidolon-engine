@@ -5,6 +5,7 @@
 ### Backend Implementation
 
 - [ ] **Create Lambda Functions**
+
   - [ ] `api_start_segment.py` - Start a new story segment
   - [ ] `api_conclude_segment.py` - Complete a segment and calculate outcomes
   - [ ] `api_create_character.py` - Create new incremental character
@@ -13,6 +14,7 @@
   - [ ] `api_character_rest.py` - Rest action for character
 
 - [ ] **DynamoDB Table Creation**
+
   - [ ] Add `incremental_characters` table definition to CDK
   - [ ] Add `active_segments` table definition to CDK
   - [ ] Add `story_progress` table definition to CDK
@@ -28,6 +30,7 @@
 ### Frontend Implementation
 
 - [ ] **Character Management**
+
   - [ ] Create character selection screen
   - [ ] Implement character creation flow with archetype selection
   - [ ] Connect to backend character APIs
@@ -44,6 +47,7 @@
 ### API Integration
 
 - [ ] **Connect Flutter to Lambda**
+
   - [ ] Update API endpoints in `api_service.dart` to match Lambda functions
   - [ ] Add error handling for all API calls
   - [ ] Implement retry logic for failed requests
@@ -58,6 +62,7 @@
 ### Story System
 
 - [ ] **S3 Integration**
+
   - [ ] Create S3 bucket for story storage in CDK
   - [ ] Implement story upload pipeline
   - [ ] Add Lambda functions to read stories from S3
@@ -74,6 +79,7 @@
 ### Game Features
 
 - [ ] **Character Progression**
+
   - [ ] Implement XP application system
   - [ ] Add skill advancement UI
   - [ ] Create attribute improvement mechanics
@@ -88,6 +94,7 @@
 ### Quality of Life
 
 - [ ] **UI Polish**
+
   - [ ] Add animations for segment transitions
   - [ ] Implement proper loading screens
   - [ ] Create settings screen
@@ -104,6 +111,7 @@
 ### Advanced Features
 
 - [ ] **Social Features**
+
   - [ ] Add leaderboards
   - [ ] Implement friend system
   - [ ] Create guild mechanics
@@ -194,6 +202,7 @@
 ## Development Guidelines
 
 1. **Commit Prefixes**:
+
    - `feat:` - New features
    - `fix:` - Bug fixes
    - `docs:` - Documentation updates
@@ -201,11 +210,13 @@
    - `refactor:` - Code refactoring
 
 2. **Branch Naming**:
+
    - `feature/incremental-[feature-name]`
    - `bugfix/incremental-[issue-number]`
    - `hotfix/incremental-[description]`
 
 3. **Testing Requirements**:
+
    - All Lambda functions must have unit tests
    - Flutter screens must have widget tests
    - Integration tests for critical user flows
