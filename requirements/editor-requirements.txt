@@ -2,7 +2,7 @@
 jupyter==1.1.1
 matplotlib==3.10.1
 networkx==3.4.2
-notebook==7.4.3
+notebook==7.4.4
 numpy==2.2.4
 pyyaml==6.0.2
 voila==0.5.8
@@ -86,7 +86,7 @@ referencing==0.36.2
 requests==2.32.4
 rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
-rpds-py==0.25.1
+rpds-py==0.26.0
 send2trash==1.8.3
 setuptools==80.9.0
 six==1.17.0
