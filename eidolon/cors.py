@@ -38,7 +38,7 @@ class CorsHandler:
         # Max age for preflight cache
         self.max_age = os.environ.get("CORS_MAX_AGE", "86400")  # 24 hours default
 
-    def get_cors_headers(self, event: dict) -> dict[str, str]:
+    def get_cors_headers(self, event: dict) -> dict:
         """
         Get CORS headers based on the request origin.
 

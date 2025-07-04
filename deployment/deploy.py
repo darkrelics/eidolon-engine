@@ -18,7 +18,7 @@ from state_manager import ConfigurationManager, DeploymentState
 class IncrementalDeploymentOrchestrator:
     """Orchestrates incremental infrastructure deployments."""
 
-    def __init__(self, profile: str | None = None, region: str = "us-east-1"):
+    def __init__(self, profile=None, region: str = "us-east-1"):
         """Initialize the deployment orchestrator.
 
         Args:

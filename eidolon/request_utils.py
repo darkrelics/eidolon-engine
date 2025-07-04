@@ -8,7 +8,7 @@ Lambda functions.
 import json
 
 
-def parse_json_body(event: dict) -> tuple[dict | None, dict | None]:
+def parse_json_body(event: dict) -> tuple:
     """
     Parse JSON body from API Gateway event.
 
@@ -111,7 +111,7 @@ def get_optional_field(body: dict, field: str, field_type: type = str, default=N
     return value
 
 
-def get_query_parameter(event: dict, param: str, required: bool = False) -> tuple[str | None, str | None]:
+def get_query_parameter(event: dict, param: str, required: bool = False) -> tuple:
     """
     Extract query parameter from API Gateway event.
 
@@ -135,7 +135,7 @@ def get_query_parameter(event: dict, param: str, required: bool = False) -> tupl
     return value if value else None, None
 
 
-def get_path_parameter(event: dict, param: str) -> str | None:
+def get_path_parameter(event: dict, param: str):
     """
     Extract path parameter from API Gateway event.
 
@@ -150,7 +150,7 @@ def get_path_parameter(event: dict, param: str) -> str | None:
     return params.get(param)
 
 
-def get_header(event: dict, header: str, required: bool = False) -> tuple[str | None, str | None]:
+def get_header(event: dict, header: str, required: bool = False) -> tuple:
     """
     Extract header from API Gateway event.
 

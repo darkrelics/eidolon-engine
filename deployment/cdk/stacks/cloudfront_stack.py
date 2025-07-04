@@ -17,7 +17,7 @@ class CloudFrontStack(Stack):
         scope: Construct,
         construct_id: str,
         portal_bucket: s3.IBucket,
-        existing_distribution_id: str | None = None,
+        existing_distribution_id=None,
         **kwargs,
     ) -> None:
         """Initialize CloudFront stack.

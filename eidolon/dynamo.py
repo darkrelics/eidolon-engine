@@ -142,7 +142,7 @@ def decimal_to_float(obj):
     return obj
 
 
-def safe_get_item(table, key: dict) -> dict | None:
+def safe_get_item(table, key: dict):
     """
     Safely get an item from DynamoDB table.
 
@@ -180,9 +180,7 @@ def safe_put_item(table, item: dict) -> bool:
         return False
 
 
-def safe_update_item(
-    table, key: dict, update_expression: str, expression_values: dict, expression_names: dict | None = None
-) -> bool:
+def safe_update_item(table, key: dict, update_expression: str, expression_values: dict, expression_names=None) -> bool:
     """
     Safely update an item in DynamoDB table.
 
@@ -232,7 +230,7 @@ def safe_delete_item(table, key: dict) -> bool:
         return False
 
 
-def batch_get_items(table, keys: list[dict]) -> list[dict]:
+def batch_get_items(table, keys: list) -> list:
     """
     Batch get multiple items from DynamoDB table.
 

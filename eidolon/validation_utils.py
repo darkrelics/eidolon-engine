@@ -12,7 +12,7 @@ MIN_NAME_LENGTH = 4
 MAX_NAME_LENGTH = 20
 
 
-def validate_character_name(name: str) -> tuple[bool, str | None]:
+def validate_character_name(name: str) -> tuple:
     """
     Validate character name according to game rules.
 
@@ -98,7 +98,7 @@ def validate_uuid(uuid_str: str) -> bool:
     return bool(pattern.match(uuid_str))
 
 
-def validate_positive_integer(value: any, min_value: int = 1, max_value: int | None = None) -> tuple[bool, str | None]:
+def validate_positive_integer(value, min_value: int = 1, max_value=None) -> tuple:
     """
     Validate positive integer within range.
 
@@ -122,7 +122,7 @@ def validate_positive_integer(value: any, min_value: int = 1, max_value: int | N
     return True, None
 
 
-def validate_enum(value: str, allowed_values: list[str], case_sensitive: bool = True) -> tuple[bool, str | None]:
+def validate_enum(value: str, allowed_values: list, case_sensitive: bool = True) -> tuple:
     """
     Validate value is in allowed list.
 
@@ -144,7 +144,7 @@ def validate_enum(value: str, allowed_values: list[str], case_sensitive: bool = 
     return True, None
 
 
-def sanitize_string(value: str, max_length: int | None = None) -> str:
+def sanitize_string(value: str, max_length=None) -> str:
     """
     Sanitize user input string.
 
@@ -168,7 +168,7 @@ def sanitize_string(value: str, max_length: int | None = None) -> str:
     return value
 
 
-def validate_password_strength(password: str) -> tuple[bool, str | None]:
+def validate_password_strength(password: str) -> tuple:
     """
     Validate password meets security requirements.
 

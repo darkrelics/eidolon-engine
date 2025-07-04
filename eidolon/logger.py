@@ -16,7 +16,7 @@ from functools import wraps
 class LambdaLogger:
     """Enhanced logger for AWS Lambda functions with structured logging support."""
 
-    def __init__(self, name: str, level: str | None = None):
+    def __init__(self, name: str, level=None):
         """
         Initialize Lambda logger with consistent configuration.
 
@@ -42,7 +42,7 @@ class LambdaLogger:
         self.logger.propagate = False
 
         # Store context for structured logging
-        self.context: dict[str, any] = {}
+        self.context: dict = {}
 
     def _get_formatter(self) -> logging.Formatter:
         """Get appropriate formatter based on environment."""
@@ -91,7 +91,7 @@ class LambdaLogger:
         """Log warning message with optional context."""
         self._log_with_context(logging.WARNING, message, **kwargs)
 
-    def error(self, message: str, error: Exception | None = None, **kwargs) -> None:
+    def error(self, message: str, error=None, **kwargs) -> None:
         """
         Log error message with optional exception and context.
 
@@ -109,7 +109,7 @@ class LambdaLogger:
         """Log critical message with optional context."""
         self._log_with_context(logging.CRITICAL, message, **kwargs)
 
-    def log_lambda_event(self, event: dict[str, any], context: any) -> None:
+    def log_lambda_event(self, event: dict, context) -> None:
         """
         Log Lambda invocation details.
 
@@ -135,7 +135,7 @@ class LambdaLogger:
         else:
             self.info("Lambda invocation", event_source=event.get("source", "unknown"))
 
-    def log_response(self, status_code: int, response_time_ms: float | None = None) -> None:
+    def log_response(self, status_code: int, response_time_ms=None) -> None:
         """
         Log API response details.
 
@@ -161,8 +161,9 @@ class JsonFormatter(logging.Formatter):
         }
 
         # Add context if available
-        if hasattr(record, "context"):
-            log_obj["context"] = record.context
+        context = getattr(record, "context", None)
+        if context is not None:
+            log_obj["context"] = context
 
         # Add exception info if present
         if record.exc_info:
@@ -171,7 +172,7 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_obj, default=str)
 
 
-def get_logger(name: str, level: str | None = None) -> LambdaLogger:
+def get_logger(name: str, level=None) -> LambdaLogger:
     """
     Get a configured logger instance.
 
@@ -185,7 +186,7 @@ def get_logger(name: str, level: str | None = None) -> LambdaLogger:
     return LambdaLogger(name, level)
 
 
-def log_duration(logger: LambdaLogger | None = None):
+def log_duration(logger=None):
     """
     Decorator to log function execution duration.
 
@@ -220,7 +221,7 @@ def log_duration(logger: LambdaLogger | None = None):
     return decorator
 
 
-def sanitize_error(error: str | Exception) -> str:
+def sanitize_error(error) -> str:
     """
     Sanitize error messages to avoid exposing sensitive information.
 

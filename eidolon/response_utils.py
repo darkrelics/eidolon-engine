@@ -27,7 +27,7 @@ def decimal_to_json_serializable(obj):
     return obj
 
 
-def success_response(data: dict | list | str | None = None, status_code: int = 200, headers: dict | None = None) -> dict:
+def success_response(data=None, status_code: int = 200, headers=None) -> dict:
     """
     Create standardized success response for API Gateway.
 
@@ -63,7 +63,7 @@ def success_response(data: dict | list | str | None = None, status_code: int = 2
     }
 
 
-def error_response(error: str, status_code: int = 400, details: dict | None = None, headers: dict | None = None) -> dict:
+def error_response(error: str, status_code: int = 400, details=None, headers=None) -> dict:
     """
     Create standardized error response for API Gateway.
 
@@ -95,7 +95,7 @@ def error_response(error: str, status_code: int = 400, details: dict | None = No
     }
 
 
-def created_response(data: dict, location: str | None = None) -> dict:
+def created_response(data: dict, location=None) -> dict:
     """
     Create standardized 201 Created response.
 
@@ -127,7 +127,7 @@ def no_content_response() -> dict:
     }
 
 
-def not_found_response(resource: str | None = None) -> dict:
+def not_found_response(resource=None) -> dict:
     """
     Create standardized 404 Not Found response.
 
@@ -155,7 +155,7 @@ def validation_error_response(field: str, message: str) -> dict:
     return error_response("Validation error", status_code=400, details={"field": field, "message": message})
 
 
-def internal_error_response(request_id: str | None = None) -> dict:
+def internal_error_response(request_id=None) -> dict:
     """
     Create standardized 500 Internal Server Error response.
 

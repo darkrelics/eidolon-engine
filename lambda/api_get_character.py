@@ -27,7 +27,7 @@ from decimal import Decimal
 import boto3
 from botocore.exceptions import ClientError
 
-from eidolon.cors_handler import cors_handler
+from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 
 # Configure logging
