@@ -45,7 +45,7 @@ func NewMockPlayer() *MockPlayer {
 
 	// Start a goroutine to capture messages
 	go func() {
-		for msg := range mp.Player.commandOut {
+		for msg := range mp.commandOut {
 			mp.mu.Lock()
 			mp.messages = append(mp.messages, msg)
 			mp.mu.Unlock()

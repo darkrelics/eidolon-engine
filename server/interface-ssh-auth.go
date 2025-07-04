@@ -299,7 +299,7 @@ func isValidPassword(password string) bool {
 			hasLower = true
 		case r >= '0' && r <= '9':
 			hasDigit = true
-		case r >= 33 && r <= 126 && !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')):
+		case r >= 33 && r <= 126 && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9'):
 			hasSpecial = true
 		}
 	}

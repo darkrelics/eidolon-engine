@@ -215,7 +215,9 @@ func (p *Player) Stop() {
 
 		// Close the connection
 		if p.connection != nil {
-			p.connection.Close()
+			if err := p.connection.Close(); err != nil {
+				Logger.Error("Player: Failed to close connection", "error", err, "player", p.id)
+			}
 		}
 
 		// Remove from server (do this last to avoid race conditions)

@@ -194,7 +194,11 @@ func (sm *ScriptManager) getScriptFromCacheOrS3(scriptID string) (string, *Scrip
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to get script from S3: %w", err)
 	}
-	defer output.Body.Close()
+	defer func() {
+		if err := output.Body.Close(); err != nil {
+			Logger.Error("ScriptManager: Failed to close S3 object body", "error", err)
+		}
+	}()
 
 	// Read the script content
 	content, err := io.ReadAll(output.Body)

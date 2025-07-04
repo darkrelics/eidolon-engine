@@ -749,7 +749,7 @@ func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	}
 
 	// Parse range argument
-	var targetRange float64 = 45.0
+	var targetRange = 45.0
 
 	if len(cmd.Args) > 1 {
 		rangeType := strings.ToLower(cmd.Args[1])
