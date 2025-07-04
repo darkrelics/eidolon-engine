@@ -165,7 +165,11 @@ func LoadNameFromFile(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			Logger.Error("LoadNameFromFile: Failed to close file", "error", err)
+		}
+	}()
 
 	var names []string
 	scanner := bufio.NewScanner(file)
