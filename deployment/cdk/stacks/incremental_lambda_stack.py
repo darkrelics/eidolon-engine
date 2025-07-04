@@ -29,7 +29,7 @@ class IncrementalLambdaStack(cdk.Stack):
         domain_name: str,
         hosted_zone_id: str,
         api_subdomain: str = "incremental-api",
-        allowed_cors_origins = None,
+        allowed_cors_origins=None,
         **kwargs,
     ) -> None:
         """Initialize the Incremental Lambda stack.

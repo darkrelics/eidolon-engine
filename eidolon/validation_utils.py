@@ -98,7 +98,7 @@ def validate_uuid(uuid_str: str) -> bool:
     return bool(pattern.match(uuid_str))
 
 
-def validate_positive_integer(value, min_value: int = 1, max_value = None) -> tuple:
+def validate_positive_integer(value, min_value: int = 1, max_value=None) -> tuple:
     """
     Validate positive integer within range.
 
@@ -144,7 +144,7 @@ def validate_enum(value: str, allowed_values: list, case_sensitive: bool = True)
     return True, None
 
 
-def sanitize_string(value: str, max_length = None) -> str:
+def sanitize_string(value: str, max_length=None) -> str:
     """
     Sanitize user input string.
 

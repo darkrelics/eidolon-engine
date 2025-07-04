@@ -16,9 +16,9 @@ class S3Stack(Stack):
         scope: Construct,
         construct_id: str,
         game_name: str = "eidolon",
-        portal_bucket_name = None,
-        scripts_bucket_name = None,
-        lambda_bucket_name = None,
+        portal_bucket_name=None,
+        scripts_bucket_name=None,
+        lambda_bucket_name=None,
         **kwargs,
     ) -> None:
         """Initialize S3 stack.
@@ -94,7 +94,7 @@ class S3Stack(Stack):
         self,
         logical_id: str,
         bucket_name: str,
-        website_config = None,
+        website_config=None,
         public_read: bool = False,
     ) -> IBucket:
         """Get existing bucket or create a new one.

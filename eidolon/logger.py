@@ -16,7 +16,7 @@ from functools import wraps
 class LambdaLogger:
     """Enhanced logger for AWS Lambda functions with structured logging support."""
 
-    def __init__(self, name: str, level = None):
+    def __init__(self, name: str, level=None):
         """
         Initialize Lambda logger with consistent configuration.
 
@@ -91,7 +91,7 @@ class LambdaLogger:
         """Log warning message with optional context."""
         self._log_with_context(logging.WARNING, message, **kwargs)
 
-    def error(self, message: str, error = None, **kwargs) -> None:
+    def error(self, message: str, error=None, **kwargs) -> None:
         """
         Log error message with optional exception and context.
 
@@ -135,7 +135,7 @@ class LambdaLogger:
         else:
             self.info("Lambda invocation", event_source=event.get("source", "unknown"))
 
-    def log_response(self, status_code: int, response_time_ms = None) -> None:
+    def log_response(self, status_code: int, response_time_ms=None) -> None:
         """
         Log API response details.
 
@@ -172,7 +172,7 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_obj, default=str)
 
 
-def get_logger(name: str, level = None) -> LambdaLogger:
+def get_logger(name: str, level=None) -> LambdaLogger:
     """
     Get a configured logger instance.
 
@@ -186,7 +186,7 @@ def get_logger(name: str, level = None) -> LambdaLogger:
     return LambdaLogger(name, level)
 
 
-def log_duration(logger = None):
+def log_duration(logger=None):
     """
     Decorator to log function execution duration.
 

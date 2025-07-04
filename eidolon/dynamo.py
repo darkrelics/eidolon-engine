@@ -180,9 +180,7 @@ def safe_put_item(table, item: dict) -> bool:
         return False
 
 
-def safe_update_item(
-    table, key: dict, update_expression: str, expression_values: dict, expression_names = None
-) -> bool:
+def safe_update_item(table, key: dict, update_expression: str, expression_values: dict, expression_names=None) -> bool:
     """
     Safely update an item in DynamoDB table.
 

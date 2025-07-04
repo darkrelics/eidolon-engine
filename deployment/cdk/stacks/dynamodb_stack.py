@@ -11,7 +11,7 @@ from constructs import Construct
 class DynamoDBStack(Stack):
     """DynamoDB stack for Eidolon Engine game data."""
 
-    def __init__(self, scope: Construct, construct_id: str, game_name: str, table_names = None, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, game_name: str, table_names=None, **kwargs) -> None:
         """Initialize DynamoDB stack.
 
         Args:
