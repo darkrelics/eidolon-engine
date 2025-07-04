@@ -8,7 +8,7 @@ Lambda functions using Cognito user pools.
 import json
 
 
-def extract_player_id(event: dict) -> str | None:
+def extract_player_id(event: dict):
     """
     Extract player ID from Cognito authorizer claims.
 
@@ -22,7 +22,7 @@ def extract_player_id(event: dict) -> str | None:
     return claims.get("sub")
 
 
-def require_auth(event: dict) -> tuple[str | None, dict | None]:
+def require_auth(event: dict) -> tuple:
     """
     Validate authentication and return player_id or error response.
 
@@ -47,7 +47,7 @@ def require_auth(event: dict) -> tuple[str | None, dict | None]:
     return player_id, None
 
 
-def extract_user_email(event: dict) -> str | None:
+def extract_user_email(event: dict):
     """
     Extract user email from Cognito authorizer claims.
 
@@ -61,7 +61,7 @@ def extract_user_email(event: dict) -> str | None:
     return claims.get("email")
 
 
-def extract_username(event: dict) -> str | None:
+def extract_username(event: dict):
     """
     Extract username from Cognito authorizer claims.
 

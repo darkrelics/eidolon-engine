@@ -16,7 +16,7 @@ import boto3
 class CDKDeploymentError(Exception):
     """Custom exception for CDK deployment failures."""
 
-    def __init__(self, message: str, details: dict | None = None):
+    def __init__(self, message: str, details = None):
         """Initialize CDK deployment error.
 
         Args:
@@ -30,7 +30,7 @@ class CDKDeploymentError(Exception):
 class CDKApiIntegration:
     """Handles CDK operations with enhanced error handling and progress monitoring."""
 
-    def __init__(self, cdk_dir: str, profile: str | None = None, region: str | None = None):
+    def __init__(self, cdk_dir: str, profile = None, region = None):
         """Initialize CDK API integration.
 
         Args:
@@ -90,7 +90,7 @@ class CDKApiIntegration:
             return False
 
     def _run_cdk_command(
-        self, args: list[str], env: dict | None = None, capture_output: bool = False
+        self, args: list, env = None, capture_output: bool = False
     ) -> subprocess.CompletedProcess:
         """Run CDK command with proper error handling.
 
@@ -117,7 +117,7 @@ class CDKApiIntegration:
                 raise CDKDeploymentError(f"CDK command failed: {err.stderr}")
             raise CDKDeploymentError(f"CDK command failed with exit code {err.returncode}")
 
-    def list_stacks(self) -> list[str]:
+    def list_stacks(self) -> list:
         """List all stacks in the CDK app.
 
         Returns:
@@ -132,7 +132,7 @@ class CDKApiIntegration:
         except Exception as err:
             raise CDKDeploymentError(f"Failed to list stacks: {err}")
 
-    def synth(self, context: dict | None = None, output_dir: str | None = None) -> dict:
+    def synth(self, context = None, output_dir = None) -> dict:
         """Synthesize CDK app to CloudFormation templates.
 
         Args:
@@ -167,10 +167,10 @@ class CDKApiIntegration:
 
     def deploy(
         self,
-        stacks: list[str] | None = None,
-        context: dict | None = None,
+        stacks = None,
+        context = None,
         require_approval: str = "broadening",
-        progress_callback=None,
+        progress_callback = None,
     ) -> dict:
         """Deploy CDK stacks with enhanced progress monitoring.
 
@@ -262,7 +262,7 @@ class CDKApiIntegration:
         except Exception as err:
             raise CDKDeploymentError(f"Unexpected error during deployment: {err}")
 
-    def diff(self, stacks: list[str] | None = None, context: dict | None = None) -> dict:
+    def diff(self, stacks = None, context = None) -> dict:
         """Show differences between deployed and local stacks.
 
         Args:
@@ -300,7 +300,7 @@ class CDKApiIntegration:
         except Exception as err:
             raise CDKDeploymentError(f"Diff failed: {err}")
 
-    def destroy(self, stacks: list[str] | None = None, context: dict | None = None, force: bool = False) -> dict:
+    def destroy(self, stacks = None, context = None, force: bool = False) -> dict:
         """Destroy CDK stacks.
 
         Args:
@@ -368,7 +368,7 @@ class CDKApiIntegration:
         except Exception as err:
             raise CDKDeploymentError(f"Failed to get stack outputs: {err}")
 
-    def bootstrap(self, account: str | None = None, region: str | None = None) -> dict:
+    def bootstrap(self, account = None, region = None) -> dict:
         """Bootstrap CDK environment.
 
         Args:
@@ -399,7 +399,7 @@ class CDKApiIntegration:
         except Exception as err:
             raise CDKDeploymentError(f"Bootstrap failed: {err}")
 
-    def _parse_progress_event(self, line: str) -> dict | None:
+    def _parse_progress_event(self, line: str):
         """Parse CDK deployment progress line into event.
 
         Args:

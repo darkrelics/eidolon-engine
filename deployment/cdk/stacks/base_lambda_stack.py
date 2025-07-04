@@ -22,7 +22,7 @@ class BaseLambdaStack(cdk.Stack):
         lambda_bucket: s3.IBucket,
         shared_players_table: str,
         cognito_user_pool_arn: str,
-        allowed_cors_origins: list[str] | None = None,
+        allowed_cors_origins = None,
         **kwargs,
     ) -> None:
         """Initialize the base Lambda stack.
