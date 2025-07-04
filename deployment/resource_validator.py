@@ -68,7 +68,7 @@ class ResourceValidator:
         """
         raise NotImplementedError("Subclasses must implement validate()")
 
-    def list_resources(self, filter_params: dict | None = None) -> list:
+    def list_resources(self, filter_params=None) -> list:
         """List all resources of this type.
 
         Args:
@@ -148,7 +148,7 @@ class DynamoDBTableValidator(ResourceValidator):
 
         return result
 
-    def list_resources(self, filter_params: dict | None = None) -> list:
+    def list_resources(self, filter_params=None) -> list:
         """List all DynamoDB tables."""
         tables = []
         paginator = self.client.get_paginator("list_tables")
@@ -252,7 +252,7 @@ class CognitoValidator(ResourceValidator):
 
         return result
 
-    def list_resources(self, filter_params: dict | None = None) -> list:
+    def list_resources(self, filter_params=None) -> list:
         """List all Cognito user pools."""
         pools = []
         paginator = self.client.get_paginator("list_user_pools")
@@ -324,7 +324,7 @@ class CloudWatchValidator(ResourceValidator):
 
         return result
 
-    def list_resources(self, filter_params: dict | None = None) -> list:
+    def list_resources(self, filter_params=None) -> list:
         """List all CloudWatch log groups."""
         log_groups = []
         paginator = self.logs_client.get_paginator("describe_log_groups")
@@ -398,7 +398,7 @@ class CodeBuildValidator(ResourceValidator):
 
         return result
 
-    def list_resources(self, filter_params: dict | None = None) -> list:
+    def list_resources(self, filter_params=None) -> list:
         """List all CodeBuild projects."""
         projects = []
         paginator = self.client.get_paginator("list_projects")
@@ -504,7 +504,7 @@ class S3BucketValidator(ResourceValidator):
 
         return result
 
-    def list_resources(self, filter_params: dict | None = None) -> list:
+    def list_resources(self, filter_params=None) -> list:
         """List all S3 buckets."""
         buckets = []
         try:

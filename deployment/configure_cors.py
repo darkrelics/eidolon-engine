@@ -39,7 +39,7 @@ def save_config(config_path: str, config: dict) -> None:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
 
-def configure_cors(config: dict, app_type: str, origins: list[str], replace: bool = False) -> dict:
+def configure_cors(config: dict, app_type: str, origins: list, replace: bool = False) -> dict:
     """Configure CORS origins for specified application type."""
     if "CORS" not in config:
         config["CORS"] = {}

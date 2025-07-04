@@ -59,7 +59,7 @@ class DeploymentState:
             "status": stack_info.get("status", "CREATE_COMPLETE"),
         }
 
-    def get_stack(self, stack_name: str) -> dict | None:
+    def get_stack(self, stack_name: str):
         """Get information about a deployed stack.
 
         Args:
@@ -88,7 +88,7 @@ class DeploymentState:
             "physical_id": resource_info.get("physical_id"),
         }
 
-    def get_resource(self, resource_type: str, resource_id: str) -> dict | None:
+    def get_resource(self, resource_type: str, resource_id: str):
         """Get information about a deployed resource.
 
         Args:

@@ -85,3 +85,6 @@ CLAUDE.md
 
 # Apple Problems
 **/.DS_Store
+
+**/.ruff_cache
+**/.ruff_cache/**
