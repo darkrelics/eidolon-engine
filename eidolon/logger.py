@@ -161,8 +161,9 @@ class JsonFormatter(logging.Formatter):
         }
 
         # Add context if available
-        if hasattr(record, "context"):
-            log_obj["context"] = record.context
+        context = getattr(record, "context", None)
+        if context is not None:
+            log_obj["context"] = context
 
         # Add exception info if present
         if record.exc_info:
