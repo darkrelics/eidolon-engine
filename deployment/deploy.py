@@ -10,11 +10,8 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
-from cdk_api_integration import (CDKApiIntegration, CDKDeploymentError,
-                                 CDKProgressReporter)
-from deployment_logic import (analyze_changes, get_existing_stacks,
-                              map_cloudformation_to_cdk,
-                              prompt_missing_parameters, validate_resources)
+from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
+from deployment_logic import analyze_changes, prompt_missing_parameters
 
 from eidolon.state_manager import ConfigurationManager, DeploymentState
 

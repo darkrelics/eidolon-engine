@@ -23,7 +23,7 @@ import sys
 
 import yaml
 
-from eidolon.s3 import list_files, upload_file, delete_file, validate_s3_bucket
+from eidolon.s3 import delete_file, list_files, upload_file, validate_s3_bucket
 
 # Configuration file paths
 CONFIG_PATH = "../config.yml"

@@ -72,7 +72,7 @@ def store_exits(exits_data):
 
             update_expression += ", ".join(expression_parts)
 
-            exits_table.update_item( # type: ignore
+            exits_table.update_item(  # type: ignore
                 Key={"ExitID": exit_data["ExitID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -114,7 +114,7 @@ def store_rooms(rooms_data):
 
             update_expression += ", ".join(expression_parts)
 
-            rooms_table.update_item( # type: ignore
+            rooms_table.update_item(  # type: ignore
                 Key={"RoomID": room["RoomID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -172,7 +172,7 @@ def store_archetypes(archetypes_data):
 
             update_expression += ", ".join(expression_parts)
 
-            archetypes_table.update_item( # type: ignore
+            archetypes_table.update_item(  # type: ignore
                 Key={"ArchetypeName": name},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -211,7 +211,7 @@ def store_item_prototypes(prototypes_data):
 
             update_expression += ", ".join(expression_parts)
 
-            prototypes_table.update_item( # type: ignore
+            prototypes_table.update_item(  # type: ignore
                 Key={"PrototypeID": prototype_id},
                 UpdateExpression=update_expression,
                 ExpressionAttributeNames=expression_attribute_names,
@@ -231,7 +231,7 @@ def load_exits():
     """
     exits_table = tables.exits
     try:
-        exits_response = exits_table.scan() # type: ignore
+        exits_response = exits_table.scan()  # type: ignore
         exits = {item["ExitID"]: item for item in exits_response.get("Items", [])}
         print("Exit data loaded from DynamoDB successfully")
         return exits
@@ -249,7 +249,7 @@ def load_rooms():
     """
     rooms_table = tables.rooms
     try:
-        rooms_response = rooms_table.scan() # type: ignore
+        rooms_response = rooms_table.scan()  # type: ignore
         rooms = {item["RoomID"]: item for item in rooms_response.get("Items", [])}
         print("Room data loaded from DynamoDB successfully")
         return rooms
@@ -267,7 +267,7 @@ def load_archetypes():
     """
     archetypes_table = tables.archetypes
     try:
-        response = archetypes_table.scan() # type: ignore
+        response = archetypes_table.scan()  # type: ignore
         archetypes = {"archetypes": {item["ArchetypeName"]: item for item in response.get("Items", [])}}
         print("Archetype data loaded from DynamoDB successfully")
         return archetypes
@@ -285,7 +285,7 @@ def load_item_prototypes():
     """
     prototypes_table = tables.prototypes
     try:
-        response = prototypes_table.scan() # type: ignore
+        response = prototypes_table.scan()  # type: ignore
         prototypes = {"itemPrototypes": response.get("Items", [])}
         print("Item prototype data loaded from DynamoDB successfully")
         return prototypes

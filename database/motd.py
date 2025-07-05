@@ -54,7 +54,7 @@ def add_or_update_motd(message: str, active: bool = True) -> dict:
         print(f"MOTD ID: {motd_id}")
         return motd_item
     else:
-        print(f"Error adding/updating MOTD.")
+        print("Error adding/updating MOTD.")
         return {}
 
 

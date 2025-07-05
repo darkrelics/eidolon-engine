@@ -21,8 +21,7 @@ This module adds an item based on a prototype to a room.
 import uuid
 from decimal import Decimal
 
-from eidolon.dynamo import (safe_get_item, safe_put_item, safe_update_item,
-                            safe_delete_item, tables)
+from eidolon.dynamo import safe_delete_item, safe_get_item, safe_put_item, safe_update_item, tables
 
 
 def display_rooms() -> list:
@@ -33,7 +32,7 @@ def display_rooms() -> list:
         A list of room dictionaries.
     """
     try:
-        response = tables.rooms.scan() # type: ignore
+        response = tables.rooms.scan()  # type: ignore
         rooms = response.get("Items", [])
         if not rooms:
             print("No rooms found.")
@@ -72,7 +71,7 @@ def display_prototypes() -> list:
     Fetches and displays all item prototypes from the 'prototypes' DynamoDB table.
     """
     try:
-        response = tables.prototypes.scan() # type: ignore
+        response = tables.prototypes.scan()  # type: ignore
         prototypes = response.get("Items", [])
         if not prototypes:
             print("No prototypes found.")
@@ -147,7 +146,7 @@ def add_item_to_table(new_item: dict) -> bool:
         print(f"Successfully added item '{new_item['item_name']}' to items table.")
         return True
     else:
-        print(f"Error saving new item to items table.")
+        print("Error saving new item to items table.")
         return False
 
 
@@ -188,12 +187,12 @@ def add_item_to_room(room: dict, new_item: dict) -> bool:
         print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
         return True
     else:
-        print(f"Error updating room.")
+        print("Error updating room.")
         # Attempt to roll back by deleting the item we just added
         if safe_delete_item(tables.items, {"ItemID": new_item["ItemID"]}):
             print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
         else:
-            print(f"Error rolling back item addition.")
+            print("Error rolling back item addition.")
         return False
 
 
