@@ -22,8 +22,6 @@ import argparse
 import json
 import logging
 
-import boto3
-
 from eidolon.dynamo import convert_to_decimal, tables
 from eidolon.validation_utils import validate_character_name
 
@@ -405,8 +403,6 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     try:
-        dynamodb = boto3.resource("dynamodb", region_name=args.region)
-
         # Load and store exits
         exits_data = load_json(args.exits)
         store_exits(exits_data)
