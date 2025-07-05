@@ -22,6 +22,8 @@ import argparse
 import json
 import logging
 
+import boto3
+
 from eidolon.dynamo import convert_to_decimal, tables
 from eidolon.validation_utils import validate_character_name
 
@@ -72,7 +74,7 @@ def store_exits(exits_data):
 
             update_expression += ", ".join(expression_parts)
 
-            exits_table.update_item(
+            exits_table.update_item( # type: ignore
                 Key={"ExitID": exit_data["ExitID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -114,7 +116,7 @@ def store_rooms(rooms_data):
 
             update_expression += ", ".join(expression_parts)
 
-            rooms_table.update_item(
+            rooms_table.update_item( # type: ignore
                 Key={"RoomID": room["RoomID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -172,7 +174,7 @@ def store_archetypes(archetypes_data):
 
             update_expression += ", ".join(expression_parts)
 
-            archetypes_table.update_item(
+            archetypes_table.update_item( # type: ignore
                 Key={"ArchetypeName": name},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -211,7 +213,7 @@ def store_item_prototypes(prototypes_data):
 
             update_expression += ", ".join(expression_parts)
 
-            prototypes_table.update_item(
+            prototypes_table.update_item( # type: ignore
                 Key={"PrototypeID": prototype_id},
                 UpdateExpression=update_expression,
                 ExpressionAttributeNames=expression_attribute_names,
@@ -231,7 +233,7 @@ def load_exits():
     """
     exits_table = tables.exits
     try:
-        exits_response = exits_table.scan()
+        exits_response = exits_table.scan() # type: ignore
         exits = {item["ExitID"]: item for item in exits_response.get("Items", [])}
         print("Exit data loaded from DynamoDB successfully")
         return exits
@@ -249,7 +251,7 @@ def load_rooms():
     """
     rooms_table = tables.rooms
     try:
-        rooms_response = rooms_table.scan()
+        rooms_response = rooms_table.scan() # type: ignore
         rooms = {item["RoomID"]: item for item in rooms_response.get("Items", [])}
         print("Room data loaded from DynamoDB successfully")
         return rooms
@@ -267,7 +269,7 @@ def load_archetypes():
     """
     archetypes_table = tables.archetypes
     try:
-        response = archetypes_table.scan()
+        response = archetypes_table.scan() # type: ignore
         archetypes = {"archetypes": {item["ArchetypeName"]: item for item in response.get("Items", [])}}
         print("Archetype data loaded from DynamoDB successfully")
         return archetypes
@@ -285,7 +287,7 @@ def load_item_prototypes():
     """
     prototypes_table = tables.prototypes
     try:
-        response = prototypes_table.scan()
+        response = prototypes_table.scan() # type: ignore
         prototypes = {"itemPrototypes": response.get("Items", [])}
         print("Item prototype data loaded from DynamoDB successfully")
         return prototypes
@@ -407,31 +409,31 @@ def main():
 
         # Load and store exits
         exits_data = load_json(args.exits)
-        store_exits(dynamodb, exits_data)
+        store_exits(exits_data)
 
         # Load and store rooms
         rooms_data = load_json(args.rooms)
-        store_rooms(dynamodb, rooms_data)
+        store_rooms(rooms_data)
 
         # Load and store archetypes
         archetypes_data = load_json(args.archetypes)
-        store_archetypes(dynamodb, archetypes_data)
+        store_archetypes(archetypes_data)
 
         # Load and store item prototypes
         prototypes_data = load_json(args.prototypes)
-        store_item_prototypes(dynamodb, prototypes_data)
+        store_item_prototypes(prototypes_data)
 
         # Load data from DynamoDB and display
-        loaded_exits = load_exits(dynamodb)
+        loaded_exits = load_exits()
         display_exits(loaded_exits)
 
-        loaded_rooms = load_rooms(dynamodb)
+        loaded_rooms = load_rooms()
         display_rooms(loaded_rooms)
 
-        loaded_archetypes = load_archetypes(dynamodb)
+        loaded_archetypes = load_archetypes()
         display_archetypes(loaded_archetypes)
 
-        loaded_prototypes = load_item_prototypes(dynamodb)
+        loaded_prototypes = load_item_prototypes()
         display_item_prototypes(loaded_prototypes)
 
     except Exception as e:
