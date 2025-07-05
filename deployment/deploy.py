@@ -162,7 +162,7 @@ class IncrementalDeploymentOrchestrator:
             params["deploy_incremental"] = False
             print("Deployment mode: MUD only")
         elif deploy_incremental:
-            params["deploy_incremental"] = False
+            params["deploy_mud"] = False
             params["deploy_incremental"] = True
             print("Deployment mode: Incremental only")
         elif deploy_both:

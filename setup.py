@@ -2,9 +2,7 @@
 Setup script for the Eidolon common library.
 """
 
-"""
-Setup script for the Eidolon common library.
-"""
+# Removed redundant docstring
 from setuptools import find_packages, setup
 
 

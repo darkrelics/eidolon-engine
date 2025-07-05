@@ -23,6 +23,9 @@ from eidolon.dynamo import tables
 
 
 def view_table(table_name):
+    if not hasattr(tables, table_name):
+        print(f"Error: Table '{table_name}' does not exist.")
+        return
     try:
         table = getattr(tables, table_name)
         response = table.scan()
