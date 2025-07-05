@@ -22,7 +22,7 @@ import uuid
 from decimal import Decimal
 
 from eidolon.dynamo import (safe_get_item, safe_put_item, safe_update_item,
-                            tables)
+                            safe_delete_item, tables)
 
 
 def display_rooms() -> list:
@@ -33,7 +33,7 @@ def display_rooms() -> list:
         A list of room dictionaries.
     """
     try:
-        response = tables.rooms.scan()
+        response = tables.rooms.scan() # type: ignore
         rooms = response.get("Items", [])
         if not rooms:
             print("No rooms found.")
@@ -72,7 +72,7 @@ def display_prototypes() -> list:
     Fetches and displays all item prototypes from the 'prototypes' DynamoDB table.
     """
     try:
-        response = tables.prototypes.scan()
+        response = tables.prototypes.scan() # type: ignore
         prototypes = response.get("Items", [])
         if not prototypes:
             print("No prototypes found.")
