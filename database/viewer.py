@@ -19,13 +19,12 @@ limitations under the License.
 import argparse
 import sys
 
-import boto3
-from botocore.exceptions import ClientError
+from eidolon.dynamo import tables
 
 
-def view_table(dynamodb, table_name):
+def view_table(table_name):
     try:
-        table = dynamodb.Table(table_name)
+        table = getattr(tables, table_name)
         response = table.scan()
         items = response["Items"]
 
@@ -36,35 +35,26 @@ def view_table(dynamodb, table_name):
         print("=" * 50)
         print(f"Total items: {len(items)}")
         print()
-    except ClientError as e:
-        print(f"Error scanning table {table_name}: {e.response['Error']['Message']}")
+    except Exception as e:
+        print(f"Error scanning table {table_name}: {e}")
 
 
-def main(region):
+def main():
     try:
-        dynamodb = boto3.resource("dynamodb", region_name=region)
-        client = boto3.client("dynamodb", region_name=region)
-
         # List all tables
-        tables = client.list_tables()["TableNames"]
+        table_names = [table for table in dir(tables) if not table.startswith("__")]
 
-        print(f"Contents of DynamoDB in region: {region}")
-        print("=" * 50)
-        print(f"Tables: {', '.join(tables)}")
+        print(f"Tables: {', '.join(table_names)}")
         print("=" * 50)
 
         # View contents of each table
-        for table_name in tables:
-            view_table(dynamodb, table_name)
+        for table_name in table_names:
+            view_table(table_name)
 
-    except ClientError as e:
-        print(f"Error connecting to DynamoDB: {e.response['Error']['Message']}")
+    except Exception as e:
+        print(f"Error connecting to DynamoDB: {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="View contents of DynamoDB tables.")
-    parser.add_argument("--region", default="us-east-1", help="AWS region for DynamoDB")
-    args = parser.parse_args()
-
-    main(args.region)
+    main()
