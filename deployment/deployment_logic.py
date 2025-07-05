@@ -1,1 +1,359 @@
-"""Business logic for the Eidolon Engine deployment orchestrator.\n\nThis module contains the functions that perform the detailed work of\nanalyzing the deployment environment, validating resources, and creating\na deployment plan.\n"""\n\nimport sys\n\nfrom resource_validator import ResourceValidatorFactory, generate_drift_report\n\n\ndef prompt_missing_parameters(params: dict) -> dict:\n    """Prompt user for any missing required parameters.\n\n    Args:\n        params: Current parameters\n\n    Returns:\n        Updated parameters with user input\n    """\n    print("\n=== CONFIGURATION ===")\n\n    # Basic required parameters\n    required_params = {\n        "game_name": ("Game name", "eidolon-engine"),\n        "contact_email": ("Administrator contact email", "admin@example.com"),\n        "github_owner": ("GitHub repository owner", "robinje"),\n        "github_repo": ("GitHub repository name", "eidolon-engine"),\n        "github_branch": ("GitHub branch to deploy from", "main"),\n    }\n\n    print("\nPlease provide the following configuration values:")\n    print("(Press Enter to accept the default value shown in brackets)\n")\n\n    for param, (description, default) in required_params.items():\n        current_value = params.get(param, default)\n        value = input(f"{description} [{current_value}]: ").strip()\n        if value:\n            params[param] = value\n        elif current_value:\n            params[param] = current_value\n        else:\n            print(f"ERROR: {param} is required")\n            sys.exit(1)\n\n    # API Configuration (required for Lambda deployments)\n    if params.get("deploy_mud") or params.get("deploy_incremental"):\n        print("\n=== API CONFIGURATION ===")\n        print("API Gateway requires a custom domain name and hosted zone.")\n        print("Skip this section if you don't have a domain configured in Route53.\n")\n\n        # Check if we have API config\n        if not params.get("domain_name"):\n            domain = input("Domain name (e.g., example.com) [skip to use default]: ").strip()\n            if domain and domain.lower() != "skip":\n                params["domain_name"] = domain\n\n                # Also need hosted zone ID\n                zone_id = input("Route53 Hosted Zone ID [required if domain provided]: ").strip()\n                if zone_id:\n                    params["hosted_zone_id"] = zone_id\n                else:\n                    print("WARNING: Hosted Zone ID is required for custom domain. Skipping API Gateway setup.")\n                    params.pop("domain_name", None)\n\n    # Optional S3 bucket names\n    print("\n=== S3 BUCKETS ===")\n    print("Leave blank to create new buckets with auto-generated names.\n")\n\n    portal_bucket = input(f"Portal S3 bucket name [{params.get('portal_bucket_name', 'auto-generate')}]: ").strip()\n    if portal_bucket and portal_bucket != "auto-generate":\n        params["portal_bucket_name"] = portal_bucket\n\n    scripts_bucket = input(f"Scripts S3 bucket name [{params.get('scripts_bucket_name', 'auto-generate')}]: ").strip()\n    if scripts_bucket and scripts_bucket != "auto-generate":\n        params["scripts_bucket_name"] = scripts_bucket\n\n    return params\n\n\ndef get_existing_stacks(cfn_client) -> dict:\n    """Get information about existing CloudFormation stacks.\n\n    Returns:\n        Dictionary of stack name to stack information\n    """\n    existing_stacks = {}\n\n    try:\n        paginator = cfn_client.get_paginator("list_stacks")\n        for page in paginator.paginate(StackStatusFilter=["CREATE_COMPLETE", "UPDATE_COMPLETE"]):\n            for stack in page.get("StackSummaries", []):\n                stack_name = stack.get("StackName")\n                # Get detailed stack info\n                try:\n                    response = cfn_client.describe_stacks(StackName=stack_name)\n                    stack_detail = response.get("Stacks", [{}])[0]\n\n                    # Get stack resources for mapping\n                    resources_response = cfn_client.list_stack_resources(StackName=stack_name)\n                    resources = {}\n                    for resource in resources_response.get("StackResourceSummaries", []):\n                        resources[resource.get("LogicalResourceId")] = {\n                            "physical_id": resource.get("PhysicalResourceId"),\n                            "type": resource.get("ResourceType"),\n                        }\n\n                    existing_stacks[stack_name] = {\n                        "status": stack_detail.get("StackStatus"),\n                        "outputs": {\n                            output.get("OutputKey"): output.get("OutputValue") for output in stack_detail.get("Outputs", [])\n                        },\n                        "parameters": {\n                            param.get("ParameterKey"): param.get("ParameterValue")\n                            for param in stack_detail.get("Parameters", [])\n                        },\n                        "resources": resources,\n                        "template_format": "CloudFormation",\n                    }\n                except Exception:\n                    # Stack might have been deleted between list and describe\n                    pass\n    except Exception as err:\n        print(f"Warning: Error querying existing stacks: {err}")\n\n    return existing_stacks\n\n\ndef validate_resources(session, params: dict) -> dict:\n    """Validate AWS resources for drift detection.\n\n    Args:\n        params: Deployment parameters\n\n    Returns:\n        Dictionary of resource validation results\n    """\n    all_results = {}\n\n    # Validate DynamoDB tables\n    try:\n        validator = ResourceValidatorFactory.create_validator("dynamodb_table", session)\n        # Use table names from params if provided, otherwise use defaults\n        if "dynamodb_tables" in params:\n            table_names = list(params["dynamodb_tables"].values())\n        else:\n            table_names = [\n                "eidolon-players",\n                "eidolon-characters",\n                "eidolon-rooms",\n                "eidolon-exits",\n                "eidolon-items",\n                "eidolon-prototypes",\n                "eidolon-archetypes",\n                "eidolon-motd",\n            ]\n\n        for table_name in table_names:\n            expected_config = {\n                "billing_mode": "PAY_PER_REQUEST",\n                "point_in_time_recovery": True,\n            }\n            result = validator.validate(table_name, expected_config)\n            all_results[table_name] = result\n    except Exception as err:\n        print(f"Warning: Error validating DynamoDB tables: {err}")\n\n    # Validate CloudWatch log groups\n    try:\n        validator = ResourceValidatorFactory.create_validator("cloudwatch_log_group", session)\n        log_group_name = "/aws/eidolon/server"\n        expected_config = {\n            "retention_days": params.get("log_retention_days", 365),\n        }\n        result = validator.validate(log_group_name, expected_config)\n        all_results[log_group_name] = result\n    except Exception as err:\n        print(f"Warning: Error validating CloudWatch log groups: {err}")\n\n    # Validate CodeBuild project\n    try:\n        validator = ResourceValidatorFactory.create_validator("codebuild_project", session)\n        project_name = "eidolon-portal-build"\n        expected_config = {\n            "source_type": "GITHUB",\n            "environment": {\n                "compute_type": "BUILD_GENERAL1_SMALL",\n                "type": "LINUX_CONTAINER",\n            },\n        }\n        result = validator.validate(project_name, expected_config)\n        all_results[project_name] = result\n    except Exception as err:\n        print(f"Warning: Error validating CodeBuild project: {err}")\n\n    # Validate S3 buckets\n    try:\n        validator = ResourceValidatorFactory.create_validator("s3_bucket", session)\n\n        # Check portal bucket\n        portal_bucket = params.get("portal_bucket_name", "eidolon-portal")\n        expected_config = {\n            "website_enabled": True,\n            "public_access_block": {\n                "block_public_acls": False,\n                "block_public_policy": False,\n                "ignore_public_acls": False,\n                "restrict_public_buckets": False,\n            },\n        }\n        result = validator.validate(portal_bucket, expected_config)\n        all_results[portal_bucket] = result\n\n        # Check scripts bucket\n        scripts_bucket = params.get("scripts_bucket_name", "eidolon-scripts")\n        result = validator.validate(scripts_bucket, expected_config)\n        all_results[scripts_bucket] = result\n    except Exception as err:\n        print(f"Warning: Error validating S3 buckets: {err}")\n\n    return all_results\n\n\ndef map_cloudformation_to_cdk(existing_stacks: dict, _params: dict) -> dict:\n    """Map existing CloudFormation stacks to CDK stacks.\n\n    Args:\n        existing_stacks: Dictionary of existing CloudFormation stacks\n        params: Deployment parameters\n\n    Returns:\n        Mapping of resources and migration strategy\n    """\n    mapping = {\n        "cloudformation_stacks": {},\n        "resource_mapping": {},\n        "migration_strategy": "adopt",  # adopt, replace, or coexist\n    }\n\n    # Check for legacy CloudFormation stacks\n    legacy_stacks = ["eidolon-cognito", "eidolon-dynamodb", "eidolon-cloudwatch", "eidolon-codebuild"]\n\n    for legacy_name in legacy_stacks:\n        if legacy_name in existing_stacks:\n            stack_info = existing_stacks[legacy_name]\n            mapping["cloudformation_stacks"][legacy_name] = {\n                "outputs": stack_info["outputs"],\n                "resources": stack_info["resources"],\n                "can_adopt": _can_adopt_stack(legacy_name, stack_info),\n            }\n\n            # Map resources to CDK expectations\n            if legacy_name == "eidolon-cognito":\n                if "UserPoolId" in stack_info.get("outputs", {}):\n                    mapping["resource_mapping"]["cognito_user_pool_id"] = stack_info.get("outputs", {}).get("UserPoolId")\n                if "AppClientId" in stack_info.get("outputs", {}):\n                    mapping["resource_mapping"]["cognito_app_client_id"] = stack_info.get("outputs", {}).get("AppClientId")\n            elif legacy_name == "eidolon-dynamodb":\n                # Map DynamoDB table names\n                for key, value in stack_info.get("outputs", {}).items():\n                    if key.endswith("TableName"):\n                        table_type = key.replace("TableName", "").lower()\n                        mapping["resource_mapping"][f"dynamodb_{table_type}_table"] = value\n            elif legacy_name == "eidolon-cloudwatch":\n                if "LogGroupName" in stack_info.get("outputs", {}):\n                    mapping["resource_mapping"]["log_group_name"] = stack_info.get("outputs", {}).get("LogGroupName")\n\n    # Determine migration strategy\n    if mapping["cloudformation_stacks"]:\n        # We have existing CloudFormation stacks\n        can_adopt_all = all(stack.get("can_adopt", False) for stack in mapping["cloudformation_stacks"].values())\n        if can_adopt_all:\n            mapping["migration_strategy"] = "adopt"\n        else:\n            mapping["migration_strategy"] = "coexist"\n\n    return mapping\n\n\ndef _can_adopt_stack(stack_name: str, _stack_info: dict) -> bool:\n    """Check if a CloudFormation stack can be adopted by CDK.\n\n    Args:\n        stack_name: Name of the stack\n        stack_info: Stack information\n\n    Returns:\n        True if stack can be adopted\n    """\n    # DynamoDB tables and CloudWatch log groups can be imported\n    # Cognito and CodeBuild are more complex\n    adoptable_stacks = ["eidolon-dynamodb", "eidolon-cloudwatch"]\n    return stack_name in adoptable_stacks\n\n\ndef analyze_changes(cfn_client, session, params: dict) -> dict:\n    """Analyze what changes need to be deployed.\n\n    Args:\n        params: Deployment parameters\n\n    Returns:\n        Dictionary with deployment plan\n    """\n    print("\nAnalyzing infrastructure changes...")\n\n    # Get existing stacks\n    existing_stacks = get_existing_stacks(cfn_client)\n\n    # Map CloudFormation resources if they exist\n    cf_mapping = map_cloudformation_to_cdk(existing_stacks, params)\n\n    # Expected CDK stack names\n    expected_stacks = ["cognito", "dynamodb", "cloudwatch", "s3", "cloudfront", "codebuild"]\n\n    plan = {\n        "create_stacks": [],\n        "update_stacks": [],\n        "unchanged_stacks": [],\n        "adopt_resources": {},\n        "cloudformation_mapping": cf_mapping,\n        "parameters": params,\n        "drift_report": "",\n    }\n\n    # If we have CloudFormation stacks, we can adopt or coexist\n    if cf_mapping["cloudformation_stacks"]:\n        print("\nDetected existing CloudFormation stacks:")\n        for stack_name, info in cf_mapping["cloudformation_stacks"].items():\n            print(f"  - {stack_name} (can adopt: {info.get('can_adopt', False)})")\n\n        if cf_mapping["migration_strategy"] == "adopt":\n            print("\nStrategy: Adopt existing resources into CDK stacks")\n            plan["adopt_resources"] = cf_mapping["resource_mapping"]\n        else:\n            print("\nStrategy: CDK stacks will coexist with CloudFormation stacks")\n            print("Note: Some resources cannot be adopted and will need manual migration")\n\n    # Check each expected stack\n    for stack_name in expected_stacks:\n        if stack_name in existing_stacks:\n            # CDK stack already exists\n            plan["update_stacks"].append(stack_name)\n        else:\n            # Need to create CDK stack\n            plan["create_stacks"].append(stack_name)\n\n    # Validate existing resources for drift detection\n    if existing_stacks or cf_mapping["cloudformation_stacks"]:\n        print("\nValidating existing resources for drift...")\n        drift_results = validate_resources(session, params)\n        if drift_results:\n            plan["drift_report"] = generate_drift_report(drift_results)\n            print(plan["drift_report"])\n\n    return plan\n
+"""Business logic for the Eidolon Engine deployment orchestrator.
+
+This module contains the functions that perform the detailed work of
+analyzing the deployment environment, validating resources, and creating
+a deployment plan.
+"""
+
+import sys
+
+from resource_validator import ResourceValidatorFactory, generate_drift_report
+
+
+def prompt_missing_parameters(params: dict) -> dict:
+    """Prompt user for any missing required parameters.
+
+    Args:
+        params: Current parameters
+
+    Returns:
+        Updated parameters with user input
+    """
+    print("\n=== CONFIGURATION ===")
+
+    # Basic required parameters
+    required_params = {
+        "game_name": ("Game name", "eidolon-engine"),
+        "contact_email": ("Administrator contact email", "admin@example.com"),
+        "github_owner": ("GitHub repository owner", "robinje"),
+        "github_repo": ("GitHub repository name", "eidolon-engine"),
+        "github_branch": ("GitHub branch to deploy from", "main"),
+    }
+
+    print("\nPlease provide the following configuration values:")
+    print("(Press Enter to accept the default value shown in brackets)\n")
+
+    for param, (description, default) in required_params.items():
+        current_value = params.get(param, default)
+        value = input(f"{description} [{current_value}]: ").strip()
+        if value:
+            params[param] = value
+        elif current_value:
+            params[param] = current_value
+        else:
+            print(f"ERROR: {param} is required")
+            sys.exit(1)
+
+    # API Configuration (required for Lambda deployments)
+    if params.get("deploy_mud") or params.get("deploy_incremental"):
+        print("\n=== API CONFIGURATION ===")
+        print("API Gateway requires a custom domain name and hosted zone.")
+        print("Skip this section if you don't have a domain configured in Route53.\n")
+
+        # Check if we have API config
+        if not params.get("domain_name"):
+            domain = input("Domain name (e.g., example.com) [skip to use default]: ").strip()
+            if domain and domain.lower() != "skip":
+                params["domain_name"] = domain
+
+                # Also need hosted zone ID
+                zone_id = input("Route53 Hosted Zone ID [required if domain provided]: ").strip()
+                if zone_id:
+                    params["hosted_zone_id"] = zone_id
+                else:
+                    print("WARNING: Hosted Zone ID is required for custom domain. Skipping API Gateway setup.")
+                    params.pop("domain_name", None)
+
+    # Optional S3 bucket names
+    print("\n=== S3 BUCKETS ===")
+    print("Leave blank to create new buckets with auto-generated names.\n")
+
+    portal_bucket = input(f"Portal S3 bucket name [{params.get('portal_bucket_name', 'auto-generate')}]: ").strip()
+    if portal_bucket and portal_bucket != "auto-generate":
+        params["portal_bucket_name"] = portal_bucket
+
+    scripts_bucket = input(f"Scripts S3 bucket name [{params.get('scripts_bucket_name', 'auto-generate')}]: ").strip()
+    if scripts_bucket and scripts_bucket != "auto-generate":
+        params["scripts_bucket_name"] = scripts_bucket
+
+    return params
+
+
+def get_existing_stacks(cfn_client) -> dict:
+    """Get information about existing CloudFormation stacks.
+
+    Returns:
+        Dictionary of stack name to stack information
+    """
+    existing_stacks = {}
+
+    try:
+        paginator = cfn_client.get_paginator("list_stacks")
+        for page in paginator.paginate(StackStatusFilter=["CREATE_COMPLETE", "UPDATE_COMPLETE"]):
+            for stack in page.get("StackSummaries", []):
+                stack_name = stack.get("StackName")
+                # Get detailed stack info
+                try:
+                    response = cfn_client.describe_stacks(StackName=stack_name)
+                    stack_detail = response.get("Stacks", [{}])[0]
+
+                    # Get stack resources for mapping
+                    resources_response = cfn_client.list_stack_resources(StackName=stack_name)
+                    resources = {}
+                    for resource in resources_response.get("StackResourceSummaries", []):
+                        resources[resource.get("LogicalResourceId")] = {
+                            "physical_id": resource.get("PhysicalResourceId"),
+                            "type": resource.get("ResourceType"),
+                        }
+
+                    existing_stacks[stack_name] = {
+                        "status": stack_detail.get("StackStatus"),
+                        "outputs": {
+                            output.get("OutputKey"): output.get("OutputValue") for output in stack_detail.get("Outputs", [])
+                        },
+                        "parameters": {
+                            param.get("ParameterKey"): param.get("ParameterValue") for param in stack_detail.get("Parameters", [])
+                        },
+                        "resources": resources,
+                        "template_format": "CloudFormation",
+                    }
+                except Exception:
+                    # Stack might have been deleted between list and describe
+                    pass
+    except Exception as err:
+        print(f"Warning: Error querying existing stacks: {err}")
+
+    return existing_stacks
+
+
+def validate_resources(session, params: dict) -> dict:
+    """Validate AWS resources for drift detection.
+
+    Args:
+        session: AWS session
+        params: Deployment parameters
+
+    Returns:
+        Dictionary of resource validation results
+    """
+    all_results = {}
+
+    # Validate DynamoDB tables
+    try:
+        validator = ResourceValidatorFactory.create_validator("dynamodb_table", session)
+        # Use table names from params if provided, otherwise use defaults
+        if "dynamodb_tables" in params:
+            table_names = list(params["dynamodb_tables"].values())
+        else:
+            table_names = [
+                "eidolon-players",
+                "eidolon-characters",
+                "eidolon-rooms",
+                "eidolon-exits",
+                "eidolon-items",
+                "eidolon-prototypes",
+                "eidolon-archetypes",
+                "eidolon-motd",
+            ]
+
+        for table_name in table_names:
+            expected_config = {
+                "billing_mode": "PAY_PER_REQUEST",
+                "point_in_time_recovery": True,
+            }
+            result = validator.validate(table_name, expected_config)
+            all_results[table_name] = result
+    except Exception as err:
+        print(f"Warning: Error validating DynamoDB tables: {err}")
+
+    # Validate CloudWatch log groups
+    try:
+        validator = ResourceValidatorFactory.create_validator("cloudwatch_log_group", session)
+        log_group_name = "/aws/eidolon/server"
+        expected_config = {
+            "retention_days": params.get("log_retention_days", 365),
+        }
+        result = validator.validate(log_group_name, expected_config)
+        all_results[log_group_name] = result
+    except Exception as err:
+        print(f"Warning: Error validating CloudWatch log groups: {err}")
+
+    # Validate CodeBuild project
+    try:
+        validator = ResourceValidatorFactory.create_validator("codebuild_project", session)
+        project_name = "eidolon-portal-build"
+        expected_config = {
+            "source_type": "GITHUB",
+            "environment": {
+                "compute_type": "BUILD_GENERAL1_SMALL",
+                "type": "LINUX_CONTAINER",
+            },
+        }
+        result = validator.validate(project_name, expected_config)
+        all_results[project_name] = result
+    except Exception as err:
+        print(f"Warning: Error validating CodeBuild project: {err}")
+
+    # Validate S3 buckets
+    try:
+        validator = ResourceValidatorFactory.create_validator("s3_bucket", session)
+
+        # Check portal bucket
+        portal_bucket = params.get("portal_bucket_name", "eidolon-portal")
+        expected_config = {
+            "website_enabled": True,
+            "public_access_block": {
+                "block_public_acls": False,
+                "block_public_policy": False,
+                "ignore_public_acls": False,
+                "restrict_public_buckets": False,
+            },
+        }
+        result = validator.validate(portal_bucket, expected_config)
+        all_results[portal_bucket] = result
+
+        # Check scripts bucket
+        scripts_bucket = params.get("scripts_bucket_name", "eidolon-scripts")
+        result = validator.validate(scripts_bucket, expected_config)
+        all_results[scripts_bucket] = result
+    except Exception as err:
+        print(f"Warning: Error validating S3 buckets: {err}")
+
+    return all_results
+
+
+def map_cloudformation_to_cdk(existing_stacks: dict, _params: dict) -> dict:
+    """Map existing CloudFormation stacks to CDK stacks.
+
+    Args:
+        existing_stacks: Dictionary of existing CloudFormation stacks
+        _params: Deployment parameters
+
+    Returns:
+        Mapping of resources and migration strategy
+    """
+    mapping = {
+        "cloudformation_stacks": {},
+        "resource_mapping": {},
+        "migration_strategy": "adopt",  # adopt, replace, or coexist
+    }
+
+    # Check for legacy CloudFormation stacks
+    legacy_stacks = ["eidolon-cognito", "eidolon-dynamodb", "eidolon-cloudwatch", "eidolon-codebuild"]
+
+    for legacy_name in legacy_stacks:
+        if legacy_name in existing_stacks:
+            stack_info = existing_stacks[legacy_name]
+            mapping["cloudformation_stacks"][legacy_name] = {
+                "outputs": stack_info["outputs"],
+                "resources": stack_info["resources"],
+                "can_adopt": _can_adopt_stack(legacy_name, stack_info),
+            }
+
+            # Map resources to CDK expectations
+            if legacy_name == "eidolon-cognito":
+                if "UserPoolId" in stack_info.get("outputs", {}):
+                    mapping["resource_mapping"]["cognito_user_pool_id"] = stack_info.get("outputs", {}).get("UserPoolId")
+                if "AppClientId" in stack_info.get("outputs", {}):
+                    mapping["resource_mapping"]["cognito_app_client_id"] = stack_info.get("outputs", {}).get("AppClientId")
+            elif legacy_name == "eidolon-dynamodb":
+                # Map DynamoDB table names
+                for key, value in stack_info.get("outputs", {}).items():
+                    if key.endswith("TableName"):
+                        table_type = key.replace("TableName", "").lower()
+                        mapping["resource_mapping"][f"dynamodb_{table_type}_table"] = value
+            elif legacy_name == "eidolon-cloudwatch":
+                if "LogGroupName" in stack_info.get("outputs", {}):
+                    mapping["resource_mapping"]["log_group_name"] = stack_info.get("outputs", {}).get("LogGroupName")
+
+    # Determine migration strategy
+    if mapping["cloudformation_stacks"]:
+        # We have existing CloudFormation stacks
+        can_adopt_all = all(stack.get("can_adopt", False) for stack in mapping["cloudformation_stacks"].values())
+        if can_adopt_all:
+            mapping["migration_strategy"] = "adopt"
+        else:
+            mapping["migration_strategy"] = "coexist"
+
+    return mapping
+
+
+def _can_adopt_stack(stack_name: str, _stack_info: dict) -> bool:
+    """Check if a CloudFormation stack can be adopted by CDK.
+
+    Args:
+        stack_name: Name of the stack
+        _stack_info: Stack information
+
+    Returns:
+        True if stack can be adopted
+    """
+    # DynamoDB tables and CloudWatch log groups can be imported
+    # Cognito and CodeBuild are more complex
+    adoptable_stacks = ["eidolon-dynamodb", "eidolon-cloudwatch"]
+    return stack_name in adoptable_stacks
+
+
+def analyze_changes(cfn_client, session, params: dict) -> dict:
+    """Analyze what changes need to be deployed.
+
+    Args:
+        cfn_client: CloudFormation client
+        session: AWS session
+        params: Deployment parameters
+
+    Returns:
+        Dictionary with deployment plan
+    """
+    print("\nAnalyzing infrastructure changes...")
+
+    # Get existing stacks
+    existing_stacks = get_existing_stacks(cfn_client)
+
+    # Map CloudFormation resources if they exist
+    cf_mapping = map_cloudformation_to_cdk(existing_stacks, params)
+
+    # Expected CDK stack names
+    expected_stacks = ["cognito", "dynamodb", "cloudwatch", "s3", "cloudfront", "codebuild"]
+
+    plan = {
+        "create_stacks": [],
+        "update_stacks": [],
+        "unchanged_stacks": [],
+        "adopt_resources": {},
+        "cloudformation_mapping": cf_mapping,
+        "parameters": params,
+        "drift_report": "",
+    }
+
+    # If we have CloudFormation stacks, we can adopt or coexist
+    if cf_mapping["cloudformation_stacks"]:
+        print("\nDetected existing CloudFormation stacks:")
+        for stack_name, info in cf_mapping["cloudformation_stacks"].items():
+            print(f"  - {stack_name} (can adopt: {info.get('can_adopt', False)})")
+
+        if cf_mapping["migration_strategy"] == "adopt":
+            print("\nStrategy: Adopt existing resources into CDK stacks")
+            plan["adopt_resources"] = cf_mapping["resource_mapping"]
+        else:
+            print("\nStrategy: CDK stacks will coexist with CloudFormation stacks")
+            print("Note: Some resources cannot be adopted and will need manual migration")
+
+    # Check each expected stack
+    for stack_name in expected_stacks:
+        if stack_name in existing_stacks:
+            # CDK stack already exists
+            plan["update_stacks"].append(stack_name)
+        else:
+            # Need to create CDK stack
+            plan["create_stacks"].append(stack_name)
+
+    # Validate existing resources for drift detection
+    if existing_stacks or cf_mapping["cloudformation_stacks"]:
+        print("\nValidating existing resources for drift...")
+        drift_results = validate_resources(session, params)
+        if drift_results:
+            plan["drift_report"] = generate_drift_report(drift_results)
+            print(plan["drift_report"])
+
+    return plan

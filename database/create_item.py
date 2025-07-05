@@ -21,7 +21,8 @@ This module adds an item based on a prototype to a room.
 import uuid
 from decimal import Decimal
 
-from eidolon.dynamo import tables, safe_get_item, safe_put_item, safe_update_item
+from eidolon.dynamo import (safe_get_item, safe_put_item, safe_update_item,
+                            tables)
 
 
 def display_rooms() -> list:

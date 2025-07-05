@@ -22,7 +22,7 @@ import argparse
 import json
 import logging
 
-from eidolon.dynamo import tables, convert_to_decimal
+from eidolon.dynamo import convert_to_decimal, tables
 from eidolon.validation_utils import validate_character_name
 
 

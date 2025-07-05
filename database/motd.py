@@ -22,7 +22,7 @@ import argparse
 import uuid
 from datetime import datetime
 
-from eidolon.dynamo import tables, safe_put_item
+from eidolon.dynamo import safe_put_item, tables
 
 
 def add_or_update_motd(message: str, active: bool = True) -> dict:

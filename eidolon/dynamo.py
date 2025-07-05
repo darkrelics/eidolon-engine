@@ -86,12 +86,12 @@ class DynamoDBTables:
     def archetypes(self):
         """Get MUD archetypes table."""
         return self._tables.get("archetypes")
-    
+
     @property
     def rooms(self):
         """Get MUD rooms table."""
         return self._tables.get("rooms")
-    
+
     @property
     def exits(self):
         """Get MUD exits table."""
@@ -101,7 +101,7 @@ class DynamoDBTables:
     def prototypes(self):
         """Get MUD prototypes table."""
         return self._tables.get("prototypes")
-    
+
     @property
     def motd(self):
         """Get MUD motd table."""
