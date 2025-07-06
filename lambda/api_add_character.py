@@ -212,6 +212,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "Resources": {"gold": 0, "supplies": 10, "reputation": 0},
         "Hidden": False,
         "CharState": "Standing",
+        "GameMode": "Incremental",  # Mark as Incremental game character
         "CreatedAt": timestamp,
         "UpdatedAt": timestamp,
         "LastPlayed": timestamp,

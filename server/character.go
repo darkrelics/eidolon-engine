@@ -132,6 +132,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		RightHandID:   rightHandID,
 		Hidden:        c.hidden,
 		CharState:     c.charState,
+		GameMode:      c.gameMode,
 	}
 
 	// Transactional save ensures data consistency
@@ -190,6 +191,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		playerCommandIn:  make(chan string, 20),
 		end:              make(chan bool, 1),
 		prompt:           "> ",
+		gameMode:         "MUD", // Characters created here are for the MUD
 	}
 
 	// Track if we need cleanup on error
