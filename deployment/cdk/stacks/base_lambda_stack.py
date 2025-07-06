@@ -22,7 +22,7 @@ class BaseLambdaStack(cdk.Stack):
         lambda_bucket: s3.IBucket,
         shared_players_table: str,
         cognito_user_pool_arn: str,
-        allowed_cors_origins=None,
+        allowed_cors_origins: list[str],
         **kwargs,
     ) -> None:
         """Initialize the base Lambda stack.
@@ -36,10 +36,20 @@ class BaseLambdaStack(cdk.Stack):
             allowed_cors_origins: List of allowed CORS origins
             **kwargs: Additional stack properties
         """
+        # Validate required parameters before stack initialization
+        if not lambda_bucket:
+            raise ValueError("lambda_bucket is required")
+        if not shared_players_table:
+            raise ValueError("shared_players_table is required")
+        if not cognito_user_pool_arn:
+            raise ValueError("cognito_user_pool_arn is required")
+
         super().__init__(scope, id, **kwargs)
 
-        # Store CORS origins for Lambda environment
-        self.cors_origins_str = ",".join(allowed_cors_origins) if allowed_cors_origins else ""
+        # Store CORS origins for Lambda environment with default
+        default_origins = ["https://portal.darkrelics.net"]
+        origins = allowed_cors_origins if allowed_cors_origins else default_origins
+        self.cors_origins_str = ",".join(origins)
 
         # Create Lambda layer for shared dependencies
         self.dependencies_layer = lambda_.LayerVersion(
@@ -54,7 +64,7 @@ class BaseLambdaStack(cdk.Stack):
         cognito_lambda_role = iam.Role(
             self,
             "shared-cognito-lambda",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),  # type: ignore
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
             ],
@@ -77,7 +87,7 @@ class BaseLambdaStack(cdk.Stack):
             handler="cognito_new_player.lambda_handler",
             code=lambda_.Code.from_bucket(lambda_bucket, "cognito_new_player.zip"),
             layers=[self.dependencies_layer],
-            role=cognito_lambda_role,
+            role=cognito_lambda_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
@@ -88,8 +98,9 @@ class BaseLambdaStack(cdk.Stack):
         )
 
         # Grant Cognito permission to invoke the Lambda function
+        cognito_source_condition = {"ArnLike": {"aws:SourceArn": cognito_user_pool_arn}}
         self.cognito_new_player_function.grant_invoke(
-            iam.ServicePrincipal("cognito-idp.amazonaws.com", conditions={"ArnLike": {"aws:SourceArn": cognito_user_pool_arn}})
+            iam.ServicePrincipal("cognito-idp.amazonaws.com", conditions=cognito_source_condition)
         )
 
         # Create CloudWatch log group with retention
