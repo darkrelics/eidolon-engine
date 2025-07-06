@@ -21,9 +21,9 @@ Deploy Lua scripts to S3 for use by Eidolon Engine server instances.
 import os
 import sys
 
-import boto3
 import yaml
-from botocore.exceptions import ClientError
+
+from eidolon.s3 import delete_file, list_files, upload_file, validate_s3_bucket
 
 # Configuration file paths
 CONFIG_PATH = "../config.yml"
@@ -44,25 +44,11 @@ def load_config() -> dict:
     return config
 
 
-def validate_s3_bucket(bucket_name, region="us-east-1") -> bool:
-    """Check if S3 bucket exists and is accessible."""
-    s3_client = boto3.client("s3", region_name=region)
-    try:
-        s3_client.head_bucket(Bucket=bucket_name)
-        print(f"S3 bucket '{bucket_name}' exists and is accessible")
-        return True
-    except ClientError as err:
-        print(f"Error accessing S3 bucket '{bucket_name}': {err}")
-        return False
-
-
 def deploy_scripts(bucket_name, prefix="scripts") -> bool:
     """
     Deploy Lua scripts to S3.
     """
     try:
-        s3_client = boto3.client("s3")
-
         # Check if scripts directory exists
         if not os.path.exists(SCRIPTS_PATH):
             print(f"Scripts directory not found: {SCRIPTS_PATH}")
@@ -86,13 +72,11 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
             local_path = os.path.join(SCRIPTS_PATH, filename)
             s3_key = f"{prefix}/{filename}"
 
-            try:
-                with open(local_path, "rb") as file_data:
-                    s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=file_data, ContentType="text/x-lua")
+            if upload_file(bucket_name, local_path, s3_key):
                 print(f"✓ Uploaded: {filename} -> s3://{bucket_name}/{s3_key}")
                 success_count += 1
-            except ClientError as err:
-                print(f"✗ Failed to upload {filename}: {err}")
+            else:
+                print(f"✗ Failed to upload {filename}")
 
         print(f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded")
         return success_count == len(lua_files)
@@ -104,41 +88,27 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
 
 def list_deployed_scripts(bucket_name, prefix="scripts"):
     """List all deployed scripts in S3."""
-    s3_client = boto3.client("s3")
+    scripts = list_files(bucket_name, prefix)
 
-    try:
-        response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+    if scripts:
+        print(f"\nDeployed scripts in s3://{bucket_name}/{prefix}:")
+        for script_key in sorted(scripts):
+            print(f"  {script_key}")
+    else:
+        print(f"\nNo scripts found in s3://{bucket_name}/{prefix}")
 
-        scripts = []
-        if "Contents" in response:
-            for obj in response.get("Contents", []):
-                if obj.get("Key", "").endswith(".lua"):
-                    scripts.append({"key": obj.get("Key"), "size": obj.get("Size"), "modified": obj.get("LastModified")})
-
-        if scripts:
-            print(f"\nDeployed scripts in s3://{bucket_name}/{prefix}:")
-            for script in sorted(scripts, key=lambda x: x["key"]):
-                print(f"  {script['key']} ({script['size']} bytes)")
-        else:
-            print(f"\nNo scripts found in s3://{bucket_name}/{prefix}")
-
-        return True
-    except ClientError as err:
-        print(f"Error listing scripts: {err}")
-        return False
+    return True
 
 
 def delete_script(bucket_name, script_name, prefix="scripts"):
     """Delete a specific script from S3."""
-    s3_client = boto3.client("s3")
     s3_key = f"{prefix}/{script_name}"
 
-    try:
-        s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
+    if delete_file(bucket_name, s3_key):
         print(f"Deleted: s3://{bucket_name}/{s3_key}")
         return True
-    except ClientError as err:
-        print(f"Failed to delete {s3_key}: {err}")
+    else:
+        print(f"Failed to delete {s3_key}")
         return False
 
 
