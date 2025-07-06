@@ -67,7 +67,7 @@ def main():
     parser = argparse.ArgumentParser(description="Configure CORS origins for Eidolon Engine deployments")
     parser.add_argument("--config", default="config.yml", help="Path to configuration file (default: config.yml)")
     parser.add_argument("--type", choices=["mud", "incremental", "both"], required=True, help="Application type to configure")
-    parser.add_argument("--origins", nargs="+", required=True, help="CORS origins to allow (e.g., https://example.com)")
+    parser.add_argument("--origins", nargs="+", required=True, help="CORS origins to allow (e.g., https://darkrelics.net)")
     parser.add_argument("--replace", action="store_true", help="Replace existing origins instead of adding to them")
     parser.add_argument("--cloudfront", help="Add CloudFront distribution URL as an allowed origin")
     parser.add_argument(

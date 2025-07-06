@@ -24,7 +24,7 @@ def prompt_missing_parameters(params: dict) -> dict:
     # Basic required parameters
     required_params = {
         "game_name": ("Game name", "eidolon-engine"),
-        "contact_email": ("Administrator contact email", "admin@example.com"),
+        "contact_email": ("Administrator contact email", "contact@darkrelics.net"),
         "github_owner": ("GitHub repository owner", "robinje"),
         "github_repo": ("GitHub repository name", "eidolon-engine"),
         "github_branch": ("GitHub branch to deploy from", "main"),
@@ -52,7 +52,7 @@ def prompt_missing_parameters(params: dict) -> dict:
 
         # Check if we have API config
         if not params.get("domain_name"):
-            domain = input("Domain name (e.g., example.com) [skip to use default]: ").strip()
+            domain = input("Domain name (e.g., darkrelics.net) [skip to use default]: ").strip()
             if domain and domain.lower() != "skip":
                 params["domain_name"] = domain
 

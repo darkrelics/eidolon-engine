@@ -56,11 +56,13 @@ Each Lambda function may use the following environment variables:
 Lambda functions are packaged and deployed through AWS CodeBuild:
 
 1. **Build Process** (`buildspec/lambda-functions.yml`):
+
    - Each function is packaged as a separate zip file
    - Shared `eidolon` modules are included if imported
    - Zip files are uploaded to S3
 
 2. **Dependencies** (`buildspec/lambda-layer.yml`):
+
    - Common dependencies are packaged as a Lambda layer
    - Requirements from `requirements/lambda-requirements.txt`
 
@@ -86,7 +88,7 @@ from eidolon.cors_handler import cors_handler
 # Create test event
 event = {
     "httpMethod": "GET",
-    "headers": {"origin": "https://example.com"},
+    "headers": {"origin": "https://darkrelics.net"},
     "requestContext": {
         "authorizer": {
             "claims": {"sub": "test-user-id"}

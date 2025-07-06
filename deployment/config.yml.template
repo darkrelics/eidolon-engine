@@ -27,19 +27,19 @@ DynamoDB:
 
 # API configuration (required)
 API:
-  Domain: example.com
+  Domain: darkrelics.net
   HostedZoneId: Z1234567890ABC
-  MUDSubdomain: mud-api         # mud-api.example.com
-  IncrementalSubdomain: inc-api # inc-api.example.com
-  
+  MUDSubdomain: mud-api         # mud-api.darkrelics.net
+  IncrementalSubdomain: inc-api # inc-api.darkrelics.net
+
 # CORS configuration for API origins
 CORS:
   MUDOrigins:
-    - https://mud.example.com
-    - https://portal.example.com
+    - https://mud.darkrelics.net
+    - https://portal.darkrelics.net
   IncrementalOrigins:
-    - https://incremental.example.com
-    - https://idle.example.com
+    - https://incremental.darkrelics.net
+    - https://idle.darkrelics.net
 
 # CodeBuild configuration
 CodeBuild:
@@ -68,4 +68,4 @@ GitHub:
 
 # Contact email for Cognito
 Contact:
-  Email: admin@example.com
+  Email: contact@darkrelics.net

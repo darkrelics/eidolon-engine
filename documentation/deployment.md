@@ -103,7 +103,7 @@ Game:
 
 AWS:
   region: us-east-1
-  contact_email: admin@example.com
+  contact_email: contact@darkrelics.net
 
 CloudFront:
   distribution_id: E1234567890ABC
