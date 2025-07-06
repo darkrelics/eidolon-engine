@@ -20,8 +20,7 @@ from stacks.codebuild_stack import CodeBuildStack
 from stacks.cognito_stack import CognitoStack
 from stacks.dynamodb_stack import DynamoDBStack
 from stacks.iam_stack import IAMStack
-from stacks.incremental_lambda_stack import IncrementalLambdaStack
-from stacks.mud_lambda_stack import MudLambdaStack
+from stacks.lambda_stack import LambdaStack
 from stacks.s3_stack import S3Stack
 
 
@@ -117,7 +116,7 @@ def deep_merge(base: dict, override: dict) -> None:
             base[key] = value
 
 
-def validate_required_config(config: dict) -> tuple:
+def validate_required_config(config: dict) -> tuple[bool, list[str]]:
     """Validate required configuration parameters.
 
     Args:
@@ -181,9 +180,9 @@ class DeploymentState:
             state_file: Path to state file for persistence
         """
         self.state_file = Path(state_file)
-        self.state: dict = self._load_state()
+        self.state: dict = self.load_state()
 
-    def _load_state(self) -> dict:
+    def load_state(self) -> dict:
         """Load state from file or create new state."""
         state = load_json_file(self.state_file)
         if not state:
@@ -288,7 +287,7 @@ class DeploymentState:
             event for event in self.state.get("deployment_history", []) if datetime.fromisoformat(event["timestamp"]) > cutoff_date
         ]
 
-    def get_deployed_stacks(self) -> set:
+    def get_deployed_stacks(self) -> set[str]:
         """Get set of all deployed stack names."""
         return set(self.state.get("stacks", {}).keys())
 
@@ -313,9 +312,9 @@ class ConfigurationManager:
             config_path: Path to server configuration file
         """
         self.config_path = Path(config_path)
-        self.config: dict = self._load_config()
+        self.config: dict = self.load_config()
 
-    def _load_config(self) -> dict:
+    def load_config(self) -> dict:
         """Load configuration from file."""
         return load_yaml_file(self.config_path)
 
@@ -371,52 +370,52 @@ class EidolonEngineApp:
 
     def __init__(self):
         """Initialize the CDK app with configuration."""
-        print("\n🚀 Initializing Eidolon Engine CDK Application")
+        print("\nInitializing Eidolon Engine CDK Application")
         print("=" * 60)
 
         self.app = cdk.App()
 
         # Initialize managers
-        print("📁 Loading configuration...")
+        print("Loading configuration...")
         self.config_manager = ConfigurationManager()
 
-        print("📊 Loading deployment state...")
+        print("Loading deployment state...")
         self.state_manager = DeploymentState()
 
         # Load configuration
         self.config = self.load_configuration()
 
         # Validate environment early
-        self._validate_environment()
+        self.validate_environment()
 
         # Create stacks with dependencies
-        print("\n🏗️  Creating CDK stacks...")
+        print("\nCreating CDK stacks...")
         self.create_stacks()
 
-        print("\n✅ CDK app initialization complete!")
+        print("\nCDK app initialization complete!")
         print("=" * 60)
 
-    def _validate_environment(self) -> None:
+    def validate_environment(self) -> None:
         """Validate AWS environment and CDK requirements."""
-        print("\n🔍 Validating environment...")
+        print("\nValidating environment...")
 
         # Check AWS credentials
-        account = os.getenv("CDK_DEFAULT_ACCOUNT")
+        account = os.getenv("CDK_DEFAULT_ACCOUNT", "")
         region = os.getenv("CDK_DEFAULT_REGION", "us-east-1")
 
         if not account:
-            print("❌ ERROR: CDK_DEFAULT_ACCOUNT environment variable not set!")
+            print("ERROR: CDK_DEFAULT_ACCOUNT environment variable not set!")
             print("   Please set your AWS account ID:")
             print("   export CDK_DEFAULT_ACCOUNT=123456789012")
             sys.exit(1)
 
-        print(f"   ✓ AWS Account: {account}")
-        print(f"   ✓ AWS Region: {region}")
+        print(f"   AWS Account: {account}")
+        print(f"   AWS Region: {region}")
 
         # Validate configuration
         is_valid, errors = validate_required_config(self.config)
         if not is_valid:
-            print("\n❌ ERROR: Invalid configuration!")
+            print("\nERROR: Invalid configuration!")
             for error in errors:
                 print(f"   - {error}")
             print("\n   Please update your config.yml with the required values.")
@@ -424,15 +423,15 @@ class EidolonEngineApp:
 
         # Validate critical parameters
         params = self.get_deployment_parameters()
-        domain_name = params.get("domain_name")
-        hosted_zone_id = params.get("hosted_zone_id")
+        domain_name = params.get("domain_name", "")
+        hosted_zone_id = params.get("hosted_zone_id", "")
 
         if not domain_name or not isinstance(domain_name, str):
-            print("\n❌ ERROR: domain_name must be a non-empty string!")
+            print("\nERROR: domain_name must be a non-empty string!")
             sys.exit(1)
 
         if not hosted_zone_id or not isinstance(hosted_zone_id, str):
-            print("\n❌ ERROR: hosted_zone_id must be a non-empty string!")
+            print("\nERROR: hosted_zone_id must be a non-empty string!")
             sys.exit(1)
 
     def load_configuration(self) -> dict:
@@ -463,20 +462,20 @@ class EidolonEngineApp:
         print(f"Deployment configuration: MUD={deploy_mud}, Incremental={deploy_incremental}")
 
         # Create shared infrastructure stacks
-        self._create_shared_stacks(env, params)
+        self.create_shared_stacks(env, params)
 
         # Deploy MUD-specific infrastructure
         if deploy_mud:
-            self._create_mud_stacks(env, params)
+            self.create_mud_stacks(env, params)
 
         # Deploy Incremental-specific infrastructure
         if deploy_incremental:
-            self._create_incremental_stacks(env, params)
+            self.create_incremental_stacks(env, params)
 
         # Create IAM stack with server execution role
-        self._create_iam_stack(env, params)
+        self.create_iam_stack(env, params)
 
-    def _create_shared_stacks(self, env: cdk.Environment, params: dict) -> None:
+    def create_shared_stacks(self, env: cdk.Environment, params: dict) -> None:
         """Create shared infrastructure stacks."""
         # Create Cognito stack (shared)
         self.cognito_stack = CognitoStack(
@@ -535,7 +534,7 @@ class EidolonEngineApp:
         )
         self.cognito_stack.add_lambda_trigger("PostConfirmation", cognito_trigger_function)
 
-    def _create_mud_stacks(self, env: cdk.Environment, params: dict) -> None:
+    def create_mud_stacks(self, env: cdk.Environment, params: dict) -> None:
         """Create MUD-specific infrastructure stacks."""
         # Create MUD DynamoDB tables
         mud_tables = params.get("mud_dynamodb_tables", {})
@@ -545,21 +544,23 @@ class EidolonEngineApp:
         domain_name = params.get("domain_name", "")
         hosted_zone_id = params.get("hosted_zone_id", "")
 
-        # Create MUD Lambda stack
-        self.mud_lambda_stack = MudLambdaStack(
+        # Create MUD Lambda stack using the unified LambdaStack
+        self.mud_lambda_stack = LambdaStack(
             self.app,
             "mud-lambda",
-            lambda_bucket=self.s3_stack.lambda_bucket,
-            shared_players_table=params.get("shared_dynamodb_tables", {}).get("Players", "players"),
-            mud_characters_table=mud_tables.get("Characters", "mud-characters"),
-            mud_items_table=mud_tables.get("Items", "mud-items"),
-            mud_ARCHETYPES_TABLE=mud_tables.get("Archetypes", "mud-archetypes"),
-            cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
-            shared_dependencies_layer_arn=self.base_lambda_stack.dependencies_layer.layer_version_arn,
-            domain_name=domain_name,
-            hosted_zone_id=hosted_zone_id,
-            api_subdomain=params.get("mud_api_subdomain", "mud-api"),
-            allowed_cors_origins=params.get("mud_cors_origins", []),
+            config={
+                "lambda_bucket": self.s3_stack.lambda_bucket.bucket_name,
+                "shared_players_table": params.get("shared_dynamodb_tables", {}).get("Players", "players"),
+                "characters_table": mud_tables.get("Characters", "mud-characters"),
+                "archetypes_table": mud_tables.get("Archetypes", "mud-archetypes"),
+                "items_table": mud_tables.get("Items", "mud-items"),
+                "cognito_user_pool_arn": self.cognito_stack.user_pool.user_pool_arn,
+                "shared_dependencies_layer_arn": self.base_lambda_stack.dependencies_layer.layer_version_arn,
+                "domain_name": domain_name,
+                "hosted_zone_id": hosted_zone_id,
+                "api_subdomain": params.get("mud_api_subdomain", "mud-api"),
+                "allowed_cors_origins": params.get("mud_cors_origins", []),
+            },
             env=env,
         )
         self.mud_lambda_stack.add_dependency(self.base_lambda_stack)
@@ -567,9 +568,9 @@ class EidolonEngineApp:
         self.mud_lambda_stack.add_dependency(self.cognito_stack)
 
         # Create MUD frontend stacks
-        self._create_mud_frontend_stacks(env, params)
+        self.create_mud_frontend_stacks(env, params)
 
-    def _create_mud_frontend_stacks(self, env: cdk.Environment, params: dict) -> None:
+    def create_mud_frontend_stacks(self, env: cdk.Environment, params: dict) -> None:
         """Create MUD frontend infrastructure (CloudFront and CodeBuild)."""
         # Create Portal CloudFront stack
         self.portal_cloudfront_stack = CloudFrontStack(
@@ -601,7 +602,7 @@ class EidolonEngineApp:
         self.portal_codebuild_stack.add_dependency(self.s3_stack)
         self.portal_codebuild_stack.add_dependency(self.portal_cloudfront_stack)
 
-    def _create_incremental_stacks(self, env: cdk.Environment, params: dict) -> None:
+    def create_incremental_stacks(self, env: cdk.Environment, params: dict) -> None:
         """Create Incremental-specific infrastructure stacks."""
         # Create Incremental DynamoDB tables
         incremental_tables = params.get("incremental_dynamodb_tables", {})
@@ -613,20 +614,23 @@ class EidolonEngineApp:
         domain_name = params.get("domain_name", "")
         hosted_zone_id = params.get("hosted_zone_id", "")
 
-        # Create Incremental Lambda stack
-        self.incremental_lambda_stack = IncrementalLambdaStack(
+        # Create Incremental Lambda stack using the unified LambdaStack
+        self.incremental_lambda_stack = LambdaStack(  # Changed from IncrementalLambdaStack
             self.app,
             "incremental-lambda",
-            lambda_bucket=self.s3_stack.lambda_bucket,
-            shared_players_table=params.get("shared_dynamodb_tables", {}).get("Players", "players"),
-            incremental_progress_table_name=incremental_tables.get("Progress", "incremental-progress"),
-            incremental_resources_table_name=incremental_tables.get("Resources", "incremental-resources"),
-            cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
-            shared_dependencies_layer_arn=self.base_lambda_stack.dependencies_layer.layer_version_arn,
-            domain_name=domain_name,
-            hosted_zone_id=hosted_zone_id,
-            api_subdomain=params.get("incremental_api_subdomain", "incremental-api"),
-            allowed_cors_origins=params.get("incremental_cors_origins", []),
+            config={
+                "lambda_bucket": self.s3_stack.lambda_bucket.bucket_name,
+                "shared_players_table": params.get("shared_dynamodb_tables", {}).get("Players", "players"),
+                "characters_table": incremental_tables.get("Characters", "incremental-characters"),
+                "archetypes_table": incremental_tables.get("Archetypes", "incremental-archetypes"),
+                "items_table": incremental_tables.get("Items", ""),  # Optional
+                "cognito_user_pool_arn": self.cognito_stack.user_pool.user_pool_arn,
+                "shared_dependencies_layer_arn": self.base_lambda_stack.dependencies_layer.layer_version_arn,
+                "domain_name": domain_name,
+                "hosted_zone_id": hosted_zone_id,
+                "api_subdomain": params.get("incremental_api_subdomain", "incremental-api"),
+                "allowed_cors_origins": params.get("incremental_cors_origins", []),
+            },
             env=env,
         )
         self.incremental_lambda_stack.add_dependency(self.base_lambda_stack)
@@ -634,9 +638,9 @@ class EidolonEngineApp:
         self.incremental_lambda_stack.add_dependency(self.cognito_stack)
 
         # Create Incremental frontend stacks
-        self._create_incremental_frontend_stacks(env, params)
+        self.create_incremental_frontend_stacks(env, params)
 
-    def _create_incremental_frontend_stacks(self, env: cdk.Environment, params: dict) -> None:
+    def create_incremental_frontend_stacks(self, env: cdk.Environment, params: dict) -> None:
         """Create Incremental frontend infrastructure (CloudFront and CodeBuild)."""
         # Create Incremental CloudFront stack
         self.incremental_cloudfront_stack = CloudFrontStack(
@@ -668,7 +672,7 @@ class EidolonEngineApp:
         self.incremental_codebuild_stack.add_dependency(self.s3_stack)
         self.incremental_codebuild_stack.add_dependency(self.incremental_cloudfront_stack)
 
-    def _create_iam_stack(self, env: cdk.Environment, params: dict) -> None:
+    def create_iam_stack(self, env: cdk.Environment, params: dict) -> None:
         """Create IAM stack with server execution role."""
         self.iam_stack = IAMStack(
             self.app,
@@ -683,7 +687,7 @@ class EidolonEngineApp:
 
     def get_deployment_parameters(self) -> dict:
         """Get deployment parameters from config or state."""
-        print("\n📝 Loading deployment parameters...")
+        print("\nLoading deployment parameters...")
 
         # Start with defaults
         params: dict = {
@@ -702,30 +706,30 @@ class EidolonEngineApp:
             "incremental_cors_origins": [],
             "shared_cors_origins": [],
         }
-        print("   ✓ Loaded default parameters")
+        print("   Loaded default parameters")
 
         # Override with stored parameters
         stored_params = self.state_manager.get_parameters()
         if stored_params:
-            print(f"   ✓ Found {len(stored_params)} stored parameters")
+            print(f"   Found {len(stored_params)} stored parameters")
             params.update(stored_params)
 
         # Override with config values
-        self._load_game_config(params)
-        self._load_deployment_config(params)
-        self._load_dynamodb_config(params)
-        self._load_codebuild_config(params)
-        self._load_api_config(params)
-        self._load_cors_config(params)
+        self.load_game_config(params)
+        self.load_deployment_config(params)
+        self.load_dynamodb_config(params)
+        self.load_codebuild_config(params)
+        self.load_api_config(params)
+        self.load_cors_config(params)
 
-        print("\n   ✓ Parameter loading complete")
+        print("\n   Parameter loading complete")
         return params
 
-    def _load_game_config(self, params: dict) -> None:
+    def load_game_config(self, params: dict) -> None:
         """Load game configuration section."""
         game_config = self.config.get("Game", {})
         if game_config:
-            print("   ✓ Loading Game configuration")
+            print("   Loading Game configuration")
             params["game_name"] = game_config.get("name", params.get("game_name", "eidolon-engine"))
 
             # Check for existing bucket configurations
@@ -736,22 +740,22 @@ class EidolonEngineApp:
                 params["scripts_bucket_name"] = game_config.get("ScriptsS3Bucket")
                 print(f"     - Using existing scripts bucket: {params['scripts_bucket_name']}")
 
-    def _load_deployment_config(self, params: dict) -> None:
+    def load_deployment_config(self, params: dict) -> None:
         """Load deployment configuration section."""
         deploy_config = self.config.get("Deployment", {})
         if deploy_config:
-            print("   ✓ Loading Deployment configuration")
+            print("   Loading Deployment configuration")
             # Only use config values if not already set by context
             if self.app.node.try_get_context("deploy_mud") is None:
                 params["deploy_mud"] = deploy_config.get("MUD", True)
             if self.app.node.try_get_context("deploy_incremental") is None:
                 params["deploy_incremental"] = deploy_config.get("Incremental", False)
 
-    def _load_dynamodb_config(self, params: dict) -> None:
+    def load_dynamodb_config(self, params: dict) -> None:
         """Load DynamoDB configuration section."""
         dynamodb_config = self.config.get("DynamoDB", {})
         if dynamodb_config:
-            print("   ✓ Loading DynamoDB configuration")
+            print("   Loading DynamoDB configuration")
             if "SharedTables" in dynamodb_config:
                 params["shared_dynamodb_tables"] = dynamodb_config.get("SharedTables", {})
                 print(f"     - Found {len(params['shared_dynamodb_tables'])} shared tables")
@@ -764,21 +768,21 @@ class EidolonEngineApp:
                 params["incremental_dynamodb_tables"] = dynamodb_config.get("IncrementalTables", {})
                 print(f"     - Found {len(params['incremental_dynamodb_tables'])} Incremental tables")
 
-    def _load_codebuild_config(self, params: dict) -> None:
+    def load_codebuild_config(self, params: dict) -> None:
         """Load CodeBuild configuration section."""
         codebuild_config = self.config.get("CodeBuild", {})
         if codebuild_config:
-            print("   ✓ Loading CodeBuild configuration")
+            print("   Loading CodeBuild configuration")
             if "PortalBuildspecPath" in codebuild_config:
                 params["portal_buildspec_path"] = codebuild_config.get("PortalBuildspecPath")
             if "IncrementalBuildspecPath" in codebuild_config:
                 params["incremental_buildspec_path"] = codebuild_config.get("IncrementalBuildspecPath")
 
-    def _load_api_config(self, params: dict) -> None:
+    def load_api_config(self, params: dict) -> None:
         """Load API configuration section."""
         api_config = self.config.get("API", {})
         if api_config:
-            print("   ✓ Loading API configuration")
+            print("   Loading API configuration")
             params["domain_name"] = api_config.get("Domain", "")
             params["hosted_zone_id"] = api_config.get("HostedZoneId", "")
             params["mud_api_subdomain"] = api_config.get("MUDSubdomain", "mud-api")
@@ -787,11 +791,11 @@ class EidolonEngineApp:
             print(f"     - Domain: {params['domain_name']}")
             print(f"     - Hosted Zone ID: {params['hosted_zone_id']}")
 
-    def _load_cors_config(self, params: dict) -> None:
+    def load_cors_config(self, params: dict) -> None:
         """Load CORS configuration section."""
         cors_config = self.config.get("CORS", {})
         if cors_config:
-            print("   ✓ Loading CORS configuration")
+            print("   Loading CORS configuration")
             params["mud_cors_origins"] = cors_config.get("MUDOrigins", [])
             params["incremental_cors_origins"] = cors_config.get("IncrementalOrigins", [])
 
