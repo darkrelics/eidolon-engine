@@ -592,9 +592,9 @@ class EidolonEngineApp:
             cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
             cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
             portal_bucket=self.s3_stack.portal_bucket,
+            lambda_bucket=self.s3_stack.lambda_bucket,
             buildspec_path=params.get("portal_buildspec_path", "buildspec/portal.yml"),
             cloudfront_distribution_id=self.portal_cloudfront_stack.distribution.distribution_id,
-            lambda_bucket=self.s3_stack.lambda_bucket,
             env=env,
         )
         self.portal_codebuild_stack.add_dependency(self.cognito_stack)
@@ -659,9 +659,9 @@ class EidolonEngineApp:
             cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
             cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
             portal_bucket=self.s3_stack.portal_bucket,
+            lambda_bucket=self.s3_stack.lambda_bucket,
             buildspec_path=params.get("incremental_buildspec_path", "buildspec/incremental.yml"),
             cloudfront_distribution_id=self.incremental_cloudfront_stack.distribution.distribution_id,
-            lambda_bucket=self.s3_stack.lambda_bucket,
             env=env,
         )
         self.incremental_codebuild_stack.add_dependency(self.cognito_stack)

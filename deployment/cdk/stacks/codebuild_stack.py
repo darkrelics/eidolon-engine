@@ -20,9 +20,9 @@ class CodeBuildStack(Stack):
         cognito_user_pool_id: str,
         cognito_app_client_id: str,
         portal_bucket: IBucket,
+        lambda_bucket: IBucket,
         buildspec_path: str = "buildspec/portal.yml",
-        cloudfront_distribution_id: str = None,
-        lambda_bucket: IBucket = None,
+        cloudfront_distribution_id: str = "",
         **kwargs,
     ) -> None:
         """Initialize CodeBuild stack.
@@ -42,6 +42,20 @@ class CodeBuildStack(Stack):
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
+
+        # Validate required configuration early
+        if not github_owner:
+            raise ValueError("github_owner is required")
+        if not github_repo:
+            raise ValueError("github_repo is required")
+        if not github_branch:
+            raise ValueError("github_branch is required")
+        if not cognito_user_pool_id:
+            raise ValueError("cognito_user_pool_id is required")
+        if not cognito_app_client_id:
+            raise ValueError("cognito_app_client_id is required")
+        if not portal_bucket:
+            raise ValueError("portal_bucket is required")
 
         # Use provided S3 bucket
         self.portal_bucket = portal_bucket
@@ -71,9 +85,7 @@ class CodeBuildStack(Stack):
                 "USER_POOL_ID": codebuild.BuildEnvironmentVariable(value=cognito_user_pool_id),
                 "CLIENT_ID": codebuild.BuildEnvironmentVariable(value=cognito_app_client_id),
                 "AWS_REGION": codebuild.BuildEnvironmentVariable(value=self.region),
-                "CLOUDFRONT_DISTRIBUTION_ID": codebuild.BuildEnvironmentVariable(
-                    value=cloudfront_distribution_id if cloudfront_distribution_id else ""
-                ),
+                "CLOUDFRONT_DISTRIBUTION_ID": codebuild.BuildEnvironmentVariable(value=cloudfront_distribution_id),
             },
             build_spec=codebuild.BuildSpec.from_source_filename(buildspec_path),
         )
