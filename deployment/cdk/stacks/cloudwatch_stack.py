@@ -15,11 +15,18 @@ class CloudWatchStack(Stack):
         Args:
             scope: CDK app scope
             construct_id: Stack identifier
-            game_name: Name of the game
+            dynamodb_policy_arn: ARN of the DynamoDB access policy
             retention_days: Log retention period in days
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
+
+        # Validate required configuration
+        if not dynamodb_policy_arn:
+            raise ValueError("dynamodb_policy_arn is required")
+
+        if retention_days < 1:
+            raise ValueError("retention_days must be at least 1")
 
         # Create Log Group
         self.log_group = logs.LogGroup(
