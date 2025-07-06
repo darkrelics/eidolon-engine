@@ -30,15 +30,19 @@ class DynamoDBTables:
         self._init_table("players", "PLAYERS_TABLE", "players")
 
         # MUD tables
-        self._init_table("mud_characters", "CHARACTERS_TABLE", "mud-characters")
-        self._init_table("mud_items", "ITEMS_TABLE", "mud-items")
-        self._init_table("mud_archetypes", "ARCHETYPES_TABLE", "mud-archetypes")
+        self._init_table("characters", "CHARACTERS_TABLE", "characters")
+        self._init_table("items", "ITEMS_TABLE", "items")
+        self._init_table("archetypes", "ARCHETYPES_TABLE", "archetypes")
+        self._init_table("rooms", "ROOMS_TABLE", "rooms")
+        self._init_table("exits", "EXITS_TABLE", "exits")
+        self._init_table("prototypes", "PROTOTYPES_TABLE", "prototypes")
+        self._init_table("motd", "MOTD_TABLE", "motd")
 
         # Incremental tables
-        self._init_table("incremental_characters", "INCREMENTAL_CHARACTERS_TABLE", "incremental_characters")
-        self._init_table("incremental_progress", "INCREMENTAL_PROGRESS_TABLE", "incremental_progress")
-        self._init_table("incremental_resources", "INCREMENTAL_RESOURCES_TABLE", "incremental_resources")
-        self._init_table("active_segments", "ACTIVE_SEGMENTS_TABLE", "active_segments")
+        self._init_table("incremental_characters", "INCREMENTAL_CHARACTERS_TABLE", "incremental-characters")
+        self._init_table("incremental_progress", "INCREMENTAL_PROGRESS_TABLE", "incremental-progress")
+        self._init_table("incremental_resources", "INCREMENTAL_RESOURCES_TABLE", "incremental-resources")
+        self._init_table("active_segments", "ACTIVE_SEGMENTS_TABLE", "active-segments")
 
     def _init_table(self, name: str, env_var: str, default: str):
         """
@@ -51,7 +55,7 @@ class DynamoDBTables:
         """
         table_name = os.environ.get(env_var, default)
         try:
-            self._tables[name] = self.dynamodb.Table(table_name)  # type: ignore
+            self._tables[name] = self.dynamodb.Table(table_name)
             logger.debug(f"Initialized table {name}: {table_name}")
         except Exception as err:
             logger.error(f"Failed to initialize table {name}", error=err, table_name=table_name)
@@ -69,19 +73,39 @@ class DynamoDBTables:
         return self._tables.get("players")
 
     @property
-    def mud_characters(self):
+    def characters(self):
         """Get MUD characters table."""
-        return self._tables.get("mud_characters")
+        return self._tables.get("characters")
 
     @property
-    def mud_items(self):
+    def items(self):
         """Get MUD items table."""
-        return self._tables.get("mud_items")
+        return self._tables.get("items")
 
     @property
-    def mud_archetypes(self):
+    def archetypes(self):
         """Get MUD archetypes table."""
-        return self._tables.get("mud_archetypes")
+        return self._tables.get("archetypes")
+
+    @property
+    def rooms(self):
+        """Get MUD rooms table."""
+        return self._tables.get("rooms")
+
+    @property
+    def exits(self):
+        """Get MUD exits table."""
+        return self._tables.get("exits")
+
+    @property
+    def prototypes(self):
+        """Get MUD prototypes table."""
+        return self._tables.get("prototypes")
+
+    @property
+    def motd(self):
+        """Get MUD motd table."""
+        return self._tables.get("motd")
 
     @property
     def incremental_characters(self):
