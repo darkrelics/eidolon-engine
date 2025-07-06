@@ -1,28 +1,33 @@
 # Incremental to MUD Character Workflow
 
 ## Overview
+
 Players start in the Incremental game and transition to the MUD after character customization.
 
 ## Workflow Steps
 
 ### 1. Account Creation
+
 - Player creates account via Incremental UI
 - Cognito handles authentication
 - Player record created in DynamoDB
 
 ### 2. Character Creation
+
 - Player provides character name
 - Name validated against shared bloom filter
 - Player selects archetype
 - Character created with `GameMode: "Incremental"`
 
 ### 3. Character Customization (Rapid Inactive)
+
 - Player goes through story-based tutorial
 - Character gains XP and equipment
 - Skills are dynamically added as used
 - Progress tracked in character record
 
 ### 4. MUD Transition
+
 - At end of customization:
   - Room is selected based on archetype or player choice
   - Character `GameMode` updated to "MUD"
@@ -30,6 +35,7 @@ Players start in the Incremental game and transition to the MUD after character 
   - Bloom filter updated with character name
 
 ### 5. MUD Entry
+
 - Player can now access MUD client
 - Character appears in selected room
 - Full MUD gameplay available
@@ -39,6 +45,7 @@ Players start in the Incremental game and transition to the MUD after character 
 ### Storage Options
 
 #### Option 1: DynamoDB Table
+
 ```
 Table: shared-bloom-filters
 - FilterName: "character-names" (PK)
@@ -49,6 +56,7 @@ Table: shared-bloom-filters
 ```
 
 #### Option 2: S3 with Lambda
+
 ```
 Bucket: eidolon-shared-data
 Path: /bloom-filters/character-names/current.bloom
