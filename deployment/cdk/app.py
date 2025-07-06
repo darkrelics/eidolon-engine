@@ -225,9 +225,9 @@ class DeploymentState:
             stack_name: Name of the CloudFormation stack
 
         Returns:
-            Stack information if exists, None otherwise
+            Stack information if exists, empty dict otherwise
         """
-        return self.state.get("stacks", {}).get(stack_name)
+        return self.state.get("stacks", {}).get(stack_name, {})
 
     def add_resource(self, resource_type: str, resource_id: str, resource_info: dict) -> None:
         """Track individual AWS resource.
@@ -255,9 +255,9 @@ class DeploymentState:
             resource_id: Resource identifier
 
         Returns:
-            Resource information if exists, None otherwise
+            Resource information if exists, empty dict otherwise
         """
-        return self.state.get("resources", {}).get(resource_type, {}).get(resource_id)
+        return self.state.get("resources", {}).get(resource_type, {}).get(resource_id, {})
 
     def update_parameters(self, parameters: dict) -> None:
         """Update deployment parameters.
@@ -575,9 +575,8 @@ class EidolonEngineApp:
         self.portal_cloudfront_stack = CloudFrontStack(
             self.app,
             "portal-cloudfront",
-            game_name="portal",
             portal_bucket=self.s3_stack.portal_bucket,
-            existing_distribution_id=params.get("portal_cloudfront_distribution_id"),
+            existing_distribution_id=params.get("portal_cloudfront_distribution_id", ""),
             env=env,
         )
         self.portal_cloudfront_stack.add_dependency(self.s3_stack)
@@ -643,9 +642,8 @@ class EidolonEngineApp:
         self.incremental_cloudfront_stack = CloudFrontStack(
             self.app,
             "incremental-cloudfront",
-            game_name="incremental",
             portal_bucket=self.s3_stack.portal_bucket,
-            existing_distribution_id=params.get("incremental_cloudfront_distribution_id"),
+            existing_distribution_id=params.get("incremental_cloudfront_distribution_id", ""),
             env=env,
         )
         self.incremental_cloudfront_stack.add_dependency(self.s3_stack)
