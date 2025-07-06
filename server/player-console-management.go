@@ -85,8 +85,9 @@ func (p *Player) HandleCharacterCreation() {
 		p.characterList = make(map[string]*PlayerCharacterInfo)
 	}
 	p.characterList[name] = &PlayerCharacterInfo{
-		UUID: character.id.String(),
-		Dead: false,
+		UUID:     character.id.String(),
+		Dead:     false,
+		GameMode: "MUD",
 	}
 	p.mutex.Unlock()
 
@@ -277,8 +278,11 @@ func (p *Player) buildCharacterOptions() []string {
 	defer p.mutex.RUnlock()
 
 	options := make([]string, 0, len(p.characterList))
-	for name := range p.characterList {
-		options = append(options, name)
+	for name, charInfo := range p.characterList {
+		// Only include MUD characters
+		if charInfo.GameMode == "MUD" || charInfo.GameMode == "" {
+			options = append(options, name)
+		}
 	}
 	sort.Strings(options)
 	return options

@@ -33,6 +33,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
+from shared_bloom_filter import check_character_name as check_bloom_filter, add_character_name as add_to_bloom
 
 # Configure logging
 logger = get_logger(__name__)
@@ -40,7 +41,7 @@ logger = get_logger(__name__)
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
 players_table = os.environ.get("PLAYERS_TABLE", "players")
-characters_table = os.environ.get("CHARACTERS_TABLE", "incremental_characters")
+characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
 ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
 
 players_table = dynamodb.Table(players_table)
@@ -208,8 +209,15 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "MaxEssence": convert_to_decimal(archetype_data.get("Essence", 3)),
         "Wounds": [],
         "RoomID": 0,  # Always room 0 for incremental
-        "Inventory": [],
+        "Inventory": {},  # Use MUD inventory structure (slot -> itemID)
         "Resources": {"gold": 0, "supplies": 10, "reputation": 0},
+        "Progress": {},  # Track story progress flags and achievements
+        "StoryState": {  # Track current position in stories
+            "currentStoryId": None,
+            "currentPassageId": None,
+            "startTime": None,
+            "abandoned": False
+        },
         "Hidden": False,
         "CharState": "Standing",
         "GameMode": "Incremental",  # Mark as Incremental game character
@@ -220,7 +228,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
 
     try:
         # Update player's character list
-        character_info = {"UUID": character_id, "Dead": False}
+        character_info = {"UUID": character_id, "Dead": False, "GameMode": "Incremental"}
 
         players_table.update_item(
             Key={"PlayerID": player_id},
@@ -309,7 +317,7 @@ def lambda_handler(event, context):
                 event,
             )
 
-        # Validate character name
+        # Validate character name format
         is_valid, error_msg = validate_character_name(character_name)
         if not is_valid:
             return cors_handler.add_cors_headers(
@@ -317,6 +325,18 @@ def lambda_handler(event, context):
                     "statusCode": 400,
                     "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({"error": f"Invalid character name: {error_msg}"}),
+                },
+                event,
+            )
+        
+        # Check bloom filter for name availability
+        bloom_result = check_bloom_filter(character_name)
+        if not bloom_result.get("available", True):
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": bloom_result.get("reason", "Name unavailable")}),
                 },
                 event,
             )
@@ -356,6 +376,13 @@ def lambda_handler(event, context):
                 },
                 event,
             )
+        
+        # Add name to bloom filter
+        try:
+            add_to_bloom(character_name)
+        except Exception as bloom_err:
+            logger.error("Failed to add name to bloom filter", error=bloom_err, character_name=character_name)
+            # Don't fail the request if bloom filter update fails
 
         # Return success response
         logger.log_response(201)
