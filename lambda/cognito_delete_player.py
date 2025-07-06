@@ -56,7 +56,7 @@ def delete_player_record(player_id):
         bool: True if deleted or not found, False on error
     """
     try:
-        table = dynamodb.Table(TABLES_CONFIG["players"])
+        table = dynamodb.Table(TABLES_CONFIG["players"])  # type: ignore
         table.delete_item(Key={"PlayerID": player_id})
         logger.info("Deleted player record", player_id=player_id)
         return True
@@ -80,7 +80,7 @@ def delete_all_characters(player_id):
     """
     deleted_count = 0
     try:
-        table = dynamodb.Table(TABLES_CONFIG["characters"])
+        table = dynamodb.Table(TABLES_CONFIG["characters"])  # type: ignore
 
         # Scan for all characters owned by this player
         response = table.scan(FilterExpression="PlayerID = :pid", ExpressionAttributeValues={":pid": player_id})
@@ -90,7 +90,7 @@ def delete_all_characters(player_id):
             try:
                 table.delete_item(Key={"CharacterID": item["CharacterID"]})
                 deleted_count += 1
-                game_mode = item.get('GameMode', 'Unknown')
+                game_mode = item.get("GameMode", "Unknown")
                 logger.info(f"Deleted {game_mode} character {item.get('CharacterName', 'Unknown')} ({item['CharacterID']})")
             except ClientError as err:
                 logger.error(f"Error deleting character {item['CharacterID']}: {err}")
@@ -107,8 +107,8 @@ def delete_all_characters(player_id):
                 try:
                     table.delete_item(Key={"CharacterID": item["CharacterID"]})
                     deleted_count += 1
-                    game_mode = item.get('GameMode', 'Unknown')
-                logger.info(f"Deleted {game_mode} character {item.get('CharacterName', 'Unknown')} ({item['CharacterID']})")
+                    game_mode = item.get("GameMode", "Unknown")
+                    logger.info(f"Deleted {game_mode} character {item.get('CharacterName', 'Unknown')} ({item['CharacterID']})")
                 except ClientError as err:
                     logger.error(f"Error deleting character {item['CharacterID']}: {err}")
 
@@ -136,7 +136,7 @@ def delete_active_segments(player_id):
         bool: True if deleted or not found, False on error
     """
     try:
-        table = dynamodb.Table(TABLES_CONFIG["active_segments"])
+        table = dynamodb.Table(TABLES_CONFIG["active_segments"])  # type: ignore
         table.delete_item(Key={"PlayerID": player_id})
         logger.info(f"Deleted active segments for {player_id}")
         return True
@@ -160,7 +160,7 @@ def delete_character_history(player_id):
     """
     deleted_count = 0
     try:
-        table = dynamodb.Table(TABLES_CONFIG["character_history"])
+        table = dynamodb.Table(TABLES_CONFIG["character_history"])  # type: ignore
 
         # Query all history records for this player
         response = table.query(KeyConditionExpression="PlayerID = :pid", ExpressionAttributeValues={":pid": player_id})

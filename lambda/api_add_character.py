@@ -30,10 +30,11 @@ from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
+from shared_bloom_filter import add_character_name as add_to_bloom
+from shared_bloom_filter import check_character_name as check_bloom_filter
 
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
-from shared_bloom_filter import check_character_name as check_bloom_filter, add_character_name as add_to_bloom
 
 # Configure logging
 logger = get_logger(__name__)
@@ -216,7 +217,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
             "currentStoryId": None,
             "currentPassageId": None,
             "startTime": None,
-            "abandoned": False
+            "abandoned": False,
         },
         "Hidden": False,
         "CharState": "Standing",
@@ -328,7 +329,7 @@ def lambda_handler(event, context):
                 },
                 event,
             )
-        
+
         # Check bloom filter for name availability
         bloom_result = check_bloom_filter(character_name)
         if not bloom_result.get("available", True):
@@ -376,7 +377,7 @@ def lambda_handler(event, context):
                 },
                 event,
             )
-        
+
         # Add name to bloom filter
         try:
             add_to_bloom(character_name)
