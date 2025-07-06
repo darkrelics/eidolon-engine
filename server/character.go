@@ -296,7 +296,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 								break
 							}
 						}
-						
+
 						if container != nil {
 							// Add item to container
 							err := container.AddItemToContainer(item)
