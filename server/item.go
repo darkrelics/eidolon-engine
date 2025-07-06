@@ -240,7 +240,7 @@ func CreateItemFromPrototype(prototype *Prototype, game *Game) (*Item, error) {
 	return item, nil
 }
 
-// AddItemToContainer adds an item to a container's contents
+// AddItemToContainer adds an item to a container's contents with stacking support
 func (container *Item) AddItemToContainer(item *Item) error {
 	if container == nil || item == nil {
 		return fmt.Errorf("invalid container or item")
@@ -253,7 +253,39 @@ func (container *Item) AddItemToContainer(item *Item) error {
 		return fmt.Errorf("this is not a container")
 	}
 
-	// Add item to contents
+	// Check if item is stackable and try to merge with existing stacks
+	if item.stackable {
+		for _, existingItem := range container.contents {
+			if existingItem != nil && existingItem.prototypeID == item.prototypeID {
+				// Same prototype, try to merge stacks
+				existingItem.mutex.Lock()
+				if existingItem.quantity < existingItem.maxStack {
+					// Calculate how many can be added
+					spaceAvailable := existingItem.maxStack - existingItem.quantity
+					item.mutex.Lock()
+					if item.quantity <= spaceAvailable {
+						// All items fit in existing stack
+						existingItem.quantity += item.quantity
+						item.mutex.Unlock()
+						existingItem.mutex.Unlock()
+						// Item fully merged, no need to add separately
+						return nil
+					} else {
+						// Partial merge
+						existingItem.quantity = existingItem.maxStack
+						item.quantity -= spaceAvailable
+						item.mutex.Unlock()
+						existingItem.mutex.Unlock()
+						// Continue to add remaining as new stack
+					}
+				} else {
+					existingItem.mutex.Unlock()
+				}
+			}
+		}
+	}
+
+	// Add item to contents (either non-stackable or remaining stackable quantity)
 	container.contents = append(container.contents, item)
 	return nil
 }
