@@ -67,8 +67,9 @@ def get_player_characters(player_id):
         # Build list of characters with just name and UUID
         characters = []
         for char_name, char_info in character_list.items():
-            # Only include characters that aren't dead for incremental game
-            if not char_info.get("Dead", False):
+            # Only include Incremental characters that aren't dead
+            game_mode = char_info.get("GameMode", "")
+            if not char_info.get("Dead", False) and (game_mode == "Incremental" or game_mode == ""):
                 characters.append({"characterId": char_info.get("UUID"), "characterName": char_name})
 
         # Sort by character name for consistent ordering

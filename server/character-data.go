@@ -68,6 +68,7 @@ type Character struct {
 	end              chan bool             // Channel for shutdown signaling
 	prompt           string                // Character prompt
 	stopped          bool                  // Flag to ensure Stop is only executed once
+	gameMode         string                // Game mode: "MUD", "Incremental", etc.
 }
 
 // FleeState tracks an active flee attempt
@@ -94,6 +95,7 @@ type CharacterData struct {
 	RightHandID   string             `json:"RightHandID,omitempty" dynamodbav:"RightHandID,omitempty"`
 	Hidden        bool               `json:"Hidden" dynamodbav:"Hidden"`
 	CharState     string             `json:"CharState" dynamodbav:"CharState"`
+	GameMode      string             `json:"GameMode" dynamodbav:"GameMode"`
 }
 
 func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
@@ -162,6 +164,13 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		character.charState = cd.CharState
 	} else {
 		character.charState = CharStateStanding
+	}
+
+	// Restore game mode, defaulting to MUD if not set
+	if cd.GameMode != "" {
+		character.gameMode = cd.GameMode
+	} else {
+		character.gameMode = "MUD"
 	}
 
 	character.CalculateCurrentHealth()

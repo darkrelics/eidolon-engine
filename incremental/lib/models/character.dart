@@ -12,6 +12,10 @@ class Character {
   final Map<String, double> attributes;
   final Map<String, double> skills;
   final Map<String, int> resources;
+  final Map<String, String> inventory; // MUD-compatible: slot -> itemId
+  final Map<String, dynamic> progress; // Story progress flags
+  final Map<String, dynamic>? storyState; // Current story position
+  final String gameMode; // "MUD" or "Incremental"
   final DateTime lastUpdated;
 
   Character({
@@ -26,6 +30,10 @@ class Character {
     required this.attributes,
     required this.skills,
     required this.resources,
+    required this.inventory,
+    required this.progress,
+    this.storyState,
+    required this.gameMode,
     required this.lastUpdated,
   });
 
@@ -51,6 +59,10 @@ class Character {
         ),
       ),
       resources: Map<String, int>.from(json['resources'] ?? {}),
+      inventory: Map<String, String>.from(json['inventory'] ?? {}),
+      progress: Map<String, dynamic>.from(json['progress'] ?? {}),
+      storyState: json['storyState'] as Map<String, dynamic>?,
+      gameMode: json['gameMode'] as String? ?? 'Incremental',
       lastUpdated: DateTime.parse(json['lastUpdated'] as String),
     );
   }
@@ -69,6 +81,10 @@ class Character {
       'attributes': attributes,
       'skills': skills,
       'resources': resources,
+      'inventory': inventory,
+      'progress': progress,
+      'storyState': storyState,
+      'gameMode': gameMode,
       'lastUpdated': lastUpdated.toIso8601String(),
     };
   }
@@ -80,6 +96,9 @@ class Character {
     Map<String, double>? attributes,
     Map<String, double>? skills,
     Map<String, int>? resources,
+    Map<String, String>? inventory,
+    Map<String, dynamic>? progress,
+    Map<String, dynamic>? storyState,
     DateTime? lastUpdated,
   }) {
     return Character(
@@ -94,11 +113,21 @@ class Character {
       attributes: attributes ?? this.attributes,
       skills: skills ?? this.skills,
       resources: resources ?? this.resources,
+      inventory: inventory ?? this.inventory,
+      progress: progress ?? this.progress,
+      storyState: storyState ?? this.storyState,
+      gameMode: gameMode,
       lastUpdated: lastUpdated ?? this.lastUpdated,
     );
   }
 
   /// Get effective score for a challenge (display only)
+  /// 
+  /// Skills are flexible and can be dynamically added as the game matures.
+  /// If a character doesn't have a skill, it's treated as 0.0.
+  /// When a character receives XP for a skill they don't have, the skill
+  /// is automatically added to their character record with the XP value.
+  /// Attributes are fixed and defined in the Attributes class.
   int getEffectiveScore(String skillName, String attributeName) {
     final skill = skills[skillName] ?? 0.0;
     final attribute = attributes[attributeName] ?? 0.0;

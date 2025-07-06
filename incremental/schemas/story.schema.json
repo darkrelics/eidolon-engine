@@ -122,24 +122,7 @@
                 "properties": {
                   "skill": {
                     "type": "string",
-                    "description": "Skill being tested",
-                    "enum": [
-                      "Melee",
-                      "Archery",
-                      "Brawling",
-                      "Dodge",
-                      "Parry",
-                      "Stealth",
-                      "Investigation",
-                      "Tumbling",
-                      "Climbing",
-                      "Lockpicking",
-                      "Mythos",
-                      "Arcane",
-                      "FirstAid",
-                      "Foraging",
-                      "Appraise"
-                    ]
+                    "description": "Skill being tested. Can be any skill name - new skills are dynamically created when XP is awarded"
                   },
                   "attribute": {
                     "type": "string",
@@ -190,7 +173,7 @@
                           },
                           "skillXP": {
                             "type": "object",
-                            "description": "XP awarded to specific skills used",
+                            "description": "XP awarded to specific skills used. If character doesn't have the skill, it will be created with the XP value",
                             "additionalProperties": { "type": "number" }
                           }
                         }
@@ -241,7 +224,7 @@
                           },
                           "skillXP": {
                             "type": "object",
-                            "description": "XP awarded to specific skills used",
+                            "description": "XP awarded to specific skills used. If character doesn't have the skill, it will be created with the XP value",
                             "additionalProperties": { "type": "number" }
                           }
                         }

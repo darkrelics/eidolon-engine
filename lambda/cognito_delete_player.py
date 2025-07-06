@@ -39,8 +39,7 @@ dynamodb = boto3.resource("dynamodb")
 # Table name configuration from environment variables with defaults
 TABLES_CONFIG = {
     "players": os.environ.get("PLAYERS_TABLE", "players"),
-    "mud_characters": os.environ.get("MUD_CHARACTERS_TABLE", "characters"),
-    "incremental_characters": os.environ.get("INCREMENTAL_CHARACTERS_TABLE", "incremental_characters"),
+    "characters": os.environ.get("CHARACTERS_TABLE", "characters"),
     "active_segments": os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments"),
     "character_history": os.environ.get("CHARACTER_HISTORY_TABLE", "character_history"),
 }
@@ -57,7 +56,7 @@ def delete_player_record(player_id):
         bool: True if deleted or not found, False on error
     """
     try:
-        table = dynamodb.Table(TABLES_CONFIG["players"])
+        table = dynamodb.Table(TABLES_CONFIG["players"])  # type: ignore
         table.delete_item(Key={"PlayerID": player_id})
         logger.info("Deleted player record", player_id=player_id)
         return True
@@ -69,9 +68,9 @@ def delete_player_record(player_id):
         return False
 
 
-def delete_mud_characters(player_id):
+def delete_all_characters(player_id):
     """
-    Delete all MUD characters owned by the player.
+    Delete all characters (both MUD and Incremental) owned by the player.
 
     Args:
         player_id: Cognito user ID
@@ -81,7 +80,7 @@ def delete_mud_characters(player_id):
     """
     deleted_count = 0
     try:
-        table = dynamodb.Table(TABLES_CONFIG["mud_characters"])
+        table = dynamodb.Table(TABLES_CONFIG["characters"])  # type: ignore
 
         # Scan for all characters owned by this player
         response = table.scan(FilterExpression="PlayerID = :pid", ExpressionAttributeValues={":pid": player_id})
@@ -91,9 +90,10 @@ def delete_mud_characters(player_id):
             try:
                 table.delete_item(Key={"CharacterID": item["CharacterID"]})
                 deleted_count += 1
-                logger.info(f"Deleted MUD character {item.get('CharacterName', 'Unknown')} ({item['CharacterID']})")
+                game_mode = item.get("GameMode", "Unknown")
+                logger.info(f"Deleted {game_mode} character {item.get('CharacterName', 'Unknown')} ({item['CharacterID']})")
             except ClientError as err:
-                logger.error(f"Error deleting MUD character {item['CharacterID']}: {err}")
+                logger.error(f"Error deleting character {item['CharacterID']}: {err}")
 
         # Handle pagination
         while "LastEvaluatedKey" in response:
@@ -107,49 +107,22 @@ def delete_mud_characters(player_id):
                 try:
                     table.delete_item(Key={"CharacterID": item["CharacterID"]})
                     deleted_count += 1
-                    logger.info(f"Deleted MUD character {item.get('CharacterName', 'Unknown')} ({item['CharacterID']})")
+                    game_mode = item.get("GameMode", "Unknown")
+                    logger.info(f"Deleted {game_mode} character {item.get('CharacterName', 'Unknown')} ({item['CharacterID']})")
                 except ClientError as err:
-                    logger.error(f"Error deleting MUD character {item['CharacterID']}: {err}")
+                    logger.error(f"Error deleting character {item['CharacterID']}: {err}")
 
         return deleted_count
 
     except ClientError as err:
         if err.response["Error"]["Code"] == "ResourceNotFoundException":
-            logger.warning(f"MUD characters table not found: {TABLES_CONFIG['mud_characters']}")
+            logger.warning(f"Characters table not found: {TABLES_CONFIG['characters']}")
             return 0
-        logger.error(f"Error scanning MUD characters: {err}")
+        logger.error(f"Error scanning characters: {err}")
         return deleted_count
 
 
-def delete_incremental_characters(player_id):
-    """
-    Delete incremental game character for the player.
-
-    Args:
-        player_id: Cognito user ID
-
-    Returns:
-        bool: True if deleted or not found, False on error
-    """
-    try:
-        table = dynamodb.Table(TABLES_CONFIG["incremental_characters"])
-
-        # Get character to log its name
-        response = table.get_item(Key={"PlayerID": player_id})
-        if "Item" in response:
-            char_name = response["Item"].get("CharacterName", "Unknown")
-            logger.info(f"Deleting incremental character {char_name} for player {player_id}")
-
-        # Delete the character
-        table.delete_item(Key={"PlayerID": player_id})
-        return True
-
-    except ClientError as err:
-        if err.response["Error"]["Code"] == "ResourceNotFoundException":
-            logger.warning(f"Incremental characters table not found: {TABLES_CONFIG['incremental_characters']}")
-            return True
-        logger.error(f"Error deleting incremental character: {err}")
-        return False
+# Note: Incremental characters are now handled by delete_all_characters since they share the same table
 
 
 def delete_active_segments(player_id):
@@ -163,7 +136,7 @@ def delete_active_segments(player_id):
         bool: True if deleted or not found, False on error
     """
     try:
-        table = dynamodb.Table(TABLES_CONFIG["active_segments"])
+        table = dynamodb.Table(TABLES_CONFIG["active_segments"])  # type: ignore
         table.delete_item(Key={"PlayerID": player_id})
         logger.info(f"Deleted active segments for {player_id}")
         return True
@@ -187,7 +160,7 @@ def delete_character_history(player_id):
     """
     deleted_count = 0
     try:
-        table = dynamodb.Table(TABLES_CONFIG["character_history"])
+        table = dynamodb.Table(TABLES_CONFIG["character_history"])  # type: ignore
 
         # Query all history records for this player
         response = table.query(KeyConditionExpression="PlayerID = :pid", ExpressionAttributeValues={":pid": player_id})
@@ -273,8 +246,7 @@ def lambda_handler(event, context):
             "timestamp": datetime.utcnow().isoformat(),
             "deletions": {
                 "player_record": False,
-                "mud_characters": 0,
-                "incremental_character": False,
+                "all_characters": 0,
                 "active_segments": False,
                 "character_history": 0,
             },
@@ -289,16 +261,10 @@ def lambda_handler(event, context):
             results["errors"].append(f"Player record: {str(err)}")
 
         try:
-            results["deletions"]["mud_characters"] = delete_mud_characters(player_id)
+            results["deletions"]["all_characters"] = delete_all_characters(player_id)
         except Exception as err:
-            logger.error(f"Unexpected error deleting MUD characters: {err}")
-            results["errors"].append(f"MUD characters: {str(err)}")
-
-        try:
-            results["deletions"]["incremental_character"] = delete_incremental_characters(player_id)
-        except Exception as err:
-            logger.error(f"Unexpected error deleting incremental character: {err}")
-            results["errors"].append(f"Incremental character: {str(err)}")
+            logger.error(f"Unexpected error deleting characters: {err}")
+            results["errors"].append(f"Characters: {str(err)}")
 
         try:
             results["deletions"]["active_segments"] = delete_active_segments(player_id)

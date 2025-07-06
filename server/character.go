@@ -132,6 +132,7 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		RightHandID:   rightHandID,
 		Hidden:        c.hidden,
 		CharState:     c.charState,
+		GameMode:      c.gameMode,
 	}
 
 	// Transactional save ensures data consistency
@@ -190,6 +191,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		playerCommandIn:  make(chan string, 20),
 		end:              make(chan bool, 1),
 		prompt:           "> ",
+		gameMode:         "MUD", // Characters created here are for the MUD
 	}
 
 	// Track if we need cleanup on error
@@ -276,15 +278,39 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 					// Items will be saved transactionally with character
 
-					// Worn state determines equipment vs inventory
-					if startingItem.IsWorn && item.wearable {
-						item.isWorn = true
+					// Only add wearable items to inventory slots
+					if item.wearable && startingItem.Slot != "" {
+						// Worn state determines if equipped
+						if startingItem.IsWorn {
+							item.isWorn = true
+						}
+						character.inventory[startingItem.Slot] = item
+						Logger.Debug("Added wearable item to character", "characterName", character.name, "itemName", item.name, "slot", startingItem.Slot)
+					} else {
+						// Non-wearable items need to go in a container
+						// Find a container (like backpack) in character's inventory
+						var container *Item
+						for _, invItem := range character.inventory {
+							if invItem != nil && invItem.container {
+								container = invItem
+								break
+							}
+						}
 
+						if container != nil {
+							// Add item to container
+							err := container.AddItemToContainer(item)
+							if err != nil {
+								Logger.Warn("Failed to add item to container", "itemName", item.name, "containerName", container.name, "error", err)
+								// If can't add to container, drop the item (will be handled elsewhere)
+							} else {
+								Logger.Debug("Added item to container", "characterName", character.name, "itemName", item.name, "containerName", container.name)
+							}
+						} else {
+							Logger.Warn("Non-wearable item has no container", "characterName", character.name, "itemName", item.name)
+							// Item will not be added to character (dropped)
+						}
 					}
-
-					// Inventory addition establishes ownership
-					character.inventory[startingItem.Slot] = item
-					Logger.Debug("Added starting item to character", "characterName", character.name, "itemName", item.name, "slot", startingItem.Slot)
 				}
 			}
 		} else {

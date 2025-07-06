@@ -37,9 +37,9 @@
       "StartRoom": 8,
       "StartingItems": [
         {
-          "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
-          "Slot": "book",
-          "IsWorn": false
+          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Slot": "back",
+          "IsWorn": true
         },
         {
           "PrototypeID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
@@ -47,14 +47,14 @@
           "IsWorn": true
         },
         {
-          "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "Slot": "potion",
+          "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
+          "Slot": "",
           "IsWorn": false
         },
         {
-          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
-          "Slot": "back",
-          "IsWorn": true
+          "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Slot": "",
+          "IsWorn": false
         }
       ]
     },
@@ -95,6 +95,11 @@
       "StartRoom": 10,
       "StartingItems": [
         {
+          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Slot": "back",
+          "IsWorn": true
+        },
+        {
           "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "Slot": "weapon",
           "IsWorn": true
@@ -106,13 +111,8 @@
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "Slot": "potion",
+          "Slot": "",
           "IsWorn": false
-        },
-        {
-          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
-          "Slot": "back",
-          "IsWorn": true
         }
       ]
     },
@@ -153,6 +153,11 @@
       "StartRoom": 4,
       "StartingItems": [
         {
+          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Slot": "back",
+          "IsWorn": true
+        },
+        {
           "PrototypeID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "Slot": "weapon",
           "IsWorn": true
@@ -164,13 +169,8 @@
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "Slot": "potion",
+          "Slot": "",
           "IsWorn": false
-        },
-        {
-          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
-          "Slot": "back",
-          "IsWorn": true
         }
       ]
     },

@@ -29,8 +29,9 @@ import (
 )
 
 type PlayerCharacterInfo struct {
-	UUID string `json:"UUID" dynamodbav:"UUID"`
-	Dead bool   `json:"Dead" dynamodbav:"Dead"`
+	UUID     string `json:"UUID" dynamodbav:"UUID"`
+	Dead     bool   `json:"Dead" dynamodbav:"Dead"`
+	GameMode string `json:"GameMode" dynamodbav:"GameMode"`
 }
 
 type PlayerData struct {
@@ -78,8 +79,9 @@ func (p *Player) Load(playerID uuid.UUID) error {
 
 	for characterName, characterInfo := range playerData.CharacterList {
 		p.characterList[characterName] = &PlayerCharacterInfo{
-			UUID: characterInfo.UUID,
-			Dead: characterInfo.Dead,
+			UUID:     characterInfo.UUID,
+			Dead:     characterInfo.Dead,
+			GameMode: characterInfo.GameMode,
 		}
 	}
 
@@ -119,8 +121,9 @@ func (p *Player) SaveWithContext(ctx context.Context) error {
 	// Copy character data
 	for characterName, characterInfo := range p.characterList {
 		playerData.CharacterList[characterName] = &PlayerCharacterInfo{
-			UUID: characterInfo.UUID,
-			Dead: characterInfo.Dead,
+			UUID:     characterInfo.UUID,
+			Dead:     characterInfo.Dead,
+			GameMode: characterInfo.GameMode,
 		}
 	}
 

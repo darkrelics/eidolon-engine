@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-characters_table = os.environ.get("CHARACTERS_TABLE", "incremental_characters")
+characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
 active_segments_table = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
 
 characters_table = dynamodb.Table(characters_table)
