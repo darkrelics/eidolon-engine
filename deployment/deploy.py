@@ -130,11 +130,23 @@ class IncrementalDeploymentOrchestrator:
             if s3_config.get("ScriptsBucket"):
                 params["scripts_bucket_name"] = s3_config["ScriptsBucket"]
 
-        # Load deployment type from config
+        # Load deployment mode from config
         if "Deployment" in config:
             deploy_config = config["Deployment"]
-            params["deploy_mud"] = deploy_config.get("MUD", True)
-            params["deploy_incremental"] = deploy_config.get("Incremental", False)
+            if "Mode" in deploy_config:
+                params["deployment_mode"] = deploy_config.get("Mode", "hybrid")
+            else:
+                # Legacy support
+                deploy_mud = deploy_config.get("MUD", False)
+                deploy_incremental = deploy_config.get("Incremental", False)
+                if deploy_mud and deploy_incremental:
+                    params["deployment_mode"] = "hybrid"
+                elif deploy_mud:
+                    params["deployment_mode"] = "mud"
+                elif deploy_incremental:
+                    params["deployment_mode"] = "incremental"
+                else:
+                    params["deployment_mode"] = "hybrid"
 
         return params
 
@@ -147,7 +159,7 @@ class IncrementalDeploymentOrchestrator:
             params: Current parameters
             deploy_mud: CLI flag to deploy only MUD
             deploy_incremental: CLI flag to deploy only Incremental
-            deploy_both: CLI flag to deploy both
+            deploy_both: CLI flag to deploy both (hybrid)
             non_interactive: Skip interactive prompts
 
         Returns:
@@ -155,50 +167,42 @@ class IncrementalDeploymentOrchestrator:
         """
         # If any CLI flag is provided, use it
         if deploy_mud:
-            params["deploy_mud"] = True
-            params["deploy_incremental"] = False
-            print("Deployment mode: MUD only")
+            params["deployment_mode"] = "mud"
+            print("Deployment mode: MUD (Portal frontend)")
         elif deploy_incremental:
-            params["deploy_mud"] = False
-            params["deploy_incremental"] = True
-            print("Deployment mode: Incremental only")
+            params["deployment_mode"] = "incremental"
+            print("Deployment mode: Incremental")
         elif deploy_both:
-            params["deploy_mud"] = True
-            params["deploy_incremental"] = True
-            print("Deployment mode: Both MUD and Incremental")
-        elif not non_interactive and "deploy_mud" not in params and "deploy_incremental" not in params:
+            params["deployment_mode"] = "hybrid"
+            print("Deployment mode: Hybrid (Incremental frontend, supports both games)")
+        elif not non_interactive and "deployment_mode" not in params:
             # Interactive mode - ask user what to deploy
             print("\n=== EIDOLON ENGINE DEPLOYMENT ===")
-            print("\nWhich game infrastructure would you like to deploy?")
-            print("1. MUD only (builds Portal frontend)")
-            print("2. Incremental Game only (builds Incremental frontend)")
-            print("3. Both MUD and Incremental (builds Incremental frontend)")
+            print("\nSelect deployment mode:")
+            print("1. MUD - Multi-User Dungeon with Portal frontend")
+            print("2. Incremental - Idle/incremental game with Incremental frontend")
+            print("3. Hybrid - Both game modes with Incremental frontend")
 
-            choice = input("\nSelect deployment type [1-3] (default: 3): ").strip()
+            choice = input("\nSelect deployment mode [1-3] (default: 3): ").strip()
 
             if choice == "1":
-                params["deploy_mud"] = True
-                params["deploy_incremental"] = False
-                print("\n[OK] Selected: MUD only (Portal frontend)")
+                params["deployment_mode"] = "mud"
+                print("\n[OK] Selected: MUD mode")
             elif choice == "2":
-                params["deploy_mud"] = False
-                params["deploy_incremental"] = True
-                print("\n[OK] Selected: Incremental Game only")
-            else:  # Default to both
-                params["deploy_mud"] = True
-                params["deploy_incremental"] = True
-                print("\n[OK] Selected: Both games (Incremental frontend)")
+                params["deployment_mode"] = "incremental"
+                print("\n[OK] Selected: Incremental mode")
+            else:  # Default to hybrid
+                params["deployment_mode"] = "hybrid"
+                print("\n[OK] Selected: Hybrid mode")
         else:
-            # Use existing params or defaults
-            if "deploy_mud" not in params and "deploy_incremental" not in params:
-                # Default to both if nothing specified
-                params["deploy_mud"] = True
-                params["deploy_incremental"] = True
-                print("Deployment mode: Both MUD and Incremental (default)")
+            # Use existing params or default
+            if "deployment_mode" not in params:
+                params["deployment_mode"] = "hybrid"
+                print("Deployment mode: Hybrid (default)")
 
-        # Update config manager with deployment choices
+        # Update config manager with deployment choice
         self.config_manager.update_section(
-            "Deployment", {"MUD": params.get("deploy_mud", True), "Incremental": params.get("deploy_incremental", False)}
+            "Deployment", {"Mode": params.get("deployment_mode", "hybrid")}
         )
 
         return params
@@ -248,9 +252,8 @@ class IncrementalDeploymentOrchestrator:
                 context[key] = value
                 print(f"  - {key}: {value}")
 
-        # Add deployment type context
-        context["deploy_mud"] = str(plan["parameters"].get("deploy_mud", True))
-        context["deploy_incremental"] = str(plan["parameters"].get("deploy_incremental", False))
+        # Add deployment mode context
+        context["deployment_mode"] = plan["parameters"].get("deployment_mode", "hybrid")
 
         # Deploy using CDK Python API
         print("\nDeploying infrastructure with CDK...")
@@ -316,6 +319,7 @@ class IncrementalDeploymentOrchestrator:
             f"{game_name}-cloudfront",
             f"{game_name}-codebuild",
             f"{game_name}-iam",
+            f"{game_name}-lambda",
         ]
 
         for stack_name in stacks_to_query:
@@ -526,16 +530,16 @@ class IncrementalDeploymentOrchestrator:
         print("            DEPLOYMENT COMPLETED SUCCESSFULLY          ")
         print("========================================================")
 
-        if params.get("deploy_mud") and params.get("deploy_incremental"):
-            print("\n[OK] MUD backend infrastructure deployed")
-            print("[OK] Incremental Game infrastructure deployed")
-            print("[OK] Frontend build: Incremental (serves both games)")
-        elif params.get("deploy_mud"):
-            print("\n[OK] MUD infrastructure deployed")
-            print("[OK] Frontend build: Portal")
-        elif params.get("deploy_incremental"):
-            print("\n[OK] Incremental Game infrastructure deployed")
-            print("[OK] Frontend build: Incremental")
+        deployment_mode = params.get("deployment_mode", "hybrid")
+        if deployment_mode == "mud":
+            print("\n[OK] Unified backend infrastructure deployed")
+            print("[OK] Frontend: Portal (MUD mode)")
+        elif deployment_mode == "incremental":
+            print("\n[OK] Unified backend infrastructure deployed")
+            print("[OK] Frontend: Incremental")
+        elif deployment_mode == "hybrid":
+            print("\n[OK] Unified backend infrastructure deployed")
+            print("[OK] Frontend: Incremental (supports both MUD and Incremental modes)")
 
         print(f"\nConfiguration saved to: {self.config_manager.config_path}")
         print("\nNext steps:")

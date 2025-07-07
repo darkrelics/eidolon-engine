@@ -11,6 +11,21 @@ The deployment system provides:
 - **Zero-downtime updates** - Works with existing infrastructure
 - **Infrastructure as Code** - All resources defined in CDK (Python)
 - **Drift detection** - Validates existing resources against expected state
+- **Multiple deployment modes** - Support for MUD, Incremental, and Hybrid game modes
+
+### Deployment Modes
+
+The Eidolon Engine supports three deployment modes, all sharing the same backend infrastructure but using different frontend applications:
+
+- **MUD Mode**: Traditional Multi-User Dungeon with Portal frontend
+- **Incremental Mode**: Idle/incremental game with Incremental frontend
+- **Hybrid Mode** (default): Supports both game types with Incremental frontend
+
+All modes share:
+- Same DynamoDB tables (Players, Characters, Archetypes, Items, Progress, Resources)
+- Same Lambda functions and API Gateway
+- Same Cognito user pool for authentication
+- Unified backend infrastructure
 
 ## Deployment Scenarios
 
@@ -75,6 +90,10 @@ Options:
   --auto-approve         Skip confirmation prompts
   --skip-scripts         Skip Lua script deployment
   --analyze-only         Only analyze infrastructure, don't deploy
+  --deploy-mud           Deploy in MUD mode (Portal frontend)
+  --deploy-incremental   Deploy in Incremental mode
+  --deploy-both          Deploy in Hybrid mode (default)
+  --non-interactive      Run without interactive prompts
 ```
 
 ## Configuration
@@ -101,9 +120,27 @@ Game:
   ScriptsS3Prefix: scripts
   PortalUrl: https://d1234567890.cloudfront.net # Portal URL via CloudFront
 
+# Deployment mode configuration
+Deployment:
+  Mode: hybrid  # Options: 'mud', 'incremental', or 'hybrid'
+
 AWS:
   region: us-east-1
   contact_email: contact@darkrelics.net
+
+# API configuration (unified for all modes)
+API:
+  Domain: darkrelics.net
+  HostedZoneId: Z1234567890ABC
+  Subdomain: api  # api.darkrelics.net
+
+# CORS configuration
+CORS:
+  AllowedOrigins:
+    - https://mud.darkrelics.net
+    - https://portal.darkrelics.net
+    - https://incremental.darkrelics.net
+    - https://darkrelics.net
 
 CloudFront:
   distribution_id: E1234567890ABC
@@ -114,16 +151,19 @@ Cognito:
   user_pool_id: us-east-1_xxxxxxxxx
   app_client_id: xxxxxxxxxxxxxxxxxxxx
 
+# Unified DynamoDB tables (same for all deployment modes)
 DynamoDB:
-  tables:
-    players: players
-    characters: characters
-    rooms: rooms
-    exits: exits
-    items: items
-    prototypes: prototypes
-    archetypes: archetypes
-    motd: motd
+  Tables:
+    Players: players
+    Characters: characters
+    Archetypes: archetypes
+    Items: items
+    Progress: progress
+    Resources: resources
+    Rooms: rooms
+    Exits: exits
+    Prototypes: prototypes
+    Motd: motd
 
 Logging:
   cloudwatch:
@@ -144,7 +184,8 @@ All AWS resources use simple, unprefixed names for clarity:
 | CodeBuild Project       | `eidolon-portal-build`        | `eidolon-portal-build`                                   |
 | CloudFront Distribution | `eidolon-portal-distribution` | `eidolon-portal-distribution`                            |
 | IAM Policies            | `{service}-access`            | `dynamodb-access`                                        |
-| CDK Stack Names         | `{service}`                   | `cognito`, `dynamodb`, `s3`                              |
+| CDK Stack Names         | `{service}`                   | `cognito`, `dynamodb`, `s3`, `lambda`, `cloudfront`      |
+| API Gateway             | Single unified API            | `api.{domain}`                                           |
 
 Legacy CloudFormation stacks with `eidolon-` prefix are still supported for backward compatibility.
 
@@ -247,10 +288,21 @@ python deploy_scripts.py
 
 ## CI/CD Pipeline
 
-### Portal Deployment
+### Frontend Deployment
 
-The CodeBuild project automatically builds and deploys the Flutter web portal when changes are pushed to the configured branch. The build process:
+The CodeBuild project automatically builds and deploys the appropriate Flutter web application based on the deployment mode:
 
+#### MUD Mode
+- Builds from `portal/` directory
+- Uses `buildspec/portal.yml`
+- Deploys Portal Flutter application
+
+#### Incremental/Hybrid Modes
+- Builds from `incremental/` directory
+- Uses `buildspec/incremental.yml`
+- Deploys Incremental Flutter application
+
+The build process:
 1. **Builds the Flutter web application**
 2. **Syncs files to the S3 portal bucket**
 3. **Invalidates CloudFront cache** (if configured)
@@ -277,7 +329,20 @@ aws codebuild start-build --project-name eidolon-portal-build
 # Navigate to CodeBuild → eidolon-portal-build → Start build
 ```
 
-## Migrating from CloudFormation
+## Migration Guide
+
+### From Separated Backend Deployment
+
+If migrating from the previous deployment with separate MUD and Incremental backends:
+
+1. **Backend is now unified** - All modes share the same tables and APIs
+2. **Table names are simplified** - No more `mud-` or `incremental-` prefixes
+3. **Single API Gateway** - One API serves all game modes at `api.{domain}`
+4. **Choose deployment mode** - Based on which frontend you need
+
+The deployment system will automatically handle resource migration.
+
+### From CloudFormation
 
 If you have existing CloudFormation stacks (`eidolon-*`):
 
@@ -412,6 +477,23 @@ If drift is detected:
 
 ## Advanced Usage
 
+### Deployment Mode Selection
+
+```bash
+# Deploy in MUD mode (Portal frontend)
+python deployment/deploy.py --deploy-mud
+
+# Deploy in Incremental mode
+python deployment/deploy.py --deploy-incremental
+
+# Deploy in Hybrid mode (supports both game types)
+python deployment/deploy.py --deploy-both
+
+# Or set in config.yml
+Deployment:
+  Mode: hybrid  # Options: 'mud', 'incremental', or 'hybrid'
+```
+
 ### Custom Parameters
 
 Override defaults via environment or config:
@@ -420,9 +502,10 @@ Override defaults via environment or config:
 # Via environment
 export CDK_DEFAULT_ACCOUNT=123456789012
 export CDK_DEFAULT_REGION=eu-west-1
+export DEPLOYMENT_MODE=hybrid
 
 # Via context
-cdk deploy -c game_name=eidolon-engine
+cdk deploy -c deployment_mode=hybrid -c game_name=eidolon-engine
 ```
 
 ### Multi-Environment

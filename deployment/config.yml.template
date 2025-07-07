@@ -1,55 +1,49 @@
 # Eidolon Engine Configuration Template
-# This template separates MUD and Incremental deployments
+# Unified backend deployment with mode-specific frontends
 
 Game:
   name: eidolon-engine
 
-# Deployment configuration - which applications to deploy
+# Deployment mode: 'mud', 'incremental', or 'hybrid'
+# - mud: MUD mode with Portal frontend
+# - incremental: Incremental mode with Incremental frontend  
+# - hybrid: Hybrid mode with Incremental frontend (supports both game types)
 Deployment:
-  MUD: true          # Deploy MUD Portal infrastructure
-  Incremental: false # Deploy Incremental game infrastructure
+  Mode: hybrid
 
-# Shared DynamoDB tables used by both applications
+# Unified DynamoDB tables (same for all deployment modes)
 DynamoDB:
-  SharedTables:
-    Players: players  # Shared player table
-
-  # MUD-specific tables
-  MUDTables:
-    Characters: mud-characters
-    Items: mud-items
-    Archetypes: mud-archetypes
-
-  # Incremental-specific tables
-  IncrementalTables:
-    Progress: incremental-progress
-    Resources: incremental-resources
+  Tables:
+    Players: players
+    Characters: characters
+    Items: items
+    Archetypes: archetypes
+    Progress: progress
+    Resources: resources
 
 # API configuration (required)
 API:
   Domain: darkrelics.net
   HostedZoneId: Z1234567890ABC
-  MUDSubdomain: mud-api         # mud-api.darkrelics.net
-  IncrementalSubdomain: inc-api # inc-api.darkrelics.net
+  Subdomain: api  # api.darkrelics.net
 
-# CORS configuration for API origins
+# CORS configuration - allowed origins for all modes
 CORS:
-  MUDOrigins:
+  AllowedOrigins:
     - https://mud.darkrelics.net
     - https://portal.darkrelics.net
-  IncrementalOrigins:
     - https://incremental.darkrelics.net
     - https://idle.darkrelics.net
+    - https://darkrelics.net
 
 # CodeBuild configuration
 CodeBuild:
-  PortalBuildspecPath: buildspec/portal.yml
-  IncrementalBuildspecPath: buildspec/incremental.yml
+  PortalBuildspecPath: buildspec/portal.yml       # Used for MUD mode
+  IncrementalBuildspecPath: buildspec/incremental.yml  # Used for Incremental/Hybrid modes
 
-# CloudFront distributions (optional - will create new if not specified)
+# CloudFront distribution (optional - will create new if not specified)
 CloudFront:
-  MUDDistributionId: ""         # Existing distribution ID for MUD
-  IncrementalDistributionId: ""  # Existing distribution ID for Incremental
+  DistributionId: ""  # Existing CloudFront distribution ID
 
 # S3 buckets (optional - will create new if not specified)
 S3:
