@@ -16,7 +16,7 @@ import boto3
 class CDKDeploymentError(Exception):
     """Custom exception for CDK deployment failures."""
 
-    def __init__(self, message: str, details=None):
+    def __init__(self, message: str, details: dict):
         """Initialize CDK deployment error.
 
         Args:
@@ -24,13 +24,13 @@ class CDKDeploymentError(Exception):
             details: Additional error details
         """
         super().__init__(message)
-        self.details = details or {}
+        self.details = details
 
 
 class CDKApiIntegration:
     """Handles CDK operations with enhanced error handling and progress monitoring."""
 
-    def __init__(self, cdk_dir: str, profile=None, region=None):
+    def __init__(self, cdk_dir: str, profile: str = "", region: str = ""):
         """Initialize CDK API integration.
 
         Args:
@@ -53,8 +53,8 @@ class CDKApiIntegration:
         self.cfn_client = self.session.client("cloudformation")
 
         # Check CDK installation
-        if not self._check_cdk_installed():
-            raise CDKDeploymentError("AWS CDK CLI is not installed. Please install it with: npm install -g aws-cdk")
+        if not check_cdk_installed():
+            raise CDKDeploymentError("AWS CDK CLI is not installed. Please install it with: npm install -g aws-cdk", {})
 
     def _setup_environment(self) -> None:
         """Configure environment for CDK operations."""
@@ -68,7 +68,7 @@ class CDKApiIntegration:
 
         # Set AWS account
         try:
-            account = self.session.client("sts").get_caller_identity()["Account"]
+            account = self.session.client("sts").get_caller_identity().get("Account", "")
             os.environ["CDK_DEFAULT_ACCOUNT"] = account
         except Exception:
             pass
@@ -77,19 +77,7 @@ class CDKApiIntegration:
         if str(self.cdk_dir) not in sys.path:
             sys.path.insert(0, str(self.cdk_dir))
 
-    def _check_cdk_installed(self) -> bool:
-        """Check if CDK CLI is installed.
-
-        Returns:
-            True if CDK is installed
-        """
-        try:
-            result = subprocess.run(["cdk", "--version"], capture_output=True, text=True)
-            return result.returncode == 0
-        except FileNotFoundError:
-            return False
-
-    def _run_cdk_command(self, args: list, env=None, capture_output: bool = False) -> subprocess.CompletedProcess:
+    def _run_cdk_command(self, args: list, env: dict, capture_output: bool = False) -> subprocess.CompletedProcess:
         """Run CDK command with proper error handling.
 
         Args:
@@ -112,8 +100,8 @@ class CDKApiIntegration:
                 return subprocess.run(cmd, cwd=self.cdk_dir, env=full_env, check=True)
         except subprocess.CalledProcessError as err:
             if capture_output and err.stderr:
-                raise CDKDeploymentError(f"CDK command failed: {err.stderr}")
-            raise CDKDeploymentError(f"CDK command failed with exit code {err.returncode}")
+                raise CDKDeploymentError(f"CDK command failed: {err.stderr}", {})
+            raise CDKDeploymentError(f"CDK command failed with exit code {err.returncode}", {})
 
     def list_stacks(self) -> list:
         """List all stacks in the CDK app.
@@ -122,15 +110,15 @@ class CDKApiIntegration:
             List of stack names
         """
         try:
-            result = self._run_cdk_command(["list"], capture_output=True)
+            result = self._run_cdk_command(["list"], capture_output=True, env={})
             stacks = [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
             return stacks
         except CDKDeploymentError:
             raise
         except Exception as err:
-            raise CDKDeploymentError(f"Failed to list stacks: {err}")
+            raise CDKDeploymentError(f"Failed to list stacks: {err}", {})
 
-    def synth(self, context=None, output_dir=None) -> dict:
+    def synth(self, context: dict, output_dir: str = "") -> dict:
         """Synthesize CDK app to CloudFormation templates.
 
         Args:
@@ -154,21 +142,21 @@ class CDKApiIntegration:
                 args.extend(["--output", output_dir])
 
             # Run synthesis
-            self._run_cdk_command(args)
+            self._run_cdk_command(args, env={})
 
             return {"success": True, "message": "Synthesis completed successfully", "context": context or {}}
 
         except CDKDeploymentError:
             raise
         except Exception as err:
-            raise CDKDeploymentError(f"Synthesis failed: {err}")
+            raise CDKDeploymentError(f"Synthesis failed: {err}", {})
 
     def deploy(
         self,
-        stacks=None,
-        context=None,
-        require_approval: str = "broadening",
-        progress_callback=None,
+        stacks: list,
+        context: dict,
+        require_approval: str,
+        progress_callback: object,
     ) -> dict:
         """Deploy CDK stacks with enhanced progress monitoring.
 
@@ -216,23 +204,24 @@ class CDKApiIntegration:
 
             # Monitor output and call progress callback
             deployed_stacks = []
-            for line in iter(process.stdout.readline, ""):  # type: ignore
-                line = line.rstrip()
-                if line:
-                    print(line)
+            if process.stdout:
+                for line in iter(process.stdout.readline, ""):
+                    line = line.rstrip()
+                    if line:
+                        print(line)
 
-                    # Parse progress events
-                    if progress_callback:
-                        event = self._parse_progress_event(line)
-                        if event:
-                            progress_callback(event)
+                        # Parse progress events
+                        if progress_callback and callable(progress_callback):
+                            event = parse_progress_event(line)
+                            if event:
+                                progress_callback(event)
 
-                    # Track deployed stacks
-                    if "CREATE_COMPLETE" in line or "UPDATE_COMPLETE" in line:
-                        parts = line.split()
-                        for part in parts:
-                            if part.startswith("eidolon-") or "-stack" in part:
-                                deployed_stacks.append(part)
+                        # Track deployed stacks
+                        if "CREATE_COMPLETE" in line or "UPDATE_COMPLETE" in line:
+                            parts = line.split()
+                            for part in parts:
+                                if part.startswith("eidolon-") or "-stack" in part:
+                                    deployed_stacks.append(part)
 
             # Wait for completion
             return_code = process.wait()
@@ -253,14 +242,14 @@ class CDKApiIntegration:
                     "outputs": outputs,
                 }
             else:
-                raise CDKDeploymentError(f"Deployment failed with exit code {return_code}")
+                raise CDKDeploymentError(f"Deployment failed with exit code {return_code}", {})
 
         except subprocess.CalledProcessError as err:
-            raise CDKDeploymentError(f"Deployment failed: {err}")
+            raise CDKDeploymentError(f"Deployment failed: {err}", {})
         except Exception as err:
-            raise CDKDeploymentError(f"Unexpected error during deployment: {err}")
+            raise CDKDeploymentError(f"Unexpected error during deployment: {err}", {})
 
-    def diff(self, stacks=None, context=None) -> dict:
+    def diff(self, stacks: list, context: dict) -> dict:
         """Show differences between deployed and local stacks.
 
         Args:
@@ -286,7 +275,7 @@ class CDKApiIntegration:
                     args.extend(["-c", f"{key}={value}"])
 
             # Run diff
-            result = self._run_cdk_command(args, capture_output=True)
+            result = self._run_cdk_command(args, capture_output=True, env={})
 
             # Parse output to determine if there are changes
             has_changes = "There were no differences" not in result.stdout
@@ -296,9 +285,9 @@ class CDKApiIntegration:
         except CDKDeploymentError:
             raise
         except Exception as err:
-            raise CDKDeploymentError(f"Diff failed: {err}")
+            raise CDKDeploymentError(f"Diff failed: {err}", {})
 
-    def destroy(self, stacks=None, context=None, force: bool = False) -> dict:
+    def destroy(self, stacks: list, context: dict, force: bool = False) -> dict:
         """Destroy CDK stacks.
 
         Args:
@@ -329,14 +318,14 @@ class CDKApiIntegration:
                     args.extend(["-c", f"{key}={value}"])
 
             # Run destroy
-            self._run_cdk_command(args)
+            self._run_cdk_command(args, env={})
 
             return {"success": True, "message": "Stacks destroyed successfully", "stacks_destroyed": stacks or ["all"]}
 
         except CDKDeploymentError:
             raise
         except Exception as err:
-            raise CDKDeploymentError(f"Destroy failed: {err}")
+            raise CDKDeploymentError(f"Destroy failed: {err}", {})
 
     def get_stack_outputs(self, stack_name: str) -> dict:
         """Get outputs from a deployed stack.
@@ -351,22 +340,22 @@ class CDKApiIntegration:
             # Use CloudFormation client to get stack outputs
             import boto3
 
-            session = boto3.Session(profile_name=self.profile, region_name=self.region)
+            session = boto3.Session(profile_name=self.profile if self.profile else None, region_name=self.region)
             cfn_client = session.client("cloudformation")
 
             response = cfn_client.describe_stacks(StackName=stack_name)
-            stack = response["Stacks"][0]
+            stack = response.get("Stacks", [{}])[0]
 
             outputs = {}
             for output in stack.get("Outputs", []):
-                outputs[output["OutputKey"]] = output["OutputValue"]
+                outputs[output.get("OutputKey", "")] = output.get("OutputValue", "")
 
             return outputs
 
         except Exception as err:
-            raise CDKDeploymentError(f"Failed to get stack outputs: {err}")
+            raise CDKDeploymentError(f"Failed to get stack outputs: {err}", {})
 
-    def bootstrap(self, account=None, region=None) -> dict:
+    def bootstrap(self, account: str = "", region: str = "") -> dict:
         """Bootstrap CDK environment.
 
         Args:
@@ -379,7 +368,7 @@ class CDKApiIntegration:
         try:
             # Get account if not specified
             if not account:
-                account = self.session.client("sts").get_caller_identity()["Account"]
+                account = self.session.client("sts").get_caller_identity().get("Account", "")
 
             # Prepare bootstrap parameters
             bootstrap_region = region or self.region
@@ -388,41 +377,55 @@ class CDKApiIntegration:
             args = ["bootstrap", f"aws://{account}/{bootstrap_region}"]
 
             # Run bootstrap
-            self._run_cdk_command(args)
+            self._run_cdk_command(args, env={})
 
             return {"success": True, "message": f"Bootstrap completed for {bootstrap_region}"}
 
         except CDKDeploymentError:
             raise
         except Exception as err:
-            raise CDKDeploymentError(f"Bootstrap failed: {err}")
+            raise CDKDeploymentError(f"Bootstrap failed: {err}", {})
 
-    def _parse_progress_event(self, line: str):
-        """Parse CDK deployment progress line into event.
 
-        Args:
-            line: Output line from CDK
+def check_cdk_installed() -> bool:
+    """Check if CDK CLI is installed.
 
-        Returns:
-            Parsed event or None
-        """
-        # Parse CloudFormation events
-        if " | " in line and ("CREATE_" in line or "UPDATE_" in line or "DELETE_" in line):
-            parts = line.split(" | ")
-            if len(parts) >= 4:
-                return {
-                    "type": "resource",
-                    "stackName": parts[0].strip(),
-                    "logicalId": parts[2].strip(),
-                    "status": parts[3].strip(),
-                    "reason": parts[4].strip() if len(parts) > 4 else "",
-                }
+    Returns:
+        True if CDK is installed
+    """
+    try:
+        result = subprocess.run(["cdk", "--version"], capture_output=True, text=True)
+        return result.returncode == 0
+    except FileNotFoundError:
+        return False
 
-        # Parse stack events
-        if "Stack " in line and ("CREATE_COMPLETE" in line or "UPDATE_COMPLETE" in line):
-            return {"type": "stack", "status": "complete", "message": line}
 
-        return None
+def parse_progress_event(line: str) -> dict:
+    """Parse CDK deployment progress line into event.
+
+    Args:
+        line: Output line from CDK
+
+    Returns:
+        Parsed event or empty dict
+    """
+    # Parse CloudFormation events
+    if " | " in line and ("CREATE_" in line or "UPDATE_" in line or "DELETE_" in line):
+        parts = line.split(" | ")
+        if len(parts) >= 4:
+            return {
+                "type": "resource",
+                "stackName": parts[0].strip(),
+                "logicalId": parts[2].strip(),
+                "status": parts[3].strip(),
+                "reason": parts[4].strip() if len(parts) > 4 else "",
+            }
+
+    # Parse stack events
+    if "Stack " in line and ("CREATE_COMPLETE" in line or "UPDATE_COMPLETE" in line):
+        return {"type": "stack", "status": "complete", "message": line}
+
+    return {}
 
 
 class CDKProgressReporter:
