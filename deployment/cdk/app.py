@@ -37,8 +37,8 @@ def load_json_file(file_path: Path) -> dict:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"Warning: Failed to load {file_path}: {e}")
+        except (json.JSONDecodeError, IOError) as err:
+            print(f"Warning: Failed to load {file_path}: {err}")
             return {}
     return {}
 
@@ -58,8 +58,8 @@ def save_json_file(file_path: Path, data: dict) -> bool:
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
         return True
-    except IOError as e:
-        print(f"Error: Failed to save {file_path}: {e}")
+    except IOError as err:
+        print(f"Error: Failed to save {file_path}: {err}")
         return False
 
 
@@ -76,8 +76,8 @@ def load_yaml_file(file_path: Path) -> dict:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
-        except (yaml.YAMLError, IOError) as e:
-            print(f"Warning: Failed to load {file_path}: {e}")
+        except (yaml.YAMLError, IOError) as err:
+            print(f"Warning: Failed to load {file_path}: {err}")
             return {}
     return {}
 
@@ -97,8 +97,8 @@ def save_yaml_file(file_path: Path, data: dict) -> bool:
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
         return True
-    except IOError as e:
-        print(f"Error: Failed to save {file_path}: {e}")
+    except IOError as err:
+        print(f"Error: Failed to save {file_path}: {err}")
         return False
 
 
@@ -507,8 +507,8 @@ class EidolonEngineApp:
             self.app,
             "s3",
             game_name=params.get("game_name", "eidolon-engine"),
-            portal_bucket_name=params.get("portal_bucket_name"),
-            scripts_bucket_name=params.get("scripts_bucket_name"),
+            portal_bucket_name=params.get("portal_bucket_name", {}),
+            scripts_bucket_name=params.get("scripts_bucket_name", {}),
             env=env,
         )
 

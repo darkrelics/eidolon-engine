@@ -78,8 +78,8 @@ def store_exits(exits_data):
                 ExpressionAttributeValues=expression_attribute_values,
             )
         print("Exit data stored in DynamoDB successfully")
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while storing exits: {str(e)}")
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while storing exits: {str(err)}")
 
 
 def store_rooms(rooms_data):
@@ -120,8 +120,8 @@ def store_rooms(rooms_data):
                 ExpressionAttributeValues=expression_attribute_values,
             )
         print("Room data stored in DynamoDB successfully")
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while storing rooms: {str(e)}")
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while storing rooms: {str(err)}")
 
 
 def store_archetypes(archetypes_data):
@@ -235,8 +235,8 @@ def load_exits():
         exits = {item["ExitID"]: item for item in exits_response.get("Items", [])}
         print("Exit data loaded from DynamoDB successfully")
         return exits
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while loading exits: {str(e)}")
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while loading exits: {str(err)}")
         return {}
 
 
@@ -253,8 +253,8 @@ def load_rooms():
         rooms = {item["RoomID"]: item for item in rooms_response.get("Items", [])}
         print("Room data loaded from DynamoDB successfully")
         return rooms
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while loading rooms: {str(e)}")
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while loading rooms: {str(err)}")
         return {}
 
 
@@ -271,8 +271,8 @@ def load_archetypes():
         archetypes = {"archetypes": {item["ArchetypeName"]: item for item in response.get("Items", [])}}
         print("Archetype data loaded from DynamoDB successfully")
         return archetypes
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while loading archetypes: {str(e)}")
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while loading archetypes: {str(err)}")
         return {}
 
 
@@ -289,8 +289,8 @@ def load_item_prototypes():
         prototypes = {"itemPrototypes": response.get("Items", [])}
         print("Item prototype data loaded from DynamoDB successfully")
         return prototypes
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while loading item prototypes: {str(e)}")
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while loading item prototypes: {str(err)}")
         return {}
 
 
@@ -432,8 +432,8 @@ def main():
         loaded_prototypes = load_item_prototypes()
         display_item_prototypes(loaded_prototypes)
 
-    except Exception as e:
-        logging.error(f"An unexpected error occurred: {str(e)}")
+    except Exception as err:
+        logging.error(f"An unexpected error occurred: {str(err)}")
 
 
 if __name__ == "__main__":

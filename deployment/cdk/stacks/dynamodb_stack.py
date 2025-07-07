@@ -225,7 +225,7 @@ class DynamoDBStack(Stack):
                 # Log error but assume table doesn't exist
                 print(f"Error checking table existence for {table_name}: {err}")
                 return False
-        except Exception as e:
+        except Exception as err:
             # Handle any other exceptions
-            print(f"Unexpected error checking table {table_name}: {e}")
+            print(f"Unexpected error checking table {table_name}: {err}")
             return False

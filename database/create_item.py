@@ -44,8 +44,8 @@ def display_rooms() -> list:
             title = room.get("Title", "No Title")
             print(f"{room_id}: {title}")
         return rooms
-    except Exception as e:
-        print(f"Error fetching rooms: {e}")
+    except Exception as err:
+        print(f"Error fetching rooms: {err}")
         return []
 
 
@@ -83,8 +83,8 @@ def display_prototypes() -> list:
             name = prototype.get("prototype_name", "No Name")
             print(f"{prototype_id}: {name}")
         return prototypes
-    except Exception as e:
-        print(f"Error fetching prototypes: {e}")
+    except Exception as err:
+        print(f"Error fetching prototypes: {err}")
         return []
 
 
