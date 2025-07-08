@@ -5,6 +5,7 @@ allowing for selective updates without full redeployment.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 

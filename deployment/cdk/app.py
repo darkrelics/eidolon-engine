@@ -132,10 +132,14 @@ def validate_required_config(config: dict) -> tuple[bool, list[str]]:
     if not api_config:
         errors.append("Missing required 'API' section in configuration")
     else:
-        if not api_config.get("Domain"):
-            errors.append("API.Domain is required")
-        if not api_config.get("HostedZoneId"):
-            errors.append("API.HostedZoneId is required")
+        # Check for empty strings as well as missing keys
+        domain = api_config.get("Domain", "")
+        hosted_zone_id = api_config.get("HostedZoneId", "")
+        
+        if not domain or not domain.strip():
+            errors.append("API.Domain is required and cannot be empty")
+        if not hosted_zone_id or not hosted_zone_id.strip():
+            errors.append("API.HostedZoneId is required and cannot be empty")
 
     return len(errors) == 0, errors
 
@@ -346,8 +350,20 @@ class ConfigurationManager:
         self.config: dict = self.load_config()
 
     def load_config(self) -> dict:
-        """Load configuration from file."""
-        return load_yaml_file(self.config_path)
+        """Load configuration from file merged with template."""
+        config = load_yaml_file(self.config_path)
+        
+        # If config exists, merge with template to fill in missing values
+        if config:
+            template_path = self.config_path.parent.parent / "config.template.yml"
+            if template_path.exists():
+                template = load_yaml_file(template_path)
+                if template:
+                    # Deep merge config over template (config values take precedence)
+                    deep_merge(template, config)
+                    return template
+        
+        return config or {}
 
     def save_config(self) -> None:
         """Save configuration to file."""
@@ -408,7 +424,9 @@ class EidolonEngineApp:
 
         # Initialize managers
         print("Loading configuration...")
-        self.config_manager = ConfigurationManager()
+        # Use absolute path to config.yml in project root
+        config_path = Path(__file__).parent / "../../config.yml"
+        self.config_manager = ConfigurationManager(str(config_path))
 
         print("Loading deployment state...")
         self.state_manager = DeploymentState()
@@ -466,13 +484,21 @@ class EidolonEngineApp:
             sys.exit(1)
 
     def load_configuration(self) -> dict:
-        """Load configuration from config.yml or use defaults."""
+        """Load configuration from config.yml merged with template defaults."""
+        template_path = Path(__file__).parent / "../../config.template.yml"
+        
+        # Start with template
+        template_config = load_yaml_file(template_path)
+        if not template_config:
+            template_config = {}
+            
         if self.config_manager.exists():
-            return self.config_manager.config
+            # Merge existing config over template (existing values take precedence)
+            deep_merge(template_config, self.config_manager.config)
+            return template_config
         else:
-            # Load from template if no config exists
-            template_path = Path(__file__).parent / "../../config.template.yml"
-            return load_yaml_file(template_path)
+            # Just use template if no config exists
+            return template_config
 
     def create_stacks(self) -> None:
         """Create all CDK stacks with proper dependencies."""

@@ -199,23 +199,25 @@ def validate_resources(session, params: dict) -> dict:
         validator = ResourceValidatorFactory.create_validator("s3_bucket", session)
 
         # Check portal bucket
-        portal_bucket = params.get("portal_bucket_name", "eidolon-portal")
-        expected_config = {
-            "website_enabled": True,
-            "public_access_block": {
-                "block_public_acls": False,
-                "block_public_policy": False,
-                "ignore_public_acls": False,
-                "restrict_public_buckets": False,
-            },
-        }
-        result = validator.validate(portal_bucket, expected_config)
-        all_results[portal_bucket] = result
+        portal_bucket = params.get("portal_bucket_name", "")
+        if portal_bucket:  # Only validate if bucket name is provided
+            expected_config = {
+                "website_enabled": True,
+                "public_access_block": {
+                    "block_public_acls": False,
+                    "block_public_policy": False,
+                    "ignore_public_acls": False,
+                    "restrict_public_buckets": False,
+                },
+            }
+            result = validator.validate(portal_bucket, expected_config)
+            all_results[portal_bucket] = result
 
         # Check scripts bucket
-        scripts_bucket = params.get("scripts_bucket_name", "eidolon-scripts")
-        result = validator.validate(scripts_bucket, expected_config)
-        all_results[scripts_bucket] = result
+        scripts_bucket = params.get("scripts_bucket_name", "")
+        if scripts_bucket:  # Only validate if bucket name is provided
+            result = validator.validate(scripts_bucket, expected_config)
+            all_results[scripts_bucket] = result
     except Exception as err:
         print(f"Warning: Error validating S3 buckets: {err}")
 
