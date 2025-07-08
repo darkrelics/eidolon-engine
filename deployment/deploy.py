@@ -497,7 +497,7 @@ class IncrementalDeploymentOrchestrator:
 
         # Initialize config from template if config.yml doesn't exist
         if not self.config_manager.exists():
-            template_path = Path(__file__).parent / "config.yml.template"
+            template_path = Path(__file__).parent / "../config.template.yml"
             if template_path.exists():
                 print("Initializing configuration from template...")
                 self.config_manager.merge_with_template(str(template_path))

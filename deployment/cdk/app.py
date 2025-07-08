@@ -471,7 +471,7 @@ class EidolonEngineApp:
             return self.config_manager.config
         else:
             # Load from template if no config exists
-            template_path = Path(__file__).parent.parent / "config.yml.template"
+            template_path = Path(__file__).parent / "../../config.template.yml"
             return load_yaml_file(template_path)
 
     def create_stacks(self) -> None:

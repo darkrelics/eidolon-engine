@@ -17,7 +17,7 @@ def load_config(config_path: str) -> dict:
     path = Path(config_path)
     if not path.exists():
         print(f"Configuration file {config_path} not found. Creating from template...")
-        template_path = Path(__file__).parent / "config.yml.template"
+        template_path = Path(__file__).parent / "../config.template.yml"
         if template_path.exists():
             with open(template_path, "r") as f:
                 config = yaml.safe_load(f)
