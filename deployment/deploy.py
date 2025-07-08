@@ -10,6 +10,7 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
+from build_executor import BuildExecutor
 from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
 from deployment_logic import analyze_changes, prompt_missing_parameters
 
@@ -46,6 +47,9 @@ class IncrementalDeploymentOrchestrator:
 
         # Initialize CDK API integration
         self.cdk_api = CDKApiIntegration(cdk_dir=str(self.cdk_dir), profile=profile, region=region)
+        
+        # Initialize build executor
+        self.build_executor = BuildExecutor(self.session)
 
     def check_prerequisites(self) -> bool:
         """Check if all prerequisites are met for deployment.
@@ -208,7 +212,7 @@ class IncrementalDeploymentOrchestrator:
         return params
 
     def execute_deployment(self, plan: dict, auto_approve: bool = False) -> bool:
-        """Execute the deployment plan.
+        """Execute the deployment plan in phases.
 
         Args:
             plan: Deployment plan from analyze_changes
@@ -255,51 +259,246 @@ class IncrementalDeploymentOrchestrator:
         # Add deployment mode context
         context["deployment_mode"] = plan["parameters"].get("deployment_mode", "hybrid")
 
-        # Deploy using CDK Python API
-        print("\nDeploying infrastructure with CDK...")
-
+        # Execute phased deployment
+        return self._execute_phased_deployment(context, plan, auto_approve)
+    
+    def _execute_phased_deployment(self, context: dict, plan: dict, auto_approve: bool) -> bool:
+        """Execute deployment in phases with build execution.
+        
+        Args:
+            context: CDK context
+            plan: Deployment plan
+            auto_approve: Skip confirmation prompts
+            
+        Returns:
+            True if all phases succeeded
+        """
+        # Define deployment phases
+        phases = [
+            {
+                "name": "Foundation",
+                "stacks": ["iam", "s3", "dynamodb"],
+                "description": "IAM roles, S3 buckets, and DynamoDB tables"
+            },
+            {
+                "name": "Authentication & Monitoring",
+                "stacks": ["cognito", "cloudwatch"],
+                "description": "User authentication and logging infrastructure"
+            },
+            {
+                "name": "Build Infrastructure",
+                "stacks": ["codebuild"],
+                "description": "CodeBuild projects for Lambda and portal builds"
+            },
+            {
+                "name": "Build Execution",
+                "stacks": [],  # No stacks, just build execution
+                "description": "Execute CodeBuild projects to create deployment artifacts",
+                "execute_builds": True
+            },
+            {
+                "name": "Application Layer",
+                "stacks": ["base-lambda", "lambda", "cognito-trigger"],
+                "description": "Lambda functions and API Gateway"
+            },
+            {
+                "name": "Distribution",
+                "stacks": ["cloudfront"],
+                "description": "CloudFront distribution for content delivery"
+            }
+        ]
+        
+        # Track overall success
+        all_succeeded = True
+        completed_phases = []
+        
         try:
-            # Create progress reporter
-            progress_reporter = CDKProgressReporter()
-
-            # Execute deployment
-            result = self.cdk_api.deploy(
-                stacks=None,  # Deploy all stacks
-                context=context,
-                require_approval="never" if auto_approve else "broadening",
-                progress_callback=progress_reporter,
-            )
-
-            if result["success"]:
-                print("\n[SUCCESS] Deployment completed successfully!")
-
-                # Update configuration file with outputs
-                self.update_configuration(plan["parameters"])
-
-                # Record deployment in state
-                self.state_manager.add_deployment_event(
-                    "deployment_complete",
-                    {
-                        "stacks_created": plan["create_stacks"],
-                        "stacks_updated": plan["update_stacks"],
-                        "outputs": result.get("outputs", {}),
-                    },
+            for i, phase in enumerate(phases, 1):
+                print(f"\n{'='*60}")
+                print(f"Phase {i}/{len(phases)}: {phase['name']}")
+                print(f"Description: {phase['description']}")
+                print(f"{'='*60}")
+                
+                # Execute build phase
+                if phase.get("execute_builds"):
+                    if not self._execute_build_phase(plan["parameters"]):
+                        print(f"\n[ERROR] Phase {i} ({phase['name']}) failed!")
+                        all_succeeded = False
+                        break
+                    completed_phases.append(phase["name"])
+                    continue
+                
+                # Deploy stacks in this phase
+                phase_stacks = phase["stacks"]
+                if not phase_stacks:
+                    continue
+                    
+                # Filter to only stacks that need deployment
+                stacks_to_deploy = [
+                    stack for stack in phase_stacks 
+                    if stack in plan.get("create_stacks", []) + plan.get("update_stacks", [])
+                ]
+                
+                if not stacks_to_deploy:
+                    print(f"No stacks to deploy in this phase")
+                    completed_phases.append(phase["name"])
+                    continue
+                
+                print(f"\nDeploying stacks: {', '.join(stacks_to_deploy)}")
+                
+                # Deploy phase stacks
+                progress_reporter = CDKProgressReporter()
+                result = self.cdk_api.deploy(
+                    stacks=stacks_to_deploy,
+                    context=context,
+                    require_approval="never" if auto_approve else "broadening",
+                    progress_callback=progress_reporter,
                 )
-                self.state_manager.save_state()
-
-                return True
-            else:
-                print("\n[ERROR] Deployment failed!")
-                return False
-
+                
+                if result["success"]:
+                    print(f"\n[SUCCESS] Phase {i} ({phase['name']}) completed successfully!")
+                    completed_phases.append(phase["name"])
+                    
+                    # Update state after each phase
+                    self.state_manager.add_deployment_event(
+                        f"phase_{phase['name'].lower().replace(' ', '_')}_complete",
+                        {
+                            "stacks_deployed": stacks_to_deploy,
+                            "outputs": result.get("outputs", {})
+                        }
+                    )
+                    self.state_manager.save_state()
+                else:
+                    print(f"\n[ERROR] Phase {i} ({phase['name']}) failed!")
+                    all_succeeded = False
+                    break
+                    
         except CDKDeploymentError as err:
             print(f"\n[ERROR] Deployment failed: {err}")
             if err.details:
                 print(f"Details: {err.details}")
-            return False
+            all_succeeded = False
         except Exception as err:
             print(f"\n[ERROR] Unexpected error during deployment: {err}")
+            all_succeeded = False
+            
+        # Final summary
+        print(f"\n{'='*60}")
+        print("DEPLOYMENT SUMMARY")
+        print(f"{'='*60}")
+        print(f"Completed phases: {len(completed_phases)}/{len(phases)}")
+        for phase_name in completed_phases:
+            print(f"  ✓ {phase_name}")
+        
+        if all_succeeded:
+            print("\n[SUCCESS] All deployment phases completed successfully!")
+            
+            # Update configuration file with outputs
+            self.update_configuration(plan["parameters"])
+            
+            # Record deployment completion
+            self.state_manager.add_deployment_event(
+                "deployment_complete",
+                {
+                    "phases_completed": completed_phases,
+                    "total_phases": len(phases)
+                }
+            )
+            self.state_manager.save_state()
+        else:
+            print("\n[ERROR] Deployment failed!")
+            print("You can resume deployment by running the command again.")
+            
+        return all_succeeded
+    
+    def _execute_build_phase(self, params: dict) -> bool:
+        """Execute CodeBuild projects.
+        
+        Args:
+            params: Deployment parameters
+            
+        Returns:
+            True if builds succeeded
+        """
+        print("\nPreparing to execute CodeBuild projects...")
+        
+        # Get CodeBuild project names from stack outputs
+        try:
+            stacks = self.cdk_api.list_stacks()
+            codebuild_stack = next((s for s in stacks if s["name"] == "codebuild"), None)
+            
+            if not codebuild_stack:
+                print("[WARNING] CodeBuild stack not found, skipping build execution")
+                return True
+                
+            # Get stack outputs
+            outputs = self._get_stack_outputs("codebuild")
+            
+            # Collect project names
+            project_names = []
+            
+            # Portal/Incremental build project
+            if "CodeBuildProjectName" in outputs:
+                project_names.append(outputs["CodeBuildProjectName"])
+                
+            # Lambda layer build project  
+            if "LambdaLayerProjectName" in outputs:
+                project_names.append(outputs["LambdaLayerProjectName"])
+                
+            # Lambda functions build project
+            if "LambdaFunctionsProjectName" in outputs:
+                project_names.append(outputs["LambdaFunctionsProjectName"])
+                
+            if not project_names:
+                print("[WARNING] No CodeBuild projects found in stack outputs")
+                return True
+                
+            print(f"\nFound {len(project_names)} CodeBuild project(s):")
+            for name in project_names:
+                print(f"  - {name}")
+                
+            # Execute builds (Lambda builds sequentially, portal in parallel with them)
+            lambda_projects = [p for p in project_names if "lambda" in p.lower()]
+            portal_projects = [p for p in project_names if "lambda" not in p.lower()]
+            
+            # Execute Lambda builds first (dependencies before functions)
+            if lambda_projects:
+                print("\nExecuting Lambda builds sequentially...")
+                if not self.build_executor.execute_builds(lambda_projects, parallel=False):
+                    return False
+                    
+            # Execute portal/incremental builds
+            if portal_projects:
+                print("\nExecuting portal/incremental builds...")
+                if not self.build_executor.execute_builds(portal_projects, parallel=True):
+                    return False
+                    
+            return True
+            
+        except Exception as err:
+            print(f"[ERROR] Failed to execute builds: {err}")
             return False
+            
+    def _get_stack_outputs(self, stack_name: str) -> dict:
+        """Get outputs from a CloudFormation stack.
+        
+        Args:
+            stack_name: Stack name
+            
+        Returns:
+            Dictionary of output key-value pairs
+        """
+        try:
+            response = self.cfn_client.describe_stacks(StackName=stack_name)
+            if response["Stacks"]:
+                stack = response["Stacks"][0]
+                outputs = {}
+                for output in stack.get("Outputs", []):
+                    outputs[output["OutputKey"]] = output["OutputValue"]
+                return outputs
+        except ClientError:
+            pass
+        return {}
 
     def update_configuration(self, params: dict) -> None:
         """Update server configuration file with deployment outputs.
