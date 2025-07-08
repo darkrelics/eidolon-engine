@@ -38,35 +38,90 @@ def create_execution_role(scope: Construct, role_id: str, game_name: str, princi
     )
 
 
-def attach_managed_policies(scope: Construct, role: iam.Role, cloudwatch_policy_arn: str, dynamodb_policy_arn: str) -> None:
-    """Attach managed policies to the execution role.
+def create_cloudwatch_policy(scope: Construct, game_name: str) -> iam.ManagedPolicy:
+    """Create CloudWatch access policy.
 
     Args:
         scope: CDK construct scope
-        role: IAM role to attach policies to
-        cloudwatch_policy_arn: ARN of the CloudWatch access policy
-        dynamodb_policy_arn: ARN of the DynamoDB access policy
+        game_name: Name of the game for resource naming
+
+    Returns:
+        Managed policy for CloudWatch access
     """
-    # Validate ARNs early
-    if not cloudwatch_policy_arn:
-        raise ValueError("CloudWatch policy ARN is required")
-    if not dynamodb_policy_arn:
-        raise ValueError("DynamoDB policy ARN is required")
+    return iam.ManagedPolicy(
+        scope,
+        "cloudwatch-access",
+        managed_policy_name=f"eidolon-{game_name}-cloudwatch-access",
+        document=iam.PolicyDocument(
+            statements=[
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=[
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents",
+                        "logs:DescribeLogStreams",
+                    ],
+                    resources=[f"arn:aws:logs:{scope.region}:{scope.account}:log-group:/aws/eidolon/*"],
+                ),
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=[
+                        "cloudwatch:PutMetricData",
+                    ],
+                    resources=["*"],
+                ),
+            ]
+        ),
+        description=f"Policy for accessing {game_name} CloudWatch logs and metrics",
+    )
 
-    # Import and attach CloudWatch policy
-    cloudwatch_policy = iam.ManagedPolicy.from_managed_policy_arn(scope, "imported-cloudwatch-policy", cloudwatch_policy_arn)
-    role.add_managed_policy(cloudwatch_policy)
 
-    # Import and attach DynamoDB policy
-    dynamodb_policy = iam.ManagedPolicy.from_managed_policy_arn(scope, "imported-dynamodb-policy", dynamodb_policy_arn)
-    role.add_managed_policy(dynamodb_policy)
+def create_dynamodb_policy(scope: Construct, game_name: str) -> iam.ManagedPolicy:
+    """Create DynamoDB access policy.
+
+    Args:
+        scope: CDK construct scope
+        game_name: Name of the game for resource naming
+
+    Returns:
+        Managed policy for DynamoDB access
+    """
+    # Table names that will be created
+    table_names = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story"]
+    table_arns = [f"arn:aws:dynamodb:{scope.region}:{scope.account}:table/{name}" for name in table_names]
+    
+    return iam.ManagedPolicy(
+        scope,
+        "dynamodb-access",
+        managed_policy_name=f"eidolon-{game_name}-dynamodb-access",
+        document=iam.PolicyDocument(
+            statements=[
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=[
+                        "dynamodb:GetItem",
+                        "dynamodb:PutItem",
+                        "dynamodb:UpdateItem",
+                        "dynamodb:DeleteItem",
+                        "dynamodb:Query",
+                        "dynamodb:Scan",
+                        "dynamodb:BatchGetItem",
+                        "dynamodb:BatchWriteItem",
+                    ],
+                    resources=table_arns,
+                )
+            ]
+        ),
+        description=f"Policy for accessing {game_name} DynamoDB tables",
+    )
 
 
 class IAMStack(Stack):
     """IAM stack for Eidolon Engine server execution role."""
 
     def __init__(
-        self, scope: Construct, construct_id: str, game_name: str, cloudwatch_policy_arn: str, dynamodb_policy_arn: str, **kwargs
+        self, scope: Construct, construct_id: str, game_name: str, **kwargs
     ) -> None:
         """Initialize IAM stack.
 
@@ -74,17 +129,11 @@ class IAMStack(Stack):
             scope: CDK app scope
             construct_id: Stack identifier
             game_name: Name of the game
-            cloudwatch_policy_arn: ARN of the CloudWatch access policy
-            dynamodb_policy_arn: ARN of the DynamoDB access policy
             **kwargs: Additional stack properties
         """
         # Fail-early validation
         if not game_name:
             raise ValueError("game_name is required")
-        if not cloudwatch_policy_arn:
-            raise ValueError("cloudwatch_policy_arn is required")
-        if not dynamodb_policy_arn:
-            raise ValueError("dynamodb_policy_arn is required")
 
         super().__init__(scope, construct_id, **kwargs)
 
@@ -94,8 +143,13 @@ class IAMStack(Stack):
         # Create execution role with the composite principal
         self.execution_role = create_execution_role(self, "server-execution-role", game_name, composite_principal)
 
-        # Attach managed policies
-        attach_managed_policies(self, self.execution_role, cloudwatch_policy_arn, dynamodb_policy_arn)
+        # Create and attach policies
+        self.cloudwatch_policy = create_cloudwatch_policy(self, game_name)
+        self.dynamodb_policy = create_dynamodb_policy(self, game_name)
+        
+        # Attach policies to role
+        self.execution_role.add_managed_policy(self.cloudwatch_policy)
+        self.execution_role.add_managed_policy(self.dynamodb_policy)
 
         # Create instance profile for EC2 use
         self.instance_profile = iam.CfnInstanceProfile(
@@ -121,4 +175,18 @@ class IAMStack(Stack):
             "ServerInstanceProfileName",
             value=instance_profile_name,
             description="Name of the EC2 instance profile",
+        )
+        
+        CfnOutput(
+            self,
+            "CloudWatchPolicyArn",
+            value=self.cloudwatch_policy.managed_policy_arn,
+            description="ARN of the CloudWatch access policy",
+        )
+        
+        CfnOutput(
+            self,
+            "DynamoDBPolicyArn",
+            value=self.dynamodb_policy.managed_policy_arn,
+            description="ARN of the DynamoDB access policy",
         )

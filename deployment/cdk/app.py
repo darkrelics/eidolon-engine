@@ -486,33 +486,48 @@ class EidolonEngineApp:
         
         print(f"Deployment mode: {deploy_mode}")
 
-        # Create unified backend infrastructure (same for all modes)
-        self.create_unified_backend(env, params)
-
-        # Create frontend infrastructure based on deployment mode
-        if deploy_mode == "mud":
-            self.create_portal_frontend(env, params)
-        elif deploy_mode in ["incremental", "hybrid"]:
-            self.create_incremental_frontend(env, params)
-
-        # Create IAM stack with server execution role
+        # Create IAM stack early (no dependencies)
         self.create_iam_stack(env, params)
+        
+        # Create foundation stacks (S3, DynamoDB, Cognito, CloudWatch)
+        self.create_foundation_stacks(env, params)
+        
+        # Create build infrastructure (CodeBuild)
+        self.create_build_infrastructure(env, params, deploy_mode)
+        
+        # Note: Build execution will happen here in phase 2
+        
+        # Create application stacks (Lambda, API Gateway)
+        self.create_application_stacks(env, params)
+        
+        # Create distribution layer (CloudFront)
+        self.create_distribution_layer(env, params)
 
-    def create_unified_backend(self, env: cdk.Environment, params: dict) -> None:
-        """Create unified backend infrastructure for all deployment modes."""
-        # Create Cognito stack (used by all modes)
+    def create_foundation_stacks(self, env: cdk.Environment, params: dict) -> None:
+        """Create foundation infrastructure stacks."""
+        # Create S3 stack first (no dependencies)
+        self.s3_stack = S3Stack(
+            self.app,
+            "s3",
+            game_name=params.get("game_name", "eidolon-engine"),
+            portal_bucket_name=params.get("portal_bucket_name", {}),
+            scripts_bucket_name=params.get("scripts_bucket_name", {}),
+            env=env,
+        )
+
+        # Create unified DynamoDB tables (no dependencies)
+        unified_tables = self.get_unified_table_names(params)
+        
+        self.dynamodb_stack = DynamoDBStack(
+            self.app, "dynamodb", game_name=params.get("game_name", "eidolon-engine"), table_names=unified_tables, env=env
+        )
+
+        # Create Cognito stack (no dependencies)
         self.cognito_stack = CognitoStack(
             self.app,
             "cognito",
             contact_email=params.get("contact_email", "contact@darkrelics.net"),
             env=env,
-        )
-
-        # Create unified DynamoDB tables (same tables for all modes)
-        unified_tables = self.get_unified_table_names(params)
-        
-        self.dynamodb_stack = DynamoDBStack(
-            self.app, "dynamodb", game_name=params.get("game_name", "eidolon-engine"), table_names=unified_tables, env=env
         )
 
         # Create CloudWatch stack
@@ -524,16 +539,35 @@ class EidolonEngineApp:
             env=env,
         )
 
-        # Create S3 stack (handles existing buckets)
-        self.s3_stack = S3Stack(
+    def create_build_infrastructure(self, env: cdk.Environment, params: dict, deploy_mode: str) -> None:
+        """Create CodeBuild infrastructure."""
+        # Create CodeBuild stack
+        buildspec_path = params.get("portal_buildspec_path", "buildspec/portal.yml")
+        if deploy_mode in ["incremental", "hybrid"]:
+            buildspec_path = params.get("incremental_buildspec_path", "buildspec/incremental.yml")
+            
+        self.codebuild_stack = CodeBuildStack(
             self.app,
-            "s3",
-            game_name=params.get("game_name", "eidolon-engine"),
-            portal_bucket_name=params.get("portal_bucket_name", {}),
-            scripts_bucket_name=params.get("scripts_bucket_name", {}),
+            "codebuild",
+            github_owner=params.get("github_owner", "robinje"),
+            github_repo=params.get("github_repo", "eidolon-engine"),
+            github_branch=params.get("github_branch", "main"),
+            cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
+            cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
+            portal_bucket=self.s3_stack.portal_bucket,
+            lambda_bucket=self.s3_stack.lambda_bucket,
+            buildspec_path=buildspec_path,
+            cloudfront_distribution_id="",  # Will be set later or via update
             env=env,
         )
-
+        self.codebuild_stack.add_dependency(self.cognito_stack)
+        self.codebuild_stack.add_dependency(self.s3_stack)
+    
+    def create_application_stacks(self, env: cdk.Environment, params: dict) -> None:
+        """Create application layer stacks (Lambda, API Gateway)."""
+        # Get unified table names
+        unified_tables = self.get_unified_table_names(params)
+        
         # Create base Lambda stack for common functions
         self.base_lambda_stack = BaseLambdaStack(
             self.app,
@@ -571,7 +605,6 @@ class EidolonEngineApp:
 
         # Create Cognito trigger stack (depends on Cognito, DynamoDB, and base Lambda)
         from stacks.cognito_trigger_stack import CognitoTriggerStack
-        from aws_cdk import aws_cognito as cognito
         
         # Get Cognito user pool ARN as string to avoid dependency
         cognito_user_pool_arn = f"arn:aws:cognito-idp:{env.region}:{env.account}:userpool/*"
@@ -589,8 +622,17 @@ class EidolonEngineApp:
         # Note: We don't add cognito as a dependency to avoid circular reference
         self.cognito_trigger_stack.add_dependency(self.dynamodb_stack)
         self.cognito_trigger_stack.add_dependency(self.base_lambda_stack)
-        
-        # TODO: Configure Cognito trigger after deployment to avoid circular dependency
+    
+    def create_distribution_layer(self, env: cdk.Environment, params: dict) -> None:
+        """Create CloudFront distribution."""
+        self.cloudfront_stack = CloudFrontStack(
+            self.app,
+            "cloudfront",
+            portal_bucket=self.s3_stack.portal_bucket,
+            existing_distribution_id=params.get("cloudfront_distribution_id", ""),
+            env=env,
+        )
+        self.cloudfront_stack.add_dependency(self.s3_stack)
 
     def get_unified_table_names(self, params: dict) -> dict:
         """Get unified table names for all deployment modes.
@@ -613,67 +655,6 @@ class EidolonEngineApp:
         
         return tables
     
-    def create_portal_frontend(self, env: cdk.Environment, params: dict) -> None:
-        """Create Portal frontend infrastructure for MUD mode."""
-        # Create Portal CloudFront stack
-        self.cloudfront_stack = CloudFrontStack(
-            self.app,
-            "cloudfront",
-            portal_bucket=self.s3_stack.portal_bucket,
-            existing_distribution_id=params.get("cloudfront_distribution_id", ""),
-            env=env,
-        )
-        self.cloudfront_stack.add_dependency(self.s3_stack)
-
-        # Create Portal CodeBuild stack
-        self.codebuild_stack = CodeBuildStack(
-            self.app,
-            "codebuild",
-            github_owner=params.get("github_owner", "robinje"),
-            github_repo=params.get("github_repo", "eidolon-engine"),
-            github_branch=params.get("github_branch", "main"),
-            cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
-            cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
-            portal_bucket=self.s3_stack.portal_bucket,
-            lambda_bucket=self.s3_stack.lambda_bucket,
-            buildspec_path=params.get("portal_buildspec_path", "buildspec/portal.yml"),
-            cloudfront_distribution_id=self.cloudfront_stack.distribution.distribution_id,
-            env=env,
-        )
-        self.codebuild_stack.add_dependency(self.cognito_stack)
-        self.codebuild_stack.add_dependency(self.s3_stack)
-        self.codebuild_stack.add_dependency(self.cloudfront_stack)
-
-    def create_incremental_frontend(self, env: cdk.Environment, params: dict) -> None:
-        """Create Incremental frontend infrastructure for Incremental/Hybrid modes."""
-        # Create Incremental CloudFront stack
-        self.cloudfront_stack = CloudFrontStack(
-            self.app,
-            "cloudfront",
-            portal_bucket=self.s3_stack.portal_bucket,
-            existing_distribution_id=params.get("cloudfront_distribution_id", ""),
-            env=env,
-        )
-        self.cloudfront_stack.add_dependency(self.s3_stack)
-
-        # Create Incremental CodeBuild stack
-        self.codebuild_stack = CodeBuildStack(
-            self.app,
-            "codebuild",
-            github_owner=params.get("github_owner", "robinje"),
-            github_repo=params.get("github_repo", "eidolon-engine"),
-            github_branch=params.get("github_branch", "main"),
-            cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
-            cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
-            portal_bucket=self.s3_stack.portal_bucket,
-            lambda_bucket=self.s3_stack.lambda_bucket,
-            buildspec_path=params.get("incremental_buildspec_path", "buildspec/incremental.yml"),
-            cloudfront_distribution_id=self.cloudfront_stack.distribution.distribution_id,
-            env=env,
-        )
-        self.codebuild_stack.add_dependency(self.cognito_stack)
-        self.codebuild_stack.add_dependency(self.s3_stack)
-        self.codebuild_stack.add_dependency(self.cloudfront_stack)
 
     def create_iam_stack(self, env: cdk.Environment, params: dict) -> None:
         """Create IAM stack with server execution role."""
@@ -681,12 +662,8 @@ class EidolonEngineApp:
             self.app,
             "iam",
             game_name=params.get("game_name", "eidolon-engine"),
-            cloudwatch_policy_arn=self.cloudwatch_stack.access_policy.managed_policy_arn,
-            dynamodb_policy_arn=self.dynamodb_stack.access_policy.managed_policy_arn,
             env=env,
         )
-        self.iam_stack.add_dependency(self.cloudwatch_stack)
-        self.iam_stack.add_dependency(self.dynamodb_stack)
 
     def get_deployment_parameters(self) -> dict:
         """Get deployment parameters from config or state."""

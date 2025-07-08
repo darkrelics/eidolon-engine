@@ -70,12 +70,7 @@ class CodeBuildStack(Stack):
                 owner=github_owner,
                 repo=github_repo,
                 branch_or_ref=github_branch,
-                webhook=True,
-                webhook_filters=[
-                    codebuild.FilterGroup.in_event_of(
-                        codebuild.EventAction.PUSH, codebuild.EventAction.PULL_REQUEST_MERGED
-                    ).and_branch_is(github_branch)
-                ],
+                webhook=False,
             ),
             environment=codebuild.BuildEnvironment(
                 build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.MEDIUM
@@ -116,6 +111,7 @@ class CodeBuildStack(Stack):
                     owner=github_owner,
                     repo=github_repo,
                     branch_or_ref=github_branch,
+                    webhook=False,
                 ),
                 environment=codebuild.BuildEnvironment(
                     build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
@@ -143,6 +139,7 @@ class CodeBuildStack(Stack):
                     owner=github_owner,
                     repo=github_repo,
                     branch_or_ref=github_branch,
+                    webhook=False,
                 ),
                 environment=codebuild.BuildEnvironment(
                     build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
