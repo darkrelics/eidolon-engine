@@ -82,6 +82,16 @@ CloudWatch:
   metrics_namespace: eidolon/metrics  # deployment-generated
   AccessPolicyArn: ""  # deployment-generated
 
+# CORS configuration for API Gateway
+CORS:
+  AllowedOrigins: []  # deployment-generated based on deployment mode
+
+# API configuration
+API:
+  Domain: ""  # optional - custom domain for API
+  HostedZoneId: ""  # optional - Route53 hosted zone ID
+  Subdomain: api  # optional - subdomain for API (e.g., api.example.com)
+
 # Logging configuration
 Logging:
   ApplicationName: eidolon-engine

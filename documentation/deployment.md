@@ -2,6 +2,13 @@
 
 This guide explains how to deploy and manage Eidolon Engine infrastructure using the CDK-based incremental deployment system.
 
+## Prerequisites
+
+- Python 3.8 or later (use `python3` command)
+- AWS CLI configured with appropriate credentials
+- AWS CDK CLI installed: `npm install -g aws-cdk`
+- Required Python packages: `pip3 install -r requirements/scripts-requirements.txt`
+
 ## Overview
 
 The deployment system provides:
@@ -35,7 +42,7 @@ For deploying to a fresh AWS account with no existing infrastructure:
 
 ```bash
 cd deployment
-python deploy.py --region us-east-1
+python3 deploy.py --region us-east-1
 ```
 
 The system will:
@@ -51,10 +58,10 @@ For environments with existing resources (S3 buckets, DynamoDB tables, etc.):
 
 ```bash
 # First, analyze what exists
-python deploy.py --region us-east-1 --analyze-only
+python3 deploy.py --region us-east-1 --analyze-only
 
 # Then deploy, adopting existing resources
-python deploy.py --region us-east-1
+python3 deploy.py --region us-east-1
 ```
 
 The system will:
@@ -70,7 +77,7 @@ The system will:
 To update an existing CDK deployment:
 
 ```bash
-python incremental_deploy.py --region us-east-1
+python3 deploy.py --region us-east-1
 ```
 
 The system will:
@@ -82,7 +89,7 @@ The system will:
 ## Command Line Options
 
 ```bash
-python deploy.py [OPTIONS]
+python3 deploy.py [OPTIONS]
 
 Options:
   --region REGION        AWS region (default: us-east-1)
@@ -134,13 +141,12 @@ API:
   HostedZoneId: Z1234567890ABC
   Subdomain: api  # api.darkrelics.net
 
-# CORS configuration
+# CORS configuration for API Gateway
 CORS:
-  AllowedOrigins:
-    - https://mud.darkrelics.net
-    - https://portal.darkrelics.net
-    - https://incremental.darkrelics.net
-    - https://darkrelics.net
+  AllowedOrigins: []  # Populated automatically based on deployment mode
+  # For MUD mode: adds portal domain
+  # For Incremental/Hybrid: adds incremental domain
+  # Custom domains can be added manually after deployment
 
 CloudFront:
   distribution_id: E1234567890ABC
@@ -158,7 +164,7 @@ DynamoDB:
     Characters: characters
     Archetypes: archetypes
     Items: items
-    Story: story
+    Story: story  # For incremental game story data
     Rooms: rooms
     Exits: exits
     Prototypes: prototypes
@@ -256,7 +262,7 @@ The deployment process follows a specific order of operations to ensure infrastr
 Run the deployment wizard:
 
 ```bash
-python deployment/deploy.py
+python3 deployment/deploy.py
 ```
 
 This will:
@@ -271,7 +277,7 @@ This will:
 To check if configured resources exist:
 
 ```bash
-python deployment/deploy.py --validate
+python3 deployment/deploy.py --validate
 ```
 
 This validates all resources in config.yml against AWS and reports:
@@ -284,7 +290,7 @@ This validates all resources in config.yml against AWS and reports:
 To see what would be deployed:
 
 ```bash
-python deployment/deploy.py --analyze-only
+python3 deployment/deploy.py --analyze-only
 ```
 
 ### 4. Non-Interactive Deployment
@@ -292,7 +298,7 @@ python deployment/deploy.py --analyze-only
 For CI/CD pipelines:
 
 ```bash
-python deployment/deploy.py --non-interactive --auto-approve
+python3 deployment/deploy.py --non-interactive --auto-approve
 ```
 
 ### 5. Update Scripts Only
@@ -300,7 +306,7 @@ python deployment/deploy.py --non-interactive --auto-approve
 To deploy only Lua scripts:
 
 ```bash
-python deployment/deploy_scripts.py
+python3 deployment/deploy_scripts.py
 ```
 
 ## CI/CD Pipeline
@@ -441,7 +447,7 @@ Common fixes:
 
 ```bash
 # Re-run deployment (only failed stacks will be attempted)
-python deploy.py --region us-east-1
+python3 deploy.py --region us-east-1
 
 # The system will:
 # - Skip already deployed stacks
@@ -472,6 +478,14 @@ cdk destroy --all
 - **Incremental progress**: Build infrastructure step by step
 
 ## Troubleshooting
+
+### Configuration File Path
+
+The deployment system expects `config.yml` to be in the project root directory (one level up from the `deployment/` directory). If you see "No configuration found" errors:
+
+1. Ensure `config.yml` exists in the project root: `/path/to/eidolon-engine/config.yml`
+2. Run deployment commands from the `deployment/` directory
+3. The system will automatically look for `../config.yml`
 
 ### "Stack already exists"
 
@@ -534,13 +548,13 @@ If drift is detected:
 
 ```bash
 # Deploy in MUD mode (Portal frontend)
-python deployment/deploy.py --deploy-mud
+python3 deployment/deploy.py --deploy-mud
 
 # Deploy in Incremental mode
-python deployment/deploy.py --deploy-incremental
+python3 deployment/deploy.py --deploy-incremental
 
 # Deploy in Hybrid mode (supports both game types)
-python deployment/deploy.py --deploy-both
+python3 deployment/deploy.py --deploy-both
 
 # Or set in config.yml
 Deployment:
@@ -567,10 +581,10 @@ Deploy multiple environments:
 
 ```bash
 # Development
-python deploy.py --region us-east-1
+python3 deploy.py --region us-east-1
 
 # Production (different region/account)
-AWS_PROFILE=prod python deploy.py --region eu-west-1
+AWS_PROFILE=prod python3 deploy.py --region eu-west-1
 ```
 
 ### State Management

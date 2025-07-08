@@ -430,7 +430,7 @@ class IncrementalDeploymentOrchestrator:
         # Get CodeBuild project names from stack outputs
         try:
             stacks = self.cdk_api.list_stacks()
-            codebuild_stack = next((s for s in stacks if s["name"] == "codebuild"), None)
+            codebuild_stack = next((s for s in stacks if s == "codebuild"), None)
             
             if not codebuild_stack:
                 print("[WARNING] CodeBuild stack not found, skipping build execution")

@@ -549,10 +549,14 @@ class EidolonEngineApp:
         )
 
         # Create Cognito stack (no dependencies)
+        # Default to dev mode (True) unless explicitly set to production
+        dev_mode = params.get("dev_mode", True)
+        
         self.cognito_stack = CognitoStack(
             self.app,
             "cognito",
             contact_email=params.get("contact_email", "contact@darkrelics.net"),
+            dev_mode=dev_mode,
             env=env,
         )
 
