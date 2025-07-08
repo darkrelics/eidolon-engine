@@ -13,6 +13,10 @@ from botocore.exceptions import ClientError
 from build_executor import BuildExecutor
 from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
 from deployment_logic import analyze_changes, prompt_missing_parameters
+from resource_validator import (
+    ResourceValidatorFactory,
+    generate_drift_report,
+)
 
 from state_manager import ConfigurationManager, DeploymentState
 
@@ -499,6 +503,172 @@ class IncrementalDeploymentOrchestrator:
         except ClientError:
             pass
         return {}
+    
+    def validate_configuration(self, fix_drift: bool = False) -> bool:
+        """Validate config.yml against actual AWS resources.
+        
+        Args:
+            fix_drift: Whether to attempt to fix configuration drift
+            
+        Returns:
+            True if all resources are valid and present
+        """
+        print("\n=== Configuration Validation ===")
+        print("Validating config.yml against AWS resources...\n")
+        
+        # Load configuration
+        config = self.config_manager.config
+        if not config:
+            print("[ERROR] No configuration found. Run deployment first.")
+            return False
+            
+        validation_results = {}
+        all_valid = True
+        
+        # Validate DynamoDB tables
+        if "DynamoDB" in config and "Tables" in config["DynamoDB"]:
+            print("Checking DynamoDB tables...")
+            validator = ResourceValidatorFactory.create_validator("dynamodb_table", self.session)
+            
+            for table_type, table_name in config["DynamoDB"]["Tables"].items():
+                if not table_name:
+                    print(f"  ✗ {table_type}: Not configured")
+                    all_valid = False
+                    continue
+                    
+                result = validator.validate(table_name, {
+                    "billing_mode": "PAY_PER_REQUEST"
+                })
+                validation_results[f"DynamoDB:{table_name}"] = result
+                
+                if result.exists and result.valid:
+                    print(f"  ✓ {table_type}: {table_name} - OK")
+                elif result.exists and not result.valid:
+                    print(f"  ⚠ {table_type}: {table_name} - Configuration drift detected")
+                    for msg in result.messages:
+                        print(f"    - {msg}")
+                else:
+                    print(f"  ✗ {table_type}: {table_name} - Does not exist")
+                    all_valid = False
+                    
+        # Validate Cognito User Pool
+        if "Cognito" in config:
+            print("\nChecking Cognito User Pool...")
+            validator = ResourceValidatorFactory.create_validator("cognito_user_pool", self.session)
+            
+            user_pool_id = config["Cognito"].get("user_pool_id", "")
+            if user_pool_id:
+                result = validator.validate(user_pool_id, {})
+                validation_results[f"Cognito:{user_pool_id}"] = result
+                
+                if result.exists and result.valid:
+                    print(f"  ✓ User Pool: {user_pool_id} - OK")
+                else:
+                    print(f"  ✗ User Pool: {user_pool_id} - {'Invalid' if result.exists else 'Does not exist'}")
+                    all_valid = False
+            else:
+                print("  ✗ User Pool: Not configured")
+                all_valid = False
+                
+        # Validate S3 Buckets
+        if "Game" in config or "S3" in config:
+            print("\nChecking S3 buckets...")
+            validator = ResourceValidatorFactory.create_validator("s3_bucket", self.session)
+            
+            # Check portal bucket
+            portal_bucket = config.get("Game", {}).get("PortalS3Bucket", "") or config.get("S3", {}).get("PortalBucket", "")
+            if portal_bucket:
+                result = validator.validate(portal_bucket, {})
+                validation_results[f"S3:{portal_bucket}"] = result
+                
+                if result.exists and result.valid:
+                    print(f"  ✓ Portal Bucket: {portal_bucket} - OK")
+                else:
+                    print(f"  ✗ Portal Bucket: {portal_bucket} - {'Access denied' if result.exists else 'Does not exist'}")
+                    all_valid = False
+                    
+            # Check scripts bucket
+            scripts_bucket = config.get("Game", {}).get("ScriptsS3Bucket", "") or config.get("S3", {}).get("ScriptsBucket", "")
+            if scripts_bucket:
+                result = validator.validate(scripts_bucket, {})
+                validation_results[f"S3:{scripts_bucket}"] = result
+                
+                if result.exists and result.valid:
+                    print(f"  ✓ Scripts Bucket: {scripts_bucket} - OK")
+                else:
+                    print(f"  ✗ Scripts Bucket: {scripts_bucket} - {'Access denied' if result.exists else 'Does not exist'}")
+                    all_valid = False
+                    
+        # Validate CloudWatch Log Groups
+        if "CloudWatch" in config or "Logging" in config:
+            print("\nChecking CloudWatch log groups...")
+            validator = ResourceValidatorFactory.create_validator("cloudwatch_log_group", self.session)
+            
+            log_group = config.get("CloudWatch", {}).get("log_group", "") or config.get("Logging", {}).get("LogGroup", "")
+            if log_group:
+                result = validator.validate(log_group, {
+                    "retention_days": config.get("CloudWatch", {}).get("LogRetentionDays", 365)
+                })
+                validation_results[f"CloudWatch:{log_group}"] = result
+                
+                if result.exists and result.valid:
+                    print(f"  ✓ Log Group: {log_group} - OK")
+                elif result.exists and result.drift_detected:
+                    print(f"  ⚠ Log Group: {log_group} - Configuration drift")
+                    for msg in result.messages:
+                        print(f"    - {msg}")
+                else:
+                    print(f"  ✗ Log Group: {log_group} - Does not exist")
+                    all_valid = False
+                    
+        # Validate CloudFront Distribution
+        if "CloudFront" in config:
+            print("\nChecking CloudFront distribution...")
+            distribution_id = config["CloudFront"].get("distribution_id", "")
+            if distribution_id:
+                try:
+                    cf_client = self.session.client('cloudfront')
+                    cf_client.get_distribution(Id=distribution_id)
+                    print(f"  ✓ Distribution: {distribution_id} - OK")
+                except ClientError as e:
+                    if e.response['Error']['Code'] == 'NoSuchDistribution':
+                        print(f"  ✗ Distribution: {distribution_id} - Does not exist")
+                    else:
+                        print(f"  ✗ Distribution: {distribution_id} - Error: {e}")
+                    all_valid = False
+            else:
+                print("  ⚠ Distribution: Not configured")
+                
+        # Generate drift report if needed
+        drift_count = sum(1 for r in validation_results.values() if r.drift_detected)
+        if drift_count > 0:
+            print("\n" + generate_drift_report(validation_results))
+            
+            if fix_drift:
+                print("\n[INFO] Drift correction requested. Run deployment to fix configuration drift.")
+                
+        # Summary
+        print(f"\n{'='*60}")
+        print("VALIDATION SUMMARY")
+        print(f"{'='*60}")
+        
+        total_resources = len(validation_results)
+        existing_resources = sum(1 for r in validation_results.values() if r.exists)
+        valid_resources = sum(1 for r in validation_results.values() if r.valid)
+        
+        print(f"Total resources checked: {total_resources}")
+        print(f"Existing resources: {existing_resources}")
+        print(f"Valid resources: {valid_resources}")
+        print(f"Resources with drift: {drift_count}")
+        
+        if all_valid:
+            print("\n✓ All configured resources are present and valid!")
+        else:
+            missing = total_resources - existing_resources
+            print(f"\n✗ Validation failed: {missing} missing resource(s)")
+            print("\nRun deployment to create missing resources.")
+            
+        return all_valid
 
     def update_configuration(self, params: dict) -> None:
         """Update server configuration file with deployment outputs.
@@ -664,7 +834,16 @@ class IncrementalDeploymentOrchestrator:
         deploy_both: bool = False,
         non_interactive: bool = False,
     ) -> bool:
-        """Run the incremental deployment.
+        """Run the deployment following the desired order of operations.
+
+        Order:
+        1. Check AWS account access
+        2. Check for config.yml
+        3. If exists, validate resources and update config with current state
+        4. Deploy/update infrastructure
+        5. Build Lambda functions and portal
+        6. Update Lambda functions
+        7. Provide final config.yml
 
         Args:
             auto_approve: Skip confirmation prompts
@@ -687,19 +866,39 @@ class IncrementalDeploymentOrchestrator:
             print("This wizard will guide you through deploying the")
             print("Eidolon Engine infrastructure to AWS.\n")
 
-        # Check prerequisites
-        if not self.check_prerequisites():
+        # Step 1: Check AWS account access
+        print("\n[Step 1/7] Checking AWS account access...")
+        if not self._check_aws_access():
+            print("\n[ERROR] Cannot access AWS account. Please check your credentials.")
             return False
+        print("✓ AWS access confirmed")
+
+        # Step 2: Check for config.yml
+        print("\n[Step 2/7] Checking for existing configuration...")
+        config_exists = self.config_manager.exists()
+        
+        if config_exists:
+            print("✓ Found existing config.yml")
+            
+            # Step 3: Validate existing resources and update config
+            print("\n[Step 3/7] Validating existing resources...")
+            validation_passed = self.validate_configuration(fix_drift=False)
+            
+            # Update config with current state from AWS
+            print("\nUpdating configuration with current AWS state...")
+            self._update_config_from_aws()
+            self.config_manager.save_config()
+            print("✓ Configuration updated with current state")
+        else:
+            print("⚠ No config.yml found, will create from template")
+            template_path = Path(__file__).parent / "../config.template.yml"
+            if template_path.exists():
+                print("✓ Initializing configuration from template...")
+                self.config_manager.merge_with_template(str(template_path))
+            validation_passed = False
 
         # Load and validate parameters
         params = self.load_parameters()
-
-        # Initialize config from template if config.yml doesn't exist
-        if not self.config_manager.exists():
-            template_path = Path(__file__).parent / "../config.template.yml"
-            if template_path.exists():
-                print("Initializing configuration from template...")
-                self.config_manager.merge_with_template(str(template_path))
 
         # Handle deployment type selection
         params = self.handle_deployment_selection(params, deploy_mud, deploy_incremental, deploy_both, non_interactive)
@@ -713,16 +912,31 @@ class IncrementalDeploymentOrchestrator:
         # If analyze-only, stop here
         if analyze_only:
             print("\n=== ANALYSIS COMPLETE ===")
+            if not validation_passed:
+                print("⚠ Resource validation showed missing or invalid resources")
             print("Run without --analyze-only to proceed with deployment.")
             return True
 
-        # Execute deployment
+        # Step 4: Deploy/update infrastructure (includes build execution)
+        print("\n[Step 4/7] Deploying infrastructure...")
         if not self.execute_deployment(plan, auto_approve):
             return False
+
+        # Step 5: Build execution is now part of phased deployment
+        print("\n[Step 5/7] Build execution completed during deployment")
+
+        # Step 6: Lambda functions already updated during deployment
+        print("\n[Step 6/7] Lambda functions updated during deployment")
 
         # Deploy scripts if requested
         if not skip_scripts:
             self.deploy_scripts(params)
+
+        # Step 7: Final configuration update
+        print("\n[Step 7/7] Finalizing configuration...")
+        self._update_config_from_aws()
+        self.config_manager.save_config()
+        print(f"✓ Final configuration saved to: {self.config_manager.config_path}")
 
         # Show deployment summary
         print("\n========================================================")
@@ -740,14 +954,152 @@ class IncrementalDeploymentOrchestrator:
             print("\n[OK] Unified backend infrastructure deployed")
             print("[OK] Frontend: Incremental (supports both MUD and Incremental modes)")
 
-        print(f"\nConfiguration saved to: {self.config_manager.config_path}")
-        print("\nNext steps:")
-        print("1. Review the generated config.yml file")
-        print("2. Deploy your game code using the CodeBuild project")
-        if not skip_scripts:
-            print("3. Lua scripts have been uploaded to S3")
+        print(f"\nConfiguration file: {self.config_manager.config_path}")
+        print("\nDeployment complete! Your infrastructure is ready.")
+        
+        # Final validation
+        print("\nRunning final validation...")
+        if self.validate_configuration(fix_drift=False):
+            print("✓ All resources validated successfully!")
+        else:
+            print("⚠ Some resources may need attention. Run with --validate for details.")
 
         return True
+    
+    def _check_aws_access(self) -> bool:
+        """Check if we have access to AWS account.
+        
+        Returns:
+            True if AWS access is available
+        """
+        try:
+            # Try to get caller identity
+            sts_client = self.session.client('sts')
+            response = sts_client.get_caller_identity()
+            
+            account_id = response.get('Account', 'Unknown')
+            user_arn = response.get('Arn', 'Unknown')
+            
+            print(f"  Account ID: {account_id}")
+            print(f"  User/Role: {user_arn}")
+            
+            # Set account ID in environment for CDK
+            os.environ['CDK_DEFAULT_ACCOUNT'] = account_id
+            
+            return True
+        except ClientError as e:
+            print(f"  Error: {e}")
+            return False
+        except Exception as e:
+            print(f"  Unexpected error: {e}")
+            return False
+            
+    def _update_config_from_aws(self) -> None:
+        """Update configuration with current state from AWS.
+        
+        This queries AWS for actual resource names/IDs and updates config.yml
+        """
+        print("  Querying AWS for current resource state...")
+        
+        # Get all CloudFormation stacks
+        try:
+            stacks = []
+            paginator = self.cfn_client.get_paginator('describe_stacks')
+            for page in paginator.paginate():
+                for stack in page.get('Stacks', []):
+                    if stack['StackStatus'] in ['CREATE_COMPLETE', 'UPDATE_COMPLETE']:
+                        stacks.append(stack)
+            
+            # Update config from stack outputs
+            for stack in stacks:
+                stack_name = stack['StackName']
+                outputs = {}
+                for output in stack.get('Outputs', []):
+                    outputs[output['OutputKey']] = output['OutputValue']
+                
+                if outputs:
+                    self._update_config_from_stack_outputs(stack_name, outputs)
+                    
+        except Exception as e:
+            print(f"  Warning: Could not query CloudFormation stacks: {e}")
+            
+        # Also check for resources outside of CloudFormation
+        self._check_standalone_resources()
+        
+    def _update_config_from_stack_outputs(self, stack_name: str, outputs: dict) -> None:
+        """Update configuration based on CloudFormation stack outputs.
+        
+        Args:
+            stack_name: Name of the stack
+            outputs: Stack outputs dictionary
+        """
+        # This reuses the existing logic from update_configuration
+        if "cognito" in stack_name:
+            self.config_manager.update_section(
+                "Cognito",
+                {
+                    "user_pool_id": outputs.get("UserPoolId", ""),
+                    "app_client_id": outputs.get("AppClientId", ""),
+                }
+            )
+        elif "dynamodb" in stack_name:
+            # Extract table names
+            tables = {}
+            for key, value in outputs.items():
+                if key.endswith("TableName"):
+                    table_type = key.replace("TableName", "")
+                    tables[table_type] = value
+            if tables:
+                self.config_manager.update_section("DynamoDB", {"Tables": tables})
+        elif "s3" in stack_name:
+            self.config_manager.update_section(
+                "Game",
+                {
+                    "PortalS3Bucket": outputs.get("PortalBucketName", ""),
+                    "ScriptsS3Bucket": outputs.get("ScriptsBucketName", ""),
+                }
+            )
+        elif "cloudfront" in stack_name:
+            self.config_manager.update_section(
+                "CloudFront",
+                {
+                    "distribution_id": outputs.get("DistributionId", ""),
+                    "domain_name": outputs.get("DistributionDomainName", ""),
+                    "portal_url": outputs.get("PortalUrl", ""),
+                }
+            )
+        elif "cloudwatch" in stack_name:
+            self.config_manager.update_section(
+                "CloudWatch",
+                {
+                    "log_group": outputs.get("LogGroupName", ""),
+                    "metrics_namespace": outputs.get("MetricsNamespace", ""),
+                }
+            )
+    
+    def _check_standalone_resources(self) -> None:
+        """Check for resources that might exist outside CloudFormation."""
+        # Check for S3 buckets by common naming patterns
+        try:
+            s3_client = self.session.client('s3')
+            response = s3_client.list_buckets()
+            
+            for bucket in response.get('Buckets', []):
+                bucket_name = bucket['Name']
+                if 'portal' in bucket_name or 'scripts' in bucket_name:
+                    # Update config if these buckets aren't already configured
+                    current_portal = self.config_manager.config.get('Game', {}).get('PortalS3Bucket', '')
+                    current_scripts = self.config_manager.config.get('Game', {}).get('ScriptsS3Bucket', '')
+                    
+                    if not current_portal and 'portal' in bucket_name:
+                        self.config_manager.update_section('Game', {'PortalS3Bucket': bucket_name})
+                        print(f"  Found portal bucket: {bucket_name}")
+                    elif not current_scripts and 'scripts' in bucket_name:
+                        self.config_manager.update_section('Game', {'ScriptsS3Bucket': bucket_name})
+                        print(f"  Found scripts bucket: {bucket_name}")
+                        
+        except Exception:
+            pass  # Ignore errors in standalone resource checking
 
 
 def main():
@@ -762,20 +1114,26 @@ def main():
     parser.add_argument("--deploy-incremental", action="store_true", help="Deploy only Incremental infrastructure")
     parser.add_argument("--deploy-both", action="store_true", help="Deploy both MUD and Incremental infrastructure (default)")
     parser.add_argument("--non-interactive", action="store_true", help="Run in non-interactive mode")
+    parser.add_argument("--validate", action="store_true", help="Validate config.yml against AWS resources")
+    parser.add_argument("--fix-drift", action="store_true", help="Attempt to fix configuration drift (use with --validate)")
 
     args = parser.parse_args()
 
     orchestrator = IncrementalDeploymentOrchestrator(profile=args.profile, region=args.region)
 
-    success = orchestrator.run(
-        auto_approve=args.auto_approve,
-        skip_scripts=args.skip_scripts,
-        analyze_only=args.analyze_only,
-        deploy_mud=args.deploy_mud,
-        deploy_incremental=args.deploy_incremental,
-        deploy_both=args.deploy_both,
-        non_interactive=args.non_interactive,
-    )
+    # Handle validation mode
+    if args.validate:
+        success = orchestrator.validate_configuration(fix_drift=args.fix_drift)
+    else:
+        success = orchestrator.run(
+            auto_approve=args.auto_approve,
+            skip_scripts=args.skip_scripts,
+            analyze_only=args.analyze_only,
+            deploy_mud=args.deploy_mud,
+            deploy_incremental=args.deploy_incremental,
+            deploy_both=args.deploy_both,
+            non_interactive=args.non_interactive,
+        )
 
     sys.exit(0 if success else 1)
 

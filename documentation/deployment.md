@@ -239,50 +239,68 @@ CloudFront:
 
 ## Deployment Workflow
 
-### 1. Pre-Deployment Analysis
+The deployment process follows a specific order of operations to ensure infrastructure is created correctly:
 
-Always analyze before deploying to understand what will happen:
+### Order of Operations
 
-```bash
-python deploy.py --analyze-only
-```
+1. **Check AWS Account Access** - Verify credentials and permissions
+2. **Check for config.yml** - Look for existing configuration
+3. **Validate Resources** - If config exists, validate all resources and update config with current state
+4. **Deploy Infrastructure** - Create/update AWS resources in phases
+5. **Build Artifacts** - Execute CodeBuild to create Lambda packages and frontend
+6. **Update Functions** - Deploy Lambda functions with new code
+7. **Finalize Configuration** - Write final config.yml with all resource IDs
 
-Output shows:
+### 1. Standard Deployment
 
-- Existing CloudFormation stacks
-- Resources that can be adopted
-- Resources that need creation
-- Any configuration drift
-
-### 2. Deploy
-
-Review the deployment plan and proceed:
+Run the deployment wizard:
 
 ```bash
-python incremental_deploy.py
+python deployment/deploy.py
 ```
 
-### 3. Verify
+This will:
+- Check AWS access and display account information
+- Validate existing resources if config.yml exists
+- Deploy infrastructure in the correct order
+- Execute builds automatically
+- Update config.yml throughout the process
 
-After deployment:
+### 2. Validate Existing Infrastructure
+
+To check if configured resources exist:
 
 ```bash
-# Check CDK stacks
-cd cdk
-cdk list
-
-# Verify resources
-aws s3 ls
-aws dynamodb list-tables
-aws logs describe-log-groups --log-group-name-prefix /aws/eidolon
+python deployment/deploy.py --validate
 ```
 
-### 4. Update Scripts
+This validates all resources in config.yml against AWS and reports:
+- Missing resources
+- Configuration drift
+- Access issues
+
+### 3. Analyze Without Deploying
+
+To see what would be deployed:
+
+```bash
+python deployment/deploy.py --analyze-only
+```
+
+### 4. Non-Interactive Deployment
+
+For CI/CD pipelines:
+
+```bash
+python deployment/deploy.py --non-interactive --auto-approve
+```
+
+### 5. Update Scripts Only
 
 To deploy only Lua scripts:
 
 ```bash
-python deploy_scripts.py
+python deployment/deploy_scripts.py
 ```
 
 ## CI/CD Pipeline
@@ -351,6 +369,42 @@ If you have existing CloudFormation stacks (`eidolon-*`):
 4. **Cognito and CodeBuild will coexist** (manual migration needed)
 
 No need to delete CloudFormation stacks first - the system handles coexistence.
+
+## Phased Deployment Details
+
+The deployment process is divided into six phases to ensure proper dependency resolution:
+
+### Phase 1: Foundation
+- **IAM roles and policies** - Created first with no dependencies
+- **S3 buckets** - Portal, scripts, and Lambda deployment buckets
+- **DynamoDB tables** - All game data tables
+
+### Phase 2: Authentication & Monitoring
+- **Cognito User Pool** - User authentication
+- **CloudWatch Log Groups** - Application logging
+
+### Phase 3: Build Infrastructure
+- **CodeBuild Projects** - For Lambda and frontend builds
+- Projects are configured without GitHub webhooks
+- Manual or deployment-triggered builds only
+
+### Phase 4: Build Execution
+- **Lambda Layer Build** - Dependencies package
+- **Lambda Functions Build** - Individual function packages
+- **Frontend Build** - Portal or Incremental application
+- Builds run sequentially for Lambda, parallel for frontend
+- CloudFront invalidation happens automatically if distribution exists
+
+### Phase 5: Application Layer
+- **Base Lambda Layer** - Shared dependencies
+- **Lambda Functions** - API handlers
+- **API Gateway** - RESTful API with custom domain
+- **Cognito Triggers** - Post-confirmation Lambda
+
+### Phase 6: Distribution
+- **CloudFront** - CDN for frontend application
+
+Each phase only proceeds if the previous phase succeeded. Failed deployments can be resumed from where they left off.
 
 ## Deployment Recovery (Fail-Forward Approach)
 
