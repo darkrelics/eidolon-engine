@@ -9,14 +9,14 @@ from constructs import Construct
 class CognitoStack(Stack):
     """Cognito stack for Eidolon Engine user authentication."""
 
-    def __init__(self, scope: Construct, construct_id: str, contact_email: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, contact_email: str, post_confirmation_lambda_arn: str = None, **kwargs) -> None:
         """Initialize Cognito stack.
 
         Args:
             scope: CDK app scope
             construct_id: Stack identifier
-            game_name: Name of the game
             contact_email: Administrator contact email
+            post_confirmation_lambda_arn: Optional Lambda function ARN for post-confirmation trigger
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -33,7 +33,7 @@ class CognitoStack(Stack):
                 min_length=8, require_lowercase=True, require_uppercase=True, require_digits=True, require_symbols=True
             ),
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=RemovalPolicy.DESTROY,
             email=cognito.UserPoolEmail.with_ses(from_email=contact_email, reply_to=contact_email),
         )
 

@@ -18,8 +18,7 @@ DynamoDB:
     Characters: characters
     Items: items
     Archetypes: archetypes
-    Progress: progress
-    Resources: resources
+    Story: story
 
 # API configuration (required)
 API:
@@ -47,8 +46,8 @@ CloudFront:
 
 # S3 buckets (optional - will create new if not specified)
 S3:
-  PortalBucket: ""    # Shared portal bucket
-  ScriptsBucket: ""   # Shared scripts bucket
+  PortalBucket: ""    # Portal bucket
+  ScriptsBucket: ""   # Scripts bucket
 
 # CloudWatch log retention
 CloudWatch:

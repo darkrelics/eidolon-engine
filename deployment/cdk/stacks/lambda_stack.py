@@ -139,11 +139,11 @@ def validate_config(config: dict) -> None:
     """
     required_fields = [
         "lambda_bucket",
-        "shared_players_table",
+        "players_table",
         "characters_table",
         "archetypes_table",
         "cognito_user_pool_arn",
-        "shared_dependencies_layer_arn",
+        "dependencies_layer_arn",
         "domain_name",
         "hosted_zone_id",
     ]
@@ -182,12 +182,12 @@ class LambdaStack(cdk.Stack):
             raise ValueError("lambda_bucket must be specified in configuration")
 
         self.lambda_bucket = s3.Bucket.from_bucket_name(self, "lambda-bucket", lambda_bucket_name)
-        self.shared_players_table = config.get("shared_players_table", "")
+        self.players_table = config.get("players_table", "")
         self.characters_table = config.get("characters_table", "")
         self.archetypes_table = config.get("archetypes_table", "")
         self.items_table = config.get("items_table", "")  # Optional for now
         self.cognito_user_pool_arn = config.get("cognito_user_pool_arn", "")
-        self.shared_dependencies_layer_arn = config.get("shared_dependencies_layer_arn", "")
+        self.dependencies_layer_arn = config.get("dependencies_layer_arn", "")
         self.domain_name = config.get("domain_name", "darkrelics.net")
         self.hosted_zone_id = config.get("hosted_zone_id", "")
 
@@ -198,9 +198,9 @@ class LambdaStack(cdk.Stack):
         # Store CORS origins for Lambda environment
         self.cors_origins_str = ",".join(self.allowed_cors_origins) if self.allowed_cors_origins else ""
 
-        # Import the shared dependencies layer
-        shared_dependencies_layer = lambda_.LayerVersion.from_layer_version_arn(
-            self, "imported-shared-layer", self.shared_dependencies_layer_arn
+        # Import the dependencies layer
+        dependencies_layer = lambda_.LayerVersion.from_layer_version_arn(
+            self, "imported-layer", self.dependencies_layer_arn
         )
 
         # Create API Gateway
@@ -218,8 +218,8 @@ class LambdaStack(cdk.Stack):
         )
 
         # Create all Lambda functions
-        self.create_character_management_functions(shared_dependencies_layer)
-        self.create_cognito_trigger_functions(shared_dependencies_layer)
+        self.create_character_management_functions(dependencies_layer)
+        self.create_cognito_trigger_functions(dependencies_layer)
 
         # Configure API routes
         self.configure_api_routes()
@@ -233,11 +233,11 @@ class LambdaStack(cdk.Stack):
         # Output values
         self.create_outputs()
 
-    def create_character_management_functions(self, shared_dependencies_layer: lambda_.ILayerVersion) -> None:
+    def create_character_management_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
         """Create Lambda functions for character management.
 
         Args:
-            shared_dependencies_layer: Shared Lambda layer
+            dependencies_layer: Lambda layer
         """
         # Get Archetypes Lambda
         get_archetypes_role = create_lambda_role(self, "get-archetypes-role")
@@ -255,7 +255,7 @@ class LambdaStack(cdk.Stack):
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="api_get_archetypes.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "api_get_archetypes.zip"),
-            layers=[shared_dependencies_layer],
+            layers=[dependencies_layer],
             role=get_archetypes_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
@@ -273,7 +273,7 @@ class LambdaStack(cdk.Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query"],
                 resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.shared_players_table}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}",
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.characters_table}",
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.archetypes_table}",
                 ],
@@ -286,12 +286,12 @@ class LambdaStack(cdk.Stack):
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="api_add_character.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "api_add_character.zip"),
-            layers=[shared_dependencies_layer],
+            layers=[dependencies_layer],
             role=add_character_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
-                "PLAYERS_TABLE": self.shared_players_table,
+                "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "MAX_CHARACTERS_PER_PLAYER": "10",
@@ -307,7 +307,7 @@ class LambdaStack(cdk.Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:Query"],
                 resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.shared_players_table}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}",
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.characters_table}",
                 ],
             )
@@ -319,12 +319,12 @@ class LambdaStack(cdk.Stack):
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="api_get_character.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "api_get_character.zip"),
-            layers=[shared_dependencies_layer],
+            layers=[dependencies_layer],
             role=get_character_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
-                "PLAYERS_TABLE": self.shared_players_table,
+                "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
@@ -338,7 +338,7 @@ class LambdaStack(cdk.Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:Query"],
                 resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.shared_players_table}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}",
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.characters_table}",
                 ],
             )
@@ -350,12 +350,12 @@ class LambdaStack(cdk.Stack):
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="api_list_characters.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "api_list_characters.zip"),
-            layers=[shared_dependencies_layer],
+            layers=[dependencies_layer],
             role=list_characters_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
-                "PLAYERS_TABLE": self.shared_players_table,
+                "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
@@ -369,7 +369,7 @@ class LambdaStack(cdk.Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:GetItem", "dynamodb:DeleteItem", "dynamodb:UpdateItem"],
                 resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.shared_players_table}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}",
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.characters_table}",
                 ],
             )
@@ -391,12 +391,12 @@ class LambdaStack(cdk.Stack):
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="api_delete_character.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "api_delete_character.zip"),
-            layers=[shared_dependencies_layer],
+            layers=[dependencies_layer],
             role=delete_character_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
-                "PLAYERS_TABLE": self.shared_players_table,
+                "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ITEMS_TABLE": self.items_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
@@ -404,11 +404,11 @@ class LambdaStack(cdk.Stack):
             description="Deletes a character for players",
         )
 
-    def create_cognito_trigger_functions(self, shared_dependencies_layer: lambda_.ILayerVersion) -> None:
+    def create_cognito_trigger_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
         """Create Lambda functions for Cognito triggers.
 
         Args:
-            shared_dependencies_layer: Shared Lambda layer
+            dependencies_layer: Lambda layer
         """
         # New Player Trigger Lambda
         new_player_role = create_lambda_role(self, "cognito-new-player-role")
@@ -416,7 +416,7 @@ class LambdaStack(cdk.Stack):
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:PutItem"],
-                resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.shared_players_table}"],
+                resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}"],
             )
         )
 
@@ -426,12 +426,12 @@ class LambdaStack(cdk.Stack):
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="cognito_new_player.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito_new_player.zip"),
-            layers=[shared_dependencies_layer],
+            layers=[dependencies_layer],
             role=new_player_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
-                "PLAYERS_TABLE": self.shared_players_table,
+                "PLAYERS_TABLE": self.players_table,
             },
             description="Creates new player entry when user signs up",
         )
@@ -443,7 +443,7 @@ class LambdaStack(cdk.Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:BatchWriteItem"],
                 resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.shared_players_table}",
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}",
                     f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.characters_table}",
                 ],
             )
@@ -465,12 +465,12 @@ class LambdaStack(cdk.Stack):
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="cognito_delete_player.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito_delete_player.zip"),
-            layers=[shared_dependencies_layer],
+            layers=[dependencies_layer],
             role=delete_player_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
             memory_size=256,
             environment={
-                "PLAYERS_TABLE": self.shared_players_table,
+                "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ITEMS_TABLE": self.items_table,
             },

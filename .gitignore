@@ -88,3 +88,5 @@ CLAUDE.md
 
 **/.ruff_cache
 **/.ruff_cache/**
+
+deployment/.deployment_state.json

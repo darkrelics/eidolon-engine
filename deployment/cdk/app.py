@@ -500,11 +500,10 @@ class EidolonEngineApp:
 
     def create_unified_backend(self, env: cdk.Environment, params: dict) -> None:
         """Create unified backend infrastructure for all deployment modes."""
-        # Create Cognito stack (shared by all modes)
+        # Create Cognito stack (used by all modes)
         self.cognito_stack = CognitoStack(
             self.app,
             "cognito",
-            game_name=params.get("game_name", "eidolon-engine"),
             contact_email=params.get("contact_email", "contact@darkrelics.net"),
             env=env,
         )
@@ -535,19 +534,14 @@ class EidolonEngineApp:
             env=env,
         )
 
-        # Create base Lambda stack for shared functions
+        # Create base Lambda stack for common functions
         self.base_lambda_stack = BaseLambdaStack(
             self.app,
             "base-lambda",
             lambda_bucket=self.s3_stack.lambda_bucket,
-            shared_players_table=unified_tables["Players"],
-            cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
-            allowed_cors_origins=params.get("allowed_cors_origins", []),
             env=env,
         )
         self.base_lambda_stack.add_dependency(self.s3_stack)
-        self.base_lambda_stack.add_dependency(self.dynamodb_stack)
-        self.base_lambda_stack.add_dependency(self.cognito_stack)
 
         # Create unified Lambda stack with all API functions
         domain_name = params.get("domain_name", "")
@@ -558,12 +552,12 @@ class EidolonEngineApp:
             "lambda",
             config={
                 "lambda_bucket": self.s3_stack.lambda_bucket.bucket_name,
-                "shared_players_table": unified_tables["Players"],
+                "players_table": unified_tables["Players"],
                 "characters_table": unified_tables["Characters"],
                 "archetypes_table": unified_tables["Archetypes"],
                 "items_table": unified_tables.get("Items", ""),
                 "cognito_user_pool_arn": self.cognito_stack.user_pool.user_pool_arn,
-                "shared_dependencies_layer_arn": self.base_lambda_stack.dependencies_layer.layer_version_arn,
+                "dependencies_layer_arn": self.base_lambda_stack.dependencies_layer.layer_version_arn,
                 "domain_name": domain_name,
                 "hosted_zone_id": hosted_zone_id,
                 "api_subdomain": params.get("api_subdomain", "api"),
@@ -575,13 +569,28 @@ class EidolonEngineApp:
         self.lambda_stack.add_dependency(self.dynamodb_stack)
         self.lambda_stack.add_dependency(self.cognito_stack)
 
-        # Add Cognito Lambda trigger
-        from aws_cdk import aws_lambda as lambda_
-
-        cognito_trigger_function = lambda_.Function.from_function_arn(
-            self.cognito_stack, "CognitoTriggerFunction", self.base_lambda_stack.cognito_new_player_function.function_arn
+        # Create Cognito trigger stack (depends on Cognito, DynamoDB, and base Lambda)
+        from stacks.cognito_trigger_stack import CognitoTriggerStack
+        from aws_cdk import aws_cognito as cognito
+        
+        # Get Cognito user pool ARN as string to avoid dependency
+        cognito_user_pool_arn = f"arn:aws:cognito-idp:{env.region}:{env.account}:userpool/*"
+        
+        self.cognito_trigger_stack = CognitoTriggerStack(
+            self.app,
+            "cognito-trigger",
+            lambda_bucket=self.s3_stack.lambda_bucket,
+            players_table=unified_tables["Players"],
+            cognito_user_pool_arn=cognito_user_pool_arn,
+            dependencies_layer=self.base_lambda_stack.dependencies_layer,
+            allowed_cors_origins=params.get("allowed_cors_origins", []),
+            env=env,
         )
-        self.cognito_stack.add_lambda_trigger("PostConfirmation", cognito_trigger_function)
+        # Note: We don't add cognito as a dependency to avoid circular reference
+        self.cognito_trigger_stack.add_dependency(self.dynamodb_stack)
+        self.cognito_trigger_stack.add_dependency(self.base_lambda_stack)
+        
+        # TODO: Configure Cognito trigger after deployment to avoid circular dependency
 
     def get_unified_table_names(self, params: dict) -> dict:
         """Get unified table names for all deployment modes.
@@ -595,8 +604,7 @@ class EidolonEngineApp:
             "Characters": "characters",
             "Archetypes": "archetypes",
             "Items": "items",
-            "Progress": "progress",
-            "Resources": "resources",
+            "Story": "story",
         }
         
         # Override with configured values if present
@@ -621,7 +629,6 @@ class EidolonEngineApp:
         self.codebuild_stack = CodeBuildStack(
             self.app,
             "codebuild",
-            game_name="portal",
             github_owner=params.get("github_owner", "robinje"),
             github_repo=params.get("github_repo", "eidolon-engine"),
             github_branch=params.get("github_branch", "main"),
@@ -653,7 +660,6 @@ class EidolonEngineApp:
         self.codebuild_stack = CodeBuildStack(
             self.app,
             "codebuild",
-            game_name="incremental",
             github_owner=params.get("github_owner", "robinje"),
             github_repo=params.get("github_repo", "eidolon-engine"),
             github_branch=params.get("github_branch", "main"),

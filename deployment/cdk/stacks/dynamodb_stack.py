@@ -31,7 +31,7 @@ class DynamoDBStack(Stack):
         self.custom_table_names = table_names or {}
 
         # Define table types upfront
-        self.table_types = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd"]
+        self.table_types = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story"]
 
         # Initialize existing tables from context
         self.existing_tables: dict[str, str] = {}
@@ -69,6 +69,7 @@ class DynamoDBStack(Stack):
             {"name": "prototypes", "pk": "prototype_id", "sk": ""},
             {"name": "archetypes", "pk": "archetype_id", "sk": ""},
             {"name": "motd", "pk": "motd_id", "sk": ""},
+            {"name": "story", "pk": "player_id", "sk": "story_id"},
         ]
 
     def _get_table_name(self, config_name: str) -> str:
@@ -88,7 +89,7 @@ class DynamoDBStack(Stack):
         elif config_name in self.custom_table_names:
             return self.custom_table_names[config_name]
         else:
-            return f"eidolon-{config_name}"
+            return config_name
 
     def _create_or_import_tables(self) -> None:
         """Create new tables or import existing ones."""
@@ -147,8 +148,7 @@ class DynamoDBStack(Stack):
             "table_name": table_name,
             "partition_key": partition_key,
             "billing_mode": dynamodb.BillingMode.PAY_PER_REQUEST,
-            "removal_policy": RemovalPolicy.RETAIN,
-            "point_in_time_recovery": True,
+            "removal_policy": RemovalPolicy.DESTROY,
         }
 
         # Add sort key if specified

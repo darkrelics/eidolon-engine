@@ -153,8 +153,8 @@ class S3Stack(Stack):
             # Create new bucket with desired configuration
             bucket_props = {
                 "bucket_name": bucket_name,
-                "removal_policy": RemovalPolicy.RETAIN,
-                "auto_delete_objects": False,
+                "removal_policy": RemovalPolicy.DESTROY,
+                "auto_delete_objects": True,
             }
 
             if website_config:

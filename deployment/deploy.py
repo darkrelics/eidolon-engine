@@ -13,7 +13,7 @@ from botocore.exceptions import ClientError
 from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
 from deployment_logic import analyze_changes, prompt_missing_parameters
 
-from eidolon.state_manager import ConfigurationManager, DeploymentState
+from state_manager import ConfigurationManager, DeploymentState
 
 
 class IncrementalDeploymentOrchestrator:

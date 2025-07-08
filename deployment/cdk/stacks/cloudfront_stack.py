@@ -81,15 +81,7 @@ class CloudFrontStack(Stack):
         Returns:
             CloudFront distribution
         """
-        # Create Origin Access Identity for secure S3 access
-        oai = cloudfront.OriginAccessIdentity(
-            self,
-            "portal-oai",
-            comment="OAI for portal bucket",
-        )
-
-        # Grant CloudFront read access to the bucket
-        portal_bucket.grant_read(oai)
+        # S3BucketOrigin handles OAI creation and permissions automatically when used
 
         # Create the distribution
         distribution = cloudfront.Distribution(
@@ -97,10 +89,7 @@ class CloudFrontStack(Stack):
             "eidolon-portal-distribution",
             default_root_object="index.html",
             default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3Origin(
-                    portal_bucket,
-                    origin_access_identity=oai,
-                ),
+                origin=origins.S3BucketOrigin(portal_bucket),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD,

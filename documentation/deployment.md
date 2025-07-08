@@ -22,7 +22,7 @@ The Eidolon Engine supports three deployment modes, all sharing the same backend
 - **Hybrid Mode** (default): Supports both game types with Incremental frontend
 
 All modes share:
-- Same DynamoDB tables (Players, Characters, Archetypes, Items, Progress, Resources)
+- Same DynamoDB tables (Players, Characters, Archetypes, Items, Story)
 - Same Lambda functions and API Gateway
 - Same Cognito user pool for authentication
 - Unified backend infrastructure
@@ -158,8 +158,7 @@ DynamoDB:
     Characters: characters
     Archetypes: archetypes
     Items: items
-    Progress: progress
-    Resources: resources
+    Story: story
     Rooms: rooms
     Exits: exits
     Prototypes: prototypes
