@@ -705,7 +705,7 @@ class EidolonEngineApp:
             "contact_email": "contact@darkrelics.net",
             "github_owner": "robinje",
             "github_repo": "eidolon-engine",
-            "github_branch": "main",
+            "github_branch": "develop",
             "log_retention_days": 365,
             "deployment_mode": "hybrid",
             "dynamodb_tables": {},
@@ -726,6 +726,10 @@ class EidolonEngineApp:
         self.load_codebuild_config(params)
         self.load_api_config(params)
         self.load_cors_config(params)
+        self.load_github_config(params)
+        
+        # Override with CDK context values
+        self.load_context_overrides(params)
 
         print("\n   Parameter loading complete")
         return params
@@ -830,6 +834,26 @@ class EidolonEngineApp:
                 params["allowed_cors_origins"] = list(set(all_origins))  # Remove duplicates
                 if all_origins:
                     print(f"     - Merged {len(params['allowed_cors_origins'])} unique origins from legacy configuration")
+    
+    def load_github_config(self, params: dict) -> None:
+        """Load GitHub configuration section."""
+        github_config = self.config.get("GitHub", {})
+        if github_config:
+            print("   Loading GitHub configuration")
+            params["github_owner"] = github_config.get("Owner", params.get("github_owner", "robinje"))
+            params["github_repo"] = github_config.get("Repo", params.get("github_repo", "eidolon-engine"))
+            params["github_branch"] = github_config.get("Branch", params.get("github_branch", "develop"))
+            print(f"     - Owner: {params['github_owner']}")
+            print(f"     - Repo: {params['github_repo']}")
+            print(f"     - Branch: {params['github_branch']}")
+    
+    def load_context_overrides(self, params: dict) -> None:
+        """Override parameters with CDK context values."""
+        # Check for context overrides
+        github_branch = self.app.node.try_get_context("github_branch")
+        if github_branch:
+            params["github_branch"] = github_branch
+            print(f"   Overriding GitHub branch from context: {github_branch}")
 
     def synth(self):
         """Synthesize the CDK app."""

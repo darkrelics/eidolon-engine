@@ -25,15 +25,17 @@ from state_manager import ConfigurationManager, DeploymentState
 class IncrementalDeploymentOrchestrator:
     """Orchestrates incremental infrastructure deployments."""
 
-    def __init__(self, profile=None, region: str = "us-east-1"):
+    def __init__(self, profile=None, region: str = "us-east-1", branch: str = None):
         """Initialize the deployment orchestrator.
 
         Args:
             profile: AWS profile to use
             region: AWS region for deployment
+            branch: GitHub branch to deploy from (overrides default)
         """
         self.profile = profile
         self.region = region
+        self.branch = branch
         self.config_manager = ConfigurationManager()
         self.state_manager = DeploymentState()
 
@@ -87,7 +89,7 @@ class IncrementalDeploymentOrchestrator:
             "contact_email": None,
             "github_owner": "robinje",
             "github_repo": "eidolon-engine",
-            "github_branch": "main",
+            "github_branch": "develop",
             "log_retention_days": 365,
         }
 
@@ -128,6 +130,10 @@ class IncrementalDeploymentOrchestrator:
             params["github_owner"] = github_config.get("Owner", params["github_owner"])
             params["github_repo"] = github_config.get("Repo", params["github_repo"])
             params["github_branch"] = github_config.get("Branch", params["github_branch"])
+        
+        # Override branch if specified via command line
+        if self.branch:
+            params["github_branch"] = self.branch
 
         if "CloudWatch" in config:
             params["log_retention_days"] = config["CloudWatch"].get("LogRetentionDays", params["log_retention_days"])
@@ -263,6 +269,9 @@ class IncrementalDeploymentOrchestrator:
 
         # Add deployment mode context
         context["deployment_mode"] = plan["parameters"].get("deployment_mode", "hybrid")
+        
+        # Add GitHub branch to context
+        context["github_branch"] = plan["parameters"].get("github_branch", "develop")
 
         # Execute phased deployment
         return self._execute_phased_deployment(context, plan, auto_approve)
@@ -1117,10 +1126,11 @@ def main():
     parser.add_argument("--non-interactive", action="store_true", help="Run in non-interactive mode")
     parser.add_argument("--validate", action="store_true", help="Validate config.yml against AWS resources")
     parser.add_argument("--fix-drift", action="store_true", help="Attempt to fix configuration drift (use with --validate)")
+    parser.add_argument("--branch", help="GitHub branch to deploy from (default: develop)")
 
     args = parser.parse_args()
 
-    orchestrator = IncrementalDeploymentOrchestrator(profile=args.profile, region=args.region)
+    orchestrator = IncrementalDeploymentOrchestrator(profile=args.profile, region=args.region, branch=args.branch)
 
     # Handle validation mode
     if args.validate:
