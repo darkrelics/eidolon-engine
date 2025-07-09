@@ -315,8 +315,8 @@ def analyze_changes(cfn_client, session, params: dict) -> dict:
     # Map CloudFormation resources if they exist
     cf_mapping = map_cloudformation_to_cdk(existing_stacks, params)
 
-    # Expected CDK stack names
-    expected_stacks = ["cognito", "dynamodb", "cloudwatch", "s3", "cloudfront", "codebuild"]
+    # Expected CDK stack names (in dependency order)
+    expected_stacks = ["iam", "s3", "dynamodb", "cognito", "cloudwatch", "codebuild", "base-lambda", "lambda", "cognito-trigger", "cloudfront"]
 
     plan = {
         "create_stacks": [],
