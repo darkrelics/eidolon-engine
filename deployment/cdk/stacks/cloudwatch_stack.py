@@ -9,21 +9,16 @@ from constructs import Construct
 class CloudWatchStack(Stack):
     """CloudWatch stack for Eidolon Engine logging and metrics."""
 
-    def __init__(self, scope: Construct, construct_id: str, dynamodb_policy_arn: str, retention_days: int = 365, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, retention_days: int = 365, **kwargs) -> None:
         """Initialize CloudWatch stack.
 
         Args:
             scope: CDK app scope
             construct_id: Stack identifier
-            dynamodb_policy_arn: ARN of the DynamoDB access policy
             retention_days: Log retention period in days
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
-
-        # Validate required configuration
-        if not dynamodb_policy_arn:
-            raise ValueError("dynamodb_policy_arn is required")
 
         if retention_days < 1:
             raise ValueError("retention_days must be at least 1")

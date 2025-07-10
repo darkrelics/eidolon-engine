@@ -585,6 +585,129 @@ class S3BucketValidator(ResourceValidator):
         return True
 
 
+class IAMValidator(ResourceValidator):
+    """Validator for IAM resources (roles and policies)."""
+
+    def __init__(self, session: boto3.Session):
+        """Initialize IAM validator."""
+        super().__init__(session)
+        self.client = session.client("iam")
+
+    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
+        """Validate an IAM role or policy."""
+        resource_type = expected_config.get("resource_type", "role")
+        
+        if resource_type == "role":
+            return self._validate_role(resource_id, expected_config)
+        elif resource_type == "policy":
+            return self._validate_policy(resource_id, expected_config)
+        else:
+            result = ValidationResult(resource_id, f"iam_{resource_type}")
+            result.add_message(f"Unsupported IAM resource type: {resource_type}")
+            return result
+
+    def _validate_role(self, role_name: str, expected_config: dict) -> ValidationResult:
+        """Validate an IAM role."""
+        result = ValidationResult(role_name, "iam_role")
+        result.expected_config = expected_config
+
+        try:
+            # Get role details
+            response = self.client.get_role(RoleName=role_name)
+            role = response.get("Role", {})
+            result.exists = True
+
+            # Extract actual configuration
+            result.actual_config = {
+                "role_name": role.get("RoleName"),
+                "arn": role.get("Arn"),
+                "assume_role_policy": role.get("AssumeRolePolicyDocument", {}),
+                "attached_policies": self._get_attached_policies(role_name),
+            }
+
+            result.valid = True
+
+        except ClientError as err:
+            if err.response.get("Error", {}).get("Code") == "NoSuchEntity":
+                result.exists = False
+                result.add_message(f"Role {role_name} does not exist")
+            else:
+                result.add_message(f"Error validating role: {err}")
+
+        return result
+
+    def _validate_policy(self, policy_name: str, expected_config: dict) -> ValidationResult:
+        """Validate an IAM policy."""
+        result = ValidationResult(policy_name, "iam_policy")
+        result.expected_config = expected_config
+
+        try:
+            # List policies to find ours
+            paginator = self.client.get_paginator("list_policies")
+            policy_found = None
+            
+            for page in paginator.paginate(Scope="Local"):
+                for policy in page.get("Policies", []):
+                    if policy.get("PolicyName") == policy_name:
+                        policy_found = policy
+                        break
+                if policy_found:
+                    break
+
+            if policy_found:
+                result.exists = True
+                result.actual_config = {
+                    "policy_name": policy_found.get("PolicyName"),
+                    "arn": policy_found.get("Arn"),
+                    "attachment_count": policy_found.get("AttachmentCount", 0),
+                }
+                result.valid = True
+            else:
+                result.exists = False
+                result.add_message(f"Policy {policy_name} does not exist")
+
+        except ClientError as err:
+            result.add_message(f"Error validating policy: {err}")
+
+        return result
+
+    def _get_attached_policies(self, role_name: str) -> list:
+        """Get list of policies attached to a role."""
+        policies = []
+        try:
+            # Get managed policies
+            response = self.client.list_attached_role_policies(RoleName=role_name)
+            for policy in response.get("AttachedPolicies", []):
+                policies.append(policy.get("PolicyName"))
+        except ClientError:
+            pass
+        return policies
+
+    def list_resources(self, filter_params=None) -> list:
+        """List all IAM resources."""
+        resources = []
+        
+        # List roles
+        try:
+            paginator = self.client.get_paginator("list_roles")
+            for page in paginator.paginate():
+                for role in page.get("Roles", []):
+                    resources.append(f"role:{role.get('RoleName')}")
+        except ClientError:
+            pass
+
+        # List policies
+        try:
+            paginator = self.client.get_paginator("list_policies")
+            for page in paginator.paginate(Scope="Local"):
+                for policy in page.get("Policies", []):
+                    resources.append(f"policy:{policy.get('PolicyName')}")
+        except ClientError:
+            pass
+
+        return resources
+
+
 class ResourceValidatorFactory:
     """Factory for creating resource validators."""
 
@@ -608,6 +731,8 @@ class ResourceValidatorFactory:
             "cloudwatch_log_group": CloudWatchValidator,
             "codebuild_project": CodeBuildValidator,
             "s3_bucket": S3BucketValidator,
+            "iam_role": IAMValidator,
+            "iam_policy": IAMValidator,
         }
 
         validator_class = validators.get(resource_type)

@@ -253,8 +253,39 @@ def validate_resources(session, params: dict) -> dict:
             # Scripts bucket should also be private
             result = validator.validate(scripts_bucket, expected_config)
             all_results[scripts_bucket] = result
+            
+        # Check lambda bucket - should be PRIVATE (deployment artifacts)
+        game_name = params.get("game_name", "eidolon-engine")
+        account_id = session.client('sts').get_caller_identity()['Account']
+        lambda_bucket = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")
+        result = validator.validate(lambda_bucket, expected_config)
+        all_results[lambda_bucket] = result
     except Exception as err:
         print(f"Warning: Error validating S3 buckets: {err}")
+
+    # Validate IAM resources
+    try:
+        game_name = params.get("game_name", "eidolon-engine")
+        
+        # Check IAM role
+        role_validator = ResourceValidatorFactory.create_validator("iam_role", session)
+        role_name = f"{game_name}-server-execution-role"
+        result = role_validator.validate(role_name, {"resource_type": "role"})
+        all_results[f"iam_role:{role_name}"] = result
+        
+        # Check IAM policies
+        policy_validator = ResourceValidatorFactory.create_validator("iam_policy", session)
+        policy_names = [
+            f"eidolon-{game_name}-cloudwatch-access",
+            f"eidolon-{game_name}-dynamodb-access"
+        ]
+        
+        for policy_name in policy_names:
+            result = policy_validator.validate(policy_name, {"resource_type": "policy"})
+            all_results[f"iam_policy:{policy_name}"] = result
+            
+    except Exception as err:
+        print(f"Warning: Error validating IAM resources: {err}")
 
     return all_results
 
@@ -331,6 +362,40 @@ def _can_adopt_stack(stack_name: str, _stack_info: dict) -> bool:
     return stack_name in adoptable_stacks
 
 
+def check_iam_policies(session, game_name: str) -> dict:
+    """Check for existing IAM policies.
+    
+    Args:
+        session: AWS session
+        game_name: Game name for policy naming
+        
+    Returns:
+        Dictionary of policy existence
+    """
+    iam_client = session.client("iam")
+    policies = {
+        "cloudwatch_policy": f"eidolon-{game_name}-cloudwatch-access",
+        "dynamodb_policy": f"eidolon-{game_name}-dynamodb-access"
+    }
+    
+    existing_policies = {}
+    try:
+        paginator = iam_client.get_paginator('list_policies')
+        for page in paginator.paginate(Scope='Local'):
+            for policy in page['Policies']:
+                for key, policy_name in policies.items():
+                    if policy['PolicyName'] == policy_name:
+                        existing_policies[key] = {
+                            "name": policy_name,
+                            "arn": policy['Arn'],
+                            "exists": True
+                        }
+    except Exception as err:
+        print(f"Warning: Could not check IAM policies: {err}")
+    
+    return existing_policies
+
+
 def analyze_changes(cfn_client, session, params: dict) -> dict:
     """Analyze what changes need to be deployed.
 
@@ -349,6 +414,15 @@ def analyze_changes(cfn_client, session, params: dict) -> dict:
 
     # Map CloudFormation resources if they exist
     cf_mapping = map_cloudformation_to_cdk(existing_stacks, params)
+    
+    # Check for existing IAM policies
+    game_name = params.get("game_name", "eidolon-engine")
+    existing_iam_policies = check_iam_policies(session, game_name)
+    
+    if existing_iam_policies:
+        print("\nDetected existing IAM policies:")
+        for key, policy_info in existing_iam_policies.items():
+            print(f"  - {policy_info['name']}")
 
     # Expected CDK stack names (in dependency order)
     expected_stacks = ["iam", "s3", "dynamodb", "cognito", "cloudwatch", "codebuild", "base-lambda", "lambda", "cognito-trigger", "cloudfront"]
@@ -359,6 +433,7 @@ def analyze_changes(cfn_client, session, params: dict) -> dict:
         "unchanged_stacks": [],
         "adopt_resources": {},
         "cloudformation_mapping": cf_mapping,
+        "existing_iam_policies": existing_iam_policies,
         "parameters": params,
         "drift_report": "",
     }

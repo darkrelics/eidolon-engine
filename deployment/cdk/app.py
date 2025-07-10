@@ -541,12 +541,18 @@ class EidolonEngineApp:
             env=env,
         )
 
-        # Create unified DynamoDB tables (no dependencies)
+        # Create unified DynamoDB tables (depends on IAM for role)
         unified_tables = self.get_unified_table_names(params)
         
         self.dynamodb_stack = DynamoDBStack(
-            self.app, "dynamodb", game_name=params.get("game_name", "eidolon-engine"), table_names=unified_tables, env=env
+            self.app, 
+            "dynamodb", 
+            game_name=params.get("game_name", "eidolon-engine"), 
+            table_names=unified_tables,
+            execution_role_arn=self.iam_stack.execution_role.role_arn,
+            env=env
         )
+        self.dynamodb_stack.add_dependency(self.iam_stack)  # DynamoDB depends on IAM
 
         # Create Cognito stack (no dependencies)
         # Default to dev mode (True) unless explicitly set to production
@@ -564,7 +570,6 @@ class EidolonEngineApp:
         self.cloudwatch_stack = CloudWatchStack(
             self.app,
             "cloudwatch",
-            dynamodb_policy_arn=self.dynamodb_stack.access_policy.managed_policy_arn,
             retention_days=params.get("log_retention_days", 365),
             env=env,
         )

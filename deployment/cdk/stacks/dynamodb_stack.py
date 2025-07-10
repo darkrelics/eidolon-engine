@@ -11,7 +11,7 @@ from constructs import Construct
 class DynamoDBStack(Stack):
     """DynamoDB stack for Eidolon Engine game data."""
 
-    def __init__(self, scope: Construct, construct_id: str, game_name: str, table_names: dict[str, str] = {}, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, game_name: str, table_names: dict[str, str] = {}, execution_role_arn: str = None, **kwargs) -> None:
         """Initialize DynamoDB stack.
 
         Args:
@@ -19,6 +19,7 @@ class DynamoDBStack(Stack):
             construct_id: Stack identifier
             game_name: Name of the game
             table_names: Optional dictionary of table type to table name mappings
+            execution_role_arn: Optional ARN of IAM role to attach the DynamoDB policy to
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -29,6 +30,7 @@ class DynamoDBStack(Stack):
 
         self.game_name = game_name
         self.custom_table_names = table_names or {}
+        self.execution_role_arn = execution_role_arn
 
         # Define table types upfront
         self.table_types = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story"]
@@ -192,6 +194,14 @@ class DynamoDBStack(Stack):
             document=self.table_access_policy,
             description=f"Policy for accessing {self.game_name} Eidolon Engine DynamoDB tables",
         )
+        
+        # Attach policy to execution role if ARN provided
+        if self.execution_role_arn:
+            # Import the role using its ARN
+            execution_role = iam.Role.from_role_arn(
+                self, "imported-execution-role", self.execution_role_arn
+            )
+            execution_role.add_managed_policy(self.access_policy)
 
         CfnOutput(
             self,

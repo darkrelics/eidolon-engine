@@ -234,6 +234,66 @@ class IncrementalDeploymentOrchestrator:
 
         return params
 
+    def _ensure_lambda_bucket_exists(self, params: dict) -> None:
+        """Ensure Lambda bucket exists before S3 stack deployment.
+        
+        Args:
+            params: Deployment parameters including game_name
+        """
+        import boto3
+        from botocore.exceptions import ClientError
+        
+        game_name = params.get("game_name", "eidolon-engine")
+        account_id = self.session.client('sts').get_caller_identity()['Account']
+        lambda_bucket_name = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")
+        
+        s3_client = self.session.client('s3')
+        
+        try:
+            # Check if bucket exists
+            s3_client.head_bucket(Bucket=lambda_bucket_name)
+            print(f"  Lambda bucket '{lambda_bucket_name}' already exists")
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == '404':
+                # Bucket doesn't exist, create it
+                print(f"  Creating Lambda bucket '{lambda_bucket_name}'...")
+                try:
+                    if self.region == 'us-east-1':
+                        # us-east-1 requires special handling
+                        s3_client.create_bucket(Bucket=lambda_bucket_name)
+                    else:
+                        s3_client.create_bucket(
+                            Bucket=lambda_bucket_name,
+                            CreateBucketConfiguration={'LocationConstraint': self.region}
+                        )
+                    
+                    # Enable versioning for safety
+                    s3_client.put_bucket_versioning(
+                        Bucket=lambda_bucket_name,
+                        VersioningConfiguration={'Status': 'Enabled'}
+                    )
+                    
+                    # Block public access
+                    s3_client.put_public_access_block(
+                        Bucket=lambda_bucket_name,
+                        PublicAccessBlockConfiguration={
+                            'BlockPublicAcls': True,
+                            'IgnorePublicAcls': True,
+                            'BlockPublicPolicy': True,
+                            'RestrictPublicBuckets': True
+                        }
+                    )
+                    
+                    print(f"  ✓ Lambda bucket created successfully")
+                except Exception as create_error:
+                    print(f"  ✗ Failed to create Lambda bucket: {create_error}")
+                    raise
+            else:
+                # Some other error
+                print(f"  ✗ Error checking Lambda bucket: {e}")
+                raise
+
     def execute_deployment(self, plan: dict, auto_approve: bool = False) -> bool:
         """Execute the deployment plan in phases.
 
@@ -303,7 +363,7 @@ class IncrementalDeploymentOrchestrator:
         phases = [
             {
                 "name": "Foundation",
-                "stacks": ["iam", "s3", "dynamodb"],
+                "stacks": ["iam", "s3", "dynamodb"],  # Order matters: IAM first, then S3, then DynamoDB
                 "description": "IAM roles, S3 buckets, and DynamoDB tables"
             },
             {
@@ -372,14 +432,31 @@ class IncrementalDeploymentOrchestrator:
                 
                 print(f"\nDeploying stacks: {', '.join(stacks_to_deploy)}")
                 
-                # Deploy phase stacks
-                progress_reporter = CDKProgressReporter()
-                result = self.cdk_api.deploy(
-                    stacks=stacks_to_deploy,
-                    context=context,
-                    require_approval="never" if auto_approve else "broadening",
-                    progress_callback=progress_reporter,
-                )
+                # Pre-deployment actions for specific phases
+                if phase["name"] == "Foundation" and "s3" in stacks_to_deploy:
+                    # Ensure Lambda bucket exists before S3 stack deployment
+                    self._ensure_lambda_bucket_exists(plan["parameters"])
+                
+                # Deploy stacks serially for safety
+                phase_success = True
+                for stack in stacks_to_deploy:
+                    print(f"\n  Deploying {stack}...")
+                    progress_reporter = CDKProgressReporter()
+                    result = self.cdk_api.deploy(
+                        stacks=[stack],  # Deploy one stack at a time
+                        context=context,
+                        require_approval="never",  # User already approved deployment plan
+                        progress_callback=progress_reporter,
+                    )
+                    
+                    if not result["success"]:
+                        print(f"\n  [ERROR] Failed to deploy {stack}")
+                        phase_success = False
+                        break
+                    else:
+                        print(f"\n  [SUCCESS] {stack} deployed successfully")
+                
+                result = {"success": phase_success}
                 
                 if result["success"]:
                     print(f"\n[SUCCESS] Phase {i} ({phase['name']}) completed successfully!")
@@ -642,6 +719,40 @@ class IncrementalDeploymentOrchestrator:
                 else:
                     print(f"  ✗ Log Group: {log_group} - Does not exist")
                     all_valid = False
+                    
+        # Validate IAM resources
+        print("\nChecking IAM resources...")
+        
+        # Check IAM role
+        game_name = config.get("Game", {}).get("name", "eidolon-engine")
+        role_name = f"{game_name}-server-execution-role"
+        
+        validator = ResourceValidatorFactory.create_validator("iam_role", self.session)
+        result = validator.validate(role_name, {"resource_type": "role"})
+        validation_results[f"IAM:role:{role_name}"] = result
+        
+        if result.exists and result.valid:
+            print(f"  ✓ Execution Role: {role_name} - OK")
+        else:
+            print(f"  ✗ Execution Role: {role_name} - Does not exist")
+            all_valid = False
+            
+        # Check IAM policies
+        policy_names = [
+            f"eidolon-{game_name}-cloudwatch-access",
+            f"eidolon-{game_name}-dynamodb-access"
+        ]
+        
+        validator = ResourceValidatorFactory.create_validator("iam_policy", self.session)
+        for policy_name in policy_names:
+            result = validator.validate(policy_name, {"resource_type": "policy"})
+            validation_results[f"IAM:policy:{policy_name}"] = result
+            
+            if result.exists and result.valid:
+                print(f"  ✓ Policy: {policy_name} - OK")
+            else:
+                print(f"  ✗ Policy: {policy_name} - Does not exist")
+                all_valid = False
                     
         # Validate CloudFront Distribution
         if "CloudFront" in config:
