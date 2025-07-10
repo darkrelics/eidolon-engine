@@ -102,6 +102,7 @@ Options:
   --deploy-incremental   Deploy in Incremental mode
   --deploy-both          Deploy in Hybrid mode (default)
   --non-interactive      Run without interactive prompts
+  --branch               Select specific GitHub branch
 ```
 
 ## Configuration

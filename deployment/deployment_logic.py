@@ -21,13 +21,13 @@ def prompt_missing_parameters(params: dict) -> dict:
     """
     print("\n=== CONFIGURATION ===")
 
-    # Basic required parameters
+    # Basic required parameters - use config values as defaults
     required_params = {
-        "game_name": ("Game name", "eidolon-engine"),
-        "contact_email": ("Administrator contact email", "contact@darkrelics.net"),
-        "github_owner": ("GitHub repository owner", "robinje"),
-        "github_repo": ("GitHub repository name", "eidolon-engine"),
-        "github_branch": ("GitHub branch to deploy from", "main"),
+        "game_name": ("Game name", params.get("game_name", "eidolon-engine")),
+        "contact_email": ("Administrator contact email", params.get("contact_email", "contact@darkrelics.net")),
+        "github_owner": ("GitHub repository owner", params.get("github_owner", "robinje")),
+        "github_repo": ("GitHub repository name", params.get("github_repo", "eidolon-engine")),
+        "github_branch": ("GitHub branch to deploy from", params.get("github_branch", "main")),
     }
 
     print("\nPlease provide the following configuration values:")
@@ -45,36 +45,70 @@ def prompt_missing_parameters(params: dict) -> dict:
             sys.exit(1)
 
     # API Configuration (required for Lambda deployments)
-    if params.get("deploy_mud") or params.get("deploy_incremental"):
+    if params.get("deploy_mud") or params.get("deploy_incremental") or params.get("deployment_mode"):
         print("\n=== API CONFIGURATION ===")
         print("API Gateway requires a custom domain name and hosted zone.")
         print("Skip this section if you don't have a domain configured in Route53.\n")
 
-        # Check if we have API config
-        if not params.get("domain_name"):
-            domain = input("Domain name (e.g., darkrelics.net) [skip to use default]: ").strip()
-            if domain and domain.lower() != "skip":
-                params["domain_name"] = domain
+        # Check if we have API config - prompt for domain if not set
+        domain_default = params.get("domain_name", "skip to use default")
+        domain = input(f"Domain name (e.g., darkrelics.net) [{domain_default}]: ").strip()
+        
+        if domain and domain.lower() != "skip":
+            params["domain_name"] = domain
+        elif not domain and domain_default != "skip to use default":
+            # User pressed enter and we have a configured value, keep it
+            params["domain_name"] = domain_default
+        elif domain.lower() == "skip" or (not domain and domain_default == "skip to use default"):
+            # User wants to skip API configuration
+            params.pop("domain_name", None)
+            params.pop("hosted_zone_id", None)
 
-                # Also need hosted zone ID
-                zone_id = input("Route53 Hosted Zone ID [required if domain provided]: ").strip()
-                if zone_id:
-                    params["hosted_zone_id"] = zone_id
-                else:
-                    print("WARNING: Hosted Zone ID is required for custom domain. Skipping API Gateway setup.")
-                    params.pop("domain_name", None)
+        # If we have a domain name, we need a hosted zone ID
+        if params.get("domain_name"):
+            zone_id_default = params.get("hosted_zone_id", "")
+            zone_id = input(f"Route53 Hosted Zone ID [{zone_id_default if zone_id_default else 'required'}]: ").strip()
+            if zone_id:
+                params["hosted_zone_id"] = zone_id
+            elif zone_id_default:
+                # User pressed enter and we have a configured value, keep it
+                params["hosted_zone_id"] = zone_id_default
+            else:
+                print("WARNING: Hosted Zone ID is required for custom domain. Skipping API Gateway setup.")
+                params.pop("domain_name", None)
+                params.pop("hosted_zone_id", None)
 
     # Optional S3 bucket names
     print("\n=== S3 BUCKETS ===")
-    print("Leave blank to create new buckets with auto-generated names.\n")
+    
+    # Check if we already have bucket names from config
+    has_portal_bucket = params.get('portal_bucket_name') and params['portal_bucket_name'] != 'auto-generate'
+    has_scripts_bucket = params.get('scripts_bucket_name') and params['scripts_bucket_name'] != 'auto-generate'
+    
+    if has_portal_bucket or has_scripts_bucket:
+        print("Existing S3 buckets detected from configuration.")
+        print("Press Enter to keep existing buckets, or enter new names to change.\n")
+    else:
+        print("Leave blank to create new buckets with auto-generated names.\n")
 
-    portal_bucket = input(f"Portal S3 bucket name [{params.get('portal_bucket_name', 'auto-generate')}]: ").strip()
-    if portal_bucket and portal_bucket != "auto-generate":
+    # Show actual bucket name from config if available, otherwise show 'auto-generate'
+    portal_default = params.get('portal_bucket_name', 'auto-generate')
+    portal_bucket = input(f"Portal S3 bucket name [{portal_default}]: ").strip()
+    if portal_bucket:
         params["portal_bucket_name"] = portal_bucket
+    elif portal_default and portal_default != "auto-generate":
+        # User pressed enter and we have a configured value, keep it
+        params["portal_bucket_name"] = portal_default
+    # else: leave it unset for auto-generation
 
-    scripts_bucket = input(f"Scripts S3 bucket name [{params.get('scripts_bucket_name', 'auto-generate')}]: ").strip()
-    if scripts_bucket and scripts_bucket != "auto-generate":
+    scripts_default = params.get('scripts_bucket_name', 'auto-generate')
+    scripts_bucket = input(f"Scripts S3 bucket name [{scripts_default}]: ").strip()
+    if scripts_bucket:
         params["scripts_bucket_name"] = scripts_bucket
+    elif scripts_default and scripts_default != "auto-generate":
+        # User pressed enter and we have a configured value, keep it
+        params["scripts_bucket_name"] = scripts_default
+    # else: leave it unset for auto-generation
 
     return params
 
@@ -198,24 +232,25 @@ def validate_resources(session, params: dict) -> dict:
     try:
         validator = ResourceValidatorFactory.create_validator("s3_bucket", session)
 
-        # Check portal bucket
+        # Check portal bucket - should be PRIVATE (accessed via CloudFront)
         portal_bucket = params.get("portal_bucket_name", "")
         if portal_bucket:  # Only validate if bucket name is provided
             expected_config = {
-                "website_enabled": True,
+                "website_enabled": False,  # No website hosting needed with CloudFront
                 "public_access_block": {
-                    "block_public_acls": False,
-                    "block_public_policy": False,
-                    "ignore_public_acls": False,
-                    "restrict_public_buckets": False,
+                    "block_public_acls": True,
+                    "block_public_policy": True,
+                    "ignore_public_acls": True,
+                    "restrict_public_buckets": True,
                 },
             }
             result = validator.validate(portal_bucket, expected_config)
             all_results[portal_bucket] = result
 
-        # Check scripts bucket
+        # Check scripts bucket - should be PRIVATE (accessed programmatically)
         scripts_bucket = params.get("scripts_bucket_name", "")
         if scripts_bucket:  # Only validate if bucket name is provided
+            # Scripts bucket should also be private
             result = validator.validate(scripts_bucket, expected_config)
             all_results[scripts_bucket] = result
     except Exception as err:

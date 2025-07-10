@@ -105,6 +105,8 @@ class IncrementalDeploymentOrchestrator:
             # Check for existing S3 buckets
             if "ScriptsS3Bucket" in game_config:
                 params["scripts_bucket_name"] = game_config["ScriptsS3Bucket"]
+            if "PortalS3Bucket" in game_config:
+                params["portal_bucket_name"] = game_config["PortalS3Bucket"]
         # Check both AWS and Contact sections for email (template uses Contact)
         if "Contact" in config:
             params["contact_email"] = config["Contact"].get("Email", params["contact_email"])
@@ -162,6 +164,16 @@ class IncrementalDeploymentOrchestrator:
                     params["deployment_mode"] = "incremental"
                 else:
                     params["deployment_mode"] = "hybrid"
+        
+        # Load API configuration
+        if "API" in config:
+            api_config = config["API"]
+            if api_config.get("Domain"):
+                params["domain_name"] = api_config["Domain"]
+            if api_config.get("HostedZoneId"):
+                params["hosted_zone_id"] = api_config["HostedZoneId"]
+            if api_config.get("Subdomain"):
+                params["api_subdomain"] = api_config["Subdomain"]
 
         return params
 
@@ -634,20 +646,23 @@ class IncrementalDeploymentOrchestrator:
         # Validate CloudFront Distribution
         if "CloudFront" in config:
             print("\nChecking CloudFront distribution...")
-            distribution_id = config["CloudFront"].get("distribution_id", "")
-            if distribution_id:
-                try:
-                    cf_client = self.session.client('cloudfront')
-                    cf_client.get_distribution(Id=distribution_id)
-                    print(f"  ✓ Distribution: {distribution_id} - OK")
-                except ClientError as e:
-                    if e.response['Error']['Code'] == 'NoSuchDistribution':
-                        print(f"  ✗ Distribution: {distribution_id} - Does not exist")
-                    else:
-                        print(f"  ✗ Distribution: {distribution_id} - Error: {e}")
-                    all_valid = False
+            if config.get("CloudFront") is None:
+                print("  ⚠ CloudFront: Not configured")
             else:
-                print("  ⚠ Distribution: Not configured")
+                distribution_id = config.get("CloudFront", {}).get("distribution_id", "")
+                if distribution_id:
+                    try:
+                        cf_client = self.session.client('cloudfront')
+                        cf_client.get_distribution(Id=distribution_id)
+                        print(f"  ✓ Distribution: {distribution_id} - OK")
+                    except ClientError as e:
+                        if e.response['Error']['Code'] == 'NoSuchDistribution':
+                            print(f"  ✗ Distribution: {distribution_id} - Does not exist")
+                        else:
+                            print(f"  ✗ Distribution: {distribution_id} - Error: {e}")
+                        all_valid = False
+                else:
+                    print("  ⚠ Distribution: Not configured")
                 
         # Generate drift report if needed
         drift_count = sum(1 for r in validation_results.values() if r.drift_detected)
