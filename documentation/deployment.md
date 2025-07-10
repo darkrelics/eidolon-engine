@@ -4,10 +4,11 @@ This guide explains how to deploy and manage Eidolon Engine infrastructure using
 
 ## Prerequisites
 
-- Python 3.8 or later (use `python3` command)
+- Python 3.11 or later (use `python3` command)
 - AWS CLI configured with appropriate credentials
 - AWS CDK CLI installed: `npm install -g aws-cdk`
 - Required Python packages: `pip3 install -r requirements/scripts-requirements.txt`
+- AWS CDK Bootstrap: The target AWS account must be bootstrapped for CDK. Run `cdk bootstrap aws://ACCOUNT-ID/REGION` if not already done
 
 ## Overview
 
@@ -247,12 +248,19 @@ CloudFront:
 
 The deployment process follows a specific order of operations to ensure infrastructure is created correctly:
 
+### Prerequisites Check
+
+Before running the deployment, ensure:
+- AWS CDK is bootstrapped: `cdk bootstrap aws://ACCOUNT-ID/REGION`
+- Required permissions are in place
+- Dependencies are installed
+
 ### Order of Operations
 
 1. **Check AWS Account Access** - Verify credentials and permissions
 2. **Check for config.yml** - Look for existing configuration
 3. **Validate Resources** - If config exists, validate all resources and update config with current state
-4. **Deploy Infrastructure** - Create/update AWS resources in phases
+4. **Deploy Infrastructure** - Create/update AWS resources in phases (requires CDK bootstrap)
 5. **Build Artifacts** - Execute CodeBuild to create Lambda packages and frontend
 6. **Update Functions** - Deploy Lambda functions with new code
 7. **Finalize Configuration** - Write final config.yml with all resource IDs
@@ -478,6 +486,27 @@ cdk destroy --all
 - **Incremental progress**: Build infrastructure step by step
 
 ## Troubleshooting
+
+### CDK Bootstrap Issues
+
+If you encounter errors like "SSM parameter /cdk-bootstrap/hnb659fds/version not found" or "Role arn:aws:iam::ACCOUNT:role/cdk-hnb659fds-deploy-role-ACCOUNT-REGION is invalid":
+
+1. **Bootstrap the CDK environment**:
+   ```bash
+   cdk bootstrap aws://ACCOUNT-ID/REGION
+   # Example: cdk bootstrap aws://542230992937/us-east-1
+   ```
+
+2. **If bootstrap fails due to existing resources**:
+   - Check for existing CDK resources: `aws s3 ls | grep cdk-hnb659fds`
+   - Delete failed bootstrap stack: `aws cloudformation delete-stack --stack-name CDKToolkit`
+   - Wait for deletion: `aws cloudformation wait stack-delete-complete --stack-name CDKToolkit`
+   - Retry bootstrap
+
+3. **Common bootstrap errors**:
+   - "Policy already exists": Delete conflicting IAM policies first
+   - "Bucket already exists": The CDK assets bucket exists from a previous bootstrap
+   - "SSM parameter already exists": Delete the parameter with `aws ssm delete-parameter --name /cdk-bootstrap/hnb659fds/version`
 
 ### Configuration File Path
 

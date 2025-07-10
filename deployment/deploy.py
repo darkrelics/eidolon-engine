@@ -867,6 +867,10 @@ class IncrementalDeploymentOrchestrator:
         Returns:
             True if deployment succeeded
         """
+        # Set non-interactive mode in environment
+        if non_interactive:
+            os.environ['NON_INTERACTIVE'] = '1'
+        
         # Show welcome message in interactive mode
         if not non_interactive and not analyze_only:
             print("========================================================")

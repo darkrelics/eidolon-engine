@@ -55,6 +55,77 @@ class CDKApiIntegration:
         # Check CDK installation
         if not check_cdk_installed():
             raise CDKDeploymentError("AWS CDK CLI is not installed. Please install it with: npm install -g aws-cdk", {})
+        
+        # Check and ensure CDK bootstrap
+        self._ensure_cdk_bootstrap()
+
+    def _ensure_cdk_bootstrap(self) -> None:
+        """Check if CDK is bootstrapped and bootstrap if necessary."""
+        try:
+            # Get account ID
+            account_id = self.session.client("sts").get_caller_identity().get("Account")
+            
+            # Check if bootstrap SSM parameter exists
+            ssm_client = self.session.client("ssm")
+            try:
+                ssm_client.get_parameter(Name="/cdk-bootstrap/hnb659fds/version")
+                print("✓ CDK bootstrap detected")
+                return
+            except ssm_client.exceptions.ParameterNotFound:
+                print("\n[CDK Bootstrap Required]")
+                print(f"The AWS CDK needs to be bootstrapped in account {account_id} for region {self.region}")
+                print("This is a one-time setup that creates resources needed by CDK.")
+                
+                # In non-interactive mode, raise an error
+                if os.environ.get('NON_INTERACTIVE'):
+                    raise CDKDeploymentError(
+                        f"CDK bootstrap required. Run: cdk bootstrap aws://{account_id}/{self.region}",
+                        {"account": account_id, "region": self.region}
+                    )
+                
+                # Ask user if they want to bootstrap
+                response = input("\nDo you want to bootstrap CDK now? [Y/n]: ").strip().lower()
+                if response == '' or response == 'y':
+                    print(f"\nBootstrapping CDK for aws://{account_id}/{self.region}...")
+                    self._run_cdk_bootstrap(account_id)
+                else:
+                    raise CDKDeploymentError(
+                        f"CDK bootstrap required. Run manually: cdk bootstrap aws://{account_id}/{self.region}",
+                        {"account": account_id, "region": self.region}
+                    )
+        except Exception as e:
+            if isinstance(e, CDKDeploymentError):
+                raise
+            raise CDKDeploymentError(f"Error checking CDK bootstrap: {str(e)}", {})
+    
+    def _run_cdk_bootstrap(self, account_id: str) -> None:
+        """Run CDK bootstrap command."""
+        try:
+            # Run bootstrap command
+            result = subprocess.run(
+                ["cdk", "bootstrap", f"aws://{account_id}/{self.region}"],
+                cwd=self.cdk_dir,
+                env=os.environ.copy(),
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                # Check if it's just the bucket already exists error
+                if "already exists" in result.stderr and "cdk-hnb659fds-assets" in result.stderr:
+                    print("⚠️  CDK assets bucket already exists, but bootstrap incomplete")
+                    print("This usually means a previous bootstrap attempt failed.")
+                    print("Please manually clean up and retry:")
+                    print(f"  1. Delete CloudFormation stack: CDKToolkit")
+                    print(f"  2. Run: cdk bootstrap aws://{account_id}/{self.region}")
+                    raise CDKDeploymentError("CDK bootstrap failed - manual cleanup required", {})
+                else:
+                    raise CDKDeploymentError(f"CDK bootstrap failed: {result.stderr}", {})
+            
+            print("✓ CDK bootstrap completed successfully")
+            
+        except subprocess.CalledProcessError as e:
+            raise CDKDeploymentError(f"CDK bootstrap command failed: {str(e)}", {})
 
     def _setup_environment(self) -> None:
         """Configure environment for CDK operations."""
