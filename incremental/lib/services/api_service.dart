@@ -4,18 +4,36 @@ import '../models/character.dart';
 import '../models/segment_outcome.dart';
 import 'auth_service.dart';
 
+/// Character info for listing
+class CharacterInfo {
+  final String name;
+  final bool dead;
+
+  CharacterInfo({required this.name, required this.dead});
+
+  factory CharacterInfo.fromJson(Map<String, dynamic> json) {
+    return CharacterInfo(
+      name: json['name'] as String,
+      dead: json['dead'] as bool? ?? false,
+    );
+  }
+}
+
 /// Service for calling Lambda functions through API Gateway
 class ApiService {
   final AuthService _authService;
   final http.Client _httpClient;
+  static const String _apiDomain = String.fromEnvironment('API_DOMAIN', defaultValue: 'darkrelics.net');
+  static const String _defaultBaseUrl = 'https://api.$_apiDomain';
   final String baseUrl;
 
   ApiService({
     required AuthService authService,
-    required this.baseUrl,
+    String? baseUrl,
     http.Client? httpClient,
   })  : _authService = authService,
-        _httpClient = httpClient ?? http.Client();
+        _httpClient = httpClient ?? http.Client(),
+        baseUrl = baseUrl ?? _defaultBaseUrl;
 
   /// Get authorization headers
   Future<Map<String, String>> _getHeaders() async {
@@ -71,6 +89,29 @@ class ApiService {
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return Character.fromJson(json['character'] as Map<String, dynamic>);
+  }
+
+  /// List all characters for the player
+  Future<List<CharacterInfo>> listCharacters() async {
+    final headers = await _getHeaders();
+    final response = await _httpClient.get(
+      Uri.parse('$baseUrl/characters'),
+      headers: headers,
+    );
+
+    if (response.statusCode == 404) {
+      return [];
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to list characters: ${response.body}');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final characterList = (json['characters'] as List)
+        .map((char) => CharacterInfo.fromJson(char as Map<String, dynamic>))
+        .toList();
+    return characterList;
   }
 
   /// Start a story segment
