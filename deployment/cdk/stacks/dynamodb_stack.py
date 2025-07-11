@@ -1,7 +1,7 @@
 """AWS DynamoDB stack for game data storage."""
 
 import boto3
-from aws_cdk import CfnOutput, RemovalPolicy, Stack, CfnDeletionPolicy
+from aws_cdk import CfnDeletionPolicy, CfnOutput, RemovalPolicy, Stack
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from botocore.exceptions import ClientError
@@ -11,7 +11,15 @@ from constructs import Construct
 class DynamoDBStack(Stack):
     """DynamoDB stack for Eidolon Engine game data."""
 
-    def __init__(self, scope: Construct, construct_id: str, game_name: str, table_names: dict[str, str] = {}, execution_role_arn: str = None, **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        game_name: str,
+        table_names: dict[str, str] = {},
+        execution_role_arn: str = None,
+        **kwargs,
+    ) -> None:
         """Initialize DynamoDB stack.
 
         Args:
@@ -162,11 +170,11 @@ class DynamoDBStack(Stack):
 
         # Use logical_id instead of table_name to maintain stable CloudFormation resource IDs
         table = dynamodb.Table(self, logical_id, **table_props)
-        
+
         # Set UpdateReplacePolicy to Retain to prevent data loss during updates
         cfn_table = table.node.default_child
         cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN
-        
+
         return table
 
     def _create_access_policy(self) -> None:
@@ -202,13 +210,11 @@ class DynamoDBStack(Stack):
             document=self.table_access_policy,
             description=f"Policy for accessing {self.game_name} Eidolon Engine DynamoDB tables",
         )
-        
+
         # Attach policy to execution role if ARN provided
         if self.execution_role_arn:
             # Import the role using its ARN
-            execution_role = iam.Role.from_role_arn(
-                self, "imported-execution-role", self.execution_role_arn
-            )
+            execution_role = iam.Role.from_role_arn(self, "imported-execution-role", self.execution_role_arn)
             execution_role.add_managed_policy(self.access_policy)
 
         CfnOutput(

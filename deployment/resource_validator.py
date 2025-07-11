@@ -128,7 +128,6 @@ class DynamoDBTableValidator(ResourceValidator):
                     result.drift_detected = True
                     result.add_message("Key schema mismatch")
 
-
             result.valid = True
 
         except ClientError as err:
@@ -154,7 +153,6 @@ class DynamoDBTableValidator(ResourceValidator):
             tables = [t for t in tables if t.startswith(prefix)]
 
         return tables
-
 
     def _compare_key_schemas(self, actual: list, expected: list) -> bool:
         """Compare key schemas for equality."""
@@ -571,7 +569,7 @@ class IAMValidator(ResourceValidator):
     def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate an IAM role or policy."""
         resource_type = expected_config.get("resource_type", "role")
-        
+
         if resource_type == "role":
             return self._validate_role(resource_id, expected_config)
         elif resource_type == "policy":
@@ -620,7 +618,7 @@ class IAMValidator(ResourceValidator):
             # List policies to find ours
             paginator = self.client.get_paginator("list_policies")
             policy_found = None
-            
+
             for page in paginator.paginate(Scope="Local"):
                 for policy in page.get("Policies", []):
                     if policy.get("PolicyName") == policy_name:
@@ -661,7 +659,7 @@ class IAMValidator(ResourceValidator):
     def list_resources(self, filter_params=None) -> list:
         """List all IAM resources."""
         resources = []
-        
+
         # List roles
         try:
             paginator = self.client.get_paginator("list_roles")

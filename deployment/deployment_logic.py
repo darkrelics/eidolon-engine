@@ -53,7 +53,7 @@ def prompt_missing_parameters(params: dict) -> dict:
         # Check if we have API config - prompt for domain if not set
         domain_default = params.get("domain_name", "skip to use default")
         domain = input(f"Domain name (e.g., darkrelics.net) [{domain_default}]: ").strip()
-        
+
         if domain and domain.lower() != "skip":
             params["domain_name"] = domain
         elif not domain and domain_default != "skip to use default":
@@ -80,11 +80,11 @@ def prompt_missing_parameters(params: dict) -> dict:
 
     # Optional S3 bucket names
     print("\n=== S3 BUCKETS ===")
-    
+
     # Check if we already have bucket names from config
-    has_portal_bucket = params.get('portal_bucket_name') and params['portal_bucket_name'] != 'auto-generate'
-    has_scripts_bucket = params.get('scripts_bucket_name') and params['scripts_bucket_name'] != 'auto-generate'
-    
+    has_portal_bucket = params.get("portal_bucket_name") and params["portal_bucket_name"] != "auto-generate"
+    has_scripts_bucket = params.get("scripts_bucket_name") and params["scripts_bucket_name"] != "auto-generate"
+
     if has_portal_bucket or has_scripts_bucket:
         print("Existing S3 buckets detected from configuration.")
         print("Press Enter to keep existing buckets, or enter new names to change.\n")
@@ -92,7 +92,7 @@ def prompt_missing_parameters(params: dict) -> dict:
         print("Leave blank to create new buckets with auto-generated names.\n")
 
     # Show actual bucket name from config if available, otherwise show 'auto-generate'
-    portal_default = params.get('portal_bucket_name', 'auto-generate')
+    portal_default = params.get("portal_bucket_name", "auto-generate")
     portal_bucket = input(f"Portal S3 bucket name [{portal_default}]: ").strip()
     if portal_bucket:
         params["portal_bucket_name"] = portal_bucket
@@ -101,7 +101,7 @@ def prompt_missing_parameters(params: dict) -> dict:
         params["portal_bucket_name"] = portal_default
     # else: leave it unset for auto-generation
 
-    scripts_default = params.get('scripts_bucket_name', 'auto-generate')
+    scripts_default = params.get("scripts_bucket_name", "auto-generate")
     scripts_bucket = input(f"Scripts S3 bucket name [{scripts_default}]: ").strip()
     if scripts_bucket:
         params["scripts_bucket_name"] = scripts_bucket
@@ -254,10 +254,10 @@ def validate_resources(session, params: dict) -> dict:
             # Scripts bucket should also be private
             result = validator.validate(scripts_bucket, expected_config)
             all_results[scripts_bucket] = result
-            
+
         # Check lambda bucket - should be PRIVATE (deployment artifacts)
         game_name = params.get("game_name", "eidolon-engine")
-        account_id = session.client('sts').get_caller_identity()['Account']
+        account_id = session.client("sts").get_caller_identity()["Account"]
         lambda_bucket = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")
         result = validator.validate(lambda_bucket, expected_config)
         all_results[lambda_bucket] = result
@@ -267,24 +267,21 @@ def validate_resources(session, params: dict) -> dict:
     # Validate IAM resources
     try:
         game_name = params.get("game_name", "eidolon-engine")
-        
+
         # Check IAM role
         role_validator = ResourceValidatorFactory.create_validator("iam_role", session)
         role_name = f"{game_name}-server-execution-role"
         result = role_validator.validate(role_name, {"resource_type": "role"})
         all_results[f"iam_role:{role_name}"] = result
-        
+
         # Check IAM policies
         policy_validator = ResourceValidatorFactory.create_validator("iam_policy", session)
-        policy_names = [
-            f"eidolon-{game_name}-cloudwatch-access",
-            f"eidolon-{game_name}-dynamodb-access"
-        ]
-        
+        policy_names = [f"eidolon-{game_name}-cloudwatch-access", f"eidolon-{game_name}-dynamodb-access"]
+
         for policy_name in policy_names:
             result = policy_validator.validate(policy_name, {"resource_type": "policy"})
             all_results[f"iam_policy:{policy_name}"] = result
-            
+
     except Exception as err:
         print(f"Warning: Error validating IAM resources: {err}")
 
@@ -365,35 +362,31 @@ def _can_adopt_stack(stack_name: str, _stack_info: dict) -> bool:
 
 def check_iam_policies(session, game_name: str) -> dict:
     """Check for existing IAM policies.
-    
+
     Args:
         session: AWS session
         game_name: Game name for policy naming
-        
+
     Returns:
         Dictionary of policy existence
     """
     iam_client = session.client("iam")
     policies = {
         "cloudwatch_policy": f"eidolon-{game_name}-cloudwatch-access",
-        "dynamodb_policy": f"eidolon-{game_name}-dynamodb-access"
+        "dynamodb_policy": f"eidolon-{game_name}-dynamodb-access",
     }
-    
+
     existing_policies = {}
     try:
-        paginator = iam_client.get_paginator('list_policies')
-        for page in paginator.paginate(Scope='Local'):
-            for policy in page['Policies']:
+        paginator = iam_client.get_paginator("list_policies")
+        for page in paginator.paginate(Scope="Local"):
+            for policy in page["Policies"]:
                 for key, policy_name in policies.items():
-                    if policy['PolicyName'] == policy_name:
-                        existing_policies[key] = {
-                            "name": policy_name,
-                            "arn": policy['Arn'],
-                            "exists": True
-                        }
+                    if policy["PolicyName"] == policy_name:
+                        existing_policies[key] = {"name": policy_name, "arn": policy["Arn"], "exists": True}
     except Exception as err:
         print(f"Warning: Could not check IAM policies: {err}")
-    
+
     return existing_policies
 
 
@@ -415,18 +408,29 @@ def analyze_changes(cfn_client, session, params: dict) -> dict:
 
     # Map CloudFormation resources if they exist
     cf_mapping = map_cloudformation_to_cdk(existing_stacks, params)
-    
+
     # Check for existing IAM policies
     game_name = params.get("game_name", "eidolon-engine")
     existing_iam_policies = check_iam_policies(session, game_name)
-    
+
     if existing_iam_policies:
         print("\nDetected existing IAM policies:")
         for key, policy_info in existing_iam_policies.items():
             print(f"  - {policy_info['name']}")
 
     # Expected CDK stack names (in dependency order)
-    expected_stacks = ["iam", "s3", "dynamodb", "cognito", "cloudwatch", "codebuild", "base-lambda", "lambda", "cognito-trigger", "cloudfront"]
+    expected_stacks = [
+        "iam",
+        "s3",
+        "dynamodb",
+        "cognito",
+        "cloudwatch",
+        "codebuild",
+        "base-lambda",
+        "lambda",
+        "cognito-trigger",
+        "cloudfront",
+    ]
 
     plan = {
         "create_stacks": [],

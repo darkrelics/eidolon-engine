@@ -9,7 +9,15 @@ from constructs import Construct
 class CognitoStack(Stack):
     """Cognito stack for Eidolon Engine user authentication."""
 
-    def __init__(self, scope: Construct, construct_id: str, contact_email: str = None, post_confirmation_lambda_arn: str = None, dev_mode: bool = False, **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        contact_email: str = None,
+        post_confirmation_lambda_arn: str = None,
+        dev_mode: bool = False,
+        **kwargs,
+    ) -> None:
         """Initialize Cognito stack.
 
         Args:

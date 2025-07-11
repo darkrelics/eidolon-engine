@@ -43,10 +43,10 @@ class CloudWatchStack(Stack):
             1827: logs.RetentionDays.FIVE_YEARS,
             3653: logs.RetentionDays.TEN_YEARS,
         }
-        
+
         # Use the closest valid retention period
         retention_enum = retention_mapping.get(retention_days, logs.RetentionDays.ONE_YEAR)
-        
+
         # Create Log Group
         self.log_group = logs.LogGroup(
             self,

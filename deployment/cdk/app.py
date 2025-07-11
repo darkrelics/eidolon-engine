@@ -135,7 +135,7 @@ def validate_required_config(config: dict) -> tuple[bool, list[str]]:
         # Check for empty strings as well as missing keys
         domain = api_config.get("Domain", "")
         hosted_zone_id = api_config.get("HostedZoneId", "")
-        
+
         if not domain or not domain.strip():
             errors.append("API.Domain is required and cannot be empty")
         if not hosted_zone_id or not hosted_zone_id.strip():
@@ -146,7 +146,7 @@ def validate_required_config(config: dict) -> tuple[bool, list[str]]:
 
 def get_deployment_mode(app: cdk.App, params: dict) -> str:
     """Determine deployment mode from context or parameters.
-    
+
     Returns:
         One of: 'mud', 'incremental', or 'hybrid'
     """
@@ -154,16 +154,16 @@ def get_deployment_mode(app: cdk.App, params: dict) -> str:
     mode = app.node.try_get_context("deployment_mode")
     if mode and mode in ["mud", "incremental", "hybrid"]:
         return mode
-    
+
     # Check environment variable
     env_mode = os.getenv("DEPLOYMENT_MODE", "").lower()
     if env_mode in ["mud", "incremental", "hybrid"]:
         return env_mode
-    
+
     # Fall back to legacy boolean flags for compatibility
     deploy_mud = get_boolean_context(app, "deploy_mud", params.get("deploy_mud", False))
     deploy_incremental = get_boolean_context(app, "deploy_incremental", params.get("deploy_incremental", False))
-    
+
     if deploy_mud and deploy_incremental:
         return "hybrid"
     elif deploy_mud:
@@ -352,7 +352,7 @@ class ConfigurationManager:
     def load_config(self) -> dict:
         """Load configuration from file merged with template."""
         config = load_yaml_file(self.config_path)
-        
+
         # If config exists, merge with template to fill in missing values
         if config:
             template_path = self.config_path.parent.parent / "config.template.yml"
@@ -362,7 +362,7 @@ class ConfigurationManager:
                     # Deep merge config over template (config values take precedence)
                     deep_merge(template, config)
                     return template
-        
+
         return config or {}
 
     def save_config(self) -> None:
@@ -486,12 +486,12 @@ class EidolonEngineApp:
     def load_configuration(self) -> dict:
         """Load configuration from config.yml merged with template defaults."""
         template_path = Path(__file__).parent / "../../config.template.yml"
-        
+
         # Start with template
         template_config = load_yaml_file(template_path)
         if not template_config:
             template_config = {}
-            
+
         if self.config_manager.exists():
             # Merge existing config over template (existing values take precedence)
             deep_merge(template_config, self.config_manager.config)
@@ -509,23 +509,23 @@ class EidolonEngineApp:
 
         # Determine deployment mode
         deploy_mode = get_deployment_mode(self.app, params)
-        
+
         print(f"Deployment mode: {deploy_mode}")
 
         # Create IAM stack early (no dependencies)
         self.create_iam_stack(env, params)
-        
+
         # Create foundation stacks (S3, DynamoDB, Cognito, CloudWatch)
         self.create_foundation_stacks(env, params)
-        
+
         # Create build infrastructure (CodeBuild)
         self.create_build_infrastructure(env, params, deploy_mode)
-        
+
         # Note: Build execution will happen here in phase 2
-        
+
         # Create application stacks (Lambda, API Gateway)
         self.create_application_stacks(env, params)
-        
+
         # Create distribution layer (CloudFront)
         self.create_distribution_layer(env, params)
 
@@ -543,21 +543,21 @@ class EidolonEngineApp:
 
         # Create unified DynamoDB tables (depends on IAM for role)
         unified_tables = self.get_unified_table_names(params)
-        
+
         self.dynamodb_stack = DynamoDBStack(
-            self.app, 
-            "dynamodb", 
-            game_name=params.get("game_name", "eidolon-engine"), 
+            self.app,
+            "dynamodb",
+            game_name=params.get("game_name", "eidolon-engine"),
             table_names=unified_tables,
             execution_role_arn=self.iam_stack.execution_role.role_arn,
-            env=env
+            env=env,
         )
         self.dynamodb_stack.add_dependency(self.iam_stack)  # DynamoDB depends on IAM
 
         # Create Cognito stack (no dependencies)
         # Default to dev mode (True) unless explicitly set to production
         dev_mode = params.get("dev_mode", True)
-        
+
         self.cognito_stack = CognitoStack(
             self.app,
             "cognito",
@@ -580,7 +580,7 @@ class EidolonEngineApp:
         buildspec_path = params.get("portal_buildspec_path", "buildspec/portal.yml")
         if deploy_mode in ["incremental", "hybrid"]:
             buildspec_path = params.get("incremental_buildspec_path", "buildspec/incremental.yml")
-            
+
         self.codebuild_stack = CodeBuildStack(
             self.app,
             "codebuild",
@@ -597,12 +597,12 @@ class EidolonEngineApp:
         )
         self.codebuild_stack.add_dependency(self.cognito_stack)
         self.codebuild_stack.add_dependency(self.s3_stack)
-    
+
     def create_application_stacks(self, env: cdk.Environment, params: dict) -> None:
         """Create application layer stacks (Lambda, API Gateway)."""
         # Get unified table names
         unified_tables = self.get_unified_table_names(params)
-        
+
         # Create base Lambda stack for common functions
         self.base_lambda_stack = BaseLambdaStack(
             self.app,
@@ -615,7 +615,7 @@ class EidolonEngineApp:
         # Create unified Lambda stack with all API functions
         domain_name = params.get("domain_name", "")
         hosted_zone_id = params.get("hosted_zone_id", "")
-        
+
         self.lambda_stack = LambdaStack(
             self.app,
             "lambda",
@@ -640,10 +640,10 @@ class EidolonEngineApp:
 
         # Create Cognito trigger stack (depends on Cognito, DynamoDB, and base Lambda)
         from stacks.cognito_trigger_stack import CognitoTriggerStack
-        
+
         # Get Cognito user pool ARN as string to avoid dependency
         cognito_user_pool_arn = f"arn:aws:cognito-idp:{env.region}:{env.account}:userpool/*"
-        
+
         self.cognito_trigger_stack = CognitoTriggerStack(
             self.app,
             "cognito-trigger",
@@ -657,7 +657,7 @@ class EidolonEngineApp:
         # Note: We don't add cognito as a dependency to avoid circular reference
         self.cognito_trigger_stack.add_dependency(self.dynamodb_stack)
         self.cognito_trigger_stack.add_dependency(self.base_lambda_stack)
-    
+
     def create_distribution_layer(self, env: cdk.Environment, params: dict) -> None:
         """Create CloudFront distribution."""
         self.cloudfront_stack = CloudFrontStack(
@@ -671,7 +671,7 @@ class EidolonEngineApp:
 
     def get_unified_table_names(self, params: dict) -> dict:
         """Get unified table names for all deployment modes.
-        
+
         Returns:
             Dictionary of table names used by all modes
         """
@@ -688,13 +688,12 @@ class EidolonEngineApp:
             "Motd": "motd",
             "Story": "story",
         }
-        
+
         # Override with configured values if present
         configured_tables = params.get("dynamodb_tables", {})
         tables.update(configured_tables)
-        
+
         return tables
-    
 
     def create_iam_stack(self, env: cdk.Environment, params: dict) -> None:
         """Create IAM stack with server execution role."""
@@ -737,7 +736,7 @@ class EidolonEngineApp:
         self.load_api_config(params)
         self.load_cors_config(params)
         self.load_github_config(params)
-        
+
         # Override with CDK context values
         self.load_context_overrides(params)
 
@@ -844,7 +843,7 @@ class EidolonEngineApp:
                 params["allowed_cors_origins"] = list(set(all_origins))  # Remove duplicates
                 if all_origins:
                     print(f"     - Merged {len(params['allowed_cors_origins'])} unique origins from legacy configuration")
-    
+
     def load_github_config(self, params: dict) -> None:
         """Load GitHub configuration section."""
         github_config = self.config.get("GitHub", {})
@@ -856,7 +855,7 @@ class EidolonEngineApp:
             print(f"     - Owner: {params['github_owner']}")
             print(f"     - Repo: {params['github_repo']}")
             print(f"     - Branch: {params['github_branch']}")
-    
+
     def load_context_overrides(self, params: dict) -> None:
         """Override parameters with CDK context values."""
         # Check for context overrides

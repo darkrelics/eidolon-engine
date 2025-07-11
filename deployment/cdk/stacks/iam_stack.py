@@ -9,21 +9,21 @@ from constructs import Construct
 
 def check_policy_exists(policy_name: str, region: str) -> bool:
     """Check if an IAM policy already exists.
-    
+
     Args:
         policy_name: Name of the policy to check
         region: AWS region
-        
+
     Returns:
         True if policy exists, False otherwise
     """
     try:
         iam_client = boto3.client("iam", region_name=region)
         # List policies and check if our policy exists
-        paginator = iam_client.get_paginator('list_policies')
-        for page in paginator.paginate(Scope='Local'):
-            for policy in page['Policies']:
-                if policy['PolicyName'] == policy_name:
+        paginator = iam_client.get_paginator("list_policies")
+        for page in paginator.paginate(Scope="Local"):
+            for policy in page["Policies"]:
+                if policy["PolicyName"] == policy_name:
                     return True
         return False
     except ClientError:
@@ -32,11 +32,11 @@ def check_policy_exists(policy_name: str, region: str) -> bool:
 
 def get_existing_policy_arn(policy_name: str, account: str) -> str:
     """Get ARN of existing policy.
-    
+
     Args:
         policy_name: Name of the policy
         account: AWS account ID
-        
+
     Returns:
         Policy ARN
     """
@@ -115,14 +115,10 @@ def create_cloudwatch_policy(scope: Construct, game_name: str) -> iam.ManagedPol
     )
 
 
-
-
 class IAMStack(Stack):
     """IAM stack for Eidolon Engine server execution role."""
 
-    def __init__(
-        self, scope: Construct, construct_id: str, game_name: str, **kwargs
-    ) -> None:
+    def __init__(self, scope: Construct, construct_id: str, game_name: str, **kwargs) -> None:
         """Initialize IAM stack.
 
         Args:
@@ -145,22 +141,20 @@ class IAMStack(Stack):
 
         # Check if CloudWatch policy already exists
         cloudwatch_policy_name = f"eidolon-{game_name}-cloudwatch-access"
-        
+
         # Create or reference CloudWatch policy
         if check_policy_exists(cloudwatch_policy_name, self.region):
             print(f"  Using existing CloudWatch policy: {cloudwatch_policy_name}")
             # Reference existing policy
             cloudwatch_policy_arn = get_existing_policy_arn(cloudwatch_policy_name, self.account)
-            self.cloudwatch_policy = iam.ManagedPolicy.from_managed_policy_arn(
-                self, "cloudwatch-access-ref", cloudwatch_policy_arn
-            )
+            self.cloudwatch_policy = iam.ManagedPolicy.from_managed_policy_arn(self, "cloudwatch-access-ref", cloudwatch_policy_arn)
         else:
             print(f"  Creating new CloudWatch policy: {cloudwatch_policy_name}")
             self.cloudwatch_policy = create_cloudwatch_policy(self, game_name)
-        
+
         # Attach CloudWatch policy to role
         self.execution_role.add_managed_policy(self.cloudwatch_policy)
-        
+
         # Note: Resource-specific policies are created by their respective stacks
 
         # Create instance profile for EC2 use
@@ -188,7 +182,7 @@ class IAMStack(Stack):
             value=instance_profile_name,
             description="Name of the EC2 instance profile",
         )
-        
+
         # Output policy ARNs
         CfnOutput(
             self,

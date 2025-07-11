@@ -199,9 +199,7 @@ class LambdaStack(cdk.Stack):
         self.cors_origins_str = ",".join(self.allowed_cors_origins) if self.allowed_cors_origins else ""
 
         # Import the dependencies layer
-        dependencies_layer = lambda_.LayerVersion.from_layer_version_arn(
-            self, "imported-layer", self.dependencies_layer_arn
-        )
+        dependencies_layer = lambda_.LayerVersion.from_layer_version_arn(self, "imported-layer", self.dependencies_layer_arn)
 
         # Create API Gateway
         self.api = create_api_gateway(
