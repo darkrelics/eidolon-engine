@@ -30,6 +30,7 @@ The Eidolon Engine supports three deployment modes, all sharing the same backend
 - **Hybrid Mode** (default): Supports both game types with Incremental frontend
 
 All modes share:
+
 - Same DynamoDB tables (Players, Characters, Archetypes, Items, Story)
 - Same Lambda functions and API Gateway
 - Same Cognito user pool for authentication
@@ -131,7 +132,7 @@ Game:
 
 # Deployment mode configuration
 Deployment:
-  Mode: hybrid  # Options: 'mud', 'incremental', or 'hybrid'
+  Mode: hybrid # Options: 'mud', 'incremental', or 'hybrid'
 
 AWS:
   region: us-east-1
@@ -141,11 +142,11 @@ AWS:
 API:
   Domain: darkrelics.net
   HostedZoneId: Z1234567890ABC
-  Subdomain: api  # api.darkrelics.net
+  Subdomain: api # api.darkrelics.net
 
 # CORS configuration for API Gateway
 CORS:
-  AllowedOrigins: []  # Populated automatically based on deployment mode
+  AllowedOrigins: [] # Populated automatically based on deployment mode
   # For MUD mode: adds portal domain
   # For Incremental/Hybrid: adds incremental domain
   # Custom domains can be added manually after deployment
@@ -166,7 +167,7 @@ DynamoDB:
     Characters: characters
     Archetypes: archetypes
     Items: items
-    Story: story  # For incremental game story data
+    Story: story # For incremental game story data
     Rooms: rooms
     Exits: exits
     Prototypes: prototypes
@@ -252,6 +253,7 @@ The deployment process follows a specific order of operations to ensure infrastr
 ### Prerequisites Check
 
 Before running the deployment, ensure:
+
 - AWS CDK is bootstrapped: `cdk bootstrap aws://ACCOUNT-ID/REGION`
 - Required permissions are in place
 - Dependencies are installed
@@ -275,6 +277,7 @@ python3 deployment/deploy.py
 ```
 
 This will:
+
 - Check AWS access and display account information
 - Validate existing resources if config.yml exists
 - Deploy infrastructure in the correct order
@@ -290,6 +293,7 @@ python3 deployment/deploy.py --validate
 ```
 
 This validates all resources in config.yml against AWS and reports:
+
 - Missing resources
 - Configuration drift
 - Access issues
@@ -325,16 +329,19 @@ python3 deployment/deploy_scripts.py
 The CodeBuild project automatically builds and deploys the appropriate Flutter web application based on the deployment mode:
 
 #### MUD Mode
+
 - Builds from `portal/` directory
 - Uses `buildspec/portal.yml`
 - Deploys Portal Flutter application
 
 #### Incremental/Hybrid Modes
+
 - Builds from `incremental/` directory
 - Uses `buildspec/incremental.yml`
 - Deploys Incremental Flutter application
 
 The build process:
+
 1. **Builds the Flutter web application**
 2. **Syncs files to the S3 portal bucket**
 3. **Invalidates CloudFront cache** (if configured)
@@ -390,20 +397,24 @@ No need to delete CloudFormation stacks first - the system handles coexistence.
 The deployment process is divided into six phases to ensure proper dependency resolution:
 
 ### Phase 1: Foundation
+
 - **IAM roles and policies** - Created first with no dependencies
 - **S3 buckets** - Portal, scripts, and Lambda deployment buckets
 - **DynamoDB tables** - All game data tables
 
 ### Phase 2: Authentication & Monitoring
+
 - **Cognito User Pool** - User authentication
 - **CloudWatch Log Groups** - Application logging
 
 ### Phase 3: Build Infrastructure
+
 - **CodeBuild Projects** - For Lambda and frontend builds
 - Projects are configured without GitHub webhooks
 - Manual or deployment-triggered builds only
 
 ### Phase 4: Build Execution
+
 - **Lambda Layer Build** - Dependencies package
 - **Lambda Functions Build** - Individual function packages
 - **Frontend Build** - Portal or Incremental application
@@ -411,12 +422,14 @@ The deployment process is divided into six phases to ensure proper dependency re
 - CloudFront invalidation happens automatically if distribution exists
 
 ### Phase 5: Application Layer
+
 - **Base Lambda Layer** - Shared dependencies
 - **Lambda Functions** - API handlers
 - **API Gateway** - RESTful API with custom domain
 - **Cognito Triggers** - Post-confirmation Lambda
 
 ### Phase 6: Distribution
+
 - **CloudFront** - CDN for frontend application
 
 Each phase only proceeds if the previous phase succeeded. Failed deployments can be resumed from where they left off.
@@ -493,12 +506,14 @@ cdk destroy --all
 If you encounter errors like "SSM parameter /cdk-bootstrap/hnb659fds/version not found" or "Role arn:aws:iam::ACCOUNT:role/cdk-hnb659fds-deploy-role-ACCOUNT-REGION is invalid":
 
 1. **Bootstrap the CDK environment**:
+
    ```bash
    cdk bootstrap aws://ACCOUNT-ID/REGION
    # Example: cdk bootstrap aws://542230992937/us-east-1
    ```
 
 2. **If bootstrap fails due to existing resources**:
+
    - Check for existing CDK resources: `aws s3 ls | grep cdk-hnb659fds`
    - Delete failed bootstrap stack: `aws cloudformation delete-stack --stack-name CDKToolkit`
    - Wait for deletion: `aws cloudformation wait stack-delete-complete --stack-name CDKToolkit`

@@ -15,16 +15,16 @@ Game:
   ScriptsS3Bucket: darkrelics-scripts
   ScriptsS3Prefix: scripts
   TickIntervalSeconds: 1
-  RoomItemCleanupSeconds: 600  # 10 minutes
-  RoomUnloadSeconds: 3600  # 60 minutes
+  RoomItemCleanupSeconds: 600 # 10 minutes
+  RoomUnloadSeconds: 3600 # 60 minutes
   CommandTimeoutSeconds: 5
-  PlayerIdleTimeoutSeconds: 900  # 15 minutes
+  PlayerIdleTimeoutSeconds: 900 # 15 minutes
   PortalS3Bucket: darkrelics-portal
-  PortalUrl: ""  # deployment-generated
+  PortalUrl: "" # deployment-generated
 
 # Deployment mode: 'mud', 'incremental', or 'hybrid'
 # - mud: MUD mode with Portal frontend
-# - incremental: Incremental mode with Incremental frontend  
+# - incremental: Incremental mode with Incremental frontend
 # - hybrid: Hybrid mode with Incremental frontend (supports both game types)
 Deployment:
   Mode: hybrid
@@ -47,30 +47,30 @@ DynamoDB:
     Exits: exits
     Prototypes: prototypes
     Motd: motd
-  AccessPolicyArn: ""  # deployment-generated
+  AccessPolicyArn: "" # deployment-generated
 
 # API configuration (required)
 API:
-  Domain: ""  # REQUIRED - Your domain name
-  HostedZoneId: ""  # REQUIRED - Route53 hosted zone ID
-  Subdomain: api  # api.{domain}
+  Domain: "" # REQUIRED - Your domain name
+  HostedZoneId: "" # REQUIRED - Route53 hosted zone ID
+  Subdomain: api # api.{domain}
 
 # CORS configuration - allowed origins for all modes
 CORS:
-  AllowedOrigins: []  # deployment-generated
+  AllowedOrigins: [] # deployment-generated
 
 # Cognito configuration
 Cognito:
-  user_pool_id: ""  # deployment-generated
-  app_client_id: ""  # deployment-generated
-  UserPoolDomain: ""  # deployment-generated
-  UserPoolArn: ""  # deployment-generated
+  user_pool_id: "" # deployment-generated
+  app_client_id: "" # deployment-generated
+  UserPoolDomain: "" # deployment-generated
+  UserPoolArn: "" # deployment-generated
 
 # CloudFront distribution
 CloudFront:
-  distribution_id: ""  # deployment-generated
-  domain_name: ""  # deployment-generated
-  portal_url: ""  # deployment-generated
+  distribution_id: "" # deployment-generated
+  domain_name: "" # deployment-generated
+  portal_url: "" # deployment-generated
 
 # CloudWatch configuration
 CloudWatch:
@@ -78,30 +78,20 @@ CloudWatch:
   MetricsTimeoutSeconds: 10
   LogFlushTimeoutSeconds: 3
   ShutdownDrainSeconds: 2
-  log_group: /aws/eidolon/server  # deployment-generated
-  metrics_namespace: eidolon/metrics  # deployment-generated
-  AccessPolicyArn: ""  # deployment-generated
-
-# CORS configuration for API Gateway
-CORS:
-  AllowedOrigins: []  # deployment-generated based on deployment mode
-
-# API configuration
-API:
-  Domain: ""  # optional - custom domain for API
-  HostedZoneId: ""  # optional - Route53 hosted zone ID
-  Subdomain: api  # optional - subdomain for API (e.g., api.example.com)
+  log_group: /aws/eidolon/server # deployment-generated
+  metrics_namespace: eidolon/metrics # deployment-generated
+  AccessPolicyArn: "" # deployment-generated
 
 # Logging configuration
 Logging:
   ApplicationName: eidolon-engine
   LogLevel: 20
   cloudwatch:
-    log_group: /aws/eidolon/server  # deployment-generated
-    metrics_namespace: eidolon/metrics  # deployment-generated
-  LogGroup: /aws/eidolon/server  # deployment-generated (legacy support)
+    log_group: /aws/eidolon/server # deployment-generated
+    metrics_namespace: eidolon/metrics # deployment-generated
+  LogGroup: /aws/eidolon/server # deployment-generated (legacy support)
   LogStream: system
-  MetricNamespace: eidolon/metrics  # deployment-generated (legacy support)
+  MetricNamespace: eidolon/metrics # deployment-generated (legacy support)
 
 # SSH configuration
 SSH:
@@ -109,27 +99,27 @@ SSH:
   PrivateKeyPath: ./server.key
   Port: 9050
   AuthTimeoutSeconds: 30
-  AuthBanDurationSeconds: 900  # 15 minutes
-  AuthCleanupIntervalSeconds: 300  # 5 minutes
+  AuthBanDurationSeconds: 900 # 15 minutes
+  AuthCleanupIntervalSeconds: 300 # 5 minutes
   ConnectionAcceptTimeoutSeconds: 1
 
 # Server configuration
 Server:
-  SessionCleanupIntervalSeconds: 300  # 5 minutes
-  SessionIdleTimeoutSeconds: 1800  # 30 minutes
+  SessionCleanupIntervalSeconds: 300 # 5 minutes
+  SessionIdleTimeoutSeconds: 1800 # 30 minutes
   ConsoleIdleTimeoutSeconds: 300
 
 # CodeBuild configuration
 CodeBuild:
-  PortalBuildspecPath: buildspec/portal.yml  # Used for MUD mode
-  IncrementalBuildspecPath: buildspec/incremental.yml  # Used for Incremental/Hybrid modes
-  ProjectName: ""  # deployment-generated
-  PortalS3Bucket: ""  # deployment-generated
+  PortalBuildspecPath: buildspec/portal.yml # Used for MUD mode
+  IncrementalBuildspecPath: buildspec/incremental.yml # Used for Incremental/Hybrid modes
+  ProjectName: "" # deployment-generated
+  PortalS3Bucket: "" # deployment-generated
 
 # S3 buckets (optional - will create new if not specified)
 S3:
-  PortalBucket: ""  # deployment-generated
-  ScriptsBucket: ""  # deployment-generated
+  PortalBucket: "" # deployment-generated
+  ScriptsBucket: "" # deployment-generated
 
 # GitHub configuration
 GitHub:

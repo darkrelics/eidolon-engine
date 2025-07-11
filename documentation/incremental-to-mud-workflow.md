@@ -68,6 +68,7 @@ Path: /bloom-filters/character-names/current.bloom
 ### Update Mechanism
 
 1. **Read Path** (Name Validation):
+
    - Lambda loads bloom filter from storage
    - Cache in Lambda memory for performance
    - Check name against filter
