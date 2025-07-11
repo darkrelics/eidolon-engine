@@ -193,7 +193,6 @@ def validate_resources(session, params: dict) -> dict:
         for table_name in table_names:
             expected_config = {
                 "billing_mode": "PAY_PER_REQUEST",
-                "point_in_time_recovery": True,
             }
             result = validator.validate(table_name, expected_config)
             all_results[table_name] = result

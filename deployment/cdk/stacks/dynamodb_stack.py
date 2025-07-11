@@ -1,7 +1,7 @@
 """AWS DynamoDB stack for game data storage."""
 
 import boto3
-from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, RemovalPolicy, Stack, CfnDeletionPolicy
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from botocore.exceptions import ClientError
@@ -150,7 +150,7 @@ class DynamoDBStack(Stack):
             "table_name": table_name,
             "partition_key": partition_key,
             "billing_mode": dynamodb.BillingMode.PAY_PER_REQUEST,
-            "removal_policy": RemovalPolicy.DESTROY,
+            "removal_policy": RemovalPolicy.RETAIN,
         }
 
         # Add sort key if specified
@@ -159,7 +159,13 @@ class DynamoDBStack(Stack):
             sort_key = dynamodb.Attribute(name=sort_key_name, type=dynamodb.AttributeType.STRING)
             table_props["sort_key"] = sort_key
 
-        return dynamodb.Table(self, table_name, **table_props)
+        table = dynamodb.Table(self, table_name, **table_props)
+        
+        # Set UpdateReplacePolicy to Retain to prevent data loss during updates
+        cfn_table = table.node.default_child
+        cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN
+        
+        return table
 
     def _create_access_policy(self) -> None:
         """Create IAM policy for table access."""

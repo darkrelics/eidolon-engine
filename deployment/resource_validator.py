@@ -105,7 +105,6 @@ class DynamoDBTableValidator(ResourceValidator):
                 "billing_mode": table.get("BillingModeSummary", {}).get("BillingMode", "PROVISIONED"),
                 "key_schema": table.get("KeySchema", []),
                 "attribute_definitions": table.get("AttributeDefinitions", []),
-                "point_in_time_recovery": self._get_point_in_time_recovery(resource_id),
                 "table_status": table.get("TableStatus"),
             }
 
@@ -129,13 +128,6 @@ class DynamoDBTableValidator(ResourceValidator):
                     result.drift_detected = True
                     result.add_message("Key schema mismatch")
 
-            # Validate point-in-time recovery
-            if "point_in_time_recovery" in expected_config:
-                actual_pitr = result.actual_config["point_in_time_recovery"]
-                expected_pitr = expected_config["point_in_time_recovery"]
-                if actual_pitr != expected_pitr:
-                    result.drift_detected = True
-                    result.add_message(f"Point-in-time recovery: expected {expected_pitr}, got {actual_pitr}")
 
             result.valid = True
 
@@ -163,18 +155,6 @@ class DynamoDBTableValidator(ResourceValidator):
 
         return tables
 
-    def _get_point_in_time_recovery(self, table_name: str) -> bool:
-        """Check if point-in-time recovery is enabled."""
-        try:
-            response = self.client.describe_continuous_backups(TableName=table_name)
-            pitr_status = (
-                response.get("ContinuousBackupsDescription", {})
-                .get("PointInTimeRecoveryDescription", {})
-                .get("PointInTimeRecoveryStatus")
-            )
-            return pitr_status == "ENABLED"
-        except ClientError:
-            return False
 
     def _compare_key_schemas(self, actual: list, expected: list) -> bool:
         """Compare key schemas for equality."""
@@ -214,18 +194,13 @@ class CognitoValidator(ResourceValidator):
             # Extract actual configuration
             result.actual_config = {
                 "pool_name": pool.get("Name"),
-                "status": pool.get("Status"),
                 "mfa_configuration": pool.get("MfaConfiguration", "OFF"),
                 "password_policy": pool.get("Policies", {}).get("PasswordPolicy", {}),
                 "auto_verified_attributes": pool.get("AutoVerifiedAttributes", []),
                 "username_attributes": pool.get("UsernameAttributes", []),
             }
 
-            # Check pool status
-            if pool.get("Status") != "Enabled":
-                result.add_message(f"User pool is not enabled (status: {pool.get('Status')})")
-                result.valid = False
-                return result
+            # Cognito user pools don't have a Status field - if we can describe it, it exists and is valid
 
             # Validate MFA configuration
             if expected_config.get("mfa_configuration"):

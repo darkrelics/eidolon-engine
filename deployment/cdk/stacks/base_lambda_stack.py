@@ -40,7 +40,7 @@ class BaseLambdaStack(cdk.Stack):
         self.dependencies_layer = lambda_.LayerVersion(
             self,
             "lambda-dependencies",
-            code=lambda_.Code.from_bucket(lambda_bucket, "lambda-layer.zip"),
+            code=lambda_.Code.from_bucket(lambda_bucket, "lambda-layer/lambda-layer.zip"),
             compatible_runtimes=[lambda_.Runtime.PYTHON_3_11],
             description="Dependencies for Eidolon Engine Lambda functions",
         )

@@ -514,6 +514,53 @@ class IncrementalDeploymentOrchestrator:
             
         return all_succeeded
     
+    def _validate_lambda_artifacts(self, params: dict) -> bool:
+        """Validate that Lambda build artifacts were created correctly.
+        
+        Args:
+            params: Deployment parameters
+            
+        Returns:
+            True if all expected artifacts exist
+        """
+        import boto3
+        from botocore.exceptions import ClientError
+        
+        s3_client = self.session.client('s3')
+        game_name = params.get("game_name", "eidolon-engine")
+        account_id = self.session.client('sts').get_caller_identity()['Account']
+        bucket_name = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")
+        
+        # Expected artifacts
+        expected_artifacts = [
+            "lambda-layer/lambda-layer.zip",  # CodeBuild artifacts path
+            "api_add_character.zip",
+            "api_delete_character.zip", 
+            "api_get_archetypes.zip",
+            "api_get_character.zip",
+            "api_list_characters.zip",
+            "cognito_new_player.zip",
+            "cognito_delete_player.zip"
+        ]
+        
+        print("\nValidating Lambda build artifacts...")
+        all_valid = True
+        
+        for artifact in expected_artifacts:
+            try:
+                # Check if artifact exists
+                s3_client.head_object(Bucket=bucket_name, Key=artifact)
+                print(f"  ✓ {artifact}")
+            except ClientError as e:
+                if e.response['Error']['Code'] == '404':
+                    print(f"  ✗ {artifact} - Not found")
+                    all_valid = False
+                else:
+                    print(f"  ✗ {artifact} - Error: {e}")
+                    all_valid = False
+                    
+        return all_valid
+
     def _execute_build_phase(self, params: dict) -> bool:
         """Execute CodeBuild projects.
         
@@ -568,6 +615,11 @@ class IncrementalDeploymentOrchestrator:
             if lambda_projects:
                 print("\nExecuting Lambda builds sequentially...")
                 if not self.build_executor.execute_builds(lambda_projects, parallel=False):
+                    return False
+                    
+                # Validate Lambda artifacts were created
+                if not self._validate_lambda_artifacts(params):
+                    print("[ERROR] Lambda build artifacts validation failed")
                     return False
                     
             # Execute portal/incremental builds

@@ -73,7 +73,7 @@ class CodeBuildStack(Stack):
                 webhook=False,
             ),
             environment=codebuild.BuildEnvironment(
-                build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.MEDIUM
+                build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
             ),
             environment_variables={
                 "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.portal_bucket.bucket_name),
@@ -120,13 +120,6 @@ class CodeBuildStack(Stack):
                     "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.lambda_bucket.bucket_name),
                 },
                 build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-layer.yml"),
-                artifacts=codebuild.Artifacts.s3(
-                    bucket=self.lambda_bucket,
-                    include_build_id=False,
-                    package_zip=False,
-                    path="",
-                    name="lambda-layer.zip",
-                ),
             )
 
             # Lambda functions build project

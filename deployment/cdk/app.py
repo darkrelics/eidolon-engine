@@ -675,12 +675,16 @@ class EidolonEngineApp:
         Returns:
             Dictionary of table names used by all modes
         """
-        # Start with defaults
+        # Start with defaults - include ALL tables expected by DynamoDB stack
         tables = {
             "Players": "players",
             "Characters": "characters",
-            "Archetypes": "archetypes",
+            "Rooms": "rooms",
+            "Exits": "exits",
             "Items": "items",
+            "Prototypes": "prototypes",
+            "Archetypes": "archetypes",
+            "Motd": "motd",
             "Story": "story",
         }
         
