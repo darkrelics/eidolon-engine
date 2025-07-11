@@ -676,6 +676,7 @@ class EidolonEngineApp:
             Dictionary of table names used by all modes
         """
         # Start with defaults - include ALL tables expected by DynamoDB stack
+        # These are base names only - config.yml can override with any names
         tables = {
             "Players": "players",
             "Characters": "characters",

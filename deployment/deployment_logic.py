@@ -179,15 +179,17 @@ def validate_resources(session, params: dict) -> dict:
         if "dynamodb_tables" in params:
             table_names = list(params["dynamodb_tables"].values())
         else:
+            # Use base table names as defaults - no prefixes
             table_names = [
-                "eidolon-players",
-                "eidolon-characters",
-                "eidolon-rooms",
-                "eidolon-exits",
-                "eidolon-items",
-                "eidolon-prototypes",
-                "eidolon-archetypes",
-                "eidolon-motd",
+                "players",
+                "characters",
+                "rooms",
+                "exits",
+                "items",
+                "prototypes",
+                "archetypes",
+                "motd",
+                "story",
             ]
 
         for table_name in table_names:

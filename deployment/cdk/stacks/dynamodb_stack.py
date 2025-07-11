@@ -121,7 +121,7 @@ class DynamoDBStack(Stack):
             else:
                 # Create new table
                 print(f"Creating new DynamoDB table: {table_name}")
-                table = self._create_table(table_name, config)
+                table = self._create_table(table_name, config, config_name)
                 self.tables[config_name] = table
 
             # Output table name
@@ -132,12 +132,13 @@ class DynamoDBStack(Stack):
                 description=f"DynamoDB table name for {config_name}",
             )
 
-    def _create_table(self, table_name: str, config: dict[str, str]) -> dynamodb.Table:
+    def _create_table(self, table_name: str, config: dict[str, str], logical_id: str) -> dynamodb.Table:
         """Create a new DynamoDB table.
 
         Args:
             table_name: Name for the table
             config: Table configuration dictionary
+            logical_id: Logical ID for the CloudFormation resource
 
         Returns:
             The created DynamoDB table
@@ -159,7 +160,8 @@ class DynamoDBStack(Stack):
             sort_key = dynamodb.Attribute(name=sort_key_name, type=dynamodb.AttributeType.STRING)
             table_props["sort_key"] = sort_key
 
-        table = dynamodb.Table(self, table_name, **table_props)
+        # Use logical_id instead of table_name to maintain stable CloudFormation resource IDs
+        table = dynamodb.Table(self, logical_id, **table_props)
         
         # Set UpdateReplacePolicy to Retain to prevent data loss during updates
         cfn_table = table.node.default_child
