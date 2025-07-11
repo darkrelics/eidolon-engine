@@ -17,4 +17,3 @@ phases:
 artifacts:
   files:
     - lambda-layer.zip
-  name: lambda-layer
