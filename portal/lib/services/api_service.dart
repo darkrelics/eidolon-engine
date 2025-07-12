@@ -33,8 +33,8 @@ class Character {
 }
 
 class ApiService {
-  static const String _apiDomain = String.fromEnvironment('API_DOMAIN', defaultValue: 'darkrelics.net');
-  static const String _baseUrl = 'https://api.$_apiDomain';
+  static const String _apiDomain = String.fromEnvironment('API_DOMAIN', defaultValue: 'api.darkrelics.net');
+  static const String _baseUrl = 'https://$_apiDomain';
   
   final AuthService _authService;
   

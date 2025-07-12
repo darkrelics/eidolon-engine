@@ -23,8 +23,8 @@ class CharacterInfo {
 class ApiService {
   final AuthService _authService;
   final http.Client _httpClient;
-  static const String _apiDomain = String.fromEnvironment('API_DOMAIN', defaultValue: 'darkrelics.net');
-  static const String _defaultBaseUrl = 'https://api.$_apiDomain';
+  static const String _apiDomain = String.fromEnvironment('API_DOMAIN', defaultValue: 'api.darkrelics.net');
+  static const String _defaultBaseUrl = 'https://$_apiDomain';
   final String baseUrl;
 
   ApiService({
