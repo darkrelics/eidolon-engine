@@ -141,9 +141,9 @@ class MyApp extends StatelessWidget {
       case '/password-reset':
         return MaterialPageRoute(builder: (_) => const PasswordResetScreen());
       case '/password-reset-confirm':
-        final email = settings.arguments as String;
         return MaterialPageRoute(
-          builder: (_) => PasswordResetConfirmScreen(email: email),
+          builder: (_) => const PasswordResetConfirmScreen(),
+          settings: settings,
         );
       case '/character-management':
         return MaterialPageRoute(

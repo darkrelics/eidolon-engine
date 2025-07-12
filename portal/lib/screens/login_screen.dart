@@ -16,11 +16,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../utils/auth_state.dart';
-import '../widgets/ui_components.dart';
-import '../utils/input_sanitizer.dart';
-import '../utils/form_state_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? redirectRoute;
@@ -34,134 +30,197 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailFocusNode = FocusNode();
-  final _passwordFocusNode = FocusNode();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isPasswordVisible = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final authState = Provider.of<AuthState>(context, listen: false);
+    _emailController.text = authState.emailController.text;
+    _passwordController.text = authState.passwordController.text;
+  }
 
   @override
   void dispose() {
-    _emailFocusNode.dispose();
-    _passwordFocusNode.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSignIn() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authState = context.read<AuthState>();
+      authState.emailController.text = _emailController.text.trim();
+      authState.passwordController.text = _passwordController.text;
+      
+      await authState.signIn();
+      
+      if (mounted && authState.isAuthenticated) {
+        _handleNavigation(
+          context,
+          widget.redirectRoute,
+          widget.redirectArgs,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _handleNavigation(BuildContext context, String? route, Object? args) {
+    final targetRoute = route ?? '/characters';
+    
+    if (targetRoute == '/characters') {
+      Navigator.of(context).pushReplacementNamed(targetRoute);
+    } else {
+      Navigator.of(context).pushReplacementNamed(targetRoute, arguments: args);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const AuthAppBar(title: 'Sign In'),
-      body: SafeArea(
+      body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: Consumer<AuthState>(
-            builder: (context, authState, child) {
-              // If authenticated, navigate to appropriate route
-              if (authState.isAuthenticated) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _handleNavigation(
-                    context,
-                    widget.redirectRoute,
-                    widget.redirectArgs,
-                  );
-                });
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              return FormStateProvider(
-                formKey: _formKey,
-                child: AutofillGroup(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      const SizedBox(height: 24),
-                      AppTextField(
-                        controller: authState.emailController,
-                        labelText: 'Email',
-                        prefixIcon: Icons.email_outlined,
-                        hintText: 'Enter your email',
-                        keyboardType: TextInputType.emailAddress,
-                        autofillHints: const [AutofillHints.email],
-                        validator: FieldValidators.email,
-                        inputFormatters: [InputSanitizer.noXSSChars()],
-                        focusNode: _emailFocusNode,
-                        onSubmitted: (_) => _passwordFocusNode.requestFocus(),
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        controller: authState.passwordController,
-                        labelText: 'Password',
-                        prefixIcon: Icons.lock_outline,
-                        hintText: 'Enter your password',
-                        obscureText: true,
-                        autofillHints: const [AutofillHints.password],
-                        validator: FieldValidators.password,
-                        inputFormatters: [InputSanitizer.noXSSChars()],
-                        focusNode: _passwordFocusNode,
-                        onSubmitted: (_) => _handleSignIn(authState),
-                      ),
-                      const SizedBox(height: 32),
-                      LoadingButton(
-                        isLoading: authState.isLoading,
-                        onPressed: () => _handleSignIn(authState),
-                        text: 'SIGN IN',
-                      ),
-                      const SizedBox(height: 16),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).pushNamed('/password-reset');
-                        },
-                        child: const Text('Forgot Password?'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () {
-                          final authState = Provider.of<AuthState>(
-                            context,
-                            listen: false,
-                          );
-                          authState.clearInputs();
-                          NavigationHelper.navigateToRegister(context);
-                        },
-                        child: const Text('Need an Account? Sign up'),
-                      ),
-                      const SizedBox(height: 24),
-                      StatusMessage(
-                        message: InputSanitizer.sanitizeDisplayText(
-                          authState.message,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Eidolon Portal',
+                    style: Theme.of(context).textTheme.headlineLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sign in to continue',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 48),
+                  TextFormField(
+                    controller: _emailController,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.email],
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                          .hasMatch(value)) {
+                        return 'Please enter a valid email';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.lock),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _isPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
                         ),
-                        isError:
-                            authState.message.toLowerCase().contains('fail') ||
-                            authState.message.toLowerCase().contains('error'),
+                        onPressed: () {
+                          setState(() {
+                            _isPasswordVisible = !_isPasswordVisible;
+                          });
+                        },
+                      ),
+                    ),
+                    obscureText: !_isPasswordVisible,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
+                    onFieldSubmitted: (_) => _handleSignIn(),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              Navigator.pushNamed(context, '/forgot-password');
+                            },
+                      child: const Text('Forgot Password?'),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _isLoading ? null : _handleSignIn,
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Sign In'),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Don\'t have an account?'),
+                      TextButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () {
+                                Navigator.pushNamed(context, '/register');
+                              },
+                        child: const Text('Create Account'),
                       ),
                     ],
                   ),
-                ),
-              );
-            },
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
-  }
-
-  void _handleSignIn(AuthState authState) async {
-    if (FormStateUtil.validateForm(_formKey)) {
-      await authState.signIn();
-      if (authState.isAuthenticated && mounted) {
-        _handleNavigation(context, widget.redirectRoute, widget.redirectArgs);
-      }
-    }
-  }
-
-  void _handleNavigation(
-    BuildContext context,
-    String? redirectRoute,
-    Object? redirectArgs,
-  ) {
-    if (redirectRoute != null) {
-      Navigator.of(
-        context,
-      ).pushReplacementNamed(redirectRoute, arguments: redirectArgs);
-    } else {
-      Navigator.of(context).pushReplacementNamed('/character-management');
-    }
   }
 }
