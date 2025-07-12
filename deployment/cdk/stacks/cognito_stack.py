@@ -66,10 +66,22 @@ class CognitoStack(Stack):
             prevent_user_existence_errors=True,
         )
 
+        # Create User Pool Domain
+        self.domain = self.user_pool.add_domain(
+            "user-pool-domain",
+            cognito_domain=cognito.CognitoDomainOptions(
+                domain_prefix=f"{self.user_pool.user_pool_id.split('_')[1]}-eidolon-user-pool"
+            ),
+        )
+
         # Output values
         CfnOutput(self, "UserPoolId", value=self.user_pool.user_pool_id, description="Cognito User Pool ID")
 
         CfnOutput(self, "AppClientId", value=self.app_client.user_pool_client_id, description="Cognito App Client ID")
+
+        CfnOutput(self, "UserPoolDomain", value=self.domain.domain_name, description="Cognito User Pool Domain")
+
+        CfnOutput(self, "UserPoolArn", value=self.user_pool.user_pool_arn, description="Cognito User Pool ARN")
 
     def add_lambda_trigger(self, trigger_type: str, lambda_function: lambda_.IFunction) -> None:
         """Add a Lambda trigger to the user pool.

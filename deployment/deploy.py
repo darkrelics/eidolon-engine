@@ -681,7 +681,7 @@ class IncrementalDeploymentOrchestrator:
             print("\nChecking Cognito User Pool...")
             validator = ResourceValidatorFactory.create_validator("cognito_user_pool", self.session)
 
-            user_pool_id = config["Cognito"].get("user_pool_id", "")
+            user_pool_id = config["Cognito"].get("UserPoolId", "")
             if user_pool_id:
                 result = validator.validate(user_pool_id, {})
                 validation_results[f"Cognito:{user_pool_id}"] = result
@@ -1201,8 +1201,10 @@ class IncrementalDeploymentOrchestrator:
             self.config_manager.update_section(
                 "Cognito",
                 {
-                    "user_pool_id": outputs.get("UserPoolId", ""),
-                    "app_client_id": outputs.get("AppClientId", ""),
+                    "UserPoolId": outputs.get("UserPoolId", ""),
+                    "UserPoolClientId": outputs.get("AppClientId", ""),
+                    "UserPoolDomain": outputs.get("UserPoolDomain", ""),
+                    "UserPoolArn": outputs.get("UserPoolArn", ""),
                 },
             )
         elif "dynamodb" in stack_name:
