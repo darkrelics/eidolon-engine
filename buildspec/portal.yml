@@ -7,8 +7,6 @@ phases:
     commands:
       - apt-get update -y -q
       - apt-get install -y clang cmake ninja-build libgtk-3-dev -q
-      - wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-      - chmod +x /usr/local/bin/yq
       - echo Installing Flutter...
       - git clone https://github.com/flutter/flutter.git -b stable
       - export PATH="$PATH:`pwd`/flutter/bin"
@@ -18,8 +16,6 @@ phases:
 
   pre_build:
     commands:
-      - echo "Reading API domain from config.yml..."
-      - 'API_DOMAIN=$(yq ''.API.Domain'' ../config.yml) && echo "API Domain: $API_DOMAIN"'
       - cd portal
       - echo "Installing dependencies..."
       - flutter pub get
