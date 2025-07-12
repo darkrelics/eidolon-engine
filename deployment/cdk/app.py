@@ -598,12 +598,10 @@ class EidolonEngineApp:
             github_repo=params.get("github_repo", "eidolon-engine"),
             github_branch=params.get("github_branch", "main"),
             cognito_user_pool_id=(
-                self.cognito_stack.user_pool.user_pool_id if self.cognito_stack
-                else self.existing_cognito_user_pool_id
+                self.cognito_stack.user_pool.user_pool_id if self.cognito_stack else self.existing_cognito_user_pool_id
             ),
             cognito_app_client_id=(
-                self.cognito_stack.app_client.user_pool_client_id if self.cognito_stack
-                else self.existing_cognito_app_client_id
+                self.cognito_stack.app_client.user_pool_client_id if self.cognito_stack else self.existing_cognito_app_client_id
             ),
             portal_bucket=self.s3_stack.portal_bucket,
             lambda_bucket=self.s3_stack.lambda_bucket,
@@ -643,7 +641,8 @@ class EidolonEngineApp:
                 "archetypes_table": unified_tables["Archetypes"],
                 "items_table": unified_tables.get("Items", ""),
                 "cognito_user_pool_arn": (
-                    self.cognito_stack.user_pool.user_pool_arn if self.cognito_stack
+                    self.cognito_stack.user_pool.user_pool_arn
+                    if self.cognito_stack
                     else f"arn:aws:cognito-idp:{env.region}:{env.account}:userpool/{self.existing_cognito_user_pool_id}"
                 ),
                 "dependencies_layer_arn": self.base_lambda_stack.dependencies_layer.layer_version_arn,

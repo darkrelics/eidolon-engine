@@ -462,7 +462,7 @@ def analyze_changes(cfn_client, session, params: dict) -> dict:
         if stack_name == "cognito" and params.get("existing_user_pool_id"):
             print(f"\nSkipping {stack_name} stack - using existing Cognito resources")
             continue
-            
+
         if stack_name in existing_stacks:
             # CDK stack already exists
             plan["update_stacks"].append(stack_name)

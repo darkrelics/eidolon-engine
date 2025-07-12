@@ -70,9 +70,7 @@ class CognitoStack(Stack):
         # Use a safe domain prefix that doesn't depend on the user pool ID
         self.domain = self.user_pool.add_domain(
             "user-pool-domain",
-            cognito_domain=cognito.CognitoDomainOptions(
-                domain_prefix=f"eidolon-{construct_id}-users"
-            ),
+            cognito_domain=cognito.CognitoDomainOptions(domain_prefix=f"eidolon-{construct_id}-users"),
         )
 
         # Output values
