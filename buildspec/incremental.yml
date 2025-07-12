@@ -17,7 +17,8 @@ phases:
   pre_build:
     commands:
       - echo "Reading API domain from config.yml..."
-      - export API_DOMAIN=$(grep -A1 "^API:" ../config.yml | grep "Domain:" | awk '{print $2}')
+      - |
+        export API_DOMAIN=$(grep -A1 "^API:" ../config.yml | grep "Domain:" | awk '{print $2}')
       - echo "API Domain: $API_DOMAIN"
       - cd incremental
       - echo "Installing dependencies..."
