@@ -51,13 +51,13 @@ class CloudWatchStack(Stack):
         self.log_group = logs.LogGroup(
             self,
             "logs",
-            log_group_name="/aws/eidolon/server",
+            log_group_name="/eidolon/game-logs",
             retention=retention_enum,
             removal_policy=RemovalPolicy.DESTROY,
         )
 
         # Create metrics namespace (this is just for documentation)
-        self.metrics_namespace = "eidolon/metrics"
+        self.metrics_namespace = "eidolon/application"
 
         # Create IAM policy for CloudWatch access
         self.cloudwatch_policy = iam.PolicyDocument(

@@ -558,13 +558,23 @@ class EidolonEngineApp:
         # Default to dev mode (True) unless explicitly set to production
         dev_mode = params.get("dev_mode", True)
 
-        self.cognito_stack = CognitoStack(
-            self.app,
-            "cognito",
-            contact_email=params.get("contact_email", "contact@darkrelics.net"),
-            dev_mode=dev_mode,
-            env=env,
-        )
+        # Check if we should skip Cognito stack creation
+        if params.get("existing_user_pool_id"):
+            print(f"Skipping Cognito stack creation - using existing user pool: {params['existing_user_pool_id']}")
+            self.cognito_stack = None
+            # Store the existing IDs for other stacks to use
+            self.existing_cognito_user_pool_id = params.get("existing_user_pool_id")
+            self.existing_cognito_app_client_id = params.get("existing_app_client_id")
+        else:
+            self.cognito_stack = CognitoStack(
+                self.app,
+                "cognito",
+                contact_email=params.get("contact_email", "contact@darkrelics.net"),
+                dev_mode=dev_mode,
+                env=env,
+            )
+            self.existing_cognito_user_pool_id = None
+            self.existing_cognito_app_client_id = None
 
         # Create CloudWatch stack
         self.cloudwatch_stack = CloudWatchStack(
@@ -581,21 +591,32 @@ class EidolonEngineApp:
         if deploy_mode in ["incremental", "hybrid"]:
             buildspec_path = params.get("incremental_buildspec_path", "buildspec/incremental.yml")
 
+        # Construct API domain
+        domain_name = params.get("domain_name", "")
+        api_subdomain = params.get("api_subdomain", "api")
+        api_domain = f"{api_subdomain}.{domain_name}" if domain_name else ""
+        
         self.codebuild_stack = CodeBuildStack(
             self.app,
             "codebuild",
             github_owner=params.get("github_owner", "robinje"),
             github_repo=params.get("github_repo", "eidolon-engine"),
             github_branch=params.get("github_branch", "main"),
-            cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
-            cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
+            cognito_user_pool_id=(
+                self.cognito_stack.user_pool.user_pool_id if self.cognito_stack else self.existing_cognito_user_pool_id
+            ),
+            cognito_app_client_id=(
+                self.cognito_stack.app_client.user_pool_client_id if self.cognito_stack else self.existing_cognito_app_client_id
+            ),
             portal_bucket=self.s3_stack.portal_bucket,
             lambda_bucket=self.s3_stack.lambda_bucket,
+            api_domain=api_domain,
             buildspec_path=buildspec_path,
             cloudfront_distribution_id="",  # Will be set later or via update
             env=env,
         )
-        self.codebuild_stack.add_dependency(self.cognito_stack)
+        if self.cognito_stack:
+            self.codebuild_stack.add_dependency(self.cognito_stack)
         self.codebuild_stack.add_dependency(self.s3_stack)
 
     def create_application_stacks(self, env: cdk.Environment, params: dict) -> None:
@@ -625,7 +646,11 @@ class EidolonEngineApp:
                 "characters_table": unified_tables["Characters"],
                 "archetypes_table": unified_tables["Archetypes"],
                 "items_table": unified_tables.get("Items", ""),
-                "cognito_user_pool_arn": self.cognito_stack.user_pool.user_pool_arn,
+                "cognito_user_pool_arn": (
+                    self.cognito_stack.user_pool.user_pool_arn
+                    if self.cognito_stack
+                    else f"arn:aws:cognito-idp:{env.region}:{env.account}:userpool/{self.existing_cognito_user_pool_id}"
+                ),
                 "dependencies_layer_arn": self.base_lambda_stack.dependencies_layer.layer_version_arn,
                 "domain_name": domain_name,
                 "hosted_zone_id": hosted_zone_id,
@@ -636,7 +661,8 @@ class EidolonEngineApp:
         )
         self.lambda_stack.add_dependency(self.base_lambda_stack)
         self.lambda_stack.add_dependency(self.dynamodb_stack)
-        self.lambda_stack.add_dependency(self.cognito_stack)
+        if self.cognito_stack:
+            self.lambda_stack.add_dependency(self.cognito_stack)
 
         # Create Cognito trigger stack (depends on Cognito, DynamoDB, and base Lambda)
         from stacks.cognito_trigger_stack import CognitoTriggerStack
@@ -732,6 +758,7 @@ class EidolonEngineApp:
         self.load_game_config(params)
         self.load_deployment_config(params)
         self.load_dynamodb_config(params)
+        self.load_cognito_config(params)
         self.load_codebuild_config(params)
         self.load_api_config(params)
         self.load_cors_config(params)
@@ -800,6 +827,21 @@ class EidolonEngineApp:
                 if tables:
                     params["dynamodb_tables"] = tables
                     print(f"     - Merged {len(tables)} tables from legacy configuration")
+
+    def load_cognito_config(self, params: dict) -> None:
+        """Load Cognito configuration section."""
+        cognito_config = self.config.get("Cognito", {})
+        if cognito_config:
+            print("   Loading Cognito configuration")
+            if "UserPoolId" in cognito_config and cognito_config.get("UserPoolId"):
+                params["existing_user_pool_id"] = cognito_config.get("UserPoolId")
+                print(f"     - Found existing user pool: {params['existing_user_pool_id']}")
+            if "UserPoolClientId" in cognito_config and cognito_config.get("UserPoolClientId"):
+                params["existing_app_client_id"] = cognito_config.get("UserPoolClientId")
+                print(f"     - Found existing app client: {params['existing_app_client_id']}")
+            if "UserPoolDomain" in cognito_config and cognito_config.get("UserPoolDomain"):
+                params["existing_user_pool_domain"] = cognito_config.get("UserPoolDomain")
+                print(f"     - Found existing domain: {params['existing_user_pool_domain']}")
 
     def load_codebuild_config(self, params: dict) -> None:
         """Load CodeBuild configuration section."""

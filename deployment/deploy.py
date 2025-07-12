@@ -171,6 +171,14 @@ class IncrementalDeploymentOrchestrator:
             if api_config.get("Subdomain"):
                 params["api_subdomain"] = api_config["Subdomain"]
 
+        # Load Cognito configuration
+        if "Cognito" in config:
+            cognito_config = config["Cognito"]
+            if cognito_config.get("UserPoolId"):
+                params["existing_user_pool_id"] = cognito_config["UserPoolId"]
+            if cognito_config.get("UserPoolClientId"):
+                params["existing_app_client_id"] = cognito_config["UserPoolClientId"]
+
         return params
 
     def handle_deployment_selection(
@@ -681,7 +689,7 @@ class IncrementalDeploymentOrchestrator:
             print("\nChecking Cognito User Pool...")
             validator = ResourceValidatorFactory.create_validator("cognito_user_pool", self.session)
 
-            user_pool_id = config["Cognito"].get("user_pool_id", "")
+            user_pool_id = config["Cognito"].get("UserPoolId", "")
             if user_pool_id:
                 result = validator.validate(user_pool_id, {})
                 validation_results[f"Cognito:{user_pool_id}"] = result
@@ -1201,8 +1209,10 @@ class IncrementalDeploymentOrchestrator:
             self.config_manager.update_section(
                 "Cognito",
                 {
-                    "user_pool_id": outputs.get("UserPoolId", ""),
-                    "app_client_id": outputs.get("AppClientId", ""),
+                    "UserPoolId": outputs.get("UserPoolId", ""),
+                    "UserPoolClientId": outputs.get("AppClientId", ""),
+                    "UserPoolDomain": outputs.get("UserPoolDomain", ""),
+                    "UserPoolArn": outputs.get("UserPoolArn", ""),
                 },
             )
         elif "dynamodb" in stack_name:
@@ -1233,10 +1243,10 @@ class IncrementalDeploymentOrchestrator:
             )
         elif "cloudwatch" in stack_name:
             self.config_manager.update_section(
-                "CloudWatch",
+                "Logging",
                 {
-                    "log_group": outputs.get("LogGroupName", ""),
-                    "metrics_namespace": outputs.get("MetricsNamespace", ""),
+                    "LogGroup": outputs.get("LogGroupName", ""),
+                    "MetricNamespace": outputs.get("MetricsNamespace", ""),
                 },
             )
 

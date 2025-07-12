@@ -21,6 +21,7 @@ class CodeBuildStack(Stack):
         cognito_app_client_id: str,
         portal_bucket: IBucket,
         lambda_bucket: IBucket,
+        api_domain: str,
         buildspec_path: str = "buildspec/portal.yml",
         cloudfront_distribution_id: str = "",
         **kwargs,
@@ -36,9 +37,10 @@ class CodeBuildStack(Stack):
             cognito_user_pool_id: Cognito User Pool ID
             cognito_app_client_id: Cognito App Client ID
             portal_bucket: S3 bucket for the web portal
+            lambda_bucket: S3 bucket for Lambda deployment packages
+            api_domain: API domain for the application
             buildspec_path: Path to buildspec file relative to repository root
             cloudfront_distribution_id: CloudFront distribution ID for cache invalidation
-            lambda_bucket: S3 bucket for Lambda deployment packages
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -56,6 +58,8 @@ class CodeBuildStack(Stack):
             raise ValueError("cognito_app_client_id is required")
         if not portal_bucket:
             raise ValueError("portal_bucket is required")
+        if not api_domain:
+            raise ValueError("api_domain is required")
 
         # Use provided S3 bucket
         self.portal_bucket = portal_bucket
@@ -79,6 +83,7 @@ class CodeBuildStack(Stack):
                 "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.portal_bucket.bucket_name),
                 "USER_POOL_ID": codebuild.BuildEnvironmentVariable(value=cognito_user_pool_id),
                 "CLIENT_ID": codebuild.BuildEnvironmentVariable(value=cognito_app_client_id),
+                "API_DOMAIN": codebuild.BuildEnvironmentVariable(value=api_domain),
                 "AWS_REGION": codebuild.BuildEnvironmentVariable(value=self.region),
                 "CLOUDFRONT_DISTRIBUTION_ID": codebuild.BuildEnvironmentVariable(value=cloudfront_distribution_id),
             },
