@@ -1235,10 +1235,10 @@ class IncrementalDeploymentOrchestrator:
             )
         elif "cloudwatch" in stack_name:
             self.config_manager.update_section(
-                "CloudWatch",
+                "Logging",
                 {
-                    "log_group": outputs.get("LogGroupName", ""),
-                    "metrics_namespace": outputs.get("MetricsNamespace", ""),
+                    "LogGroup": outputs.get("LogGroupName", ""),
+                    "MetricNamespace": outputs.get("MetricsNamespace", ""),
                 },
             )
 
