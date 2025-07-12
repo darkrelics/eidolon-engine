@@ -595,7 +595,7 @@ class EidolonEngineApp:
         domain_name = params.get("domain_name", "")
         api_subdomain = params.get("api_subdomain", "api")
         api_domain = f"{api_subdomain}.{domain_name}" if domain_name else ""
-        
+
         self.codebuild_stack = CodeBuildStack(
             self.app,
             "codebuild",
