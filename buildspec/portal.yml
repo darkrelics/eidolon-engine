@@ -24,7 +24,7 @@ phases:
   build:
     commands:
       - echo "Building web application with configured credentials..."
-      - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID
+      - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
 
   post_build:
     commands:

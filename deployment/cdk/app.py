@@ -591,6 +591,11 @@ class EidolonEngineApp:
         if deploy_mode in ["incremental", "hybrid"]:
             buildspec_path = params.get("incremental_buildspec_path", "buildspec/incremental.yml")
 
+        # Construct API domain
+        domain_name = params.get("domain_name", "")
+        api_subdomain = params.get("api_subdomain", "api")
+        api_domain = f"{api_subdomain}.{domain_name}" if domain_name else ""
+        
         self.codebuild_stack = CodeBuildStack(
             self.app,
             "codebuild",
@@ -605,6 +610,7 @@ class EidolonEngineApp:
             ),
             portal_bucket=self.s3_stack.portal_bucket,
             lambda_bucket=self.s3_stack.lambda_bucket,
+            api_domain=api_domain,
             buildspec_path=buildspec_path,
             cloudfront_distribution_id="",  # Will be set later or via update
             env=env,
