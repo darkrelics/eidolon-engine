@@ -19,7 +19,7 @@ phases:
   pre_build:
     commands:
       - echo "Reading API domain from config.yml..."
-      - API_DOMAIN=$(yq '.API.Domain' ../config.yml) && echo "API Domain: $API_DOMAIN"
+      - 'API_DOMAIN=$(yq ''.API.Domain'' ../config.yml) && echo "API Domain: $API_DOMAIN"'
       - cd portal
       - echo "Installing dependencies..."
       - flutter pub get
@@ -28,7 +28,7 @@ phases:
   build:
     commands:
       - echo "Building web application with configured credentials..."
-      - API_DOMAIN=$(yq '.API.Domain' ../config.yml) && flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
+      - "API_DOMAIN=$(yq '.API.Domain' ../config.yml) && flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN"
 
   post_build:
     commands:

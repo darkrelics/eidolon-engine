@@ -72,11 +72,13 @@ All deployment modes (MUD, Incremental, Hybrid) share:
 ## Deployment Flow
 
 1. **Prerequisites Check**
+
    - Verify CDK is installed
    - Validate AWS credentials and access
    - Confirm AWS account and region
 
 2. **Parameter Loading**
+
    - Load saved parameters from state manager
    - Read existing `config.yml` if present
    - Determine deployment mode (mud/incremental/hybrid)
@@ -84,6 +86,7 @@ All deployment modes (MUD, Incremental, Hybrid) share:
    - Prompt user for any missing required parameters
 
 3. **Discovery & Analysis Phase**
+
    - Query existing CloudFormation stacks (both CDK and legacy)
    - Map legacy CloudFormation resources to CDK expectations
    - Determine migration strategy (adopt, coexist, or greenfield)
@@ -91,12 +94,14 @@ All deployment modes (MUD, Incremental, Hybrid) share:
    - Generate drift report for any configuration mismatches
 
 4. **Planning Phase**
+
    - Identify stacks to create vs update
    - Determine resource adoption requirements
    - Build comprehensive deployment plan
    - Present plan to user for approval
 
 5. **Execution Phase**
+
    - Set up CDK environment variables and context
    - Pass deployment mode to CDK context
    - Pass adopted resource information to CDK
@@ -107,6 +112,7 @@ All deployment modes (MUD, Incremental, Hybrid) share:
    - On failure, stop and provide recovery guidance
 
 6. **Configuration Update**
+
    - Query deployed stack outputs
    - Update `config.yml` with:
      - Cognito user pool and client IDs

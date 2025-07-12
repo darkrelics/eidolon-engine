@@ -513,6 +513,7 @@ If you encounter errors like "SSM parameter /cdk-bootstrap/hnb659fds/version not
    ```
 
 2. **If bootstrap fails due to existing resources**:
+
    - Check for existing CDK resources: `aws s3 ls | grep cdk-hnb659fds`
    - Delete failed bootstrap stack: `aws cloudformation delete-stack --stack-name CDKToolkit`
    - Wait for deletion: `aws cloudformation wait stack-delete-complete --stack-name CDKToolkit`
