@@ -171,6 +171,14 @@ class IncrementalDeploymentOrchestrator:
             if api_config.get("Subdomain"):
                 params["api_subdomain"] = api_config["Subdomain"]
 
+        # Load Cognito configuration
+        if "Cognito" in config:
+            cognito_config = config["Cognito"]
+            if cognito_config.get("UserPoolId"):
+                params["existing_user_pool_id"] = cognito_config["UserPoolId"]
+            if cognito_config.get("UserPoolClientId"):
+                params["existing_app_client_id"] = cognito_config["UserPoolClientId"]
+
         return params
 
     def handle_deployment_selection(
