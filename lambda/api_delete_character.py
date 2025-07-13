@@ -27,6 +27,8 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
+from eidolon.cors import cors_handler
+
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -216,54 +218,59 @@ def lambda_handler(event, _):
         try:
             body = json.loads(event.get("body", "{}"))
         except json.JSONDecodeError:
-            return {
+            response = {
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Invalid JSON"}),
             }
+            return cors_handler.add_cors_headers(response, event)
 
         # Extract character name
         character_name = body.get("characterName", "").strip()
 
         if not character_name:
-            return {
+            response = {
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Missing character name"}),
             }
+            return cors_handler.add_cors_headers(response, event)
 
         # Verify ownership
         is_owner, character_id = verify_character_ownership(player_id, character_name)
 
         if not is_owner:
-            return {
+            response = {
                 "statusCode": 403,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Character not found or access denied"}),
             }
+            return cors_handler.add_cors_headers(response, event)
 
         # Delete the character
         if not delete_character(player_id, character_name, character_id):
-            return {
+            response = {
                 "statusCode": 500,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Failed to delete character"}),
             }
+            return cors_handler.add_cors_headers(response, event)
 
         # Return success response
-        return {
+        response = {
             "statusCode": 200,
             "headers": {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
             },
             "body": json.dumps({"message": "Character deleted successfully", "characterName": character_name}),
         }
+        return cors_handler.add_cors_headers(response, event)
 
     except Exception as err:
         logger.error(f"Unexpected error: {err}")
-        return {
+        response = {
             "statusCode": 500,
             "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"error": "Internal server error"}),
         }
+        return cors_handler.add_cors_headers(response, event)

@@ -28,6 +28,8 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
+from eidolon.cors import cors_handler
+
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -125,11 +127,10 @@ def lambda_handler(_, __):
         player_archetypes = load_player_archetypes()
 
         # Return successful response
-        return {
+        response = {
             "statusCode": 200,
             "headers": {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",  # Configure based on your needs
             },
             "body": json.dumps(
                 {
@@ -138,14 +139,14 @@ def lambda_handler(_, __):
                 }
             ),
         }
+        return cors_handler.add_cors_headers(response, event)
 
     except Exception as err:
         logger.error(f"Error in lambda_handler: {err}")
-        return {
+        response = {
             "statusCode": 500,
             "headers": {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
             },
             "body": json.dumps(
                 {
@@ -154,3 +155,4 @@ def lambda_handler(_, __):
                 }
             ),
         }
+        return cors_handler.add_cors_headers(response, event)

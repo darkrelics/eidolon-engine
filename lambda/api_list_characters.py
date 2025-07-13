@@ -26,6 +26,7 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
+from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 
 # Configure logging
@@ -80,22 +81,24 @@ def lambda_handler(event, _):
         # Sort by name for consistent ordering
         characters.sort(key=lambda x: x["name"])
 
-        return {
+        response = {
             "statusCode": 200,
             "headers": {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
             },
             "body": json.dumps({"characters": characters}),
         }
+        return cors_handler.add_cors_headers(response, event)
 
     except ClientError as err:
         logger.error(f"DynamoDB error: {err}")
-        return {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": "Database error"})}
+        response = {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": "Database error"})}
+        return cors_handler.add_cors_headers(response, event)
     except Exception as err:
         logger.error(f"Unexpected error: {err}")
-        return {
+        response = {
             "statusCode": 500,
             "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"error": "Internal server error"}),
         }
+        return cors_handler.add_cors_headers(response, event)
