@@ -37,8 +37,8 @@ def view_table(table_name):
         print("=" * 50)
         print(f"Total items: {len(items)}")
         print()
-    except Exception as e:
-        print(f"Error scanning table {table_name}: {e}")
+    except Exception as err:
+        print(f"Error scanning table {table_name}: {err}")
 
 
 def main():
@@ -53,8 +53,8 @@ def main():
         for table_name in table_names:
             view_table(table_name)
 
-    except Exception as e:
-        print(f"Error connecting to DynamoDB: {e}")
+    except Exception as err:
+        print(f"Error connecting to DynamoDB: {err}")
         sys.exit(1)
 
 

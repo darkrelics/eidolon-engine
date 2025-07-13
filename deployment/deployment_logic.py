@@ -21,13 +21,13 @@ def prompt_missing_parameters(params: dict) -> dict:
     """
     print("\n=== CONFIGURATION ===")
 
-    # Basic required parameters
+    # Basic required parameters - use config values as defaults
     required_params = {
-        "game_name": ("Game name", "eidolon-engine"),
-        "contact_email": ("Administrator contact email", "admin@example.com"),
-        "github_owner": ("GitHub repository owner", "robinje"),
-        "github_repo": ("GitHub repository name", "eidolon-engine"),
-        "github_branch": ("GitHub branch to deploy from", "main"),
+        "game_name": ("Game name", params.get("game_name", "eidolon-engine")),
+        "contact_email": ("Administrator contact email", params.get("contact_email", "contact@darkrelics.net")),
+        "github_owner": ("GitHub repository owner", params.get("github_owner", "robinje")),
+        "github_repo": ("GitHub repository name", params.get("github_repo", "eidolon-engine")),
+        "github_branch": ("GitHub branch to deploy from", params.get("github_branch", "main")),
     }
 
     print("\nPlease provide the following configuration values:")
@@ -45,36 +45,70 @@ def prompt_missing_parameters(params: dict) -> dict:
             sys.exit(1)
 
     # API Configuration (required for Lambda deployments)
-    if params.get("deploy_mud") or params.get("deploy_incremental"):
+    if params.get("deploy_mud") or params.get("deploy_incremental") or params.get("deployment_mode"):
         print("\n=== API CONFIGURATION ===")
         print("API Gateway requires a custom domain name and hosted zone.")
         print("Skip this section if you don't have a domain configured in Route53.\n")
 
-        # Check if we have API config
-        if not params.get("domain_name"):
-            domain = input("Domain name (e.g., example.com) [skip to use default]: ").strip()
-            if domain and domain.lower() != "skip":
-                params["domain_name"] = domain
+        # Check if we have API config - prompt for domain if not set
+        domain_default = params.get("domain_name", "skip to use default")
+        domain = input(f"Domain name (e.g., darkrelics.net) [{domain_default}]: ").strip()
 
-                # Also need hosted zone ID
-                zone_id = input("Route53 Hosted Zone ID [required if domain provided]: ").strip()
-                if zone_id:
-                    params["hosted_zone_id"] = zone_id
-                else:
-                    print("WARNING: Hosted Zone ID is required for custom domain. Skipping API Gateway setup.")
-                    params.pop("domain_name", None)
+        if domain and domain.lower() != "skip":
+            params["domain_name"] = domain
+        elif not domain and domain_default != "skip to use default":
+            # User pressed enter and we have a configured value, keep it
+            params["domain_name"] = domain_default
+        elif domain.lower() == "skip" or (not domain and domain_default == "skip to use default"):
+            # User wants to skip API configuration
+            params.pop("domain_name", None)
+            params.pop("hosted_zone_id", None)
+
+        # If we have a domain name, we need a hosted zone ID
+        if params.get("domain_name"):
+            zone_id_default = params.get("hosted_zone_id", "")
+            zone_id = input(f"Route53 Hosted Zone ID [{zone_id_default if zone_id_default else 'required'}]: ").strip()
+            if zone_id:
+                params["hosted_zone_id"] = zone_id
+            elif zone_id_default:
+                # User pressed enter and we have a configured value, keep it
+                params["hosted_zone_id"] = zone_id_default
+            else:
+                print("WARNING: Hosted Zone ID is required for custom domain. Skipping API Gateway setup.")
+                params.pop("domain_name", None)
+                params.pop("hosted_zone_id", None)
 
     # Optional S3 bucket names
     print("\n=== S3 BUCKETS ===")
-    print("Leave blank to create new buckets with auto-generated names.\n")
 
-    portal_bucket = input(f"Portal S3 bucket name [{params.get('portal_bucket_name', 'auto-generate')}]: ").strip()
-    if portal_bucket and portal_bucket != "auto-generate":
+    # Check if we already have bucket names from config
+    has_portal_bucket = params.get("portal_bucket_name") and params["portal_bucket_name"] != "auto-generate"
+    has_scripts_bucket = params.get("scripts_bucket_name") and params["scripts_bucket_name"] != "auto-generate"
+
+    if has_portal_bucket or has_scripts_bucket:
+        print("Existing S3 buckets detected from configuration.")
+        print("Press Enter to keep existing buckets, or enter new names to change.\n")
+    else:
+        print("Leave blank to create new buckets with auto-generated names.\n")
+
+    # Show actual bucket name from config if available, otherwise show 'auto-generate'
+    portal_default = params.get("portal_bucket_name", "auto-generate")
+    portal_bucket = input(f"Portal S3 bucket name [{portal_default}]: ").strip()
+    if portal_bucket:
         params["portal_bucket_name"] = portal_bucket
+    elif portal_default and portal_default != "auto-generate":
+        # User pressed enter and we have a configured value, keep it
+        params["portal_bucket_name"] = portal_default
+    # else: leave it unset for auto-generation
 
-    scripts_bucket = input(f"Scripts S3 bucket name [{params.get('scripts_bucket_name', 'auto-generate')}]: ").strip()
-    if scripts_bucket and scripts_bucket != "auto-generate":
+    scripts_default = params.get("scripts_bucket_name", "auto-generate")
+    scripts_bucket = input(f"Scripts S3 bucket name [{scripts_default}]: ").strip()
+    if scripts_bucket:
         params["scripts_bucket_name"] = scripts_bucket
+    elif scripts_default and scripts_default != "auto-generate":
+        # User pressed enter and we have a configured value, keep it
+        params["scripts_bucket_name"] = scripts_default
+    # else: leave it unset for auto-generation
 
     return params
 
@@ -145,21 +179,22 @@ def validate_resources(session, params: dict) -> dict:
         if "dynamodb_tables" in params:
             table_names = list(params["dynamodb_tables"].values())
         else:
+            # Use base table names as defaults - no prefixes
             table_names = [
-                "eidolon-players",
-                "eidolon-characters",
-                "eidolon-rooms",
-                "eidolon-exits",
-                "eidolon-items",
-                "eidolon-prototypes",
-                "eidolon-archetypes",
-                "eidolon-motd",
+                "players",
+                "characters",
+                "rooms",
+                "exits",
+                "items",
+                "prototypes",
+                "archetypes",
+                "motd",
+                "story",
             ]
 
         for table_name in table_names:
             expected_config = {
                 "billing_mode": "PAY_PER_REQUEST",
-                "point_in_time_recovery": True,
             }
             result = validator.validate(table_name, expected_config)
             all_results[table_name] = result
@@ -198,26 +233,57 @@ def validate_resources(session, params: dict) -> dict:
     try:
         validator = ResourceValidatorFactory.create_validator("s3_bucket", session)
 
-        # Check portal bucket
-        portal_bucket = params.get("portal_bucket_name", "eidolon-portal")
-        expected_config = {
-            "website_enabled": True,
-            "public_access_block": {
-                "block_public_acls": False,
-                "block_public_policy": False,
-                "ignore_public_acls": False,
-                "restrict_public_buckets": False,
-            },
-        }
-        result = validator.validate(portal_bucket, expected_config)
-        all_results[portal_bucket] = result
+        # Check portal bucket - should be PRIVATE (accessed via CloudFront)
+        portal_bucket = params.get("portal_bucket_name", "")
+        if portal_bucket:  # Only validate if bucket name is provided
+            expected_config = {
+                "website_enabled": False,  # No website hosting needed with CloudFront
+                "public_access_block": {
+                    "block_public_acls": True,
+                    "block_public_policy": True,
+                    "ignore_public_acls": True,
+                    "restrict_public_buckets": True,
+                },
+            }
+            result = validator.validate(portal_bucket, expected_config)
+            all_results[portal_bucket] = result
 
-        # Check scripts bucket
-        scripts_bucket = params.get("scripts_bucket_name", "eidolon-scripts")
-        result = validator.validate(scripts_bucket, expected_config)
-        all_results[scripts_bucket] = result
+        # Check scripts bucket - should be PRIVATE (accessed programmatically)
+        scripts_bucket = params.get("scripts_bucket_name", "")
+        if scripts_bucket:  # Only validate if bucket name is provided
+            # Scripts bucket should also be private
+            result = validator.validate(scripts_bucket, expected_config)
+            all_results[scripts_bucket] = result
+
+        # Check lambda bucket - should be PRIVATE (deployment artifacts)
+        game_name = params.get("game_name", "eidolon-engine")
+        account_id = session.client("sts").get_caller_identity()["Account"]
+        lambda_bucket = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")
+        result = validator.validate(lambda_bucket, expected_config)
+        all_results[lambda_bucket] = result
     except Exception as err:
         print(f"Warning: Error validating S3 buckets: {err}")
+
+    # Validate IAM resources
+    try:
+        game_name = params.get("game_name", "eidolon-engine")
+
+        # Check IAM role
+        role_validator = ResourceValidatorFactory.create_validator("iam_role", session)
+        role_name = f"{game_name}-server-execution-role"
+        result = role_validator.validate(role_name, {"resource_type": "role"})
+        all_results[f"iam_role:{role_name}"] = result
+
+        # Check IAM policies
+        policy_validator = ResourceValidatorFactory.create_validator("iam_policy", session)
+        policy_names = [f"eidolon-{game_name}-cloudwatch-access", f"eidolon-{game_name}-dynamodb-access"]
+
+        for policy_name in policy_names:
+            result = policy_validator.validate(policy_name, {"resource_type": "policy"})
+            all_results[f"iam_policy:{policy_name}"] = result
+
+    except Exception as err:
+        print(f"Warning: Error validating IAM resources: {err}")
 
     return all_results
 
@@ -294,6 +360,36 @@ def _can_adopt_stack(stack_name: str, _stack_info: dict) -> bool:
     return stack_name in adoptable_stacks
 
 
+def check_iam_policies(session, game_name: str) -> dict:
+    """Check for existing IAM policies.
+
+    Args:
+        session: AWS session
+        game_name: Game name for policy naming
+
+    Returns:
+        Dictionary of policy existence
+    """
+    iam_client = session.client("iam")
+    policies = {
+        "cloudwatch_policy": f"eidolon-{game_name}-cloudwatch-access",
+        "dynamodb_policy": f"eidolon-{game_name}-dynamodb-access",
+    }
+
+    existing_policies = {}
+    try:
+        paginator = iam_client.get_paginator("list_policies")
+        for page in paginator.paginate(Scope="Local"):
+            for policy in page["Policies"]:
+                for key, policy_name in policies.items():
+                    if policy["PolicyName"] == policy_name:
+                        existing_policies[key] = {"name": policy_name, "arn": policy["Arn"], "exists": True}
+    except Exception as err:
+        print(f"Warning: Could not check IAM policies: {err}")
+
+    return existing_policies
+
+
 def analyze_changes(cfn_client, session, params: dict) -> dict:
     """Analyze what changes need to be deployed.
 
@@ -313,8 +409,28 @@ def analyze_changes(cfn_client, session, params: dict) -> dict:
     # Map CloudFormation resources if they exist
     cf_mapping = map_cloudformation_to_cdk(existing_stacks, params)
 
-    # Expected CDK stack names
-    expected_stacks = ["cognito", "dynamodb", "cloudwatch", "s3", "cloudfront", "codebuild"]
+    # Check for existing IAM policies
+    game_name = params.get("game_name", "eidolon-engine")
+    existing_iam_policies = check_iam_policies(session, game_name)
+
+    if existing_iam_policies:
+        print("\nDetected existing IAM policies:")
+        for key, policy_info in existing_iam_policies.items():
+            print(f"  - {policy_info['name']}")
+
+    # Expected CDK stack names (in dependency order)
+    expected_stacks = [
+        "iam",
+        "s3",
+        "dynamodb",
+        "cognito",
+        "cloudwatch",
+        "codebuild",
+        "base-lambda",
+        "lambda",
+        "cognito-trigger",
+        "cloudfront",
+    ]
 
     plan = {
         "create_stacks": [],
@@ -322,6 +438,7 @@ def analyze_changes(cfn_client, session, params: dict) -> dict:
         "unchanged_stacks": [],
         "adopt_resources": {},
         "cloudformation_mapping": cf_mapping,
+        "existing_iam_policies": existing_iam_policies,
         "parameters": params,
         "drift_report": "",
     }
@@ -341,6 +458,11 @@ def analyze_changes(cfn_client, session, params: dict) -> dict:
 
     # Check each expected stack
     for stack_name in expected_stacks:
+        # Skip cognito stack if we have existing Cognito resources
+        if stack_name == "cognito" and params.get("existing_user_pool_id"):
+            print(f"\nSkipping {stack_name} stack - using existing Cognito resources")
+            continue
+
         if stack_name in existing_stacks:
             # CDK stack already exists
             plan["update_stacks"].append(stack_name)

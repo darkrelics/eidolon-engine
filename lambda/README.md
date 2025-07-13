@@ -86,7 +86,7 @@ from eidolon.cors_handler import cors_handler
 # Create test event
 event = {
     "httpMethod": "GET",
-    "headers": {"origin": "https://example.com"},
+    "headers": {"origin": "https://darkrelics.net"},
     "requestContext": {
         "authorizer": {
             "claims": {"sub": "test-user-id"}

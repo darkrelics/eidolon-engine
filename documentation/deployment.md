@@ -2,6 +2,14 @@
 
 This guide explains how to deploy and manage Eidolon Engine infrastructure using the CDK-based incremental deployment system.
 
+## Prerequisites
+
+- Python 3.11 or later (use `python3` command)
+- AWS CLI configured with appropriate credentials
+- AWS CDK CLI installed: `npm install -g aws-cdk`
+- Required Python packages: `pip3 install -r requirements/scripts-requirements.txt`
+- AWS CDK Bootstrap: The target AWS account must be bootstrapped for CDK. Run `cdk bootstrap aws://ACCOUNT-ID/REGION` if not already done
+
 ## Overview
 
 The deployment system provides:
@@ -11,6 +19,22 @@ The deployment system provides:
 - **Zero-downtime updates** - Works with existing infrastructure
 - **Infrastructure as Code** - All resources defined in CDK (Python)
 - **Drift detection** - Validates existing resources against expected state
+- **Multiple deployment modes** - Support for MUD, Incremental, and Hybrid game modes
+
+### Deployment Modes
+
+The Eidolon Engine supports three deployment modes, all sharing the same backend infrastructure but using different frontend applications:
+
+- **MUD Mode**: Traditional Multi-User Dungeon with Portal frontend
+- **Incremental Mode**: Idle/incremental game with Incremental frontend
+- **Hybrid Mode** (default): Supports both game types with Incremental frontend
+
+All modes share:
+
+- Same DynamoDB tables (Players, Characters, Archetypes, Items, Story)
+- Same Lambda functions and API Gateway
+- Same Cognito user pool for authentication
+- Unified backend infrastructure
 
 ## Deployment Scenarios
 
@@ -20,7 +44,7 @@ For deploying to a fresh AWS account with no existing infrastructure:
 
 ```bash
 cd deployment
-python deploy.py --region us-east-1
+python3 deploy.py --region us-east-1
 ```
 
 The system will:
@@ -36,10 +60,10 @@ For environments with existing resources (S3 buckets, DynamoDB tables, etc.):
 
 ```bash
 # First, analyze what exists
-python deploy.py --region us-east-1 --analyze-only
+python3 deploy.py --region us-east-1 --analyze-only
 
 # Then deploy, adopting existing resources
-python deploy.py --region us-east-1
+python3 deploy.py --region us-east-1
 ```
 
 The system will:
@@ -55,7 +79,7 @@ The system will:
 To update an existing CDK deployment:
 
 ```bash
-python incremental_deploy.py --region us-east-1
+python3 deploy.py --region us-east-1
 ```
 
 The system will:
@@ -67,7 +91,7 @@ The system will:
 ## Command Line Options
 
 ```bash
-python deploy.py [OPTIONS]
+python3 deploy.py [OPTIONS]
 
 Options:
   --region REGION        AWS region (default: us-east-1)
@@ -75,6 +99,11 @@ Options:
   --auto-approve         Skip confirmation prompts
   --skip-scripts         Skip Lua script deployment
   --analyze-only         Only analyze infrastructure, don't deploy
+  --deploy-mud           Deploy in MUD mode (Portal frontend)
+  --deploy-incremental   Deploy in Incremental mode
+  --deploy-both          Deploy in Hybrid mode (default)
+  --non-interactive      Run without interactive prompts
+  --branch               Select specific GitHub branch
 ```
 
 ## Configuration
@@ -101,9 +130,26 @@ Game:
   ScriptsS3Prefix: scripts
   PortalUrl: https://d1234567890.cloudfront.net # Portal URL via CloudFront
 
+# Deployment mode configuration
+Deployment:
+  Mode: hybrid # Options: 'mud', 'incremental', or 'hybrid'
+
 AWS:
   region: us-east-1
-  contact_email: admin@example.com
+  contact_email: contact@darkrelics.net
+
+# API configuration (unified for all modes)
+API:
+  Domain: darkrelics.net
+  HostedZoneId: Z1234567890ABC
+  Subdomain: api # api.darkrelics.net
+
+# CORS configuration for API Gateway
+CORS:
+  AllowedOrigins: [] # Populated automatically based on deployment mode
+  # For MUD mode: adds portal domain
+  # For Incremental/Hybrid: adds incremental domain
+  # Custom domains can be added manually after deployment
 
 CloudFront:
   distribution_id: E1234567890ABC
@@ -114,16 +160,18 @@ Cognito:
   user_pool_id: us-east-1_xxxxxxxxx
   app_client_id: xxxxxxxxxxxxxxxxxxxx
 
+# Unified DynamoDB tables (same for all deployment modes)
 DynamoDB:
-  tables:
-    players: players
-    characters: characters
-    rooms: rooms
-    exits: exits
-    items: items
-    prototypes: prototypes
-    archetypes: archetypes
-    motd: motd
+  Tables:
+    Players: players
+    Characters: characters
+    Archetypes: archetypes
+    Items: items
+    Story: story # For incremental game story data
+    Rooms: rooms
+    Exits: exits
+    Prototypes: prototypes
+    Motd: motd
 
 Logging:
   cloudwatch:
@@ -144,7 +192,8 @@ All AWS resources use simple, unprefixed names for clarity:
 | CodeBuild Project       | `eidolon-portal-build`        | `eidolon-portal-build`                                   |
 | CloudFront Distribution | `eidolon-portal-distribution` | `eidolon-portal-distribution`                            |
 | IAM Policies            | `{service}-access`            | `dynamodb-access`                                        |
-| CDK Stack Names         | `{service}`                   | `cognito`, `dynamodb`, `s3`                              |
+| CDK Stack Names         | `{service}`                   | `cognito`, `dynamodb`, `s3`, `lambda`, `cloudfront`      |
+| API Gateway             | Single unified API            | `api.{domain}`                                           |
 
 Legacy CloudFormation stacks with `eidolon-` prefix are still supported for backward compatibility.
 
@@ -199,57 +248,99 @@ CloudFront:
 
 ## Deployment Workflow
 
-### 1. Pre-Deployment Analysis
+The deployment process follows a specific order of operations to ensure infrastructure is created correctly:
 
-Always analyze before deploying to understand what will happen:
+### Prerequisites Check
 
-```bash
-python deploy.py --analyze-only
-```
+Before running the deployment, ensure:
 
-Output shows:
+- AWS CDK is bootstrapped: `cdk bootstrap aws://ACCOUNT-ID/REGION`
+- Required permissions are in place
+- Dependencies are installed
 
-- Existing CloudFormation stacks
-- Resources that can be adopted
-- Resources that need creation
-- Any configuration drift
+### Order of Operations
 
-### 2. Deploy
+1. **Check AWS Account Access** - Verify credentials and permissions
+2. **Check for config.yml** - Look for existing configuration
+3. **Validate Resources** - If config exists, validate all resources and update config with current state
+4. **Deploy Infrastructure** - Create/update AWS resources in phases (requires CDK bootstrap)
+5. **Build Artifacts** - Execute CodeBuild to create Lambda packages and frontend
+6. **Update Functions** - Deploy Lambda functions with new code
+7. **Finalize Configuration** - Write final config.yml with all resource IDs
 
-Review the deployment plan and proceed:
+### 1. Standard Deployment
 
-```bash
-python incremental_deploy.py
-```
-
-### 3. Verify
-
-After deployment:
+Run the deployment wizard:
 
 ```bash
-# Check CDK stacks
-cd cdk
-cdk list
-
-# Verify resources
-aws s3 ls
-aws dynamodb list-tables
-aws logs describe-log-groups --log-group-name-prefix /aws/eidolon
+python3 deployment/deploy.py
 ```
 
-### 4. Update Scripts
+This will:
+
+- Check AWS access and display account information
+- Validate existing resources if config.yml exists
+- Deploy infrastructure in the correct order
+- Execute builds automatically
+- Update config.yml throughout the process
+
+### 2. Validate Existing Infrastructure
+
+To check if configured resources exist:
+
+```bash
+python3 deployment/deploy.py --validate
+```
+
+This validates all resources in config.yml against AWS and reports:
+
+- Missing resources
+- Configuration drift
+- Access issues
+
+### 3. Analyze Without Deploying
+
+To see what would be deployed:
+
+```bash
+python3 deployment/deploy.py --analyze-only
+```
+
+### 4. Non-Interactive Deployment
+
+For CI/CD pipelines:
+
+```bash
+python3 deployment/deploy.py --non-interactive --auto-approve
+```
+
+### 5. Update Scripts Only
 
 To deploy only Lua scripts:
 
 ```bash
-python deploy_scripts.py
+python3 deployment/deploy_scripts.py
 ```
 
 ## CI/CD Pipeline
 
-### Portal Deployment
+### Frontend Deployment
 
-The CodeBuild project automatically builds and deploys the Flutter web portal when changes are pushed to the configured branch. The build process:
+The CodeBuild project automatically builds and deploys the appropriate Flutter web application based on the deployment mode:
+
+#### MUD Mode
+
+- Builds from `portal/` directory
+- Uses `buildspec/portal.yml`
+- Deploys Portal Flutter application
+
+#### Incremental/Hybrid Modes
+
+- Builds from `incremental/` directory
+- Uses `buildspec/incremental.yml`
+- Deploys Incremental Flutter application
+
+The build process:
 
 1. **Builds the Flutter web application**
 2. **Syncs files to the S3 portal bucket**
@@ -277,7 +368,20 @@ aws codebuild start-build --project-name eidolon-portal-build
 # Navigate to CodeBuild → eidolon-portal-build → Start build
 ```
 
-## Migrating from CloudFormation
+## Migration Guide
+
+### From Separated Backend Deployment
+
+If migrating from the previous deployment with separate MUD and Incremental backends:
+
+1. **Backend is now unified** - All modes share the same tables and APIs
+2. **Table names are simplified** - No more `mud-` or `incremental-` prefixes
+3. **Single API Gateway** - One API serves all game modes at `api.{domain}`
+4. **Choose deployment mode** - Based on which frontend you need
+
+The deployment system will automatically handle resource migration.
+
+### From CloudFormation
 
 If you have existing CloudFormation stacks (`eidolon-*`):
 
@@ -287,6 +391,48 @@ If you have existing CloudFormation stacks (`eidolon-*`):
 4. **Cognito and CodeBuild will coexist** (manual migration needed)
 
 No need to delete CloudFormation stacks first - the system handles coexistence.
+
+## Phased Deployment Details
+
+The deployment process is divided into six phases to ensure proper dependency resolution:
+
+### Phase 1: Foundation
+
+- **IAM roles and policies** - Created first with no dependencies
+- **S3 buckets** - Portal, scripts, and Lambda deployment buckets
+- **DynamoDB tables** - All game data tables
+
+### Phase 2: Authentication & Monitoring
+
+- **Cognito User Pool** - User authentication
+- **CloudWatch Log Groups** - Application logging
+
+### Phase 3: Build Infrastructure
+
+- **CodeBuild Projects** - For Lambda and frontend builds
+- Projects are configured without GitHub webhooks
+- Manual or deployment-triggered builds only
+
+### Phase 4: Build Execution
+
+- **Lambda Layer Build** - Dependencies package
+- **Lambda Functions Build** - Individual function packages
+- **Frontend Build** - Portal or Incremental application
+- Builds run sequentially for Lambda, parallel for frontend
+- CloudFront invalidation happens automatically if distribution exists
+
+### Phase 5: Application Layer
+
+- **Base Lambda Layer** - Shared dependencies
+- **Lambda Functions** - API handlers
+- **API Gateway** - RESTful API with custom domain
+- **Cognito Triggers** - Post-confirmation Lambda
+
+### Phase 6: Distribution
+
+- **CloudFront** - CDN for frontend application
+
+Each phase only proceeds if the previous phase succeeded. Failed deployments can be resumed from where they left off.
 
 ## Deployment Recovery (Fail-Forward Approach)
 
@@ -323,7 +469,7 @@ Common fixes:
 
 ```bash
 # Re-run deployment (only failed stacks will be attempted)
-python deploy.py --region us-east-1
+python3 deploy.py --region us-east-1
 
 # The system will:
 # - Skip already deployed stacks
@@ -354,6 +500,36 @@ cdk destroy --all
 - **Incremental progress**: Build infrastructure step by step
 
 ## Troubleshooting
+
+### CDK Bootstrap Issues
+
+If you encounter errors like "SSM parameter /cdk-bootstrap/hnb659fds/version not found" or "Role arn:aws:iam::ACCOUNT:role/cdk-hnb659fds-deploy-role-ACCOUNT-REGION is invalid":
+
+1. **Bootstrap the CDK environment**:
+
+   ```bash
+   cdk bootstrap aws://ACCOUNT-ID/REGION
+   # Example: cdk bootstrap aws://542230992937/us-east-1
+   ```
+
+2. **If bootstrap fails due to existing resources**:
+   - Check for existing CDK resources: `aws s3 ls | grep cdk-hnb659fds`
+   - Delete failed bootstrap stack: `aws cloudformation delete-stack --stack-name CDKToolkit`
+   - Wait for deletion: `aws cloudformation wait stack-delete-complete --stack-name CDKToolkit`
+   - Retry bootstrap
+
+3. **Common bootstrap errors**:
+   - "Policy already exists": Delete conflicting IAM policies first
+   - "Bucket already exists": The CDK assets bucket exists from a previous bootstrap
+   - "SSM parameter already exists": Delete the parameter with `aws ssm delete-parameter --name /cdk-bootstrap/hnb659fds/version`
+
+### Configuration File Path
+
+The deployment system expects `config.yml` to be in the project root directory (one level up from the `deployment/` directory). If you see "No configuration found" errors:
+
+1. Ensure `config.yml` exists in the project root: `/path/to/eidolon-engine/config.yml`
+2. Run deployment commands from the `deployment/` directory
+3. The system will automatically look for `../config.yml`
 
 ### "Stack already exists"
 
@@ -412,6 +588,23 @@ If drift is detected:
 
 ## Advanced Usage
 
+### Deployment Mode Selection
+
+```bash
+# Deploy in MUD mode (Portal frontend)
+python3 deployment/deploy.py --deploy-mud
+
+# Deploy in Incremental mode
+python3 deployment/deploy.py --deploy-incremental
+
+# Deploy in Hybrid mode (supports both game types)
+python3 deployment/deploy.py --deploy-both
+
+# Or set in config.yml
+Deployment:
+  Mode: hybrid  # Options: 'mud', 'incremental', or 'hybrid'
+```
+
 ### Custom Parameters
 
 Override defaults via environment or config:
@@ -420,9 +613,10 @@ Override defaults via environment or config:
 # Via environment
 export CDK_DEFAULT_ACCOUNT=123456789012
 export CDK_DEFAULT_REGION=eu-west-1
+export DEPLOYMENT_MODE=hybrid
 
 # Via context
-cdk deploy -c game_name=eidolon-engine
+cdk deploy -c deployment_mode=hybrid -c game_name=eidolon-engine
 ```
 
 ### Multi-Environment
@@ -431,10 +625,10 @@ Deploy multiple environments:
 
 ```bash
 # Development
-python deploy.py --region us-east-1
+python3 deploy.py --region us-east-1
 
 # Production (different region/account)
-AWS_PROFILE=prod python deploy.py --region eu-west-1
+AWS_PROFILE=prod python3 deploy.py --region eu-west-1
 ```
 
 ### State Management

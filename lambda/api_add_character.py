@@ -30,8 +30,6 @@ from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
-from shared_bloom_filter import add_character_name as add_to_bloom
-from shared_bloom_filter import check_character_name as check_bloom_filter
 
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
@@ -330,18 +328,6 @@ def lambda_handler(event, context):
                 event,
             )
 
-        # Check bloom filter for name availability
-        bloom_result = check_bloom_filter(character_name)
-        if not bloom_result.get("available", True):
-            return cors_handler.add_cors_headers(
-                {
-                    "statusCode": 400,
-                    "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": bloom_result.get("reason", "Name unavailable")}),
-                },
-                event,
-            )
-
         # Check character limit
         can_create, current_count = check_character_limit(player_id)
         if not can_create:
@@ -377,13 +363,6 @@ def lambda_handler(event, context):
                 },
                 event,
             )
-
-        # Add name to bloom filter
-        try:
-            add_to_bloom(character_name)
-        except Exception as bloom_err:
-            logger.error("Failed to add name to bloom filter", error=bloom_err, character_name=character_name)
-            # Don't fail the request if bloom filter update fails
 
         # Return success response
         logger.log_response(201)

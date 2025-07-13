@@ -8,6 +8,33 @@ from botocore.exceptions import ClientError
 from constructs import Construct
 
 
+def check_bucket_exists(bucket_name: str, region: str) -> bool:
+    """Check if an S3 bucket exists.
+
+    Args:
+        bucket_name: Name of the bucket to check
+        region: AWS region to check in
+
+    Returns:
+        True if bucket exists, False otherwise
+    """
+    try:
+        s3_client = boto3.client("s3", region_name=region)
+        s3_client.head_bucket(Bucket=bucket_name)
+        return True
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code")
+        if error_code in ["404", "NoSuchBucket"]:
+            return False
+        elif error_code == "403":
+            # Bucket exists but we don't have access
+            # Treat as existing to avoid trying to create it
+            return True
+        else:
+            # Other errors - assume bucket doesn't exist
+            return False
+
+
 class S3Stack(Stack):
     """S3 stack for Eidolon Engine storage buckets."""
 
@@ -16,9 +43,9 @@ class S3Stack(Stack):
         scope: Construct,
         construct_id: str,
         game_name: str = "eidolon",
-        portal_bucket_name=None,
-        scripts_bucket_name=None,
-        lambda_bucket_name=None,
+        portal_bucket_name: str = "",
+        scripts_bucket_name: str = "",
+        lambda_bucket_name: str = "",
         **kwargs,
     ) -> None:
         """Initialize S3 stack.
@@ -34,19 +61,23 @@ class S3Stack(Stack):
         """
         super().__init__(scope, construct_id, **kwargs)
 
+        # Validate configuration
+        if not game_name:
+            raise ValueError("game_name is required")
+
         # Handle portal bucket
         # Note: When using CloudFront, we don't need public read or website hosting
         self.portal_bucket = self.get_or_create_bucket(
             "portal-bucket",
-            portal_bucket_name or "eidolon-portal",
-            website_config=None,  # CloudFront will handle web serving
+            portal_bucket_name or "darkrelics-portal",
+            website_config={},  # CloudFront will handle web serving
             public_read=False,  # CloudFront OAI will have access
         )
 
         # Handle scripts bucket
         self.scripts_bucket = self.get_or_create_bucket(
             "scripts-bucket",
-            scripts_bucket_name or "eidolon-scripts",
+            scripts_bucket_name or "darkrelics-scripts",
             public_read=True,
         )
 
@@ -94,7 +125,7 @@ class S3Stack(Stack):
         self,
         logical_id: str,
         bucket_name: str,
-        website_config=None,
+        website_config: dict = {},
         public_read: bool = False,
     ) -> IBucket:
         """Get existing bucket or create a new one.
@@ -109,7 +140,7 @@ class S3Stack(Stack):
             S3 bucket (existing or newly created)
         """
         # Check if bucket exists
-        if self._bucket_exists(bucket_name):
+        if check_bucket_exists(bucket_name, self.region):
             # Import existing bucket
             bucket = s3.Bucket.from_bucket_name(self, logical_id, bucket_name)
 
@@ -122,13 +153,13 @@ class S3Stack(Stack):
             # Create new bucket with desired configuration
             bucket_props = {
                 "bucket_name": bucket_name,
-                "removal_policy": RemovalPolicy.RETAIN,
-                "auto_delete_objects": False,
+                "removal_policy": RemovalPolicy.DESTROY,
+                "auto_delete_objects": True,
             }
 
             if website_config:
-                bucket_props["website_index_document"] = website_config["index_document"]
-                bucket_props["website_error_document"] = website_config["error_document"]
+                bucket_props["website_index_document"] = website_config.get("index_document", "index.html")
+                bucket_props["website_error_document"] = website_config.get("error_document", "error.html")
 
             if public_read:
                 bucket_props["public_read_access"] = True
@@ -143,28 +174,3 @@ class S3Stack(Stack):
             print(f"Creating new S3 bucket: {bucket_name}")
 
             return bucket
-
-    def _bucket_exists(self, bucket_name: str) -> bool:
-        """Check if an S3 bucket exists.
-
-        Args:
-            bucket_name: Name of the bucket to check
-
-        Returns:
-            True if bucket exists, False otherwise
-        """
-        try:
-            s3_client = boto3.client("s3", region_name=self.region)
-            s3_client.head_bucket(Bucket=bucket_name)
-            return True
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code")
-            if error_code in ["404", "NoSuchBucket"]:
-                return False
-            elif error_code == "403":
-                # Bucket exists but we don't have access
-                # Treat as existing to avoid trying to create it
-                return True
-            else:
-                # Other errors - assume bucket doesn't exist
-                return False

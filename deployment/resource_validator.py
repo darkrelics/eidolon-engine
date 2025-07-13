@@ -105,7 +105,6 @@ class DynamoDBTableValidator(ResourceValidator):
                 "billing_mode": table.get("BillingModeSummary", {}).get("BillingMode", "PROVISIONED"),
                 "key_schema": table.get("KeySchema", []),
                 "attribute_definitions": table.get("AttributeDefinitions", []),
-                "point_in_time_recovery": self._get_point_in_time_recovery(resource_id),
                 "table_status": table.get("TableStatus"),
             }
 
@@ -128,14 +127,6 @@ class DynamoDBTableValidator(ResourceValidator):
                 if not self._compare_key_schemas(result.actual_config["key_schema"], expected_config["key_schema"]):
                     result.drift_detected = True
                     result.add_message("Key schema mismatch")
-
-            # Validate point-in-time recovery
-            if "point_in_time_recovery" in expected_config:
-                actual_pitr = result.actual_config["point_in_time_recovery"]
-                expected_pitr = expected_config["point_in_time_recovery"]
-                if actual_pitr != expected_pitr:
-                    result.drift_detected = True
-                    result.add_message(f"Point-in-time recovery: expected {expected_pitr}, got {actual_pitr}")
 
             result.valid = True
 
@@ -162,19 +153,6 @@ class DynamoDBTableValidator(ResourceValidator):
             tables = [t for t in tables if t.startswith(prefix)]
 
         return tables
-
-    def _get_point_in_time_recovery(self, table_name: str) -> bool:
-        """Check if point-in-time recovery is enabled."""
-        try:
-            response = self.client.describe_continuous_backups(TableName=table_name)
-            pitr_status = (
-                response.get("ContinuousBackupsDescription", {})
-                .get("PointInTimeRecoveryDescription", {})
-                .get("PointInTimeRecoveryStatus")
-            )
-            return pitr_status == "ENABLED"
-        except ClientError:
-            return False
 
     def _compare_key_schemas(self, actual: list, expected: list) -> bool:
         """Compare key schemas for equality."""
@@ -214,18 +192,13 @@ class CognitoValidator(ResourceValidator):
             # Extract actual configuration
             result.actual_config = {
                 "pool_name": pool.get("Name"),
-                "status": pool.get("Status"),
                 "mfa_configuration": pool.get("MfaConfiguration", "OFF"),
                 "password_policy": pool.get("Policies", {}).get("PasswordPolicy", {}),
                 "auto_verified_attributes": pool.get("AutoVerifiedAttributes", []),
                 "username_attributes": pool.get("UsernameAttributes", []),
             }
 
-            # Check pool status
-            if pool.get("Status") != "Enabled":
-                result.add_message(f"User pool is not enabled (status: {pool.get('Status')})")
-                result.valid = False
-                return result
+            # Cognito user pools don't have a Status field - if we can describe it, it exists and is valid
 
             # Validate MFA configuration
             if expected_config.get("mfa_configuration"):
@@ -585,6 +558,129 @@ class S3BucketValidator(ResourceValidator):
         return True
 
 
+class IAMValidator(ResourceValidator):
+    """Validator for IAM resources (roles and policies)."""
+
+    def __init__(self, session: boto3.Session):
+        """Initialize IAM validator."""
+        super().__init__(session)
+        self.client = session.client("iam")
+
+    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
+        """Validate an IAM role or policy."""
+        resource_type = expected_config.get("resource_type", "role")
+
+        if resource_type == "role":
+            return self._validate_role(resource_id, expected_config)
+        elif resource_type == "policy":
+            return self._validate_policy(resource_id, expected_config)
+        else:
+            result = ValidationResult(resource_id, f"iam_{resource_type}")
+            result.add_message(f"Unsupported IAM resource type: {resource_type}")
+            return result
+
+    def _validate_role(self, role_name: str, expected_config: dict) -> ValidationResult:
+        """Validate an IAM role."""
+        result = ValidationResult(role_name, "iam_role")
+        result.expected_config = expected_config
+
+        try:
+            # Get role details
+            response = self.client.get_role(RoleName=role_name)
+            role = response.get("Role", {})
+            result.exists = True
+
+            # Extract actual configuration
+            result.actual_config = {
+                "role_name": role.get("RoleName"),
+                "arn": role.get("Arn"),
+                "assume_role_policy": role.get("AssumeRolePolicyDocument", {}),
+                "attached_policies": self._get_attached_policies(role_name),
+            }
+
+            result.valid = True
+
+        except ClientError as err:
+            if err.response.get("Error", {}).get("Code") == "NoSuchEntity":
+                result.exists = False
+                result.add_message(f"Role {role_name} does not exist")
+            else:
+                result.add_message(f"Error validating role: {err}")
+
+        return result
+
+    def _validate_policy(self, policy_name: str, expected_config: dict) -> ValidationResult:
+        """Validate an IAM policy."""
+        result = ValidationResult(policy_name, "iam_policy")
+        result.expected_config = expected_config
+
+        try:
+            # List policies to find ours
+            paginator = self.client.get_paginator("list_policies")
+            policy_found = None
+
+            for page in paginator.paginate(Scope="Local"):
+                for policy in page.get("Policies", []):
+                    if policy.get("PolicyName") == policy_name:
+                        policy_found = policy
+                        break
+                if policy_found:
+                    break
+
+            if policy_found:
+                result.exists = True
+                result.actual_config = {
+                    "policy_name": policy_found.get("PolicyName"),
+                    "arn": policy_found.get("Arn"),
+                    "attachment_count": policy_found.get("AttachmentCount", 0),
+                }
+                result.valid = True
+            else:
+                result.exists = False
+                result.add_message(f"Policy {policy_name} does not exist")
+
+        except ClientError as err:
+            result.add_message(f"Error validating policy: {err}")
+
+        return result
+
+    def _get_attached_policies(self, role_name: str) -> list:
+        """Get list of policies attached to a role."""
+        policies = []
+        try:
+            # Get managed policies
+            response = self.client.list_attached_role_policies(RoleName=role_name)
+            for policy in response.get("AttachedPolicies", []):
+                policies.append(policy.get("PolicyName"))
+        except ClientError:
+            pass
+        return policies
+
+    def list_resources(self, filter_params=None) -> list:
+        """List all IAM resources."""
+        resources = []
+
+        # List roles
+        try:
+            paginator = self.client.get_paginator("list_roles")
+            for page in paginator.paginate():
+                for role in page.get("Roles", []):
+                    resources.append(f"role:{role.get('RoleName')}")
+        except ClientError:
+            pass
+
+        # List policies
+        try:
+            paginator = self.client.get_paginator("list_policies")
+            for page in paginator.paginate(Scope="Local"):
+                for policy in page.get("Policies", []):
+                    resources.append(f"policy:{policy.get('PolicyName')}")
+        except ClientError:
+            pass
+
+        return resources
+
+
 class ResourceValidatorFactory:
     """Factory for creating resource validators."""
 
@@ -608,6 +704,8 @@ class ResourceValidatorFactory:
             "cloudwatch_log_group": CloudWatchValidator,
             "codebuild_project": CodeBuildValidator,
             "s3_bucket": S3BucketValidator,
+            "iam_role": IAMValidator,
+            "iam_policy": IAMValidator,
         }
 
         validator_class = validators.get(resource_type)

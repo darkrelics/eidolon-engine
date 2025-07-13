@@ -17,7 +17,7 @@ class CloudFrontStack(Stack):
         scope: Construct,
         construct_id: str,
         portal_bucket: s3.IBucket,
-        existing_distribution_id=None,
+        existing_distribution_id: str = "",
         **kwargs,
     ) -> None:
         """Initialize CloudFront stack.
@@ -25,12 +25,15 @@ class CloudFrontStack(Stack):
         Args:
             scope: CDK app scope
             construct_id: Stack identifier
-            game_name: Name of the game
             portal_bucket: S3 bucket containing the portal
             existing_distribution_id: Optional existing CloudFront distribution ID to import
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
+
+        # Validate required configuration early
+        if not portal_bucket:
+            raise ValueError("portal_bucket is required")
 
         # Check if we should import an existing distribution
         if existing_distribution_id and self.distribution_exists(existing_distribution_id):
@@ -66,7 +69,7 @@ class CloudFrontStack(Stack):
             self,
             "PortalUrl",
             value=f"https://{self.distribution.distribution_domain_name}",
-            description="Portal URL via CloudFront",
+            description="Portal URL via CloudFront (e.g., https://portal.darkrelics.net)",
         )
 
     def create_distribution(self, portal_bucket: s3.IBucket) -> cloudfront.Distribution:
@@ -78,15 +81,7 @@ class CloudFrontStack(Stack):
         Returns:
             CloudFront distribution
         """
-        # Create Origin Access Identity for secure S3 access
-        oai = cloudfront.OriginAccessIdentity(
-            self,
-            "portal-oai",
-            comment="OAI for portal bucket",
-        )
-
-        # Grant CloudFront read access to the bucket
-        portal_bucket.grant_read(oai)
+        # S3BucketOrigin handles OAI creation and permissions automatically when used
 
         # Create the distribution
         distribution = cloudfront.Distribution(
@@ -94,10 +89,7 @@ class CloudFrontStack(Stack):
             "eidolon-portal-distribution",
             default_root_object="index.html",
             default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3Origin(
-                    portal_bucket,
-                    origin_access_identity=oai,
-                ),
+                origin=origins.S3BucketOrigin(portal_bucket),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD,
@@ -117,7 +109,7 @@ class CloudFrontStack(Stack):
                     ttl=Duration.minutes(5),
                 ),
             ],
-            comment="CloudFront distribution for portal",
+            comment="CloudFront distribution for portal.darkrelics.net",
             enabled=True,
             http_version=cloudfront.HttpVersion.HTTP2_AND_3,
             price_class=cloudfront.PriceClass.PRICE_CLASS_100,  # US, Canada, Europe
@@ -134,12 +126,15 @@ class CloudFrontStack(Stack):
         Returns:
             True if distribution exists, False otherwise
         """
+        if not distribution_id:
+            return False
+
         try:
             cf_client = boto3.client("cloudfront", region_name="us-east-1")
             cf_client.get_distribution(Id=distribution_id)
             return True
         except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code")
+            error_code = err.response.get("Error", {}).get("Code", "")
             if error_code in ["NoSuchDistribution", "DistributionNotFound"]:
                 return False
             else:
@@ -155,10 +150,14 @@ class CloudFrontStack(Stack):
         Returns:
             Domain name of the distribution
         """
+        if not distribution_id:
+            return f"{distribution_id}.cloudfront.net"
+
         try:
             cf_client = boto3.client("cloudfront", region_name="us-east-1")
             response = cf_client.get_distribution(Id=distribution_id)
-            return response["Distribution"]["DomainName"]
+            distribution_info = response.get("Distribution", {})
+            return distribution_info.get("DomainName", f"{distribution_id}.cloudfront.net")
         except Exception:
             # Fallback to default CloudFront domain pattern
             return f"{distribution_id}.cloudfront.net"

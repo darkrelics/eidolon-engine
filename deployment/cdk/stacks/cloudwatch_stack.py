@@ -9,29 +9,55 @@ from constructs import Construct
 class CloudWatchStack(Stack):
     """CloudWatch stack for Eidolon Engine logging and metrics."""
 
-    def __init__(self, scope: Construct, construct_id: str, dynamodb_policy_arn: str, retention_days: int = 365, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, retention_days: int = 365, **kwargs) -> None:
         """Initialize CloudWatch stack.
 
         Args:
             scope: CDK app scope
             construct_id: Stack identifier
-            game_name: Name of the game
             retention_days: Log retention period in days
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
 
+        if retention_days < 1:
+            raise ValueError("retention_days must be at least 1")
+
+        # Map retention days to valid enum values
+        retention_mapping = {
+            1: logs.RetentionDays.ONE_DAY,
+            3: logs.RetentionDays.THREE_DAYS,
+            5: logs.RetentionDays.FIVE_DAYS,
+            7: logs.RetentionDays.ONE_WEEK,
+            14: logs.RetentionDays.TWO_WEEKS,
+            30: logs.RetentionDays.ONE_MONTH,
+            60: logs.RetentionDays.TWO_MONTHS,
+            90: logs.RetentionDays.THREE_MONTHS,
+            120: logs.RetentionDays.FOUR_MONTHS,
+            150: logs.RetentionDays.FIVE_MONTHS,
+            180: logs.RetentionDays.SIX_MONTHS,
+            365: logs.RetentionDays.ONE_YEAR,
+            400: logs.RetentionDays.THIRTEEN_MONTHS,
+            545: logs.RetentionDays.EIGHTEEN_MONTHS,
+            731: logs.RetentionDays.TWO_YEARS,
+            1827: logs.RetentionDays.FIVE_YEARS,
+            3653: logs.RetentionDays.TEN_YEARS,
+        }
+
+        # Use the closest valid retention period
+        retention_enum = retention_mapping.get(retention_days, logs.RetentionDays.ONE_YEAR)
+
         # Create Log Group
         self.log_group = logs.LogGroup(
             self,
             "logs",
-            log_group_name="/aws/eidolon/server",
-            retention=logs.RetentionDays(retention_days),
-            removal_policy=RemovalPolicy.RETAIN,
+            log_group_name="/eidolon/game-logs",
+            retention=retention_enum,
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
         # Create metrics namespace (this is just for documentation)
-        self.metrics_namespace = "eidolon/metrics"
+        self.metrics_namespace = "eidolon/application"
 
         # Create IAM policy for CloudWatch access
         self.cloudwatch_policy = iam.PolicyDocument(

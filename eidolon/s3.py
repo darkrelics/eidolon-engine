@@ -30,8 +30,8 @@ def upload_file(bucket_name: str, file_path: str, object_name=None) -> bool:
         s3_client.upload_file(file_path, bucket_name, object_name)
         logger.info(f"Successfully uploaded {file_path} to s3://{bucket_name}/{object_name}")
         return True
-    except ClientError as e:
-        logger.error(f"Failed to upload {file_path} to s3://{bucket_name}/{object_name}", error=e)
+    except ClientError as err:
+        logger.error(f"Failed to upload {file_path} to s3://{bucket_name}/{object_name}", error=err)
         return False
 
 
@@ -51,8 +51,8 @@ def download_file(bucket_name: str, object_name: str, file_path: str) -> bool:
         s3_client.download_file(bucket_name, object_name, file_path)
         logger.info(f"Successfully downloaded s3://{bucket_name}/{object_name} to {file_path}")
         return True
-    except ClientError as e:
-        logger.error(f"Failed to download s3://{bucket_name}/{object_name} to {file_path}", error=e)
+    except ClientError as err:
+        logger.error(f"Failed to download s3://{bucket_name}/{object_name} to {file_path}", error=err)
         return False
 
 
@@ -70,8 +70,8 @@ def list_files(bucket_name: str, prefix: str = "") -> list:
     try:
         response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
         return [item["Key"] for item in response.get("Contents", [])]
-    except ClientError as e:
-        logger.error(f"Failed to list files in s3://{bucket_name}/{prefix}", error=e)
+    except ClientError as err:
+        logger.error(f"Failed to list files in s3://{bucket_name}/{prefix}", error=err)
         return []
 
 
@@ -90,8 +90,8 @@ def delete_file(bucket_name: str, s3_key: str) -> bool:
         s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
         logger.info(f"Successfully deleted s3://{bucket_name}/{s3_key}")
         return True
-    except ClientError as e:
-        logger.error(f"Failed to delete s3://{bucket_name}/{s3_key}", error=e)
+    except ClientError as err:
+        logger.error(f"Failed to delete s3://{bucket_name}/{s3_key}", error=err)
         return False
 
 
@@ -110,12 +110,12 @@ def validate_s3_bucket(bucket_name: str) -> bool:
         s3_client.get_bucket_location(Bucket=bucket_name)
         logger.info(f"Successfully validated S3 bucket: {bucket_name}")
         return True
-    except ClientError as e:
-        error_code = e.response.get("Error", {}).get("Code", "")
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
         if error_code == "NoSuchBucket":
             logger.error(f"S3 bucket does not exist: {bucket_name}")
         elif error_code == "AccessDenied":
             logger.error(f"Access denied to S3 bucket: {bucket_name}")
         else:
-            logger.error(f"Failed to validate S3 bucket: {bucket_name}", error=e)
+            logger.error(f"Failed to validate S3 bucket: {bucket_name}", error=err)
         return False

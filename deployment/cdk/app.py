@@ -7,7 +7,8 @@ and Incremental deployments.
 
 import json
 import os
-from datetime import datetime
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import aws_cdk as cdk
@@ -19,9 +20,189 @@ from stacks.codebuild_stack import CodeBuildStack
 from stacks.cognito_stack import CognitoStack
 from stacks.dynamodb_stack import DynamoDBStack
 from stacks.iam_stack import IAMStack
-from stacks.incremental_lambda_stack import IncrementalLambdaStack
-from stacks.mud_lambda_stack import MudLambdaStack
+from stacks.lambda_stack import LambdaStack
 from stacks.s3_stack import S3Stack
+
+
+def load_json_file(file_path: Path) -> dict:
+    """Load JSON data from file.
+
+    Args:
+        file_path: Path to JSON file
+
+    Returns:
+        Loaded JSON data or empty dict if file doesn't exist
+    """
+    if file_path.exists():
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as err:
+            print(f"Warning: Failed to load {file_path}: {err}")
+            return {}
+    return {}
+
+
+def save_json_file(file_path: Path, data: dict) -> bool:
+    """Save JSON data to file.
+
+    Args:
+        file_path: Path to save JSON file
+        data: Data to save
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, default=str)
+        return True
+    except IOError as err:
+        print(f"Error: Failed to save {file_path}: {err}")
+        return False
+
+
+def load_yaml_file(file_path: Path) -> dict:
+    """Load YAML data from file.
+
+    Args:
+        file_path: Path to YAML file
+
+    Returns:
+        Loaded YAML data or empty dict if file doesn't exist
+    """
+    if file_path.exists():
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except (yaml.YAMLError, IOError) as err:
+            print(f"Warning: Failed to load {file_path}: {err}")
+            return {}
+    return {}
+
+
+def save_yaml_file(file_path: Path, data: dict) -> bool:
+    """Save YAML data to file.
+
+    Args:
+        file_path: Path to save YAML file
+        data: Data to save
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(file_path, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+        return True
+    except IOError as err:
+        print(f"Error: Failed to save {file_path}: {err}")
+        return False
+
+
+def deep_merge(base: dict, override: dict) -> None:
+    """Deep merge override dict into base dict.
+
+    Args:
+        base: Base dictionary to merge into
+        override: Dictionary with values to override
+    """
+    for key, value in override.items():
+        if key in base and isinstance(base.get(key), dict) and isinstance(value, dict):
+            deep_merge(base[key], value)
+        else:
+            base[key] = value
+
+
+def validate_required_config(config: dict) -> tuple[bool, list[str]]:
+    """Validate required configuration parameters.
+
+    Args:
+        config: Configuration dictionary to validate
+
+    Returns:
+        Tuple of (is_valid, list_of_errors)
+    """
+    errors = []
+
+    # Check API configuration
+    api_config = config.get("API", {})
+    if not api_config:
+        errors.append("Missing required 'API' section in configuration")
+    else:
+        # Check for empty strings as well as missing keys
+        domain = api_config.get("Domain", "")
+        hosted_zone_id = api_config.get("HostedZoneId", "")
+
+        if not domain or not domain.strip():
+            errors.append("API.Domain is required and cannot be empty")
+        if not hosted_zone_id or not hosted_zone_id.strip():
+            errors.append("API.HostedZoneId is required and cannot be empty")
+
+    return len(errors) == 0, errors
+
+
+def get_deployment_mode(app: cdk.App, params: dict) -> str:
+    """Determine deployment mode from context or parameters.
+
+    Returns:
+        One of: 'mud', 'incremental', or 'hybrid'
+    """
+    # Check for explicit mode in context
+    mode = app.node.try_get_context("deployment_mode")
+    if mode and mode in ["mud", "incremental", "hybrid"]:
+        return mode
+
+    # Check environment variable
+    env_mode = os.getenv("DEPLOYMENT_MODE", "").lower()
+    if env_mode in ["mud", "incremental", "hybrid"]:
+        return env_mode
+
+    # Fall back to legacy boolean flags for compatibility
+    deploy_mud = get_boolean_context(app, "deploy_mud", params.get("deploy_mud", False))
+    deploy_incremental = get_boolean_context(app, "deploy_incremental", params.get("deploy_incremental", False))
+
+    if deploy_mud and deploy_incremental:
+        return "hybrid"
+    elif deploy_mud:
+        return "mud"
+    elif deploy_incremental:
+        return "incremental"
+    else:
+        # Default to hybrid if nothing specified
+        return "hybrid"
+
+
+def get_boolean_context(app: cdk.App, key: str, default: bool = False) -> bool:
+    """Get boolean value from CDK context.
+
+    Args:
+        app: CDK application
+        key: Context key
+        default: Default value if not found
+
+    Returns:
+        Boolean value
+    """
+    value = app.node.try_get_context(key)
+    if value is not None:
+        return str(value).lower() in ["true", "1", "yes"]
+    return default
+
+
+def get_environment_bool(key: str, default: str = "false") -> bool:
+    """Get boolean value from environment variable.
+
+    Args:
+        key: Environment variable key
+        default: Default value if not found
+
+    Returns:
+        Boolean value
+    """
+    return os.getenv(key, default).lower() in ["true", "1", "yes"]
 
 
 class DeploymentState:
@@ -34,27 +215,26 @@ class DeploymentState:
             state_file: Path to state file for persistence
         """
         self.state_file = Path(state_file)
-        self.state: dict = self._load_state()
+        self.state: dict = self.load_state()
 
-    def _load_state(self) -> dict:
+    def load_state(self) -> dict:
         """Load state from file or create new state."""
-        if self.state_file.exists():
-            with open(self.state_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return {
-            "version": "1.0",
-            "last_deployment": None,
-            "stacks": {},
-            "resources": {},
-            "parameters": {},
-            "deployment_history": [],
-        }
+        state = load_json_file(self.state_file)
+        if not state:
+            state = {
+                "version": "1.0",
+                "last_deployment": None,
+                "stacks": {},
+                "resources": {},
+                "parameters": {},
+                "deployment_history": [],
+            }
+        return state
 
     def save_state(self) -> None:
         """Persist current state to file."""
         self.state["last_deployment"] = datetime.now().isoformat()
-        with open(self.state_file, "w", encoding="utf-8") as f:
-            json.dump(self.state, f, indent=2, default=str)
+        save_json_file(self.state_file, self.state)
 
     def add_stack(self, stack_name: str, stack_info: dict) -> None:
         """Record CloudFormation stack deployment.
@@ -72,16 +252,16 @@ class DeploymentState:
             "status": stack_info.get("status", "CREATE_COMPLETE"),
         }
 
-    def get_stack(self, stack_name: str):
+    def get_stack(self, stack_name: str) -> dict:
         """Get information about a deployed stack.
 
         Args:
             stack_name: Name of the CloudFormation stack
 
         Returns:
-            Stack information if exists, None otherwise
+            Stack information if exists, empty dict otherwise
         """
-        return self.state["stacks"].get(stack_name)
+        return self.state.get("stacks", {}).get(stack_name, {})
 
     def add_resource(self, resource_type: str, resource_id: str, resource_info: dict) -> None:
         """Track individual AWS resource.
@@ -101,7 +281,7 @@ class DeploymentState:
             "physical_id": resource_info.get("physical_id"),
         }
 
-    def get_resource(self, resource_type: str, resource_id: str):
+    def get_resource(self, resource_type: str, resource_id: str) -> dict:
         """Get information about a deployed resource.
 
         Args:
@@ -109,9 +289,9 @@ class DeploymentState:
             resource_id: Resource identifier
 
         Returns:
-            Resource information if exists, None otherwise
+            Resource information if exists, empty dict otherwise
         """
-        return self.state["resources"].get(resource_type, {}).get(resource_id)
+        return self.state.get("resources", {}).get(resource_type, {}).get(resource_id, {})
 
     def update_parameters(self, parameters: dict) -> None:
         """Update deployment parameters.
@@ -123,7 +303,7 @@ class DeploymentState:
 
     def get_parameters(self) -> dict:
         """Get all stored deployment parameters."""
-        return self.state["parameters"].copy()
+        return self.state.get("parameters", {}).copy()
 
     def add_deployment_event(self, event_type: str, event_data: dict) -> None:
         """Add entry to deployment history.
@@ -136,21 +316,24 @@ class DeploymentState:
             {"timestamp": datetime.now().isoformat(), "event_type": event_type, "data": event_data}
         )
 
-        # Keep only last 100 events
-        if len(self.state["deployment_history"]) > 100:
-            self.state["deployment_history"] = self.state["deployment_history"][-100:]
+        # Keep only events from the last 7 days
+        cutoff_date = datetime.now() - timedelta(days=7)
+        self.state["deployment_history"] = [
+            event for event in self.state.get("deployment_history", []) if datetime.fromisoformat(event["timestamp"]) > cutoff_date
+        ]
 
     def get_deployed_stacks(self) -> set[str]:
         """Get set of all deployed stack names."""
-        return set(self.state["stacks"].keys())
+        return set(self.state.get("stacks", {}).keys())
 
     def get_deployment_summary(self) -> dict:
         """Get summary of current deployment state."""
+        resources = self.state.get("resources", {})
         return {
-            "last_deployment": self.state["last_deployment"],
+            "last_deployment": self.state.get("last_deployment"),
             "deployed_stacks": list(self.get_deployed_stacks()),
-            "total_resources": sum(len(resources) for resources in self.state["resources"].values()),
-            "parameter_count": len(self.state["parameters"]),
+            "total_resources": sum(len(res_dict) for res_dict in resources.values()),
+            "parameter_count": len(self.state.get("parameters", {})),
         }
 
 
@@ -164,20 +347,27 @@ class ConfigurationManager:
             config_path: Path to server configuration file
         """
         self.config_path = Path(config_path)
-        self.config: dict = self._load_config()
+        self.config: dict = self.load_config()
 
-    def _load_config(self) -> dict:
-        """Load configuration from file."""
-        if self.config_path.exists():
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        return {}
+    def load_config(self) -> dict:
+        """Load configuration from file merged with template."""
+        config = load_yaml_file(self.config_path)
+
+        # If config exists, merge with template to fill in missing values
+        if config:
+            template_path = self.config_path.parent.parent / "config.template.yml"
+            if template_path.exists():
+                template = load_yaml_file(template_path)
+                if template:
+                    # Deep merge config over template (config values take precedence)
+                    deep_merge(template, config)
+                    return template
+
+        return config or {}
 
     def save_config(self) -> None:
         """Save configuration to file."""
-        self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            yaml.dump(self.config, f, default_flow_style=False, sort_keys=False)
+        save_yaml_file(self.config_path, self.config)
 
     def update_section(self, section: str, values: dict) -> None:
         """Update a configuration section.
@@ -215,26 +405,11 @@ class ConfigurationManager:
         Args:
             template_path: Path to configuration template
         """
-        if Path(template_path).exists():
-            with open(template_path, "r", encoding="utf-8") as f:
-                template = yaml.safe_load(f) or {}
-
+        template = load_yaml_file(Path(template_path))
+        if template:
             # Deep merge template with existing config
-            self._deep_merge(template, self.config)
+            deep_merge(template, self.config)
             self.config = template
-
-    def _deep_merge(self, base: dict, override: dict) -> None:
-        """Deep merge override dict into base dict.
-
-        Args:
-            base: Base dictionary to merge into
-            override: Dictionary with values to override
-        """
-        for key, value in override.items():
-            if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-                self._deep_merge(base[key], value)
-            else:
-                base[key] = value
 
 
 class EidolonEngineApp:
@@ -242,316 +417,501 @@ class EidolonEngineApp:
 
     def __init__(self):
         """Initialize the CDK app with configuration."""
+        print("\nInitializing Eidolon Engine CDK Application")
+        print("=" * 60)
+
         self.app = cdk.App()
-        self.config_manager = ConfigurationManager()
+
+        # Initialize managers
+        print("Loading configuration...")
+        # Use absolute path to config.yml in project root
+        config_path = Path(__file__).parent / "../../config.yml"
+        self.config_manager = ConfigurationManager(str(config_path))
+
+        print("Loading deployment state...")
         self.state_manager = DeploymentState()
 
-        # Load configuration if exists
+        # Load configuration
         self.config = self.load_configuration()
 
+        # Validate environment early
+        self.validate_environment()
+
         # Create stacks with dependencies
+        print("\nCreating CDK stacks...")
         self.create_stacks()
 
-    def load_configuration(self) -> dict:
-        """Load configuration from config.yml or use defaults."""
-        if self.config_manager.exists():
-            return self.config_manager.config
-        else:
-            # Load from template if no config exists
-            template_path = Path(__file__).parent.parent / "config.yml.template"
-            if template_path.exists():
-                with open(template_path, "r", encoding="utf-8") as f:
-                    return yaml.safe_load(f) or {}
-            return {}
+        print("\nCDK app initialization complete!")
+        print("=" * 60)
 
-    def create_stacks(self):
+    def validate_environment(self) -> None:
+        """Validate AWS environment and CDK requirements."""
+        print("\nValidating environment...")
+
+        # Check AWS credentials
+        account = os.getenv("CDK_DEFAULT_ACCOUNT", "")
+        region = os.getenv("CDK_DEFAULT_REGION", "us-east-1")
+
+        if not account:
+            print("ERROR: CDK_DEFAULT_ACCOUNT environment variable not set!")
+            print("   Please set your AWS account ID:")
+            print("   export CDK_DEFAULT_ACCOUNT=123456789012")
+            sys.exit(1)
+
+        print(f"   AWS Account: {account}")
+        print(f"   AWS Region: {region}")
+
+        # Validate configuration
+        is_valid, errors = validate_required_config(self.config)
+        if not is_valid:
+            print("\nERROR: Invalid configuration!")
+            for error in errors:
+                print(f"   - {error}")
+            print("\n   Please update your config.yml with the required values.")
+            sys.exit(1)
+
+        # Validate critical parameters
+        params = self.get_deployment_parameters()
+        domain_name = params.get("domain_name", "")
+        hosted_zone_id = params.get("hosted_zone_id", "")
+
+        if not domain_name or not isinstance(domain_name, str):
+            print("\nERROR: domain_name must be a non-empty string!")
+            sys.exit(1)
+
+        if not hosted_zone_id or not isinstance(hosted_zone_id, str):
+            print("\nERROR: hosted_zone_id must be a non-empty string!")
+            sys.exit(1)
+
+    def load_configuration(self) -> dict:
+        """Load configuration from config.yml merged with template defaults."""
+        template_path = Path(__file__).parent / "../../config.template.yml"
+
+        # Start with template
+        template_config = load_yaml_file(template_path)
+        if not template_config:
+            template_config = {}
+
+        if self.config_manager.exists():
+            # Merge existing config over template (existing values take precedence)
+            deep_merge(template_config, self.config_manager.config)
+            return template_config
+        else:
+            # Just use template if no config exists
+            return template_config
+
+    def create_stacks(self) -> None:
         """Create all CDK stacks with proper dependencies."""
         env = cdk.Environment(account=os.getenv("CDK_DEFAULT_ACCOUNT"), region=os.getenv("CDK_DEFAULT_REGION", "us-east-1"))
 
         # Get deployment parameters
         params = self.get_deployment_parameters()
 
-        # Determine which applications to deploy from context or parameters
-        # Check CDK context first (from command line), then environment, then config
-        deploy_mud = self.app.node.try_get_context("deploy_mud")
-        if deploy_mud is not None:
-            deploy_mud = str(deploy_mud).lower() in ["true", "1", "yes"]
-        else:
-            deploy_mud = os.getenv("DEPLOY_MUD", str(params.get("deploy_mud", True))).lower() in ["true", "1", "yes"]
+        # Determine deployment mode
+        deploy_mode = get_deployment_mode(self.app, params)
 
-        deploy_incremental = self.app.node.try_get_context("deploy_incremental")
-        if deploy_incremental is not None:
-            deploy_incremental = str(deploy_incremental).lower() in ["true", "1", "yes"]
-        else:
-            deploy_incremental = os.getenv("DEPLOY_INCREMENTAL", str(params.get("deploy_incremental", False))).lower() in [
-                "true",
-                "1",
-                "yes",
-            ]
+        print(f"Deployment mode: {deploy_mode}")
 
-        print(f"Deployment configuration: MUD={deploy_mud}, Incremental={deploy_incremental}")
+        # Create IAM stack early (no dependencies)
+        self.create_iam_stack(env, params)
 
-        # Create shared infrastructure stacks
+        # Create foundation stacks (S3, DynamoDB, Cognito, CloudWatch)
+        self.create_foundation_stacks(env, params)
 
-        # Create Cognito stack (shared)
-        self.cognito_stack = CognitoStack(
+        # Create build infrastructure (CodeBuild)
+        self.create_build_infrastructure(env, params, deploy_mode)
+
+        # Note: Build execution will happen here in phase 2
+
+        # Create application stacks (Lambda, API Gateway)
+        self.create_application_stacks(env, params)
+
+        # Create distribution layer (CloudFront)
+        self.create_distribution_layer(env, params)
+
+    def create_foundation_stacks(self, env: cdk.Environment, params: dict) -> None:
+        """Create foundation infrastructure stacks."""
+        # Create S3 stack first (no dependencies)
+        self.s3_stack = S3Stack(
             self.app,
-            "cognito",
-            game_name=params["game_name"],
-            contact_email=params["contact_email"],
+            "s3",
+            game_name=params.get("game_name", "eidolon-engine"),
+            portal_bucket_name=params.get("portal_bucket_name", {}),
+            scripts_bucket_name=params.get("scripts_bucket_name", {}),
             env=env,
         )
 
-        # Create shared DynamoDB tables
-        shared_tables = {"Players": params.get("shared_dynamodb_tables", {}).get("Players", "players")}
+        # Create unified DynamoDB tables (depends on IAM for role)
+        unified_tables = self.get_unified_table_names(params)
 
-        self.shared_dynamodb_stack = DynamoDBStack(
-            self.app, "shared-dynamodb", game_name="shared", table_names=shared_tables, env=env
+        self.dynamodb_stack = DynamoDBStack(
+            self.app,
+            "dynamodb",
+            game_name=params.get("game_name", "eidolon-engine"),
+            table_names=unified_tables,
+            execution_role_arn=self.iam_stack.execution_role.role_arn,
+            env=env,
         )
+        self.dynamodb_stack.add_dependency(self.iam_stack)  # DynamoDB depends on IAM
+
+        # Create Cognito stack (no dependencies)
+        # Default to dev mode (True) unless explicitly set to production
+        dev_mode = params.get("dev_mode", True)
+
+        # Check if we should skip Cognito stack creation
+        if params.get("existing_user_pool_id"):
+            print(f"Skipping Cognito stack creation - using existing user pool: {params['existing_user_pool_id']}")
+            self.cognito_stack = None
+            # Store the existing IDs for other stacks to use
+            self.existing_cognito_user_pool_id = params.get("existing_user_pool_id")
+            self.existing_cognito_app_client_id = params.get("existing_app_client_id")
+        else:
+            self.cognito_stack = CognitoStack(
+                self.app,
+                "cognito",
+                contact_email=params.get("contact_email", "contact@darkrelics.net"),
+                dev_mode=dev_mode,
+                env=env,
+            )
+            self.existing_cognito_user_pool_id = None
+            self.existing_cognito_app_client_id = None
 
         # Create CloudWatch stack
         self.cloudwatch_stack = CloudWatchStack(
             self.app,
             "cloudwatch",
-            dynamodb_policy_arn=self.shared_dynamodb_stack.access_policy.managed_policy_arn,
             retention_days=params.get("log_retention_days", 365),
             env=env,
         )
 
-        # Create S3 stack (handles existing buckets)
-        self.s3_stack = S3Stack(
+    def create_build_infrastructure(self, env: cdk.Environment, params: dict, deploy_mode: str) -> None:
+        """Create CodeBuild infrastructure."""
+        # Create CodeBuild stack
+        buildspec_path = params.get("portal_buildspec_path", "buildspec/portal.yml")
+        if deploy_mode in ["incremental", "hybrid"]:
+            buildspec_path = params.get("incremental_buildspec_path", "buildspec/incremental.yml")
+
+        # Construct API domain
+        domain_name = params.get("domain_name", "")
+        api_subdomain = params.get("api_subdomain", "api")
+        api_domain = f"{api_subdomain}.{domain_name}" if domain_name else ""
+
+        self.codebuild_stack = CodeBuildStack(
             self.app,
-            "s3",
-            game_name=params["game_name"],
-            portal_bucket_name=params.get("portal_bucket_name"),
-            scripts_bucket_name=params.get("scripts_bucket_name"),
+            "codebuild",
+            github_owner=params.get("github_owner", "robinje"),
+            github_repo=params.get("github_repo", "eidolon-engine"),
+            github_branch=params.get("github_branch", "main"),
+            cognito_user_pool_id=(
+                self.cognito_stack.user_pool.user_pool_id if self.cognito_stack else self.existing_cognito_user_pool_id
+            ),
+            cognito_app_client_id=(
+                self.cognito_stack.app_client.user_pool_client_id if self.cognito_stack else self.existing_cognito_app_client_id
+            ),
+            portal_bucket=self.s3_stack.portal_bucket,
+            lambda_bucket=self.s3_stack.lambda_bucket,
+            api_domain=api_domain,
+            buildspec_path=buildspec_path,
+            cloudfront_distribution_id="",  # Will be set later or via update
             env=env,
         )
+        if self.cognito_stack:
+            self.codebuild_stack.add_dependency(self.cognito_stack)
+        self.codebuild_stack.add_dependency(self.s3_stack)
 
-        # Create base Lambda stack for shared functions
+    def create_application_stacks(self, env: cdk.Environment, params: dict) -> None:
+        """Create application layer stacks (Lambda, API Gateway)."""
+        # Get unified table names
+        unified_tables = self.get_unified_table_names(params)
+
+        # Create base Lambda stack for common functions
         self.base_lambda_stack = BaseLambdaStack(
             self.app,
             "base-lambda",
             lambda_bucket=self.s3_stack.lambda_bucket,
-            shared_players_table=shared_tables["Players"],
-            cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
-            allowed_cors_origins=params.get("shared_cors_origins", []),
             env=env,
         )
         self.base_lambda_stack.add_dependency(self.s3_stack)
-        self.base_lambda_stack.add_dependency(self.shared_dynamodb_stack)
-        self.base_lambda_stack.add_dependency(self.cognito_stack)
 
-        # Add Cognito Lambda trigger
-        self.cognito_stack.add_lambda_trigger("PostConfirmation", self.base_lambda_stack.cognito_new_player_function)
+        # Create unified Lambda stack with all API functions
+        domain_name = params.get("domain_name", "")
+        hosted_zone_id = params.get("hosted_zone_id", "")
 
-        # Deploy MUD-specific infrastructure
-        if deploy_mud:
-            # Create MUD DynamoDB tables
-            mud_tables = params.get("mud_dynamodb_tables", {})
-            self.mud_dynamodb_stack = DynamoDBStack(self.app, "mud-dynamodb", game_name="mud", table_names=mud_tables, env=env)
+        self.lambda_stack = LambdaStack(
+            self.app,
+            "lambda",
+            config={
+                "lambda_bucket": self.s3_stack.lambda_bucket.bucket_name,
+                "players_table": unified_tables["Players"],
+                "characters_table": unified_tables["Characters"],
+                "archetypes_table": unified_tables["Archetypes"],
+                "items_table": unified_tables.get("Items", ""),
+                "cognito_user_pool_arn": (
+                    self.cognito_stack.user_pool.user_pool_arn
+                    if self.cognito_stack
+                    else f"arn:aws:cognito-idp:{env.region}:{env.account}:userpool/{self.existing_cognito_user_pool_id}"
+                ),
+                "dependencies_layer_arn": self.base_lambda_stack.dependencies_layer.layer_version_arn,
+                "domain_name": domain_name,
+                "hosted_zone_id": hosted_zone_id,
+                "api_subdomain": params.get("api_subdomain", "api"),
+                "allowed_cors_origins": params.get("allowed_cors_origins", []),
+            },
+            env=env,
+        )
+        self.lambda_stack.add_dependency(self.base_lambda_stack)
+        self.lambda_stack.add_dependency(self.dynamodb_stack)
+        if self.cognito_stack:
+            self.lambda_stack.add_dependency(self.cognito_stack)
 
-            # Create MUD Lambda stack
-            self.mud_lambda_stack = MudLambdaStack(
-                self.app,
-                "mud-lambda",
-                lambda_bucket=self.s3_stack.lambda_bucket,
-                shared_players_table=shared_tables["Players"],
-                mud_characters_table=mud_tables.get("Characters", "mud-characters"),
-                mud_items_table=mud_tables.get("Items", "mud-items"),
-                mud_ARCHETYPES_TABLE=mud_tables.get("Archetypes", "mud-archetypes"),
-                cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
-                shared_dependencies_layer_arn=self.base_lambda_stack.dependencies_layer.layer_version_arn,
-                domain_name=params.get("domain_name"),
-                hosted_zone_id=params.get("hosted_zone_id"),
-                api_subdomain=params.get("mud_api_subdomain", "mud-api"),
-                allowed_cors_origins=params.get("mud_cors_origins", []),
-                env=env,
-            )
-            self.mud_lambda_stack.add_dependency(self.base_lambda_stack)
-            self.mud_lambda_stack.add_dependency(self.mud_dynamodb_stack)
-            self.mud_lambda_stack.add_dependency(self.cognito_stack)
+        # Create Cognito trigger stack (depends on Cognito, DynamoDB, and base Lambda)
+        from stacks.cognito_trigger_stack import CognitoTriggerStack
 
-        # Deploy Incremental-specific infrastructure
-        if deploy_incremental:
-            # Create Incremental DynamoDB tables
-            incremental_tables = params.get("incremental_dynamodb_tables", {})
-            self.incremental_dynamodb_stack = DynamoDBStack(
-                self.app, "incremental-dynamodb", game_name="incremental", table_names=incremental_tables, env=env
-            )
+        # Get Cognito user pool ARN as string to avoid dependency
+        cognito_user_pool_arn = f"arn:aws:cognito-idp:{env.region}:{env.account}:userpool/*"
 
-            # Create Incremental Lambda stack
-            self.incremental_lambda_stack = IncrementalLambdaStack(
-                self.app,
-                "incremental-lambda",
-                lambda_bucket=self.s3_stack.lambda_bucket,
-                shared_players_table=shared_tables["Players"],
-                incremental_progress_table_name=incremental_tables.get("Progress", "incremental-progress"),
-                incremental_resources_table_name=incremental_tables.get("Resources", "incremental-resources"),
-                cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
-                shared_dependencies_layer_arn=self.base_lambda_stack.dependencies_layer.layer_version_arn,
-                domain_name=params.get("domain_name"),
-                hosted_zone_id=params.get("hosted_zone_id"),
-                api_subdomain=params.get("incremental_api_subdomain", "incremental-api"),
-                allowed_cors_origins=params.get("incremental_cors_origins", []),
-                env=env,
-            )
-            self.incremental_lambda_stack.add_dependency(self.base_lambda_stack)
-            self.incremental_lambda_stack.add_dependency(self.incremental_dynamodb_stack)
-            self.incremental_lambda_stack.add_dependency(self.cognito_stack)
+        self.cognito_trigger_stack = CognitoTriggerStack(
+            self.app,
+            "cognito-trigger",
+            lambda_bucket=self.s3_stack.lambda_bucket,
+            players_table=unified_tables["Players"],
+            cognito_user_pool_arn=cognito_user_pool_arn,
+            dependencies_layer=self.base_lambda_stack.dependencies_layer,
+            allowed_cors_origins=params.get("allowed_cors_origins", []),
+            env=env,
+        )
+        # Note: We don't add cognito as a dependency to avoid circular reference
+        self.cognito_trigger_stack.add_dependency(self.dynamodb_stack)
+        self.cognito_trigger_stack.add_dependency(self.base_lambda_stack)
 
-        # Create unified CloudFront and CodeBuild stacks
-        # Logic: If deploying Incremental (with or without MUD), build Incremental
-        #        If deploying MUD only, build Portal
-        if deploy_mud or deploy_incremental:
-            # Determine which frontend to build
-            if deploy_incremental:
-                # Build Incremental frontend if Incremental is being deployed
-                frontend_type = "incremental"
-                buildspec_path = params.get("incremental_buildspec_path", "buildspec/incremental.yml")
-                distribution_id_param = "incremental_cloudfront_distribution_id"
-            else:
-                # Build Portal frontend if only MUD is being deployed
-                frontend_type = "portal"
-                buildspec_path = params.get("portal_buildspec_path", "buildspec/portal.yml")
-                distribution_id_param = "portal_cloudfront_distribution_id"
+    def create_distribution_layer(self, env: cdk.Environment, params: dict) -> None:
+        """Create CloudFront distribution."""
+        self.cloudfront_stack = CloudFrontStack(
+            self.app,
+            "cloudfront",
+            portal_bucket=self.s3_stack.portal_bucket,
+            existing_distribution_id=params.get("cloudfront_distribution_id", ""),
+            env=env,
+        )
+        self.cloudfront_stack.add_dependency(self.s3_stack)
 
-            # Create CloudFront stack
-            self.cloudfront_stack = CloudFrontStack(
-                self.app,
-                "cloudfront",
-                game_name=frontend_type,
-                portal_bucket=self.s3_stack.portal_bucket,
-                existing_distribution_id=params.get(distribution_id_param),
-                env=env,
-            )
-            self.cloudfront_stack.add_dependency(self.s3_stack)
+    def get_unified_table_names(self, params: dict) -> dict:
+        """Get unified table names for all deployment modes.
 
-            # Create CodeBuild stack
-            self.codebuild_stack = CodeBuildStack(
-                self.app,
-                "codebuild",
-                game_name=frontend_type,
-                github_owner=params["github_owner"],
-                github_repo=params["github_repo"],
-                github_branch=params.get("github_branch", "main"),
-                cognito_user_pool_id=self.cognito_stack.user_pool.user_pool_id,
-                cognito_app_client_id=self.cognito_stack.app_client.user_pool_client_id,
-                portal_bucket=self.s3_stack.portal_bucket,
-                buildspec_path=buildspec_path,
-                cloudfront_distribution_id=self.cloudfront_stack.distribution.distribution_id,
-                lambda_bucket=self.s3_stack.lambda_bucket,
-                env=env,
-            )
-            self.codebuild_stack.add_dependency(self.cognito_stack)
-            self.codebuild_stack.add_dependency(self.s3_stack)
-            self.codebuild_stack.add_dependency(self.cloudfront_stack)
+        Returns:
+            Dictionary of table names used by all modes
+        """
+        # Start with defaults - include ALL tables expected by DynamoDB stack
+        # These are base names only - config.yml can override with any names
+        tables = {
+            "Players": "players",
+            "Characters": "characters",
+            "Rooms": "rooms",
+            "Exits": "exits",
+            "Items": "items",
+            "Prototypes": "prototypes",
+            "Archetypes": "archetypes",
+            "Motd": "motd",
+            "Story": "story",
+        }
 
-        # Create IAM stack with server execution role
+        # Override with configured values if present
+        configured_tables = params.get("dynamodb_tables", {})
+        tables.update(configured_tables)
+
+        return tables
+
+    def create_iam_stack(self, env: cdk.Environment, params: dict) -> None:
+        """Create IAM stack with server execution role."""
         self.iam_stack = IAMStack(
             self.app,
             "iam",
-            game_name=params["game_name"],
-            cloudwatch_policy_arn=self.cloudwatch_stack.access_policy.managed_policy_arn,
-            dynamodb_policy_arn=self.shared_dynamodb_stack.access_policy.managed_policy_arn,
+            game_name=params.get("game_name", "eidolon-engine"),
             env=env,
         )
-        self.iam_stack.add_dependency(self.cloudwatch_stack)
-        self.iam_stack.add_dependency(self.shared_dynamodb_stack)
 
     def get_deployment_parameters(self) -> dict:
         """Get deployment parameters from config or state."""
+        print("\nLoading deployment parameters...")
+
         # Start with defaults
-        params = {
+        params: dict = {
             "game_name": "eidolon-engine",
-            "contact_email": "admin@example.com",
+            "contact_email": "contact@darkrelics.net",
             "github_owner": "robinje",
             "github_repo": "eidolon-engine",
-            "github_branch": "main",
+            "github_branch": "develop",
             "log_retention_days": 365,
-            "deploy_mud": True,
-            "deploy_incremental": False,
+            "deployment_mode": "hybrid",
+            "dynamodb_tables": {},
+            "allowed_cors_origins": [],
         }
+        print("   Loaded default parameters")
 
         # Override with stored parameters
         stored_params = self.state_manager.get_parameters()
-        params.update(stored_params)
+        if stored_params:
+            print(f"   Found {len(stored_params)} stored parameters")
+            params.update(stored_params)
 
         # Override with config values
-        if "Game" in self.config:
-            game_config = self.config["Game"]
-            params["game_name"] = game_config.get("name", params["game_name"])
+        self.load_game_config(params)
+        self.load_deployment_config(params)
+        self.load_dynamodb_config(params)
+        self.load_cognito_config(params)
+        self.load_codebuild_config(params)
+        self.load_api_config(params)
+        self.load_cors_config(params)
+        self.load_github_config(params)
+
+        # Override with CDK context values
+        self.load_context_overrides(params)
+
+        print("\n   Parameter loading complete")
+        return params
+
+    def load_game_config(self, params: dict) -> None:
+        """Load game configuration section."""
+        game_config = self.config.get("Game", {})
+        if game_config:
+            print("   Loading Game configuration")
+            params["game_name"] = game_config.get("name", params.get("game_name", "eidolon-engine"))
 
             # Check for existing bucket configurations
             if "PortalS3Bucket" in game_config:
-                params["portal_bucket_name"] = game_config["PortalS3Bucket"]
+                params["portal_bucket_name"] = game_config.get("PortalS3Bucket")
+                print(f"     - Using existing portal bucket: {params['portal_bucket_name']}")
             if "ScriptsS3Bucket" in game_config:
-                params["scripts_bucket_name"] = game_config["ScriptsS3Bucket"]
+                params["scripts_bucket_name"] = game_config.get("ScriptsS3Bucket")
+                print(f"     - Using existing scripts bucket: {params['scripts_bucket_name']}")
 
-        # Check for deployment configuration
-        if "Deployment" in self.config:
-            deploy_config = self.config["Deployment"]
-            # Only use config values if not already set by context
-            if self.app.node.try_get_context("deploy_mud") is None:
-                params["deploy_mud"] = deploy_config.get("MUD", True)
-            if self.app.node.try_get_context("deploy_incremental") is None:
-                params["deploy_incremental"] = deploy_config.get("Incremental", False)
+    def load_deployment_config(self, params: dict) -> None:
+        """Load deployment configuration section."""
+        deploy_config = self.config.get("Deployment", {})
+        if deploy_config:
+            print("   Loading Deployment configuration")
+            # Check for explicit mode
+            if "Mode" in deploy_config:
+                params["deployment_mode"] = deploy_config.get("Mode", "hybrid")
+            # Legacy support for boolean flags
+            elif self.app.node.try_get_context("deployment_mode") is None:
+                deploy_mud = deploy_config.get("MUD", False)
+                deploy_incremental = deploy_config.get("Incremental", False)
+                if deploy_mud and deploy_incremental:
+                    params["deployment_mode"] = "hybrid"
+                elif deploy_mud:
+                    params["deployment_mode"] = "mud"
+                elif deploy_incremental:
+                    params["deployment_mode"] = "incremental"
+                else:
+                    params["deployment_mode"] = "hybrid"
 
-        # Check for shared DynamoDB table configurations
-        if "DynamoDB" in self.config and "SharedTables" in self.config["DynamoDB"]:
-            params["shared_dynamodb_tables"] = self.config["DynamoDB"]["SharedTables"]
+    def load_dynamodb_config(self, params: dict) -> None:
+        """Load DynamoDB configuration section."""
+        dynamodb_config = self.config.get("DynamoDB", {})
+        if dynamodb_config:
+            print("   Loading DynamoDB configuration")
+            # Load unified tables
+            if "Tables" in dynamodb_config:
+                params["dynamodb_tables"] = dynamodb_config.get("Tables", {})
+                print(f"     - Found {len(params['dynamodb_tables'])} unified tables")
+            # Legacy support - merge all table types into unified tables
+            else:
+                tables = {}
+                if "SharedTables" in dynamodb_config:
+                    tables.update(dynamodb_config.get("SharedTables", {}))
+                if "MUDTables" in dynamodb_config:
+                    tables.update(dynamodb_config.get("MUDTables", {}))
+                if "IncrementalTables" in dynamodb_config:
+                    tables.update(dynamodb_config.get("IncrementalTables", {}))
+                if tables:
+                    params["dynamodb_tables"] = tables
+                    print(f"     - Merged {len(tables)} tables from legacy configuration")
 
-        # Check for MUD-specific DynamoDB tables
-        if "DynamoDB" in self.config and "MUDTables" in self.config["DynamoDB"]:
-            params["mud_dynamodb_tables"] = self.config["DynamoDB"]["MUDTables"]
+    def load_cognito_config(self, params: dict) -> None:
+        """Load Cognito configuration section."""
+        cognito_config = self.config.get("Cognito", {})
+        if cognito_config:
+            print("   Loading Cognito configuration")
+            if "UserPoolId" in cognito_config and cognito_config.get("UserPoolId"):
+                params["existing_user_pool_id"] = cognito_config.get("UserPoolId")
+                print(f"     - Found existing user pool: {params['existing_user_pool_id']}")
+            if "UserPoolClientId" in cognito_config and cognito_config.get("UserPoolClientId"):
+                params["existing_app_client_id"] = cognito_config.get("UserPoolClientId")
+                print(f"     - Found existing app client: {params['existing_app_client_id']}")
+            if "UserPoolDomain" in cognito_config and cognito_config.get("UserPoolDomain"):
+                params["existing_user_pool_domain"] = cognito_config.get("UserPoolDomain")
+                print(f"     - Found existing domain: {params['existing_user_pool_domain']}")
 
-        # Check for Incremental-specific DynamoDB tables
-        if "DynamoDB" in self.config and "IncrementalTables" in self.config["DynamoDB"]:
-            params["incremental_dynamodb_tables"] = self.config["DynamoDB"]["IncrementalTables"]
-
-        # Check for CodeBuild configuration
-        if "CodeBuild" in self.config:
-            codebuild_config = self.config["CodeBuild"]
+    def load_codebuild_config(self, params: dict) -> None:
+        """Load CodeBuild configuration section."""
+        codebuild_config = self.config.get("CodeBuild", {})
+        if codebuild_config:
+            print("   Loading CodeBuild configuration")
             if "PortalBuildspecPath" in codebuild_config:
-                params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
+                params["portal_buildspec_path"] = codebuild_config.get("PortalBuildspecPath")
             if "IncrementalBuildspecPath" in codebuild_config:
-                params["incremental_buildspec_path"] = codebuild_config["IncrementalBuildspecPath"]
+                params["incremental_buildspec_path"] = codebuild_config.get("IncrementalBuildspecPath")
 
-        # Check for API configuration (required)
-        if "API" in self.config:
-            api_config = self.config["API"]
-            params["domain_name"] = api_config.get("Domain")
-            params["hosted_zone_id"] = api_config.get("HostedZoneId")
-            params["mud_api_subdomain"] = api_config.get("MUDSubdomain", "mud-api")
-            params["incremental_api_subdomain"] = api_config.get("IncrementalSubdomain", "incremental-api")
+    def load_api_config(self, params: dict) -> None:
+        """Load API configuration section."""
+        api_config = self.config.get("API", {})
+        if api_config:
+            print("   Loading API configuration")
+            params["domain_name"] = api_config.get("Domain", "")
+            params["hosted_zone_id"] = api_config.get("HostedZoneId", "")
+            params["api_subdomain"] = api_config.get("Subdomain", "api")
 
-            # Validate required API parameters
-            if not params["domain_name"]:
-                raise ValueError("API.Domain is required in configuration")
-            if not params["hosted_zone_id"]:
-                raise ValueError("API.HostedZoneId is required in configuration")
-        else:
-            raise ValueError("API configuration section is required")
+            print(f"     - Domain: {params['domain_name']}")
+            print(f"     - Hosted Zone ID: {params['hosted_zone_id']}")
+            print(f"     - API Subdomain: {params['api_subdomain']}")
 
-        # Check for CORS configuration
-        if "CORS" in self.config:
-            cors_config = self.config["CORS"]
-            params["mud_cors_origins"] = cors_config.get("MUDOrigins", [])
-            params["incremental_cors_origins"] = cors_config.get("IncrementalOrigins", [])
-            # Shared CORS origins include all configured origins
-            all_origins = []
-            all_origins.extend(params["mud_cors_origins"])
-            all_origins.extend(params["incremental_cors_origins"])
-            params["shared_cors_origins"] = list(set(all_origins))  # Remove duplicates
+    def load_cors_config(self, params: dict) -> None:
+        """Load CORS configuration section."""
+        cors_config = self.config.get("CORS", {})
+        if cors_config:
+            print("   Loading CORS configuration")
+            # Load unified CORS origins
+            if "AllowedOrigins" in cors_config:
+                params["allowed_cors_origins"] = cors_config.get("AllowedOrigins", [])
+                print(f"     - Found {len(params['allowed_cors_origins'])} allowed origins")
+            # Legacy support - merge all origin types
+            else:
+                all_origins = []
+                if "MUDOrigins" in cors_config:
+                    all_origins.extend(cors_config.get("MUDOrigins", []))
+                if "IncrementalOrigins" in cors_config:
+                    all_origins.extend(cors_config.get("IncrementalOrigins", []))
+                params["allowed_cors_origins"] = list(set(all_origins))  # Remove duplicates
+                if all_origins:
+                    print(f"     - Merged {len(params['allowed_cors_origins'])} unique origins from legacy configuration")
 
-        return params
+    def load_github_config(self, params: dict) -> None:
+        """Load GitHub configuration section."""
+        github_config = self.config.get("GitHub", {})
+        if github_config:
+            print("   Loading GitHub configuration")
+            params["github_owner"] = github_config.get("Owner", params.get("github_owner", "robinje"))
+            params["github_repo"] = github_config.get("Repo", params.get("github_repo", "eidolon-engine"))
+            params["github_branch"] = github_config.get("Branch", params.get("github_branch", "develop"))
+            print(f"     - Owner: {params['github_owner']}")
+            print(f"     - Repo: {params['github_repo']}")
+            print(f"     - Branch: {params['github_branch']}")
+
+    def load_context_overrides(self, params: dict) -> None:
+        """Override parameters with CDK context values."""
+        # Check for context overrides
+        github_branch = self.app.node.try_get_context("github_branch")
+        if github_branch:
+            params["github_branch"] = github_branch
+            print(f"   Overriding GitHub branch from context: {github_branch}")
 
     def synth(self):
         """Synthesize the CDK app."""
         return self.app.synth()
 
 
-def main():
+def main() -> None:
     """Main entry point for CDK app."""
     app = EidolonEngineApp()
     app.synth()

@@ -17,7 +17,7 @@ def load_config(config_path: str) -> dict:
     path = Path(config_path)
     if not path.exists():
         print(f"Configuration file {config_path} not found. Creating from template...")
-        template_path = Path(__file__).parent / "config.yml.template"
+        template_path = Path(__file__).parent / "../config.template.yml"
         if template_path.exists():
             with open(template_path, "r") as f:
                 config = yaml.safe_load(f)
@@ -67,7 +67,7 @@ def main():
     parser = argparse.ArgumentParser(description="Configure CORS origins for Eidolon Engine deployments")
     parser.add_argument("--config", default="config.yml", help="Path to configuration file (default: config.yml)")
     parser.add_argument("--type", choices=["mud", "incremental", "both"], required=True, help="Application type to configure")
-    parser.add_argument("--origins", nargs="+", required=True, help="CORS origins to allow (e.g., https://example.com)")
+    parser.add_argument("--origins", nargs="+", required=True, help="CORS origins to allow (e.g., https://darkrelics.net)")
     parser.add_argument("--replace", action="store_true", help="Replace existing origins instead of adding to them")
     parser.add_argument("--cloudfront", help="Add CloudFront distribution URL as an allowed origin")
     parser.add_argument(

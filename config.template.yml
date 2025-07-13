@@ -1,60 +1,99 @@
-# NOTE: Values marked with 'deployment-generated' are automatically updated by deployment/deploy.py
-AWS:
-  Region: us-east-1 # deployment-generated
-  ServerExecutionRoleArn: arn:aws:iam::999999999999:role/eidolon-engine-server-execution-role # deployment-generated
-CloudFront: # All CloudFront values are deployment-generated
-  distribution_id: E1234567890ABC
-  domain_name: d1234567890.cloudfront.net
-  portal_url: https://d1234567890.cloudfront.net
-CloudWatch:
-  MetricsIntervalSeconds: 60
-  MetricsTimeoutSeconds: 10
-  LogFlushTimeoutSeconds: 3
-  ShutdownDrainSeconds: 2
-  AccessPolicyArn: arn:aws:iam::999999999999:policy/eidolon-cloudwatch-access # deployment-generated
-Cognito: # All Cognito values are deployment-generated
-  UserPoolId: us-east-1_xxxxxxxxx
-  UserPoolClientId: xxxxxxxxxxxxxxxxxxxxxxxxxx
-  UserPoolDomain: eidolon-users
-  UserPoolArn: arn:aws:cognito-idp:us-east-1:999999999999:userpool/us-east-1_xxxxxxxxx
-CodeBuild: # All CodeBuild values are deployment-generated
-  ProjectName: eidolon-portal-build
-  PortalS3Bucket: eidolon-portal
-DynamoDB: # All DynamoDB values are deployment-generated
-  Tables:
-    Players: eidolon-players
-    Characters: eidolon-characters
-    Rooms: eidolon-rooms
-    Exits: eidolon-exits
-    Items: eidolon-items
-    Prototypes: eidolon-prototypes
-    Archetypes: eidolon-archetypes
-    Motd: eidolon-motd
-  AccessPolicyArn: arn:aws:iam::999999999999:policy/eidolon-dynamodb-access
+# Eidolon Engine Configuration Template
+# This template is used by deployment/deploy.py to generate config.yml
+# Values will be populated during deployment
+
+# Game configuration
 Game:
+  name: eidolon-engine
+  # Core game settings
   AutoSave: 5
   Balance: 0.25
   StartingHealth: 10
   StartingEssence: 3
   NamesPath: ../data/names.txt
   ObscenityPath: ../data/obscenity.txt
-  ScriptsS3Bucket: eidolon-scripts # deployment-generated
+  ScriptsS3Bucket: darkrelics-scripts
   ScriptsS3Prefix: scripts
   TickIntervalSeconds: 1
   RoomItemCleanupSeconds: 600 # 10 minutes
   RoomUnloadSeconds: 3600 # 60 minutes
   CommandTimeoutSeconds: 5
   PlayerIdleTimeoutSeconds: 900 # 15 minutes
-API: # Required - API Gateway custom domain configuration
-  Domain: example.com # Your domain name (REQUIRED)
-  Subdomain: api # Subdomain for API (default: api)
-  HostedZoneId: Z1234567890ABC # Route53 hosted zone ID for the domain (REQUIRED)
+  PortalS3Bucket: darkrelics-portal
+  PortalUrl: "" # deployment-generated
+
+# Deployment mode: 'mud', 'incremental', or 'hybrid'
+# - mud: MUD mode with Portal frontend
+# - incremental: Incremental mode with Incremental frontend
+# - hybrid: Hybrid mode with Incremental frontend (supports both game types)
+Deployment:
+  Mode: hybrid
+
+# AWS configuration
+AWS:
+  region: us-east-1
+  contact_email: contact@darkrelics.net
+  ServerExecutionRoleArn: ""
+
+# DynamoDB tables
+DynamoDB:
+  Tables:
+    Players: players
+    Characters: characters
+    Items: items
+    Archetypes: archetypes
+    Story: story
+    Rooms: rooms
+    Exits: exits
+    Prototypes: prototypes
+    Motd: motd
+  AccessPolicyArn: "" # deployment-generated
+
+# API configuration (required)
+API:
+  Domain: "" # REQUIRED - Your domain name
+  HostedZoneId: "" # REQUIRED - Route53 hosted zone ID
+  Subdomain: api # api.{domain}
+
+# CORS configuration - allowed origins for all modes
+CORS:
+  AllowedOrigins: [] # deployment-generated
+
+# Cognito configuration
+Cognito:
+  user_pool_id: "" # deployment-generated
+  app_client_id: "" # deployment-generated
+  UserPoolDomain: "" # deployment-generated
+  UserPoolArn: "" # deployment-generated
+
+# CloudFront distribution
+CloudFront:
+  distribution_id: "" # deployment-generated
+  domain_name: "" # deployment-generated
+  portal_url: "" # deployment-generated
+
+# CloudWatch configuration
+CloudWatch:
+  MetricsIntervalSeconds: 60
+  MetricsTimeoutSeconds: 10
+  LogFlushTimeoutSeconds: 3
+  ShutdownDrainSeconds: 2
+  log_group: /aws/eidolon/server # deployment-generated
+  metrics_namespace: eidolon/metrics # deployment-generated
+  AccessPolicyArn: "" # deployment-generated
+
+# Logging configuration
 Logging:
   ApplicationName: eidolon-engine
   LogLevel: 20
-  LogGroup: /aws/eidolon/server # deployment-generated (from CloudWatch stack)
+  cloudwatch:
+    log_group: /aws/eidolon/server # deployment-generated
+    metrics_namespace: eidolon/metrics # deployment-generated
+  LogGroup: /aws/eidolon/server # deployment-generated (legacy support)
   LogStream: system
-  MetricNamespace: eidolon/metrics # deployment-generated (from CloudWatch stack)
+  MetricNamespace: eidolon/metrics # deployment-generated (legacy support)
+
+# SSH configuration
 SSH:
   Enabled: true
   PrivateKeyPath: ./server.key
@@ -63,7 +102,31 @@ SSH:
   AuthBanDurationSeconds: 900 # 15 minutes
   AuthCleanupIntervalSeconds: 300 # 5 minutes
   ConnectionAcceptTimeoutSeconds: 1
+
+# Server configuration
 Server:
   SessionCleanupIntervalSeconds: 300 # 5 minutes
   SessionIdleTimeoutSeconds: 1800 # 30 minutes
   ConsoleIdleTimeoutSeconds: 300
+
+# CodeBuild configuration
+CodeBuild:
+  PortalBuildspecPath: buildspec/portal.yml # Used for MUD mode
+  IncrementalBuildspecPath: buildspec/incremental.yml # Used for Incremental/Hybrid modes
+  ProjectName: "" # deployment-generated
+  PortalS3Bucket: "" # deployment-generated
+
+# S3 buckets (optional - will create new if not specified)
+S3:
+  PortalBucket: "" # deployment-generated
+  ScriptsBucket: "" # deployment-generated
+
+# GitHub configuration
+GitHub:
+  Owner: robinje
+  Repo: eidolon-engine
+  Branch: develop
+
+# Contact configuration
+Contact:
+  Email: contact@darkrelics.net

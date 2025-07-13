@@ -166,8 +166,8 @@ def delete_character(player_id, character_name, character_id):
                 ConditionExpression="PlayerID = :player_id",
                 ExpressionAttributeValues={":player_id": player_id},
             )
-        except ClientError as e:
-            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
                 logger.error(f"Character {character_id} does not belong to player {player_id}")
                 return False
             raise

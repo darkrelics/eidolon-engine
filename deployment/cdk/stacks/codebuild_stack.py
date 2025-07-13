@@ -20,9 +20,10 @@ class CodeBuildStack(Stack):
         cognito_user_pool_id: str,
         cognito_app_client_id: str,
         portal_bucket: IBucket,
+        lambda_bucket: IBucket,
+        api_domain: str,
         buildspec_path: str = "buildspec/portal.yml",
-        cloudfront_distribution_id: str = None,
-        lambda_bucket: IBucket = None,
+        cloudfront_distribution_id: str = "",
         **kwargs,
     ) -> None:
         """Initialize CodeBuild stack.
@@ -36,12 +37,29 @@ class CodeBuildStack(Stack):
             cognito_user_pool_id: Cognito User Pool ID
             cognito_app_client_id: Cognito App Client ID
             portal_bucket: S3 bucket for the web portal
+            lambda_bucket: S3 bucket for Lambda deployment packages
+            api_domain: API domain for the application
             buildspec_path: Path to buildspec file relative to repository root
             cloudfront_distribution_id: CloudFront distribution ID for cache invalidation
-            lambda_bucket: S3 bucket for Lambda deployment packages
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
+
+        # Validate required configuration early
+        if not github_owner:
+            raise ValueError("github_owner is required")
+        if not github_repo:
+            raise ValueError("github_repo is required")
+        if not github_branch:
+            raise ValueError("github_branch is required")
+        if not cognito_user_pool_id:
+            raise ValueError("cognito_user_pool_id is required")
+        if not cognito_app_client_id:
+            raise ValueError("cognito_app_client_id is required")
+        if not portal_bucket:
+            raise ValueError("portal_bucket is required")
+        if not api_domain:
+            raise ValueError("api_domain is required")
 
         # Use provided S3 bucket
         self.portal_bucket = portal_bucket
@@ -56,24 +74,18 @@ class CodeBuildStack(Stack):
                 owner=github_owner,
                 repo=github_repo,
                 branch_or_ref=github_branch,
-                webhook=True,
-                webhook_filters=[
-                    codebuild.FilterGroup.in_event_of(
-                        codebuild.EventAction.PUSH, codebuild.EventAction.PULL_REQUEST_MERGED
-                    ).and_branch_is(github_branch)
-                ],
+                webhook=False,
             ),
             environment=codebuild.BuildEnvironment(
-                build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.MEDIUM
+                build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
             ),
             environment_variables={
                 "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.portal_bucket.bucket_name),
                 "USER_POOL_ID": codebuild.BuildEnvironmentVariable(value=cognito_user_pool_id),
                 "CLIENT_ID": codebuild.BuildEnvironmentVariable(value=cognito_app_client_id),
+                "API_DOMAIN": codebuild.BuildEnvironmentVariable(value=api_domain),
                 "AWS_REGION": codebuild.BuildEnvironmentVariable(value=self.region),
-                "CLOUDFRONT_DISTRIBUTION_ID": codebuild.BuildEnvironmentVariable(
-                    value=cloudfront_distribution_id if cloudfront_distribution_id else ""
-                ),
+                "CLOUDFRONT_DISTRIBUTION_ID": codebuild.BuildEnvironmentVariable(value=cloudfront_distribution_id),
             },
             build_spec=codebuild.BuildSpec.from_source_filename(buildspec_path),
         )
@@ -104,6 +116,7 @@ class CodeBuildStack(Stack):
                     owner=github_owner,
                     repo=github_repo,
                     branch_or_ref=github_branch,
+                    webhook=False,
                 ),
                 environment=codebuild.BuildEnvironment(
                     build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
@@ -112,13 +125,6 @@ class CodeBuildStack(Stack):
                     "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.lambda_bucket.bucket_name),
                 },
                 build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-layer.yml"),
-                artifacts=codebuild.Artifacts.s3(
-                    bucket=self.lambda_bucket,
-                    include_build_id=False,
-                    package_zip=False,
-                    path="",
-                    name="lambda-layer.zip",
-                ),
             )
 
             # Lambda functions build project
@@ -131,6 +137,7 @@ class CodeBuildStack(Stack):
                     owner=github_owner,
                     repo=github_repo,
                     branch_or_ref=github_branch,
+                    webhook=False,
                 ),
                 environment=codebuild.BuildEnvironment(
                     build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
