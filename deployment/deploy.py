@@ -432,6 +432,7 @@ class IncrementalDeploymentOrchestrator:
 
                 # Deploy stacks serially for safety
                 phase_success = True
+                stack_results = {}  # Track individual stack results
                 for stack in stacks_to_deploy:
                     print(f"\n  Deploying {stack}...")
                     progress_reporter = CDKProgressReporter()
@@ -448,13 +449,44 @@ class IncrementalDeploymentOrchestrator:
                         break
                     else:
                         print(f"\n  [SUCCESS] {stack} deployed successfully")
+                        # Store the result including stack_changes info
+                        stack_results[stack] = result
 
-                result = {"success": phase_success}
+                result = {"success": phase_success, "stack_results": stack_results}
                 
                 # Post-deployment actions for specific phases
                 if phase_success and phase["name"] == "Distribution" and "cloudfront" in stacks_to_deploy:
                     # Update S3 bucket policy for CloudFront access
                     self._update_s3_bucket_policy_for_cloudfront(plan["parameters"])
+                
+                # Check if we need to update Lambda functions after Application Layer
+                if phase_success and phase["name"] == "Application Layer":
+                    # Check if any Lambda stack reported no changes
+                    lambda_stacks = ["lambda", "base-lambda", "cognito-trigger"]
+                    needs_lambda_update = False
+                    
+                    for stack in lambda_stacks:
+                        if stack in stack_results:
+                            stack_changes = stack_results[stack].get("stack_changes", {})
+                            # If this specific stack had no changes, we need to update
+                            if stack in stack_changes and not stack_changes[stack]:
+                                needs_lambda_update = True
+                                print(f"\n  Note: {stack} had no changes, Lambda update required")
+                                break
+                    
+                    if needs_lambda_update:
+                        # Get Lambda bucket name
+                        lambda_bucket = plan["parameters"].get("lambda_bucket_name")
+                        if not lambda_bucket:
+                            # Try to construct it
+                            game_name = plan["parameters"].get("game_name", "eidolon-engine")
+                            account_id = self.session.client("sts").get_caller_identity()["Account"]
+                            lambda_bucket = f"{game_name}-lambda-{account_id}"
+                        
+                        if lambda_bucket:
+                            self._update_lambda_functions_from_s3(lambda_bucket)
+                        else:
+                            print("  ⚠ Could not determine Lambda bucket name for updates")
 
                 if result["success"]:
                     print(f"\n[SUCCESS] Phase {i} ({phase['name']}) completed successfully!")
@@ -1279,6 +1311,68 @@ class IncrementalDeploymentOrchestrator:
 
         except Exception:
             pass  # Ignore errors in standalone resource checking
+    
+    def _update_lambda_functions_from_s3(self, lambda_bucket: str):
+        """Update all Lambda functions to use latest code from S3.
+        
+        Args:
+            lambda_bucket: S3 bucket containing Lambda deployment packages
+        """
+        print("\n  Updating Lambda functions with latest code from S3...")
+        
+        lambda_client = self.session.client("lambda")
+        s3_client = self.session.client("s3")
+        
+        # List all Lambda function ZIPs in the S3 bucket
+        try:
+            response = s3_client.list_objects_v2(Bucket=lambda_bucket)
+            if 'Contents' not in response:
+                print("    ⚠ No objects found in Lambda bucket")
+                return
+            
+            # Filter for .zip files (excluding the lambda-layer directory)
+            lambda_artifacts = [
+                obj['Key'] for obj in response['Contents'] 
+                if obj['Key'].endswith('.zip') and not obj['Key'].startswith('lambda-layer/')
+            ]
+            
+            if not lambda_artifacts:
+                print("    ⚠ No Lambda function ZIPs found in bucket")
+                return
+                
+            print(f"    Found {len(lambda_artifacts)} Lambda function(s) to update")
+            
+            updated_count = 0
+            for artifact in lambda_artifacts:
+                # Convert artifact name to function name
+                # e.g., "api_get_archetypes.zip" -> "eidolon-api-get-archetypes"
+                func_name = artifact.replace(".zip", "").replace("_", "-")
+                func_name = f"eidolon-{func_name}"
+                
+                try:
+                    # Update function code
+                    lambda_client.update_function_code(
+                        FunctionName=func_name,
+                        S3Bucket=lambda_bucket,
+                        S3Key=artifact
+                    )
+                    print(f"    ✓ Updated {func_name}")
+                    updated_count += 1
+                except ClientError as e:
+                    error_code = e.response.get("Error", {}).get("Code", "")
+                    if error_code == "ResourceNotFoundException":
+                        print(f"    ⚠ Function {func_name} not found, skipping")
+                    else:
+                        print(f"    ✗ Failed to update {func_name}: {e}")
+                except Exception as e:
+                    print(f"    ✗ Error updating {func_name}: {e}")
+            
+            print(f"    Successfully updated {updated_count} Lambda function(s)")
+            
+        except ClientError as e:
+            print(f"    ✗ Failed to list objects in bucket {lambda_bucket}: {e}")
+        except Exception as e:
+            print(f"    ✗ Unexpected error: {e}")
     
     def _update_s3_bucket_policy_for_cloudfront(self, parameters: dict):
         """Update S3 bucket policy to allow CloudFront access.

@@ -275,6 +275,7 @@ class CDKApiIntegration:
 
             # Monitor output and call progress callback
             deployed_stacks = []
+            stack_changes = {}  # Track if each stack had changes
             if process.stdout:
                 for line in iter(process.stdout.readline, ""):
                     line = line.rstrip()
@@ -293,6 +294,15 @@ class CDKApiIntegration:
                             for part in parts:
                                 if part.startswith("eidolon-") or "-stack" in part:
                                     deployed_stacks.append(part)
+                                    stack_changes[part] = True
+                        else:
+                            # Mark stacks without CREATE/UPDATE as having no changes
+                            parts = line.split()
+                            for part in parts:
+                                if part == "lambda" or part == "base-lambda" or part == "cognito-trigger":
+                                    if part not in deployed_stacks:
+                                        deployed_stacks.append(part)
+                                        stack_changes[part] = False
 
             # Wait for completion
             return_code = process.wait()
@@ -310,6 +320,7 @@ class CDKApiIntegration:
                     "success": True,
                     "message": "Deployment completed successfully",
                     "stacks_deployed": list(set(deployed_stacks)),
+                    "stack_changes": stack_changes,
                     "outputs": outputs,
                 }
             else:
