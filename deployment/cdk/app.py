@@ -686,10 +686,17 @@ class EidolonEngineApp:
 
     def create_distribution_layer(self, env: cdk.Environment, params: dict) -> None:
         """Create CloudFront distribution."""
+        # Get CloudFront configuration
+        cloudfront_config = self.config.get("CloudFront", {})
+        portal_subdomain = cloudfront_config.get("Subdomain", "")
+        
         self.cloudfront_stack = CloudFrontStack(
             self.app,
             "cloudfront",
             portal_bucket=self.s3_stack.portal_bucket,
+            domain_name=params.get("domain_name", ""),
+            portal_subdomain=portal_subdomain,
+            hosted_zone_id=params.get("hosted_zone_id", ""),
             existing_distribution_id=params.get("cloudfront_distribution_id", ""),
             env=env,
         )
@@ -868,23 +875,40 @@ class EidolonEngineApp:
 
     def load_cors_config(self, params: dict) -> None:
         """Load CORS configuration section."""
+        # Derive CORS origins from CloudFront configuration
+        allowed_origins = []
+        
+        # Add CloudFront custom domain if configured
+        cloudfront_config = self.config.get("CloudFront", {})
+        portal_subdomain = cloudfront_config.get("Subdomain", "")
+        domain_name = params.get("domain_name", "")
+        
+        if portal_subdomain and domain_name:
+            portal_origin = f"https://{portal_subdomain}.{domain_name}"
+            allowed_origins.append(portal_origin)
+            print(f"   Deriving CORS configuration from CloudFront")
+            print(f"     - Added portal origin: {portal_origin}")
+        
+        # Also add the CloudFront distribution URL if available
+        cloudfront_url = cloudfront_config.get("portal_url", "")
+        if cloudfront_url and cloudfront_url not in allowed_origins:
+            allowed_origins.append(cloudfront_url)
+            print(f"     - Added CloudFront distribution URL: {cloudfront_url}")
+        
+        # Check for legacy CORS configuration (for backward compatibility)
         cors_config = self.config.get("CORS", {})
         if cors_config:
-            print("   Loading CORS configuration")
-            # Load unified CORS origins
             if "AllowedOrigins" in cors_config:
-                params["allowed_cors_origins"] = cors_config.get("AllowedOrigins", [])
-                print(f"     - Found {len(params['allowed_cors_origins'])} allowed origins")
-            # Legacy support - merge all origin types
-            else:
-                all_origins = []
-                if "MUDOrigins" in cors_config:
-                    all_origins.extend(cors_config.get("MUDOrigins", []))
-                if "IncrementalOrigins" in cors_config:
-                    all_origins.extend(cors_config.get("IncrementalOrigins", []))
-                params["allowed_cors_origins"] = list(set(all_origins))  # Remove duplicates
-                if all_origins:
-                    print(f"     - Merged {len(params['allowed_cors_origins'])} unique origins from legacy configuration")
+                legacy_origins = cors_config.get("AllowedOrigins", [])
+                for origin in legacy_origins:
+                    if origin not in allowed_origins:
+                        allowed_origins.append(origin)
+                if legacy_origins:
+                    print(f"     - Added {len(legacy_origins)} legacy origins")
+        
+        params["allowed_cors_origins"] = allowed_origins
+        if allowed_origins:
+            print(f"     - Total allowed origins: {len(allowed_origins)}")
 
     def load_github_config(self, params: dict) -> None:
         """Load GitHub configuration section."""
