@@ -8,6 +8,7 @@ from aws_cdk import aws_cloudfront_origins as origins
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as targets
 from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_iam as iam
 from botocore.exceptions import ClientError
 from constructs import Construct
 
@@ -101,8 +102,6 @@ class CloudFrontStack(Stack):
         Returns:
             CloudFront distribution
         """
-        # S3BucketOrigin handles OAI creation and permissions automatically when used
-        
         # Configure custom domain if provided
         certificate = None
         domain_names = None
@@ -162,6 +161,9 @@ class CloudFrontStack(Stack):
             http_version=cloudfront.HttpVersion.HTTP2_AND_3,
             price_class=cloudfront.PriceClass.PRICE_CLASS_100,  # US, Canada, Europe
         )
+        
+        # Note: S3 bucket policy will be updated post-deployment
+        # CDK has issues updating existing bucket policies
         
         # Create Route53 record if custom domain is configured
         if self.domain_name and self.portal_subdomain and self.hosted_zone_id:

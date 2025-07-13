@@ -5,6 +5,7 @@ allowing for selective updates without full redeployment.
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -449,6 +450,11 @@ class IncrementalDeploymentOrchestrator:
                         print(f"\n  [SUCCESS] {stack} deployed successfully")
 
                 result = {"success": phase_success}
+                
+                # Post-deployment actions for specific phases
+                if phase_success and phase["name"] == "Distribution" and "cloudfront" in stacks_to_deploy:
+                    # Update S3 bucket policy for CloudFront access
+                    self._update_s3_bucket_policy_for_cloudfront(plan["parameters"])
 
                 if result["success"]:
                     print(f"\n[SUCCESS] Phase {i} ({phase['name']}) completed successfully!")
@@ -1273,6 +1279,159 @@ class IncrementalDeploymentOrchestrator:
 
         except Exception:
             pass  # Ignore errors in standalone resource checking
+    
+    def _update_s3_bucket_policy_for_cloudfront(self, parameters: dict):
+        """Update S3 bucket policy to allow CloudFront access.
+        
+        Args:
+            parameters: Deployment parameters containing bucket and distribution info
+        """
+        print("\n  Updating CloudFront configuration and S3 bucket policy...")
+        
+        try:
+            # Get bucket name from config
+            bucket_name = self.config_manager.config.get("Game", {}).get("PortalS3Bucket", "")
+            if not bucket_name:
+                print("    ⚠ Portal bucket not configured, skipping policy update")
+                return
+            
+            # Get distribution ID from config
+            distribution_id = self.config_manager.config.get("CloudFront", {}).get("distribution_id", "")
+            if not distribution_id:
+                print("    ⚠ CloudFront distribution ID not found, skipping policy update")
+                return
+            
+            # Get account ID
+            account_id = self.session.client("sts").get_caller_identity()["Account"]
+            
+            # Get CloudFront client
+            cf_client = self.session.client("cloudfront", region_name="us-east-1")
+            s3_client = self.session.client("s3")
+            
+            # Get current distribution configuration
+            print("    Checking CloudFront distribution configuration...")
+            dist_response = cf_client.get_distribution(Id=distribution_id)
+            dist_config = dist_response["Distribution"]["DistributionConfig"]
+            etag = dist_response["ETag"]
+            
+            # Check if OAI already exists in the distribution
+            oai_id = None
+            origin_to_update = None
+            for i, origin in enumerate(dist_config["Origins"]["Items"]):
+                if origin["DomainName"].startswith(f"{bucket_name}.s3"):
+                    origin_to_update = i
+                    oai_config = origin.get("S3OriginConfig", {})
+                    oai_value = oai_config.get("OriginAccessIdentity", "")
+                    if oai_value:
+                        # Extract OAI ID from the full path
+                        oai_id = oai_value.split("/")[-1]
+                    break
+            
+            # Track if we need to update the distribution
+            needs_distribution_update = False
+            
+            # Create OAI if it doesn't exist
+            if not oai_id:
+                print("    Creating Origin Access Identity...")
+                oai_response = cf_client.create_cloud_front_origin_access_identity(
+                    CloudFrontOriginAccessIdentityConfig={
+                        'CallerReference': f'eidolon-portal-oai-{distribution_id}',
+                        'Comment': 'OAI for Eidolon portal S3 access'
+                    }
+                )
+                oai_id = oai_response["CloudFrontOriginAccessIdentity"]["Id"]
+                print(f"    ✓ Created OAI: {oai_id}")
+                needs_distribution_update = True
+                
+            # Update distribution to use the OAI if needed
+            if needs_distribution_update and origin_to_update is not None:
+                print("    Updating CloudFront distribution to use OAI...")
+                dist_config["Origins"]["Items"][origin_to_update]["S3OriginConfig"] = {
+                    "OriginAccessIdentity": f"origin-access-identity/cloudfront/{oai_id}"
+                }
+                
+                # Update the distribution
+                try:
+                    cf_client.update_distribution(
+                        DistributionConfig=dist_config,
+                        Id=distribution_id,
+                        IfMatch=etag
+                    )
+                    print("    ✓ Updated CloudFront distribution to use OAI")
+                except Exception as e:
+                    print(f"    ⚠ Failed to update distribution: {e}")
+                    print("      Continuing with bucket policy update...")
+            else:
+                if oai_id:
+                    print(f"    ✓ Found existing OAI: {oai_id}")
+            
+            # Wait a moment for distribution update to propagate if we just updated it
+            if needs_distribution_update:
+                print("    Waiting for distribution update to propagate...")
+                import time
+                time.sleep(5)
+            
+            # Update S3 bucket policy
+            print("\n    Updating S3 bucket policy...")
+            print(f"    OAI to include in policy: {oai_id if oai_id else 'None'}")
+            
+            # Create policy statements
+            statements = []
+            
+            # Add CloudFront service principal access (modern method)
+            statements.append({
+                "Sid": "AllowCloudFrontServicePrincipal",
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "cloudfront.amazonaws.com"
+                },
+                "Action": "s3:GetObject",
+                "Resource": f"arn:aws:s3:::{bucket_name}/*",
+                "Condition": {
+                    "StringEquals": {
+                        "AWS:SourceArn": f"arn:aws:cloudfront::{account_id}:distribution/{distribution_id}"
+                    }
+                }
+            })
+            
+            # Add OAI access if OAI exists
+            if oai_id:
+                statements.append({
+                    "Sid": "AllowCloudFrontOAI",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"
+                    },
+                    "Action": "s3:GetObject",
+                    "Resource": f"arn:aws:s3:::{bucket_name}/*"
+                })
+            
+            # Create the complete policy
+            policy = {
+                "Version": "2008-10-17",
+                "Id": "PolicyForCloudFrontPrivateContent",
+                "Statement": statements
+            }
+            
+            # Apply the policy
+            s3_client.put_bucket_policy(
+                Bucket=bucket_name,
+                Policy=json.dumps(policy)
+            )
+            
+            print(f"    ✓ Updated bucket policy for {bucket_name}")
+            print(f"      - CloudFront distribution {distribution_id} now has access")
+            if oai_id:
+                print(f"      - OAI {oai_id} also has access")
+                
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "NoSuchBucket":
+                print(f"    ✗ Bucket {bucket_name} not found")
+            else:
+                print(f"    ✗ Failed to update bucket policy: {e}")
+        except Exception as e:
+            print(f"    ✗ Error updating bucket policy: {e}")
 
 
 def main():
