@@ -65,7 +65,7 @@ class CognitoTriggerStack(cdk.Stack):
             "cognito-new-player",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="cognito_new_player.lambda_handler",
-            code=lambda_.Code.from_bucket(lambda_bucket, "cognito_new_player.zip"),
+            code=lambda_.Code.from_bucket(lambda_bucket, "cognito-new-player.zip"),
             layers=[dependencies_layer],
             role=cognito_lambda_role,
             timeout=cdk.Duration.seconds(30),

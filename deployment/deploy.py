@@ -556,13 +556,13 @@ class IncrementalDeploymentOrchestrator:
         # Expected artifacts
         expected_artifacts = [
             "lambda-layer/lambda-layer.zip",  # CodeBuild artifacts path
-            "api_add_character.zip",
-            "api_delete_character.zip",
-            "api_get_archetypes.zip",
-            "api_get_character.zip",
-            "api_list_characters.zip",
-            "cognito_new_player.zip",
-            "cognito_delete_player.zip",
+            "api-add-character.zip",
+            "api-delete-character.zip",
+            "api-get-archetypes.zip",
+            "api-get-character.zip",
+            "api-list-characters.zip",
+            "cognito-new-player.zip",
+            "cognito-delete-player.zip",
         ]
 
         print("\nValidating Lambda build artifacts...")
@@ -1342,32 +1342,52 @@ class IncrementalDeploymentOrchestrator:
                 
             print(f"    Found {len(lambda_artifacts)} Lambda function(s) to update")
             
-            updated_count = 0
-            for artifact in lambda_artifacts:
-                # Convert artifact name to function name
-                # e.g., "api_get_archetypes.zip" -> "eidolon-api-get-archetypes"
-                func_name = artifact.replace(".zip", "").replace("_", "-")
-                func_name = f"eidolon-{func_name}"
+            # First, list all Lambda functions to find the actual names
+            print("    Discovering Lambda function names...")
+            try:
+                paginator = lambda_client.get_paginator('list_functions')
+                all_functions = []
+                for page in paginator.paginate():
+                    all_functions.extend(page['Functions'])
                 
-                try:
-                    # Update function code
-                    lambda_client.update_function_code(
-                        FunctionName=func_name,
-                        S3Bucket=lambda_bucket,
-                        S3Key=artifact
-                    )
-                    print(f"    ✓ Updated {func_name}")
-                    updated_count += 1
-                except ClientError as e:
-                    error_code = e.response.get("Error", {}).get("Code", "")
-                    if error_code == "ResourceNotFoundException":
-                        print(f"    ⚠ Function {func_name} not found, skipping")
-                    else:
+                # Create a mapping from artifact name to actual function name
+                function_mapping = {}
+                for artifact in lambda_artifacts:
+                    # Remove .zip extension to get function name
+                    # e.g., "api-get-archetypes.zip" -> "api-get-archetypes"
+                    expected_name = artifact.replace(".zip", "")
+                    
+                    # Check if this exact function exists
+                    for func in all_functions:
+                        if func['FunctionName'] == expected_name:
+                            function_mapping[artifact] = func['FunctionName']
+                            break
+                
+                if not function_mapping:
+                    print("    ⚠ No matching Lambda functions found")
+                    return
+                
+                # Update the functions we found
+                updated_count = 0
+                for artifact, func_name in function_mapping.items():
+                    try:
+                        # Update function code
+                        lambda_client.update_function_code(
+                            FunctionName=func_name,
+                            S3Bucket=lambda_bucket,
+                            S3Key=artifact
+                        )
+                        print(f"    ✓ Updated {func_name}")
+                        updated_count += 1
+                    except ClientError as e:
                         print(f"    ✗ Failed to update {func_name}: {e}")
-                except Exception as e:
-                    print(f"    ✗ Error updating {func_name}: {e}")
-            
-            print(f"    Successfully updated {updated_count} Lambda function(s)")
+                    except Exception as e:
+                        print(f"    ✗ Error updating {func_name}: {e}")
+                
+                print(f"    Successfully updated {updated_count} Lambda function(s)")
+                
+            except Exception as e:
+                print(f"    ✗ Error listing Lambda functions: {e}")
             
         except ClientError as e:
             print(f"    ✗ Failed to list objects in bucket {lambda_bucket}: {e}")

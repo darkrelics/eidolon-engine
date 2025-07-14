@@ -252,7 +252,7 @@ class LambdaStack(cdk.Stack):
             "api-get-archetypes",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="api_get_archetypes.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api_get_archetypes.zip"),
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-get-archetypes.zip"),
             layers=[dependencies_layer],
             role=get_archetypes_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
@@ -262,6 +262,7 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Returns available archetypes",
+            function_name="api-get-archetypes",
         )
 
         # Add Character Lambda
@@ -283,7 +284,7 @@ class LambdaStack(cdk.Stack):
             "api-add-character",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="api_add_character.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api_add_character.zip"),
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-add-character.zip"),
             layers=[dependencies_layer],
             role=add_character_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
@@ -296,6 +297,7 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Creates new character for players",
+            function_name="api-add-character",
         )
 
         # Get Character Lambda
@@ -316,7 +318,7 @@ class LambdaStack(cdk.Stack):
             "api-get-character",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="api_get_character.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api_get_character.zip"),
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-get-character.zip"),
             layers=[dependencies_layer],
             role=get_character_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
@@ -327,6 +329,7 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Gets a specific character",
+            function_name="api-get-character",
         )
 
         # List Characters Lambda
@@ -347,7 +350,7 @@ class LambdaStack(cdk.Stack):
             "api-list-characters",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="api_list_characters.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api_list_characters.zip"),
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-list-characters.zip"),
             layers=[dependencies_layer],
             role=list_characters_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
@@ -358,6 +361,7 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Lists all characters for players",
+            function_name="api-list-characters",
         )
 
         # Delete Character Lambda
@@ -388,7 +392,7 @@ class LambdaStack(cdk.Stack):
             "api-delete-character",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="api_delete_character.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api_delete_character.zip"),
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-delete-character.zip"),
             layers=[dependencies_layer],
             role=delete_character_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
@@ -400,6 +404,7 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Deletes a character for players",
+            function_name="api-delete-character",
         )
 
     def create_cognito_trigger_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
@@ -423,7 +428,7 @@ class LambdaStack(cdk.Stack):
             "cognito-new-player",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="cognito_new_player.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito_new_player.zip"),
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito-new-player.zip"),
             layers=[dependencies_layer],
             role=new_player_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
@@ -432,6 +437,7 @@ class LambdaStack(cdk.Stack):
                 "PLAYERS_TABLE": self.players_table,
             },
             description="Creates new player entry when user signs up",
+            function_name="cognito-new-player",
         )
 
         # Delete Player Trigger Lambda
@@ -462,7 +468,7 @@ class LambdaStack(cdk.Stack):
             "cognito-delete-player",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="cognito_delete_player.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito_delete_player.zip"),
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito-delete-player.zip"),
             layers=[dependencies_layer],
             role=delete_player_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
@@ -473,6 +479,7 @@ class LambdaStack(cdk.Stack):
                 "ITEMS_TABLE": self.items_table,
             },
             description="Cleans up player data when user account is deleted",
+            function_name="cognito-delete-player",
         )
 
     def configure_api_routes(self) -> None:
