@@ -67,10 +67,10 @@ class CognitoStack(Stack):
         )
 
         # Create User Pool Domain
-        # Use a safe domain prefix that doesn't depend on the user pool ID
+        # Simple domain prefix - will be unique per AWS account
         self.domain = self.user_pool.add_domain(
             "user-pool-domain",
-            cognito_domain=cognito.CognitoDomainOptions(domain_prefix=f"eidolon-{construct_id}-users"),
+            cognito_domain=cognito.CognitoDomainOptions(domain_prefix="eidolon-auth"),
         )
 
         # Output values
