@@ -299,7 +299,7 @@ class CDKApiIntegration:
                             # Mark stacks without CREATE/UPDATE as having no changes
                             parts = line.split()
                             for part in parts:
-                                if part == "lambda" or part == "base-lambda" or part == "cognito-trigger":
+                                if part == "lambda" or part == "base-lambda":
                                     if part not in deployed_stacks:
                                         deployed_stacks.append(part)
                                         stack_changes[part] = False

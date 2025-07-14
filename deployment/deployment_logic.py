@@ -428,7 +428,6 @@ def analyze_changes(cfn_client, session, params: dict) -> dict:
         "codebuild",
         "base-lambda",
         "lambda",
-        "cognito-trigger",
         "cloudfront",
     ]
 

@@ -382,7 +382,7 @@ class IncrementalDeploymentOrchestrator:
             },
             {
                 "name": "Application Layer",
-                "stacks": ["base-lambda", "lambda", "cognito-trigger"],
+                "stacks": ["base-lambda", "lambda"],
                 "description": "Lambda functions and API Gateway",
             },
             {"name": "Distribution", "stacks": ["cloudfront"], "description": "CloudFront distribution for content delivery"},
@@ -461,8 +461,11 @@ class IncrementalDeploymentOrchestrator:
                 
                 # Check if we need to update Lambda functions after Application Layer
                 if phase_success and phase["name"] == "Application Layer":
+                    # Configure Cognito triggers via boto3
+                    self._configure_cognito_triggers()
+                    
                     # Check if any Lambda stack reported no changes
-                    lambda_stacks = ["lambda", "base-lambda", "cognito-trigger"]
+                    lambda_stacks = ["lambda", "base-lambda"]
                     needs_lambda_update = False
                     
                     for stack in lambda_stacks:
@@ -884,16 +887,15 @@ class IncrementalDeploymentOrchestrator:
         print("\nUpdating server configuration...")
 
         # Get stack outputs
-        game_name = params["game_name"]
         stacks_to_query = [
-            f"{game_name}-cognito",
-            f"{game_name}-dynamodb",
-            f"{game_name}-cloudwatch",
-            f"{game_name}-s3",
-            f"{game_name}-cloudfront",
-            f"{game_name}-codebuild",
-            f"{game_name}-iam",
-            f"{game_name}-lambda",
+            "cognito",
+            "dynamodb",
+            "cloudwatch",
+            "s3",
+            "cloudfront",
+            "codebuild",
+            "iam",
+            "lambda",
         ]
 
         for stack_name in stacks_to_query:
@@ -1393,6 +1395,57 @@ class IncrementalDeploymentOrchestrator:
             print(f"    ✗ Failed to list objects in bucket {lambda_bucket}: {e}")
         except Exception as e:
             print(f"    ✗ Unexpected error: {e}")
+    
+    def _configure_cognito_triggers(self) -> None:
+        """Configure Cognito user pool Lambda triggers and email verification using boto3.
+        
+        This is done post-deployment to avoid circular dependencies in CDK.
+        """
+        print("\n  Configuring Cognito settings...")
+        
+        try:
+            cognito_client = self.session.client("cognito-idp")
+            lambda_client = self.session.client("lambda")
+            
+            # Get user pool ID from config
+            user_pool_id = self.config_manager.config.get("Cognito", {}).get("UserPoolId", "")
+            if not user_pool_id:
+                print("    ⚠ Cognito User Pool ID not found, skipping configuration")
+                return
+            
+            # Check if Lambda functions exist
+            new_player_function = "cognito-new-player"
+            delete_player_function = "cognito-delete-player"
+            
+            try:
+                # Get function ARNs
+                new_player_response = lambda_client.get_function(FunctionName=new_player_function)
+                new_player_arn = new_player_response["Configuration"]["FunctionArn"]
+                
+                delete_player_response = lambda_client.get_function(FunctionName=delete_player_function)
+                delete_player_arn = delete_player_response["Configuration"]["FunctionArn"]
+                
+                # Update user pool with triggers and email verification
+                print(f"    Setting PostConfirmation trigger to {new_player_function}...")
+                print("    Enabling email auto-verification...")
+                cognito_client.update_user_pool(
+                    UserPoolId=user_pool_id,
+                    AutoVerifiedAttributes=["email"],  # Enable email verification
+                    LambdaConfig={
+                        "PostConfirmation": new_player_arn
+                        # Could add PreSignUp, CustomMessage, etc. triggers here
+                    }
+                )
+                
+                print("    ✓ Cognito settings configured successfully")
+                
+            except lambda_client.exceptions.ResourceNotFoundException as e:
+                print(f"    ⚠ Lambda function not found: {e}")
+                print("    Triggers will need to be configured manually")
+                
+        except Exception as e:
+            print(f"    ⚠ Error configuring Cognito: {e}")
+            print("    Settings will need to be configured manually")
     
     def _update_s3_bucket_policy_for_cloudfront(self, parameters: dict):
         """Update S3 bucket policy to allow CloudFront access.

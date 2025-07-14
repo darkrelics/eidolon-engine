@@ -664,25 +664,9 @@ class EidolonEngineApp:
         if self.cognito_stack:
             self.lambda_stack.add_dependency(self.cognito_stack)
 
-        # Create Cognito trigger stack (depends on Cognito, DynamoDB, and base Lambda)
-        from stacks.cognito_trigger_stack import CognitoTriggerStack
-
-        # Get Cognito user pool ARN as string to avoid dependency
-        cognito_user_pool_arn = f"arn:aws:cognito-idp:{env.region}:{env.account}:userpool/*"
-
-        self.cognito_trigger_stack = CognitoTriggerStack(
-            self.app,
-            "cognito-trigger",
-            lambda_bucket=self.s3_stack.lambda_bucket,
-            players_table=unified_tables["Players"],
-            cognito_user_pool_arn=cognito_user_pool_arn,
-            dependencies_layer=self.base_lambda_stack.dependencies_layer,
-            allowed_cors_origins=params.get("allowed_cors_origins", []),
-            env=env,
-        )
-        # Note: We don't add cognito as a dependency to avoid circular reference
-        self.cognito_trigger_stack.add_dependency(self.dynamodb_stack)
-        self.cognito_trigger_stack.add_dependency(self.base_lambda_stack)
+        # Note: Cognito trigger functions are now created in lambda_stack to use simple names
+        # The cognito_trigger_stack is no longer needed
+        # Triggers will be connected via boto3 after deployment to avoid circular dependencies
 
     def create_distribution_layer(self, env: cdk.Environment, params: dict) -> None:
         """Create CloudFront distribution."""
