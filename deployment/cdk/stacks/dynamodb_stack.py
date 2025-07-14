@@ -18,6 +18,7 @@ class DynamoDBStack(Stack):
         game_name: str,
         table_names: dict[str, str] = {},
         execution_role_arn: str = None,
+        lambda_execution_role_arn: str = None,
         **kwargs,
     ) -> None:
         """Initialize DynamoDB stack.
@@ -28,6 +29,7 @@ class DynamoDBStack(Stack):
             game_name: Name of the game
             table_names: Optional dictionary of table type to table name mappings
             execution_role_arn: Optional ARN of IAM role to attach the DynamoDB policy to
+            lambda_execution_role_arn: Optional ARN of Lambda execution role to attach the DynamoDB policy to
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -39,6 +41,7 @@ class DynamoDBStack(Stack):
         self.game_name = game_name
         self.custom_table_names = table_names or {}
         self.execution_role_arn = execution_role_arn
+        self.lambda_execution_role_arn = lambda_execution_role_arn
 
         # Define table types upfront
         self.table_types = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story"]
@@ -216,6 +219,12 @@ class DynamoDBStack(Stack):
             # Import the role using its ARN
             execution_role = iam.Role.from_role_arn(self, "imported-execution-role", self.execution_role_arn)
             execution_role.add_managed_policy(self.access_policy)
+        
+        # Attach policy to Lambda execution role if ARN provided
+        if self.lambda_execution_role_arn:
+            # Import the Lambda role using its ARN
+            lambda_execution_role = iam.Role.from_role_arn(self, "imported-lambda-execution-role", self.lambda_execution_role_arn)
+            lambda_execution_role.add_managed_policy(self.access_policy)
 
         CfnOutput(
             self,

@@ -165,6 +165,18 @@ class IAMStack(Stack):
             roles=[self.execution_role.role_name],
         )
 
+        # Create Lambda execution role with AWS managed policy
+        self.lambda_execution_role = iam.Role(
+            self,
+            "lambda-execution-role",
+            role_name=f"{game_name}-lambda-execution-role",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            description="Execution role for Eidolon Engine Lambda functions",
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ],
+        )
+
         # Output values
         CfnOutput(
             self,
@@ -189,4 +201,11 @@ class IAMStack(Stack):
             "CloudWatchPolicyArn",
             value=self.cloudwatch_policy.managed_policy_arn,
             description="ARN of the CloudWatch access policy",
+        )
+
+        CfnOutput(
+            self,
+            "LambdaExecutionRoleArn",
+            value=self.lambda_execution_role.role_arn,
+            description="ARN of the Lambda execution role",
         )

@@ -550,6 +550,7 @@ class EidolonEngineApp:
             game_name=params.get("game_name", "eidolon-engine"),
             table_names=unified_tables,
             execution_role_arn=self.iam_stack.execution_role.role_arn,
+            lambda_execution_role_arn=self.iam_stack.lambda_execution_role.role_arn,
             env=env,
         )
         self.dynamodb_stack.add_dependency(self.iam_stack)  # DynamoDB depends on IAM
@@ -662,11 +663,13 @@ class EidolonEngineApp:
                 "hosted_zone_id": hosted_zone_id,
                 "api_subdomain": params.get("api_subdomain", "api"),
                 "allowed_cors_origins": params.get("allowed_cors_origins", []),
+                "lambda_execution_role_arn": self.iam_stack.lambda_execution_role.role_arn,
             },
             env=env,
         )
         self.lambda_stack.add_dependency(self.base_lambda_stack)
         self.lambda_stack.add_dependency(self.dynamodb_stack)
+        self.lambda_stack.add_dependency(self.iam_stack)  # Lambda needs IAM role
         if self.cognito_stack:
             self.lambda_stack.add_dependency(self.cognito_stack)
 
