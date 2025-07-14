@@ -1538,30 +1538,15 @@ class IncrementalDeploymentOrchestrator:
                 import time
                 time.sleep(5)
             
-            # Update S3 bucket policy
-            print("\n    Updating S3 bucket policy...")
-            print(f"    OAI to include in policy: {oai_id if oai_id else 'None'}")
+            # Always replace S3 bucket policy with the correct one
+            print("\n    Replacing S3 bucket policy...")
+            print(f"    Distribution ID: {distribution_id}")
+            print(f"    OAI ID: {oai_id if oai_id else 'None'}")
             
             # Create policy statements
             statements = []
             
-            # Add CloudFront service principal access (modern method)
-            statements.append({
-                "Sid": "AllowCloudFrontServicePrincipal",
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "cloudfront.amazonaws.com"
-                },
-                "Action": "s3:GetObject",
-                "Resource": f"arn:aws:s3:::{bucket_name}/*",
-                "Condition": {
-                    "StringEquals": {
-                        "AWS:SourceArn": f"arn:aws:cloudfront::{account_id}:distribution/{distribution_id}"
-                    }
-                }
-            })
-            
-            # Add OAI access if OAI exists
+            # Only add OAI access if we have an OAI
             if oai_id:
                 statements.append({
                     "Sid": "AllowCloudFrontOAI",
@@ -1572,11 +1557,12 @@ class IncrementalDeploymentOrchestrator:
                     "Action": "s3:GetObject",
                     "Resource": f"arn:aws:s3:::{bucket_name}/*"
                 })
+            else:
+                print("    ⚠ No OAI found - bucket policy may not grant proper access")
             
             # Create the complete policy
             policy = {
-                "Version": "2008-10-17",
-                "Id": "PolicyForCloudFrontPrivateContent",
+                "Version": "2012-10-17",
                 "Statement": statements
             }
             
