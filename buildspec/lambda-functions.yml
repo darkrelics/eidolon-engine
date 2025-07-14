@@ -19,7 +19,9 @@ phases:
         for func in lambda/*.py; do
           if [ -f "$func" ]; then
             func_name=$(basename "$func" .py)
-            echo "Packaging $func_name..."
+            # Convert snake_case to kebab-case for zip file name
+            zip_name=$(echo "$func_name" | sed 's/_/-/g')
+            echo "Packaging $func_name as $zip_name.zip..."
             
             # Create function-specific directory
             mkdir -p "build_temp/$func_name"
@@ -32,9 +34,9 @@ phases:
               cp -r eidolon "build_temp/$func_name/"
             fi
             
-            # Create the zip file
+            # Create the zip file with kebab-case name
             cd "build_temp/$func_name"
-            zip -r "../../lambda/$func_name.zip" .
+            zip -r "../../lambda/$zip_name.zip" .
             cd ../..
           fi
         done

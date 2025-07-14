@@ -44,7 +44,7 @@ Resources:
       Handler: api_get_archetypes.lambda_handler
       Code:
         S3Bucket: !Sub "eidolon-lambda-${AWS::AccountId}"
-        S3Key: api_get_archetypes.zip
+        S3Key: api-get-archetypes.zip
       Role: !GetAtt ArchetypesLambdaRole.Arn
       Timeout: 30
       MemorySize: 256
