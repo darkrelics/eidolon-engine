@@ -16,6 +16,7 @@ class CognitoStack(Stack):
         contact_email: str = None,
         post_confirmation_lambda_arn: str = None,
         dev_mode: bool = False,
+        portal_domain: str = None,
         **kwargs,
     ) -> None:
         """Initialize Cognito stack.
@@ -26,6 +27,7 @@ class CognitoStack(Stack):
             contact_email: Administrator contact email (optional in dev mode)
             post_confirmation_lambda_arn: Optional Lambda function ARN for post-confirmation trigger
             dev_mode: If True, disables email sending and auto-verifies users
+            portal_domain: Domain name for the portal (e.g., portal.darkrelics.net)
             **kwargs: Additional stack properties
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -59,11 +61,33 @@ class CognitoStack(Stack):
         )
 
         # Create App Client
+        # Configure OAuth settings if portal domain is provided
+        oauth_config = None
+        if portal_domain:
+            portal_url = f"https://{portal_domain}"
+            oauth_config = cognito.OAuthSettings(
+                flows=cognito.OAuthFlows(
+                    authorization_code_grant=True,
+                    implicit_code_grant=True,
+                ),
+                scopes=[
+                    cognito.OAuthScope.OPENID,
+                    cognito.OAuthScope.EMAIL,
+                    cognito.OAuthScope.PHONE,
+                    cognito.OAuthScope.PROFILE,
+                    cognito.OAuthScope.COGNITO_ADMIN,
+                ],
+                callback_urls=[portal_url],
+                logout_urls=[portal_url],
+            )
+        
         self.app_client = self.user_pool.add_client(
             "app-client",
             auth_flows=cognito.AuthFlow(user_password=True, user_srp=True),
             generate_secret=False,
             prevent_user_existence_errors=True,
+            o_auth=oauth_config,
+            supported_identity_providers=[cognito.UserPoolClientIdentityProvider.COGNITO] if oauth_config else None,
         )
 
         # Create User Pool Domain

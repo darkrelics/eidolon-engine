@@ -566,11 +566,17 @@ class EidolonEngineApp:
             self.existing_cognito_user_pool_id = params.get("existing_user_pool_id")
             self.existing_cognito_app_client_id = params.get("existing_app_client_id")
         else:
+            # Get portal domain from CloudFront configuration
+            domain_name = params.get("domain_name", "")
+            portal_subdomain = self.config.get("CloudFront", {}).get("Subdomain", "portal")
+            portal_domain = f"{portal_subdomain}.{domain_name}" if domain_name else None
+            
             self.cognito_stack = CognitoStack(
                 self.app,
                 "cognito",
                 contact_email=params.get("contact_email", "contact@darkrelics.net"),
                 dev_mode=dev_mode,
+                portal_domain=portal_domain,
                 env=env,
             )
             self.existing_cognito_user_pool_id = None
