@@ -1425,6 +1425,22 @@ class IncrementalDeploymentOrchestrator:
                 delete_player_response = lambda_client.get_function(FunctionName=delete_player_function)
                 delete_player_arn = delete_player_response["Configuration"]["FunctionArn"]
                 
+                # First, add permissions for Cognito to invoke the Lambda functions
+                print(f"    Adding permissions for Cognito to invoke Lambda functions...")
+                
+                # Add permission for PostConfirmation trigger
+                try:
+                    lambda_client.add_permission(
+                        FunctionName=new_player_function,
+                        StatementId="CognitoPostConfirmationInvoke",
+                        Action="lambda:InvokeFunction",
+                        Principal="cognito-idp.amazonaws.com",
+                        SourceArn=f"arn:aws:cognito-idp:{self.region}:{self.session.client('sts').get_caller_identity()['Account']}:userpool/{user_pool_id}"
+                    )
+                    print(f"    ✓ Added permission for {new_player_function}")
+                except lambda_client.exceptions.ResourceConflictException:
+                    print(f"    ✓ Permission already exists for {new_player_function}")
+                
                 # Update user pool with triggers and email verification
                 print(f"    Setting PostConfirmation trigger to {new_player_function}...")
                 print("    Enabling email auto-verification...")
