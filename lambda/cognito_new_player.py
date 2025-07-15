@@ -19,6 +19,7 @@ limitations under the License.
 Lambda function to create a new player record in DynamoDB after user registration.
 """
 
+import os
 from datetime import datetime, timezone
 
 import boto3
@@ -31,7 +32,8 @@ logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-player_table = dynamodb.Table("players")  # type: ignore
+players_table_name = os.environ.get("PLAYERS_TABLE", "players")
+player_table = dynamodb.Table(players_table_name)  # type: ignore
 
 
 def lambda_handler(event, context) -> dict:
@@ -65,12 +67,29 @@ def lambda_handler(event, context) -> dict:
 
         # Check if player already exists
         try:
+            logger.debug("Checking for existing player", user_id=user_uuid, table_name=players_table_name)
             response = player_table.get_item(Key={"PlayerID": user_uuid})
             if "Item" in response:
                 logger.info("Player already exists", user_id=user_uuid)
                 return event
         except ClientError as err:
-            logger.error("Error checking for existing player", error=err, user_id=user_uuid)
+            error_code = err.response.get("Error", {}).get("Code", "")
+            error_message = err.response.get("Error", {}).get("Message", "")
+            logger.error(
+                "Error checking for existing player",
+                user_id=user_uuid,
+                error_type=error_code,
+                error_message=error_message,
+                table_name=players_table_name
+            )
+            # If it's a validation error, log more details to help debug
+            if error_code == "ValidationException":
+                logger.error(
+                    "Schema mismatch detected",
+                    expected_key="PlayerID",
+                    provided_value=user_uuid,
+                    table_name=players_table_name
+                )
             return event
 
         # Create new player entry

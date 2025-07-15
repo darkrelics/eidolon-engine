@@ -71,18 +71,23 @@ class DynamoDBStack(Stack):
         """Get table configurations.
 
         Returns:
-            List of table configuration dictionaries
+            List of table configuration dictionaries with keys:
+            - name: table name
+            - pk: partition key name
+            - pk_type: partition key type (S=String, N=Number)
+            - sk: sort key name (optional)
+            - sk_type: sort key type (S=String, N=Number) (optional)
         """
         return [
-            {"name": "players", "pk": "player_id", "sk": ""},
-            {"name": "characters", "pk": "player_id", "sk": "character_id"},
-            {"name": "rooms", "pk": "room_id", "sk": ""},
-            {"name": "exits", "pk": "room_id", "sk": "exit_id"},
-            {"name": "items", "pk": "item_id", "sk": ""},
-            {"name": "prototypes", "pk": "prototype_id", "sk": ""},
-            {"name": "archetypes", "pk": "archetype_id", "sk": ""},
-            {"name": "motd", "pk": "motd_id", "sk": ""},
-            {"name": "story", "pk": "player_id", "sk": "story_id"},
+            {"name": "players", "pk": "PlayerID", "pk_type": "S", "sk": ""},
+            {"name": "characters", "pk": "CharacterID", "pk_type": "S", "sk": "PlayerID", "sk_type": "S"},
+            {"name": "rooms", "pk": "RoomID", "pk_type": "N", "sk": ""},
+            {"name": "exits", "pk": "ExitID", "pk_type": "S", "sk": ""},
+            {"name": "items", "pk": "ItemID", "pk_type": "S", "sk": ""},
+            {"name": "prototypes", "pk": "PrototypeID", "pk_type": "S", "sk": ""},
+            {"name": "archetypes", "pk": "ArchetypeName", "pk_type": "S", "sk": ""},
+            {"name": "motd", "pk": "MotdID", "pk_type": "S", "sk": ""},
+            {"name": "story", "pk": "PlayerID", "pk_type": "S", "sk": "StoryID", "sk_type": "S"},
         ]
 
     def _get_table_name(self, config_name: str) -> str:
@@ -154,8 +159,9 @@ class DynamoDBStack(Stack):
         Returns:
             The created DynamoDB table
         """
-        # Define partition key
-        partition_key = dynamodb.Attribute(name=config.get("pk", ""), type=dynamodb.AttributeType.STRING)
+        # Define partition key with correct type
+        pk_type = dynamodb.AttributeType.STRING if config.get("pk_type", "S") == "S" else dynamodb.AttributeType.NUMBER
+        partition_key = dynamodb.Attribute(name=config.get("pk", ""), type=pk_type)
 
         # Base table properties
         table_props = {
@@ -168,7 +174,8 @@ class DynamoDBStack(Stack):
         # Add sort key if specified
         sort_key_name = config.get("sk", "")
         if sort_key_name:
-            sort_key = dynamodb.Attribute(name=sort_key_name, type=dynamodb.AttributeType.STRING)
+            sk_type = dynamodb.AttributeType.STRING if config.get("sk_type", "S") == "S" else dynamodb.AttributeType.NUMBER
+            sort_key = dynamodb.Attribute(name=sort_key_name, type=sk_type)
             table_props["sort_key"] = sort_key
 
         # Use logical_id instead of table_name to maintain stable CloudFormation resource IDs
