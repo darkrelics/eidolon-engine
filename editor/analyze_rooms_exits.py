@@ -197,8 +197,8 @@ def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:
             for target, direction, exit_id in connections[room_id]:
                 target_name = rooms[target]["Title"] if target in rooms else f"Unknown({target})"
                 exit_desc = exits[exit_id].get("Description", "")
-                desc_str = f" ({exit_desc})" if exit_desc else ""
-                print(f"     - {direction}: Room {target} '{target_name}'{desc_str}")
+                description_text = f" ({exit_desc})" if exit_desc else ""
+                print(f"     - {direction}: Room {target} '{target_name}'{description_text}")
         else:
             print("   No exits")
 

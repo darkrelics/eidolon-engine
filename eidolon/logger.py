@@ -231,7 +231,7 @@ def sanitize_error(error) -> str:
     Returns:
         Sanitized error message
     """
-    error_str = str(error)
+    error_message = str(error)
 
     # List of patterns to redact
     sensitive_patterns = [
@@ -245,6 +245,6 @@ def sanitize_error(error) -> str:
     import re
 
     for pattern in sensitive_patterns:
-        error_str = re.sub(pattern, "[REDACTED]", error_str, flags=re.IGNORECASE)
+        error_message = re.sub(pattern, "[REDACTED]", error_message, flags=re.IGNORECASE)
 
-    return error_str
+    return error_message

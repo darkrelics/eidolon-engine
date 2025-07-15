@@ -20,14 +20,14 @@ def parse_json_body(event: dict) -> tuple:
         - If successful: (parsed_body, None)
         - If error: (None, error_response_dict)
     """
-    body_str = event.get("body", "")
+    body_content = event.get("body", "")
 
     # Handle empty body
-    if not body_str:
+    if not body_content:
         return {}, None
 
     try:
-        body = json.loads(body_str)
+        body = json.loads(body_content)
         if not isinstance(body, dict):
             error_response = {
                 "statusCode": 400,
