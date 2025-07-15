@@ -214,6 +214,35 @@ class LambdaStack(cdk.Stack):
         # Output values
         self.create_outputs()
 
+    def create_lambda_function(self, function_id: str, handler: str, environment: dict, 
+                               description: str, dependencies_layer) -> lambda_.Function:
+        """Create a Lambda function with standard settings.
+
+        Args:
+            function_id: CDK construct ID and function name
+            handler: Lambda handler (e.g., 'api_get_archetypes.lambda_handler')
+            environment: Environment variables
+            description: Function description
+            dependencies_layer: Lambda layer for dependencies
+
+        Returns:
+            The created Lambda function
+        """
+        return lambda_.Function(
+            self,
+            function_id,
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler=handler,
+            code=lambda_.Code.from_bucket(self.lambda_bucket, f"{function_id}.zip"),
+            layers=[dependencies_layer],
+            role=self.lambda_execution_role,
+            timeout=cdk.Duration.seconds(30),
+            memory_size=128,
+            environment=environment,
+            description=description,
+            function_name=function_id,
+        )
+
     def create_character_management_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
         """Create Lambda functions for character management.
 
@@ -221,110 +250,70 @@ class LambdaStack(cdk.Stack):
             dependencies_layer: Lambda layer
         """
         # Get Archetypes Lambda
-
-        self.get_archetypes_function = lambda_.Function(
-            self,
+        self.get_archetypes_function = self.create_lambda_function(
             "api-get-archetypes",
-            runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="api_get_archetypes.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-get-archetypes.zip"),
-            layers=[dependencies_layer],
-            role=self.lambda_execution_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=128,
-            environment={
+            "api_get_archetypes.lambda_handler",
+            {
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            description="Returns available archetypes",
-            function_name="api-get-archetypes",
+            "Returns available archetypes",
+            dependencies_layer
         )
 
         # Add Character Lambda
-
-        self.add_character_function = lambda_.Function(
-            self,
+        self.add_character_function = self.create_lambda_function(
             "api-add-character",
-            runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="api_add_character.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-add-character.zip"),
-            layers=[dependencies_layer],
-            role=self.lambda_execution_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=128,
-            environment={
+            "api_add_character.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "MAX_CHARACTERS_PER_PLAYER": "10",
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            description="Creates new character for players",
-            function_name="api-add-character",
+            "Creates new character for players",
+            dependencies_layer
         )
 
         # Get Character Lambda
-
-        self.get_character_function = lambda_.Function(
-            self,
+        self.get_character_function = self.create_lambda_function(
             "api-get-character",
-            runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="api_get_character.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-get-character.zip"),
-            layers=[dependencies_layer],
-            role=self.lambda_execution_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=128,
-            environment={
+            "api_get_character.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            description="Gets a specific character",
-            function_name="api-get-character",
+            "Gets a specific character",
+            dependencies_layer
         )
 
         # List Characters Lambda
-
-        self.list_characters_function = lambda_.Function(
-            self,
+        self.list_characters_function = self.create_lambda_function(
             "api-list-characters",
-            runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="api_list_characters.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-list-characters.zip"),
-            layers=[dependencies_layer],
-            role=self.lambda_execution_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=128,
-            environment={
+            "api_list_characters.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            description="Lists all characters for players",
-            function_name="api-list-characters",
+            "Lists all characters for players",
+            dependencies_layer
         )
 
         # Delete Character Lambda
-
-        self.delete_character_function = lambda_.Function(
-            self,
+        self.delete_character_function = self.create_lambda_function(
             "api-delete-character",
-            runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="api_delete_character.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-delete-character.zip"),
-            layers=[dependencies_layer],
-            role=self.lambda_execution_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=128,
-            environment={
+            "api_delete_character.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ITEMS_TABLE": self.items_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            description="Deletes a character for players",
-            function_name="api-delete-character",
+            "Deletes a character for players",
+            dependencies_layer
         )
 
     def create_cognito_trigger_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
@@ -334,43 +323,27 @@ class LambdaStack(cdk.Stack):
             dependencies_layer: Lambda layer
         """
         # New Player Trigger Lambda
-
-        self.cognito_new_player_function = lambda_.Function(
-            self,
+        self.cognito_new_player_function = self.create_lambda_function(
             "cognito-new-player",
-            runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="cognito_new_player.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito-new-player.zip"),
-            layers=[dependencies_layer],
-            role=self.lambda_execution_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=128,
-            environment={
+            "cognito_new_player.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
             },
-            description="Creates new player entry when user signs up",
-            function_name="cognito-new-player",
+            "Creates new player entry when user signs up",
+            dependencies_layer
         )
 
         # Delete Player Trigger Lambda
-
-        self.cognito_delete_player_function = lambda_.Function(
-            self,
+        self.cognito_delete_player_function = self.create_lambda_function(
             "cognito-delete-player",
-            runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="cognito_delete_player.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito-delete-player.zip"),
-            layers=[dependencies_layer],
-            role=self.lambda_execution_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=128,
-            environment={
+            "cognito_delete_player.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ITEMS_TABLE": self.items_table,
             },
-            description="Cleans up player data when user account is deleted",
-            function_name="cognito-delete-player",
+            "Cleans up player data when user account is deleted",
+            dependencies_layer
         )
 
     def configure_api_routes(self) -> None:

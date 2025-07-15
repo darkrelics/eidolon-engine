@@ -232,19 +232,21 @@ def validate_resources(session, params: dict) -> dict:
     # Validate S3 buckets
     try:
         validator = ResourceValidatorFactory.create_validator("s3_bucket", session)
+        
+        # Expected config for all private S3 buckets
+        expected_config = {
+            "website_enabled": False,  # No website hosting needed with CloudFront
+            "public_access_block": {
+                "block_public_acls": True,
+                "block_public_policy": True,
+                "ignore_public_acls": True,
+                "restrict_public_buckets": True,
+            },
+        }
 
         # Check portal bucket - should be PRIVATE (accessed via CloudFront)
         portal_bucket = params.get("portal_bucket_name", "")
         if portal_bucket:  # Only validate if bucket name is provided
-            expected_config = {
-                "website_enabled": False,  # No website hosting needed with CloudFront
-                "public_access_block": {
-                    "block_public_acls": True,
-                    "block_public_policy": True,
-                    "ignore_public_acls": True,
-                    "restrict_public_buckets": True,
-                },
-            }
             result = validator.validate(portal_bucket, expected_config)
             all_results[portal_bucket] = result
 

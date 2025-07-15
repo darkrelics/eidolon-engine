@@ -12,10 +12,14 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
+from aws_client_factory import AWSClientFactory
 from build_executor import BuildExecutor
 from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
+from config_updater import ConfigurationUpdater
 from deployment_logic import analyze_changes, prompt_missing_parameters
+from error_handlers import handle_client_errors
 from resource_validator import ResourceValidatorFactory, generate_drift_report
+from stack_utils import StackOutputHelper
 from state_manager import ConfigurationManager, DeploymentState
 
 
@@ -31,20 +35,22 @@ class IncrementalDeploymentOrchestrator:
             branch: GitHub branch to deploy from (overrides default)
         """
         self.profile = profile
-        self.region: str = region
+        self.region = region
         self.branch = branch
         self.config_manager = ConfigurationManager()
         self.state_manager = DeploymentState()
 
-        # Set up AWS session
-        session_args: dict = {"region_name": region}
-        if profile:
-            session_args["profile_name"] = profile
-        self.session = boto3.Session(**session_args)
-
-        # Initialize AWS clients
-        self.cfn_client = self.session.client("cloudformation")
-        self.s3_client = self.session.client("s3")
+        # Set up AWS client factory
+        self.aws_factory = AWSClientFactory(profile=profile, region=region)
+        self.session = self.aws_factory.session
+        
+        # Initialize AWS clients through factory
+        self.cfn_client = self.aws_factory.get_client("cloudformation")
+        self.s3_client = self.aws_factory.get_client("s3")
+        
+        # Initialize helper classes
+        self.stack_helper = StackOutputHelper(self.cfn_client)
+        self.config_updater = ConfigurationUpdater(self.config_manager)
 
         # CDK app directory
         self.cdk_dir = Path(__file__).parent / "cdk"
@@ -64,13 +70,16 @@ class IncrementalDeploymentOrchestrator:
         print("Checking prerequisites...")
 
         # Check AWS credentials
+        if not self.aws_factory.validate_credentials():
+            print("ERROR: Unable to access AWS. Please check your credentials.")
+            return False
+        
         try:
-            sts = self.session.client("sts")
-            identity = sts.get_caller_identity()
+            identity = self.aws_factory.get_caller_identity()
             print(f"AWS Account: {identity.get('Account', 'Unknown')}")
             print(f"AWS Region: {self.region}")
         except Exception as err:
-            print(f"ERROR: Unable to access AWS: {err}")
+            print(f"ERROR: Unable to get AWS identity: {err}")
             return False
 
         return True
@@ -245,7 +254,7 @@ class IncrementalDeploymentOrchestrator:
         """
 
         game_name = params.get("game_name", "eidolon-engine")
-        account_id = self.session.client("sts").get_caller_identity()["Account"]
+        account_id = self.aws_factory.get_account_id()
         lambda_bucket_name = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")
 
         s3_client = self.session.client("s3")
@@ -482,7 +491,7 @@ class IncrementalDeploymentOrchestrator:
                         if not lambda_bucket:
                             # Try to construct it
                             game_name = plan["parameters"].get("game_name", "eidolon-engine")
-                            account_id = self.session.client("sts").get_caller_identity()["Account"]
+                            account_id = self.aws_factory.get_account_id()
                             lambda_bucket: str = f"{game_name}-lambda-{account_id}"
 
                         if lambda_bucket:
@@ -551,7 +560,7 @@ class IncrementalDeploymentOrchestrator:
 
         s3_client = self.session.client("s3")
         game_name = params.get("game_name", "eidolon-engine")
-        account_id = self.session.client("sts").get_caller_identity()["Account"]
+        account_id = self.aws_factory.get_account_id()
         bucket_name = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")
 
         # Expected artifacts
@@ -666,17 +675,7 @@ class IncrementalDeploymentOrchestrator:
         Returns:
             Dictionary of output key-value pairs
         """
-        try:
-            response = self.cfn_client.describe_stacks(StackName=stack_name)
-            if response["Stacks"]:
-                stack = response["Stacks"][0]
-                outputs = {}
-                for output in stack.get("Outputs", []):
-                    outputs[output["OutputKey"]] = output["OutputValue"]
-                return outputs
-        except ClientError:
-            pass
-        return {}
+        return self.stack_helper.get_outputs(stack_name)
 
     def validate_configuration(self, fix_drift: bool = False) -> bool:
         """Validate config.yml against actual AWS resources.
@@ -884,7 +883,7 @@ class IncrementalDeploymentOrchestrator:
         """
         print("\nUpdating server configuration...")
 
-        # Get stack outputs
+        # Get stack outputs and update configuration
         stacks_to_query = [
             "cognito",
             "dynamodb",
@@ -898,92 +897,22 @@ class IncrementalDeploymentOrchestrator:
 
         for stack_name in stacks_to_query:
             try:
-                response = self.cfn_client.describe_stacks(StackName=stack_name)
-                stack = response.get("Stacks", [{}])[0]
-                outputs = {output.get("OutputKey"): output.get("OutputValue") for output in stack.get("Outputs", [])}
-
-                # Update config based on stack type
-                if "cognito" in stack_name:
-                    self.config_manager.update_section(
-                        "Cognito",
-                        {
-                            "UserPoolId": outputs.get("UserPoolId", ""),
-                            "UserPoolClientId": outputs.get("AppClientId", ""),
-                        },
-                    )
-                elif "dynamodb" in stack_name:
-                    # Extract table names
-                    tables = {}
-                    for key, value in outputs.items():
-                        if key.endswith("TableName"):
-                            # Convert PlayersTableName -> Players, CharactersTableName -> Characters, etc.
-                            table_type = key.replace("TableName", "")
-                            tables[table_type] = value
-                    self.config_manager.update_section(
-                        "DynamoDB", {"Tables": tables, "AccessPolicyArn": outputs.get("DynamoDBAccessPolicyArn", "")}
-                    )
-                elif "cloudwatch" in stack_name:
-                    self.config_manager.update_section(
-                        "Logging",
-                        {
-                            "LogGroup": outputs.get("LogGroupName", ""),
-                            "MetricNamespace": outputs.get("MetricsNamespace", ""),
-                        },
-                    )
-                    self.config_manager.update_section(
-                        "CloudWatch", {"AccessPolicyArn": outputs.get("CloudWatchAccessPolicyArn", "")}
-                    )
-                elif "s3" in stack_name:
-                    # Update S3 bucket names in config
-                    self.config_manager.update_section(
-                        "Game",
-                        {
-                            "ScriptsS3Bucket": outputs.get("ScriptsBucketName", ""),
-                            "ScriptsS3Prefix": "scripts",
-                        },
-                    )
-                    # Update CodeBuild with portal bucket
-                    self.config_manager.update_section(
-                        "CodeBuild",
-                        {
-                            "PortalS3Bucket": outputs.get("PortalBucketName", ""),
-                        },
-                    )
-                elif "cloudfront" in stack_name:
-                    # Update CloudFront configuration
-                    self.config_manager.update_section(
-                        "CloudFront",
-                        {
-                            "distribution_id": outputs.get("DistributionId", ""),
-                            "domain_name": outputs.get("DistributionDomainName", ""),
-                            "portal_url": outputs.get("PortalUrl", ""),
-                        },
-                    )
-                elif "codebuild" in stack_name:
-                    # Update CodeBuild configuration
-                    codebuild_config = {"ProjectName": outputs.get("CodeBuildProjectName", "")}
-                    # Add buildspec path if it was provided
-                    if "portal_buildspec_path" in params:
-                        codebuild_config["PortalBuildspecPath"] = params["portal_buildspec_path"]
-                    self.config_manager.update_section("CodeBuild", codebuild_config)
-                elif "iam" in stack_name:
-                    # Update AWS configuration with server execution role
-                    self.config_manager.update_section(
-                        "AWS",
-                        {
-                            "ServerExecutionRoleArn": outputs.get("ServerExecutionRoleArn", ""),
-                        },
-                    )
-
+                outputs = self.stack_helper.get_outputs(stack_name)
+                if outputs:
+                    self.config_updater.update_from_stack_outputs(stack_name, outputs)
             except Exception as err:
                 print(f"Warning: Could not get outputs for {stack_name}: {err}")
 
         # Update game config
-        self.config_manager.update_section("Game", {"name": params["game_name"]})
+        self.config_updater.update_game_config(params["game_name"])
+
+        # Add buildspec path if it was provided
+        if "portal_buildspec_path" in params:
+            self.config_manager.update_section("CodeBuild", {"PortalBuildspecPath": params["portal_buildspec_path"]})
 
         # Save configuration
-        self.config_manager.save_config()
-        print(f"[OK] Configuration saved to {self.config_manager.config_path}")
+        config_path = self.config_updater.save_configuration()
+        print(f"[OK] Configuration saved to {config_path}")
 
     def deploy_scripts(self, params: dict) -> bool:
         """Deploy Lua scripts to S3.
@@ -1242,51 +1171,8 @@ class IncrementalDeploymentOrchestrator:
             stack_name: Name of the stack
             outputs: Stack outputs dictionary
         """
-        # This reuses the existing logic from update_configuration
-        if "cognito" in stack_name:
-            self.config_manager.update_section(
-                "Cognito",
-                {
-                    "UserPoolId": outputs.get("UserPoolId", ""),
-                    "UserPoolClientId": outputs.get("AppClientId", ""),
-                    "UserPoolDomain": outputs.get("UserPoolDomain", ""),
-                    "UserPoolArn": outputs.get("UserPoolArn", ""),
-                },
-            )
-        elif "dynamodb" in stack_name:
-            # Extract table names
-            tables = {}
-            for key, value in outputs.items():
-                if key.endswith("TableName"):
-                    table_type = key.replace("TableName", "")
-                    tables[table_type] = value
-            if tables:
-                self.config_manager.update_section("DynamoDB", {"Tables": tables})
-        elif "s3" in stack_name:
-            self.config_manager.update_section(
-                "Game",
-                {
-                    "PortalS3Bucket": outputs.get("PortalBucketName", ""),
-                    "ScriptsS3Bucket": outputs.get("ScriptsBucketName", ""),
-                },
-            )
-        elif "cloudfront" in stack_name:
-            self.config_manager.update_section(
-                "CloudFront",
-                {
-                    "distribution_id": outputs.get("DistributionId", ""),
-                    "domain_name": outputs.get("DistributionDomainName", ""),
-                    "portal_url": outputs.get("PortalUrl", ""),
-                },
-            )
-        elif "cloudwatch" in stack_name:
-            self.config_manager.update_section(
-                "Logging",
-                {
-                    "LogGroup": outputs.get("LogGroupName", ""),
-                    "MetricNamespace": outputs.get("MetricsNamespace", ""),
-                },
-            )
+        # Use the configuration updater to handle all stack types
+        self.config_updater.update_from_stack_outputs(stack_name, outputs)
 
     def _check_standalone_resources(self) -> None:
         """Check for resources that might exist outside CloudFormation."""
@@ -1320,8 +1206,8 @@ class IncrementalDeploymentOrchestrator:
         """
         print("\n  Updating Lambda functions with latest code from S3...")
 
-        lambda_client = self.session.client("lambda")
-        s3_client = self.session.client("s3")
+        lambda_client = self.aws_factory.get_client("lambda")
+        s3_client = self.aws_factory.get_client("s3")
 
         # List all Lambda function ZIPs in the S3 bucket
         try:
@@ -1466,6 +1352,9 @@ class IncrementalDeploymentOrchestrator:
         """
         print("\n  Updating CloudFront configuration and S3 bucket policy...")
 
+        # Initialize variables outside try block
+        bucket_name = ""
+        
         try:
             # Get bucket name from config
             bucket_name = self.config_manager.config.get("Game", {}).get("PortalS3Bucket", "")
@@ -1480,7 +1369,7 @@ class IncrementalDeploymentOrchestrator:
                 return
 
             # Get account ID
-            account_id = self.session.client("sts").get_caller_identity()["Account"]
+            account_id = self.aws_factory.get_account_id()
 
             # Get CloudFront client
             cf_client = self.session.client("cloudfront", region_name="us-east-1")
