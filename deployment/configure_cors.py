@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Configure CORS origins for Eidolon Engine deployments.
 

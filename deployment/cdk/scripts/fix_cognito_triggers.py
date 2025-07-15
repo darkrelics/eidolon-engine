@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Fix Cognito triggers by granting permissions and updating User Pool configuration.
 
 This script addresses the issue where Cognito Lambda triggers are not being invoked
