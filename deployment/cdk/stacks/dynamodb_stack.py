@@ -16,9 +16,9 @@ class DynamoDBStack(Stack):
         scope: Construct,
         construct_id: str,
         game_name: str,
-        table_names = None,
-        execution_role_arn = None,
-        lambda_execution_role_arn = None,
+        table_names=None,
+        execution_role_arn=None,
+        lambda_execution_role_arn=None,
         **kwargs,
     ) -> None:
         """Initialize DynamoDB stack.
@@ -187,7 +187,7 @@ class DynamoDBStack(Stack):
 
         # Set UpdateReplacePolicy to Retain to prevent data loss during updates
         cfn_table = table.node.default_child
-        cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN # type: ignore
+        cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN  # type: ignore
 
         return table
 

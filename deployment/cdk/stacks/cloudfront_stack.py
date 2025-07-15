@@ -178,7 +178,7 @@ class CloudFrontStack(Stack):
                 "portal-dns-record",
                 zone=hosted_zone,
                 record_name=self.portal_subdomain,
-                target=route53.RecordTarget.from_alias(targets.CloudFrontTarget(distribution)), # type: ignore
+                target=route53.RecordTarget.from_alias(targets.CloudFrontTarget(distribution)),  # type: ignore
             )
 
         return distribution

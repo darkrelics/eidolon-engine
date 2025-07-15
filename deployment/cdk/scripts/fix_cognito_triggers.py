@@ -9,6 +9,7 @@ after user registration. It:
 
 import json
 import sys
+
 import boto3
 from botocore.exceptions import ClientError
 

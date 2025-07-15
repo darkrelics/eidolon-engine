@@ -38,8 +38,8 @@ dynamodb = boto3.resource("dynamodb")
 characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
 active_segments_table = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
 
-characters_table = dynamodb.Table(characters_table) # type: ignore
-active_segments_table = dynamodb.Table(active_segments_table) # type: ignore
+characters_table = dynamodb.Table(characters_table)  # type: ignore
+active_segments_table = dynamodb.Table(active_segments_table)  # type: ignore
 
 
 def decimal_to_float(obj):
@@ -73,7 +73,7 @@ def get_character_by_id(character_id, player_id):
         Character data or None if not found or not owned by player
     """
     try:
-        response = characters_table.get_item(Key={"CharacterID": character_id}) # type: ignore
+        response = characters_table.get_item(Key={"CharacterID": character_id})  # type: ignore
 
         if "Item" not in response:
             return None
@@ -103,7 +103,7 @@ def get_active_segment(player_id):
         Active segment data or None
     """
     try:
-        response = active_segments_table.get_item(Key={"PlayerID": player_id}) # type: ignore
+        response = active_segments_table.get_item(Key={"PlayerID": player_id})  # type: ignore
 
         if "Item" in response:
             return response["Item"]

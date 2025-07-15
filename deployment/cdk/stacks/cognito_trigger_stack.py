@@ -43,7 +43,7 @@ class CognitoTriggerStack(cdk.Stack):
         cognito_lambda_role = iam.Role(
             self,
             "cognito-trigger-role",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"), # type: ignore
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),  # type: ignore
             description="Execution role for Cognito trigger Lambda function",
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
@@ -67,7 +67,7 @@ class CognitoTriggerStack(cdk.Stack):
             handler="cognito_new_player.lambda_handler",
             code=lambda_.Code.from_bucket(lambda_bucket, "cognito-new-player.zip"),
             layers=[dependencies_layer],
-            role=cognito_lambda_role, # type: ignore
+            role=cognito_lambda_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
             memory_size=128,
             environment={

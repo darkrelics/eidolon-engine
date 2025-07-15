@@ -139,7 +139,7 @@ def lambda_handler(event, _) -> dict:
                 }
             ),
         }
-        return cors_handler.add_cors_headers(response, event) # type: ignore
+        return cors_handler.add_cors_headers(response, event)  # type: ignore
 
     except Exception as err:
         logger.error(f"Error in lambda_handler: {err}")

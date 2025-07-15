@@ -22,7 +22,7 @@ from state_manager import ConfigurationManager, DeploymentState
 class IncrementalDeploymentOrchestrator:
     """Orchestrates incremental infrastructure deployments."""
 
-    def __init__(self, profile=None, region: str = "us-east-1", branch = None) -> None:
+    def __init__(self, profile=None, region: str = "us-east-1", branch=None) -> None:
         """Initialize the deployment orchestrator.
 
         Args:
@@ -50,7 +50,7 @@ class IncrementalDeploymentOrchestrator:
         self.cdk_dir = Path(__file__).parent / "cdk"
 
         # Initialize CDK API integration
-        self.cdk_api = CDKApiIntegration(cdk_dir=str(self.cdk_dir), profile=profile, region=region) # type: ignore
+        self.cdk_api = CDKApiIntegration(cdk_dir=str(self.cdk_dir), profile=profile, region=region)  # type: ignore
 
         # Initialize build executor
         self.build_executor = BuildExecutor(self.session)
@@ -243,7 +243,7 @@ class IncrementalDeploymentOrchestrator:
         Args:
             params: Deployment parameters including game_name
         """
-        
+
         game_name = params.get("game_name", "eidolon-engine")
         account_id = self.session.client("sts").get_caller_identity()["Account"]
         lambda_bucket_name = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")

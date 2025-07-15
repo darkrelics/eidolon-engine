@@ -529,8 +529,8 @@ class EidolonEngineApp:
             self.app,
             "s3",
             game_name=params.get("game_name", "eidolon-engine"),
-            portal_bucket_name=params.get("portal_bucket_name"), # type: ignore
-            scripts_bucket_name=params.get("scripts_bucket_name"), # type: ignore
+            portal_bucket_name=params.get("portal_bucket_name"),  # type: ignore
+            scripts_bucket_name=params.get("scripts_bucket_name"),  # type: ignore
             env=env,
         )
 
@@ -567,7 +567,7 @@ class EidolonEngineApp:
                 "cognito",
                 contact_email=params.get("contact_email", "contact@darkrelics.net"),
                 dev_mode=dev_mode,
-                portal_domain=portal_domain, # type: ignore
+                portal_domain=portal_domain,  # type: ignore
                 env=env,
             )
             self.existing_cognito_user_pool_id = None
@@ -599,8 +599,8 @@ class EidolonEngineApp:
             github_owner=params.get("github_owner", "robinje"),
             github_repo=params.get("github_repo", "eidolon-engine"),
             github_branch=params.get("github_branch", "main"),
-            cognito_user_pool_id=( self.cognito_stack.user_pool.user_pool_id if self.cognito_stack else self.existing_cognito_user_pool_id), #type: ignore
-            cognito_app_client_id=(self.cognito_stack.app_client.user_pool_client_id if self.cognito_stack else self.existing_cognito_app_client_id), #type: ignore
+            cognito_user_pool_id=(self.cognito_stack.user_pool.user_pool_id if self.cognito_stack else self.existing_cognito_user_pool_id),  # type: ignore
+            cognito_app_client_id=(self.cognito_stack.app_client.user_pool_client_id if self.cognito_stack else self.existing_cognito_app_client_id),  # type: ignore
             portal_bucket=self.s3_stack.portal_bucket,
             lambda_bucket=self.s3_stack.lambda_bucket,
             api_domain=api_domain,

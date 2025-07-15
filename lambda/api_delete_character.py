@@ -39,9 +39,9 @@ players_table = os.environ.get("PLAYERS_TABLE", "players")
 characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
 items_table = os.environ.get("ITEMS_TABLE", "items")
 
-players_table = dynamodb.Table(players_table) # type: ignore
-characters_table = dynamodb.Table(characters_table) # type: ignore
-items_table = dynamodb.Table(items_table) # type: ignore
+players_table = dynamodb.Table(players_table)  # type: ignore
+characters_table = dynamodb.Table(characters_table)  # type: ignore
+items_table = dynamodb.Table(items_table)  # type: ignore
 
 
 def verify_character_ownership(player_id, character_name) -> tuple:
@@ -57,7 +57,7 @@ def verify_character_ownership(player_id, character_name) -> tuple:
     """
     try:
         # Get player record
-        response = players_table.get_item(Key={"PlayerID": player_id}) # type: ignore
+        response = players_table.get_item(Key={"PlayerID": player_id})  # type: ignore
 
         if "Item" not in response:
             logger.warning(f"Player not found: {player_id}")
@@ -75,7 +75,7 @@ def verify_character_ownership(player_id, character_name) -> tuple:
         character_uuid = character_info.get("UUID")
 
         # Double-check character record ownership
-        char_response = characters_table.get_item(Key={"CharacterID": character_uuid}) # type: ignore
+        char_response = characters_table.get_item(Key={"CharacterID": character_uuid})  # type: ignore
         if "Item" in char_response:
             character_data = char_response["Item"]
             if character_data.get("PlayerID") != player_id:
@@ -103,7 +103,7 @@ def delete_character_items(character_id) -> int:
 
     try:
         # Get character record to find inventory
-        char_response = characters_table.get_item(Key={"CharacterID": character_id}) # type: ignore
+        char_response = characters_table.get_item(Key={"CharacterID": character_id})  # type: ignore
 
         if "Item" not in char_response:
             return 0
@@ -114,7 +114,7 @@ def delete_character_items(character_id) -> int:
         # Delete each item
         for item_id in inventory:
             try:
-                items_table.delete_item(Key={"ItemID": item_id}) # type: ignore
+                items_table.delete_item(Key={"ItemID": item_id})  # type: ignore
                 deleted_count += 1
             except ClientError as err:
                 logger.error(f"Error deleting item {item_id}: {err}")
@@ -125,14 +125,14 @@ def delete_character_items(character_id) -> int:
 
         if left_hand_id:
             try:
-                items_table.delete_item(Key={"ItemID": left_hand_id}) # type: ignore
+                items_table.delete_item(Key={"ItemID": left_hand_id})  # type: ignore
                 deleted_count += 1
             except ClientError:
                 pass
 
         if right_hand_id:
             try:
-                items_table.delete_item(Key={"ItemID": right_hand_id}) # type: ignore
+                items_table.delete_item(Key={"ItemID": right_hand_id})  # type: ignore
                 deleted_count += 1
             except ClientError:
                 pass
@@ -163,8 +163,8 @@ def delete_character(player_id, character_name, character_id) -> bool:
 
         # Delete character from characters table
         try:
-            characters_table.delete_item( # type: ignore
-                Key={"CharacterID": character_id}, 
+            characters_table.delete_item(  # type: ignore
+                Key={"CharacterID": character_id},
                 ConditionExpression="PlayerID = :player_id",
                 ExpressionAttributeValues={":player_id": player_id},
             )
@@ -175,7 +175,7 @@ def delete_character(player_id, character_name, character_id) -> bool:
             raise
 
         # Remove character from player's character list
-        players_table.update_item( # type: ignore
+        players_table.update_item(  # type: ignore
             Key={"PlayerID": player_id},
             UpdateExpression="REMOVE CharacterList.#name",
             ExpressionAttributeNames={"#name": character_name},

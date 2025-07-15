@@ -420,7 +420,6 @@ class CDKApiIntegration:
         """
         try:
             # Use CloudFormation client to get stack outputs
-            
 
             session = boto3.Session(profile_name=self.profile if self.profile else None, region_name=self.region)
             cfn_client = session.client("cloudformation")

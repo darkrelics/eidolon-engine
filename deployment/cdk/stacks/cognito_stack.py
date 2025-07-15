@@ -14,7 +14,7 @@ class CognitoStack(Stack):
         scope: Construct,
         construct_id: str,
         contact_email: str = "",
-        post_confirmation_lambda_arn = None,
+        post_confirmation_lambda_arn=None,
         dev_mode: bool = False,
         portal_domain: str = "",
         **kwargs,

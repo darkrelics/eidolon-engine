@@ -125,7 +125,7 @@ class S3Stack(Stack):
         self,
         logical_id: str,
         bucket_name: str,
-        website_config = None,
+        website_config=None,
         public_read: bool = False,
     ) -> IBucket:
         """Get existing bucket or create a new one.

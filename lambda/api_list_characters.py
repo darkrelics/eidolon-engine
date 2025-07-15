@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 dynamodb = boto3.resource("dynamodb")
 players_table: str = os.environ.get("PLAYERS_TABLE", "players")
 
-players_table = dynamodb.Table(players_table) #type: ignore
+players_table = dynamodb.Table(players_table)  # type: ignore
 
 
 def lambda_handler(event, _):
@@ -61,7 +61,7 @@ def lambda_handler(event, _):
             }
 
         # Get player data from players table
-        response = players_table.get_item(Key={"PlayerID": player_id}) # type: ignore
+        response = players_table.get_item(Key={"PlayerID": player_id})  # type: ignore
 
         if "Item" not in response:
             return {
@@ -81,7 +81,7 @@ def lambda_handler(event, _):
         # Sort by name for consistent ordering
         characters.sort(key=lambda x: x["name"])
 
-        response:dict = {
+        response: dict = {
             "statusCode": 200,
             "headers": {
                 "Content-Type": "application/json",
