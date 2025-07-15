@@ -170,3 +170,34 @@ def internal_error_response(request_id=None) -> dict:
         details["request_id"] = request_id
 
     return error_response("Internal server error", status_code=500, details=details)
+
+
+def unauthorized_response(message: str = "Unauthorized") -> dict:
+    """
+    Create standardized 401 Unauthorized response.
+
+    Args:
+        message: Optional custom unauthorized message
+
+    Returns:
+        API Gateway response dict
+    """
+    return error_response(message, status_code=401)
+
+
+def create_response(status_code: int, body: dict) -> dict:
+    """
+    Create a generic API response with proper formatting.
+    
+    Args:
+        status_code: HTTP status code.
+        body: Response body dict.
+        
+    Returns:
+        API Gateway response dict.
+    """
+    return {
+        "statusCode": status_code,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(decimal_to_json_serializable(body))
+    }

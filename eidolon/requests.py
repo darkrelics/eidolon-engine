@@ -196,3 +196,49 @@ def validate_content_type(event: dict, expected: str = "application/json") -> bo
     expected_type = expected.split(";")[0].strip().lower()
 
     return media_type == expected_type
+
+
+def extract_player_id(event: dict) -> tuple:
+    """
+    Extract player ID from Cognito authorizer claims.
+    
+    Args:
+        event: API Gateway event with Cognito authorizer.
+        
+    Returns:
+        Tuple of (player_id, error_message).
+        - On success: (player_id, None)
+        - On failure: (None, "Unauthorized")
+    """
+    claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
+    player_id = claims.get("sub")
+    
+    if not player_id:
+        return None, "Unauthorized"
+    
+    return player_id, None
+
+
+def validate_required_fields(body: dict, required_fields: list) -> tuple:
+    """
+    Validate that all required fields are present in request body.
+    
+    Args:
+        body: Parsed request body.
+        required_fields: List of required field names.
+        
+    Returns:
+        Tuple of (is_valid, error_message).
+        - On success: (True, None)
+        - On failure: (False, error_message)
+    """
+    missing_fields = []
+    for field in required_fields:
+        value = body.get(field)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            missing_fields.append(field)
+    
+    if missing_fields:
+        return False, f"Missing required fields: {', '.join(missing_fields)}"
+    
+    return True, None

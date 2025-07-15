@@ -23,8 +23,8 @@ import os
 from datetime import datetime, timezone
 
 import boto3
-from botocore.exceptions import ClientError
 
+from eidolon.dynamo import get_item_safe, safe_put_item
 from eidolon.logger import get_logger
 
 # Configure logging
@@ -66,27 +66,19 @@ def lambda_handler(event, context) -> dict:
             return event
 
         # Check if player already exists
-        try:
-            logger.debug("Checking for existing player", user_id=user_uuid, table_name=players_table_name)
-            response = player_table.get_item(Key={"PlayerID": user_uuid})
-            if "Item" in response:
-                logger.info("Player already exists", user_id=user_uuid)
-                return event
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            error_message = err.response.get("Error", {}).get("Message", "")
-            logger.error(
-                "Error checking for existing player",
-                user_id=user_uuid,
-                error_type=error_code,
-                error_message=error_message,
-                table_name=players_table_name,
-            )
-            # If it's a validation error, log more details to help debug
-            if error_code == "ValidationException":
-                logger.error(
-                    "Schema mismatch detected", expected_key="PlayerID", provided_value=user_uuid, table_name=players_table_name
-                )
+        logger.debug("Checking for existing player", user_id=user_uuid, table_name=players_table_name)
+        success, result = get_item_safe(
+            player_table,
+            {"PlayerID": user_uuid},
+            error_context="checking for existing player"
+        )
+        
+        if success and result != "Item not found":
+            logger.info("Player already exists", user_id=user_uuid)
+            return event
+            
+        if not success:
+            logger.error("Failed to check for existing player", user_id=user_uuid, error=result)
             return event
 
         # Create new player entry
@@ -102,8 +94,10 @@ def lambda_handler(event, context) -> dict:
         }
 
         # Write to DynamoDB
-        player_table.put_item(Item=player_item)
-        logger.info("Created new player record", email=email, user_id=user_uuid)
+        if safe_put_item(player_table, player_item):
+            logger.info("Created new player record", email=email, user_id=user_uuid)
+        else:
+            logger.error("Failed to create player record", email=email, user_id=user_uuid)
 
     except Exception as err:
         logger.error("Error processing user registration", error=err)

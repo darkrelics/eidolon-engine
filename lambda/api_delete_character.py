@@ -20,18 +20,18 @@ Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.
 """
 
-import json
-import logging
 import os
 
 import boto3
-from botocore.exceptions import ClientError
 
 from eidolon.cors import cors_handler
+from eidolon.dynamo import get_item_safe, safe_delete_item, safe_update_item_with_condition
+from eidolon.logger import get_logger
+from eidolon.requests import extract_player_id, parse_json_body, validate_required_fields
+from eidolon.responses import error_response, success_response
 
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
@@ -55,38 +55,45 @@ def verify_character_ownership(player_id, character_name) -> tuple:
     Returns:
         tuple: (is_owner, character_uuid)
     """
-    try:
-        # Get player record
-        response = players_table.get_item(Key={"PlayerID": player_id})  # type: ignore
+    # Get player record
+    success, result = get_item_safe(
+        players_table,
+        {"PlayerID": player_id},
+        error_context="verifying character ownership"
+    )
 
-        if "Item" not in response:
-            logger.warning(f"Player not found: {player_id}")
-            return False, None
-
-        player_data = response["Item"]
-        character_list = player_data.get("CharacterList", {})
-
-        # Check if character exists in player's list
-        if character_name not in character_list:
-            logger.warning(f"Character {character_name} not found for player {player_id}")
-            return False, None
-
-        character_info = character_list[character_name]
-        character_uuid = character_info.get("UUID")
-
-        # Double-check character record ownership
-        char_response = characters_table.get_item(Key={"CharacterID": character_uuid})  # type: ignore
-        if "Item" in char_response:
-            character_data = char_response["Item"]
-            if character_data.get("PlayerID") != player_id:
-                logger.warning(f"Character {character_uuid} does not belong to player {player_id}")
-                return False, None
-
-        return True, character_uuid
-
-    except ClientError as err:
-        logger.error(f"Error verifying ownership: {err}")
+    if not success:
         return False, None
+
+    if result == "Item not found":
+        logger.warning("Player not found", player_id=player_id)
+        return False, None
+
+    player_data = result
+    character_list = player_data.get("CharacterList", {})
+
+    # Check if character exists in player's list
+    if character_name not in character_list:
+        logger.warning("Character not found for player", character_name=character_name, player_id=player_id)
+        return False, None
+
+    character_info = character_list[character_name]
+    character_uuid = character_info.get("UUID")
+
+    # Double-check character record ownership
+    char_success, char_result = get_item_safe(
+        characters_table,
+        {"CharacterID": character_uuid},
+        error_context="checking character ownership"
+    )
+
+    if char_success and char_result != "Item not found":
+        character_data = char_result
+        if character_data.get("PlayerID") != player_id:
+            logger.warning("Character does not belong to player", character_id=character_uuid, player_id=player_id)
+            return False, None
+
+    return True, character_uuid
 
 
 def delete_character_items(character_id) -> int:
@@ -103,44 +110,39 @@ def delete_character_items(character_id) -> int:
 
     try:
         # Get character record to find inventory
-        char_response = characters_table.get_item(Key={"CharacterID": character_id})  # type: ignore
+        success, result = get_item_safe(
+            characters_table,
+            {"CharacterID": character_id},
+            error_context="getting character inventory"
+        )
 
-        if "Item" not in char_response:
+        if not success or result == "Item not found":
             return 0
 
-        character_data = char_response["Item"]
+        character_data = result
         inventory = character_data.get("Inventory", [])
 
         # Delete each item
         for item_id in inventory:
-            try:
-                items_table.delete_item(Key={"ItemID": item_id})  # type: ignore
+            if safe_delete_item(items_table, {"ItemID": item_id}):
                 deleted_count += 1
-            except ClientError as err:
-                logger.error(f"Error deleting item {item_id}: {err}")
 
         # Also check for hand items
         left_hand_id = character_data.get("LeftHandID")
         right_hand_id = character_data.get("RightHandID")
 
         if left_hand_id:
-            try:
-                items_table.delete_item(Key={"ItemID": left_hand_id})  # type: ignore
+            if safe_delete_item(items_table, {"ItemID": left_hand_id}):
                 deleted_count += 1
-            except ClientError:
-                pass
 
         if right_hand_id:
-            try:
-                items_table.delete_item(Key={"ItemID": right_hand_id})  # type: ignore
+            if safe_delete_item(items_table, {"ItemID": right_hand_id}):
                 deleted_count += 1
-            except ClientError:
-                pass
 
         return deleted_count
 
-    except ClientError as err:
-        logger.error(f"Error getting character inventory: {err}")
+    except Exception as err:
+        logger.error("Error processing character items", error=err)
         return deleted_count
 
 
@@ -158,119 +160,100 @@ def delete_character(player_id, character_name, character_id) -> bool:
     """
     try:
         # Delete character items first
-        items_deleted: int = delete_character_items(character_id)
-        logger.info(f"Deleted {items_deleted} items for character {character_id}")
+        items_deleted = delete_character_items(character_id)
+        logger.info("Deleted items for character", items_deleted=items_deleted, character_id=character_id)
 
-        # Delete character from characters table
-        try:
-            characters_table.delete_item(  # type: ignore
-                Key={"CharacterID": character_id},
-                ConditionExpression="PlayerID = :player_id",
-                ExpressionAttributeValues={":player_id": player_id},
-            )
-        except ClientError as err:
-            if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-                logger.error(f"Character {character_id} does not belong to player {player_id}")
-                return False
-            raise
+        # Delete character from characters table with ownership check
+        if not safe_delete_item(characters_table, {"CharacterID": character_id}):
+            return False
 
         # Remove character from player's character list
-        players_table.update_item(  # type: ignore
-            Key={"PlayerID": player_id},
-            UpdateExpression="REMOVE CharacterList.#name",
-            ExpressionAttributeNames={"#name": character_name},
-            ConditionExpression="attribute_exists(CharacterList.#name)",
-            ReturnValues="ALL_NEW",
+        success, error_msg = safe_update_item_with_condition(
+            players_table,
+            {"PlayerID": player_id},
+            "REMOVE CharacterList.#name",
+            {},
+            "attribute_exists(CharacterList.#name)",
+            {"#name": character_name}
         )
 
-        logger.info(f"Deleted character {character_name} ({character_id}) for player {player_id}")
+        if not success:
+            logger.error("Failed to remove character from player list", error=error_msg)
+            return False
+
+        logger.info("Deleted character", character_name=character_name, character_id=character_id, player_id=player_id)
         return True
 
-    except ClientError as err:
-        logger.error(f"Error deleting character: {err}")
+    except Exception as err:
+        logger.error("Error deleting character", error=err)
         return False
 
 
-def lambda_handler(event, _) -> dict:
+def lambda_handler(event, context) -> dict:
     """
     Lambda handler for character deletion API.
 
     Args:
         event: API Gateway event with Cognito authorizer
-        _: Lambda context (unused)
+        context: Lambda context
 
     Returns:
         API Gateway response
     """
+    # Log Lambda invocation
+    logger.log_lambda_event(event, context)
+
     try:
         # Extract player ID from Cognito authorizer
-        claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-        player_id = claims.get("sub")
-
-        if not player_id:
-            return {
-                "statusCode": 401,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Unauthorized"}),
-            }
+        player_id, auth_error = extract_player_id(event)
+        if auth_error:
+            return auth_error
 
         # Parse request body
-        try:
-            body = json.loads(event.get("body", "{}"))
-        except json.JSONDecodeError:
-            response: dict = {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Invalid JSON"}),
-            }
-            return cors_handler.add_cors_headers(response, event)
+        body, parse_error = parse_json_body(event)
+        if parse_error:
+            return cors_handler.add_cors_headers(parse_error, event)
 
-        # Extract character name
-        character_name = body.get("characterName", "").strip()
+        # Validate required fields
+        is_valid, error_msg = validate_required_fields(body, ["characterName"])
+        if not is_valid:
+            return cors_handler.add_cors_headers(
+                error_response(error_msg),
+                event
+            )
 
-        if not character_name:
-            response = {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Missing character name"}),
-            }
-            return cors_handler.add_cors_headers(response, event)
+        character_name = body["characterName"].strip()
 
         # Verify ownership
         is_owner, character_id = verify_character_ownership(player_id, character_name)
 
         if not is_owner:
-            response = {
-                "statusCode": 403,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Character not found or access denied"}),
-            }
-            return cors_handler.add_cors_headers(response, event)
+            return cors_handler.add_cors_headers(
+                error_response("Character not found or access denied", status_code=403),
+                event
+            )
 
         # Delete the character
         if not delete_character(player_id, character_name, character_id):
-            response = {
-                "statusCode": 500,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Failed to delete character"}),
-            }
-            return cors_handler.add_cors_headers(response, event)
+            return cors_handler.add_cors_headers(
+                error_response("Failed to delete character", status_code=500),
+                event
+            )
 
         # Return success response
-        response = {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-            },
-            "body": json.dumps({"message": "Character deleted successfully", "characterName": character_name}),
-        }
-        return cors_handler.add_cors_headers(response, event)
+        logger.log_response(200)
+        return cors_handler.add_cors_headers(
+            success_response({
+                "message": "Character deleted successfully",
+                "characterName": character_name
+            }),
+            event
+        )
 
     except Exception as err:
-        logger.error(f"Unexpected error: {err}")
-        response = {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Internal server error"}),
-        }
-        return cors_handler.add_cors_headers(response, event)
+        logger.error("Unexpected error in lambda_handler", error=err)
+        logger.log_response(500)
+        return cors_handler.add_cors_headers(
+            error_response("Internal server error", status_code=500),
+            event
+        )
