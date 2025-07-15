@@ -77,7 +77,7 @@ def lambda_handler(event, context) -> dict:
             logger.info("Player already exists", user_id=user_uuid)
             return event
             
-        if not success:
+        if not success and result != "Item not found":
             logger.error("Failed to check for existing player", user_id=user_uuid, error=result)
             return event
 

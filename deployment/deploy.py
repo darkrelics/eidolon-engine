@@ -10,14 +10,12 @@ import os
 import sys
 from pathlib import Path
 
-import boto3
 from botocore.exceptions import ClientError
 from aws_client_factory import AWSClientFactory
 from build_executor import BuildExecutor
 from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
 from config_updater import ConfigurationUpdater
 from deployment_logic import analyze_changes, prompt_missing_parameters
-from error_handlers import handle_client_errors
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from stack_utils import StackOutputHelper
 from state_manager import ConfigurationManager, DeploymentState
@@ -1296,15 +1294,15 @@ class IncrementalDeploymentOrchestrator:
 
             # Check if Lambda functions exist
             new_player_function = "cognito-new-player"
-            delete_player_function = "cognito-delete-player"
+            # delete_player_function = "cognito-delete-player"
 
             try:
                 # Get function ARNs
                 new_player_response = lambda_client.get_function(FunctionName=new_player_function)
                 new_player_arn = new_player_response["Configuration"]["FunctionArn"]
 
-                delete_player_response = lambda_client.get_function(FunctionName=delete_player_function)
-                delete_player_arn = delete_player_response["Configuration"]["FunctionArn"]
+                # delete_player_response = lambda_client.get_function(FunctionName=delete_player_function)
+                # delete_player_arn = delete_player_response["Configuration"]["FunctionArn"]
 
                 # First, add permissions for Cognito to invoke the Lambda functions
                 print("    Adding permissions for Cognito to invoke Lambda functions...")
@@ -1369,7 +1367,7 @@ class IncrementalDeploymentOrchestrator:
                 return
 
             # Get account ID
-            account_id = self.aws_factory.get_account_id()
+            # account_id = self.aws_factory.get_account_id()
 
             # Get CloudFront client
             cf_client = self.session.client("cloudfront", region_name="us-east-1")
