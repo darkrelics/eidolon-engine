@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 dynamodb = boto3.resource("dynamodb")
 
 # Table name configuration from environment variables with defaults
-TABLES_CONFIG = {
+TABLES_CONFIG: dict = {
     "players": os.environ.get("PLAYERS_TABLE", "players"),
     "characters": os.environ.get("CHARACTERS_TABLE", "characters"),
     "active_segments": os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments"),
@@ -45,7 +45,7 @@ TABLES_CONFIG = {
 }
 
 
-def delete_player_record(player_id):
+def delete_player_record(player_id: str) -> bool:
     """
     Delete player record from players table.
 
@@ -68,7 +68,7 @@ def delete_player_record(player_id):
         return False
 
 
-def delete_all_characters(player_id):
+def delete_all_characters(player_id: str) -> int:
     """
     Delete all characters (both MUD and Incremental) owned by the player.
 
@@ -125,7 +125,7 @@ def delete_all_characters(player_id):
 # Note: Incremental characters are now handled by delete_all_characters since they share the same table
 
 
-def delete_active_segments(player_id):
+def delete_active_segments(player_id: str) -> bool:
     """
     Delete any active game segments for the player.
 
@@ -148,7 +148,7 @@ def delete_active_segments(player_id):
         return False
 
 
-def delete_character_history(player_id):
+def delete_character_history(player_id: str) -> int:
     """
     Delete all character history records for the player.
 
@@ -199,7 +199,7 @@ def delete_character_history(player_id):
         return deleted_count
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, _):
     """
     Lambda handler for complete player data deletion.
 
@@ -210,7 +210,7 @@ def lambda_handler(event, context):
 
     Args:
         event: Lambda event
-        context: Lambda context
+        _: Lambda context
 
     Returns:
         Response with deletion summary
@@ -241,7 +241,7 @@ def lambda_handler(event, context):
         logger.info(f"Starting deletion process for player {player_id}")
 
         # Track deletion results
-        results = {
+        results: dict = {
             "player_id": player_id,
             "timestamp": datetime.utcnow().isoformat(),
             "deletions": {

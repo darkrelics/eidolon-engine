@@ -24,7 +24,7 @@ class CloudWatchStack(Stack):
             raise ValueError("retention_days must be at least 1")
 
         # Map retention days to valid enum values
-        retention_mapping = {
+        retention_mapping: dict = {
             1: logs.RetentionDays.ONE_DAY,
             3: logs.RetentionDays.THREE_DAYS,
             5: logs.RetentionDays.FIVE_DAYS,

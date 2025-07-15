@@ -43,9 +43,9 @@ players_table = os.environ.get("PLAYERS_TABLE", "players")
 characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
 ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
 
-players_table = dynamodb.Table(players_table)
-characters_table = dynamodb.Table(characters_table)
-archetypes_table = dynamodb.Table(ARCHETYPES_TABLE)
+players_table = dynamodb.Table(players_table) # type: ignore
+characters_table = dynamodb.Table(characters_table) # type: ignore
+archetypes_table = dynamodb.Table(ARCHETYPES_TABLE) # type: ignore
 
 # Character name validation regex (same as server)
 NAME_PATTERN = re.compile(r"^[a-zA-Z'-]+$")
@@ -53,7 +53,7 @@ MIN_NAME_LENGTH = 4
 MAX_NAME_LENGTH = 20
 
 
-def validate_character_name(name):
+def validate_character_name(name) -> tuple:
     """
     Validate character name according to game rules.
 
@@ -94,14 +94,14 @@ def validate_character_name(name):
         return False, "Short names cannot contain special characters"
 
     # Ensure reasonable letter-to-special-character ratio
-    letter_count = sum(1 for c in name if c.isalpha())
+    letter_count: int = sum(1 for c in name if c.isalpha())
     if letter_count / len(name) < 0.5:
         return False, "Name must be primarily letters"
 
     return True, None
 
 
-def generate_character_id():
+def generate_character_id() -> str:
     """Generate a UUID v4 for the character ID."""
     return str(uuid.uuid4())
 
@@ -137,7 +137,7 @@ def get_archetype(archetype_name):
         return None
 
 
-def check_character_limit(player_id):
+def check_character_limit(player_id) -> tuple:
     """
     Check if player has reached character limit.
 
@@ -151,7 +151,7 @@ def check_character_limit(player_id):
 
     try:
         # Get player record
-        response = players_table.get_item(Key={"PlayerID": player_id})
+        response = players_table.get_item(Key={"PlayerID": player_id}) # type: ignore
 
         if "Item" not in response:
             logger.error("Player not found", player_id=player_id)
@@ -159,7 +159,7 @@ def check_character_limit(player_id):
 
         player = response["Item"]
         character_list = player.get("CharacterList", {})
-        current_count = len(character_list)
+        current_count: int = len(character_list)
 
         return current_count < max_characters, current_count
 
@@ -195,7 +195,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         return obj
 
     # Build character record
-    character_item = {
+    character_item: dict = {
         "CharacterID": character_id,
         "PlayerID": player_id,
         "CharacterName": character_name,
@@ -209,7 +209,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "Wounds": [],
         "RoomID": 0,  # Always room 0 for incremental
         "Inventory": {},  # Use MUD inventory structure (slot -> itemID)
-        "Resources": {"gold": 0, "supplies": 10, "reputation": 0},
+        "Resources": {},
         "Progress": {},  # Track story progress flags and achievements
         "StoryState": {  # Track current position in stories
             "currentStoryId": None,
@@ -227,9 +227,9 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
 
     try:
         # Update player's character list
-        character_info = {"UUID": character_id, "Dead": False, "GameMode": "Incremental"}
+        character_info: dict = {"UUID": character_id, "Dead": False, "GameMode": "Incremental"}
 
-        players_table.update_item(
+        players_table.update_item( # type: ignore
             Key={"PlayerID": player_id},
             UpdateExpression="SET CharacterList.#name = :info, UpdatedAt = :timestamp",
             ExpressionAttributeNames={"#name": character_name},
@@ -237,7 +237,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         )
 
         # Create character record
-        characters_table.put_item(Item=character_item)
+        characters_table.put_item(Item=character_item) # type: ignore
 
         logger.info("Created incremental character", character_name=character_name, character_id=character_id, player_id=player_id)
         return character_id
@@ -246,7 +246,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         logger.error("Error creating character", error=err, character_name=character_name, player_id=player_id)
         # Attempt to rollback player update
         try:
-            players_table.update_item(
+            players_table.update_item( # type: ignore
                 Key={"PlayerID": player_id},
                 UpdateExpression="REMOVE CharacterList.#name",
                 ExpressionAttributeNames={"#name": character_name},

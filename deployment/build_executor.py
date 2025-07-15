@@ -9,7 +9,7 @@ from botocore.exceptions import ClientError
 class BuildExecutor:
     """Manages CodeBuild project execution and monitoring."""
 
-    def __init__(self, session: boto3.Session):
+    def __init__(self, session: boto3.Session) -> None:
         """Initialize build executor with AWS session.
 
         Args:
@@ -31,13 +31,13 @@ class BuildExecutor:
             print(f"\nStarting build for project: {project_name}")
             response = self.codebuild_client.start_build(projectName=project_name)
             build_id = response["build"]["id"]
-            print(f"✓ Build started successfully: {build_id}")
+            print(f"Build started successfully: {build_id}")
             return build_id
-        except ClientError as e:
-            print(f"✗ Failed to start build for {project_name}: {e}")
+        except ClientError as err:
+            print(f"Failed to start build for {project_name}: {err}")
             return None
 
-    def get_build_status(self, build_id: str) -> dict[str, str]:
+    def get_build_status(self, build_id: str) -> dict:
         """Get current status of a build.
 
         Args:
@@ -56,8 +56,8 @@ class BuildExecutor:
                     "phase_status": build.get("phases", [{}])[-1].get("phaseStatus", "") if build.get("phases") else "",
                 }
             return {"status": "NOT_FOUND", "phase": "", "phase_status": ""}
-        except ClientError as e:
-            print(f"Error getting build status: {e}")
+        except ClientError as err:
+            print(f"Error getting build status: {err}")
             return {"status": "ERROR", "phase": "", "phase_status": ""}
 
     def wait_for_build(self, build_id: str, timeout_minutes: int = 30) -> bool:
@@ -70,7 +70,7 @@ class BuildExecutor:
         Returns:
             True if build succeeded, False otherwise
         """
-        start_time = time.time()
+        start_time: float = time.time()
         timeout_seconds = timeout_minutes * 60
         last_phase = ""
 
@@ -78,7 +78,7 @@ class BuildExecutor:
         print(f"Timeout: {timeout_minutes} minutes")
 
         while True:
-            status_info = self.get_build_status(build_id)
+            status_info: dict = self.get_build_status(build_id)
             status = status_info["status"]
             phase = status_info["phase"]
 
@@ -89,23 +89,23 @@ class BuildExecutor:
 
             # Check terminal states
             if status == "SUCCEEDED":
-                print("✓ Build completed successfully!")
+                print("Build completed successfully!")
                 return True
             elif status in ["FAILED", "FAULT", "TIMED_OUT", "STOPPED"]:
-                print(f"✗ Build failed with status: {status}")
+                print(f"Build failed with status: {status}")
                 self._print_build_logs(build_id)
                 return False
 
             # Check timeout
             elapsed = time.time() - start_time
             if elapsed > timeout_seconds:
-                print(f"✗ Build timed out after {timeout_minutes} minutes")
+                print(f"Build timed out after {timeout_minutes} minutes")
                 return False
 
             # Wait before next check
             time.sleep(10)
 
-    def _print_build_logs(self, build_id: str, tail_lines: int = 50):
+    def _print_build_logs(self, build_id: str, tail_lines: int = 50) -> None:
         """Print the last N lines of build logs for debugging.
 
         Args:
@@ -143,15 +143,15 @@ class BuildExecutor:
                 for event in events[-tail_lines:]:
                     print(event["message"].rstrip())
 
-            except ClientError as e:
-                print(f"Could not retrieve logs: {e}")
+            except ClientError as err:
+                print(f"Could not retrieve logs: {err}")
 
             print("-" * 60)
 
-        except Exception as e:
-            print(f"Error printing build logs: {e}")
+        except Exception as err:
+            print(f"Error printing build logs: {err}")
 
-    def execute_builds(self, project_names: list[str], parallel: bool = True, timeout_minutes: int = 30) -> bool:
+    def execute_builds(self, project_names: list, parallel: bool = True, timeout_minutes: int = 30) -> bool:
         """Execute multiple CodeBuild projects.
 
         Args:
@@ -187,7 +187,7 @@ class BuildExecutor:
             True if all builds succeeded
         """
         # Start all builds
-        builds = {}
+        builds: dict = {}
         for project_name in project_names:
             build_id = self.start_build(project_name)
             if build_id:
@@ -197,10 +197,10 @@ class BuildExecutor:
                 return False
 
         # Monitor all builds
-        start_time = time.time()
-        timeout_seconds = timeout_minutes * 60
-        completed = set()
-        failed = set()
+        start_time: float = time.time()
+        timeout_seconds: int = timeout_minutes * 60
+        completed: set = set()
+        failed: set = set()
 
         print(f"\nMonitoring {len(builds)} parallel builds...")
 
@@ -209,20 +209,20 @@ class BuildExecutor:
                 if project_name in completed or project_name in failed:
                     continue
 
-                status_info = self.get_build_status(build_id)
+                status_info: dict = self.get_build_status(build_id)
                 status = status_info["status"]
 
                 if status == "SUCCEEDED":
-                    print(f"✓ {project_name}: Build completed successfully")
+                    print(f"{project_name}: Build completed successfully")
                     completed.add(project_name)
                 elif status in ["FAILED", "FAULT", "TIMED_OUT", "STOPPED"]:
-                    print(f"✗ {project_name}: Build failed with status: {status}")
+                    print(f"{project_name}: Build failed with status: {status}")
                     self._print_build_logs(build_id)
                     failed.add(project_name)
 
             # Check overall timeout
             if time.time() - start_time > timeout_seconds:
-                print(f"\n✗ Build execution timed out after {timeout_minutes} minutes")
+                print(f"\nBuild execution timed out after {timeout_minutes} minutes")
                 return False
 
             if len(completed) + len(failed) < len(builds):
@@ -237,7 +237,7 @@ class BuildExecutor:
 
         return len(failed) == 0
 
-    def _execute_sequential_builds(self, project_names: list[str], timeout_minutes: int) -> bool:
+    def _execute_sequential_builds(self, project_names: list, timeout_minutes: int) -> bool:
         """Execute builds sequentially.
 
         Args:
@@ -255,8 +255,8 @@ class BuildExecutor:
                 return False
 
             if not self.wait_for_build(build_id, timeout_minutes):
-                print("✗ Build failed, aborting remaining builds")
+                print("Build failed, aborting remaining builds")
                 return False
 
-        print(f"\n✓ All {len(project_names)} builds completed successfully")
+        print(f"\nAll {len(project_names)} builds completed successfully")
         return True

@@ -16,9 +16,9 @@ class DynamoDBStack(Stack):
         scope: Construct,
         construct_id: str,
         game_name: str,
-        table_names: dict[str, str] = {},
-        execution_role_arn: str = None,
-        lambda_execution_role_arn: str = None,
+        table_names = None,
+        execution_role_arn = None,
+        lambda_execution_role_arn = None,
         **kwargs,
     ) -> None:
         """Initialize DynamoDB stack.
@@ -32,26 +32,30 @@ class DynamoDBStack(Stack):
             lambda_execution_role_arn: Optional ARN of Lambda execution role to attach the DynamoDB policy to
             **kwargs: Additional stack properties
         """
+
+        if table_names is None:
+            table_names = {}
+
         super().__init__(scope, construct_id, **kwargs)
 
         # Validate required parameters early
         if not game_name:
             raise ValueError("game_name is required")
 
-        self.game_name = game_name
+        self.game_name: str = game_name
         self.custom_table_names = table_names or {}
         self.execution_role_arn = execution_role_arn
         self.lambda_execution_role_arn = lambda_execution_role_arn
 
         # Define table types upfront
-        self.table_types = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story"]
+        self.table_types: list = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story"]
 
         # Initialize existing tables from context
-        self.existing_tables: dict[str, str] = {}
+        self.existing_tables: dict = {}
         self._load_existing_tables_from_context()
 
         # Initialize tables dictionary - using ITable to support both created and imported tables
-        self.tables: dict[str, dynamodb.ITable] = {}
+        self.tables: dict = {}
 
         # Create or import tables
         self._create_or_import_tables()
@@ -62,7 +66,7 @@ class DynamoDBStack(Stack):
     def _load_existing_tables_from_context(self) -> None:
         """Load existing table names from CDK context."""
         for table_type in self.table_types:
-            context_key = f"dynamodb_{table_type}_table"
+            context_key: str = f"dynamodb_{table_type}_table"
             existing_table_name = self.node.try_get_context(context_key)
             if existing_table_name:
                 self.existing_tables[table_type] = existing_table_name
@@ -100,7 +104,7 @@ class DynamoDBStack(Stack):
             The resolved table name
         """
         # Check custom table names (try both capitalized and lowercase)
-        capitalized_name = config_name.capitalize()
+        capitalized_name: str = config_name.capitalize()
 
         if capitalized_name in self.custom_table_names:
             return self.custom_table_names[capitalized_name]
@@ -111,10 +115,10 @@ class DynamoDBStack(Stack):
 
     def _create_or_import_tables(self) -> None:
         """Create new tables or import existing ones."""
-        table_configs = self._get_table_configs()
+        table_configs: list = self._get_table_configs()
 
         for config in table_configs:
-            table_name = self._get_table_name(config.get("name", ""))
+            table_name: str = self._get_table_name(config.get("name", ""))
             config_name = config.get("name", "")
 
             # Validate required config fields
@@ -148,7 +152,7 @@ class DynamoDBStack(Stack):
                 description=f"DynamoDB table name for {config_name}",
             )
 
-    def _create_table(self, table_name: str, config: dict[str, str], logical_id: str) -> dynamodb.Table:
+    def _create_table(self, table_name: str, config: dict, logical_id: str) -> dynamodb.Table:
         """Create a new DynamoDB table.
 
         Args:
@@ -164,7 +168,7 @@ class DynamoDBStack(Stack):
         partition_key = dynamodb.Attribute(name=config.get("pk", ""), type=pk_type)
 
         # Base table properties
-        table_props = {
+        table_props: dict = {
             "table_name": table_name,
             "partition_key": partition_key,
             "billing_mode": dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -183,7 +187,7 @@ class DynamoDBStack(Stack):
 
         # Set UpdateReplacePolicy to Retain to prevent data loss during updates
         cfn_table = table.node.default_child
-        cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN
+        cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN # type: ignore
 
         return table
 
@@ -226,7 +230,7 @@ class DynamoDBStack(Stack):
             # Import the role using its ARN
             execution_role = iam.Role.from_role_arn(self, "imported-execution-role", self.execution_role_arn)
             execution_role.add_managed_policy(self.access_policy)
-        
+
         # Attach policy to Lambda execution role if ARN provided
         if self.lambda_execution_role_arn:
             # Import the Lambda role using its ARN

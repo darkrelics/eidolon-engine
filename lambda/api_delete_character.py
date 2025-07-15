@@ -39,12 +39,12 @@ players_table = os.environ.get("PLAYERS_TABLE", "players")
 characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
 items_table = os.environ.get("ITEMS_TABLE", "items")
 
-players_table = dynamodb.Table(players_table)
-characters_table = dynamodb.Table(characters_table)
-items_table = dynamodb.Table(items_table)
+players_table = dynamodb.Table(players_table) # type: ignore
+characters_table = dynamodb.Table(characters_table) # type: ignore
+items_table = dynamodb.Table(items_table) # type: ignore
 
 
-def verify_character_ownership(player_id, character_name):
+def verify_character_ownership(player_id, character_name) -> tuple:
     """
     Verify that a character belongs to the specified player.
 
@@ -57,7 +57,7 @@ def verify_character_ownership(player_id, character_name):
     """
     try:
         # Get player record
-        response = players_table.get_item(Key={"PlayerID": player_id})
+        response = players_table.get_item(Key={"PlayerID": player_id}) # type: ignore
 
         if "Item" not in response:
             logger.warning(f"Player not found: {player_id}")
@@ -75,7 +75,7 @@ def verify_character_ownership(player_id, character_name):
         character_uuid = character_info.get("UUID")
 
         # Double-check character record ownership
-        char_response = characters_table.get_item(Key={"CharacterID": character_uuid})
+        char_response = characters_table.get_item(Key={"CharacterID": character_uuid}) # type: ignore
         if "Item" in char_response:
             character_data = char_response["Item"]
             if character_data.get("PlayerID") != player_id:
@@ -89,7 +89,7 @@ def verify_character_ownership(player_id, character_name):
         return False, None
 
 
-def delete_character_items(character_id):
+def delete_character_items(character_id) -> int:
     """
     Delete all items belonging to a character.
 
@@ -103,7 +103,7 @@ def delete_character_items(character_id):
 
     try:
         # Get character record to find inventory
-        char_response = characters_table.get_item(Key={"CharacterID": character_id})
+        char_response = characters_table.get_item(Key={"CharacterID": character_id}) # type: ignore
 
         if "Item" not in char_response:
             return 0
@@ -114,7 +114,7 @@ def delete_character_items(character_id):
         # Delete each item
         for item_id in inventory:
             try:
-                items_table.delete_item(Key={"ItemID": item_id})
+                items_table.delete_item(Key={"ItemID": item_id}) # type: ignore
                 deleted_count += 1
             except ClientError as err:
                 logger.error(f"Error deleting item {item_id}: {err}")
@@ -125,14 +125,14 @@ def delete_character_items(character_id):
 
         if left_hand_id:
             try:
-                items_table.delete_item(Key={"ItemID": left_hand_id})
+                items_table.delete_item(Key={"ItemID": left_hand_id}) # type: ignore
                 deleted_count += 1
             except ClientError:
                 pass
 
         if right_hand_id:
             try:
-                items_table.delete_item(Key={"ItemID": right_hand_id})
+                items_table.delete_item(Key={"ItemID": right_hand_id}) # type: ignore
                 deleted_count += 1
             except ClientError:
                 pass
@@ -144,7 +144,7 @@ def delete_character_items(character_id):
         return deleted_count
 
 
-def delete_character(player_id, character_name, character_id):
+def delete_character(player_id, character_name, character_id) -> bool:
     """
     Delete a character from the database.
 
@@ -158,13 +158,13 @@ def delete_character(player_id, character_name, character_id):
     """
     try:
         # Delete character items first
-        items_deleted = delete_character_items(character_id)
+        items_deleted: int = delete_character_items(character_id)
         logger.info(f"Deleted {items_deleted} items for character {character_id}")
 
         # Delete character from characters table
         try:
-            characters_table.delete_item(
-                Key={"CharacterID": character_id},
+            characters_table.delete_item( # type: ignore
+                Key={"CharacterID": character_id}, 
                 ConditionExpression="PlayerID = :player_id",
                 ExpressionAttributeValues={":player_id": player_id},
             )
@@ -175,7 +175,7 @@ def delete_character(player_id, character_name, character_id):
             raise
 
         # Remove character from player's character list
-        players_table.update_item(
+        players_table.update_item( # type: ignore
             Key={"PlayerID": player_id},
             UpdateExpression="REMOVE CharacterList.#name",
             ExpressionAttributeNames={"#name": character_name},
@@ -191,7 +191,7 @@ def delete_character(player_id, character_name, character_id):
         return False
 
 
-def lambda_handler(event, _):
+def lambda_handler(event, _) -> dict:
     """
     Lambda handler for character deletion API.
 
@@ -218,7 +218,7 @@ def lambda_handler(event, _):
         try:
             body = json.loads(event.get("body", "{}"))
         except json.JSONDecodeError:
-            response = {
+            response: dict = {
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Invalid JSON"}),

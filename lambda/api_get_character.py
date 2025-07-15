@@ -38,8 +38,8 @@ dynamodb = boto3.resource("dynamodb")
 characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
 active_segments_table = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
 
-characters_table = dynamodb.Table(characters_table)
-active_segments_table = dynamodb.Table(active_segments_table)
+characters_table = dynamodb.Table(characters_table) # type: ignore
+active_segments_table = dynamodb.Table(active_segments_table) # type: ignore
 
 
 def decimal_to_float(obj):
@@ -73,7 +73,7 @@ def get_character_by_id(character_id, player_id):
         Character data or None if not found or not owned by player
     """
     try:
-        response = characters_table.get_item(Key={"CharacterID": character_id})
+        response = characters_table.get_item(Key={"CharacterID": character_id}) # type: ignore
 
         if "Item" not in response:
             return None
@@ -103,7 +103,7 @@ def get_active_segment(player_id):
         Active segment data or None
     """
     try:
-        response = active_segments_table.get_item(Key={"PlayerID": player_id})
+        response = active_segments_table.get_item(Key={"PlayerID": player_id}) # type: ignore
 
         if "Item" in response:
             return response["Item"]
@@ -115,7 +115,7 @@ def get_active_segment(player_id):
         return None
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, context) -> dict:
     """
     Lambda handler for getting incremental character data.
 
@@ -178,7 +178,7 @@ def lambda_handler(event, context):
         active_segment = get_active_segment(player_id)
 
         # Prepare response data
-        response_data = {
+        response_data: dict = {
             "character": decimal_to_float(character),
             "activeSegment": decimal_to_float(active_segment) if active_segment else None,
         }

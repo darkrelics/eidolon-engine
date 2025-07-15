@@ -34,9 +34,9 @@ logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-players_table = os.environ.get("PLAYERS_TABLE", "players")
+players_table: str = os.environ.get("PLAYERS_TABLE", "players")
 
-players_table = dynamodb.Table(players_table)
+players_table = dynamodb.Table(players_table) #type: ignore
 
 
 def lambda_handler(event, _):
@@ -61,7 +61,7 @@ def lambda_handler(event, _):
             }
 
         # Get player data from players table
-        response = players_table.get_item(Key={"PlayerID": player_id})
+        response = players_table.get_item(Key={"PlayerID": player_id}) # type: ignore
 
         if "Item" not in response:
             return {
@@ -74,14 +74,14 @@ def lambda_handler(event, _):
         character_list = player_data.get("CharacterList", {})
 
         # Build character list with name and death status
-        characters = []
+        characters: list = []
         for char_name, char_info in character_list.items():
             characters.append({"name": char_name, "dead": char_info.get("Dead", False)})
 
         # Sort by name for consistent ordering
         characters.sort(key=lambda x: x["name"])
 
-        response = {
+        response:dict = {
             "statusCode": 200,
             "headers": {
                 "Content-Type": "application/json",
@@ -92,7 +92,11 @@ def lambda_handler(event, _):
 
     except ClientError as err:
         logger.error(f"DynamoDB error: {err}")
-        response = {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": "Database error"})}
+        response = {
+            "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"error": "Database error"}),
+        }
         return cors_handler.add_cors_headers(response, event)
     except Exception as err:
         logger.error(f"Unexpected error: {err}")

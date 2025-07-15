@@ -13,10 +13,10 @@ class CognitoStack(Stack):
         self,
         scope: Construct,
         construct_id: str,
-        contact_email: str = None,
-        post_confirmation_lambda_arn: str = None,
+        contact_email: str = "",
+        post_confirmation_lambda_arn = None,
         dev_mode: bool = False,
-        portal_domain: str = None,
+        portal_domain: str = "",
         **kwargs,
     ) -> None:
         """Initialize Cognito stack.
@@ -64,7 +64,7 @@ class CognitoStack(Stack):
         # Configure OAuth settings if portal domain is provided
         oauth_config = None
         if portal_domain:
-            portal_url = f"https://{portal_domain}"
+            portal_url: str = f"https://{portal_domain}"
             oauth_config = cognito.OAuthSettings(
                 flows=cognito.OAuthFlows(
                     authorization_code_grant=True,
@@ -80,7 +80,7 @@ class CognitoStack(Stack):
                 callback_urls=[portal_url],
                 logout_urls=[portal_url],
             )
-        
+
         self.app_client = self.user_pool.add_client(
             "app-client",
             auth_flows=cognito.AuthFlow(user_password=True, user_srp=True),

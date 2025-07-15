@@ -100,7 +100,7 @@ def create_cloudwatch_policy(scope: Construct, game_name: str) -> iam.ManagedPol
                         "logs:PutLogEvents",
                         "logs:DescribeLogStreams",
                     ],
-                    resources=[f"arn:aws:logs:{scope.region}:{scope.account}:log-group:/aws/eidolon/*"],
+                    resources=[f"arn:aws:logs:{scope.region}:{scope.account}:log-group:/aws/eidolon/*"], # type: ignore
                 ),
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
@@ -140,7 +140,7 @@ class IAMStack(Stack):
         self.execution_role = create_execution_role(self, "server-execution-role", game_name, composite_principal)
 
         # Check if CloudWatch policy already exists
-        cloudwatch_policy_name = f"eidolon-{game_name}-cloudwatch-access"
+        cloudwatch_policy_name: str = f"eidolon-{game_name}-cloudwatch-access"
 
         # Create or reference CloudWatch policy
         if check_policy_exists(cloudwatch_policy_name, self.region):
@@ -170,11 +170,9 @@ class IAMStack(Stack):
             self,
             "lambda-execution-role",
             role_name=f"{game_name}-lambda-execution-role",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"), # type: ignore
             description="Execution role for Eidolon Engine Lambda functions",
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
-            ],
+            managed_policies=[iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")],
         )
 
         # Output values
@@ -186,7 +184,7 @@ class IAMStack(Stack):
         )
 
         # Use getattr with sensible default for instance profile name
-        instance_profile_name = getattr(self.instance_profile, "instance_profile_name", f"{game_name}-server-instance-profile")
+        instance_profile_name: str = getattr(self.instance_profile, "instance_profile_name", f"{game_name}-server-instance-profile")
 
         CfnOutput(
             self,

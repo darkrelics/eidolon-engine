@@ -47,7 +47,7 @@ Resources:
         S3Key: api-get-archetypes.zip
       Role: !GetAtt ArchetypesLambdaRole.Arn
       Timeout: 30
-      MemorySize: 256
+      MemorySize: 128
       Environment:
         Variables:
           ARCHETYPES_TABLE: !Ref ArchetypesTableName

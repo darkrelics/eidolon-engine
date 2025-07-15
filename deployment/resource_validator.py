@@ -11,15 +11,15 @@ from botocore.exceptions import ClientError
 class ValidationResult:
     """Result of a resource validation check."""
 
-    def __init__(self, resource_id: str, resource_type: str):
+    def __init__(self, resource_id: str, resource_type: str) -> None:
         """Initialize validation result.
 
         Args:
             resource_id: Identifier for the resource
             resource_type: Type of AWS resource
         """
-        self.resource_id = resource_id
-        self.resource_type = resource_type
+        self.resource_id: str = resource_id
+        self.resource_type: str = resource_type
         self.exists = False
         self.valid = False
         self.drift_detected = False
@@ -48,7 +48,7 @@ class ValidationResult:
 class ResourceValidator:
     """Base class for AWS resource validators."""
 
-    def __init__(self, session: boto3.Session):
+    def __init__(self, session: boto3.Session) -> None:
         """Initialize validator with AWS session.
 
         Args:
@@ -83,7 +83,7 @@ class ResourceValidator:
 class DynamoDBTableValidator(ResourceValidator):
     """Validator for DynamoDB tables."""
 
-    def __init__(self, session: boto3.Session):
+    def __init__(self, session: boto3.Session) -> None:
         """Initialize DynamoDB validator."""
         super().__init__(session)
         self.client = session.client("dynamodb")

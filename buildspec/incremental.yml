@@ -7,7 +7,6 @@ phases:
     commands:
       - apt-get update -y -q
       - apt-get install -y clang cmake ninja-build libgtk-3-dev -q
-      - echo Installing Flutter...
       - git clone https://github.com/flutter/flutter.git -b stable
       - export PATH="$PATH:`pwd`/flutter/bin"
       - flutter config --no-analytics
@@ -17,22 +16,18 @@ phases:
   pre_build:
     commands:
       - cd incremental
-      - echo "Installing dependencies..."
       - flutter pub get
       - dart fix --apply
 
   build:
     commands:
-      - echo "Building web application with configured credentials..."
       - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
 
   post_build:
     commands:
-      - echo "Deploying to S3..."
       - aws s3 sync build/web s3://$S3_BUCKET/ --delete --cache-control "max-age=86400"
       - |
         if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then 
-          echo "Invalidating CloudFront cache..."
           aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
         else
           echo "No CloudFront distribution ID provided, skipping cache invalidation"

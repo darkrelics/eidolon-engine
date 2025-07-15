@@ -16,7 +16,7 @@ class BaseLambdaStack(cdk.Stack):
     def __init__(
         self,
         scope: Construct,
-        id: str,
+        stack_id: str,
         lambda_bucket: s3.IBucket,
         **kwargs,
     ) -> None:
@@ -24,7 +24,7 @@ class BaseLambdaStack(cdk.Stack):
 
         Args:
             scope: CDK scope
-            id: Stack ID
+            stack_id: Stack ID
             lambda_bucket: S3 bucket containing Lambda deployment packages
             **kwargs: Additional stack properties
         """
@@ -32,14 +32,14 @@ class BaseLambdaStack(cdk.Stack):
         if not lambda_bucket:
             raise ValueError("lambda_bucket is required")
 
-        super().__init__(scope, id, **kwargs)
+        super().__init__(scope, stack_id, **kwargs)
 
         # Create Lambda layer for dependencies
         self.dependencies_layer = lambda_.LayerVersion(
             self,
             "lambda-dependencies",
             code=lambda_.Code.from_bucket(lambda_bucket, "lambda-layer/lambda-layer.zip"),
-            compatible_runtimes=[lambda_.Runtime.PYTHON_3_11],
+            compatible_runtimes=[lambda_.Runtime.PYTHON_3_12],
             description="Dependencies for Eidolon Engine Lambda functions",
         )
 

@@ -125,7 +125,7 @@ class S3Stack(Stack):
         self,
         logical_id: str,
         bucket_name: str,
-        website_config: dict = {},
+        website_config = None,
         public_read: bool = False,
     ) -> IBucket:
         """Get existing bucket or create a new one.
@@ -139,6 +139,10 @@ class S3Stack(Stack):
         Returns:
             S3 bucket (existing or newly created)
         """
+
+        if website_config is None:
+            website_config = {}
+
         # Check if bucket exists
         if check_bucket_exists(bucket_name, self.region):
             # Import existing bucket
@@ -151,7 +155,7 @@ class S3Stack(Stack):
             return bucket
         else:
             # Create new bucket with desired configuration
-            bucket_props = {
+            bucket_props: dict = {
                 "bucket_name": bucket_name,
                 "removal_policy": RemovalPolicy.DESTROY,
                 "auto_delete_objects": True,

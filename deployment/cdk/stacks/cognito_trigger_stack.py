@@ -14,7 +14,7 @@ class CognitoTriggerStack(cdk.Stack):
     def __init__(
         self,
         scope: Construct,
-        id: str,
+        lambda_id,
         lambda_bucket: s3.IBucket,
         players_table: str,
         cognito_user_pool_arn: str,
@@ -34,7 +34,7 @@ class CognitoTriggerStack(cdk.Stack):
             allowed_cors_origins: List of allowed CORS origins
             **kwargs: Additional stack properties
         """
-        super().__init__(scope, id, **kwargs)
+        super().__init__(scope, lambda_id, **kwargs)
 
         # Store CORS origins for Lambda environment
         self.cors_origins_str = ",".join(allowed_cors_origins) if allowed_cors_origins else "*"
@@ -43,7 +43,7 @@ class CognitoTriggerStack(cdk.Stack):
         cognito_lambda_role = iam.Role(
             self,
             "cognito-trigger-role",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"), # type: ignore
             description="Execution role for Cognito trigger Lambda function",
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
@@ -63,13 +63,13 @@ class CognitoTriggerStack(cdk.Stack):
         self.cognito_new_player_function = lambda_.Function(
             self,
             "cognito-new-player",
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="cognito_new_player.lambda_handler",
             code=lambda_.Code.from_bucket(lambda_bucket, "cognito-new-player.zip"),
             layers=[dependencies_layer],
-            role=cognito_lambda_role,
+            role=cognito_lambda_role, # type: ignore
             timeout=cdk.Duration.seconds(30),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "players_table": players_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
@@ -78,7 +78,7 @@ class CognitoTriggerStack(cdk.Stack):
         )
 
         # Grant Cognito permission to invoke the Lambda function
-        cognito_source_condition = {"ArnLike": {"aws:SourceArn": cognito_user_pool_arn}}
+        cognito_source_condition: dict = {"ArnLike": {"aws:SourceArn": cognito_user_pool_arn}}
         self.cognito_new_player_function.grant_invoke(
             iam.ServicePrincipal("cognito-idp.amazonaws.com", conditions=cognito_source_condition)
         )

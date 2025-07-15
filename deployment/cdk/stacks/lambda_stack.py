@@ -16,8 +16,6 @@ from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 
-
-
 def create_api_gateway(
     scope: Construct, api_id: str, api_name: str, api_description: str, allowed_cors_origins: list
 ) -> apigateway.RestApi:
@@ -69,7 +67,7 @@ def setup_custom_domain(
     )
 
     # Create the full domain name for the API
-    api_domain_name = f"{api_subdomain}.{domain_name}"
+    api_domain_name: str = f"{api_subdomain}.{domain_name}"
 
     # Create ACM certificate for the API domain
     certificate = acm.Certificate(
@@ -117,7 +115,7 @@ def validate_config(config: dict) -> None:
     Raises:
         ValueError: If required configuration is missing
     """
-    required_fields = [
+    required_fields: list = [
         "lambda_bucket",
         "players_table",
         "characters_table",
@@ -129,7 +127,7 @@ def validate_config(config: dict) -> None:
         "lambda_execution_role_arn",
     ]
 
-    missing_fields = [field for field in required_fields if not config.get(field)]
+    missing_fields: list = [field for field in required_fields if not config.get(field)]
     if missing_fields:
         raise ValueError(f"Missing required configuration fields: {', '.join(missing_fields)}")
 
@@ -140,7 +138,7 @@ class LambdaStack(cdk.Stack):
     def __init__(
         self,
         scope: Construct,
-        id: str,
+        lambda_id: str,
         config: dict,
         **kwargs,
     ) -> None:
@@ -148,11 +146,11 @@ class LambdaStack(cdk.Stack):
 
         Args:
             scope: CDK scope
-            id: Stack ID
+            lambda_id: Stack ID
             config: Configuration dictionary containing all required parameters
             **kwargs: Additional stack properties
         """
-        super().__init__(scope, id, **kwargs)
+        super().__init__(scope, lambda_id, **kwargs)
 
         # Validate configuration
         validate_config(config)
@@ -166,24 +164,22 @@ class LambdaStack(cdk.Stack):
         self.players_table = config.get("players_table", "")
         self.characters_table = config.get("characters_table", "")
         self.archetypes_table = config.get("archetypes_table", "")
-        self.items_table = config.get("items_table", "")  # Optional for now
+        self.items_table = config.get("items_table", "")
         self.cognito_user_pool_arn = config.get("cognito_user_pool_arn", "")
         self.dependencies_layer_arn = config.get("dependencies_layer_arn", "")
         self.domain_name = config.get("domain_name", "darkrelics.net")
         self.hosted_zone_id = config.get("hosted_zone_id", "")
         self.lambda_execution_role_arn = config.get("lambda_execution_role_arn", "")
-        
+
         # Import the shared Lambda execution role
-        self.lambda_execution_role = iam.Role.from_role_arn(
-            self, "imported-lambda-execution-role", self.lambda_execution_role_arn
-        )
+        self.lambda_execution_role = iam.Role.from_role_arn(self, "imported-lambda-execution-role", self.lambda_execution_role_arn)
 
         # Extract API configuration
         self.api_subdomain = config.get("api_subdomain", "api")
         self.allowed_cors_origins = config.get("allowed_cors_origins", [])
 
         # Store CORS origins for Lambda environment
-        self.cors_origins_str = ",".join(self.allowed_cors_origins) if self.allowed_cors_origins else ""
+        self.cors_origins_str: str = ",".join(self.allowed_cors_origins) if self.allowed_cors_origins else ""
 
         # Import the dependencies layer
         dependencies_layer = lambda_.LayerVersion.from_layer_version_arn(self, "imported-layer", self.dependencies_layer_arn)
@@ -229,13 +225,13 @@ class LambdaStack(cdk.Stack):
         self.get_archetypes_function = lambda_.Function(
             self,
             "api-get-archetypes",
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="api_get_archetypes.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "api-get-archetypes.zip"),
             layers=[dependencies_layer],
             role=self.lambda_execution_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
@@ -249,13 +245,13 @@ class LambdaStack(cdk.Stack):
         self.add_character_function = lambda_.Function(
             self,
             "api-add-character",
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="api_add_character.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "api-add-character.zip"),
             layers=[dependencies_layer],
             role=self.lambda_execution_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -272,13 +268,13 @@ class LambdaStack(cdk.Stack):
         self.get_character_function = lambda_.Function(
             self,
             "api-get-character",
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="api_get_character.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "api-get-character.zip"),
             layers=[dependencies_layer],
             role=self.lambda_execution_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -293,13 +289,13 @@ class LambdaStack(cdk.Stack):
         self.list_characters_function = lambda_.Function(
             self,
             "api-list-characters",
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="api_list_characters.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "api-list-characters.zip"),
             layers=[dependencies_layer],
             role=self.lambda_execution_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -314,13 +310,13 @@ class LambdaStack(cdk.Stack):
         self.delete_character_function = lambda_.Function(
             self,
             "api-delete-character",
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="api_delete_character.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "api-delete-character.zip"),
             layers=[dependencies_layer],
             role=self.lambda_execution_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -342,13 +338,13 @@ class LambdaStack(cdk.Stack):
         self.cognito_new_player_function = lambda_.Function(
             self,
             "cognito-new-player",
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="cognito_new_player.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito-new-player.zip"),
             layers=[dependencies_layer],
             role=self.lambda_execution_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "PLAYERS_TABLE": self.players_table,
             },
@@ -361,13 +357,13 @@ class LambdaStack(cdk.Stack):
         self.cognito_delete_player_function = lambda_.Function(
             self,
             "cognito-delete-player",
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="cognito_delete_player.lambda_handler",
             code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito-delete-player.zip"),
             layers=[dependencies_layer],
             role=self.lambda_execution_role,  # type: ignore
             timeout=cdk.Duration.seconds(30),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -428,7 +424,7 @@ class LambdaStack(cdk.Stack):
 
     def create_log_groups(self) -> None:
         """Create CloudWatch log groups for all Lambda functions."""
-        log_configs = [
+        log_configs: list = [
             ("get-archetypes-logs", self.get_archetypes_function),
             ("add-character-logs", self.add_character_function),
             ("get-character-logs", self.get_character_function),
@@ -449,7 +445,7 @@ class LambdaStack(cdk.Stack):
 
     def create_outputs(self) -> None:
         """Create CloudFormation outputs."""
-        api_domain_name = f"{self.api_subdomain}.{self.domain_name}"
+        api_domain_name: str = f"{self.api_subdomain}.{self.domain_name}"
 
         cdk.CfnOutput(
             self,

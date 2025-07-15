@@ -55,7 +55,7 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
             return False
 
         # Find all .lua files
-        lua_files = []
+        lua_files: list = []
         for filename in os.listdir(SCRIPTS_PATH):
             if filename.endswith(".lua"):
                 lua_files.append(filename)
@@ -69,14 +69,14 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
         # Upload each script
         success_count = 0
         for filename in lua_files:
-            local_path = os.path.join(SCRIPTS_PATH, filename)
-            s3_key = f"{prefix}/{filename}"
+            local_path: str = os.path.join(SCRIPTS_PATH, filename)
+            s3_key: str = f"{prefix}/{filename}"
 
             if upload_file(bucket_name, local_path, s3_key):
-                print(f"✓ Uploaded: {filename} -> s3://{bucket_name}/{s3_key}")
+                print(f" Uploaded: {filename} -> s3://{bucket_name}/{s3_key}")
                 success_count += 1
             else:
-                print(f"✗ Failed to upload {filename}")
+                print(f"Failed to upload {filename}")
 
         print(f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded")
         return success_count == len(lua_files)
@@ -86,9 +86,9 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
         return False
 
 
-def list_deployed_scripts(bucket_name, prefix="scripts"):
+def list_deployed_scripts(bucket_name, prefix="scripts") -> bool:
     """List all deployed scripts in S3."""
-    scripts = list_files(bucket_name, prefix)
+    scripts: list = list_files(bucket_name, prefix)
 
     if scripts:
         print(f"\nDeployed scripts in s3://{bucket_name}/{prefix}:")
@@ -100,9 +100,9 @@ def list_deployed_scripts(bucket_name, prefix="scripts"):
     return True
 
 
-def delete_script(bucket_name, script_name, prefix="scripts"):
+def delete_script(bucket_name, script_name, prefix="scripts") -> bool:
     """Delete a specific script from S3."""
-    s3_key = f"{prefix}/{script_name}"
+    s3_key: str = f"{prefix}/{script_name}"
 
     if delete_file(bucket_name, s3_key):
         print(f"Deleted: s3://{bucket_name}/{s3_key}")
@@ -119,7 +119,7 @@ def main():
 
     # Load configuration
     try:
-        config = load_config()
+        config: dict = load_config()
 
         # Try to get defaults from config
         default_bucket = config.get("Game", {}).get("ScriptsS3Bucket", "mud-scripts")
@@ -134,7 +134,7 @@ def main():
     print("2. List deployed scripts")
     print("3. Delete a script")
 
-    choice = input("\nEnter choice (1-3) [default: 1]: ").strip()
+    choice: str = input("\nEnter choice (1-3) [default: 1]: ").strip()
     if not choice:
         choice = "1"
 
@@ -161,11 +161,11 @@ def main():
 
     # Execute action
     if choice == "1":
-        success = deploy_scripts(bucket_name, prefix)
+        success: bool = deploy_scripts(bucket_name, prefix)
     elif choice == "2":
         success = list_deployed_scripts(bucket_name, prefix)
     elif choice == "3":
-        script_name = input("Enter script name to delete (e.g., room_tavern.lua): ").strip()
+        script_name: str = input("Enter script name to delete (e.g., room_tavern.lua): ").strip()
         if not script_name:
             print("Error: Script name is required")
             sys.exit(1)

@@ -80,15 +80,12 @@ def lambda_handler(event, context) -> dict:
                 user_id=user_uuid,
                 error_type=error_code,
                 error_message=error_message,
-                table_name=players_table_name
+                table_name=players_table_name,
             )
             # If it's a validation error, log more details to help debug
             if error_code == "ValidationException":
                 logger.error(
-                    "Schema mismatch detected",
-                    expected_key="PlayerID",
-                    provided_value=user_uuid,
-                    table_name=players_table_name
+                    "Schema mismatch detected", expected_key="PlayerID", provided_value=user_uuid, table_name=players_table_name
                 )
             return event
 

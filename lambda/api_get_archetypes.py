@@ -36,22 +36,22 @@ logger.setLevel(logging.INFO)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
+ARCHETYPES_TABLE: str = os.environ.get("ARCHETYPES_TABLE", "archetypes")
 archetypes_table = dynamodb.Table(ARCHETYPES_TABLE)  # type: ignore
 
 # Cache for player archetypes
-player_archetypes_cache = []
-cache_loaded = False
+player_archetypes_cache: list = []
+cache_loaded: bool = False
 
 
-def load_player_archetypes():
+def load_player_archetypes() -> list:
     """
     Load all archetypes from DynamoDB and filter for player-available ones.
 
     Returns:
         List of player archetypes with their data
     """
-    global player_archetypes_cache, cache_loaded
+    global player_archetypes_cache, cache_loaded  # kill the global variables
 
     if cache_loaded:
         logger.info("Returning cached player archetypes")
@@ -70,7 +70,7 @@ def load_player_archetypes():
             items.extend(response.get("Items", []))
 
         # Filter for player archetypes
-        player_archetypes = []
+        player_archetypes: list = []
         for item in items:
             # Check if Player field exists and is True
             if item.get("Player", False):
@@ -111,23 +111,23 @@ def load_player_archetypes():
         raise
 
 
-def lambda_handler(_, __):
+def lambda_handler(event, _) -> dict:
     """
     Lambda handler to return player-available archetypes.
 
     Args:
-        _: API Gateway event or direct invocation event (unused)
-        __: Lambda context (unused)
+        event: API Gateway event or direct invocation event
+        _: Lambda context (unused)
 
     Returns:
         API Gateway response with player archetypes
     """
     try:
         # Load player archetypes (from cache if available)
-        player_archetypes = load_player_archetypes()
+        player_archetypes: list = load_player_archetypes()
 
         # Return successful response
-        response = {
+        response: dict = {
             "statusCode": 200,
             "headers": {
                 "Content-Type": "application/json",
@@ -139,7 +139,7 @@ def lambda_handler(_, __):
                 }
             ),
         }
-        return cors_handler.add_cors_headers(response, event)
+        return cors_handler.add_cors_headers(response, event) # type: ignore
 
     except Exception as err:
         logger.error(f"Error in lambda_handler: {err}")
