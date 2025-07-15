@@ -75,6 +75,7 @@ class CodeBuildStack(Stack):
                 repo=github_repo,
                 branch_or_ref=github_branch,
                 webhook=False,
+                report_build_status=False,
             ),
             environment=codebuild.BuildEnvironment(
                 build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
@@ -117,6 +118,7 @@ class CodeBuildStack(Stack):
                     repo=github_repo,
                     branch_or_ref=github_branch,
                     webhook=False,
+                    report_build_status=False,
                 ),
                 environment=codebuild.BuildEnvironment(
                     build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
@@ -138,6 +140,7 @@ class CodeBuildStack(Stack):
                     repo=github_repo,
                     branch_or_ref=github_branch,
                     webhook=False,
+                    report_build_status=False,
                 ),
                 environment=codebuild.BuildEnvironment(
                     build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
