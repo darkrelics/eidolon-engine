@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 
 import boto3
 
-from eidolon.dynamo import safe_delete_item, scan_all_items
+from eidolon.dynamo import get_table, delete_item, scan_all_items
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, parse_json_body
 from eidolon.responses import create_response, error_response
@@ -57,9 +57,9 @@ def delete_player_record(player_id: str) -> bool:
     Returns:
         bool: True if deleted or not found, False on error
     """
-    table = dynamodb.Table(TABLES_CONFIG["players"])  # type: ignore
-    if safe_delete_item(table, {"PlayerID": player_id}):
-        logger.info("Deleted player record", player_id=player_id)
+    table = get_table(TABLES_CONFIG["players"])
+    if delete_item(table, {"PlayerID": player_id}):
+        logger.info("Deleted player record", extra={"player_id": player_id})
         return True
     return False
 
@@ -76,7 +76,7 @@ def delete_all_characters(player_id: str) -> int:
     """
     deleted_count = 0
     try:
-        table = dynamodb.Table(TABLES_CONFIG["characters"])  # type: ignore
+        table = get_table(TABLES_CONFIG["characters"])
 
         # Scan for all characters owned by this player
         success, result = scan_all_items(
@@ -86,23 +86,27 @@ def delete_all_characters(player_id: str) -> int:
         )
 
         if not success:
-            logger.error("Failed to scan characters", error=result)
+            logger.error("Failed to scan characters", extra={"error": result})
             return 0
 
+        items = result if isinstance(result, list) else []
+        
         # Delete each character found
-        for item in result:
-            if safe_delete_item(table, {"CharacterID": item["CharacterID"]}):
+        for item in items:
+            if delete_item(table, {"CharacterID": item["CharacterID"]}):
                 deleted_count += 1
                 game_mode = item.get("GameMode", "Unknown")
                 logger.info("Deleted character",
-                           game_mode=game_mode,
-                           character_name=item.get('CharacterName', 'Unknown'),
-                           character_id=item['CharacterID'])
+                           extra={
+                               "game_mode": game_mode,
+                               "character_name": item.get('CharacterName', 'Unknown'),
+                               "character_id": item['CharacterID']
+                           })
 
         return deleted_count
 
     except Exception as err:
-        logger.error("Error in delete_all_characters", error=err)
+        logger.error("Error in delete_all_characters", extra={"error": str(err)}, exc_info=True)
         return deleted_count
 
 
@@ -119,9 +123,9 @@ def delete_active_segments(player_id: str) -> bool:
     Returns:
         bool: True if deleted or not found, False on error
     """
-    table = dynamodb.Table(TABLES_CONFIG["active_segments"])  # type: ignore
-    if safe_delete_item(table, {"PlayerID": player_id}):
-        logger.info("Deleted active segments", player_id=player_id)
+    table = get_table(TABLES_CONFIG["active_segments"])
+    if delete_item(table, {"PlayerID": player_id}):
+        logger.info("Deleted active segments", extra={"player_id": player_id})
         return True
     return False
 
@@ -138,14 +142,14 @@ def delete_character_history(player_id: str) -> int:
     """
     deleted_count = 0
     try:
-        table = dynamodb.Table(TABLES_CONFIG["character_history"])  # type: ignore
+        table = get_table(TABLES_CONFIG["character_history"])
 
         # Query all history records for this player
         response = table.query(KeyConditionExpression="PlayerID = :pid", ExpressionAttributeValues={":pid": player_id})
 
         # Delete each history record
         for item in response.get("Items", []):
-            if safe_delete_item(table, {"PlayerID": player_id, "Timestamp": item["Timestamp"]}):
+            if delete_item(table, {"PlayerID": player_id, "Timestamp": item["Timestamp"]}):
                 deleted_count += 1
 
         # Handle pagination
@@ -157,14 +161,14 @@ def delete_character_history(player_id: str) -> int:
             )
 
             for item in response.get("Items", []):
-                if safe_delete_item(table, {"PlayerID": player_id, "Timestamp": item["Timestamp"]}):
+                if delete_item(table, {"PlayerID": player_id, "Timestamp": item["Timestamp"]}):
                     deleted_count += 1
 
-        logger.info("Deleted history records", count=deleted_count, player_id=player_id)
+        logger.info("Deleted history records", extra={"count": deleted_count, "player_id": player_id})
         return deleted_count
 
     except Exception as err:
-        logger.error("Error in delete_character_history", error=err)
+        logger.error("Error in delete_character_history", extra={"error": str(err)}, exc_info=True)
         return deleted_count
 
 
@@ -185,7 +189,14 @@ def lambda_handler(event, context):
         Response with deletion summary
     """
     # Log Lambda invocation
-    logger.log_lambda_event(event, context)
+    if hasattr(context, "aws_request_id"):
+        logger.info(
+            "Lambda invocation",
+            extra={
+                "request_id": context.aws_request_id,
+                "function_name": getattr(context, "function_name", "unknown"),
+            }
+        )
 
     try:
         player_id = None
@@ -211,7 +222,7 @@ def lambda_handler(event, context):
                 return create_response(400, {"error": "Player ID required"})
             return {"statusCode": 400, "body": json.dumps({"error": "Player ID required"})}
 
-        logger.info("Starting deletion process", player_id=player_id)
+        logger.info("Starting deletion process", extra={"player_id": player_id})
 
         # Track deletion results
         results: dict = {
@@ -230,43 +241,43 @@ def lambda_handler(event, context):
         try:
             results["deletions"]["player_record"] = delete_player_record(player_id)
         except Exception as err:
-            logger.error("Unexpected error deleting player record", error=err)
+            logger.error("Unexpected error deleting player record", extra={"error": str(err)}, exc_info=True)
             results["errors"].append(f"Player record: {str(err)}")
 
         try:
             results["deletions"]["all_characters"] = delete_all_characters(player_id)
         except Exception as err:
-            logger.error("Unexpected error deleting characters", error=err)
+            logger.error("Unexpected error deleting characters", extra={"error": str(err)}, exc_info=True)
             results["errors"].append(f"Characters: {str(err)}")
 
         try:
             results["deletions"]["active_segments"] = delete_active_segments(player_id)
         except Exception as err:
-            logger.error("Unexpected error deleting active segments", error=err)
+            logger.error("Unexpected error deleting active segments", extra={"error": str(err)}, exc_info=True)
             results["errors"].append(f"Active segments: {str(err)}")
 
         try:
             results["deletions"]["character_history"] = delete_character_history(player_id)
         except Exception as err:
-            logger.error("Unexpected error deleting character history", error=err)
+            logger.error("Unexpected error deleting character history", extra={"error": str(err)}, exc_info=True)
             results["errors"].append(f"Character history: {str(err)}")
 
         # Log summary
-        logger.info("Deletion complete", player_id=player_id, summary=results)
+        logger.info("Deletion complete", extra={"player_id": player_id, "summary": results})
 
         # Return appropriate response based on event source
         if "requestContext" in event:
             # API Gateway response format
             status_code = 200 if not results["errors"] else 207
-            logger.log_response(status_code)
+            logger.info("Lambda response", extra={"status_code": status_code})
             return create_response(status_code, results)
         else:
             # Direct invocation response
             return results
 
     except Exception as err:
-        logger.error("Unexpected error in lambda_handler", error=err)
-        logger.log_response(500)
+        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
+        logger.info("Lambda response", extra={"status_code": 500})
 
         if "requestContext" in event:
             return error_response("Internal server error", status_code=500)

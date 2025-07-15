@@ -16,21 +16,40 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import os
 import sys
+import boto3
+from eidolon.dynamo import get_table
 
-from eidolon.dynamo import tables
+
+# Define table names
+TABLE_NAMES = {
+    "players": os.environ.get("PLAYERS_TABLE", "players"),
+    "characters": os.environ.get("CHARACTERS_TABLE", "characters"),
+    "rooms": os.environ.get("ROOMS_TABLE", "rooms"),
+    "exits": os.environ.get("EXITS_TABLE", "exits"),
+    "items": os.environ.get("ITEMS_TABLE", "items"),
+    "prototypes": os.environ.get("PROTOTYPES_TABLE", "prototypes"),
+    "archetypes": os.environ.get("ARCHETYPES_TABLE", "archetypes"),
+    "motd": os.environ.get("MOTD_TABLE", "motd"),
+    "active_segments": os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments"),
+    "character_history": os.environ.get("CHARACTER_HISTORY_TABLE", "character_history"),
+}
 
 
-def view_table(table_name):
-    if not hasattr(tables, table_name):
-        print(f"Error: Table '{table_name}' does not exist.")
-        return
+def view_table(table_name, actual_table_name):
+    """View contents of a DynamoDB table.
+    
+    Args:
+        table_name: Logical name of the table (e.g., "players")
+        actual_table_name: Actual DynamoDB table name
+    """
     try:
-        table = getattr(tables, table_name)
+        table = get_table(actual_table_name)
         response = table.scan()
         items = response["Items"]
 
-        print(f"\nContents of table: {table_name}")
+        print(f"\nContents of table: {table_name} ({actual_table_name})")
         print("=" * 50)
         for item in items:
             print(item)
@@ -44,14 +63,14 @@ def view_table(table_name):
 def main():
     try:
         # List all tables
-        table_names = [table for table in dir(tables) if not table.startswith("__")]
-
-        print(f"Tables: {', '.join(table_names)}")
+        print("Available tables:")
+        for logical_name, actual_name in TABLE_NAMES.items():
+            print(f"  {logical_name}: {actual_name}")
         print("=" * 50)
 
         # View contents of each table
-        for table_name in table_names:
-            view_table(table_name)
+        for logical_name, actual_name in TABLE_NAMES.items():
+            view_table(logical_name, actual_name)
 
     except Exception as err:
         print(f"Error connecting to DynamoDB: {err}")

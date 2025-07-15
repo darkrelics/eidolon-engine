@@ -604,8 +604,8 @@ class IAMValidator(ResourceValidator):
 
     def __init__(self, session: boto3.Session):
         """Initialize IAM validator."""
-        super().__init__(session)
-        self.client = session.client("iam")
+        super().__init__(session, "iam", "iam_resource")
+        # Client is already created by parent class
 
     def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate an IAM role or policy."""

@@ -59,7 +59,11 @@ class CorsHandler:
         }
 
         # Validate origin
-        if origin and origin in self.allowed_origins:
+        if not self.allowed_origins:
+            # No origins configured, use wildcard but don't allow credentials
+            cors_headers["Access-Control-Allow-Origin"] = "*"
+            # Don't set credentials header when using wildcard
+        elif origin and origin in self.allowed_origins:
             cors_headers["Access-Control-Allow-Origin"] = origin
             if self.allow_credentials:
                 cors_headers["Access-Control-Allow-Credentials"] = "true"
@@ -69,8 +73,11 @@ class CorsHandler:
             if self.allow_credentials:
                 cors_headers["Access-Control-Allow-Credentials"] = "true"
         else:
-            # No valid origin found, don't set Access-Control-Allow-Origin
-            logger.warning(f"Origin '{origin}' not in allowed list")
+            # No valid origin found, use first allowed origin as fallback
+            logger.warning(f"Origin '{origin}' not in allowed list, using fallback")
+            cors_headers["Access-Control-Allow-Origin"] = self.allowed_origins[0]
+            if self.allow_credentials:
+                cors_headers["Access-Control-Allow-Credentials"] = "true"
 
         return cors_headers
 

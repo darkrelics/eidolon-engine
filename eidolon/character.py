@@ -39,20 +39,20 @@ def get_archetype(archetype_name: str, archetypes_table):
         response = archetypes_table.get_item(Key={"ArchetypeName": archetype_name})
 
         if "Item" not in response:
-            logger.warning("Archetype not found", archetype_name=archetype_name)
+            logger.warning("Archetype not found", extra={"archetype_name": archetype_name})
             return None
 
         archetype = response["Item"]
 
         # Check if archetype is available to players
         if not archetype.get("Player", False):
-            logger.warning("Archetype not available to players", archetype_name=archetype_name)
+            logger.warning("Archetype not available to players", extra={"archetype_name": archetype_name})
             return None
 
         return archetype
 
     except ClientError as err:
-        logger.error("Error retrieving archetype", error=err, archetype_name=archetype_name)
+        logger.error("Error retrieving archetype", extra={"error": str(err), "archetype_name": archetype_name})
         return None
 
 
@@ -74,7 +74,7 @@ def check_character_limit(player_id: str, players_table) -> tuple:
         response = players_table.get_item(Key={"PlayerID": player_id})
 
         if "Item" not in response:
-            logger.error("Player not found", player_id=player_id)
+            logger.error("Player not found", extra={"player_id": player_id})
             return False, 0
 
         player = response["Item"]
@@ -84,7 +84,7 @@ def check_character_limit(player_id: str, players_table) -> tuple:
         return current_count < max_characters, current_count
 
     except ClientError as err:
-        logger.error("Error checking character limit", error=err, player_id=player_id)
+        logger.error("Error checking character limit", extra={"error": str(err), "player_id": player_id})
         return False, 0
 
 

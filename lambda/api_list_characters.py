@@ -25,7 +25,7 @@ import os
 import boto3
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_item_safe
+from eidolon.dynamo import get_table, get_item
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id
 from eidolon.responses import create_response, error_response, not_found_response
@@ -33,11 +33,8 @@ from eidolon.responses import create_response, error_response, not_found_respons
 # Configure logging
 logger = get_logger(__name__)
 
-# Initialize DynamoDB client
-dynamodb = boto3.resource("dynamodb")
-players_table: str = os.environ.get("PLAYERS_TABLE", "players")
-
-players_table = dynamodb.Table(players_table)  # type: ignore
+# Get table name from environment
+PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
 
 
 def lambda_handler(event, context):
@@ -52,7 +49,20 @@ def lambda_handler(event, context):
         API Gateway response
     """
     # Log Lambda invocation
-    logger.log_lambda_event(event, context)
+    if hasattr(context, "aws_request_id"):
+        logger.info(
+            "Lambda invocation",
+            extra={
+                "request_id": context.aws_request_id,
+                "function_name": getattr(context, "function_name", "unknown"),
+                "http_method": event.get("httpMethod"),
+                "path": event.get("path"),
+            }
+        )
+    
+    # Handle preflight requests
+    if event.get("httpMethod") == "OPTIONS":
+        return cors_handler.handle_preflight(event)
 
     try:
         # Extract player ID from Cognito authorizer
@@ -61,25 +71,14 @@ def lambda_handler(event, context):
             return auth_error
 
         # Get player data from players table
-        success, result = get_item_safe(
-            players_table,
-            {"PlayerID": player_id},
-            error_context="getting player data"
-        )
-
-        if not success:
-            return cors_handler.add_cors_headers(
-                error_response("Database error", status_code=500),
-                event
-            )
-
-        if result == "Item not found":
+        players_table = get_table(PLAYERS_TABLE)
+        player_data = get_item(players_table, {"PlayerID": player_id})
+        
+        if not player_data:
             return cors_handler.add_cors_headers(
                 not_found_response("Player"),
                 event
             )
-
-        player_data = result
         character_list = player_data.get("CharacterList", {})
 
         # Build character list with name and death status
@@ -91,15 +90,15 @@ def lambda_handler(event, context):
         characters.sort(key=lambda x: x["name"])
 
         # Return success response
-        logger.log_response(200)
+        logger.info("Lambda response", extra={"status_code": 200})
         return cors_handler.add_cors_headers(
             create_response(200, {"characters": characters}),
             event
         )
 
     except Exception as err:
-        logger.error("Unexpected error in lambda_handler", error=err)
-        logger.log_response(500)
+        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
+        logger.info("Lambda response", extra={"status_code": 500})
         return cors_handler.add_cors_headers(
             error_response("Internal server error", status_code=500),
             event

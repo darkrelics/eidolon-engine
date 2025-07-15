@@ -39,7 +39,7 @@ def create_api_gateway(
         default_cors_preflight_options=apigateway.CorsOptions(
             allow_origins=allowed_cors_origins if allowed_cors_origins else ["*"],
             allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            allow_headers=["Content-Type", "Authorization"],
+            allow_headers=["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"],
             allow_credentials=True if allowed_cors_origins else False,
         ),
     )
