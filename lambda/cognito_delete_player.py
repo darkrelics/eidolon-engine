@@ -79,11 +79,7 @@ def delete_all_characters(player_id: str) -> int:
         table = dynamodb.Table(TABLES_CONFIG["characters"])  # type: ignore
 
         # Scan for all characters owned by this player
-        success, result = scan_all_items(
-            table,
-            filter_expression="PlayerID = :pid",
-            expression_values={":pid": player_id}
-        )
+        success, result = scan_all_items(table, filter_expression="PlayerID = :pid", expression_values={":pid": player_id})
 
         if not success:
             logger.error("Failed to scan characters", error=result)
@@ -94,10 +90,12 @@ def delete_all_characters(player_id: str) -> int:
             if safe_delete_item(table, {"CharacterID": item["CharacterID"]}):
                 deleted_count += 1
                 game_mode = item.get("GameMode", "Unknown")
-                logger.info("Deleted character",
-                           game_mode=game_mode,
-                           character_name=item.get('CharacterName', 'Unknown'),
-                           character_id=item['CharacterID'])
+                logger.info(
+                    "Deleted character",
+                    game_mode=game_mode,
+                    character_name=item.get("CharacterName", "Unknown"),
+                    character_id=item["CharacterID"],
+                )
 
         return deleted_count
 

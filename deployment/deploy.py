@@ -10,8 +10,8 @@ import os
 import sys
 from pathlib import Path
 
-from botocore.exceptions import ClientError
 from aws_client_factory import AWSClientFactory
+from botocore.exceptions import ClientError
 from build_executor import BuildExecutor
 from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
 from config_updater import ConfigurationUpdater
@@ -41,11 +41,11 @@ class IncrementalDeploymentOrchestrator:
         # Set up AWS client factory
         self.aws_factory = AWSClientFactory(profile=profile, region=region)
         self.session = self.aws_factory.session
-        
+
         # Initialize AWS clients through factory
         self.cfn_client = self.aws_factory.get_client("cloudformation")
         self.s3_client = self.aws_factory.get_client("s3")
-        
+
         # Initialize helper classes
         self.stack_helper = StackOutputHelper(self.cfn_client)
         self.config_updater = ConfigurationUpdater(self.config_manager)
@@ -71,7 +71,7 @@ class IncrementalDeploymentOrchestrator:
         if not self.aws_factory.validate_credentials():
             print("ERROR: Unable to access AWS. Please check your credentials.")
             return False
-        
+
         try:
             identity = self.aws_factory.get_caller_identity()
             print(f"AWS Account: {identity.get('Account', 'Unknown')}")
@@ -1352,7 +1352,7 @@ class IncrementalDeploymentOrchestrator:
 
         # Initialize variables outside try block
         bucket_name = ""
-        
+
         try:
             # Get bucket name from config
             bucket_name = self.config_manager.config.get("Game", {}).get("PortalS3Bucket", "")

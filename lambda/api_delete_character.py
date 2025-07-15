@@ -56,11 +56,7 @@ def verify_character_ownership(player_id, character_name) -> tuple:
         tuple: (is_owner, character_uuid)
     """
     # Get player record
-    success, result = get_item_safe(
-        players_table,
-        {"PlayerID": player_id},
-        error_context="verifying character ownership"
-    )
+    success, result = get_item_safe(players_table, {"PlayerID": player_id}, error_context="verifying character ownership")
 
     if not success:
         return False, None
@@ -82,9 +78,7 @@ def verify_character_ownership(player_id, character_name) -> tuple:
 
     # Double-check character record ownership
     char_success, char_result = get_item_safe(
-        characters_table,
-        {"CharacterID": character_uuid},
-        error_context="checking character ownership"
+        characters_table, {"CharacterID": character_uuid}, error_context="checking character ownership"
     )
 
     if char_success and char_result != "Item not found":
@@ -111,9 +105,7 @@ def delete_character_items(character_id) -> int:
     try:
         # Get character record to find inventory
         success, result = get_item_safe(
-            characters_table,
-            {"CharacterID": character_id},
-            error_context="getting character inventory"
+            characters_table, {"CharacterID": character_id}, error_context="getting character inventory"
         )
 
         if not success or result == "Item not found":
@@ -174,7 +166,7 @@ def delete_character(player_id, character_name, character_id) -> bool:
             "REMOVE CharacterList.#name",
             {},
             "attribute_exists(CharacterList.#name)",
-            {"#name": character_name}
+            {"#name": character_name},
         )
 
         if not success:
@@ -217,10 +209,7 @@ def lambda_handler(event, context) -> dict:
         # Validate required fields
         is_valid, error_msg = validate_required_fields(body, ["characterName"])
         if not is_valid:
-            return cors_handler.add_cors_headers(
-                error_response(error_msg),
-                event
-            )
+            return cors_handler.add_cors_headers(error_response(error_msg), event)
 
         character_name = body["characterName"].strip()
 
@@ -228,32 +217,19 @@ def lambda_handler(event, context) -> dict:
         is_owner, character_id = verify_character_ownership(player_id, character_name)
 
         if not is_owner:
-            return cors_handler.add_cors_headers(
-                error_response("Character not found or access denied", status_code=403),
-                event
-            )
+            return cors_handler.add_cors_headers(error_response("Character not found or access denied", status_code=403), event)
 
         # Delete the character
         if not delete_character(player_id, character_name, character_id):
-            return cors_handler.add_cors_headers(
-                error_response("Failed to delete character", status_code=500),
-                event
-            )
+            return cors_handler.add_cors_headers(error_response("Failed to delete character", status_code=500), event)
 
         # Return success response
         logger.log_response(200)
         return cors_handler.add_cors_headers(
-            success_response({
-                "message": "Character deleted successfully",
-                "characterName": character_name
-            }),
-            event
+            success_response({"message": "Character deleted successfully", "characterName": character_name}), event
         )
 
     except Exception as err:
         logger.error("Unexpected error in lambda_handler", error=err)
         logger.log_response(500)
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500),
-            event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

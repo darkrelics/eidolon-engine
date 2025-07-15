@@ -61,23 +61,13 @@ def lambda_handler(event, context):
             return auth_error
 
         # Get player data from players table
-        success, result = get_item_safe(
-            players_table,
-            {"PlayerID": player_id},
-            error_context="getting player data"
-        )
+        success, result = get_item_safe(players_table, {"PlayerID": player_id}, error_context="getting player data")
 
         if not success:
-            return cors_handler.add_cors_headers(
-                error_response("Database error", status_code=500),
-                event
-            )
+            return cors_handler.add_cors_headers(error_response("Database error", status_code=500), event)
 
         if result == "Item not found":
-            return cors_handler.add_cors_headers(
-                not_found_response("Player"),
-                event
-            )
+            return cors_handler.add_cors_headers(not_found_response("Player"), event)
 
         player_data = result
         character_list = player_data.get("CharacterList", {})
@@ -92,15 +82,9 @@ def lambda_handler(event, context):
 
         # Return success response
         logger.log_response(200)
-        return cors_handler.add_cors_headers(
-            create_response(200, {"characters": characters}),
-            event
-        )
+        return cors_handler.add_cors_headers(create_response(200, {"characters": characters}), event)
 
     except Exception as err:
         logger.error("Unexpected error in lambda_handler", error=err)
         logger.log_response(500)
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500),
-            event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

@@ -30,7 +30,7 @@ class ConfigurationUpdater:
             "cloudfront": self._update_cloudfront_config,
             "codebuild": self._update_codebuild_config,
             "iam": self._update_iam_config,
-            "lambda": self._update_lambda_config
+            "lambda": self._update_lambda_config,
         }
 
         # Find matching updater
@@ -45,7 +45,7 @@ class ConfigurationUpdater:
             "UserPoolId": outputs.get("UserPoolId", ""),
             "UserPoolClientId": outputs.get("AppClientId", ""),
             "UserPoolDomain": outputs.get("UserPoolDomain", ""),
-            "UserPoolArn": outputs.get("UserPoolArn", "")
+            "UserPoolArn": outputs.get("UserPoolArn", ""),
         }
         self.config_manager.update_section("Cognito", config_data)
 
@@ -58,22 +58,19 @@ class ConfigurationUpdater:
                 # Convert PlayersTableName -> Players
                 table_type = key.replace("TableName", "")
                 tables[table_type] = value
-        
+
         config_data = {"Tables": tables}
         if "DynamoDBAccessPolicyArn" in outputs:
             config_data["AccessPolicyArn"] = outputs["DynamoDBAccessPolicyArn"]
-        
+
         self.config_manager.update_section("DynamoDB", config_data)
 
     def _update_cloudwatch_config(self, outputs: dict):
         """Update CloudWatch and Logging configuration sections."""
         # Update Logging section
-        logging_data = {
-            "LogGroup": outputs.get("LogGroupName", ""),
-            "MetricNamespace": outputs.get("MetricsNamespace", "")
-        }
+        logging_data = {"LogGroup": outputs.get("LogGroupName", ""), "MetricNamespace": outputs.get("MetricsNamespace", "")}
         self.config_manager.update_section("Logging", logging_data)
-        
+
         # Update CloudWatch section
         if "CloudWatchAccessPolicyArn" in outputs:
             cloudwatch_data = {"AccessPolicyArn": outputs["CloudWatchAccessPolicyArn"]}
@@ -88,10 +85,10 @@ class ConfigurationUpdater:
             game_data["ScriptsS3Prefix"] = "scripts"
         if "PortalBucketName" in outputs:
             game_data["PortalS3Bucket"] = outputs["PortalBucketName"]
-        
+
         if game_data:
             self.config_manager.update_section("Game", game_data)
-        
+
         # Update CodeBuild section with portal bucket
         if "PortalBucketName" in outputs:
             codebuild_data = {"PortalS3Bucket": outputs["PortalBucketName"]}
@@ -102,7 +99,7 @@ class ConfigurationUpdater:
         config_data = {
             "distribution_id": outputs.get("DistributionId", ""),
             "domain_name": outputs.get("DistributionDomainName", ""),
-            "portal_url": outputs.get("PortalUrl", "")
+            "portal_url": outputs.get("PortalUrl", ""),
         }
         self.config_manager.update_section("CloudFront", config_data)
 
@@ -115,7 +112,7 @@ class ConfigurationUpdater:
             config_data["LambdaLayerProjectName"] = outputs["LambdaLayerProjectName"]
         if "LambdaFunctionsProjectName" in outputs:
             config_data["LambdaFunctionsProjectName"] = outputs["LambdaFunctionsProjectName"]
-        
+
         if config_data:
             self.config_manager.update_section("CodeBuild", config_data)
 

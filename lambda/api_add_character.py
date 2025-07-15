@@ -28,13 +28,9 @@ from datetime import datetime, timezone
 import boto3
 from botocore.exceptions import ClientError
 
-from eidolon.character import (
-    check_character_limit,
-    generate_character_id,
-    get_archetype,
-)
-from eidolon.dynamo import convert_to_decimal
+from eidolon.character import check_character_limit, generate_character_id, get_archetype
 from eidolon.cors import cors_handler
+from eidolon.dynamo import convert_to_decimal
 from eidolon.logger import get_logger
 from eidolon.validation_utils import validate_character_name
 
@@ -52,9 +48,6 @@ characters_table = dynamodb.Table(characters_table)  # type: ignore
 archetypes_table = dynamodb.Table(ARCHETYPES_TABLE)  # type: ignore
 
 
-
-
-
 def create_character(player_id, character_name, archetype_name, archetype_data):
     """
     Create a new incremental character in DynamoDB.
@@ -70,7 +63,6 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
     """
     character_id = generate_character_id()
     timestamp = datetime.now(timezone.utc).isoformat()
-
 
     # Build character record
     character_item: dict = {

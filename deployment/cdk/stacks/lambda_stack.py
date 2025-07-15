@@ -214,8 +214,9 @@ class LambdaStack(cdk.Stack):
         # Output values
         self.create_outputs()
 
-    def create_lambda_function(self, function_id: str, handler: str, environment: dict, 
-                               description: str, dependencies_layer) -> lambda_.Function:
+    def create_lambda_function(
+        self, function_id: str, handler: str, environment: dict, description: str, dependencies_layer
+    ) -> lambda_.Function:
         """Create a Lambda function with standard settings.
 
         Args:
@@ -258,7 +259,7 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Returns available archetypes",
-            dependencies_layer
+            dependencies_layer,
         )
 
         # Add Character Lambda
@@ -273,7 +274,7 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Creates new character for players",
-            dependencies_layer
+            dependencies_layer,
         )
 
         # Get Character Lambda
@@ -286,7 +287,7 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Gets a specific character",
-            dependencies_layer
+            dependencies_layer,
         )
 
         # List Characters Lambda
@@ -299,7 +300,7 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Lists all characters for players",
-            dependencies_layer
+            dependencies_layer,
         )
 
         # Delete Character Lambda
@@ -313,7 +314,7 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Deletes a character for players",
-            dependencies_layer
+            dependencies_layer,
         )
 
     def create_cognito_trigger_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
@@ -330,7 +331,7 @@ class LambdaStack(cdk.Stack):
                 "PLAYERS_TABLE": self.players_table,
             },
             "Creates new player entry when user signs up",
-            dependencies_layer
+            dependencies_layer,
         )
 
         # Delete Player Trigger Lambda
@@ -343,7 +344,7 @@ class LambdaStack(cdk.Stack):
                 "ITEMS_TABLE": self.items_table,
             },
             "Cleans up player data when user account is deleted",
-            dependencies_layer
+            dependencies_layer,
         )
 
     def configure_api_routes(self) -> None:

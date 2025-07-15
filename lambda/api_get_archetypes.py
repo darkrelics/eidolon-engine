@@ -60,9 +60,7 @@ def load_player_archetypes() -> list:
         logger.info("Loading archetypes from DynamoDB")
 
         # Scan the archetypes table with pagination
-        success, result = scan_all_items(
-            archetypes_table
-        )
+        success, result = scan_all_items(archetypes_table)
 
         if not success:
             logger.error("Failed to load archetypes", error=result)
@@ -129,17 +127,17 @@ def lambda_handler(event, context) -> dict:
         # Return successful response
         logger.log_response(200)
         return cors_handler.add_cors_headers(
-            create_response(200, {
-                "archetypes": player_archetypes,
-                "count": len(player_archetypes),
-            }),
-            event
+            create_response(
+                200,
+                {
+                    "archetypes": player_archetypes,
+                    "count": len(player_archetypes),
+                },
+            ),
+            event,
         )
 
     except Exception as err:
         logger.error("Error in lambda_handler", error=err)
         logger.log_response(500)
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500),
-            event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

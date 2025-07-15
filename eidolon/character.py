@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 def generate_character_id() -> str:
     """
     Generate a UUID v4 for the character ID.
-    
+
     Returns:
         A UUID string for the character ID.
     """
@@ -86,5 +86,3 @@ def check_character_limit(player_id: str, players_table) -> tuple:
     except ClientError as err:
         logger.error("Error checking character limit", error=err, player_id=player_id)
         return False, 0
-
-

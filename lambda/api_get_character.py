@@ -42,8 +42,6 @@ characters_table = dynamodb.Table(characters_table)  # type: ignore
 active_segments_table = dynamodb.Table(active_segments_table)  # type: ignore
 
 
-
-
 def get_character_by_id(character_id, player_id):
     """
     Get character by UUID and verify ownership.
@@ -55,11 +53,7 @@ def get_character_by_id(character_id, player_id):
     Returns:
         Character data or None if not found or not owned by player
     """
-    success, result = get_item_safe(
-        characters_table,
-        {"CharacterID": character_id},
-        error_context="getting character"
-    )
+    success, result = get_item_safe(characters_table, {"CharacterID": character_id}, error_context="getting character")
 
     if not success:
         return None
@@ -87,11 +81,7 @@ def get_active_segment(player_id):
     Returns:
         Active segment data or None
     """
-    success, result = get_item_safe(
-        active_segments_table,
-        {"PlayerID": player_id},
-        error_context="getting active segment"
-    )
+    success, result = get_item_safe(active_segments_table, {"PlayerID": player_id}, error_context="getting active segment")
 
     if not success or result == "Item not found":
         return None
@@ -126,19 +116,13 @@ def lambda_handler(event, context) -> dict:
         # Get character ID from query parameters
         character_id, error_msg = get_query_parameter(event, "characterId", required=True)
         if error_msg:
-            return cors_handler.add_cors_headers(
-                error_response(error_msg),
-                event
-            )
+            return cors_handler.add_cors_headers(error_response(error_msg), event)
 
         # Get character data
         character = get_character_by_id(character_id, player_id)
 
         if not character:
-            return cors_handler.add_cors_headers(
-                not_found_response("Character"),
-                event
-            )
+            return cors_handler.add_cors_headers(not_found_response("Character"), event)
 
         # Get active segment if any
         active_segment = get_active_segment(player_id)
@@ -151,15 +135,9 @@ def lambda_handler(event, context) -> dict:
 
         # Return success response
         logger.log_response(200)
-        return cors_handler.add_cors_headers(
-            create_response(200, response_data),
-            event
-        )
+        return cors_handler.add_cors_headers(create_response(200, response_data), event)
 
     except Exception as err:
         logger.error("Unexpected error in lambda_handler", error=err)
         logger.log_response(500)
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500),
-            event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
