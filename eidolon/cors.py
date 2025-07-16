@@ -16,8 +16,8 @@ class CorsHandler:
     def __init__(self):
         """Initialize CORS handler with environment configuration."""
         # Get allowed origins from environment variable
-        origins_str = os.environ.get("ALLOWED_ORIGINS", "")
-        self.allowed_origins = [origin.strip() for origin in origins_str.split(",") if origin.strip()]
+        origins_config = os.environ.get("ALLOWED_ORIGINS", "")
+        self.allowed_origins = [origin.strip() for origin in origins_config.split(",") if origin.strip()]
 
         # Default to restrictive CORS if no origins specified
         if not self.allowed_origins:

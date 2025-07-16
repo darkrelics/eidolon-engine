@@ -84,18 +84,18 @@ def validate_email(email: str) -> bool:
     return bool(pattern.match(email))
 
 
-def validate_uuid(uuid_str: str) -> bool:
+def validate_uuid(uuid_value: str) -> bool:
     """
     Validate UUID format.
 
     Args:
-        uuid_str: UUID string to validate
+        uuid_value: UUID string to validate
 
     Returns:
         True if valid UUID format, False otherwise
     """
     pattern = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
-    return bool(pattern.match(uuid_str))
+    return bool(pattern.match(uuid_value))
 
 
 def validate_positive_integer(value, min_value: int = 1, max_value=None) -> tuple:

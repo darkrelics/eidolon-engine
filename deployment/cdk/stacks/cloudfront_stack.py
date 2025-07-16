@@ -2,8 +2,11 @@
 
 import boto3
 from aws_cdk import CfnOutput, Duration, Stack
+from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as origins
+from aws_cdk import aws_route53 as route53
+from aws_cdk import aws_route53_targets as targets
 from aws_cdk import aws_s3 as s3
 from botocore.exceptions import ClientError
 from constructs import Construct
@@ -17,6 +20,9 @@ class CloudFrontStack(Stack):
         scope: Construct,
         construct_id: str,
         portal_bucket: s3.IBucket,
+        domain_name: str = "",
+        portal_subdomain: str = "",
+        hosted_zone_id: str = "",
         existing_distribution_id: str = "",
         **kwargs,
     ) -> None:
@@ -26,6 +32,9 @@ class CloudFrontStack(Stack):
             scope: CDK app scope
             construct_id: Stack identifier
             portal_bucket: S3 bucket containing the portal
+            domain_name: Root domain name (e.g., darkrelics.net)
+            portal_subdomain: Subdomain for portal
+            hosted_zone_id: Route53 hosted zone ID
             existing_distribution_id: Optional existing CloudFront distribution ID to import
             **kwargs: Additional stack properties
         """
@@ -34,6 +43,11 @@ class CloudFrontStack(Stack):
         # Validate required configuration early
         if not portal_bucket:
             raise ValueError("portal_bucket is required")
+
+        # Store parameters
+        self.domain_name: str = domain_name
+        self.portal_subdomain: str = portal_subdomain
+        self.hosted_zone_id: str = hosted_zone_id
 
         # Check if we should import an existing distribution
         if existing_distribution_id and self.distribution_exists(existing_distribution_id):
@@ -65,11 +79,17 @@ class CloudFrontStack(Stack):
             description="CloudFront distribution domain name",
         )
 
+        # Output custom domain URL if configured, otherwise CloudFront domain
+        if self.domain_name and self.portal_subdomain:
+            portal_url: str = f"https://{self.portal_subdomain}.{self.domain_name}"
+        else:
+            portal_url: str = f"https://{self.distribution.distribution_domain_name}"
+
         CfnOutput(
             self,
             "PortalUrl",
-            value=f"https://{self.distribution.distribution_domain_name}",
-            description="Portal URL via CloudFront (e.g., https://portal.darkrelics.net)",
+            value=portal_url,
+            description="Portal URL via CloudFront",
         )
 
     def create_distribution(self, portal_bucket: s3.IBucket) -> cloudfront.Distribution:
@@ -81,13 +101,39 @@ class CloudFrontStack(Stack):
         Returns:
             CloudFront distribution
         """
-        # S3BucketOrigin handles OAI creation and permissions automatically when used
+        # Configure custom domain if provided
+        certificate = None
+        domain_names = []
+
+        if self.domain_name and self.portal_subdomain and self.hosted_zone_id:
+            # Construct the full domain name
+            portal_domain = f"{self.portal_subdomain}.{self.domain_name}"
+
+            # Get the hosted zone
+            hosted_zone = route53.HostedZone.from_hosted_zone_attributes(
+                self,
+                "portal-hosted-zone",
+                hosted_zone_id=self.hosted_zone_id,
+                zone_name=self.domain_name,
+            )
+
+            # Create ACM certificate for the portal domain
+            certificate = acm.Certificate(
+                self,
+                "portal-certificate",
+                domain_name=portal_domain,
+                validation=acm.CertificateValidation.from_dns(hosted_zone),
+            )
+
+            domain_names: list = [portal_domain]
 
         # Create the distribution
         distribution = cloudfront.Distribution(
             self,
             "eidolon-portal-distribution",
             default_root_object="index.html",
+            certificate=certificate,
+            domain_names=domain_names,
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origins.S3BucketOrigin(portal_bucket),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -109,11 +155,31 @@ class CloudFrontStack(Stack):
                     ttl=Duration.minutes(5),
                 ),
             ],
-            comment="CloudFront distribution for portal.darkrelics.net",
+            comment="CloudFront distribution for Eidolon Engine portal",
             enabled=True,
             http_version=cloudfront.HttpVersion.HTTP2_AND_3,
             price_class=cloudfront.PriceClass.PRICE_CLASS_100,  # US, Canada, Europe
         )
+
+        # Note: S3 bucket policy will be updated post-deployment
+        # CDK has issues updating existing bucket policies
+
+        # Create Route53 record if custom domain is configured
+        if self.domain_name and self.portal_subdomain and self.hosted_zone_id:
+            hosted_zone = route53.HostedZone.from_hosted_zone_attributes(
+                self,
+                "portal-hosted-zone-for-record",
+                hosted_zone_id=self.hosted_zone_id,
+                zone_name=self.domain_name,
+            )
+
+            route53.ARecord(
+                self,
+                "portal-dns-record",
+                zone=hosted_zone,
+                record_name=self.portal_subdomain,
+                target=route53.RecordTarget.from_alias(targets.CloudFrontTarget(distribution)),  # type: ignore
+            )
 
         return distribution
 

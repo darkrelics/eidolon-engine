@@ -28,6 +28,6 @@ def filter_single_word_entries(input_file: str, output_file: str) -> None:
 
 
 if __name__ == "__main__":
-    input_list = "../data/en.txt"
-    output_list = "../data/names.txt"
-    filter_single_word_entries(input_list, output_list)
+    input_file = "../data/en.txt"
+    output_file = "../data/names.txt"
+    filter_single_word_entries(input_file, output_file)

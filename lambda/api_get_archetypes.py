@@ -21,35 +21,36 @@ The function loads all archetypes on cold start and filters for Player=true.
 Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 """
 
-import json
-import logging
 import os
 
 import boto3
-from botocore.exceptions import ClientError
+
+from eidolon.cors import cors_handler
+from eidolon.dynamo import scan_all_items
+from eidolon.logger import get_logger
+from eidolon.responses import create_response, error_response
 
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
+ARCHETYPES_TABLE: str = os.environ.get("ARCHETYPES_TABLE", "archetypes")
 archetypes_table = dynamodb.Table(ARCHETYPES_TABLE)  # type: ignore
 
 # Cache for player archetypes
-player_archetypes_cache = []
-cache_loaded = False
+player_archetypes_cache: list = []
+cache_loaded: bool = False
 
 
-def load_player_archetypes():
+def load_player_archetypes() -> list:
     """
     Load all archetypes from DynamoDB and filter for player-available ones.
 
     Returns:
         List of player archetypes with their data
     """
-    global player_archetypes_cache, cache_loaded
+    global player_archetypes_cache, cache_loaded  # kill the global variables
 
     if cache_loaded:
         logger.info("Returning cached player archetypes")
@@ -58,17 +59,17 @@ def load_player_archetypes():
     try:
         logger.info("Loading archetypes from DynamoDB")
 
-        # Scan the archetypes table
-        response = archetypes_table.scan()
-        items = response.get("Items", [])
+        # Scan the archetypes table with pagination
+        success, result = scan_all_items(archetypes_table)
 
-        # Handle pagination if necessary
-        while "LastEvaluatedKey" in response:
-            response = archetypes_table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
-            items.extend(response.get("Items", []))
+        if not success:
+            logger.error("Failed to load archetypes", error=result)
+            return []
+
+        items = result
 
         # Filter for player archetypes
-        player_archetypes = []
+        player_archetypes: list = []
         for item in items:
             # Check if Player field exists and is True
             if item.get("Player", False):
@@ -98,59 +99,45 @@ def load_player_archetypes():
         player_archetypes_cache = player_archetypes
         cache_loaded = True
 
-        logger.info(f"Loaded {len(player_archetypes)} player archetypes")
+        logger.info("Loaded player archetypes", count=len(player_archetypes))
         return player_archetypes
 
-    except ClientError as err:
-        logger.error(f"Error loading archetypes from DynamoDB: {err}")
-        raise
     except Exception as err:
-        logger.error(f"Unexpected error loading archetypes: {err}")
+        logger.error("Error loading archetypes", error=err)
         raise
 
 
-def lambda_handler(_, __):
+def lambda_handler(event, context) -> dict:
     """
     Lambda handler to return player-available archetypes.
 
     Args:
-        _: API Gateway event or direct invocation event (unused)
-        __: Lambda context (unused)
+        event: API Gateway event or direct invocation event
+        context: Lambda context
 
     Returns:
         API Gateway response with player archetypes
     """
+    # Log Lambda invocation
+    logger.log_lambda_event(event, context)
     try:
         # Load player archetypes (from cache if available)
-        player_archetypes = load_player_archetypes()
+        player_archetypes: list = load_player_archetypes()
 
         # Return successful response
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",  # Configure based on your needs
-            },
-            "body": json.dumps(
+        logger.log_response(200)
+        return cors_handler.add_cors_headers(
+            create_response(
+                200,
                 {
                     "archetypes": player_archetypes,
                     "count": len(player_archetypes),
-                }
+                },
             ),
-        }
+            event,
+        )
 
     except Exception as err:
-        logger.error(f"Error in lambda_handler: {err}")
-        return {
-            "statusCode": 500,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-            },
-            "body": json.dumps(
-                {
-                    "error": "Internal server error",
-                    "message": str(err),
-                }
-            ),
-        }
+        logger.error("Error in lambda_handler", error=err)
+        logger.log_response(500)
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

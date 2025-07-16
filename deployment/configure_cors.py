@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Configure CORS origins for Eidolon Engine deployments.
 
@@ -19,23 +18,23 @@ def load_config(config_path: str) -> dict:
         print(f"Configuration file {config_path} not found. Creating from template...")
         template_path = Path(__file__).parent / "../config.template.yml"
         if template_path.exists():
-            with open(template_path, "r") as f:
+            with open(template_path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
             # Save initial config
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 yaml.dump(config, f, default_flow_style=False, sort_keys=False)
             return config
         else:
             print("Template file not found. Creating minimal configuration...")
             return {}
 
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
 def save_config(config_path: str, config: dict) -> None:
     """Save configuration to YAML file."""
-    with open(config_path, "w") as f:
+    with open(config_path, "w", encoding="utf-8") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
 
@@ -55,14 +54,14 @@ def configure_cors(config: dict, app_type: str, origins: list, replace: bool = F
         config["CORS"][key] = origins
     else:
         # Add to existing origins
-        existing = set(config["CORS"][key])
+        existing: set = set(config["CORS"][key])
         existing.update(origins)
         config["CORS"][key] = list(existing)
 
     return config
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Configure CORS origins for Eidolon Engine deployments")
     parser.add_argument("--config", default="config.yml", help="Path to configuration file (default: config.yml)")
@@ -77,10 +76,10 @@ def main():
     args = parser.parse_args()
 
     # Load existing configuration
-    config = load_config(args.config)
+    config: dict = load_config(args.config)
 
     # Prepare origins list
-    origins = list(args.origins)
+    origins: list = list(args.origins)
 
     # Add CloudFront origin if specified
     if args.cloudfront:
@@ -88,7 +87,7 @@ def main():
 
     # Add localhost origins if specified
     if args.localhost:
-        localhost_origins = [
+        localhost_origins: list = [
             "http://localhost:3000",
             "http://localhost:8080",
             "http://localhost:8000",

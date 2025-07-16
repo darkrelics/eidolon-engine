@@ -23,16 +23,16 @@ allows duplicate names.
 
 import json
 import os
-import re
-import uuid
 from datetime import datetime, timezone
-from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
 
+from eidolon.character import check_character_limit, generate_character_id, get_archetype
 from eidolon.cors import cors_handler
+from eidolon.dynamo import convert_to_decimal
 from eidolon.logger import get_logger
+from eidolon.validation_utils import validate_character_name
 
 # Configure logging
 logger = get_logger(__name__)
@@ -43,129 +43,9 @@ players_table = os.environ.get("PLAYERS_TABLE", "players")
 characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
 ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
 
-players_table = dynamodb.Table(players_table)
-characters_table = dynamodb.Table(characters_table)
-archetypes_table = dynamodb.Table(ARCHETYPES_TABLE)
-
-# Character name validation regex (same as server)
-NAME_PATTERN = re.compile(r"^[a-zA-Z'-]+$")
-MIN_NAME_LENGTH = 4
-MAX_NAME_LENGTH = 20
-
-
-def validate_character_name(name):
-    """
-    Validate character name according to game rules.
-
-    Args:
-        name: Character name to validate
-
-    Returns:
-        tuple: (is_valid, error_message)
-    """
-    if not name:
-        return False, "Name cannot be empty"
-
-    if len(name) < MIN_NAME_LENGTH:
-        return False, f"Name must be at least {MIN_NAME_LENGTH} characters"
-
-    if len(name) > MAX_NAME_LENGTH:
-        return False, f"Name must be {MAX_NAME_LENGTH} characters or fewer"
-
-    if not NAME_PATTERN.match(name):
-        return False, "Name must contain only letters, hyphens, and apostrophes"
-
-    # Check for special characters at start/end
-    if name[0] in "-'" or name[-1] in "-'":
-        return False, "Name cannot start or end with special characters"
-
-    # Check for consecutive special characters
-    for i in range(len(name) - 1):
-        if name[i] in "-'" and name[i + 1] in "-'":
-            return False, "Name cannot have consecutive special characters"
-
-    # Check for excessive repetition
-    for i in range(len(name) - 2):
-        if name[i] == name[i + 1] == name[i + 2]:
-            return False, "Name cannot have more than 2 consecutive identical characters"
-
-    # Check letter ratio for short names with special chars
-    if len(name) <= 3 and any(c in "-'" for c in name):
-        return False, "Short names cannot contain special characters"
-
-    # Ensure reasonable letter-to-special-character ratio
-    letter_count = sum(1 for c in name if c.isalpha())
-    if letter_count / len(name) < 0.5:
-        return False, "Name must be primarily letters"
-
-    return True, None
-
-
-def generate_character_id():
-    """Generate a UUID v4 for the character ID."""
-    return str(uuid.uuid4())
-
-
-def get_archetype(archetype_name):
-    """
-    Retrieve and validate an archetype from DynamoDB.
-
-    Args:
-        archetype_name: Name of the archetype
-
-    Returns:
-        Archetype data or None if not found/not player-available
-    """
-    try:
-        response = archetypes_table.get_item(Key={"ArchetypeName": archetype_name})
-
-        if "Item" not in response:
-            logger.warning("Archetype not found", archetype_name=archetype_name)
-            return None
-
-        archetype = response["Item"]
-
-        # Check if archetype is available to players
-        if not archetype.get("Player", False):
-            logger.warning("Archetype not available to players", archetype_name=archetype_name)
-            return None
-
-        return archetype
-
-    except ClientError as err:
-        logger.error("Error retrieving archetype", error=err, archetype_name=archetype_name)
-        return None
-
-
-def check_character_limit(player_id):
-    """
-    Check if player has reached character limit.
-
-    Args:
-        player_id: Cognito user ID
-
-    Returns:
-        tuple: (can_create, current_count)
-    """
-    max_characters = int(os.environ.get("MAX_CHARACTERS_PER_PLAYER", "10"))
-
-    try:
-        # Get player record
-        response = players_table.get_item(Key={"PlayerID": player_id})
-
-        if "Item" not in response:
-            logger.error("Player not found", player_id=player_id)
-            return False, 0
-
-        player = response["Item"]
-        character_list = player.get("CharacterList", {})
-        current_count = len(character_list)
-
-        return current_count < max_characters, current_count
-
-    except ClientError as err:
-        logger.error("Error checking character limit", error=err, player_id=player_id)
-        return False, 0
+players_table = dynamodb.Table(players_table)  # type: ignore
+characters_table = dynamodb.Table(characters_table)  # type: ignore
+archetypes_table = dynamodb.Table(ARCHETYPES_TABLE)  # type: ignore
 
 
 def create_character(player_id, character_name, archetype_name, archetype_data):
@@ -184,18 +64,8 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
     character_id = generate_character_id()
     timestamp = datetime.now(timezone.utc).isoformat()
 
-    # Convert float values to Decimal for DynamoDB
-    def convert_to_decimal(obj):
-        if isinstance(obj, float):
-            return Decimal(str(obj))
-        elif isinstance(obj, dict):
-            return {k: convert_to_decimal(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [convert_to_decimal(v) for v in obj]
-        return obj
-
     # Build character record
-    character_item = {
+    character_item: dict = {
         "CharacterID": character_id,
         "PlayerID": player_id,
         "CharacterName": character_name,
@@ -209,7 +79,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "Wounds": [],
         "RoomID": 0,  # Always room 0 for incremental
         "Inventory": {},  # Use MUD inventory structure (slot -> itemID)
-        "Resources": {"gold": 0, "supplies": 10, "reputation": 0},
+        "Resources": {},
         "Progress": {},  # Track story progress flags and achievements
         "StoryState": {  # Track current position in stories
             "currentStoryId": None,
@@ -227,9 +97,9 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
 
     try:
         # Update player's character list
-        character_info = {"UUID": character_id, "Dead": False, "GameMode": "Incremental"}
+        character_info: dict = {"UUID": character_id, "Dead": False, "GameMode": "Incremental"}
 
-        players_table.update_item(
+        players_table.update_item(  # type: ignore
             Key={"PlayerID": player_id},
             UpdateExpression="SET CharacterList.#name = :info, UpdatedAt = :timestamp",
             ExpressionAttributeNames={"#name": character_name},
@@ -237,7 +107,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         )
 
         # Create character record
-        characters_table.put_item(Item=character_item)
+        characters_table.put_item(Item=character_item)  # type: ignore
 
         logger.info("Created incremental character", character_name=character_name, character_id=character_id, player_id=player_id)
         return character_id
@@ -246,7 +116,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         logger.error("Error creating character", error=err, character_name=character_name, player_id=player_id)
         # Attempt to rollback player update
         try:
-            players_table.update_item(
+            players_table.update_item(  # type: ignore
                 Key={"PlayerID": player_id},
                 UpdateExpression="REMOVE CharacterList.#name",
                 ExpressionAttributeNames={"#name": character_name},
@@ -329,7 +199,7 @@ def lambda_handler(event, context):
             )
 
         # Check character limit
-        can_create, current_count = check_character_limit(player_id)
+        can_create, current_count = check_character_limit(player_id, players_table)
         if not can_create:
             return cors_handler.add_cors_headers(
                 {
@@ -341,7 +211,7 @@ def lambda_handler(event, context):
             )
 
         # Validate archetype
-        archetype_data = get_archetype(archetype_name)
+        archetype_data = get_archetype(archetype_name, archetypes_table)
         if not archetype_data:
             return cors_handler.add_cors_headers(
                 {

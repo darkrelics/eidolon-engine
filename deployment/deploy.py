@@ -5,23 +5,26 @@ allowing for selective updates without full redeployment.
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
 
-import boto3
+from aws_client_factory import AWSClientFactory
 from botocore.exceptions import ClientError
 from build_executor import BuildExecutor
 from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
+from config_updater import ConfigurationUpdater
 from deployment_logic import analyze_changes, prompt_missing_parameters
 from resource_validator import ResourceValidatorFactory, generate_drift_report
+from stack_utils import StackOutputHelper
 from state_manager import ConfigurationManager, DeploymentState
 
 
 class IncrementalDeploymentOrchestrator:
     """Orchestrates incremental infrastructure deployments."""
 
-    def __init__(self, profile=None, region: str = "us-east-1", branch: str = None):
+    def __init__(self, profile=None, region: str = "us-east-1", branch=None) -> None:
         """Initialize the deployment orchestrator.
 
         Args:
@@ -35,21 +38,23 @@ class IncrementalDeploymentOrchestrator:
         self.config_manager = ConfigurationManager()
         self.state_manager = DeploymentState()
 
-        # Set up AWS session
-        session_args = {"region_name": region}
-        if profile:
-            session_args["profile_name"] = profile
-        self.session = boto3.Session(**session_args)
+        # Set up AWS client factory
+        self.aws_factory = AWSClientFactory(profile=profile, region=region)
+        self.session = self.aws_factory.session
 
-        # Initialize AWS clients
-        self.cfn_client = self.session.client("cloudformation")
-        self.s3_client = self.session.client("s3")
+        # Initialize AWS clients through factory
+        self.cfn_client = self.aws_factory.get_client("cloudformation")
+        self.s3_client = self.aws_factory.get_client("s3")
+
+        # Initialize helper classes
+        self.stack_helper = StackOutputHelper(self.cfn_client)
+        self.config_updater = ConfigurationUpdater(self.config_manager)
 
         # CDK app directory
         self.cdk_dir = Path(__file__).parent / "cdk"
 
         # Initialize CDK API integration
-        self.cdk_api = CDKApiIntegration(cdk_dir=str(self.cdk_dir), profile=profile, region=region)
+        self.cdk_api = CDKApiIntegration(cdk_dir=str(self.cdk_dir), profile=profile, region=region)  # type: ignore
 
         # Initialize build executor
         self.build_executor = BuildExecutor(self.session)
@@ -63,13 +68,16 @@ class IncrementalDeploymentOrchestrator:
         print("Checking prerequisites...")
 
         # Check AWS credentials
+        if not self.aws_factory.validate_credentials():
+            print("ERROR: Unable to access AWS. Please check your credentials.")
+            return False
+
         try:
-            sts = self.session.client("sts")
-            identity = sts.get_caller_identity()
+            identity = self.aws_factory.get_caller_identity()
             print(f"AWS Account: {identity.get('Account', 'Unknown')}")
             print(f"AWS Region: {self.region}")
         except Exception as err:
-            print(f"ERROR: Unable to access AWS: {err}")
+            print(f"ERROR: Unable to get AWS identity: {err}")
             return False
 
         return True
@@ -80,7 +88,7 @@ class IncrementalDeploymentOrchestrator:
         Returns:
             Dictionary of deployment parameters
         """
-        params = {
+        params: dict = {
             "game_name": "eidolon-engine",
             "contact_email": None,
             "github_owner": "robinje",
@@ -90,11 +98,11 @@ class IncrementalDeploymentOrchestrator:
         }
 
         # Load from saved state
-        saved_params = self.state_manager.get_parameters()
+        saved_params: dict = self.state_manager.get_parameters()
         params.update(saved_params)
 
         # Load from config file (which may have been initialized from template)
-        config = self.config_manager.config
+        config: dict = self.config_manager.config
         if "Game" in config:
             game_config = config["Game"]
             params["game_name"] = game_config.get("name", params["game_name"])
@@ -214,7 +222,7 @@ class IncrementalDeploymentOrchestrator:
             print("2. Incremental - Idle/incremental game with Incremental frontend")
             print("3. Hybrid - Both game modes with Incremental frontend")
 
-            choice = input("\nSelect deployment mode [1-3] (default: 3): ").strip()
+            choice: str = input("\nSelect deployment mode [1-3] (default: 3): ").strip()
 
             if choice == "1":
                 params["deployment_mode"] = "mud"
@@ -242,10 +250,9 @@ class IncrementalDeploymentOrchestrator:
         Args:
             params: Deployment parameters including game_name
         """
-        from botocore.exceptions import ClientError
 
         game_name = params.get("game_name", "eidolon-engine")
-        account_id = self.session.client("sts").get_caller_identity()["Account"]
+        account_id = self.aws_factory.get_account_id()
         lambda_bucket_name = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")
 
         s3_client = self.session.client("s3")
@@ -254,8 +261,8 @@ class IncrementalDeploymentOrchestrator:
             # Check if bucket exists
             s3_client.head_bucket(Bucket=lambda_bucket_name)
             print(f"  Lambda bucket '{lambda_bucket_name}' already exists")
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
+        except ClientError as err:
+            error_code = err.response["Error"]["Code"]
             if error_code == "404":
                 # Bucket doesn't exist, create it
                 print(f"  Creating Lambda bucket '{lambda_bucket_name}'...")
@@ -282,13 +289,13 @@ class IncrementalDeploymentOrchestrator:
                         },
                     )
 
-                    print("  ✓ Lambda bucket created successfully")
+                    print("Lambda bucket created successfully")
                 except Exception as create_error:
-                    print(f"  ✗ Failed to create Lambda bucket: {create_error}")
+                    print(f"Failed to create Lambda bucket: {create_error}")
                     raise
             else:
                 # Some other error
-                print(f"  ✗ Error checking Lambda bucket: {e}")
+                print(f"  ✗ Error checking Lambda bucket: {err}")
                 raise
 
     def execute_deployment(self, plan: dict, auto_approve: bool = False) -> bool:
@@ -327,7 +334,7 @@ class IncrementalDeploymentOrchestrator:
         self.state_manager.save_state()
 
         # Prepare CDK context
-        context = {}
+        context: dict = {}
 
         # Add adopted resources to context
         if plan.get("adopt_resources"):
@@ -357,7 +364,7 @@ class IncrementalDeploymentOrchestrator:
             True if all phases succeeded
         """
         # Define deployment phases
-        phases = [
+        phases: list = [
             {
                 "name": "Foundation",
                 "stacks": ["iam", "s3", "dynamodb"],  # Order matters: IAM first, then S3, then DynamoDB
@@ -381,7 +388,7 @@ class IncrementalDeploymentOrchestrator:
             },
             {
                 "name": "Application Layer",
-                "stacks": ["base-lambda", "lambda", "cognito-trigger"],
+                "stacks": ["base-lambda", "lambda"],
                 "description": "Lambda functions and API Gateway",
             },
             {"name": "Distribution", "stacks": ["cloudfront"], "description": "CloudFront distribution for content delivery"},
@@ -389,7 +396,7 @@ class IncrementalDeploymentOrchestrator:
 
         # Track overall success
         all_succeeded = True
-        completed_phases = []
+        completed_phases: list = []
 
         try:
             for i, phase in enumerate(phases, 1):
@@ -413,7 +420,7 @@ class IncrementalDeploymentOrchestrator:
                     continue
 
                 # Filter to only stacks that need deployment
-                stacks_to_deploy = [
+                stacks_to_deploy: list = [
                     stack for stack in phase_stacks if stack in plan.get("create_stacks", []) + plan.get("update_stacks", [])
                 ]
 
@@ -431,10 +438,11 @@ class IncrementalDeploymentOrchestrator:
 
                 # Deploy stacks serially for safety
                 phase_success = True
+                stack_results: dict = {}  # Track individual stack results
                 for stack in stacks_to_deploy:
                     print(f"\n  Deploying {stack}...")
                     progress_reporter = CDKProgressReporter()
-                    result = self.cdk_api.deploy(
+                    result: dict = self.cdk_api.deploy(
                         stacks=[stack],  # Deploy one stack at a time
                         context=context,
                         require_approval="never",  # User already approved deployment plan
@@ -447,8 +455,47 @@ class IncrementalDeploymentOrchestrator:
                         break
                     else:
                         print(f"\n  [SUCCESS] {stack} deployed successfully")
+                        # Store the result including stack_changes info
+                        stack_results[stack] = result
 
-                result = {"success": phase_success}
+                result = {"success": phase_success, "stack_results": stack_results}
+
+                # Post-deployment actions for specific phases
+                if phase_success and phase["name"] == "Distribution" and "cloudfront" in stacks_to_deploy:
+                    # Update S3 bucket policy for CloudFront access
+                    self._update_s3_bucket_policy_for_cloudfront(plan["parameters"])
+
+                # Check if we need to update Lambda functions after Application Layer
+                if phase_success and phase["name"] == "Application Layer":
+                    # Configure Cognito triggers via boto3
+                    self._configure_cognito_triggers()
+
+                    # Check if any Lambda stack reported no changes
+                    lambda_stacks: list = ["lambda", "base-lambda"]
+                    needs_lambda_update = False
+
+                    for stack in lambda_stacks:
+                        if stack in stack_results:
+                            stack_changes = stack_results[stack].get("stack_changes", {})
+                            # If this specific stack had no changes, we need to update
+                            if stack in stack_changes and not stack_changes[stack]:
+                                needs_lambda_update = True
+                                print(f"\n  Note: {stack} had no changes, Lambda update required")
+                                break
+
+                    if needs_lambda_update:
+                        # Get Lambda bucket name
+                        lambda_bucket = plan["parameters"].get("lambda_bucket_name")
+                        if not lambda_bucket:
+                            # Try to construct it
+                            game_name = plan["parameters"].get("game_name", "eidolon-engine")
+                            account_id = self.aws_factory.get_account_id()
+                            lambda_bucket: str = f"{game_name}-lambda-{account_id}"
+
+                        if lambda_bucket:
+                            self._update_lambda_functions_from_s3(lambda_bucket)
+                        else:
+                            print("  ⚠ Could not determine Lambda bucket name for updates")
 
                 if result["success"]:
                     print(f"\n[SUCCESS] Phase {i} ({phase['name']}) completed successfully!")
@@ -480,7 +527,7 @@ class IncrementalDeploymentOrchestrator:
         print(f"{'='*60}")
         print(f"Completed phases: {len(completed_phases)}/{len(phases)}")
         for phase_name in completed_phases:
-            print(f"  ✓ {phase_name}")
+            print(f"{phase_name}")
 
         if all_succeeded:
             print("\n[SUCCESS] All deployment phases completed successfully!")
@@ -508,23 +555,22 @@ class IncrementalDeploymentOrchestrator:
         Returns:
             True if all expected artifacts exist
         """
-        from botocore.exceptions import ClientError
 
         s3_client = self.session.client("s3")
         game_name = params.get("game_name", "eidolon-engine")
-        account_id = self.session.client("sts").get_caller_identity()["Account"]
+        account_id = self.aws_factory.get_account_id()
         bucket_name = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")
 
         # Expected artifacts
-        expected_artifacts = [
+        expected_artifacts: list = [
             "lambda-layer/lambda-layer.zip",  # CodeBuild artifacts path
-            "api_add_character.zip",
-            "api_delete_character.zip",
-            "api_get_archetypes.zip",
-            "api_get_character.zip",
-            "api_list_characters.zip",
-            "cognito_new_player.zip",
-            "cognito_delete_player.zip",
+            "api-add-character.zip",
+            "api-delete-character.zip",
+            "api-get-archetypes.zip",
+            "api-get-character.zip",
+            "api-list-characters.zip",
+            "cognito-new-player.zip",
+            "cognito-delete-player.zip",
         ]
 
         print("\nValidating Lambda build artifacts...")
@@ -535,12 +581,12 @@ class IncrementalDeploymentOrchestrator:
                 # Check if artifact exists
                 s3_client.head_object(Bucket=bucket_name, Key=artifact)
                 print(f"  ✓ {artifact}")
-            except ClientError as e:
-                if e.response["Error"]["Code"] == "404":
+            except ClientError as err:
+                if err.response["Error"]["Code"] == "404":
                     print(f"  ✗ {artifact} - Not found")
                     all_valid = False
                 else:
-                    print(f"  ✗ {artifact} - Error: {e}")
+                    print(f"  ✗ {artifact} - Error: {err}")
                     all_valid = False
 
         return all_valid
@@ -627,17 +673,7 @@ class IncrementalDeploymentOrchestrator:
         Returns:
             Dictionary of output key-value pairs
         """
-        try:
-            response = self.cfn_client.describe_stacks(StackName=stack_name)
-            if response["Stacks"]:
-                stack = response["Stacks"][0]
-                outputs = {}
-                for output in stack.get("Outputs", []):
-                    outputs[output["OutputKey"]] = output["OutputValue"]
-                return outputs
-        except ClientError:
-            pass
-        return {}
+        return self.stack_helper.get_outputs(stack_name)
 
     def validate_configuration(self, fix_drift: bool = False) -> bool:
         """Validate config.yml against actual AWS resources.
@@ -797,11 +833,11 @@ class IncrementalDeploymentOrchestrator:
                         cf_client = self.session.client("cloudfront")
                         cf_client.get_distribution(Id=distribution_id)
                         print(f"  ✓ Distribution: {distribution_id} - OK")
-                    except ClientError as e:
-                        if e.response["Error"]["Code"] == "NoSuchDistribution":
+                    except ClientError as err:
+                        if err.response["Error"]["Code"] == "NoSuchDistribution":
                             print(f"  ✗ Distribution: {distribution_id} - Does not exist")
                         else:
-                            print(f"  ✗ Distribution: {distribution_id} - Error: {e}")
+                            print(f"  ✗ Distribution: {distribution_id} - Error: {err}")
                         all_valid = False
                 else:
                     print("  ⚠ Distribution: Not configured")
@@ -845,107 +881,36 @@ class IncrementalDeploymentOrchestrator:
         """
         print("\nUpdating server configuration...")
 
-        # Get stack outputs
-        game_name = params["game_name"]
+        # Get stack outputs and update configuration
         stacks_to_query = [
-            f"{game_name}-cognito",
-            f"{game_name}-dynamodb",
-            f"{game_name}-cloudwatch",
-            f"{game_name}-s3",
-            f"{game_name}-cloudfront",
-            f"{game_name}-codebuild",
-            f"{game_name}-iam",
-            f"{game_name}-lambda",
+            "cognito",
+            "dynamodb",
+            "cloudwatch",
+            "s3",
+            "cloudfront",
+            "codebuild",
+            "iam",
+            "lambda",
         ]
 
         for stack_name in stacks_to_query:
             try:
-                response = self.cfn_client.describe_stacks(StackName=stack_name)
-                stack = response.get("Stacks", [{}])[0]
-                outputs = {output.get("OutputKey"): output.get("OutputValue") for output in stack.get("Outputs", [])}
-
-                # Update config based on stack type
-                if "cognito" in stack_name:
-                    self.config_manager.update_section(
-                        "Cognito",
-                        {
-                            "UserPoolId": outputs.get("UserPoolId", ""),
-                            "UserPoolClientId": outputs.get("AppClientId", ""),
-                        },
-                    )
-                elif "dynamodb" in stack_name:
-                    # Extract table names
-                    tables = {}
-                    for key, value in outputs.items():
-                        if key.endswith("TableName"):
-                            # Convert PlayersTableName -> Players, CharactersTableName -> Characters, etc.
-                            table_type = key.replace("TableName", "")
-                            tables[table_type] = value
-                    self.config_manager.update_section(
-                        "DynamoDB", {"Tables": tables, "AccessPolicyArn": outputs.get("DynamoDBAccessPolicyArn", "")}
-                    )
-                elif "cloudwatch" in stack_name:
-                    self.config_manager.update_section(
-                        "Logging",
-                        {
-                            "LogGroup": outputs.get("LogGroupName", ""),
-                            "MetricNamespace": outputs.get("MetricsNamespace", ""),
-                        },
-                    )
-                    self.config_manager.update_section(
-                        "CloudWatch", {"AccessPolicyArn": outputs.get("CloudWatchAccessPolicyArn", "")}
-                    )
-                elif "s3" in stack_name:
-                    # Update S3 bucket names in config
-                    self.config_manager.update_section(
-                        "Game",
-                        {
-                            "ScriptsS3Bucket": outputs.get("ScriptsBucketName", ""),
-                            "ScriptsS3Prefix": "scripts",
-                        },
-                    )
-                    # Update CodeBuild with portal bucket
-                    self.config_manager.update_section(
-                        "CodeBuild",
-                        {
-                            "PortalS3Bucket": outputs.get("PortalBucketName", ""),
-                        },
-                    )
-                elif "cloudfront" in stack_name:
-                    # Update CloudFront configuration
-                    self.config_manager.update_section(
-                        "CloudFront",
-                        {
-                            "distribution_id": outputs.get("DistributionId", ""),
-                            "domain_name": outputs.get("DistributionDomainName", ""),
-                            "portal_url": outputs.get("PortalUrl", ""),
-                        },
-                    )
-                elif "codebuild" in stack_name:
-                    # Update CodeBuild configuration
-                    codebuild_config = {"ProjectName": outputs.get("CodeBuildProjectName", "")}
-                    # Add buildspec path if it was provided
-                    if "portal_buildspec_path" in params:
-                        codebuild_config["PortalBuildspecPath"] = params["portal_buildspec_path"]
-                    self.config_manager.update_section("CodeBuild", codebuild_config)
-                elif "iam" in stack_name:
-                    # Update AWS configuration with server execution role
-                    self.config_manager.update_section(
-                        "AWS",
-                        {
-                            "ServerExecutionRoleArn": outputs.get("ServerExecutionRoleArn", ""),
-                        },
-                    )
-
+                outputs = self.stack_helper.get_outputs(stack_name)
+                if outputs:
+                    self.config_updater.update_from_stack_outputs(stack_name, outputs)
             except Exception as err:
                 print(f"Warning: Could not get outputs for {stack_name}: {err}")
 
         # Update game config
-        self.config_manager.update_section("Game", {"name": params["game_name"]})
+        self.config_updater.update_game_config(params["game_name"])
+
+        # Add buildspec path if it was provided
+        if "portal_buildspec_path" in params:
+            self.config_manager.update_section("CodeBuild", {"PortalBuildspecPath": params["portal_buildspec_path"]})
 
         # Save configuration
-        self.config_manager.save_config()
-        print(f"[OK] Configuration saved to {self.config_manager.config_path}")
+        config_path = self.config_updater.save_configuration()
+        print(f"[OK] Configuration saved to {config_path}")
 
     def deploy_scripts(self, params: dict) -> bool:
         """Deploy Lua scripts to S3.
@@ -1158,11 +1123,11 @@ class IncrementalDeploymentOrchestrator:
             os.environ["CDK_DEFAULT_ACCOUNT"] = account_id
 
             return True
-        except ClientError as e:
-            print(f"  Error: {e}")
+        except ClientError as err:
+            print(f"  Error: {err}")
             return False
-        except Exception as e:
-            print(f"  Unexpected error: {e}")
+        except Exception as err:
+            print(f"  Unexpected error: {err}")
             return False
 
     def _update_config_from_aws(self) -> None:
@@ -1191,8 +1156,8 @@ class IncrementalDeploymentOrchestrator:
                 if outputs:
                     self._update_config_from_stack_outputs(stack_name, outputs)
 
-        except Exception as e:
-            print(f"  Warning: Could not query CloudFormation stacks: {e}")
+        except Exception as err:
+            print(f"  Warning: Could not query CloudFormation stacks: {err}")
 
         # Also check for resources outside of CloudFormation
         self._check_standalone_resources()
@@ -1204,51 +1169,8 @@ class IncrementalDeploymentOrchestrator:
             stack_name: Name of the stack
             outputs: Stack outputs dictionary
         """
-        # This reuses the existing logic from update_configuration
-        if "cognito" in stack_name:
-            self.config_manager.update_section(
-                "Cognito",
-                {
-                    "UserPoolId": outputs.get("UserPoolId", ""),
-                    "UserPoolClientId": outputs.get("AppClientId", ""),
-                    "UserPoolDomain": outputs.get("UserPoolDomain", ""),
-                    "UserPoolArn": outputs.get("UserPoolArn", ""),
-                },
-            )
-        elif "dynamodb" in stack_name:
-            # Extract table names
-            tables = {}
-            for key, value in outputs.items():
-                if key.endswith("TableName"):
-                    table_type = key.replace("TableName", "")
-                    tables[table_type] = value
-            if tables:
-                self.config_manager.update_section("DynamoDB", {"Tables": tables})
-        elif "s3" in stack_name:
-            self.config_manager.update_section(
-                "Game",
-                {
-                    "PortalS3Bucket": outputs.get("PortalBucketName", ""),
-                    "ScriptsS3Bucket": outputs.get("ScriptsBucketName", ""),
-                },
-            )
-        elif "cloudfront" in stack_name:
-            self.config_manager.update_section(
-                "CloudFront",
-                {
-                    "distribution_id": outputs.get("DistributionId", ""),
-                    "domain_name": outputs.get("DistributionDomainName", ""),
-                    "portal_url": outputs.get("PortalUrl", ""),
-                },
-            )
-        elif "cloudwatch" in stack_name:
-            self.config_manager.update_section(
-                "Logging",
-                {
-                    "LogGroup": outputs.get("LogGroupName", ""),
-                    "MetricNamespace": outputs.get("MetricsNamespace", ""),
-                },
-            )
+        # Use the configuration updater to handle all stack types
+        self.config_updater.update_from_stack_outputs(stack_name, outputs)
 
     def _check_standalone_resources(self) -> None:
         """Check for resources that might exist outside CloudFormation."""
@@ -1273,6 +1195,285 @@ class IncrementalDeploymentOrchestrator:
 
         except Exception:
             pass  # Ignore errors in standalone resource checking
+
+    def _update_lambda_functions_from_s3(self, lambda_bucket: str):
+        """Update all Lambda functions to use latest code from S3.
+
+        Args:
+            lambda_bucket: S3 bucket containing Lambda deployment packages
+        """
+        print("\n  Updating Lambda functions with latest code from S3...")
+
+        lambda_client = self.aws_factory.get_client("lambda")
+        s3_client = self.aws_factory.get_client("s3")
+
+        # List all Lambda function ZIPs in the S3 bucket
+        try:
+            response = s3_client.list_objects_v2(Bucket=lambda_bucket)
+            if "Contents" not in response:
+                print("    ⚠ No objects found in Lambda bucket")
+                return
+
+            # Filter for .zip files (excluding the lambda-layer directory)
+            lambda_artifacts = [
+                obj["Key"]
+                for obj in response["Contents"]
+                if obj["Key"].endswith(".zip") and not obj["Key"].startswith("lambda-layer/")
+            ]
+
+            if not lambda_artifacts:
+                print("    ⚠ No Lambda function ZIPs found in bucket")
+                return
+
+            print(f"    Found {len(lambda_artifacts)} Lambda function(s) to update")
+
+            # First, list all Lambda functions to find the actual names
+            print("    Discovering Lambda function names...")
+            try:
+                paginator = lambda_client.get_paginator("list_functions")
+                all_functions = []
+                for page in paginator.paginate():
+                    all_functions.extend(page["Functions"])
+
+                # Create a mapping from artifact name to actual function name
+                function_mapping = {}
+                for artifact in lambda_artifacts:
+                    # Remove .zip extension to get function name
+                    # e.g., "api-get-archetypes.zip" -> "api-get-archetypes"
+                    expected_name = artifact.replace(".zip", "")
+
+                    # Check if this exact function exists
+                    for func in all_functions:
+                        if func["FunctionName"] == expected_name:
+                            function_mapping[artifact] = func["FunctionName"]
+                            break
+
+                if not function_mapping:
+                    print("    ⚠ No matching Lambda functions found")
+                    return
+
+                # Update the functions we found
+                updated_count = 0
+                for artifact, func_name in function_mapping.items():
+                    try:
+                        # Update function code
+                        lambda_client.update_function_code(FunctionName=func_name, S3Bucket=lambda_bucket, S3Key=artifact)
+                        print(f"    ✓ Updated {func_name}")
+                        updated_count += 1
+                    except ClientError as err:
+                        print(f"    ✗ Failed to update {func_name}: {err}")
+                    except Exception as err:
+                        print(f"    ✗ Error updating {func_name}: {err}")
+
+                print(f"    Successfully updated {updated_count} Lambda function(s)")
+
+            except Exception as err:
+                print(f"    ✗ Error listing Lambda functions: {err}")
+
+        except ClientError as err:
+            print(f"    ✗ Failed to list objects in bucket {lambda_bucket}: {err}")
+        except Exception as err:
+            print(f"    ✗ Unexpected error: {err}")
+
+    def _configure_cognito_triggers(self) -> None:
+        """Configure Cognito user pool Lambda triggers and email verification using boto3.
+
+        This is done post-deployment to avoid circular dependencies in CDK.
+        """
+        print("\n  Configuring Cognito settings...")
+
+        try:
+            cognito_client = self.session.client("cognito-idp")
+            lambda_client = self.session.client("lambda")
+
+            # Get user pool ID from config
+            user_pool_id = self.config_manager.config.get("Cognito", {}).get("UserPoolId", "")
+            if not user_pool_id:
+                print("    Cognito User Pool ID not found, skipping configuration")
+                return
+
+            # Check if Lambda functions exist
+            new_player_function = "cognito-new-player"
+            # delete_player_function = "cognito-delete-player"
+
+            try:
+                # Get function ARNs
+                new_player_response = lambda_client.get_function(FunctionName=new_player_function)
+                new_player_arn = new_player_response["Configuration"]["FunctionArn"]
+
+                # delete_player_response = lambda_client.get_function(FunctionName=delete_player_function)
+                # delete_player_arn = delete_player_response["Configuration"]["FunctionArn"]
+
+                # First, add permissions for Cognito to invoke the Lambda functions
+                print("    Adding permissions for Cognito to invoke Lambda functions...")
+
+                # Add permission for PostConfirmation trigger
+                try:
+                    lambda_client.add_permission(
+                        FunctionName=new_player_function,
+                        StatementId="CognitoPostConfirmationInvoke",
+                        Action="lambda:InvokeFunction",
+                        Principal="cognito-idp.amazonaws.com",
+                        SourceArn=f"arn:aws:cognito-idp:{self.region}:{self.session.client('sts').get_caller_identity()['Account']}:userpool/{user_pool_id}",
+                    )
+                    print(f"    Added permission for {new_player_function}")
+                except lambda_client.exceptions.ResourceConflictException:
+                    print(f"    Permission already exists for {new_player_function}")
+
+                # Update user pool with triggers and email verification
+                print(f"    Setting PostConfirmation trigger to {new_player_function}...")
+                print("    Enabling email auto-verification...")
+                cognito_client.update_user_pool(
+                    UserPoolId=user_pool_id,
+                    AutoVerifiedAttributes=["email"],  # Enable email verification
+                    LambdaConfig={
+                        "PostConfirmation": new_player_arn
+                        # Could add PreSignUp, CustomMessage, etc. triggers here
+                    },
+                )
+
+                print("    Cognito settings configured successfully")
+
+            except lambda_client.exceptions.ResourceNotFoundException as err:
+                print(f"    Lambda function not found: {err}")
+                print("    Triggers will need to be configured manually")
+
+        except Exception as err:
+            print(f"    Error configuring Cognito: {err}")
+            print("    Settings will need to be configured manually")
+
+    def _update_s3_bucket_policy_for_cloudfront(self, parameters: dict):
+        """Update S3 bucket policy to allow CloudFront access.
+
+        Args:
+            parameters: Deployment parameters containing bucket and distribution info
+        """
+        print("\n  Updating CloudFront configuration and S3 bucket policy...")
+
+        # Initialize variables outside try block
+        bucket_name = ""
+
+        try:
+            # Get bucket name from config
+            bucket_name = self.config_manager.config.get("Game", {}).get("PortalS3Bucket", "")
+            if not bucket_name:
+                print("    Portal bucket not configured, skipping policy update")
+                return
+
+            # Get distribution ID from config
+            distribution_id = self.config_manager.config.get("CloudFront", {}).get("distribution_id", "")
+            if not distribution_id:
+                print("    CloudFront distribution ID not found, skipping policy update")
+                return
+
+            # Get account ID
+            # account_id = self.aws_factory.get_account_id()
+
+            # Get CloudFront client
+            cf_client = self.session.client("cloudfront", region_name="us-east-1")
+            s3_client = self.session.client("s3")
+
+            # Get current distribution configuration
+            print("    Checking CloudFront distribution configuration...")
+            dist_response = cf_client.get_distribution(Id=distribution_id)
+            dist_config = dist_response["Distribution"]["DistributionConfig"]
+            etag = dist_response["ETag"]
+
+            # Check if OAI already exists in the distribution
+            oai_id = None
+            origin_to_update = None
+            for i, origin in enumerate(dist_config["Origins"]["Items"]):
+                if origin["DomainName"].startswith(f"{bucket_name}.s3"):
+                    origin_to_update = i
+                    oai_config = origin.get("S3OriginConfig", {})
+                    oai_value = oai_config.get("OriginAccessIdentity", "")
+                    if oai_value:
+                        # Extract OAI ID from the full path
+                        oai_id = oai_value.split("/")[-1]
+                    break
+
+            # Track if we need to update the distribution
+            needs_distribution_update = False
+
+            # Create OAI if it doesn't exist
+            if not oai_id:
+                print("    Creating Origin Access Identity...")
+                oai_response = cf_client.create_cloud_front_origin_access_identity(
+                    CloudFrontOriginAccessIdentityConfig={
+                        "CallerReference": f"eidolon-portal-oai-{distribution_id}",
+                        "Comment": "OAI for Eidolon portal S3 access",
+                    }
+                )
+                oai_id = oai_response["CloudFrontOriginAccessIdentity"]["Id"]
+                print(f"    Created OAI: {oai_id}")
+                needs_distribution_update = True
+
+            # Update distribution to use the OAI if needed
+            if needs_distribution_update and origin_to_update is not None:
+                print("    Updating CloudFront distribution to use OAI...")
+                dist_config["Origins"]["Items"][origin_to_update]["S3OriginConfig"] = {
+                    "OriginAccessIdentity": f"origin-access-identity/cloudfront/{oai_id}"
+                }
+
+                # Update the distribution
+                try:
+                    cf_client.update_distribution(DistributionConfig=dist_config, Id=distribution_id, IfMatch=etag)
+                    print("    Updated CloudFront distribution to use OAI")
+                except Exception as err:
+                    print(f"    Failed to update distribution: {err}")
+                    print("      Continuing with bucket policy update...")
+            else:
+                if oai_id:
+                    print(f"    Found existing OAI: {oai_id}")
+
+            # Wait a moment for distribution update to propagate if we just updated it
+            if needs_distribution_update:
+                print("    Waiting for distribution update to propagate...")
+                import time
+
+                time.sleep(5)
+
+            # Always replace S3 bucket policy with the correct one
+            print("\n    Replacing S3 bucket policy...")
+            print(f"    Distribution ID: {distribution_id}")
+            print(f"    OAI ID: {oai_id if oai_id else 'None'}")
+
+            # Create policy statements
+            statements: list = []
+
+            # Only add OAI access if we have an OAI
+            if oai_id:
+                statements.append(
+                    {
+                        "Sid": "AllowCloudFrontOAI",
+                        "Effect": "Allow",
+                        "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
+                        "Action": "s3:GetObject",
+                        "Resource": f"arn:aws:s3:::{bucket_name}/*",
+                    }
+                )
+            else:
+                print("    No OAI found - bucket policy may not grant proper access")
+
+            # Create the complete policy
+            policy: dict = {"Version": "2012-10-17", "Statement": statements}
+
+            # Apply the policy
+            s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
+
+            print(f"    Updated bucket policy for {bucket_name}")
+            print(f"      - CloudFront distribution {distribution_id} now has access")
+            if oai_id:
+                print(f"      - OAI {oai_id} also has access")
+
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code", "")
+            if error_code == "NoSuchBucket":
+                print(f"    Bucket {bucket_name} not found")
+            else:
+                print(f"    Failed to update bucket policy: {err}")
+        except Exception as err:
+            print(f"    Error updating bucket policy: {err}")
 
 
 def main():

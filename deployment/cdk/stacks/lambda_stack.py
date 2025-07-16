@@ -16,28 +16,6 @@ from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 
-def create_lambda_role(scope: Construct, role_id: str, service_principal: str = "lambda.amazonaws.com") -> iam.Role:
-    """Create a basic Lambda execution role.
-
-    Args:
-        scope: CDK construct scope
-        role_id: Unique identifier for the role
-        service_principal: AWS service that can assume this role
-
-    Returns:
-        IAM role for Lambda execution
-    """
-    role = iam.Role(
-        scope,
-        role_id,
-        assumed_by=iam.ServicePrincipal(service_principal),  # type: ignore
-        managed_policies=[
-            iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
-        ],
-    )
-    return role
-
-
 def create_api_gateway(
     scope: Construct, api_id: str, api_name: str, api_description: str, allowed_cors_origins: list
 ) -> apigateway.RestApi:
@@ -89,7 +67,7 @@ def setup_custom_domain(
     )
 
     # Create the full domain name for the API
-    api_domain_name = f"{api_subdomain}.{domain_name}"
+    api_domain_name: str = f"{api_subdomain}.{domain_name}"
 
     # Create ACM certificate for the API domain
     certificate = acm.Certificate(
@@ -137,7 +115,7 @@ def validate_config(config: dict) -> None:
     Raises:
         ValueError: If required configuration is missing
     """
-    required_fields = [
+    required_fields: list = [
         "lambda_bucket",
         "players_table",
         "characters_table",
@@ -146,9 +124,10 @@ def validate_config(config: dict) -> None:
         "dependencies_layer_arn",
         "domain_name",
         "hosted_zone_id",
+        "lambda_execution_role_arn",
     ]
 
-    missing_fields = [field for field in required_fields if not config.get(field)]
+    missing_fields: list = [field for field in required_fields if not config.get(field)]
     if missing_fields:
         raise ValueError(f"Missing required configuration fields: {', '.join(missing_fields)}")
 
@@ -159,7 +138,7 @@ class LambdaStack(cdk.Stack):
     def __init__(
         self,
         scope: Construct,
-        id: str,
+        lambda_id: str,
         config: dict,
         **kwargs,
     ) -> None:
@@ -167,11 +146,11 @@ class LambdaStack(cdk.Stack):
 
         Args:
             scope: CDK scope
-            id: Stack ID
+            lambda_id: Stack ID
             config: Configuration dictionary containing all required parameters
             **kwargs: Additional stack properties
         """
-        super().__init__(scope, id, **kwargs)
+        super().__init__(scope, lambda_id, **kwargs)
 
         # Validate configuration
         validate_config(config)
@@ -185,18 +164,22 @@ class LambdaStack(cdk.Stack):
         self.players_table = config.get("players_table", "")
         self.characters_table = config.get("characters_table", "")
         self.archetypes_table = config.get("archetypes_table", "")
-        self.items_table = config.get("items_table", "")  # Optional for now
+        self.items_table = config.get("items_table", "")
         self.cognito_user_pool_arn = config.get("cognito_user_pool_arn", "")
         self.dependencies_layer_arn = config.get("dependencies_layer_arn", "")
         self.domain_name = config.get("domain_name", "darkrelics.net")
         self.hosted_zone_id = config.get("hosted_zone_id", "")
+        self.lambda_execution_role_arn = config.get("lambda_execution_role_arn", "")
+
+        # Import the shared Lambda execution role
+        self.lambda_execution_role = iam.Role.from_role_arn(self, "imported-lambda-execution-role", self.lambda_execution_role_arn)
 
         # Extract API configuration
         self.api_subdomain = config.get("api_subdomain", "api")
         self.allowed_cors_origins = config.get("allowed_cors_origins", [])
 
         # Store CORS origins for Lambda environment
-        self.cors_origins_str = ",".join(self.allowed_cors_origins) if self.allowed_cors_origins else ""
+        self.cors_origins_str: str = ",".join(self.allowed_cors_origins) if self.allowed_cors_origins else ""
 
         # Import the dependencies layer
         dependencies_layer = lambda_.LayerVersion.from_layer_version_arn(self, "imported-layer", self.dependencies_layer_arn)
@@ -231,6 +214,36 @@ class LambdaStack(cdk.Stack):
         # Output values
         self.create_outputs()
 
+    def create_lambda_function(
+        self, function_id: str, handler: str, environment: dict, description: str, dependencies_layer
+    ) -> lambda_.Function:
+        """Create a Lambda function with standard settings.
+
+        Args:
+            function_id: CDK construct ID and function name
+            handler: Lambda handler (e.g., 'api_get_archetypes.lambda_handler')
+            environment: Environment variables
+            description: Function description
+            dependencies_layer: Lambda layer for dependencies
+
+        Returns:
+            The created Lambda function
+        """
+        return lambda_.Function(
+            self,
+            function_id,
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler=handler,
+            code=lambda_.Code.from_bucket(self.lambda_bucket, f"{function_id}.zip"),
+            layers=[dependencies_layer],
+            role=self.lambda_execution_role,
+            timeout=cdk.Duration.seconds(30),
+            memory_size=128,
+            environment=environment,
+            description=description,
+            function_name=function_id,
+        )
+
     def create_character_management_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
         """Create Lambda functions for character management.
 
@@ -238,168 +251,70 @@ class LambdaStack(cdk.Stack):
             dependencies_layer: Lambda layer
         """
         # Get Archetypes Lambda
-        get_archetypes_role = create_lambda_role(self, "get-archetypes-role")
-        get_archetypes_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["dynamodb:Scan", "dynamodb:Query", "dynamodb:GetItem"],
-                resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.archetypes_table}"],
-            )
-        )
-
-        self.get_archetypes_function = lambda_.Function(
-            self,
+        self.get_archetypes_function = self.create_lambda_function(
             "api-get-archetypes",
-            runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="api_get_archetypes.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api_get_archetypes.zip"),
-            layers=[dependencies_layer],
-            role=get_archetypes_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=256,
-            environment={
+            "api_get_archetypes.lambda_handler",
+            {
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            description="Returns available archetypes",
+            "Returns available archetypes",
+            dependencies_layer,
         )
 
         # Add Character Lambda
-        add_character_role = create_lambda_role(self, "add-character-role")
-        add_character_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query"],
-                resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.characters_table}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.archetypes_table}",
-                ],
-            )
-        )
-
-        self.add_character_function = lambda_.Function(
-            self,
+        self.add_character_function = self.create_lambda_function(
             "api-add-character",
-            runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="api_add_character.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api_add_character.zip"),
-            layers=[dependencies_layer],
-            role=add_character_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=256,
-            environment={
+            "api_add_character.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "MAX_CHARACTERS_PER_PLAYER": "10",
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            description="Creates new character for players",
+            "Creates new character for players",
+            dependencies_layer,
         )
 
         # Get Character Lambda
-        get_character_role = create_lambda_role(self, "get-character-role")
-        get_character_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["dynamodb:GetItem", "dynamodb:Query"],
-                resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.characters_table}",
-                ],
-            )
-        )
-
-        self.get_character_function = lambda_.Function(
-            self,
+        self.get_character_function = self.create_lambda_function(
             "api-get-character",
-            runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="api_get_character.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api_get_character.zip"),
-            layers=[dependencies_layer],
-            role=get_character_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=256,
-            environment={
+            "api_get_character.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            description="Gets a specific character",
+            "Gets a specific character",
+            dependencies_layer,
         )
 
         # List Characters Lambda
-        list_characters_role = create_lambda_role(self, "list-characters-role")
-        list_characters_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["dynamodb:GetItem", "dynamodb:Query"],
-                resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.characters_table}",
-                ],
-            )
-        )
-
-        self.list_characters_function = lambda_.Function(
-            self,
+        self.list_characters_function = self.create_lambda_function(
             "api-list-characters",
-            runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="api_list_characters.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api_list_characters.zip"),
-            layers=[dependencies_layer],
-            role=list_characters_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=256,
-            environment={
+            "api_list_characters.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            description="Lists all characters for players",
+            "Lists all characters for players",
+            dependencies_layer,
         )
 
         # Delete Character Lambda
-        delete_character_role = create_lambda_role(self, "delete-character-role")
-        delete_character_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["dynamodb:GetItem", "dynamodb:DeleteItem", "dynamodb:UpdateItem"],
-                resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.characters_table}",
-                ],
-            )
-        )
-
-        # Add items table permission if configured
-        if self.items_table:
-            delete_character_role.add_to_policy(
-                iam.PolicyStatement(
-                    effect=iam.Effect.ALLOW,
-                    actions=["dynamodb:DeleteItem", "dynamodb:Query"],
-                    resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.items_table}"],
-                )
-            )
-
-        self.delete_character_function = lambda_.Function(
-            self,
+        self.delete_character_function = self.create_lambda_function(
             "api-delete-character",
-            runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="api_delete_character.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api_delete_character.zip"),
-            layers=[dependencies_layer],
-            role=delete_character_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=256,
-            environment={
+            "api_delete_character.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ITEMS_TABLE": self.items_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            description="Deletes a character for players",
+            "Deletes a character for players",
+            dependencies_layer,
         )
 
     def create_cognito_trigger_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
@@ -409,70 +324,27 @@ class LambdaStack(cdk.Stack):
             dependencies_layer: Lambda layer
         """
         # New Player Trigger Lambda
-        new_player_role = create_lambda_role(self, "cognito-new-player-role")
-        new_player_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["dynamodb:PutItem"],
-                resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}"],
-            )
-        )
-
-        self.cognito_new_player_function = lambda_.Function(
-            self,
+        self.cognito_new_player_function = self.create_lambda_function(
             "cognito-new-player",
-            runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="cognito_new_player.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito_new_player.zip"),
-            layers=[dependencies_layer],
-            role=new_player_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=256,
-            environment={
+            "cognito_new_player.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
             },
-            description="Creates new player entry when user signs up",
+            "Creates new player entry when user signs up",
+            dependencies_layer,
         )
 
         # Delete Player Trigger Lambda
-        delete_player_role = create_lambda_role(self, "cognito-delete-player-role")
-        delete_player_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:BatchWriteItem"],
-                resources=[
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.players_table}",
-                    f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.characters_table}",
-                ],
-            )
-        )
-
-        # Add items table permission if configured
-        if self.items_table:
-            delete_player_role.add_to_policy(
-                iam.PolicyStatement(
-                    effect=iam.Effect.ALLOW,
-                    actions=["dynamodb:Query", "dynamodb:BatchWriteItem"],
-                    resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.items_table}"],
-                )
-            )
-
-        self.cognito_delete_player_function = lambda_.Function(
-            self,
+        self.cognito_delete_player_function = self.create_lambda_function(
             "cognito-delete-player",
-            runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="cognito_delete_player.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "cognito_delete_player.zip"),
-            layers=[dependencies_layer],
-            role=delete_player_role,  # type: ignore
-            timeout=cdk.Duration.seconds(30),
-            memory_size=256,
-            environment={
+            "cognito_delete_player.lambda_handler",
+            {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ITEMS_TABLE": self.items_table,
             },
-            description="Cleans up player data when user account is deleted",
+            "Cleans up player data when user account is deleted",
+            dependencies_layer,
         )
 
     def configure_api_routes(self) -> None:
@@ -526,7 +398,7 @@ class LambdaStack(cdk.Stack):
 
     def create_log_groups(self) -> None:
         """Create CloudWatch log groups for all Lambda functions."""
-        log_configs = [
+        log_configs: list = [
             ("get-archetypes-logs", self.get_archetypes_function),
             ("add-character-logs", self.add_character_function),
             ("get-character-logs", self.get_character_function),
@@ -547,7 +419,7 @@ class LambdaStack(cdk.Stack):
 
     def create_outputs(self) -> None:
         """Create CloudFormation outputs."""
-        api_domain_name = f"{self.api_subdomain}.{self.domain_name}"
+        api_domain_name: str = f"{self.api_subdomain}.{self.domain_name}"
 
         cdk.CfnOutput(
             self,

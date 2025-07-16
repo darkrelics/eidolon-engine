@@ -55,9 +55,7 @@ API:
   HostedZoneId: "" # REQUIRED - Route53 hosted zone ID
   Subdomain: api # api.{domain}
 
-# CORS configuration - allowed origins for all modes
-CORS:
-  AllowedOrigins: [] # deployment-generated
+# CORS configuration - automatically derived from CloudFront configuration
 
 # Cognito configuration
 Cognito:
@@ -68,6 +66,7 @@ Cognito:
 
 # CloudFront distribution
 CloudFront:
+  Subdomain: portal # portal.{domain} - subdomain for the CloudFront distribution
   distribution_id: "" # deployment-generated
   domain_name: "" # deployment-generated
   portal_url: "" # deployment-generated

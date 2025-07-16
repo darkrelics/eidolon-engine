@@ -125,14 +125,13 @@ def validate_required_config(config: dict) -> tuple[bool, list[str]]:
     Returns:
         Tuple of (is_valid, list_of_errors)
     """
-    errors = []
+    errors: list = []
 
     # Check API configuration
     api_config = config.get("API", {})
     if not api_config:
         errors.append("Missing required 'API' section in configuration")
     else:
-        # Check for empty strings as well as missing keys
         domain = api_config.get("Domain", "")
         hosted_zone_id = api_config.get("HostedZoneId", "")
 
@@ -156,13 +155,12 @@ def get_deployment_mode(app: cdk.App, params: dict) -> str:
         return mode
 
     # Check environment variable
-    env_mode = os.getenv("DEPLOYMENT_MODE", "").lower()
+    env_mode: str = os.getenv("DEPLOYMENT_MODE", "").lower()
     if env_mode in ["mud", "incremental", "hybrid"]:
         return env_mode
 
-    # Fall back to legacy boolean flags for compatibility
-    deploy_mud = get_boolean_context(app, "deploy_mud", params.get("deploy_mud", False))
-    deploy_incremental = get_boolean_context(app, "deploy_incremental", params.get("deploy_incremental", False))
+    deploy_mud: bool = get_boolean_context(app, "deploy_mud", params.get("deploy_mud", False))
+    deploy_incremental: bool = get_boolean_context(app, "deploy_incremental", params.get("deploy_incremental", False))
 
     if deploy_mud and deploy_incremental:
         return "hybrid"
@@ -171,7 +169,6 @@ def get_deployment_mode(app: cdk.App, params: dict) -> str:
     elif deploy_incremental:
         return "incremental"
     else:
-        # Default to hybrid if nothing specified
         return "hybrid"
 
 
@@ -208,7 +205,7 @@ def get_environment_bool(key: str, default: str = "false") -> bool:
 class DeploymentState:
     """Represents the current state of deployed infrastructure."""
 
-    def __init__(self, state_file: str = ".deployment_state.json"):
+    def __init__(self, state_file: str = ".deployment_state.json") -> None:
         """Initialize deployment state manager.
 
         Args:
@@ -219,7 +216,7 @@ class DeploymentState:
 
     def load_state(self) -> dict:
         """Load state from file or create new state."""
-        state = load_json_file(self.state_file)
+        state: dict = load_json_file(self.state_file)
         if not state:
             state = {
                 "version": "1.0",
@@ -317,7 +314,7 @@ class DeploymentState:
         )
 
         # Keep only events from the last 7 days
-        cutoff_date = datetime.now() - timedelta(days=7)
+        cutoff_date: datetime = datetime.now() - timedelta(days=7)
         self.state["deployment_history"] = [
             event for event in self.state.get("deployment_history", []) if datetime.fromisoformat(event["timestamp"]) > cutoff_date
         ]
@@ -340,7 +337,7 @@ class DeploymentState:
 class ConfigurationManager:
     """Manages server configuration file operations."""
 
-    def __init__(self, config_path: str = "../config.yml"):
+    def __init__(self, config_path: str = "../config.yml") -> None:
         """Initialize configuration manager.
 
         Args:
@@ -351,15 +348,13 @@ class ConfigurationManager:
 
     def load_config(self) -> dict:
         """Load configuration from file merged with template."""
-        config = load_yaml_file(self.config_path)
+        config: dict = load_yaml_file(self.config_path)
 
-        # If config exists, merge with template to fill in missing values
         if config:
             template_path = self.config_path.parent.parent / "config.template.yml"
             if template_path.exists():
-                template = load_yaml_file(template_path)
+                template: dict = load_yaml_file(template_path)
                 if template:
-                    # Deep merge config over template (config values take precedence)
                     deep_merge(template, config)
                     return template
 
@@ -405,9 +400,8 @@ class ConfigurationManager:
         Args:
             template_path: Path to configuration template
         """
-        template = load_yaml_file(Path(template_path))
+        template: dict = load_yaml_file(Path(template_path))
         if template:
-            # Deep merge template with existing config
             deep_merge(template, self.config)
             self.config = template
 
@@ -415,7 +409,7 @@ class ConfigurationManager:
 class EidolonEngineApp:
     """Main CDK application for Eidolon Engine infrastructure."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the CDK app with configuration."""
         print("\nInitializing Eidolon Engine CDK Application")
         print("=" * 60)
@@ -432,7 +426,7 @@ class EidolonEngineApp:
         self.state_manager = DeploymentState()
 
         # Load configuration
-        self.config = self.load_configuration()
+        self.config: dict = self.load_configuration()
 
         # Validate environment early
         self.validate_environment()
@@ -471,7 +465,7 @@ class EidolonEngineApp:
             sys.exit(1)
 
         # Validate critical parameters
-        params = self.get_deployment_parameters()
+        params: dict = self.get_deployment_parameters()
         domain_name = params.get("domain_name", "")
         hosted_zone_id = params.get("hosted_zone_id", "")
 
@@ -487,13 +481,12 @@ class EidolonEngineApp:
         """Load configuration from config.yml merged with template defaults."""
         template_path = Path(__file__).parent / "../../config.template.yml"
 
-        # Start with template
-        template_config = load_yaml_file(template_path)
+        template_config: dict = load_yaml_file(template_path)
         if not template_config:
             template_config = {}
 
         if self.config_manager.exists():
-            # Merge existing config over template (existing values take precedence)
+            # Merge existing config over template
             deep_merge(template_config, self.config_manager.config)
             return template_config
         else:
@@ -505,10 +498,10 @@ class EidolonEngineApp:
         env = cdk.Environment(account=os.getenv("CDK_DEFAULT_ACCOUNT"), region=os.getenv("CDK_DEFAULT_REGION", "us-east-1"))
 
         # Get deployment parameters
-        params = self.get_deployment_parameters()
+        params: dict = self.get_deployment_parameters()
 
         # Determine deployment mode
-        deploy_mode = get_deployment_mode(self.app, params)
+        deploy_mode: str = get_deployment_mode(self.app, params)
 
         print(f"Deployment mode: {deploy_mode}")
 
@@ -536,8 +529,8 @@ class EidolonEngineApp:
             self.app,
             "s3",
             game_name=params.get("game_name", "eidolon-engine"),
-            portal_bucket_name=params.get("portal_bucket_name", {}),
-            scripts_bucket_name=params.get("scripts_bucket_name", {}),
+            portal_bucket_name=params.get("portal_bucket_name"),  # type: ignore
+            scripts_bucket_name=params.get("scripts_bucket_name"),  # type: ignore
             env=env,
         )
 
@@ -550,27 +543,31 @@ class EidolonEngineApp:
             game_name=params.get("game_name", "eidolon-engine"),
             table_names=unified_tables,
             execution_role_arn=self.iam_stack.execution_role.role_arn,
+            lambda_execution_role_arn=self.iam_stack.lambda_execution_role.role_arn,
             env=env,
         )
-        self.dynamodb_stack.add_dependency(self.iam_stack)  # DynamoDB depends on IAM
+        self.dynamodb_stack.add_dependency(self.iam_stack)
 
-        # Create Cognito stack (no dependencies)
-        # Default to dev mode (True) unless explicitly set to production
         dev_mode = params.get("dev_mode", True)
 
         # Check if we should skip Cognito stack creation
         if params.get("existing_user_pool_id"):
             print(f"Skipping Cognito stack creation - using existing user pool: {params['existing_user_pool_id']}")
             self.cognito_stack = None
-            # Store the existing IDs for other stacks to use
             self.existing_cognito_user_pool_id = params.get("existing_user_pool_id")
             self.existing_cognito_app_client_id = params.get("existing_app_client_id")
         else:
+            # Get portal domain from CloudFront configuration
+            domain_name = params.get("domain_name", "")
+            portal_subdomain = self.config.get("CloudFront", {}).get("Subdomain", "portal")
+            portal_domain = f"{portal_subdomain}.{domain_name}" if domain_name else None
+
             self.cognito_stack = CognitoStack(
                 self.app,
                 "cognito",
                 contact_email=params.get("contact_email", "contact@darkrelics.net"),
                 dev_mode=dev_mode,
+                portal_domain=portal_domain,  # type: ignore
                 env=env,
             )
             self.existing_cognito_user_pool_id = None
@@ -602,17 +599,13 @@ class EidolonEngineApp:
             github_owner=params.get("github_owner", "robinje"),
             github_repo=params.get("github_repo", "eidolon-engine"),
             github_branch=params.get("github_branch", "main"),
-            cognito_user_pool_id=(
-                self.cognito_stack.user_pool.user_pool_id if self.cognito_stack else self.existing_cognito_user_pool_id
-            ),
-            cognito_app_client_id=(
-                self.cognito_stack.app_client.user_pool_client_id if self.cognito_stack else self.existing_cognito_app_client_id
-            ),
+            cognito_user_pool_id=(self.cognito_stack.user_pool.user_pool_id if self.cognito_stack else self.existing_cognito_user_pool_id),  # type: ignore
+            cognito_app_client_id=(self.cognito_stack.app_client.user_pool_client_id if self.cognito_stack else self.existing_cognito_app_client_id),  # type: ignore
             portal_bucket=self.s3_stack.portal_bucket,
             lambda_bucket=self.s3_stack.lambda_bucket,
             api_domain=api_domain,
             buildspec_path=buildspec_path,
-            cloudfront_distribution_id="",  # Will be set later or via update
+            cloudfront_distribution_id="",
             env=env,
         )
         if self.cognito_stack:
@@ -622,7 +615,7 @@ class EidolonEngineApp:
     def create_application_stacks(self, env: cdk.Environment, params: dict) -> None:
         """Create application layer stacks (Lambda, API Gateway)."""
         # Get unified table names
-        unified_tables = self.get_unified_table_names(params)
+        unified_tables: dict = self.get_unified_table_names(params)
 
         # Create base Lambda stack for common functions
         self.base_lambda_stack = BaseLambdaStack(
@@ -656,40 +649,29 @@ class EidolonEngineApp:
                 "hosted_zone_id": hosted_zone_id,
                 "api_subdomain": params.get("api_subdomain", "api"),
                 "allowed_cors_origins": params.get("allowed_cors_origins", []),
+                "lambda_execution_role_arn": self.iam_stack.lambda_execution_role.role_arn,
             },
             env=env,
         )
         self.lambda_stack.add_dependency(self.base_lambda_stack)
         self.lambda_stack.add_dependency(self.dynamodb_stack)
+        self.lambda_stack.add_dependency(self.iam_stack)
         if self.cognito_stack:
             self.lambda_stack.add_dependency(self.cognito_stack)
 
-        # Create Cognito trigger stack (depends on Cognito, DynamoDB, and base Lambda)
-        from stacks.cognito_trigger_stack import CognitoTriggerStack
-
-        # Get Cognito user pool ARN as string to avoid dependency
-        cognito_user_pool_arn = f"arn:aws:cognito-idp:{env.region}:{env.account}:userpool/*"
-
-        self.cognito_trigger_stack = CognitoTriggerStack(
-            self.app,
-            "cognito-trigger",
-            lambda_bucket=self.s3_stack.lambda_bucket,
-            players_table=unified_tables["Players"],
-            cognito_user_pool_arn=cognito_user_pool_arn,
-            dependencies_layer=self.base_lambda_stack.dependencies_layer,
-            allowed_cors_origins=params.get("allowed_cors_origins", []),
-            env=env,
-        )
-        # Note: We don't add cognito as a dependency to avoid circular reference
-        self.cognito_trigger_stack.add_dependency(self.dynamodb_stack)
-        self.cognito_trigger_stack.add_dependency(self.base_lambda_stack)
-
     def create_distribution_layer(self, env: cdk.Environment, params: dict) -> None:
         """Create CloudFront distribution."""
+        # Get CloudFront configuration
+        cloudfront_config = self.config.get("CloudFront", {})
+        portal_subdomain = cloudfront_config.get("Subdomain", "")
+
         self.cloudfront_stack = CloudFrontStack(
             self.app,
             "cloudfront",
             portal_bucket=self.s3_stack.portal_bucket,
+            domain_name=params.get("domain_name", ""),
+            portal_subdomain=portal_subdomain,
+            hosted_zone_id=params.get("hosted_zone_id", ""),
             existing_distribution_id=params.get("cloudfront_distribution_id", ""),
             env=env,
         )
@@ -701,9 +683,8 @@ class EidolonEngineApp:
         Returns:
             Dictionary of table names used by all modes
         """
-        # Start with defaults - include ALL tables expected by DynamoDB stack
-        # These are base names only - config.yml can override with any names
-        tables = {
+
+        tables: dict = {
             "Players": "players",
             "Characters": "characters",
             "Rooms": "rooms",
@@ -715,7 +696,6 @@ class EidolonEngineApp:
             "Story": "story",
         }
 
-        # Override with configured values if present
         configured_tables = params.get("dynamodb_tables", {})
         tables.update(configured_tables)
 
@@ -748,13 +728,11 @@ class EidolonEngineApp:
         }
         print("   Loaded default parameters")
 
-        # Override with stored parameters
-        stored_params = self.state_manager.get_parameters()
+        stored_params: dict = self.state_manager.get_parameters()
         if stored_params:
             print(f"   Found {len(stored_params)} stored parameters")
             params.update(stored_params)
 
-        # Override with config values
         self.load_game_config(params)
         self.load_deployment_config(params)
         self.load_dynamodb_config(params)
@@ -764,7 +742,6 @@ class EidolonEngineApp:
         self.load_cors_config(params)
         self.load_github_config(params)
 
-        # Override with CDK context values
         self.load_context_overrides(params)
 
         print("\n   Parameter loading complete")
@@ -793,7 +770,6 @@ class EidolonEngineApp:
             # Check for explicit mode
             if "Mode" in deploy_config:
                 params["deployment_mode"] = deploy_config.get("Mode", "hybrid")
-            # Legacy support for boolean flags
             elif self.app.node.try_get_context("deployment_mode") is None:
                 deploy_mud = deploy_config.get("MUD", False)
                 deploy_incremental = deploy_config.get("Incremental", False)
@@ -815,9 +791,8 @@ class EidolonEngineApp:
             if "Tables" in dynamodb_config:
                 params["dynamodb_tables"] = dynamodb_config.get("Tables", {})
                 print(f"     - Found {len(params['dynamodb_tables'])} unified tables")
-            # Legacy support - merge all table types into unified tables
             else:
-                tables = {}
+                tables: dict = {}
                 if "SharedTables" in dynamodb_config:
                     tables.update(dynamodb_config.get("SharedTables", {}))
                 if "MUDTables" in dynamodb_config:
@@ -868,23 +843,40 @@ class EidolonEngineApp:
 
     def load_cors_config(self, params: dict) -> None:
         """Load CORS configuration section."""
+        # Derive CORS origins from CloudFront configuration
+        allowed_origins = []
+
+        # Add CloudFront custom domain if configured
+        cloudfront_config = self.config.get("CloudFront", {})
+        portal_subdomain = cloudfront_config.get("Subdomain", "")
+        domain_name = params.get("domain_name", "")
+
+        if portal_subdomain and domain_name:
+            portal_origin = f"https://{portal_subdomain}.{domain_name}"
+            allowed_origins.append(portal_origin)
+            print("Deriving CORS configuration from CloudFront")
+            print(f"     - Added portal origin: {portal_origin}")
+
+        # Also add the CloudFront distribution URL if available
+        cloudfront_url = cloudfront_config.get("portal_url", "")
+        if cloudfront_url and cloudfront_url not in allowed_origins:
+            allowed_origins.append(cloudfront_url)
+            print(f"     - Added CloudFront distribution URL: {cloudfront_url}")
+
+        # Check for legacy CORS configuration (for backward compatibility)
         cors_config = self.config.get("CORS", {})
         if cors_config:
-            print("   Loading CORS configuration")
-            # Load unified CORS origins
             if "AllowedOrigins" in cors_config:
-                params["allowed_cors_origins"] = cors_config.get("AllowedOrigins", [])
-                print(f"     - Found {len(params['allowed_cors_origins'])} allowed origins")
-            # Legacy support - merge all origin types
-            else:
-                all_origins = []
-                if "MUDOrigins" in cors_config:
-                    all_origins.extend(cors_config.get("MUDOrigins", []))
-                if "IncrementalOrigins" in cors_config:
-                    all_origins.extend(cors_config.get("IncrementalOrigins", []))
-                params["allowed_cors_origins"] = list(set(all_origins))  # Remove duplicates
-                if all_origins:
-                    print(f"     - Merged {len(params['allowed_cors_origins'])} unique origins from legacy configuration")
+                legacy_origins = cors_config.get("AllowedOrigins", [])
+                for origin in legacy_origins:
+                    if origin not in allowed_origins:
+                        allowed_origins.append(origin)
+                if legacy_origins:
+                    print(f"     - Added {len(legacy_origins)} legacy origins")
+
+        params["allowed_cors_origins"] = allowed_origins
+        if allowed_origins:
+            print(f"     - Total allowed origins: {len(allowed_origins)}")
 
     def load_github_config(self, params: dict) -> None:
         """Load GitHub configuration section."""

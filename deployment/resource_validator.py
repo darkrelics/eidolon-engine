@@ -11,15 +11,15 @@ from botocore.exceptions import ClientError
 class ValidationResult:
     """Result of a resource validation check."""
 
-    def __init__(self, resource_id: str, resource_type: str):
+    def __init__(self, resource_id: str, resource_type: str) -> None:
         """Initialize validation result.
 
         Args:
             resource_id: Identifier for the resource
             resource_type: Type of AWS resource
         """
-        self.resource_id = resource_id
-        self.resource_type = resource_type
+        self.resource_id: str = resource_id
+        self.resource_type: str = resource_type
         self.exists = False
         self.valid = False
         self.drift_detected = False
@@ -48,13 +48,17 @@ class ValidationResult:
 class ResourceValidator:
     """Base class for AWS resource validators."""
 
-    def __init__(self, session: boto3.Session):
+    def __init__(self, session: boto3.Session, service_name: str, resource_type: str):
         """Initialize validator with AWS session.
 
         Args:
             session: Boto3 session for AWS access
+            service_name: AWS service name for client creation
+            resource_type: Type of resource being validated
         """
         self.session = session
+        self.client = session.client(service_name)
+        self.resource_type = resource_type
 
     def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate a specific resource.
@@ -66,7 +70,77 @@ class ResourceValidator:
         Returns:
             ValidationResult with validation details
         """
-        raise NotImplementedError("Subclasses must implement validate()")
+        result = ValidationResult(resource_id, self.resource_type)
+        result.expected_config = expected_config
+
+        try:
+            # Get resource description
+            resource_data = self.get_resource_description(resource_id)
+            if resource_data is None:
+                result.exists = False
+                result.add_message(f"{self.resource_type} {resource_id} does not exist")
+                return result
+
+            result.exists = True
+
+            # Extract actual configuration
+            result.actual_config = self.extract_actual_config(resource_data)
+
+            # Check if resource is valid
+            if not self.is_resource_valid(resource_data):
+                result.valid = False
+                return result
+
+            # Validate configuration
+            self.validate_configuration(result, expected_config)
+            result.valid = True
+
+        except ClientError as err:
+            self.handle_client_error(result, err, resource_id)
+
+        return result
+
+    def get_resource_description(self, resource_id: str):
+        """Get the resource description from AWS.
+
+        Subclasses must implement this method.
+        Returns None if resource doesn't exist.
+        """
+        raise NotImplementedError("Subclasses must implement get_resource_description()")
+
+    def extract_actual_config(self, resource_data: dict) -> dict:
+        """Extract the actual configuration from resource data.
+
+        Subclasses must implement this method.
+        """
+        raise NotImplementedError("Subclasses must implement extract_actual_config()")
+
+    def is_resource_valid(self, resource_data: dict) -> bool:
+        """Check if the resource is in a valid state.
+
+        Default implementation returns True. Override if needed.
+        """
+        return True
+
+    def validate_configuration(self, result: ValidationResult, expected_config: dict):
+        """Validate the actual configuration against expected.
+
+        Subclasses should implement specific validation logic.
+        """
+        pass
+
+    def handle_client_error(self, result: ValidationResult, err: ClientError, resource_id: str):
+        """Handle ClientError exceptions.
+
+        Default implementation handles ResourceNotFoundException.
+        Override to add service-specific error handling.
+        """
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code == "ResourceNotFoundException":
+            result.exists = False
+            result.add_message(f"{self.resource_type} {resource_id} does not exist")
+        else:
+            result.add_message(f"Error validating {self.resource_type}: {err}")
 
     def list_resources(self, filter_params=None) -> list:
         """List all resources of this type.
@@ -85,59 +159,50 @@ class DynamoDBTableValidator(ResourceValidator):
 
     def __init__(self, session: boto3.Session):
         """Initialize DynamoDB validator."""
-        super().__init__(session)
-        self.client = session.client("dynamodb")
+        super().__init__(session, "dynamodb", "dynamodb_table")
 
-    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
-        """Validate a DynamoDB table configuration."""
-        result = ValidationResult(resource_id, "dynamodb_table")
-        result.expected_config = expected_config
-
+    def get_resource_description(self, resource_id: str):
+        """Get DynamoDB table description."""
         try:
-            # Get table description
             response = self.client.describe_table(TableName=resource_id)
-            table = response.get("Table", {})
-            result.exists = True
-
-            # Extract actual configuration
-            result.actual_config = {
-                "table_name": table.get("TableName"),
-                "billing_mode": table.get("BillingModeSummary", {}).get("BillingMode", "PROVISIONED"),
-                "key_schema": table.get("KeySchema", []),
-                "attribute_definitions": table.get("AttributeDefinitions", []),
-                "table_status": table.get("TableStatus"),
-            }
-
-            # Check table status
-            if table.get("TableStatus") != "ACTIVE":
-                result.add_message(f"Table is not active (status: {table.get('TableStatus')})")
-                result.valid = False
-                return result
-
-            # Validate billing mode
-            if expected_config.get("billing_mode"):
-                actual_billing = result.actual_config["billing_mode"]
-                expected_billing = expected_config["billing_mode"]
-                if actual_billing != expected_billing:
-                    result.drift_detected = True
-                    result.add_message(f"Billing mode drift: expected {expected_billing}, got {actual_billing}")
-
-            # Validate key schema
-            if expected_config.get("key_schema"):
-                if not self._compare_key_schemas(result.actual_config["key_schema"], expected_config["key_schema"]):
-                    result.drift_detected = True
-                    result.add_message("Key schema mismatch")
-
-            result.valid = True
-
+            return response.get("Table", {})
         except ClientError as err:
             if err.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
-                result.exists = False
-                result.add_message(f"Table {resource_id} does not exist")
-            else:
-                result.add_message(f"Error validating table: {err}")
+                return None
+            raise
 
-        return result
+    def extract_actual_config(self, resource_data: dict) -> dict:
+        """Extract actual configuration from table data."""
+        return {
+            "table_name": resource_data.get("TableName"),
+            "billing_mode": resource_data.get("BillingModeSummary", {}).get("BillingMode", "PROVISIONED"),
+            "key_schema": resource_data.get("KeySchema", []),
+            "attribute_definitions": resource_data.get("AttributeDefinitions", []),
+            "table_status": resource_data.get("TableStatus"),
+        }
+
+    def is_resource_valid(self, resource_data: dict) -> bool:
+        """Check if table is in ACTIVE status."""
+        status = resource_data.get("TableStatus")
+        if status != "ACTIVE":
+            return False
+        return True
+
+    def validate_configuration(self, result: ValidationResult, expected_config: dict):
+        """Validate DynamoDB table configuration."""
+        # Validate billing mode
+        if expected_config.get("billing_mode"):
+            actual_billing = result.actual_config["billing_mode"]
+            expected_billing = expected_config["billing_mode"]
+            if actual_billing != expected_billing:
+                result.drift_detected = True
+                result.add_message(f"Billing mode drift: expected {expected_billing}, got {actual_billing}")
+
+        # Validate key schema
+        if expected_config.get("key_schema"):
+            if not compare_key_schemas(result.actual_config["key_schema"], expected_config["key_schema"]):
+                result.drift_detected = True
+                result.add_message("Key schema mismatch")
 
     def list_resources(self, filter_params=None) -> list:
         """List all DynamoDB tables."""
@@ -154,20 +219,21 @@ class DynamoDBTableValidator(ResourceValidator):
 
         return tables
 
-    def _compare_key_schemas(self, actual: list, expected: list) -> bool:
-        """Compare key schemas for equality."""
-        if len(actual) != len(expected):
+
+def compare_key_schemas(actual: list, expected: list) -> bool:
+    """Compare DynamoDB key schemas for equality."""
+    if len(actual) != len(expected):
+        return False
+
+    # Sort by attribute name for comparison
+    actual_sorted = sorted(actual, key=lambda x: x.get("AttributeName", ""))
+    expected_sorted = sorted(expected, key=lambda x: x.get("AttributeName", ""))
+
+    for a, e in zip(actual_sorted, expected_sorted):
+        if a.get("AttributeName") != e.get("AttributeName") or a.get("KeyType") != e.get("KeyType"):
             return False
 
-        # Sort by attribute name for comparison
-        actual_sorted = sorted(actual, key=lambda x: x.get("AttributeName", ""))
-        expected_sorted = sorted(expected, key=lambda x: x.get("AttributeName", ""))
-
-        for a, e in zip(actual_sorted, expected_sorted):
-            if a.get("AttributeName") != e.get("AttributeName") or a.get("KeyType") != e.get("KeyType"):
-                return False
-
-        return True
+    return True
 
 
 class CognitoValidator(ResourceValidator):
@@ -175,55 +241,43 @@ class CognitoValidator(ResourceValidator):
 
     def __init__(self, session: boto3.Session):
         """Initialize Cognito validator."""
-        super().__init__(session)
-        self.client = session.client("cognito-idp")
+        super().__init__(session, "cognito-idp", "cognito_user_pool")
 
-    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
-        """Validate a Cognito user pool."""
-        result = ValidationResult(resource_id, "cognito_user_pool")
-        result.expected_config = expected_config
-
+    def get_resource_description(self, resource_id: str):
+        """Get Cognito user pool description."""
         try:
-            # Get user pool description
             response = self.client.describe_user_pool(UserPoolId=resource_id)
-            pool = response.get("UserPool", {})
-            result.exists = True
-
-            # Extract actual configuration
-            result.actual_config = {
-                "pool_name": pool.get("Name"),
-                "mfa_configuration": pool.get("MfaConfiguration", "OFF"),
-                "password_policy": pool.get("Policies", {}).get("PasswordPolicy", {}),
-                "auto_verified_attributes": pool.get("AutoVerifiedAttributes", []),
-                "username_attributes": pool.get("UsernameAttributes", []),
-            }
-
-            # Cognito user pools don't have a Status field - if we can describe it, it exists and is valid
-
-            # Validate MFA configuration
-            if expected_config.get("mfa_configuration"):
-                actual_mfa = result.actual_config["mfa_configuration"]
-                expected_mfa = expected_config["mfa_configuration"]
-                if actual_mfa != expected_mfa:
-                    result.drift_detected = True
-                    result.add_message(f"MFA configuration drift: expected {expected_mfa}, got {actual_mfa}")
-
-            # Validate password policy
-            if expected_config.get("password_policy"):
-                if not self._compare_password_policies(result.actual_config["password_policy"], expected_config["password_policy"]):
-                    result.drift_detected = True
-                    result.add_message("Password policy mismatch")
-
-            result.valid = True
-
+            return response.get("UserPool", {})
         except ClientError as err:
             if err.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
-                result.exists = False
-                result.add_message(f"User pool {resource_id} does not exist")
-            else:
-                result.add_message(f"Error validating user pool: {err}")
+                return None
+            raise
 
-        return result
+    def extract_actual_config(self, resource_data: dict) -> dict:
+        """Extract actual configuration from user pool data."""
+        return {
+            "pool_name": resource_data.get("Name"),
+            "mfa_configuration": resource_data.get("MfaConfiguration", "OFF"),
+            "password_policy": resource_data.get("Policies", {}).get("PasswordPolicy", {}),
+            "auto_verified_attributes": resource_data.get("AutoVerifiedAttributes", []),
+            "username_attributes": resource_data.get("UsernameAttributes", []),
+        }
+
+    def validate_configuration(self, result: ValidationResult, expected_config: dict):
+        """Validate Cognito user pool configuration."""
+        # Validate MFA configuration
+        if expected_config.get("mfa_configuration"):
+            actual_mfa = result.actual_config["mfa_configuration"]
+            expected_mfa = expected_config["mfa_configuration"]
+            if actual_mfa != expected_mfa:
+                result.drift_detected = True
+                result.add_message(f"MFA configuration drift: expected {expected_mfa}, got {actual_mfa}")
+
+        # Validate password policy
+        if expected_config.get("password_policy"):
+            if not compare_password_policies(result.actual_config["password_policy"], expected_config["password_policy"]):
+                result.drift_detected = True
+                result.add_message("Password policy mismatch")
 
     def list_resources(self, filter_params=None) -> list:
         """List all Cognito user pools."""
@@ -236,16 +290,17 @@ class CognitoValidator(ResourceValidator):
 
         return pools
 
-    def _compare_password_policies(self, actual: dict, expected: dict) -> bool:
-        """Compare password policies for equality."""
-        policy_keys = ["MinimumLength", "RequireUppercase", "RequireLowercase", "RequireNumbers", "RequireSymbols"]
 
-        for key in policy_keys:
-            if key in expected:
-                if actual.get(key) != expected.get(key):
-                    return False
+def compare_password_policies(actual: dict, expected: dict) -> bool:
+    """Compare Cognito password policies for equality."""
+    policy_keys = ["MinimumLength", "RequireUppercase", "RequireLowercase", "RequireNumbers", "RequireSymbols"]
 
-        return True
+    for key in policy_keys:
+        if key in expected:
+            if actual.get(key) != expected.get(key):
+                return False
+
+    return True
 
 
 class CloudWatchValidator(ResourceValidator):
@@ -253,54 +308,44 @@ class CloudWatchValidator(ResourceValidator):
 
     def __init__(self, session: boto3.Session):
         """Initialize CloudWatch validator."""
-        super().__init__(session)
-        self.logs_client = session.client("logs")
+        super().__init__(session, "logs", "cloudwatch_log_group")
 
-    def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
-        """Validate a CloudWatch log group."""
-        result = ValidationResult(resource_id, "cloudwatch_log_group")
-        result.expected_config = expected_config
-
+    def get_resource_description(self, resource_id: str):
+        """Get CloudWatch log group description."""
         try:
-            # Get log group description
-            response = self.logs_client.describe_log_groups(logGroupNamePrefix=resource_id, limit=1)
-
+            response = self.client.describe_log_groups(logGroupNamePrefix=resource_id, limit=1)
             log_groups = response.get("logGroups", [])
             if not log_groups or log_groups[0]["logGroupName"] != resource_id:
-                result.exists = False
-                result.add_message(f"Log group {resource_id} does not exist")
-                return result
-
-            log_group = log_groups[0]
-            result.exists = True
-
-            # Extract actual configuration
-            result.actual_config = {
-                "log_group_name": log_group["logGroupName"],
-                "retention_days": log_group.get("retentionInDays"),
-                "kms_key_id": log_group.get("kmsKeyId"),
-                "stored_bytes": log_group.get("storedBytes", 0),
-            }
-
-            # Validate retention policy
-            if expected_config.get("retention_days") is not None:
-                actual_retention = result.actual_config["retention_days"]
-                expected_retention = expected_config["retention_days"]
-                if actual_retention != expected_retention:
-                    result.drift_detected = True
-                    result.add_message(f"Retention days drift: expected {expected_retention}, got {actual_retention}")
-
-            result.valid = True
-
+                return None
+            return log_groups[0]
         except ClientError as err:
-            result.add_message(f"Error validating log group: {err}")
+            if err.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                return None
+            raise
 
-        return result
+    def extract_actual_config(self, resource_data: dict) -> dict:
+        """Extract actual configuration from log group data."""
+        return {
+            "log_group_name": resource_data["logGroupName"],
+            "retention_days": resource_data.get("retentionInDays"),
+            "kms_key_id": resource_data.get("kmsKeyId"),
+            "stored_bytes": resource_data.get("storedBytes", 0),
+        }
+
+    def validate_configuration(self, result: ValidationResult, expected_config: dict):
+        """Validate CloudWatch log group configuration."""
+        # Validate retention policy
+        if expected_config.get("retention_days") is not None:
+            actual_retention = result.actual_config["retention_days"]
+            expected_retention = expected_config["retention_days"]
+            if actual_retention != expected_retention:
+                result.drift_detected = True
+                result.add_message(f"Retention days drift: expected {expected_retention}, got {actual_retention}")
 
     def list_resources(self, filter_params=None) -> list:
         """List all CloudWatch log groups."""
         log_groups = []
-        paginator = self.logs_client.get_paginator("describe_log_groups")
+        paginator = self.client.get_paginator("describe_log_groups")
 
         kwargs = {}
         if filter_params and "prefix" in filter_params:
@@ -318,8 +363,7 @@ class CodeBuildValidator(ResourceValidator):
 
     def __init__(self, session: boto3.Session):
         """Initialize CodeBuild validator."""
-        super().__init__(session)
-        self.client = session.client("codebuild")
+        super().__init__(session, "codebuild", "codebuild_project")
 
     def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate a CodeBuild project."""
@@ -403,8 +447,7 @@ class S3BucketValidator(ResourceValidator):
 
     def __init__(self, session: boto3.Session):
         """Initialize S3 validator."""
-        super().__init__(session)
-        self.client = session.client("s3")
+        super().__init__(session, "s3", "s3_bucket")
         self.region = session.region_name
 
     def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:

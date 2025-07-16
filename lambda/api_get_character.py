@@ -20,15 +20,15 @@ Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-import json
 import os
-from decimal import Decimal
 
 import boto3
-from botocore.exceptions import ClientError
 
 from eidolon.cors import cors_handler
+from eidolon.dynamo import decimal_to_float, get_item_safe
 from eidolon.logger import get_logger
+from eidolon.requests import extract_player_id, get_query_parameter
+from eidolon.responses import create_response, error_response, not_found_response
 
 # Configure logging
 logger = get_logger(__name__)
@@ -38,27 +38,8 @@ dynamodb = boto3.resource("dynamodb")
 characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
 active_segments_table = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
 
-characters_table = dynamodb.Table(characters_table)
-active_segments_table = dynamodb.Table(active_segments_table)
-
-
-def decimal_to_float(obj):
-    """
-    Convert DynamoDB Decimal types to Python float for JSON serialization.
-
-    Args:
-        obj: Object to convert
-
-    Returns:
-        Converted object
-    """
-    if isinstance(obj, Decimal):
-        return float(obj)
-    elif isinstance(obj, dict):
-        return {k: decimal_to_float(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [decimal_to_float(v) for v in obj]
-    return obj
+characters_table = dynamodb.Table(characters_table)  # type: ignore
+active_segments_table = dynamodb.Table(active_segments_table)  # type: ignore
 
 
 def get_character_by_id(character_id, player_id):
@@ -72,24 +53,22 @@ def get_character_by_id(character_id, player_id):
     Returns:
         Character data or None if not found or not owned by player
     """
-    try:
-        response = characters_table.get_item(Key={"CharacterID": character_id})
+    success, result = get_item_safe(characters_table, {"CharacterID": character_id}, error_context="getting character")
 
-        if "Item" not in response:
-            return None
-
-        character = response["Item"]
-
-        # Verify ownership
-        if character.get("PlayerID") != player_id:
-            logger.warning("Character ownership mismatch", character_id=character_id, player_id=player_id)
-            return None
-
-        return character
-
-    except ClientError as err:
-        logger.error("Error getting character", error=err, character_id=character_id)
+    if not success:
         return None
+
+    if result == "Item not found":
+        return None
+
+    character = result
+
+    # Verify ownership
+    if character.get("PlayerID") != player_id:
+        logger.warning("Character ownership mismatch", character_id=character_id, player_id=player_id)
+        return None
+
+    return character
 
 
 def get_active_segment(player_id):
@@ -102,20 +81,15 @@ def get_active_segment(player_id):
     Returns:
         Active segment data or None
     """
-    try:
-        response = active_segments_table.get_item(Key={"PlayerID": player_id})
+    success, result = get_item_safe(active_segments_table, {"PlayerID": player_id}, error_context="getting active segment")
 
-        if "Item" in response:
-            return response["Item"]
-
+    if not success or result == "Item not found":
         return None
 
-    except ClientError as err:
-        logger.error("Error getting active segment", error=err, player_id=player_id)
-        return None
+    return result
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, context) -> dict:
     """
     Lambda handler for getting incremental character data.
 
@@ -135,75 +109,35 @@ def lambda_handler(event, context):
 
     try:
         # Extract player ID from Cognito authorizer
-        claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-        player_id = claims.get("sub")
-
-        if not player_id:
-            return cors_handler.add_cors_headers(
-                {
-                    "statusCode": 401,
-                    "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": "Unauthorized"}),
-                },
-                event,
-            )
+        player_id, auth_error = extract_player_id(event)
+        if auth_error:
+            return auth_error
 
         # Get character ID from query parameters
-        character_id = event.get("queryStringParameters", {}).get("characterId", "").strip()
-
-        if not character_id:
-            return cors_handler.add_cors_headers(
-                {
-                    "statusCode": 400,
-                    "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": "Missing character ID"}),
-                },
-                event,
-            )
+        character_id, error_msg = get_query_parameter(event, "characterId", required=True)
+        if error_msg:
+            return cors_handler.add_cors_headers(error_response(error_msg), event)
 
         # Get character data
         character = get_character_by_id(character_id, player_id)
 
         if not character:
-            return cors_handler.add_cors_headers(
-                {
-                    "statusCode": 404,
-                    "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": "Character not found"}),
-                },
-                event,
-            )
+            return cors_handler.add_cors_headers(not_found_response("Character"), event)
 
         # Get active segment if any
         active_segment = get_active_segment(player_id)
 
         # Prepare response data
-        response_data = {
+        response_data: dict = {
             "character": decimal_to_float(character),
             "activeSegment": decimal_to_float(active_segment) if active_segment else None,
         }
 
         # Return success response
         logger.log_response(200)
-        return cors_handler.add_cors_headers(
-            {
-                "statusCode": 200,
-                "headers": {
-                    "Content-Type": "application/json",
-                },
-                "body": json.dumps(response_data),
-            },
-            event,
-        )
+        return cors_handler.add_cors_headers(create_response(200, response_data), event)
 
     except Exception as err:
         logger.error("Unexpected error in lambda_handler", error=err)
         logger.log_response(500)
-        return cors_handler.add_cors_headers(
-            {
-                "statusCode": 500,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Internal server error"}),
-            },
-            event,
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

@@ -3,44 +3,35 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      python: 3.11
-    commands:
-      - echo Installing tools for Lambda function packaging
+      python: 3.12
 
   build:
     commands:
       - echo Building Lambda functions with shared eidolon module
 
-      # Create temporary directory for packaging
       - mkdir -p build_temp
 
-      # Package each Lambda function with eidolon module
       - |
         for func in lambda/*.py; do
           if [ -f "$func" ]; then
             func_name=$(basename "$func" .py)
-            echo "Packaging $func_name..."
+            # Convert snake_case to kebab-case for zip file name
+            zip_name=$(echo "$func_name" | sed 's/_/-/g')
+            echo "Packaging $func_name as $zip_name.zip..."
             
-            # Create function-specific directory
             mkdir -p "build_temp/$func_name"
             
-            # Copy the Lambda function
             cp "$func" "build_temp/$func_name/"
             
-            # Copy the eidolon module if the function uses it
             if grep -q "from eidolon" "$func"; then
               cp -r eidolon "build_temp/$func_name/"
             fi
             
-            # Create the zip file
             cd "build_temp/$func_name"
-            zip -r "../../lambda/$func_name.zip" .
+            zip -r "../../lambda/$zip_name.zip" .
             cd ../..
           fi
         done
-
-      # Clean up
-      - rm -rf build_temp
 
   post_build:
     commands:

@@ -16,12 +16,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:amazon_cognito_identity_dart_2/cognito.dart';
-
 import '../services/auth_service.dart';
-import '../widgets/ui_components.dart';
-import '../utils/input_sanitizer.dart';
-import '../utils/form_state_provider.dart';
 
 class PasswordResetScreen extends StatefulWidget {
   const PasswordResetScreen({super.key});
@@ -34,8 +29,6 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   bool _isLoading = false;
-  String _message = '';
-  bool _isError = false;
 
   @override
   void dispose() {
@@ -43,13 +36,11 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
     super.dispose();
   }
 
-  Future<void> _requestPasswordReset() async {
+  Future<void> _handlePasswordReset() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _isLoading = true;
-      _message = '';
-      _isError = false;
     });
 
     try {
@@ -57,25 +48,27 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
       await authService.forgotPassword(_emailController.text.trim());
 
       if (mounted) {
-        setState(() {
-          _message = 'Password reset code sent to your email';
-          _isError = false;
-        });
-
-        Navigator.of(context).pushReplacementNamed(
+        Navigator.pushNamed(
+          context,
           '/password-reset-confirm',
           arguments: _emailController.text.trim(),
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reset code sent to your email'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isError = true;
-          _message =
-              e is CognitoClientException && e.message != null
-                  ? e.message!
-                  : 'An unexpected error occurred. Please try again.';
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -89,52 +82,76 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const AuthAppBar(title: 'Reset Password'),
-      body: SafeArea(
+      appBar: AppBar(title: const Text('Reset Password')),
+      body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: FormStateProvider(
-            formKey: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                const SizedBox(height: 24),
-                const Text(
-                  'Enter your email address and we\'ll send you a code to reset your password.',
-                  style: TextStyle(fontSize: 16),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                AppTextField(
-                  controller: _emailController,
-                  labelText: 'Email',
-                  prefixIcon: Icons.email_outlined,
-                  hintText: 'Enter your email',
-                  keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
-                  validator: FieldValidators.email,
-                  inputFormatters: [InputSanitizer.noXSSChars()],
-                  onSubmitted: (_) => _requestPasswordReset(),
-                ),
-                const SizedBox(height: 32),
-                LoadingButton(
-                  isLoading: _isLoading,
-                  onPressed: _requestPasswordReset,
-                  text: 'SEND RESET CODE',
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Back to Sign In'),
-                ),
-                const SizedBox(height: 24),
-                StatusMessage(
-                  message: InputSanitizer.sanitizeDisplayText(_message),
-                  isError: _isError,
-                ),
-              ],
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Forgot Your Password?',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Enter your email address and we\'ll send you a code to reset your password.',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                  TextFormField(
+                    controller: _emailController,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.email],
+                    onFieldSubmitted: (_) => _handlePasswordReset(),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value)) {
+                        return 'Please enter a valid email';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _isLoading ? null : _handlePasswordReset,
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Text('Send Reset Code'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed:
+                        _isLoading
+                            ? null
+                            : () {
+                              Navigator.pop(context);
+                            },
+                    child: const Text('Back to Sign In'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

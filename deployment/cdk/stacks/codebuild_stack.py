@@ -75,6 +75,7 @@ class CodeBuildStack(Stack):
                 repo=github_repo,
                 branch_or_ref=github_branch,
                 webhook=False,
+                report_build_status=False,
             ),
             environment=codebuild.BuildEnvironment(
                 build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
@@ -117,6 +118,7 @@ class CodeBuildStack(Stack):
                     repo=github_repo,
                     branch_or_ref=github_branch,
                     webhook=False,
+                    report_build_status=False,
                 ),
                 environment=codebuild.BuildEnvironment(
                     build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
@@ -138,6 +140,7 @@ class CodeBuildStack(Stack):
                     repo=github_repo,
                     branch_or_ref=github_branch,
                     webhook=False,
+                    report_build_status=False,
                 ),
                 environment=codebuild.BuildEnvironment(
                     build_image=codebuild.LinuxBuildImage.STANDARD_7_0, compute_type=codebuild.ComputeType.SMALL
@@ -157,11 +160,13 @@ class CodeBuildStack(Stack):
                 iam.PolicyStatement(
                     actions=["s3:PutObject"],
                     resources=[
-                        f"{self.lambda_bucket.bucket_arn}/cognito_new_player.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api_get_archetypes.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api_save_character.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api_list_characters.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api_delete_character.zip",
+                        f"{self.lambda_bucket.bucket_arn}/cognito-new-player.zip",
+                        f"{self.lambda_bucket.bucket_arn}/cognito-delete-player.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-get-archetypes.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-add-character.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-get-character.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-list-characters.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-delete-character.zip",
                     ],
                 )
             )

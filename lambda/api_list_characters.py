@@ -20,82 +20,71 @@ Lambda function to list character names for an authenticated player.
 Returns only character names and death status from the player table.
 """
 
-import json
 import os
 
 import boto3
-from botocore.exceptions import ClientError
 
+from eidolon.cors import cors_handler
+from eidolon.dynamo import get_item_safe
 from eidolon.logger import get_logger
+from eidolon.requests import extract_player_id
+from eidolon.responses import create_response, error_response, not_found_response
 
 # Configure logging
 logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-players_table = os.environ.get("PLAYERS_TABLE", "players")
+players_table: str = os.environ.get("PLAYERS_TABLE", "players")
 
-players_table = dynamodb.Table(players_table)
+players_table = dynamodb.Table(players_table)  # type: ignore
 
 
-def lambda_handler(event, _):
+def lambda_handler(event, context):
     """
     Lambda handler for listing player characters.
 
     Args:
         event: API Gateway event with Cognito authorizer
-        _: Lambda context (unused)
+        context: Lambda context
 
     Returns:
         API Gateway response
     """
+    # Log Lambda invocation
+    logger.log_lambda_event(event, context)
+
     try:
         # Extract player ID from Cognito authorizer
-        player_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("sub")
-        if not player_id:
-            return {
-                "statusCode": 401,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Unauthorized"}),
-            }
+        player_id, auth_error = extract_player_id(event)
+        if auth_error:
+            return auth_error
 
         # Get player data from players table
-        response = players_table.get_item(Key={"PlayerID": player_id})
+        success, result = get_item_safe(players_table, {"PlayerID": player_id}, error_context="getting player data")
 
-        if "Item" not in response:
-            return {
-                "statusCode": 404,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Player not found"}),
-            }
+        if not success:
+            return cors_handler.add_cors_headers(error_response("Database error", status_code=500), event)
 
-        player_data = response["Item"]
+        if result == "Item not found":
+            return cors_handler.add_cors_headers(not_found_response("Player"), event)
+
+        player_data = result
         character_list = player_data.get("CharacterList", {})
 
         # Build character list with name and death status
-        characters = []
+        characters: list = []
         for char_name, char_info in character_list.items():
             characters.append({"name": char_name, "dead": char_info.get("Dead", False)})
 
         # Sort by name for consistent ordering
         characters.sort(key=lambda x: x["name"])
 
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-            },
-            "body": json.dumps({"characters": characters}),
-        }
+        # Return success response
+        logger.log_response(200)
+        return cors_handler.add_cors_headers(create_response(200, {"characters": characters}), event)
 
-    except ClientError as err:
-        logger.error(f"DynamoDB error: {err}")
-        return {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": "Database error"})}
     except Exception as err:
-        logger.error(f"Unexpected error: {err}")
-        return {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Internal server error"}),
-        }
+        logger.error("Unexpected error in lambda_handler", error=err)
+        logger.log_response(500)
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

@@ -163,6 +163,8 @@ def decimal_to_float(obj):
         return {k: decimal_to_float(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [decimal_to_float(v) for v in obj]
+    elif isinstance(obj, set):
+        return [decimal_to_float(v) for v in obj]
     return obj
 
 
@@ -306,6 +308,117 @@ def batch_get_items(table, keys: list) -> list:
     except ClientError as err:
         logger.error("Error batch getting items from DynamoDB", error=err, table=table.name)
         return []
+
+
+def safe_update_item_with_condition(
+    table, key: dict, update_expression: str, expression_values: dict, condition_expression: str, expression_names=None
+) -> tuple:
+    """
+    Safely update an item in DynamoDB table with a condition.
+
+    Args:
+        table: DynamoDB table resource
+        key: Primary key dict
+        update_expression: UpdateExpression string
+        expression_values: ExpressionAttributeValues dict
+        condition_expression: ConditionExpression string
+        expression_names: Optional ExpressionAttributeNames dict
+
+    Returns:
+        Tuple of (success, error_message)
+    """
+    try:
+        kwargs = {
+            "Key": key,
+            "UpdateExpression": update_expression,
+            "ExpressionAttributeValues": convert_to_decimal(expression_values),
+            "ConditionExpression": condition_expression,
+        }
+
+        if expression_names:
+            kwargs["ExpressionAttributeNames"] = expression_names
+
+        table.update_item(**kwargs)
+        return True, None
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.warning("Condition check failed", error=err, table=table.name, key=key)
+            return False, "Condition not met"
+        else:
+            logger.error("Error updating item in DynamoDB", error=err, table=table.name, key=key)
+            return False, "Database error"
+
+
+def scan_all_items(
+    table, filter_expression=None, expression_values=None, projection_expression=None, expression_names=None
+) -> tuple:
+    """
+    Scan all items from a DynamoDB table with pagination handling.
+
+    Args:
+        table: DynamoDB table resource
+        filter_expression: Optional FilterExpression string
+        expression_values: Optional ExpressionAttributeValues dict
+        projection_expression: Optional ProjectionExpression string
+        expression_names: Optional ExpressionAttributeNames dict
+
+    Returns:
+        Tuple of (success, items_or_error)
+    """
+    try:
+        items = []
+        kwargs = {}
+
+        if filter_expression:
+            kwargs["FilterExpression"] = filter_expression
+
+        if expression_values:
+            kwargs["ExpressionAttributeValues"] = convert_to_decimal(expression_values)
+
+        if projection_expression:
+            kwargs["ProjectionExpression"] = projection_expression
+
+        if expression_names:
+            kwargs["ExpressionAttributeNames"] = expression_names
+
+        # Initial scan
+        response = table.scan(**kwargs)
+        items.extend(response.get("Items", []))
+
+        # Handle pagination
+        while "LastEvaluatedKey" in response:
+            kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+            response = table.scan(**kwargs)
+            items.extend(response.get("Items", []))
+
+        return True, items
+    except ClientError as err:
+        logger.error("Error scanning table", error=err, table=table.name)
+        return False, "Database error"
+
+
+def get_item_safe(table, key: dict, error_context: str = "") -> tuple:
+    """
+    Safely get an item from DynamoDB with detailed error handling.
+
+    Args:
+        table: DynamoDB table resource
+        key: Primary key dict
+        error_context: Additional context for error logging
+
+    Returns:
+        Tuple of (success, item_or_error)
+    """
+    try:
+        response = table.get_item(Key=key)
+
+        if "Item" not in response:
+            return False, "Item not found"
+
+        return True, response["Item"]
+    except ClientError as err:
+        logger.error(f"Error getting item {error_context}", error=err, table=table.name, key=key)
+        return False, "Database error"
 
 
 # Global instance for easy import
