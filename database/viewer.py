@@ -39,7 +39,7 @@ TABLE_NAMES = {
 
 def view_table(table_name, actual_table_name):
     """View contents of a DynamoDB table.
-    
+
     Args:
         table_name: Logical name of the table (e.g., "players")
         actual_table_name: Actual DynamoDB table name

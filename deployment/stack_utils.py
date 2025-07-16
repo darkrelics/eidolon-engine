@@ -106,7 +106,7 @@ class StackOutputHelper:
                 resources[resource.get("LogicalResourceId")] = {
                     "physical_id": resource.get("PhysicalResourceId"),
                     "type": resource.get("ResourceType"),
-                    "status": resource.get("ResourceStatus")
+                    "status": resource.get("ResourceStatus"),
                 }
         except ClientError:
             pass
@@ -119,12 +119,8 @@ class StackOutputHelper:
             stack_name: Name of the CloudFormation stack
             wait_type: Type of waiter ('create', 'update', 'delete')
         """
-        waiter_map = {
-            "create": "stack_create_complete",
-            "update": "stack_update_complete",
-            "delete": "stack_delete_complete"
-        }
-        
+        waiter_map = {"create": "stack_create_complete", "update": "stack_update_complete", "delete": "stack_delete_complete"}
+
         waiter_name = waiter_map.get(wait_type, "stack_create_complete")
         waiter = self.cfn_client.get_waiter(waiter_name)
         waiter.wait(StackName=stack_name)

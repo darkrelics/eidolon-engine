@@ -232,7 +232,7 @@ def validate_resources(session, params: dict) -> dict:
     # Validate S3 buckets
     try:
         validator = ResourceValidatorFactory.create_validator("s3_bucket", session)
-        
+
         # Expected config for all private S3 buckets
         expected_config = {
             "website_enabled": False,  # No website hosting needed with CloudFront

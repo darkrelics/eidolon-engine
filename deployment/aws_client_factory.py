@@ -41,10 +41,10 @@ class AWSClientFactory:
         """
         # Create a cache key including any extra kwargs
         cache_key = f"{service_name}:{str(sorted(kwargs.items()))}"
-        
+
         if cache_key not in self._clients:
             self._clients[cache_key] = self.session.client(service_name, **kwargs)
-        
+
         return self._clients[cache_key]
 
     def get_resource(self, service_name: str, **kwargs):

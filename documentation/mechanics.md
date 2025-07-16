@@ -48,7 +48,6 @@ The `Outcome` struct provides:
 The system uses a normal distribution with two key transformations:
 
 1. **Mean Shift (μ)**: Based on the rating difference (Δ = aggressor - defender)
-
    - μ = kShift × Δ
    - Shifts the probability curve to favor the higher-rated participant
 

@@ -84,7 +84,7 @@ func NewScriptManager(cfg *Configuration) (*ScriptManager, error) {
 		roomScripts:  make(map[int64]*lua.LState),
 		scriptCache:  make(map[string]*ScriptCache),
 		s3Client:     s3Client,
-		bucketName:   cfg.Game.ScriptsS3Bucket,
+		bucketName:   cfg.S3.ScriptsBucket,
 		bucketPrefix: prefix,
 		mutex:        sync.RWMutex{},
 	}, nil
@@ -447,6 +447,6 @@ func InitScriptManager(cfg *Configuration) error {
 		Logger.Error("ScriptMgr is nil after successful NewScriptManager - this should not happen")
 		return fmt.Errorf("script manager is nil after initialization")
 	}
-	Logger.Info("Script manager initialized successfully", "bucket", cfg.Game.ScriptsS3Bucket, "prefix", cfg.Game.ScriptsS3Prefix)
+	Logger.Info("Script manager initialized successfully", "bucket", cfg.S3.ScriptsBucket, "prefix", cfg.Game.ScriptsS3Prefix)
 	return nil
 }

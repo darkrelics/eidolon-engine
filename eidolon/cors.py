@@ -73,11 +73,10 @@ class CorsHandler:
             if self.allow_credentials:
                 cors_headers["Access-Control-Allow-Credentials"] = "true"
         else:
-            # No valid origin found, use first allowed origin as fallback
-            logger.warning(f"Origin '{origin}' not in allowed list, using fallback")
-            cors_headers["Access-Control-Allow-Origin"] = self.allowed_origins[0]
-            if self.allow_credentials:
-                cors_headers["Access-Control-Allow-Credentials"] = "true"
+            # No valid origin found, reject the request
+            logger.warning(f"Origin '{origin}' not in allowed list. Allowed origins: {self.allowed_origins}")
+            # Don't set Access-Control-Allow-Origin header for unauthorized origins
+            # This will cause the browser to block the request
 
         return cors_headers
 

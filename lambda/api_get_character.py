@@ -38,8 +38,6 @@ CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
 ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
 
 
-
-
 def get_character_by_id(character_id, player_id):
     """
     Get character by UUID and verify ownership.
@@ -53,7 +51,7 @@ def get_character_by_id(character_id, player_id):
     """
     characters_table = get_table(CHARACTERS_TABLE)
     character = get_item(characters_table, {"CharacterID": character_id})
-    
+
     if not character:
         return None
 
@@ -99,7 +97,7 @@ def lambda_handler(event, context) -> dict:
                 "function_name": getattr(context, "function_name", "unknown"),
                 "http_method": event.get("httpMethod"),
                 "path": event.get("path"),
-            }
+            },
         )
 
     # Handle preflight requests
@@ -115,19 +113,13 @@ def lambda_handler(event, context) -> dict:
         # Get character ID from query parameters
         character_id, error_msg = get_query_parameter(event, "characterId", required=True)
         if error_msg:
-            return cors_handler.add_cors_headers(
-                error_response(error_msg),
-                event
-            )
+            return cors_handler.add_cors_headers(error_response(error_msg), event)
 
         # Get character data
         character = get_character_by_id(character_id, player_id)
 
         if not character:
-            return cors_handler.add_cors_headers(
-                not_found_response("Character"),
-                event
-            )
+            return cors_handler.add_cors_headers(not_found_response("Character"), event)
 
         # Get active segment if any
         active_segment = get_active_segment(player_id)
@@ -140,15 +132,9 @@ def lambda_handler(event, context) -> dict:
 
         # Return success response
         logger.info("Lambda response", extra={"status_code": 200})
-        return cors_handler.add_cors_headers(
-            create_response(200, response_data),
-            event
-        )
+        return cors_handler.add_cors_headers(create_response(200, response_data), event)
 
     except Exception as err:
         logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500),
-            event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

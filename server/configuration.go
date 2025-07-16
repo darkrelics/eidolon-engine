@@ -62,7 +62,6 @@ type Configuration struct {
 		AutoSave                 uint16  `yaml:"AutoSave"`
 		NamesPath                string  `yaml:"NamesPath"`
 		ObscenityPath            string  `yaml:"ObscenityPath"`
-		ScriptsS3Bucket          string  `yaml:"ScriptsS3Bucket"`          // S3 bucket for Lua scripts
 		ScriptsS3Prefix          string  `yaml:"ScriptsS3Prefix"`          // S3 prefix for Lua scripts (default: scripts)
 		TickIntervalSeconds      int     `yaml:"TickIntervalSeconds"`      // Game tick interval (default: 1)
 		RoomItemCleanupSeconds   int     `yaml:"RoomItemCleanupSeconds"`   // Room item cleanup interval (default: 600)
@@ -105,6 +104,11 @@ type Configuration struct {
 		LogFlushTimeoutSeconds int `yaml:"LogFlushTimeoutSeconds"` // Log flush timeout (default: 3)
 		ShutdownDrainSeconds   int `yaml:"ShutdownDrainSeconds"`   // Error channel drain timeout during shutdown (default: 2)
 	} `yaml:"CloudWatch"`
+
+	// S3 bucket settings
+	S3 struct {
+		ScriptsBucket string `yaml:"ScriptsBucket"` // S3 bucket for game scripts
+	} `yaml:"S3"`
 }
 
 func LoadConfiguration(configurationFile string) (*Configuration, error) {
