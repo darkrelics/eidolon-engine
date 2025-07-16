@@ -72,7 +72,7 @@ class ResourceValidator:
         """
         result = ValidationResult(resource_id, self.resource_type)
         result.expected_config = expected_config
-        
+
         try:
             # Get resource description
             resource_data = self.get_resource_description(resource_id)
@@ -80,58 +80,58 @@ class ResourceValidator:
                 result.exists = False
                 result.add_message(f"{self.resource_type} {resource_id} does not exist")
                 return result
-                
+
             result.exists = True
-            
+
             # Extract actual configuration
             result.actual_config = self.extract_actual_config(resource_data)
-            
+
             # Check if resource is valid
             if not self.is_resource_valid(resource_data):
                 result.valid = False
                 return result
-                
+
             # Validate configuration
             self.validate_configuration(result, expected_config)
             result.valid = True
-            
+
         except ClientError as err:
             self.handle_client_error(result, err, resource_id)
-            
+
         return result
 
     def get_resource_description(self, resource_id: str):
         """Get the resource description from AWS.
-        
+
         Subclasses must implement this method.
         Returns None if resource doesn't exist.
         """
         raise NotImplementedError("Subclasses must implement get_resource_description()")
-        
+
     def extract_actual_config(self, resource_data: dict) -> dict:
         """Extract the actual configuration from resource data.
-        
+
         Subclasses must implement this method.
         """
         raise NotImplementedError("Subclasses must implement extract_actual_config()")
-        
+
     def is_resource_valid(self, resource_data: dict) -> bool:
         """Check if the resource is in a valid state.
-        
+
         Default implementation returns True. Override if needed.
         """
         return True
-        
+
     def validate_configuration(self, result: ValidationResult, expected_config: dict):
         """Validate the actual configuration against expected.
-        
+
         Subclasses should implement specific validation logic.
         """
         pass
-        
+
     def handle_client_error(self, result: ValidationResult, err: ClientError, resource_id: str):
         """Handle ClientError exceptions.
-        
+
         Default implementation handles ResourceNotFoundException.
         Override to add service-specific error handling.
         """
@@ -219,6 +219,7 @@ class DynamoDBTableValidator(ResourceValidator):
 
         return tables
 
+
 def compare_key_schemas(actual: list, expected: list) -> bool:
     """Compare DynamoDB key schemas for equality."""
     if len(actual) != len(expected):
@@ -288,6 +289,7 @@ class CognitoValidator(ResourceValidator):
                 pools.append(pool["Id"])
 
         return pools
+
 
 def compare_password_policies(actual: dict, expected: dict) -> bool:
     """Compare Cognito password policies for equality."""

@@ -21,7 +21,7 @@ def get_table(table_name: str):
         DynamoDB table resource
     """
     dynamodb = boto3.resource("dynamodb")
-    return dynamodb.Table(table_name) # type: ignore
+    return dynamodb.Table(table_name)  # type: ignore
 
 
 def convert_to_decimal(obj):
@@ -132,9 +132,9 @@ def delete_item(table, key: dict) -> bool:
         return False
 
 
-def update_item_with_condition(table, key: dict, update_expression: str,
-                              expression_values: dict, condition_expression: str,
-                              expression_names=None):
+def update_item_with_condition(
+    table, key: dict, update_expression: str, expression_values: dict, condition_expression: str, expression_names=None
+):
     """Update an item in DynamoDB table with a condition.
 
     Args:
@@ -153,7 +153,7 @@ def update_item_with_condition(table, key: dict, update_expression: str,
             "Key": key,
             "UpdateExpression": update_expression,
             "ExpressionAttributeValues": convert_to_decimal(expression_values),
-            "ConditionExpression": condition_expression
+            "ConditionExpression": condition_expression,
         }
 
         if expression_names:
@@ -162,7 +162,7 @@ def update_item_with_condition(table, key: dict, update_expression: str,
         table.update_item(**kwargs)
         return True, None
     except ClientError as err:
-        if err.response['Error']['Code'] == 'ConditionalCheckFailedException':
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             logger.warning("Condition check failed", extra={"error": str(err), "table": table.name, "key": key})
             return False, "Condition not met"
         else:
@@ -170,8 +170,7 @@ def update_item_with_condition(table, key: dict, update_expression: str,
             return False, "Database error"
 
 
-def scan_all_items(table, filter_expression=None, expression_values=None,
-                  projection_expression=None, expression_names=None):
+def scan_all_items(table, filter_expression=None, expression_values=None, projection_expression=None, expression_names=None):
     """Scan all items from a DynamoDB table with pagination handling.
 
     Args:

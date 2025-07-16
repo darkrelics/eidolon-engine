@@ -57,9 +57,9 @@ def lambda_handler(event, context):
                 "function_name": getattr(context, "function_name", "unknown"),
                 "http_method": event.get("httpMethod"),
                 "path": event.get("path"),
-            }
+            },
         )
-    
+
     # Handle preflight requests
     if event.get("httpMethod") == "OPTIONS":
         return cors_handler.handle_preflight(event)
@@ -73,12 +73,9 @@ def lambda_handler(event, context):
         # Get player data from players table
         players_table = get_table(PLAYERS_TABLE)
         player_data = get_item(players_table, {"PlayerID": player_id})
-        
+
         if not player_data:
-            return cors_handler.add_cors_headers(
-                not_found_response("Player"),
-                event
-            )
+            return cors_handler.add_cors_headers(not_found_response("Player"), event)
         character_list = player_data.get("CharacterList", {})
 
         # Build character list with name and death status
@@ -91,15 +88,9 @@ def lambda_handler(event, context):
 
         # Return success response
         logger.info("Lambda response", extra={"status_code": 200})
-        return cors_handler.add_cors_headers(
-            create_response(200, {"characters": characters}),
-            event
-        )
+        return cors_handler.add_cors_headers(create_response(200, {"characters": characters}), event)
 
     except Exception as err:
         logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500),
-            event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

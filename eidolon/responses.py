@@ -188,16 +188,16 @@ def unauthorized_response(message: str = "Unauthorized") -> dict:
 def create_response(status_code: int, body: dict) -> dict:
     """
     Create a generic API response with proper formatting.
-    
+
     Args:
         status_code: HTTP status code.
         body: Response body dict.
-        
+
     Returns:
         API Gateway response dict.
     """
     return {
         "statusCode": status_code,
         "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(decimal_to_json_serializable(body))
+        "body": json.dumps(decimal_to_json_serializable(body)),
     }

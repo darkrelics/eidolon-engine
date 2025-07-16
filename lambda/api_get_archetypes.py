@@ -126,13 +126,13 @@ def lambda_handler(event, context) -> dict:
                 "function_name": getattr(context, "function_name", "unknown"),
                 "http_method": event.get("httpMethod"),
                 "path": event.get("path"),
-            }
+            },
         )
-    
+
     # Handle preflight requests
     if event.get("httpMethod") == "OPTIONS":
         return cors_handler.handle_preflight(event)
-    
+
     try:
         # Load player archetypes (from cache if available)
         player_archetypes: list = load_player_archetypes()
@@ -140,17 +140,17 @@ def lambda_handler(event, context) -> dict:
         # Return successful response
         logger.info("Lambda response", extra={"status_code": 200})
         return cors_handler.add_cors_headers(
-            create_response(200, {
-                "archetypes": player_archetypes,
-                "count": len(player_archetypes),
-            }),
-            event
+            create_response(
+                200,
+                {
+                    "archetypes": player_archetypes,
+                    "count": len(player_archetypes),
+                },
+            ),
+            event,
         )
 
     except Exception as err:
         logger.error("Error in lambda_handler", extra={"error": str(err)}, exc_info=True)
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500),
-            event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

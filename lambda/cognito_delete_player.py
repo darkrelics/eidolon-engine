@@ -79,29 +79,27 @@ def delete_all_characters(player_id: str) -> int:
         table = get_table(TABLES_CONFIG["characters"])
 
         # Scan for all characters owned by this player
-        success, result = scan_all_items(
-            table,
-            filter_expression="PlayerID = :pid",
-            expression_values={":pid": player_id}
-        )
+        success, result = scan_all_items(table, filter_expression="PlayerID = :pid", expression_values={":pid": player_id})
 
         if not success:
             logger.error("Failed to scan characters", extra={"error": result})
             return 0
 
         items = result if isinstance(result, list) else []
-        
+
         # Delete each character found
         for item in items:
             if delete_item(table, {"CharacterID": item["CharacterID"]}):
                 deleted_count += 1
                 game_mode = item.get("GameMode", "Unknown")
-                logger.info("Deleted character",
-                           extra={
-                               "game_mode": game_mode,
-                               "character_name": item.get('CharacterName', 'Unknown'),
-                               "character_id": item['CharacterID']
-                           })
+                logger.info(
+                    "Deleted character",
+                    extra={
+                        "game_mode": game_mode,
+                        "character_name": item.get("CharacterName", "Unknown"),
+                        "character_id": item["CharacterID"],
+                    },
+                )
 
         return deleted_count
 
@@ -195,7 +193,7 @@ def lambda_handler(event, context):
             extra={
                 "request_id": context.aws_request_id,
                 "function_name": getattr(context, "function_name", "unknown"),
-            }
+            },
         )
 
     try:

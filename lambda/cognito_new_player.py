@@ -48,8 +48,8 @@ def lambda_handler(event, context) -> dict:
     """
     # Log Lambda invocation (without exposing sensitive event data)
     logger.info(
-        "Cognito post-confirmation trigger", 
-        extra={"trigger_source": event.get("triggerSource"), "user_pool_id": event.get("userPoolId")}
+        "Cognito post-confirmation trigger",
+        extra={"trigger_source": event.get("triggerSource"), "user_pool_id": event.get("userPoolId")},
     )
 
     try:
@@ -68,7 +68,7 @@ def lambda_handler(event, context) -> dict:
         players_table = get_table(PLAYERS_TABLE)
         logger.debug("Checking for existing player", extra={"user_id": user_uuid, "table_name": PLAYERS_TABLE})
         existing_player = get_item(players_table, {"PlayerID": user_uuid})
-        
+
         if existing_player:
             logger.info("Player already exists", extra={"user_id": user_uuid})
             return event

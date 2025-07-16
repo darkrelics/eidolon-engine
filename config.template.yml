@@ -12,15 +12,14 @@ Game:
   StartingEssence: 3
   NamesPath: ../data/names.txt
   ObscenityPath: ../data/obscenity.txt
-  ScriptsS3Bucket: darkrelics-scripts
   ScriptsS3Prefix: scripts
   TickIntervalSeconds: 1
-  RoomItemCleanupSeconds: 600 # 10 minutes
-  RoomUnloadSeconds: 3600 # 60 minutes
+  RoomItemCleanupSeconds: 600
+  RoomUnloadSeconds: 3600
   CommandTimeoutSeconds: 5
-  PlayerIdleTimeoutSeconds: 900 # 15 minutes
-  PortalS3Bucket: darkrelics-portal
-  PortalUrl: "" # deployment-generated
+  PlayerIdleTimeoutSeconds: 900
+  SessionCleanupIntervalSeconds: 300 # Future
+  SessionIdleTimeoutSeconds: 900 # Future
 
 # Deployment mode: 'mud', 'incremental', or 'hybrid'
 # - mud: MUD mode with Portal frontend
@@ -55,8 +54,6 @@ API:
   HostedZoneId: "" # REQUIRED - Route53 hosted zone ID
   Subdomain: api # api.{domain}
 
-# CORS configuration - automatically derived from CloudFront configuration
-
 # Cognito configuration
 Cognito:
   user_pool_id: "" # deployment-generated
@@ -77,20 +74,15 @@ CloudWatch:
   MetricsTimeoutSeconds: 10
   LogFlushTimeoutSeconds: 3
   ShutdownDrainSeconds: 2
-  log_group: /aws/eidolon/server # deployment-generated
-  metrics_namespace: eidolon/metrics # deployment-generated
-  AccessPolicyArn: "" # deployment-generated
+  LogRetentionDays: 7 # How long to keep logs
 
 # Logging configuration
 Logging:
   ApplicationName: eidolon-engine
   LogLevel: 20
-  cloudwatch:
-    log_group: /aws/eidolon/server # deployment-generated
-    metrics_namespace: eidolon/metrics # deployment-generated
-  LogGroup: /aws/eidolon/server # deployment-generated (legacy support)
+  LogGroup: /eidolon/server
   LogStream: system
-  MetricNamespace: eidolon/metrics # deployment-generated (legacy support)
+  MetricNamespace: eidolon/metrics
 
 # SSH configuration
 SSH:
@@ -98,27 +90,21 @@ SSH:
   PrivateKeyPath: ./server.key
   Port: 9050
   AuthTimeoutSeconds: 30
-  AuthBanDurationSeconds: 900 # 15 minutes
-  AuthCleanupIntervalSeconds: 300 # 5 minutes
-  ConnectionAcceptTimeoutSeconds: 1
-
-# Server configuration
-Server:
-  SessionCleanupIntervalSeconds: 300 # 5 minutes
-  SessionIdleTimeoutSeconds: 1800 # 30 minutes
-  ConsoleIdleTimeoutSeconds: 300
+  AuthBanDurationSeconds: 900
+  AuthCleanupIntervalSeconds: 300
+  ConnectionAcceptTimeoutSeconds: 60
 
 # CodeBuild configuration
 CodeBuild:
   PortalBuildspecPath: buildspec/portal.yml # Used for MUD mode
   IncrementalBuildspecPath: buildspec/incremental.yml # Used for Incremental/Hybrid modes
   ProjectName: "" # deployment-generated
-  PortalS3Bucket: "" # deployment-generated
 
 # S3 buckets (optional - will create new if not specified)
 S3:
-  PortalBucket: "" # deployment-generated
-  ScriptsBucket: "" # deployment-generated
+  PortalBucket: "" # deployment-generated - Frontend static files
+  ScriptsBucket: "" # deployment-generated - Game scripts
+  ArtifactsBucket: "" # deployment-generated - CodeBuild artifacts and Lambda packages
 
 # GitHub configuration
 GitHub:

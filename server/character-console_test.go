@@ -86,7 +86,6 @@ func setupTestCharacterConsole(_ *testing.T) (*Character, *Game, *mockPlayer, ch
 			AutoSave                 uint16  `yaml:"AutoSave"`
 			NamesPath                string  `yaml:"NamesPath"`
 			ObscenityPath            string  `yaml:"ObscenityPath"`
-			ScriptsS3Bucket          string  `yaml:"ScriptsS3Bucket"`
 			ScriptsS3Prefix          string  `yaml:"ScriptsS3Prefix"`
 			TickIntervalSeconds      int     `yaml:"TickIntervalSeconds"`
 			RoomItemCleanupSeconds   int     `yaml:"RoomItemCleanupSeconds"`

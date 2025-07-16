@@ -70,7 +70,7 @@ def verify_character_ownership(player_id, character_name) -> tuple:
     # Double-check character record ownership
     characters_table = get_table(CHARACTERS_TABLE)
     character_data = get_item(characters_table, {"CharacterID": character_uuid})
-    
+
     if character_data and character_data.get("PlayerID") != player_id:
         logger.warning("Character does not belong to player", extra={"character_id": character_uuid, "player_id": player_id})
         return False, None
@@ -94,7 +94,7 @@ def delete_character_items(character_id) -> int:
         # Get character record to find inventory
         characters_table = get_table(CHARACTERS_TABLE)
         character_data = get_item(characters_table, {"CharacterID": character_id})
-        
+
         if not character_data:
             return 0
         inventory = character_data.get("Inventory", {})
@@ -154,14 +154,16 @@ def delete_character(player_id, character_name, character_id) -> bool:
             "REMOVE CharacterList.#name",
             {},
             "attribute_exists(CharacterList.#name)",
-            {"#name": character_name}
+            {"#name": character_name},
         )
 
         if not success:
             logger.error("Failed to remove character from player list", extra={"error": error_msg})
             return False
 
-        logger.info("Deleted character", extra={"character_name": character_name, "character_id": character_id, "player_id": player_id})
+        logger.info(
+            "Deleted character", extra={"character_name": character_name, "character_id": character_id, "player_id": player_id}
+        )
         return True
 
     except Exception as err:
@@ -189,9 +191,9 @@ def lambda_handler(event, context) -> dict:
                 "function_name": getattr(context, "function_name", "unknown"),
                 "http_method": event.get("httpMethod"),
                 "path": event.get("path"),
-            }
+            },
         )
-    
+
     # Handle preflight requests
     if event.get("httpMethod") == "OPTIONS":
         return cors_handler.handle_preflight(event)
@@ -210,10 +212,7 @@ def lambda_handler(event, context) -> dict:
         # Validate required fields
         is_valid, error_msg = validate_required_fields(body, ["characterName"])
         if not is_valid:
-            return cors_handler.add_cors_headers(
-                error_response(error_msg),
-                event
-            )
+            return cors_handler.add_cors_headers(error_response(error_msg), event)
 
         character_name = body["characterName"].strip()
 
@@ -221,32 +220,19 @@ def lambda_handler(event, context) -> dict:
         is_owner, character_id = verify_character_ownership(player_id, character_name)
 
         if not is_owner:
-            return cors_handler.add_cors_headers(
-                error_response("Character not found or access denied", status_code=403),
-                event
-            )
+            return cors_handler.add_cors_headers(error_response("Character not found or access denied", status_code=403), event)
 
         # Delete the character
         if not delete_character(player_id, character_name, character_id):
-            return cors_handler.add_cors_headers(
-                error_response("Failed to delete character", status_code=500),
-                event
-            )
+            return cors_handler.add_cors_headers(error_response("Failed to delete character", status_code=500), event)
 
         # Return success response
         logger.info("Lambda response", extra={"status_code": 200})
         return cors_handler.add_cors_headers(
-            success_response({
-                "message": "Character deleted successfully",
-                "characterName": character_name
-            }),
-            event
+            success_response({"message": "Character deleted successfully", "characterName": character_name}), event
         )
 
     except Exception as err:
         logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500),
-            event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
