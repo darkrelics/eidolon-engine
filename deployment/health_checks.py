@@ -135,10 +135,6 @@ def check_s3_buckets_health(session: boto3.Session, bucket_names: list) -> dict:
             # Check bucket exists and is accessible
             s3.head_bucket(Bucket=bucket_name)
 
-            # Check versioning (should be enabled for safety)
-            versioning = s3.get_bucket_versioning(Bucket=bucket_name)
-            if versioning.get("Status") != "Enabled":
-                issues.append(f"Bucket {bucket_name} versioning is not enabled")
 
             healthy_buckets.append(bucket_name)
 

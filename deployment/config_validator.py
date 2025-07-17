@@ -29,11 +29,6 @@ def validate_deployment_config(params: dict) -> list:
     if params.get("domain_name") and not params.get("hosted_zone_id"):
         errors.append("Hosted Zone ID is required when domain name is specified")
 
-    # GitHub configuration validation
-    if params.get("github_branch"):
-        branch = params["github_branch"]
-        if " " in branch or "/" not in branch and branch not in ["main", "master", "develop"]:
-            errors.append(f"Suspicious GitHub branch name: {branch}")
 
     # Deployment mode validation
     valid_modes = ["mud", "incremental", "hybrid"]

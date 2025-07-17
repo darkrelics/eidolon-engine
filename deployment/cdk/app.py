@@ -531,6 +531,7 @@ class EidolonEngineApp:
             game_name=params.get("game_name", "eidolon-engine"),
             portal_bucket_name=params.get("portal_bucket_name"),  # type: ignore
             scripts_bucket_name=params.get("scripts_bucket_name"),  # type: ignore
+            lambda_bucket_name=params.get("lambda_bucket_name"),  # type: ignore
             env=env,
         )
 
