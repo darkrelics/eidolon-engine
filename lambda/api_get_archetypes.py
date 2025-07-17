@@ -23,20 +23,16 @@ Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 
 import os
 
-import boto3
-
 from eidolon.cors import cors_handler
-from eidolon.dynamo import scan_all_items
+from eidolon.dynamo import get_table, scan_all_items
 from eidolon.logger import get_logger
 from eidolon.responses import create_response, error_response
 
 # Configure logging
 logger = get_logger(__name__)
 
-# Initialize DynamoDB client
-dynamodb = boto3.resource("dynamodb")
-ARCHETYPES_TABLE: str = os.environ.get("ARCHETYPES_TABLE", "archetypes")
-archetypes_table = dynamodb.Table(ARCHETYPES_TABLE)  # type: ignore
+# Get table name from environment
+ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
 
 # Cache for player archetypes
 player_archetypes_cache: list = []
@@ -60,13 +56,14 @@ def load_player_archetypes() -> list:
         logger.info("Loading archetypes from DynamoDB")
 
         # Scan the archetypes table with pagination
+        archetypes_table = get_table(ARCHETYPES_TABLE)
         success, result = scan_all_items(archetypes_table)
 
         if not success:
-            logger.error("Failed to load archetypes", error=result)
+            logger.error("Failed to load archetypes", extra={"error": result})
             return []
 
-        items = result
+        items = result if isinstance(result, list) else []
 
         # Filter for player archetypes
         player_archetypes: list = []
@@ -99,11 +96,11 @@ def load_player_archetypes() -> list:
         player_archetypes_cache = player_archetypes
         cache_loaded = True
 
-        logger.info("Loaded player archetypes", count=len(player_archetypes))
+        logger.info("Loaded player archetypes", extra={"count": len(player_archetypes)})
         return player_archetypes
 
     except Exception as err:
-        logger.error("Error loading archetypes", error=err)
+        logger.error("Error loading archetypes", extra={"error": str(err)}, exc_info=True)
         raise
 
 
@@ -119,13 +116,27 @@ def lambda_handler(event, context) -> dict:
         API Gateway response with player archetypes
     """
     # Log Lambda invocation
-    logger.log_lambda_event(event, context)
+    if hasattr(context, "aws_request_id"):
+        logger.info(
+            "Lambda invocation",
+            extra={
+                "request_id": context.aws_request_id,
+                "function_name": getattr(context, "function_name", "unknown"),
+                "http_method": event.get("httpMethod"),
+                "path": event.get("path"),
+            },
+        )
+
+    # Handle preflight requests
+    if event.get("httpMethod") == "OPTIONS":
+        return cors_handler.handle_preflight(event)
+
     try:
         # Load player archetypes (from cache if available)
         player_archetypes: list = load_player_archetypes()
 
         # Return successful response
-        logger.log_response(200)
+        logger.info("Lambda response", extra={"status_code": 200})
         return cors_handler.add_cors_headers(
             create_response(
                 200,
@@ -138,6 +149,6 @@ def lambda_handler(event, context) -> dict:
         )
 
     except Exception as err:
-        logger.error("Error in lambda_handler", error=err)
-        logger.log_response(500)
+        logger.error("Error in lambda_handler", extra={"error": str(err)}, exc_info=True)
+        logger.info("Lambda response", extra={"status_code": 500})
         return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

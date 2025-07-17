@@ -15,7 +15,9 @@ from botocore.exceptions import ClientError
 from build_executor import BuildExecutor
 from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
 from config_updater import ConfigurationUpdater
+from config_validator import validate_deployment_config
 from deployment_logic import analyze_changes, prompt_missing_parameters
+from health_checks import run_phase_health_check
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from stack_utils import StackOutputHelper
 from state_manager import ConfigurationManager, DeploymentState
@@ -106,11 +108,6 @@ class IncrementalDeploymentOrchestrator:
         if "Game" in config:
             game_config = config["Game"]
             params["game_name"] = game_config.get("name", params["game_name"])
-            # Check for existing S3 buckets
-            if "ScriptsS3Bucket" in game_config:
-                params["scripts_bucket_name"] = game_config["ScriptsS3Bucket"]
-            if "PortalS3Bucket" in game_config:
-                params["portal_bucket_name"] = game_config["PortalS3Bucket"]
         # Check both AWS and Contact sections for email (template uses Contact)
         if "Contact" in config:
             params["contact_email"] = config["Contact"].get("Email", params["contact_email"])
@@ -127,8 +124,6 @@ class IncrementalDeploymentOrchestrator:
             codebuild_config = config["CodeBuild"]
             if "PortalBuildspecPath" in codebuild_config:
                 params["portal_buildspec_path"] = codebuild_config["PortalBuildspecPath"]
-            if "PortalS3Bucket" in codebuild_config:
-                params["portal_bucket_name"] = codebuild_config["PortalS3Bucket"]
 
         # Load from template structure
         if "GitHub" in config:
@@ -150,6 +145,8 @@ class IncrementalDeploymentOrchestrator:
                 params["portal_bucket_name"] = s3_config["PortalBucket"]
             if s3_config.get("ScriptsBucket"):
                 params["scripts_bucket_name"] = s3_config["ScriptsBucket"]
+            if s3_config.get("ArtifactsBucket"):
+                params["lambda_bucket_name"] = s3_config["ArtifactsBucket"]
 
         # Load deployment mode from config
         if "Deployment" in config:
@@ -243,60 +240,6 @@ class IncrementalDeploymentOrchestrator:
         self.config_manager.update_section("Deployment", {"Mode": params.get("deployment_mode", "hybrid")})
 
         return params
-
-    def _ensure_lambda_bucket_exists(self, params: dict) -> None:
-        """Ensure Lambda bucket exists before S3 stack deployment.
-
-        Args:
-            params: Deployment parameters including game_name
-        """
-
-        game_name = params.get("game_name", "eidolon-engine")
-        account_id = self.aws_factory.get_account_id()
-        lambda_bucket_name = params.get("lambda_bucket_name", f"{game_name}-lambda-{account_id}")
-
-        s3_client = self.session.client("s3")
-
-        try:
-            # Check if bucket exists
-            s3_client.head_bucket(Bucket=lambda_bucket_name)
-            print(f"  Lambda bucket '{lambda_bucket_name}' already exists")
-        except ClientError as err:
-            error_code = err.response["Error"]["Code"]
-            if error_code == "404":
-                # Bucket doesn't exist, create it
-                print(f"  Creating Lambda bucket '{lambda_bucket_name}'...")
-                try:
-                    if self.region == "us-east-1":
-                        # us-east-1 requires special handling
-                        s3_client.create_bucket(Bucket=lambda_bucket_name)
-                    else:
-                        s3_client.create_bucket(
-                            Bucket=lambda_bucket_name, CreateBucketConfiguration={"LocationConstraint": self.region}
-                        )
-
-                    # Enable versioning for safety
-                    s3_client.put_bucket_versioning(Bucket=lambda_bucket_name, VersioningConfiguration={"Status": "Enabled"})
-
-                    # Block public access
-                    s3_client.put_public_access_block(
-                        Bucket=lambda_bucket_name,
-                        PublicAccessBlockConfiguration={
-                            "BlockPublicAcls": True,
-                            "IgnorePublicAcls": True,
-                            "BlockPublicPolicy": True,
-                            "RestrictPublicBuckets": True,
-                        },
-                    )
-
-                    print("Lambda bucket created successfully")
-                except Exception as create_error:
-                    print(f"Failed to create Lambda bucket: {create_error}")
-                    raise
-            else:
-                # Some other error
-                print(f"  ✗ Error checking Lambda bucket: {err}")
-                raise
 
     def execute_deployment(self, plan: dict, auto_approve: bool = False) -> bool:
         """Execute the deployment plan in phases.
@@ -432,9 +375,7 @@ class IncrementalDeploymentOrchestrator:
                 print(f"\nDeploying stacks: {', '.join(stacks_to_deploy)}")
 
                 # Pre-deployment actions for specific phases
-                if phase["name"] == "Foundation" and "s3" in stacks_to_deploy:
-                    # Ensure Lambda bucket exists before S3 stack deployment
-                    self._ensure_lambda_bucket_exists(plan["parameters"])
+                # S3 buckets are now all managed by the S3 stack
 
                 # Deploy stacks serially for safety
                 phase_success = True
@@ -461,14 +402,17 @@ class IncrementalDeploymentOrchestrator:
                 result = {"success": phase_success, "stack_results": stack_results}
 
                 # Post-deployment actions for specific phases
-                if phase_success and phase["name"] == "Distribution" and "cloudfront" in stacks_to_deploy:
-                    # Update S3 bucket policy for CloudFront access
-                    self._update_s3_bucket_policy_for_cloudfront(plan["parameters"])
+                if phase_success and phase["name"] == "Distribution":
+                    # Always update S3 bucket policy for CloudFront access, even if cloudfront stack wasn't deployed
+                    # This ensures the policy is correct even after manual changes or drift
+                    if self.config_manager.config.get("CloudFront", {}).get("distribution_id"):
+                        print("\n  Ensuring S3 bucket policy is configured for CloudFront...")
+                        self.update_s3_bucket_policy_for_cloudfront(plan["parameters"])
 
                 # Check if we need to update Lambda functions after Application Layer
                 if phase_success and phase["name"] == "Application Layer":
                     # Configure Cognito triggers via boto3
-                    self._configure_cognito_triggers()
+                    self.configure_cognito_triggers()
 
                     # Check if any Lambda stack reported no changes
                     lambda_stacks: list = ["lambda", "base-lambda"]
@@ -499,6 +443,20 @@ class IncrementalDeploymentOrchestrator:
 
                 if result["success"]:
                     print(f"\n[SUCCESS] Phase {i} ({phase['name']}) completed successfully!")
+
+                    # Run health checks for this phase
+                    health_check_passed = run_phase_health_check(self.session, phase["name"], stacks_to_deploy, plan["parameters"])
+
+                    if not health_check_passed:
+                        print(f"\n[WARNING] Health checks failed for {phase['name']}")
+                        print("Review the issues above and fix if needed before continuing.")
+                        if not auto_approve:
+                            response = input("\nContinue with deployment anyway? [y/N]: ").strip().lower()
+                            if response != "y":
+                                print("Deployment stopped due to health check failures.")
+                                all_succeeded = False
+                                break
+
                     completed_phases.append(phase["name"])
 
                     # Update state after each phase
@@ -641,21 +599,16 @@ class IncrementalDeploymentOrchestrator:
             lambda_projects = [p for p in project_names if "lambda" in p.lower()]
             portal_projects = [p for p in project_names if "lambda" not in p.lower()]
 
-            # Execute Lambda builds first (dependencies before functions)
-            if lambda_projects:
-                print("\nExecuting Lambda builds sequentially...")
-                if not self.build_executor.execute_builds(lambda_projects, parallel=False):
+            # Execute all builds sequentially
+            all_projects = lambda_projects + portal_projects
+            if all_projects:
+                print("\nExecuting all builds sequentially...")
+                if not self.build_executor.execute_builds(all_projects, parallel=False):
                     return False
 
-                # Validate Lambda artifacts were created
-                if not self._validate_lambda_artifacts(params):
+                # Validate Lambda artifacts were created if we built Lambda projects
+                if lambda_projects and not self._validate_lambda_artifacts(params):
                     print("[ERROR] Lambda build artifacts validation failed")
-                    return False
-
-            # Execute portal/incremental builds
-            if portal_projects:
-                print("\nExecuting portal/incremental builds...")
-                if not self.build_executor.execute_builds(portal_projects, parallel=True):
                     return False
 
             return True
@@ -740,33 +693,31 @@ class IncrementalDeploymentOrchestrator:
                 all_valid = False
 
         # Validate S3 Buckets
-        if "Game" in config or "S3" in config:
+        if "S3" in config:
             print("\nChecking S3 buckets...")
             validator = ResourceValidatorFactory.create_validator("s3_bucket", self.session)
 
-            # Check portal bucket
-            portal_bucket = config.get("Game", {}).get("PortalS3Bucket", "") or config.get("S3", {}).get("PortalBucket", "")
-            if portal_bucket:
-                result = validator.validate(portal_bucket, {})
-                validation_results[f"S3:{portal_bucket}"] = result
+            # Map of bucket types to their configuration keys
+            bucket_types = {"Portal": "PortalBucket", "Scripts": "ScriptsBucket", "Artifacts": "ArtifactsBucket"}
 
-                if result.exists and result.valid:
-                    print(f"  ✓ Portal Bucket: {portal_bucket} - OK")
+            s3_config = config.get("S3", {})
+            for bucket_type, config_key in bucket_types.items():
+                bucket_name = s3_config.get(config_key, "")
+                if bucket_name:
+                    result = validator.validate(bucket_name, {})
+                    validation_results[f"S3:{bucket_name}"] = result
+
+                    if result.exists and result.valid:
+                        print(f"  ✓ {bucket_type} Bucket: {bucket_name} - OK")
+                    else:
+                        print(f"  ✗ {bucket_type} Bucket: {bucket_name} - {'Access denied' if result.exists else 'Does not exist'}")
+                        all_valid = False
                 else:
-                    print(f"  ✗ Portal Bucket: {portal_bucket} - {'Access denied' if result.exists else 'Does not exist'}")
-                    all_valid = False
+                    print(f"  - {bucket_type} Bucket: Not configured")
 
-            # Check scripts bucket
-            scripts_bucket = config.get("Game", {}).get("ScriptsS3Bucket", "") or config.get("S3", {}).get("ScriptsBucket", "")
-            if scripts_bucket:
-                result = validator.validate(scripts_bucket, {})
-                validation_results[f"S3:{scripts_bucket}"] = result
-
-                if result.exists and result.valid:
-                    print(f"  ✓ Scripts Bucket: {scripts_bucket} - OK")
-                else:
-                    print(f"  ✗ Scripts Bucket: {scripts_bucket} - {'Access denied' if result.exists else 'Does not exist'}")
-                    all_valid = False
+            # Check if any buckets are missing
+            if not any(s3_config.get(key) for key in bucket_types.values()):
+                print("  ⚠ No S3 buckets configured")
 
         # Validate CloudWatch Log Groups
         if "CloudWatch" in config or "Logging" in config:
@@ -1042,6 +993,15 @@ class IncrementalDeploymentOrchestrator:
         if not auto_approve and not analyze_only and not non_interactive:
             params = prompt_missing_parameters(params)
 
+        # Validate configuration before proceeding
+        validation_errors = validate_deployment_config(params)
+        if validation_errors:
+            print("\n[ERROR] Configuration validation failed:")
+            for error in validation_errors:
+                print(f"  - {error}")
+            print("\nPlease fix these issues and try again.")
+            return False
+
         # Analyze what needs to be deployed
         plan = analyze_changes(self.cfn_client, self.session, params)
 
@@ -1183,14 +1143,14 @@ class IncrementalDeploymentOrchestrator:
                 bucket_name = bucket["Name"]
                 if "portal" in bucket_name or "scripts" in bucket_name:
                     # Update config if these buckets aren't already configured
-                    current_portal = self.config_manager.config.get("Game", {}).get("PortalS3Bucket", "")
-                    current_scripts = self.config_manager.config.get("Game", {}).get("ScriptsS3Bucket", "")
+                    current_portal = self.config_manager.config.get("S3", {}).get("PortalBucket", "")
+                    current_scripts = self.config_manager.config.get("S3", {}).get("ScriptsBucket", "")
 
                     if not current_portal and "portal" in bucket_name:
-                        self.config_manager.update_section("Game", {"PortalS3Bucket": bucket_name})
+                        self.config_manager.update_section("S3", {"PortalBucket": bucket_name})
                         print(f"  Found portal bucket: {bucket_name}")
                     elif not current_scripts and "scripts" in bucket_name:
-                        self.config_manager.update_section("Game", {"ScriptsS3Bucket": bucket_name})
+                        self.config_manager.update_section("S3", {"ScriptsBucket": bucket_name})
                         print(f"  Found scripts bucket: {bucket_name}")
 
         except Exception:
@@ -1275,7 +1235,7 @@ class IncrementalDeploymentOrchestrator:
         except Exception as err:
             print(f"    ✗ Unexpected error: {err}")
 
-    def _configure_cognito_triggers(self) -> None:
+    def configure_cognito_triggers(self) -> None:
         """Configure Cognito user pool Lambda triggers and email verification using boto3.
 
         This is done post-deployment to avoid circular dependencies in CDK.
@@ -1294,15 +1254,15 @@ class IncrementalDeploymentOrchestrator:
 
             # Check if Lambda functions exist
             new_player_function = "cognito-new-player"
-            # delete_player_function = "cognito-delete-player"
+            delete_player_function = "cognito-delete-player"
 
             try:
-                # Get function ARNs
+                # Verify both Lambda functions exist
                 new_player_response = lambda_client.get_function(FunctionName=new_player_function)
                 new_player_arn = new_player_response["Configuration"]["FunctionArn"]
 
-                # delete_player_response = lambda_client.get_function(FunctionName=delete_player_function)
-                # delete_player_arn = delete_player_response["Configuration"]["FunctionArn"]
+                # Verify delete player function exists (will raise exception if not found)
+                lambda_client.get_function(FunctionName=delete_player_function)
 
                 # First, add permissions for Cognito to invoke the Lambda functions
                 print("    Adding permissions for Cognito to invoke Lambda functions...")
@@ -1342,7 +1302,7 @@ class IncrementalDeploymentOrchestrator:
             print(f"    Error configuring Cognito: {err}")
             print("    Settings will need to be configured manually")
 
-    def _update_s3_bucket_policy_for_cloudfront(self, parameters: dict):
+    def update_s3_bucket_policy_for_cloudfront(self, parameters: dict):
         """Update S3 bucket policy to allow CloudFront access.
 
         Args:
@@ -1355,7 +1315,7 @@ class IncrementalDeploymentOrchestrator:
 
         try:
             # Get bucket name from config
-            bucket_name = self.config_manager.config.get("Game", {}).get("PortalS3Bucket", "")
+            bucket_name = self.config_manager.config.get("S3", {}).get("PortalBucket", "")
             if not bucket_name:
                 print("    Portal bucket not configured, skipping policy update")
                 return
@@ -1366,8 +1326,7 @@ class IncrementalDeploymentOrchestrator:
                 print("    CloudFront distribution ID not found, skipping policy update")
                 return
 
-            # Get account ID
-            # account_id = self.aws_factory.get_account_id()
+            # Account ID would be used here if needed for bucket policies
 
             # Get CloudFront client
             cf_client = self.session.client("cloudfront", region_name="us-east-1")
@@ -1379,38 +1338,90 @@ class IncrementalDeploymentOrchestrator:
             dist_config = dist_response["Distribution"]["DistributionConfig"]
             etag = dist_response["ETag"]
 
+            # Track if we need to update the distribution
+            needs_distribution_update = False
+
             # Check if OAI already exists in the distribution
             oai_id = None
             origin_to_update = None
+            print(f"    Looking for origin matching bucket: {bucket_name}")
             for i, origin in enumerate(dist_config["Origins"]["Items"]):
-                if origin["DomainName"].startswith(f"{bucket_name}.s3"):
+                # Check if this is the S3 origin for our bucket
+                # CDK might create it with various domain patterns
+                domain_name = origin["DomainName"]
+                print(f"      Checking origin {i}: {domain_name}")
+                if (
+                    domain_name.startswith(f"{bucket_name}.s3")
+                    or domain_name == f"{bucket_name}.s3.amazonaws.com"
+                    or domain_name.startswith(f"{bucket_name}.s3-")
+                ):
                     origin_to_update = i
-                    oai_config = origin.get("S3OriginConfig", {})
-                    oai_value = oai_config.get("OriginAccessIdentity", "")
-                    if oai_value:
-                        # Extract OAI ID from the full path
-                        oai_id = oai_value.split("/")[-1]
+                    print(f"      Found matching origin at index {i}")
+                    # Check if it has S3OriginConfig (it might be a CustomOriginConfig)
+                    if "S3OriginConfig" in origin:
+                        oai_config = origin["S3OriginConfig"]
+                        oai_value = oai_config.get("OriginAccessIdentity", "")
+                        if oai_value:
+                            # Extract OAI ID from the full path
+                            oai_id = oai_value.split("/")[-1]
+                            print(f"      Origin already has OAI: {oai_id}")
+                        else:
+                            print("      Origin has S3OriginConfig but no OAI")
+                            needs_distribution_update = True
+                    else:
+                        # Origin exists but doesn't have S3OriginConfig - needs to be converted
+                        print(f"      Origin lacks S3OriginConfig, has: {list(origin.keys())}")
+                        needs_distribution_update = True
                     break
 
-            # Track if we need to update the distribution
-            needs_distribution_update = False
+            if origin_to_update is None:
+                print(f"    WARNING: No origin found for bucket {bucket_name}")
+                print("    Available origins:")
+                for i, origin in enumerate(dist_config["Origins"]["Items"]):
+                    print(f"      {i}: {origin['DomainName']}")
 
             # Create OAI if it doesn't exist
             if not oai_id:
                 print("    Creating Origin Access Identity...")
-                oai_response = cf_client.create_cloud_front_origin_access_identity(
-                    CloudFrontOriginAccessIdentityConfig={
-                        "CallerReference": f"eidolon-portal-oai-{distribution_id}",
-                        "Comment": "OAI for Eidolon portal S3 access",
-                    }
-                )
-                oai_id = oai_response["CloudFrontOriginAccessIdentity"]["Id"]
-                print(f"    Created OAI: {oai_id}")
-                needs_distribution_update = True
+                try:
+                    oai_response = cf_client.create_cloud_front_origin_access_identity(
+                        CloudFrontOriginAccessIdentityConfig={
+                            "CallerReference": f"eidolon-portal-oai-{distribution_id}",
+                            "Comment": "OAI for Eidolon portal S3 access",
+                        }
+                    )
+                    oai_id = oai_response["CloudFrontOriginAccessIdentity"]["Id"]
+                    print(f"    Created OAI: {oai_id}")
+                    needs_distribution_update = True
+                except ClientError as err:
+                    if err.response.get("Error", {}).get("Code") == "CloudFrontOriginAccessIdentityAlreadyExists":
+                        # OAI with this caller reference already exists, try to find it
+                        print("    OAI already exists, searching for existing OAI...")
+                        paginator = cf_client.get_paginator("list_cloud_front_origin_access_identities")
+                        for page in paginator.paginate():
+                            for item in page.get("CloudFrontOriginAccessIdentityList", {}).get("Items", []):
+                                if item.get("Comment") == "OAI for Eidolon portal S3 access":
+                                    oai_id = item.get("Id")
+                                    print(f"    Found existing OAI: {oai_id}")
+                                    needs_distribution_update = True
+                                    break
+                            if oai_id:
+                                break
+                        if not oai_id:
+                            print("    ERROR: Could not find existing OAI")
+                            print(f"    Please manually check CloudFront OAIs for: {distribution_id}")
+                            return
+                    else:
+                        print(f"    ERROR: Failed to create OAI: {err}")
+                        return
 
             # Update distribution to use the OAI if needed
-            if needs_distribution_update and origin_to_update is not None:
+            if needs_distribution_update and origin_to_update is not None and oai_id:
                 print("    Updating CloudFront distribution to use OAI...")
+                # Remove CustomOriginConfig if it exists
+                if "CustomOriginConfig" in dist_config["Origins"]["Items"][origin_to_update]:
+                    del dist_config["Origins"]["Items"][origin_to_update]["CustomOriginConfig"]
+                # Set S3OriginConfig with OAI
                 dist_config["Origins"]["Items"][origin_to_update]["S3OriginConfig"] = {
                     "OriginAccessIdentity": f"origin-access-identity/cloudfront/{oai_id}"
                 }
@@ -1438,12 +1449,18 @@ class IncrementalDeploymentOrchestrator:
             print(f"    Distribution ID: {distribution_id}")
             print(f"    OAI ID: {oai_id if oai_id else 'None'}")
 
-            # Create policy statements
-            statements: list = []
+            # Delete existing bucket policy first to ensure clean state
+            try:
+                s3_client.delete_bucket_policy(Bucket=bucket_name)
+                print("    Deleted existing bucket policy")
+            except ClientError as err:
+                if err.response.get("Error", {}).get("Code") != "NoSuchBucketPolicy":
+                    print(f"    Note: Could not delete existing policy: {err}")
 
-            # Only add OAI access if we have an OAI
+            # Only create and apply new policy if we have an OAI
             if oai_id:
-                statements.append(
+                # Create policy statements
+                statements = [
                     {
                         "Sid": "AllowCloudFrontOAI",
                         "Effect": "Allow",
@@ -1451,15 +1468,17 @@ class IncrementalDeploymentOrchestrator:
                         "Action": "s3:GetObject",
                         "Resource": f"arn:aws:s3:::{bucket_name}/*",
                     }
-                )
+                ]
+
+                # Create the complete policy
+                policy: dict = {"Version": "2012-10-17", "Statement": statements}
+
+                # Apply the policy
+                s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
+                print("    Applied new bucket policy")
             else:
-                print("    No OAI found - bucket policy may not grant proper access")
-
-            # Create the complete policy
-            policy: dict = {"Version": "2012-10-17", "Statement": statements}
-
-            # Apply the policy
-            s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
+                print("    WARNING: No OAI found - bucket will not be accessible via CloudFront!")
+                print("    The CloudFront distribution may need to be reconfigured")
 
             print(f"    Updated bucket policy for {bucket_name}")
             print(f"      - CloudFront distribution {distribution_id} now has access")
@@ -1494,7 +1513,19 @@ def main():
 
     args = parser.parse_args()
 
-    orchestrator = IncrementalDeploymentOrchestrator(profile=args.profile, region=args.region, branch=args.branch)
+    try:
+        orchestrator = IncrementalDeploymentOrchestrator(profile=args.profile, region=args.region, branch=args.branch)
+    except CDKDeploymentError as e:
+        # Check if this is specifically the CDK not installed error
+        if "AWS CDK CLI is not installed" in str(e):
+            print("\n❌ AWS CDK is not installed on your system.")
+            print("\nTo install AWS CDK, you need Node.js installed first, then run:")
+            print("  npm install -g aws-cdk")
+            print("\nFor more information, visit: https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html")
+            sys.exit(1)
+        else:
+            # Re-raise other CDK deployment errors
+            raise
 
     # Handle validation mode
     if args.validate:

@@ -21,8 +21,9 @@ Utility to add an item to a room in the DynamoDB database.
 import argparse
 import json
 import logging
+import os
 
-from eidolon.dynamo import convert_to_decimal, tables
+from eidolon.dynamo import convert_to_decimal, get_table
 from eidolon.validation_utils import validate_character_name
 
 
@@ -47,7 +48,7 @@ def store_exits(exits_data):
     Args:
         exits_data (dict): The exits data to store.
     """
-    exits_table = tables.exits
+    exits_table = get_table(os.environ.get("EXITS_TABLE", "exits"))
     try:
         for exit_data in exits_data.get("exits", []):
             exit_item = {
@@ -89,7 +90,7 @@ def store_rooms(rooms_data):
     Args:
         rooms_data (dict): The rooms data to store.
     """
-    rooms_table = tables.rooms
+    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
     try:
         for room in rooms_data.get("rooms", []):
             room_item = {
@@ -131,7 +132,7 @@ def store_archetypes(archetypes_data):
     Args:
         archetypes_data (dict): The archetypes data to store.
     """
-    archetypes_table = tables.archetypes
+    archetypes_table = get_table(os.environ.get("ARCHETYPES_TABLE", "archetypes"))
     try:
         for name, archetype in archetypes_data.get("archetypes", {}).items():
             is_valid, error_message = validate_character_name(name)
@@ -189,7 +190,7 @@ def store_item_prototypes(prototypes_data):
     Args:
         prototypes_data (dict): The item prototypes data to store.
     """
-    prototypes_table = tables.prototypes
+    prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
     try:
         for prototype in prototypes_data.get("itemPrototypes", []):
             prototype_id = prototype["PrototypeID"]
@@ -229,7 +230,7 @@ def load_exits():
     Returns:
         dict: A dictionary of exit data.
     """
-    exits_table = tables.exits
+    exits_table = get_table(os.environ.get("EXITS_TABLE", "exits"))
     try:
         exits_response = exits_table.scan()  # type: ignore
         exits = {item["ExitID"]: item for item in exits_response.get("Items", [])}
@@ -247,7 +248,7 @@ def load_rooms():
     Returns:
         dict: A dictionary of room data.
     """
-    rooms_table = tables.rooms
+    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
     try:
         rooms_response = rooms_table.scan()  # type: ignore
         rooms = {item["RoomID"]: item for item in rooms_response.get("Items", [])}
@@ -265,7 +266,7 @@ def load_archetypes():
     Returns:
         dict: A dictionary containing the archetypes.
     """
-    archetypes_table = tables.archetypes
+    archetypes_table = get_table(os.environ.get("ARCHETYPES_TABLE", "archetypes"))
     try:
         response = archetypes_table.scan()  # type: ignore
         archetypes = {"archetypes": {item["ArchetypeName"]: item for item in response.get("Items", [])}}
@@ -283,7 +284,7 @@ def load_item_prototypes():
     Returns:
         dict: A dictionary containing the item prototypes.
     """
-    prototypes_table = tables.prototypes
+    prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
     try:
         response = prototypes_table.scan()  # type: ignore
         prototypes = {"itemPrototypes": response.get("Items", [])}
