@@ -25,7 +25,7 @@ import os
 import boto3
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import decimal_to_float, get_item_safe
+from eidolon.dynamo import decimal_to_float, get_table, get_item
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, get_query_parameter
 from eidolon.responses import create_response, error_response, not_found_response
@@ -33,13 +33,9 @@ from eidolon.responses import create_response, error_response, not_found_respons
 # Configure logging
 logger = get_logger(__name__)
 
-# Initialize DynamoDB client
-dynamodb = boto3.resource("dynamodb")
-characters_table = os.environ.get("CHARACTERS_TABLE", "characters")
-active_segments_table = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
-
-characters_table = dynamodb.Table(characters_table)  # type: ignore
-active_segments_table = dynamodb.Table(active_segments_table)  # type: ignore
+# Get table names from environment
+CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
+ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
 
 
 def get_character_by_id(character_id, player_id):
@@ -53,19 +49,15 @@ def get_character_by_id(character_id, player_id):
     Returns:
         Character data or None if not found or not owned by player
     """
-    success, result = get_item_safe(characters_table, {"CharacterID": character_id}, error_context="getting character")
+    characters_table = get_table(CHARACTERS_TABLE)
+    character = get_item(characters_table, {"CharacterID": character_id})
 
-    if not success:
+    if not character:
         return None
-
-    if result == "Item not found":
-        return None
-
-    character = result
 
     # Verify ownership
     if character.get("PlayerID") != player_id:
-        logger.warning("Character ownership mismatch", character_id=character_id, player_id=player_id)
+        logger.warning("Character ownership mismatch", extra={"character_id": character_id, "player_id": player_id})
         return None
 
     return character
@@ -81,12 +73,8 @@ def get_active_segment(player_id):
     Returns:
         Active segment data or None
     """
-    success, result = get_item_safe(active_segments_table, {"PlayerID": player_id}, error_context="getting active segment")
-
-    if not success or result == "Item not found":
-        return None
-
-    return result
+    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
+    return get_item(active_segments_table, {"PlayerID": player_id})
 
 
 def lambda_handler(event, context) -> dict:
@@ -101,7 +89,16 @@ def lambda_handler(event, context) -> dict:
         API Gateway response
     """
     # Log Lambda invocation
-    logger.log_lambda_event(event, context)
+    if hasattr(context, "aws_request_id"):
+        logger.info(
+            "Lambda invocation",
+            extra={
+                "request_id": context.aws_request_id,
+                "function_name": getattr(context, "function_name", "unknown"),
+                "http_method": event.get("httpMethod"),
+                "path": event.get("path"),
+            },
+        )
 
     # Handle preflight requests
     if event.get("httpMethod") == "OPTIONS":
@@ -134,10 +131,10 @@ def lambda_handler(event, context) -> dict:
         }
 
         # Return success response
-        logger.log_response(200)
+        logger.info("Lambda response", extra={"status_code": 200})
         return cors_handler.add_cors_headers(create_response(200, response_data), event)
 
     except Exception as err:
-        logger.error("Unexpected error in lambda_handler", error=err)
-        logger.log_response(500)
+        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
+        logger.info("Lambda response", extra={"status_code": 500})
         return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

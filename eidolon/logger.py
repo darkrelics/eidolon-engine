@@ -1,9 +1,4 @@
-"""
-Shared logging module for Lambda functions.
-
-Provides consistent logging configuration and utilities for all Lambda functions
-in the Eidolon Engine project.
-"""
+"""Shared logging module for Lambda functions."""
 
 import json
 import logging
@@ -13,137 +8,38 @@ from datetime import datetime, timezone
 from functools import wraps
 
 
-class LambdaLogger:
-    """Enhanced logger for AWS Lambda functions with structured logging support."""
+def get_logger(name: str, level=None):
+    """Get a configured logger instance.
 
-    def __init__(self, name: str, level=None):
-        """
-        Initialize Lambda logger with consistent configuration.
+    Args:
+        name: Logger name (typically __name__)
+        level: Optional logging level
 
-        Args:
-            name: Logger name (typically __name__ from the calling module)
-            level: Logging level (default from LOG_LEVEL env var or INFO)
-        """
-        self.logger = logging.getLogger(name)
+    Returns:
+        Configured logger instance
+    """
+    logger = logging.getLogger(name)
 
-        # Set logging level from environment or parameter
-        log_level = level or os.environ.get("LOG_LEVEL", "INFO")
-        self.logger.setLevel(getattr(logging, log_level.upper()))
+    # Set logging level from environment or parameter
+    log_level = level or os.environ.get("LOG_LEVEL", "INFO")
+    logger.setLevel(getattr(logging, log_level.upper()))
 
-        # Remove existing handlers to avoid duplicates
-        self.logger.handlers.clear()
+    # Remove existing handlers to avoid duplicates
+    logger.handlers.clear()
 
-        # Create console handler with custom formatter
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(self._get_formatter())
-        self.logger.addHandler(handler)
+    # Create console handler
+    handler = logging.StreamHandler(sys.stdout)
 
-        # Prevent propagation to avoid duplicate logs
-        self.logger.propagate = False
+    # Use JSON formatter in Lambda, simple formatter locally
+    if os.environ.get("AWS_EXECUTION_ENV"):
+        handler.setFormatter(JsonFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
 
-        # Store context for structured logging
-        self.context: dict = {}
+    logger.addHandler(handler)
+    logger.propagate = False
 
-    def _get_formatter(self) -> logging.Formatter:
-        """Get appropriate formatter based on environment."""
-        # Use JSON formatter for production, readable format for development
-        if os.environ.get("AWS_EXECUTION_ENV"):
-            # Running in Lambda environment
-            return JsonFormatter()
-        else:
-            # Local development
-            return logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-
-    def set_context(self, **kwargs) -> None:
-        """
-        Set persistent context for all subsequent log messages.
-
-        Args:
-            **kwargs: Context key-value pairs
-        """
-        self.context.update(kwargs)
-
-    def clear_context(self) -> None:
-        """Clear all persistent context."""
-        self.context.clear()
-
-    def _log_with_context(self, level: int, message: str, **kwargs) -> None:
-        """
-        Log message with context.
-
-        Args:
-            level: Logging level
-            message: Log message
-            **kwargs: Additional context for this log entry
-        """
-        extra = {"context": {**self.context, **kwargs}}
-        self.logger.log(level, message, extra=extra)
-
-    def debug(self, message: str, **kwargs) -> None:
-        """Log debug message with optional context."""
-        self._log_with_context(logging.DEBUG, message, **kwargs)
-
-    def info(self, message: str, **kwargs) -> None:
-        """Log info message with optional context."""
-        self._log_with_context(logging.INFO, message, **kwargs)
-
-    def warning(self, message: str, **kwargs) -> None:
-        """Log warning message with optional context."""
-        self._log_with_context(logging.WARNING, message, **kwargs)
-
-    def error(self, message: str, error=None, **kwargs) -> None:
-        """
-        Log error message with optional exception and context.
-
-        Args:
-            message: Error message
-            error: Optional exception object
-            **kwargs: Additional context
-        """
-        if error:
-            kwargs["error_type"] = type(error).__name__
-            kwargs["error_message"] = str(error)
-        self._log_with_context(logging.ERROR, message, **kwargs)
-
-    def critical(self, message: str, **kwargs) -> None:
-        """Log critical message with optional context."""
-        self._log_with_context(logging.CRITICAL, message, **kwargs)
-
-    def log_lambda_event(self, event: dict, context) -> None:
-        """
-        Log Lambda invocation details.
-
-        Args:
-            event: Lambda event
-            context: Lambda context
-        """
-        self.set_context(
-            request_id=context.aws_request_id if hasattr(context, "aws_request_id") else "unknown",
-            function_name=context.function_name if hasattr(context, "function_name") else "unknown",
-            function_version=context.function_version if hasattr(context, "function_version") else "unknown",
-        )
-
-        # Log HTTP method and path if available (API Gateway event)
-        if "httpMethod" in event:
-            self.info(
-                "Lambda invocation",
-                http_method=event.get("httpMethod"),
-                path=event.get("path"),
-                source_ip=event.get("requestContext", {}).get("identity", {}).get("sourceIp"),
-                user_agent=event.get("headers", {}).get("User-Agent"),
-            )
-        else:
-            self.info("Lambda invocation", event_source=event.get("source", "unknown"))
-
-    def log_response(self, status_code: int, response_time_ms=None) -> None:
-        """
-        Log API response details.
-
-        Args:
-            status_code: HTTP status code
-            response_time_ms: Response time in milliseconds
-        """
-        self.info("Lambda response", status_code=status_code, response_time_ms=response_time_ms)
+    return logger
 
 
 class JsonFormatter(logging.Formatter):
@@ -160,10 +56,32 @@ class JsonFormatter(logging.Formatter):
             "line": record.lineno,
         }
 
-        # Add context if available
-        context = getattr(record, "context", None)
-        if context is not None:
-            log_obj["context"] = context
+        # Add extra fields if present
+        for key, value in record.__dict__.items():
+            if key not in [
+                "name",
+                "msg",
+                "args",
+                "created",
+                "filename",
+                "funcName",
+                "levelname",
+                "levelno",
+                "lineno",
+                "module",
+                "msecs",
+                "message",
+                "pathname",
+                "process",
+                "processName",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+            ]:
+                log_obj[key] = value
 
         # Add exception info if present
         if record.exc_info:
@@ -172,68 +90,38 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_obj, default=str)
 
 
-def get_logger(name: str, level=None) -> LambdaLogger:
-    """
-    Get a configured logger instance.
+def log_duration(func):
+    """Decorator to log function execution duration."""
 
-    Args:
-        name: Logger name (typically __name__)
-        level: Optional logging level
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        logger = get_logger(func.__module__)
+        start_time = datetime.now(timezone.utc)
 
-    Returns:
-        Configured LambdaLogger instance
-    """
-    return LambdaLogger(name, level)
+        try:
+            result = func(*args, **kwargs)
+            duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            logger.debug(f"Function completed: {func.__name__}", extra={"function": func.__name__, "duration_ms": duration_ms})
+            return result
+        except Exception as err:
+            duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            logger.error(
+                f"Function failed: {func.__name__}",
+                extra={"function": func.__name__, "duration_ms": duration_ms, "error": str(err)},
+                exc_info=True,
+            )
+            raise
 
-
-def log_duration(logger=None):
-    """
-    Decorator to log function execution duration.
-
-    Args:
-        logger: Logger instance (will create one if not provided)
-
-    Returns:
-        Decorated function
-    """
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            nonlocal logger
-            if logger is None:
-                logger = get_logger(func.__module__)
-
-            start_time = datetime.now(timezone.utc)
-
-            try:
-                result = func(*args, **kwargs)
-                duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
-                logger.debug(f"Function completed: {func.__name__}", function=func.__name__, duration_ms=duration_ms)
-                return result
-            except Exception as err:
-                duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
-                logger.error(f"Function failed: {func.__name__}", error=err, function=func.__name__, duration_ms=duration_ms)
-                raise
-
-        return wrapper
-
-    return decorator
+    return wrapper
 
 
 def sanitize_error(error) -> str:
-    """
-    Sanitize error messages to avoid exposing sensitive information.
+    """Sanitize error messages to avoid exposing sensitive information."""
+    import re
 
-    Args:
-        error: Error message or exception
-
-    Returns:
-        Sanitized error message
-    """
     error_message = str(error)
 
-    # List of patterns to redact
+    # Patterns to redact
     sensitive_patterns = [
         r'password["\']?\s*[:=]\s*["\']?[^"\'\s]+',
         r'token["\']?\s*[:=]\s*["\']?[^"\'\s]+',
@@ -241,8 +129,6 @@ def sanitize_error(error) -> str:
         r'secret["\']?\s*[:=]\s*["\']?[^"\'\s]+',
         r"arn:aws:[^:\s]+:[^:\s]+:\d+:[^:\s]+",  # AWS ARNs
     ]
-
-    import re
 
     for pattern in sensitive_patterns:
         error_message = re.sub(pattern, "[REDACTED]", error_message, flags=re.IGNORECASE)

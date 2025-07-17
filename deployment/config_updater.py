@@ -66,33 +66,30 @@ class ConfigurationUpdater:
         self.config_manager.update_section("DynamoDB", config_data)
 
     def _update_cloudwatch_config(self, outputs: dict):
-        """Update CloudWatch and Logging configuration sections."""
-        # Update Logging section
-        logging_data = {"LogGroup": outputs.get("LogGroupName", ""), "MetricNamespace": outputs.get("MetricsNamespace", "")}
-        self.config_manager.update_section("Logging", logging_data)
+        """Update Logging configuration section."""
+        # Update Logging section with log group and metrics namespace
+        logging_data = {}
+        if "LogGroupName" in outputs:
+            logging_data["LogGroup"] = outputs["LogGroupName"]
+        if "MetricsNamespace" in outputs:
+            logging_data["MetricNamespace"] = outputs["MetricsNamespace"]
 
-        # Update CloudWatch section
-        if "CloudWatchAccessPolicyArn" in outputs:
-            cloudwatch_data = {"AccessPolicyArn": outputs["CloudWatchAccessPolicyArn"]}
-            self.config_manager.update_section("CloudWatch", cloudwatch_data)
+        if logging_data:
+            self.config_manager.update_section("Logging", logging_data)
 
     def _update_s3_config(self, outputs: dict):
         """Update S3 bucket configuration."""
-        # Update Game section with bucket names
-        game_data = {}
+        # Update S3 section with all bucket names
+        s3_data = {}
+        if "PortalBucketName" in outputs:
+            s3_data["PortalBucket"] = outputs["PortalBucketName"]
         if "ScriptsBucketName" in outputs:
-            game_data["ScriptsS3Bucket"] = outputs["ScriptsBucketName"]
-            game_data["ScriptsS3Prefix"] = "scripts"
-        if "PortalBucketName" in outputs:
-            game_data["PortalS3Bucket"] = outputs["PortalBucketName"]
+            s3_data["ScriptsBucket"] = outputs["ScriptsBucketName"]
+        if "LambdaBucketName" in outputs:
+            s3_data["ArtifactsBucket"] = outputs["LambdaBucketName"]
 
-        if game_data:
-            self.config_manager.update_section("Game", game_data)
-
-        # Update CodeBuild section with portal bucket
-        if "PortalBucketName" in outputs:
-            codebuild_data = {"PortalS3Bucket": outputs["PortalBucketName"]}
-            self.config_manager.update_section("CodeBuild", codebuild_data)
+        if s3_data:
+            self.config_manager.update_section("S3", s3_data)
 
     def _update_cloudfront_config(self, outputs: dict):
         """Update CloudFront configuration section."""

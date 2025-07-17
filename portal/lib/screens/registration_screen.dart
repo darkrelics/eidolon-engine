@@ -32,12 +32,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _verificationCodeController = TextEditingController();
-
+  
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
   bool _showVerificationStep = false;
-
+  
   @override
   void initState() {
     super.initState();
@@ -66,14 +66,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final authState = context.read<AuthState>();
       authState.emailController.text = _emailController.text.trim();
       authState.passwordController.text = _passwordController.text;
-
+      
       await authState.signUp();
-
+      
       if (mounted && authState.isVerificationMode) {
         setState(() {
           _showVerificationStep = true;
         });
-
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Verification code sent to your email'),
@@ -108,11 +108,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     try {
       final authState = context.read<AuthState>();
-      authState.verificationCodeController.text =
-          _verificationCodeController.text.trim();
-
+      authState.verificationCodeController.text = _verificationCodeController.text.trim();
+      
       await authState.confirmRegistration();
-
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -148,7 +147,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     try {
       final authState = context.read<AuthState>();
       await authState.resendVerificationCode();
-
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -200,16 +199,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
+      appBar: AppBar(
+        title: const Text('Create Account'),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
-            child:
-                _showVerificationStep
-                    ? _buildVerificationStep()
-                    : _buildRegistrationForm(),
+            child: _showVerificationStep
+                ? _buildVerificationStep()
+                : _buildRegistrationForm(),
           ),
         ),
       ),
@@ -242,9 +242,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               if (value == null || value.isEmpty) {
                 return 'Please enter your email';
               }
-              if (!RegExp(
-                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-              ).hasMatch(value)) {
+              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                  .hasMatch(value)) {
                 return 'Please enter a valid email';
               }
               return null;
@@ -259,7 +258,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               prefixIcon: const Icon(Icons.lock),
               suffixIcon: IconButton(
                 icon: Icon(
-                  _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                  _isPasswordVisible
+                      ? Icons.visibility_off
+                      : Icons.visibility,
                 ),
                 onPressed: () {
                   setState(() {
@@ -309,14 +310,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           const SizedBox(height: 24),
           FilledButton(
             onPressed: _isLoading ? null : _handleCreateAccount,
-            child:
-                _isLoading
-                    ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Text('Create Account'),
+            child: _isLoading
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Create Account'),
           ),
           const SizedBox(height: 16),
           Row(
@@ -324,12 +324,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             children: [
               const Text('Already have an account?'),
               TextButton(
-                onPressed:
-                    _isLoading
-                        ? null
-                        : () {
-                          Navigator.pushReplacementNamed(context, '/login');
-                        },
+                onPressed: _isLoading
+                    ? null
+                    : () {
+                        Navigator.pushReplacementNamed(context, '/login');
+                      },
                 child: const Text('Sign In'),
               ),
             ],
@@ -377,14 +376,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           const SizedBox(height: 24),
           FilledButton(
             onPressed: _isLoading ? null : _handleVerification,
-            child:
-                _isLoading
-                    ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Text('Verify'),
+            child: _isLoading
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Verify'),
           ),
           const SizedBox(height: 16),
           TextButton(
@@ -393,14 +391,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           ),
           const SizedBox(height: 8),
           TextButton(
-            onPressed:
-                _isLoading
-                    ? null
-                    : () {
-                      setState(() {
-                        _showVerificationStep = false;
-                      });
-                    },
+            onPressed: _isLoading
+                ? null
+                : () {
+                    setState(() {
+                      _showVerificationStep = false;
+                    });
+                  },
             child: const Text('Back to Sign Up'),
           ),
         ],

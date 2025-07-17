@@ -2,7 +2,6 @@
 
 import functools
 import time
-
 from botocore.exceptions import ClientError
 
 

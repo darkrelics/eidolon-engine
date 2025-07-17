@@ -531,6 +531,7 @@ class EidolonEngineApp:
             game_name=params.get("game_name", "eidolon-engine"),
             portal_bucket_name=params.get("portal_bucket_name"),  # type: ignore
             scripts_bucket_name=params.get("scripts_bucket_name"),  # type: ignore
+            lambda_bucket_name=params.get("lambda_bucket_name"),  # type: ignore
             env=env,
         )
 
@@ -741,6 +742,7 @@ class EidolonEngineApp:
         self.load_api_config(params)
         self.load_cors_config(params)
         self.load_github_config(params)
+        self.load_s3_config(params)
 
         self.load_context_overrides(params)
 
@@ -753,14 +755,6 @@ class EidolonEngineApp:
         if game_config:
             print("   Loading Game configuration")
             params["game_name"] = game_config.get("name", params.get("game_name", "eidolon-engine"))
-
-            # Check for existing bucket configurations
-            if "PortalS3Bucket" in game_config:
-                params["portal_bucket_name"] = game_config.get("PortalS3Bucket")
-                print(f"     - Using existing portal bucket: {params['portal_bucket_name']}")
-            if "ScriptsS3Bucket" in game_config:
-                params["scripts_bucket_name"] = game_config.get("ScriptsS3Bucket")
-                print(f"     - Using existing scripts bucket: {params['scripts_bucket_name']}")
 
     def load_deployment_config(self, params: dict) -> None:
         """Load deployment configuration section."""
@@ -889,6 +883,21 @@ class EidolonEngineApp:
             print(f"     - Owner: {params['github_owner']}")
             print(f"     - Repo: {params['github_repo']}")
             print(f"     - Branch: {params['github_branch']}")
+
+    def load_s3_config(self, params: dict) -> None:
+        """Load S3 configuration section."""
+        s3_config = self.config.get("S3", {})
+        if s3_config:
+            print("   Loading S3 configuration")
+            if s3_config.get("PortalBucket"):
+                params["portal_bucket_name"] = s3_config["PortalBucket"]
+                print(f"     - Portal bucket: {params['portal_bucket_name']}")
+            if s3_config.get("ScriptsBucket"):
+                params["scripts_bucket_name"] = s3_config["ScriptsBucket"]
+                print(f"     - Scripts bucket: {params['scripts_bucket_name']}")
+            if s3_config.get("ArtifactsBucket"):
+                params["lambda_bucket_name"] = s3_config["ArtifactsBucket"]
+                print(f"     - Artifacts bucket: {params['lambda_bucket_name']}")
 
     def load_context_overrides(self, params: dict) -> None:
         """Override parameters with CDK context values."""

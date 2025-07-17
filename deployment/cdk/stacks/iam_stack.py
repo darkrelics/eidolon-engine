@@ -100,7 +100,7 @@ def create_cloudwatch_policy(scope: Construct, game_name: str) -> iam.ManagedPol
                         "logs:PutLogEvents",
                         "logs:DescribeLogStreams",
                     ],
-                    resources=[f"arn:aws:logs:{scope.region}:{scope.account}:log-group:/aws/eidolon/*"],  # type: ignore
+                    resources=[f"arn:aws:logs:{scope.region}:{scope.account}:log-group:/eidolon/*"],  # type: ignore
                 ),
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
@@ -142,15 +142,36 @@ class IAMStack(Stack):
         # Check if CloudWatch policy already exists
         cloudwatch_policy_name: str = f"eidolon-{game_name}-cloudwatch-access"
 
-        # Create or reference CloudWatch policy
-        if check_policy_exists(cloudwatch_policy_name, self.region):
-            print(f"  Using existing CloudWatch policy: {cloudwatch_policy_name}")
-            # Reference existing policy
-            cloudwatch_policy_arn = get_existing_policy_arn(cloudwatch_policy_name, self.account)
-            self.cloudwatch_policy = iam.ManagedPolicy.from_managed_policy_arn(self, "cloudwatch-access-ref", cloudwatch_policy_arn)
-        else:
-            print(f"  Creating new CloudWatch policy: {cloudwatch_policy_name}")
-            self.cloudwatch_policy = create_cloudwatch_policy(self, game_name)
+        # Always use the same logical ID for the policy to prevent replacement
+        # This prevents CDK from trying to delete and recreate the policy
+        print(f"  Ensuring CloudWatch policy: {cloudwatch_policy_name}")
+        self.cloudwatch_policy = iam.ManagedPolicy(
+            self,
+            "CloudWatchAccessPolicy",  # Stable logical ID
+            managed_policy_name=cloudwatch_policy_name,
+            document=iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        actions=[
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents",
+                            "logs:DescribeLogStreams",
+                        ],
+                        resources=[f"arn:aws:logs:{self.region}:{self.account}:log-group:/eidolon/*"],
+                    ),
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        actions=[
+                            "cloudwatch:PutMetricData",
+                        ],
+                        resources=["*"],
+                    ),
+                ]
+            ),
+            description=f"Policy for accessing {game_name} CloudWatch logs and metrics",
+        )
 
         # Attach CloudWatch policy to role
         self.execution_role.add_managed_policy(self.cloudwatch_policy)

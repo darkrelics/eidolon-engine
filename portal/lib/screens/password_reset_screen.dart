@@ -46,14 +46,14 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       await authService.forgotPassword(_emailController.text.trim());
-
+      
       if (mounted) {
         Navigator.pushNamed(
           context,
           '/password-reset-confirm',
           arguments: _emailController.text.trim(),
         );
-
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Reset code sent to your email'),
@@ -82,7 +82,9 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Reset Password')),
+      appBar: AppBar(
+        title: const Text('Reset Password'),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -120,9 +122,8 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(
-                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                      ).hasMatch(value)) {
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                          .hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -131,23 +132,21 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _isLoading ? null : _handlePasswordReset,
-                    child:
-                        _isLoading
-                            ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Text('Send Reset Code'),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Send Reset Code'),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed:
-                        _isLoading
-                            ? null
-                            : () {
-                              Navigator.pop(context);
-                            },
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            Navigator.pop(context);
+                          },
                     child: const Text('Back to Sign In'),
                   ),
                 ],

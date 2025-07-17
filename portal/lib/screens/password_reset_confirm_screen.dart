@@ -22,17 +22,15 @@ class PasswordResetConfirmScreen extends StatefulWidget {
   const PasswordResetConfirmScreen({super.key});
 
   @override
-  State<PasswordResetConfirmScreen> createState() =>
-      _PasswordResetConfirmScreenState();
+  State<PasswordResetConfirmScreen> createState() => _PasswordResetConfirmScreenState();
 }
 
-class _PasswordResetConfirmScreenState
-    extends State<PasswordResetConfirmScreen> {
+class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen> {
   final _formKey = GlobalKey<FormState>();
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-
+  
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
@@ -76,7 +74,7 @@ class _PasswordResetConfirmScreenState
         _codeController.text.trim(),
         _passwordController.text,
       );
-
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -114,7 +112,7 @@ class _PasswordResetConfirmScreenState
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       await authService.forgotPassword(_email!);
-
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -166,7 +164,9 @@ class _PasswordResetConfirmScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Reset Password')),
+      appBar: AppBar(
+        title: const Text('Reset Password'),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -245,8 +245,7 @@ class _PasswordResetConfirmScreenState
                         ),
                         onPressed: () {
                           setState(() {
-                            _isConfirmPasswordVisible =
-                                !_isConfirmPasswordVisible;
+                            _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
                           });
                         },
                       ),
@@ -267,14 +266,13 @@ class _PasswordResetConfirmScreenState
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _isLoading ? null : _handlePasswordReset,
-                    child:
-                        _isLoading
-                            ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Text('Reset Password'),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Reset Password'),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
@@ -283,16 +281,15 @@ class _PasswordResetConfirmScreenState
                   ),
                   const SizedBox(height: 8),
                   TextButton(
-                    onPressed:
-                        _isLoading
-                            ? null
-                            : () {
-                              Navigator.pushNamedAndRemoveUntil(
-                                context,
-                                '/login',
-                                (route) => false,
-                              );
-                            },
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            Navigator.pushNamedAndRemoveUntil(
+                              context,
+                              '/login',
+                              (route) => false,
+                            );
+                          },
                     child: const Text('Back to Sign In'),
                   ),
                 ],

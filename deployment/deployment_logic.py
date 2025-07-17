@@ -84,8 +84,9 @@ def prompt_missing_parameters(params: dict) -> dict:
     # Check if we already have bucket names from config
     has_portal_bucket = params.get("portal_bucket_name") and params["portal_bucket_name"] != "auto-generate"
     has_scripts_bucket = params.get("scripts_bucket_name") and params["scripts_bucket_name"] != "auto-generate"
+    has_artifacts_bucket = params.get("lambda_bucket_name") and params["lambda_bucket_name"] != "auto-generate"
 
-    if has_portal_bucket or has_scripts_bucket:
+    if has_portal_bucket or has_scripts_bucket or has_artifacts_bucket:
         print("Existing S3 buckets detected from configuration.")
         print("Press Enter to keep existing buckets, or enter new names to change.\n")
     else:
@@ -108,6 +109,15 @@ def prompt_missing_parameters(params: dict) -> dict:
     elif scripts_default and scripts_default != "auto-generate":
         # User pressed enter and we have a configured value, keep it
         params["scripts_bucket_name"] = scripts_default
+    # else: leave it unset for auto-generation
+
+    artifacts_default = params.get("lambda_bucket_name", "auto-generate")
+    artifacts_bucket = input(f"Artifacts S3 bucket name [{artifacts_default}]: ").strip()
+    if artifacts_bucket:
+        params["lambda_bucket_name"] = artifacts_bucket
+    elif artifacts_default and artifacts_default != "auto-generate":
+        # User pressed enter and we have a configured value, keep it
+        params["lambda_bucket_name"] = artifacts_default
     # else: leave it unset for auto-generation
 
     return params

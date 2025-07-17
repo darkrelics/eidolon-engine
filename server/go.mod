@@ -17,8 +17,8 @@ require (
 	github.com/gofrs/uuid/v5 v5.3.2
 	github.com/paul-mannino/go-fuzzywuzzy v0.0.0-20200127021948-54652b135d0e
 	github.com/yuin/gopher-lua v1.1.1
-	golang.org/x/crypto v0.40.0
-	golang.org/x/text v0.27.0
+	golang.org/x/crypto v0.39.0
+	golang.org/x/text v0.26.0
 	golang.org/x/time v0.12.0
 )
 
@@ -40,5 +40,5 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.34.0 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect
-	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
 )

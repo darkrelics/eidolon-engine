@@ -24,16 +24,14 @@ from datetime import datetime, timezone
 
 import boto3
 
-from eidolon.dynamo import get_item_safe, safe_put_item
+from eidolon.dynamo import get_table, get_item, put_item
 from eidolon.logger import get_logger
 
 # Configure logging
 logger = get_logger(__name__)
 
-# Initialize DynamoDB client
-dynamodb = boto3.resource("dynamodb")
-players_table_name = os.environ.get("PLAYERS_TABLE", "players")
-player_table = dynamodb.Table(players_table_name)  # type: ignore
+# Get table name from environment
+PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
 
 
 def lambda_handler(event, context) -> dict:
@@ -50,7 +48,8 @@ def lambda_handler(event, context) -> dict:
     """
     # Log Lambda invocation (without exposing sensitive event data)
     logger.info(
-        "Cognito post-confirmation trigger", trigger_source=event.get("triggerSource"), user_pool_id=event.get("userPoolId")
+        "Cognito post-confirmation trigger",
+        extra={"trigger_source": event.get("triggerSource"), "user_pool_id": event.get("userPoolId")},
     )
 
     try:
@@ -66,15 +65,12 @@ def lambda_handler(event, context) -> dict:
             return event
 
         # Check if player already exists
-        logger.debug("Checking for existing player", user_id=user_uuid, table_name=players_table_name)
-        success, result = get_item_safe(player_table, {"PlayerID": user_uuid}, error_context="checking for existing player")
+        players_table = get_table(PLAYERS_TABLE)
+        logger.debug("Checking for existing player", extra={"user_id": user_uuid, "table_name": PLAYERS_TABLE})
+        existing_player = get_item(players_table, {"PlayerID": user_uuid})
 
-        if success and result != "Item not found":
-            logger.info("Player already exists", user_id=user_uuid)
-            return event
-
-        if not success and result != "Item not found":
-            logger.error("Failed to check for existing player", user_id=user_uuid, error=result)
+        if existing_player:
+            logger.info("Player already exists", extra={"user_id": user_uuid})
             return event
 
         # Create new player entry
@@ -90,12 +86,12 @@ def lambda_handler(event, context) -> dict:
         }
 
         # Write to DynamoDB
-        if safe_put_item(player_table, player_item):
-            logger.info("Created new player record", email=email, user_id=user_uuid)
+        if put_item(players_table, player_item):
+            logger.info("Created new player record", extra={"email": email, "user_id": user_uuid})
         else:
-            logger.error("Failed to create player record", email=email, user_id=user_uuid)
+            logger.error("Failed to create player record", extra={"email": email, "user_id": user_uuid})
 
     except Exception as err:
-        logger.error("Error processing user registration", error=err)
+        logger.error("Error processing user registration", extra={"error": str(err)}, exc_info=True)
 
     return event

@@ -25,8 +25,7 @@ class CharacterManagementScreen extends StatefulWidget {
   const CharacterManagementScreen({super.key});
 
   @override
-  State<CharacterManagementScreen> createState() =>
-      _CharacterManagementScreenState();
+  State<CharacterManagementScreen> createState() => _CharacterManagementScreenState();
 }
 
 class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
@@ -45,14 +44,14 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       _apiService = ApiService(authService);
-
+      
       setState(() {
         _isLoading = true;
         _error = null;
       });
 
       final characters = await _apiService.getCharacters();
-
+      
       if (mounted) {
         setState(() {
           _characters = characters;
@@ -149,9 +148,7 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                           Text(
                             _error!,
                             style: TextStyle(
-                              color: colorScheme.onSurface.withValues(
-                                alpha: 0.7,
-                              ),
+                              color: colorScheme.onSurface.withValues(alpha: 0.7),
                               fontSize: 12,
                             ),
                           ),
@@ -188,9 +185,7 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                           Text(
                             'Create your first character in the game to begin your adventure.',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurface.withValues(
-                                alpha: 0.7,
-                              ),
+                              color: colorScheme.onSurface.withValues(alpha: 0.7),
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -209,44 +204,35 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      ..._characters!.map(
-                        (character) => Card(
-                          color: colorScheme.surface.withValues(alpha: 0.1),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            leading: Icon(
-                              character.dead ? Icons.person_off : Icons.person,
-                              color:
-                                  character.dead
-                                      ? colorScheme.error
-                                      : colorScheme.primary,
-                            ),
-                            title: Text(
-                              character.name,
-                              style: TextStyle(
-                                decoration:
-                                    character.dead
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                              ),
-                            ),
-                            subtitle:
-                                character.dead
-                                    ? Text(
-                                      'Deceased',
-                                      style: TextStyle(
-                                        color: colorScheme.error,
-                                      ),
-                                    )
-                                    : Text(
-                                      'Active',
-                                      style: TextStyle(
-                                        color: colorScheme.primary,
-                                      ),
-                                    ),
+                      ..._characters!.map((character) => Card(
+                        color: colorScheme.surface.withValues(alpha: 0.1),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: Icon(
+                            character.dead ? Icons.person_off : Icons.person,
+                            color: character.dead 
+                                ? colorScheme.error 
+                                : colorScheme.primary,
                           ),
+                          title: Text(
+                            character.name,
+                            style: TextStyle(
+                              decoration: character.dead 
+                                  ? TextDecoration.lineThrough 
+                                  : null,
+                            ),
+                          ),
+                          subtitle: character.dead 
+                              ? Text(
+                                  'Deceased',
+                                  style: TextStyle(color: colorScheme.error),
+                                )
+                              : Text(
+                                  'Active',
+                                  style: TextStyle(color: colorScheme.primary),
+                                ),
                         ),
-                      ),
+                      )),
                     ],
                   ),
                 const SizedBox(height: 40),

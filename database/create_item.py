@@ -21,7 +21,9 @@ This module adds an item based on a prototype to a room.
 import uuid
 from decimal import Decimal
 
-from eidolon.dynamo import safe_delete_item, safe_get_item, safe_put_item, safe_update_item, tables
+import os
+import boto3
+from eidolon.dynamo import get_table, get_item, put_item, update_item, delete_item
 
 
 def display_rooms() -> list:
@@ -32,7 +34,8 @@ def display_rooms() -> list:
         A list of room dictionaries.
     """
     try:
-        response = tables.rooms.scan()  # type: ignore
+        rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
+        response = rooms_table.scan()
         rooms = response.get("Items", [])
         if not rooms:
             print("No rooms found.")
@@ -49,7 +52,7 @@ def display_rooms() -> list:
         return []
 
 
-def prompt_for_room() -> int:
+def prompt_for_room():
     """
     Prompts the user to enter a room ID.
 
@@ -57,9 +60,9 @@ def prompt_for_room() -> int:
         The room ID entered by the user, or None to quit.
     """
     while True:
-        room_input: str = input("Enter room ID (X to quit): ").strip().upper()
+        room_input = input("Enter room ID (X to quit): ").strip().upper()
         if room_input == "X":
-            return None  # type: ignore
+            return None
         try:
             return int(room_input)
         except ValueError:
@@ -71,7 +74,8 @@ def display_prototypes() -> list:
     Fetches and displays all item prototypes from the 'prototypes' DynamoDB table.
     """
     try:
-        response = tables.prototypes.scan()  # type: ignore
+        prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
+        response = prototypes_table.scan()
         prototypes = response.get("Items", [])
         if not prototypes:
             print("No prototypes found.")
@@ -142,7 +146,8 @@ def add_item_to_table(new_item: dict) -> bool:
     Returns:
         True if the item was successfully added to the table, False otherwise.
     """
-    if safe_put_item(tables.items, new_item):
+    items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
+    if put_item(items_table, new_item):
         print(f"Successfully added item '{new_item['item_name']}' to items table.")
         return True
     else:
@@ -163,7 +168,8 @@ def add_item_to_room(room: dict, new_item: dict) -> bool:
     """
     room_id = int(room.get("RoomID", 0))
 
-    current_room = safe_get_item(tables.rooms, {"RoomID": room_id})
+    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
+    current_room = get_item(rooms_table, {"RoomID": room_id})
 
     if not current_room:
         print(f"Room {room_id} not found.")
@@ -183,13 +189,14 @@ def add_item_to_room(room: dict, new_item: dict) -> bool:
 
     current_item_ids.append(item_id)
 
-    if safe_update_item(tables.rooms, {"RoomID": room_id}, "SET ItemID = :item_ids", {":item_ids": current_item_ids}):
+    if update_item(rooms_table, {"RoomID": room_id}, "SET ItemID = :item_ids", {":item_ids": current_item_ids}):
         print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
         return True
     else:
         print("Error updating room.")
         # Attempt to roll back by deleting the item we just added
-        if safe_delete_item(tables.items, {"ItemID": new_item["ItemID"]}):
+        items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
+        if delete_item(items_table, {"ItemID": new_item["ItemID"]}):
             print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
         else:
             print("Error rolling back item addition.")
@@ -207,7 +214,7 @@ def main() -> None:
             print("No rooms available. Exiting.")
             break
 
-        room_id: int = prompt_for_room()
+        room_id = prompt_for_room()
         if room_id is None:
             print("Exiting.")
             break
