@@ -88,11 +88,11 @@ def check_api_gateway_health(session: boto3.Session, api_name: str) -> dict:
     """
     apigateway = session.client("apigateway")
     issues = []
+    api_id = None
 
     try:
         # Find the API by name
         apis = apigateway.get_rest_apis()
-        api_id = None
 
         for api in apis.get("items", []):
             if api["name"] == api_name:

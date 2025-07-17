@@ -754,7 +754,7 @@ class EidolonEngineApp:
         game_config = self.config.get("Game", {})
         if game_config:
             print("   Loading Game configuration")
-            params["game_name"] = game_config.get("name", params.get("game_name", "eidolon-engine"))
+            params["game_name"] = game_config.get("Name", params.get("game_name", "eidolon-engine"))
 
     def load_deployment_config(self, params: dict) -> None:
         """Load deployment configuration section."""

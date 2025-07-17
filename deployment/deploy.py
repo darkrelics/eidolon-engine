@@ -107,16 +107,16 @@ class IncrementalDeploymentOrchestrator:
         config: dict = self.config_manager.config
         if "Game" in config:
             game_config = config["Game"]
-            params["game_name"] = game_config.get("name", params["game_name"])
+            params["game_name"] = game_config.get("Name", params["game_name"])
         # Check both AWS and Contact sections for email (template uses Contact)
         if "Contact" in config:
             params["contact_email"] = config["Contact"].get("Email", params["contact_email"])
         if "AWS" in config:
             aws_config = config["AWS"]
-            params["contact_email"] = aws_config.get("contact_email", params["contact_email"])
+            params["contact_email"] = aws_config.get("ContactEmail", params["contact_email"])
         if "CloudFront" in config:
             cf_config = config["CloudFront"]
-            params["cloudfront_distribution_id"] = cf_config.get("distribution_id", params.get("cloudfront_distribution_id"))
+            params["cloudfront_distribution_id"] = cf_config.get("DistributionId", params.get("cloudfront_distribution_id"))
         if "DynamoDB" in config and "Tables" in config["DynamoDB"]:
             # Load existing DynamoDB table names if configured
             params["dynamodb_tables"] = config["DynamoDB"]["Tables"]
@@ -405,7 +405,7 @@ class IncrementalDeploymentOrchestrator:
                 if phase_success and phase["name"] == "Distribution":
                     # Always update S3 bucket policy for CloudFront access, even if cloudfront stack wasn't deployed
                     # This ensures the policy is correct even after manual changes or drift
-                    if self.config_manager.config.get("CloudFront", {}).get("distribution_id"):
+                    if self.config_manager.config.get("CloudFront", {}).get("DistributionId"):
                         print("\n  Ensuring S3 bucket policy is configured for CloudFront...")
                         self.update_s3_bucket_policy_for_cloudfront()
 
@@ -777,7 +777,7 @@ class IncrementalDeploymentOrchestrator:
             if config.get("CloudFront") is None:
                 print("  ⚠ CloudFront: Not configured")
             else:
-                distribution_id = config.get("CloudFront", {}).get("distribution_id", "")
+                distribution_id = config.get("CloudFront", {}).get("DistributionId", "")
                 if distribution_id:
                     try:
                         cf_client = self.session.client("cloudfront")
@@ -1316,7 +1316,7 @@ class IncrementalDeploymentOrchestrator:
                 return
 
             # Get distribution ID from config
-            distribution_id = self.config_manager.config.get("CloudFront", {}).get("distribution_id", "")
+            distribution_id = self.config_manager.config.get("CloudFront", {}).get("DistributionId", "")
             if not distribution_id:
                 print("    CloudFront distribution ID not found, skipping policy update")
                 return
