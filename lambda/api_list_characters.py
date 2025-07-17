@@ -59,6 +59,16 @@ def lambda_handler(event, context):
                 "path": event.get("path"),
             },
         )
+    
+    # Log auth details
+    headers = event.get("headers", {})
+    auth_header = headers.get("Authorization", headers.get("authorization", "NOT PROVIDED"))
+    logger.info(f"Authorization header present: {'Bearer' in auth_header}")
+    
+    # Log request context authorizer
+    request_context = event.get("requestContext", {})
+    authorizer = request_context.get("authorizer", {})
+    logger.info(f"Authorizer claims: {authorizer.get('claims', 'NO CLAIMS')}")
 
     # Handle preflight requests
     if event.get("httpMethod") == "OPTIONS":
@@ -68,7 +78,7 @@ def lambda_handler(event, context):
         # Extract player ID from Cognito authorizer
         player_id, auth_error = extract_player_id(event)
         if auth_error:
-            return auth_error
+            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
 
         # Get player data from players table
         players_table = get_table(PLAYERS_TABLE)

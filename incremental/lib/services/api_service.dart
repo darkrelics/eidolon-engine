@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/character.dart';
 import '../models/segment_outcome.dart';
@@ -37,11 +38,14 @@ class ApiService {
 
   /// Get authorization headers
   Future<Map<String, String>> _getHeaders() async {
+    debugPrint('ApiService: Getting ID token...');
     final token = await _authService.getIdToken();
     if (token == null) {
+      debugPrint('ApiService: ERROR - No ID token available');
       throw Exception('Not authenticated');
     }
 
+    debugPrint('ApiService: Got ID token, length: ${token.length}');
     return {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
@@ -93,17 +97,27 @@ class ApiService {
 
   /// List all characters for the player
   Future<List<CharacterInfo>> listCharacters() async {
+    debugPrint('ApiService: Calling listCharacters...');
+    debugPrint('ApiService: API URL: $baseUrl/characters');
+    
     final headers = await _getHeaders();
+    debugPrint('ApiService: Headers prepared, making request...');
+    
     final response = await _httpClient.get(
       Uri.parse('$baseUrl/characters'),
       headers: headers,
     );
 
+    debugPrint('ApiService: Response status: ${response.statusCode}');
+    debugPrint('ApiService: Response body: ${response.body}');
+
     if (response.statusCode == 404) {
+      debugPrint('ApiService: No characters found (404)');
       return [];
     }
 
     if (response.statusCode != 200) {
+      debugPrint('ApiService: ERROR - Failed to list characters');
       throw Exception('Failed to list characters: ${response.body}');
     }
 
@@ -111,6 +125,8 @@ class ApiService {
     final characterList = (json['characters'] as List)
         .map((char) => CharacterInfo.fromJson(char as Map<String, dynamic>))
         .toList();
+    
+    debugPrint('ApiService: Successfully parsed ${characterList.length} characters');
     return characterList;
   }
 

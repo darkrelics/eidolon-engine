@@ -55,6 +55,7 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, _) {
+        debugPrint('AuthWrapper: Auth status changed to ${authProvider.status}');
         switch (authProvider.status) {
           case AuthStatus.uninitialized:
             return const Scaffold(
@@ -63,8 +64,10 @@ class AuthWrapper extends StatelessWidget {
               ),
             );
           case AuthStatus.unauthenticated:
+            debugPrint('AuthWrapper: Showing LoginScreen');
             return const LoginScreen();
           case AuthStatus.authenticated:
+            debugPrint('AuthWrapper: Showing CharacterSelectionScreen');
             return const CharacterSelectionScreen();
           case AuthStatus.loading:
             return const Scaffold(

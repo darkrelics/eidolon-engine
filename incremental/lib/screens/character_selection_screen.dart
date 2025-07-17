@@ -36,6 +36,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint('CharacterSelectionScreen: initState called');
     _initializeApiService();
     _loadCharacters();
   }
@@ -46,12 +47,14 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
 
   Future<void> _loadCharacters() async {
     try {
+      debugPrint('CharacterSelectionScreen: Loading characters...');
       setState(() {
         _isLoading = true;
         _error = null;
       });
 
       final characters = await _apiService.listCharacters();
+      debugPrint('CharacterSelectionScreen: Loaded ${characters.length} characters');
       
       if (mounted) {
         setState(() {
@@ -60,6 +63,8 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
         });
       }
     } catch (e) {
+      debugPrint('CharacterSelectionScreen: ERROR loading characters: $e');
+      debugPrint('CharacterSelectionScreen: Error type: ${e.runtimeType}');
       if (mounted) {
         setState(() {
           _error = e.toString();
