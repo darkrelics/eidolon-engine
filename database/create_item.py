@@ -18,11 +18,11 @@ limitations under the License.
 This module adds an item based on a prototype to a room.
 """
 
+import os
 import uuid
 from decimal import Decimal
 
-import os
-from eidolon.dynamo import get_table, get_item, put_item, update_item, delete_item
+from eidolon.dynamo import delete_item, get_item, get_table, put_item, update_item
 
 
 def display_rooms() -> list:

@@ -22,9 +22,8 @@ Returns the full character data including active segments if any.
 
 import os
 
-
 from eidolon.cors import cors_handler
-from eidolon.dynamo import decimal_to_float, get_table, get_item
+from eidolon.dynamo import decimal_to_float, get_item, get_table
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, get_query_parameter
 from eidolon.responses import create_response, error_response, not_found_response

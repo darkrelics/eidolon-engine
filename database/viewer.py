@@ -18,8 +18,8 @@ limitations under the License.
 
 import os
 import sys
-from eidolon.dynamo import get_table
 
+from eidolon.dynamo import get_table
 
 # Define table names
 TABLE_NAMES = {

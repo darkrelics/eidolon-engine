@@ -135,7 +135,6 @@ def check_s3_buckets_health(session: boto3.Session, bucket_names: list) -> dict:
             # Check bucket exists and is accessible
             s3.head_bucket(Bucket=bucket_name)
 
-
             healthy_buckets.append(bucket_name)
 
         except ClientError as err:

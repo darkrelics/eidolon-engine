@@ -22,9 +22,8 @@ Returns only character names and death status from the player table.
 
 import os
 
-
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_table, get_item
+from eidolon.dynamo import get_item, get_table
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id
 from eidolon.responses import create_response, error_response, not_found_response
