@@ -33,11 +33,14 @@ class Character {
 }
 
 class ApiService {
-  static const String _apiDomain = String.fromEnvironment('API_DOMAIN', defaultValue: 'api.darkrelics.net');
+  static const String _apiDomain = String.fromEnvironment(
+    'API_DOMAIN',
+    defaultValue: 'api.darkrelics.net',
+  );
   static const String _baseUrl = 'https://$_apiDomain';
-  
+
   final AuthService _authService;
-  
+
   ApiService(this._authService);
 
   Future<List<Character>> getCharacters() async {
@@ -61,9 +64,10 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body) as Map<String, dynamic>;
-      final characterList = (data['characters'] as List)
-          .map((char) => Character.fromJson(char as Map<String, dynamic>))
-          .toList();
+      final characterList =
+          (data['characters'] as List)
+              .map((char) => Character.fromJson(char as Map<String, dynamic>))
+              .toList();
       return characterList;
     } else if (response.statusCode == 401) {
       throw Exception('Unauthorized');

@@ -61,15 +61,11 @@ class _LoginScreenState extends State<LoginScreen> {
       final authState = context.read<AuthState>();
       authState.emailController.text = _emailController.text.trim();
       authState.passwordController.text = _passwordController.text;
-      
+
       await authState.signIn();
-      
+
       if (mounted && authState.isAuthenticated) {
-        _handleNavigation(
-          context,
-          widget.redirectRoute,
-          widget.redirectArgs,
-        );
+        _handleNavigation(context, widget.redirectRoute, widget.redirectArgs);
       }
     } catch (e) {
       if (mounted) {
@@ -91,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _handleNavigation(BuildContext context, String? route, Object? args) {
     final targetRoute = route ?? '/characters';
-    
+
     if (targetRoute == '/characters') {
       Navigator.of(context).pushReplacementNamed(targetRoute);
     } else {
@@ -139,8 +135,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                          .hasMatch(value)) {
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -181,24 +178,29 @@ class _LoginScreenState extends State<LoginScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              Navigator.pushNamed(context, '/forgot-password');
-                            },
+                      onPressed:
+                          _isLoading
+                              ? null
+                              : () {
+                                Navigator.pushNamed(
+                                  context,
+                                  '/forgot-password',
+                                );
+                              },
                       child: const Text('Forgot Password?'),
                     ),
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _isLoading ? null : _handleSignIn,
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Sign In'),
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Text('Sign In'),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -206,11 +208,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       const Text('Don\'t have an account?'),
                       TextButton(
-                        onPressed: _isLoading
-                            ? null
-                            : () {
-                                Navigator.pushNamed(context, '/register');
-                              },
+                        onPressed:
+                            _isLoading
+                                ? null
+                                : () {
+                                  Navigator.pushNamed(context, '/register');
+                                },
                         child: const Text('Create Account'),
                       ),
                     ],

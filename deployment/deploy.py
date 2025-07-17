@@ -10,15 +10,13 @@ import os
 import sys
 from pathlib import Path
 
-import boto3
-from botocore.exceptions import ClientError
 from aws_client_factory import AWSClientFactory
+from botocore.exceptions import ClientError
 from build_executor import BuildExecutor
 from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
 from config_updater import ConfigurationUpdater
-from config_validator import validate_deployment_config, validate_stack_config
+from config_validator import validate_deployment_config
 from deployment_logic import analyze_changes, prompt_missing_parameters
-from error_handlers import handle_client_errors
 from health_checks import run_phase_health_check
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from stack_utils import StackOutputHelper
@@ -243,7 +241,6 @@ class IncrementalDeploymentOrchestrator:
 
         return params
 
-
     def execute_deployment(self, plan: dict, auto_approve: bool = False) -> bool:
         """Execute the deployment plan in phases.
 
@@ -410,7 +407,7 @@ class IncrementalDeploymentOrchestrator:
                     # This ensures the policy is correct even after manual changes or drift
                     if self.config_manager.config.get("CloudFront", {}).get("distribution_id"):
                         print("\n  Ensuring S3 bucket policy is configured for CloudFront...")
-                        self.update_s3_bucket_policy_for_cloudfront(plan["parameters"])
+                        self.update_s3_bucket_policy_for_cloudfront()
 
                 # Check if we need to update Lambda functions after Application Layer
                 if phase_success and phase["name"] == "Application Layer":
@@ -701,11 +698,7 @@ class IncrementalDeploymentOrchestrator:
             validator = ResourceValidatorFactory.create_validator("s3_bucket", self.session)
 
             # Map of bucket types to their configuration keys
-            bucket_types = {
-                "Portal": "PortalBucket",
-                "Scripts": "ScriptsBucket",
-                "Artifacts": "ArtifactsBucket"
-            }
+            bucket_types = {"Portal": "PortalBucket", "Scripts": "ScriptsBucket", "Artifacts": "ArtifactsBucket"}
 
             s3_config = config.get("S3", {})
             for bucket_type, config_key in bucket_types.items():
@@ -721,7 +714,6 @@ class IncrementalDeploymentOrchestrator:
                         all_valid = False
                 else:
                     print(f"  - {bucket_type} Bucket: Not configured")
-            
             # Check if any buckets are missing
             if not any(s3_config.get(key) for key in bucket_types.values()):
                 print("  ⚠ No S3 buckets configured")
@@ -1264,12 +1256,12 @@ class IncrementalDeploymentOrchestrator:
             delete_player_function = "cognito-delete-player"
 
             try:
-                # Get function ARNs
+                # Verify both Lambda functions exist
                 new_player_response = lambda_client.get_function(FunctionName=new_player_function)
                 new_player_arn = new_player_response["Configuration"]["FunctionArn"]
 
-                delete_player_response = lambda_client.get_function(FunctionName=delete_player_function)
-                delete_player_arn = delete_player_response["Configuration"]["FunctionArn"]
+                # Verify delete player function exists (will raise exception if not found)
+                lambda_client.get_function(FunctionName=delete_player_function)
 
                 # First, add permissions for Cognito to invoke the Lambda functions
                 print("    Adding permissions for Cognito to invoke Lambda functions...")
@@ -1309,12 +1301,8 @@ class IncrementalDeploymentOrchestrator:
             print(f"    Error configuring Cognito: {err}")
             print("    Settings will need to be configured manually")
 
-    def update_s3_bucket_policy_for_cloudfront(self, parameters: dict):
-        """Update S3 bucket policy to allow CloudFront access.
-
-        Args:
-            parameters: Deployment parameters containing bucket and distribution info
-        """
+    def update_s3_bucket_policy_for_cloudfront(self):
+        """Update S3 bucket policy to allow CloudFront access."""
         print("\n  Updating CloudFront configuration and S3 bucket policy...")
 
         # Initialize variables outside try block
@@ -1333,8 +1321,7 @@ class IncrementalDeploymentOrchestrator:
                 print("    CloudFront distribution ID not found, skipping policy update")
                 return
 
-            # Get account ID
-            account_id = self.aws_factory.get_account_id()
+            # Account ID would be used here if needed for bucket policies
 
             # Get CloudFront client
             cf_client = self.session.client("cloudfront", region_name="us-east-1")
@@ -1348,7 +1335,6 @@ class IncrementalDeploymentOrchestrator:
 
             # Track if we need to update the distribution
             needs_distribution_update = False
-            
             # Check if OAI already exists in the distribution
             oai_id = None
             origin_to_update = None
@@ -1358,9 +1344,11 @@ class IncrementalDeploymentOrchestrator:
                 # CDK might create it with various domain patterns
                 domain_name = origin["DomainName"]
                 print(f"      Checking origin {i}: {domain_name}")
-                if (domain_name.startswith(f"{bucket_name}.s3") or 
-                    domain_name == f"{bucket_name}.s3.amazonaws.com" or
-                    domain_name.startswith(f"{bucket_name}.s3-")):
+                if (
+                    domain_name.startswith(f"{bucket_name}.s3")
+                    or domain_name == f"{bucket_name}.s3.amazonaws.com"
+                    or domain_name.startswith(f"{bucket_name}.s3-")
+                ):
                     origin_to_update = i
                     print(f"      Found matching origin at index {i}")
                     # Check if it has S3OriginConfig (it might be a CustomOriginConfig)
@@ -1379,7 +1367,6 @@ class IncrementalDeploymentOrchestrator:
                         print(f"      Origin lacks S3OriginConfig, has: {list(origin.keys())}")
                         needs_distribution_update = True
                     break
-            
             if origin_to_update is None:
                 print(f"    WARNING: No origin found for bucket {bucket_name}")
                 print("    Available origins:")
@@ -1462,7 +1449,6 @@ class IncrementalDeploymentOrchestrator:
             except ClientError as err:
                 if err.response.get("Error", {}).get("Code") != "NoSuchBucketPolicy":
                     print(f"    Note: Could not delete existing policy: {err}")
-            
             # Only create and apply new policy if we have an OAI
             if oai_id:
                 # Create policy statements
@@ -1475,13 +1461,13 @@ class IncrementalDeploymentOrchestrator:
                         "Resource": f"arn:aws:s3:::{bucket_name}/*",
                     }
                 ]
-                
+
                 # Create the complete policy
                 policy: dict = {"Version": "2012-10-17", "Statement": statements}
-                
+
                 # Apply the policy
                 s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
-                print(f"    Applied new bucket policy")
+                print("    Applied new bucket policy")
             else:
                 print("    WARNING: No OAI found - bucket will not be accessible via CloudFront!")
                 print("    The CloudFront distribution may need to be reconfigured")

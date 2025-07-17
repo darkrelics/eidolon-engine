@@ -23,8 +23,6 @@ Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 
 import os
 
-import boto3
-
 from eidolon.cors import cors_handler
 from eidolon.dynamo import get_table, scan_all_items
 from eidolon.logger import get_logger

@@ -22,10 +22,12 @@ Ensures the character belongs to the player before deletion.
 
 import os
 
-import boto3
-
 from eidolon.cors import cors_handler
+<<<<<<< HEAD
 from eidolon.dynamo import get_table, get_item, delete_item, update_item_with_condition
+=======
+from eidolon.dynamo import delete_item, get_item, get_table, update_item_with_condition
+>>>>>>> develop
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, parse_json_body, validate_required_fields
 from eidolon.responses import error_response, success_response

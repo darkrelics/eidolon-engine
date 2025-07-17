@@ -29,7 +29,6 @@ def validate_deployment_config(params: dict) -> list:
     if params.get("domain_name") and not params.get("hosted_zone_id"):
         errors.append("Hosted Zone ID is required when domain name is specified")
 
-
     # Deployment mode validation
     valid_modes = ["mud", "incremental", "hybrid"]
     if params.get("deployment_mode") and params["deployment_mode"] not in valid_modes:

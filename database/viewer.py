@@ -18,9 +18,8 @@ limitations under the License.
 
 import os
 import sys
-import boto3
-from eidolon.dynamo import get_table
 
+from eidolon.dynamo import get_table
 
 # Define table names
 TABLE_NAMES = {

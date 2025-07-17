@@ -134,8 +134,6 @@ def check_s3_buckets_health(session: boto3.Session, bucket_names: list) -> dict:
         try:
             # Check bucket exists and is accessible
             s3.head_bucket(Bucket=bucket_name)
-
-
             healthy_buckets.append(bucket_name)
 
         except ClientError as err:
@@ -177,7 +175,7 @@ def run_phase_health_check(session: boto3.Session, phase_name: str, deployed_sta
             ]
             result = check_dynamodb_tables_health(session, table_names)
             if not result["healthy"]:
-                print(f"    ✗ DynamoDB tables unhealthy:")
+                print("    ✗ DynamoDB tables unhealthy:")
                 for issue in result["issues"]:
                     print(f"      - {issue}")
                 all_healthy = False
@@ -189,7 +187,7 @@ def run_phase_health_check(session: boto3.Session, phase_name: str, deployed_sta
             bucket_names = [config.get("portal_bucket_name"), config.get("scripts_bucket_name"), config.get("lambda_bucket_name")]
             result = check_s3_buckets_health(session, bucket_names)
             if not result["healthy"]:
-                print(f"    ✗ S3 buckets unhealthy:")
+                print("    ✗ S3 buckets unhealthy:")
                 for issue in result["issues"]:
                     print(f"      - {issue}")
                 all_healthy = False
@@ -210,7 +208,7 @@ def run_phase_health_check(session: boto3.Session, phase_name: str, deployed_sta
             ]
             result = check_lambda_functions_health(session, function_names)
             if not result["healthy"]:
-                print(f"    ✗ Lambda functions unhealthy:")
+                print("    ✗ Lambda functions unhealthy:")
                 for issue in result["issues"]:
                     print(f"      - {issue}")
                 all_healthy = False
@@ -220,12 +218,12 @@ def run_phase_health_check(session: boto3.Session, phase_name: str, deployed_sta
         # Check API Gateway
         result = check_api_gateway_health(session, "eidolon-engine-api")
         if not result["healthy"]:
-            print(f"    ✗ API Gateway unhealthy:")
+            print("    ✗ API Gateway unhealthy:")
             for issue in result["issues"]:
                 print(f"      - {issue}")
             all_healthy = False
         else:
-            print(f"    ✓ API Gateway healthy")
+            print("    ✓ API Gateway healthy")
 
     if all_healthy:
         print(f"  ✓ All health checks passed for {phase_name}")

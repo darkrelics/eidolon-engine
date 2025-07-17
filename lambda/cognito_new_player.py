@@ -22,9 +22,13 @@ Lambda function to create a new player record in DynamoDB after user registratio
 import os
 from datetime import datetime, timezone
 
+<<<<<<< HEAD
 import boto3
 
 from eidolon.dynamo import get_table, get_item, put_item
+=======
+from eidolon.dynamo import get_item, get_table, put_item
+>>>>>>> develop
 from eidolon.logger import get_logger
 
 # Configure logging
