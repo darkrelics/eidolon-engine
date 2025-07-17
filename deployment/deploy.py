@@ -10,15 +10,13 @@ import os
 import sys
 from pathlib import Path
 
-import boto3
 from botocore.exceptions import ClientError
 from aws_client_factory import AWSClientFactory
 from build_executor import BuildExecutor
 from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
 from config_updater import ConfigurationUpdater
-from config_validator import validate_deployment_config, validate_stack_config
+from config_validator import validate_deployment_config
 from deployment_logic import analyze_changes, prompt_missing_parameters
-from error_handlers import handle_client_errors
 from health_checks import run_phase_health_check
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from stack_utils import StackOutputHelper
@@ -1264,12 +1262,12 @@ class IncrementalDeploymentOrchestrator:
             delete_player_function = "cognito-delete-player"
 
             try:
-                # Get function ARNs
+                # Verify both Lambda functions exist
                 new_player_response = lambda_client.get_function(FunctionName=new_player_function)
                 new_player_arn = new_player_response["Configuration"]["FunctionArn"]
 
-                delete_player_response = lambda_client.get_function(FunctionName=delete_player_function)
-                delete_player_arn = delete_player_response["Configuration"]["FunctionArn"]
+                # Verify delete player function exists (will raise exception if not found)
+                lambda_client.get_function(FunctionName=delete_player_function)
 
                 # First, add permissions for Cognito to invoke the Lambda functions
                 print("    Adding permissions for Cognito to invoke Lambda functions...")
@@ -1333,8 +1331,7 @@ class IncrementalDeploymentOrchestrator:
                 print("    CloudFront distribution ID not found, skipping policy update")
                 return
 
-            # Get account ID
-            account_id = self.aws_factory.get_account_id()
+            # Account ID would be used here if needed for bucket policies
 
             # Get CloudFront client
             cf_client = self.session.client("cloudfront", region_name="us-east-1")
@@ -1481,7 +1478,7 @@ class IncrementalDeploymentOrchestrator:
                 
                 # Apply the policy
                 s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
-                print(f"    Applied new bucket policy")
+                print("    Applied new bucket policy")
             else:
                 print("    WARNING: No OAI found - bucket will not be accessible via CloudFront!")
                 print("    The CloudFront distribution may need to be reconfigured")

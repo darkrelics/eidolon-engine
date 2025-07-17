@@ -23,7 +23,6 @@ import uuid
 from datetime import datetime
 
 import os
-import boto3
 from eidolon.dynamo import get_table, put_item
 
 

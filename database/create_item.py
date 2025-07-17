@@ -22,7 +22,6 @@ import uuid
 from decimal import Decimal
 
 import os
-import boto3
 from eidolon.dynamo import get_table, get_item, put_item, update_item, delete_item
 
 

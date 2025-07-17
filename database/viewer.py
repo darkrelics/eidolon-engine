@@ -18,7 +18,6 @@ limitations under the License.
 
 import os
 import sys
-import boto3
 from eidolon.dynamo import get_table
 
 

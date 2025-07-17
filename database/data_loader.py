@@ -23,7 +23,6 @@ import json
 import logging
 
 import os
-import boto3
 from eidolon.dynamo import convert_to_decimal, get_table
 from eidolon.validation_utils import validate_character_name
 

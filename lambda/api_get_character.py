@@ -22,7 +22,6 @@ Returns the full character data including active segments if any.
 
 import os
 
-import boto3
 
 from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float, get_table, get_item

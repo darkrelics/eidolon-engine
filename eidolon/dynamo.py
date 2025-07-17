@@ -1,6 +1,5 @@
 """DynamoDB utilities for Lambda functions."""
 
-import os
 from decimal import Decimal
 
 import boto3
