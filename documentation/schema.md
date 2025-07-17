@@ -1,15 +1,18 @@
 **Schema Overview:**
 
-This schema supports the Eidolon Engine, providing structures for players, characters, rooms, items, and game messages. It facilitates:
+This schema supports the Eidolon Engine's unified backend infrastructure, providing shared data structures used by both MUD and Incremental game modes. All tables listed here are actively used by both game modes, with the GameMode field on characters preventing concurrent access.
 
-- Player management with associated characters and messages seen.
-- Character progression with attributes, abilities, inventory, and location tracking.
-- Room definitions with descriptions, items, and exits to other rooms.
-- Item management including stacking, containment, and usage mechanics.
-- Archetype templates for character creation.
-- Storage of messages of the day for player engagement.
+The schema facilitates:
 
-By adhering to this schema, developers can ensure data consistency and ease of access across the application, while leveraging DynamoDB's capabilities for scalability and performance.
+- Unified player management across both game modes
+- Character progression with attributes, skills, inventory, and location tracking
+- Character safety through GameMode field (prevents simultaneous MUD/Incremental use)
+- Room definitions with descriptions, items, and exits
+- Item management including stacking, containment, and usage mechanics
+- Archetype templates for character creation
+- Storage of messages of the day for player engagement
+
+By adhering to this schema, developers can ensure data consistency and ease of access across both game modes, while leveraging DynamoDB's capabilities for scalability and performance.
 
 ## Player Table
 
@@ -32,6 +35,7 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 | `CharacterID`   | `STRING` | UUID of the character.                                      |
 | `PlayerID`      | `STRING` | Email of the player who owns the character.                 |
 | `CharacterName` | `STRING` | Name of the character.                                      |
+| `GameMode`      | `STRING` | Current mode: "MUD" or "Incremental" (prevents concurrent use) |
 | `RoomID`        | `NUMBER` | ID of the room the character is currently in.               |
 | `Inventory`     | `MAP`    | Map of inventory slots to item UUIDs.                       |
 | `Attributes`    | `MAP`    | Map of attribute names to their values (e.g., Strength: 4). |
@@ -43,6 +47,7 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 - **`CharacterID`**: The UUID of the character, serving as the primary key.
 - **`PlayerID`**: The email address of the player who owns this character.
 - **`CharacterName`**: The name given to the character by the player.
+- **`GameMode`**: Indicates whether character is currently in "MUD" or "Incremental" mode. This field prevents a character from being used in both modes simultaneously.
 - **`RoomID`**: The ID of the room where the character is located.
 - **`Inventory`**: A map where keys represent inventory slots or item names, and values are item UUIDs.
 - **`Attributes`**: A map of character attributes (e.g., Strength, Agility) to their numerical values.

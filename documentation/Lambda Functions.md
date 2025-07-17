@@ -1,28 +1,36 @@
 # Lambda Functions
 
-This directory contains AWS Lambda functions for the Eidolon Engine API.
+This directory contains AWS Lambda functions that power the Eidolon Engine's unified backend infrastructure.
+
+## Overview
+
+All Lambda functions in this directory serve both the MUD Portal and Incremental game interfaces. The same backend infrastructure supports all deployment modes (MUD, Incremental, or Hybrid), with different frontend applications consuming these shared APIs.
 
 ## Structure
-
-Lambda functions are organized by their purpose:
 
 ### Cognito Triggers
 
 - `cognito_new_player.py` - Post-confirmation trigger to create player records
 - `cognito_delete_player.py` - Pre-deletion trigger to clean up player data
 
-### MUD API Functions
+### Character Management API (Shared)
 
-- `api_list_characters.py` - List all MUD characters for a player
-- `api_delete_character.py` - Delete a MUD character
-- `api_get_archetypes.py` - Get available character archetypes
+These functions handle character operations for both Portal and Incremental interfaces:
+
+- `api_list_characters.py` - List all characters for a player
+- `api_delete_character.py` - Delete a character
+- `api_get_character.py` - Get character details
+- `api_add_character.py` - Create new character
 - `api_save_character.py` - Save character state
+- `api_get_archetypes.py` - Get available character archetypes
 
-### Incremental Game API Functions
+### Future Additions
 
-- `api_list_incremental_characters.py` - List incremental game characters
-- `api_get_character.py` - Get incremental character details
-- `api_add_character.py` - Create new incremental character
+Additional Lambda functions will be added for Incremental-specific features:
+- Story progression tracking
+- Segment management
+- Plot state handling
+- Active segment timers
 
 ## Shared Modules
 
@@ -40,12 +48,21 @@ Each Lambda function may use the following environment variables:
 
 ### Database Tables
 
-- `players_table` - Shared players DynamoDB table
-- `characters_table` - Game-specific characters table
-- `items_table` - MUD items table
-- `ARCHETYPES_TABLE` - Archetypes table
-- `CHARACTERS_TABLE` - Incremental characters table
-- `ACTIVE_SEGMENTS_TABLE` - Active game segments table
+All tables are shared between MUD and Incremental game modes:
+
+- `PLAYERS_TABLE` - Players table (unified authentication)
+- `CHARACTERS_TABLE` - Characters table (with GameMode field preventing concurrent use)
+- `ARCHETYPES_TABLE` - Character archetypes
+- `ITEMS_TABLE` - Items table
+- `ROOMS_TABLE` - Rooms table
+- `EXITS_TABLE` - Room exits
+- `PROTOTYPES_TABLE` - Item prototypes
+- `MOTD_TABLE` - Messages of the day
+
+Future Incremental-specific tables:
+- `STORY_TABLE` - Story metadata
+- `ACTIVE_SEGMENTS_TABLE` - Active story segments
+- `CHARACTER_HISTORY_TABLE` - Story completion tracking
 
 ### CORS Configuration
 
