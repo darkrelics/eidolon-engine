@@ -212,3 +212,32 @@ def scan_all_items(table, filter_expression=None, expression_values=None, projec
     except ClientError as err:
         logger.error("Error scanning table", extra={"error": str(err), "table": table.name})
         return False, "Database error"
+
+
+def put_item_if_not_exists(table, item: dict, condition_attribute: str):
+    """Put an item to DynamoDB table only if the condition attribute doesn't exist.
+
+    Args:
+        table: DynamoDB table resource
+        item: Item to put
+        condition_attribute: Attribute name to check for non-existence
+
+    Returns:
+        Tuple of (success, error_message)
+        - If successful: (True, None)
+        - If item exists: (False, "Item already exists")
+        - If database error: (False, "Database error")
+    """
+    try:
+        table.put_item(
+            Item=convert_to_decimal(item),
+            ConditionExpression=f"attribute_not_exists({condition_attribute})"
+        )
+        return True, None
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.warning("Item already exists", extra={"error": str(err), "table": table.name})
+            return False, "Item already exists"
+        else:
+            logger.error("Error putting item to DynamoDB", extra={"error": str(err), "table": table.name})
+            return False, "Database error"

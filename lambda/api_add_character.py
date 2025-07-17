@@ -2,13 +2,15 @@
 
 import json
 import os
+import pickle
 from datetime import datetime, timezone
 
+from bloom_filter import BloomFilter
 from botocore.exceptions import ClientError
 
 from eidolon.character import check_character_limit, generate_character_id, get_archetype
 from eidolon.cors import cors_handler
-from eidolon.dynamo import convert_to_decimal, get_table
+from eidolon.dynamo import convert_to_decimal, get_table, put_item_if_not_exists
 from eidolon.logger import get_logger
 from eidolon.validation_utils import validate_character_name
 
@@ -19,6 +21,15 @@ logger = get_logger(__name__)
 PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
 CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
 ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
+
+# Load bloom filter for name validation
+bloom_filter = None
+try:
+    with open('character_name_filter.pkl', 'rb') as f:
+        bloom_filter = pickle.load(f)
+        logger.info("Loaded character name bloom filter")
+except Exception as err:
+    logger.error("Failed to load bloom filter", extra={"error": str(err)})
 
 
 def create_character(player_id, character_name, archetype_name, archetype_data):
@@ -31,7 +42,9 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         archetype_data: Archetype data from DynamoDB
 
     Returns:
-        Character ID if successful, None otherwise
+        Tuple of (character_id, error_message)
+        - If successful: (character_id, None)
+        - If failed: (None, error_message)
     """
     character_id = generate_character_id()
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -72,6 +85,18 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         players_table = get_table(PLAYERS_TABLE)
         characters_table = get_table(CHARACTERS_TABLE)
 
+        # First, try to create the character record with conditional write
+        success, error_msg = put_item_if_not_exists(characters_table, character_item, "CharacterName")
+        if not success:
+            if error_msg == "Item already exists":
+                logger.info(
+                    "Character name already taken",
+                    extra={"character_name": character_name, "player_id": player_id},
+                )
+                return None, "Character name is already taken"
+            else:
+                return None, "Failed to create character"
+
         # Update player's character list
         character_info = {"UUID": character_id, "Dead": False, "GameMode": "Incremental"}
 
@@ -82,30 +107,22 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
             ExpressionAttributeValues={":info": character_info, ":timestamp": timestamp},
         )
 
-        # Create character record
-        characters_table.put_item(Item=character_item)
-
         logger.info(
             "Created incremental character",
             extra={"character_name": character_name, "character_id": character_id, "player_id": player_id},
         )
-        return character_id
+        return character_id, None
 
     except ClientError as err:
         logger.error(
             "Error creating character", extra={"error": str(err), "character_name": character_name, "player_id": player_id}
         )
-        # Attempt to rollback player update
+        # Attempt to rollback character creation if player update failed
         try:
-            # Reuse existing players_table from line 54
-            players_table.update_item(
-                Key={"PlayerID": player_id},
-                UpdateExpression="REMOVE CharacterList.#name",
-                ExpressionAttributeNames={"#name": character_name},
-            )
+            characters_table.delete_item(Key={"CharacterID": character_id})
         except ClientError as rollback_err:
-            logger.error("Failed to rollback player update", extra={"error": str(rollback_err), "character_name": character_name})
-        return None
+            logger.error("Failed to rollback character creation", extra={"error": str(rollback_err), "character_id": character_id})
+        return None, "Failed to create character"
 
 
 def lambda_handler(event, context):
@@ -180,6 +197,17 @@ def lambda_handler(event, context):
                 event,
             )
 
+        # Check bloom filter for restricted names
+        if bloom_filter and character_name.lower() in bloom_filter:
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Character name is not available"}),
+                },
+                event,
+            )
+
         # Check character limit
         players_table = get_table(PLAYERS_TABLE)
         can_create, current_count = check_character_limit(player_id, players_table)
@@ -207,13 +235,14 @@ def lambda_handler(event, context):
             )
 
         # Create the character
-        character_id = create_character(player_id, character_name, archetype_name, archetype_data)
+        character_id, error_msg = create_character(player_id, character_name, archetype_name, archetype_data)
         if not character_id:
+            status_code = 409 if error_msg == "Character name is already taken" else 500
             return cors_handler.add_cors_headers(
                 {
-                    "statusCode": 500,
+                    "statusCode": status_code,
                     "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": "Failed to create character"}),
+                    "body": json.dumps({"error": error_msg or "Failed to create character"}),
                 },
                 event,
             )

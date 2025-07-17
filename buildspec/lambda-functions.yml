@@ -11,6 +11,10 @@ phases:
 
       - mkdir -p build_temp
 
+      # Generate bloom filter data
+      - echo "Generating bloom filter data..."
+      - python3 scripts/generate_bloom_filter.py
+
       - |
         for func in lambda/*.py; do
           if [ -f "$func" ]; then
@@ -25,6 +29,11 @@ phases:
             
             if grep -q "from eidolon" "$func"; then
               cp -r eidolon "build_temp/$func_name/"
+            fi
+            
+            # Include bloom filter data for api_add_character
+            if [ "$func_name" = "api_add_character" ]; then
+              cp lambda/character_name_filter.pkl "build_temp/$func_name/"
             fi
             
             cd "build_temp/$func_name"
