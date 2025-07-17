@@ -69,6 +69,123 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
     }
   }
 
+  Future<void> _viewCharacter(Character character) async {
+    try {
+      final fullCharacter = await _apiService.getCharacter(character.id);
+      
+      if (!mounted) return;
+      
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(fullCharacter.name),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  fullCharacter.dead ? 'Status: Deceased' : 'Status: Active',
+                  style: TextStyle(
+                    color: fullCharacter.dead
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (fullCharacter.health != null &&
+                    fullCharacter.maxHealth != null)
+                  Text('Health: ${fullCharacter.health}/${fullCharacter.maxHealth}'),
+                const SizedBox(height: 8),
+                if (fullCharacter.attributes != null) ...[
+                  const Text(
+                    'Attributes:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  ...fullCharacter.attributes!.entries.map(
+                    (e) => Text('  ${e.key}: ${e.value}'),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                if (fullCharacter.skills != null) ...[
+                  const Text(
+                    'Skills:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  ...fullCharacter.skills!.entries.map(
+                    (e) => Text('  ${e.key}: ${e.value}'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('CLOSE'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading character: ${e.toString()}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteCharacter(Character character) async {
+    await CustomDialog.show(
+      context,
+      title: 'Delete Character',
+      content:
+          'Are you sure you want to delete ${character.name}? This action cannot be undone.',
+      confirmText: 'DELETE',
+      cancelText: 'CANCEL',
+      onConfirm: () async {
+        Navigator.of(context).pop();
+
+        try {
+          await _apiService.deleteCharacter(character.id);
+          await _loadCharacters();
+
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Character deleted successfully'),
+            ),
+          );
+        } catch (e) {
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting character: ${e.toString()}'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      },
+      isDestructive: true,
+    );
+  }
+
+  void _playStory(Character character) {
+    // TODO: Navigate to story gameplay screen
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Story gameplay coming soon!'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = Provider.of<AuthState>(context);
@@ -244,6 +361,30 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                                         color: colorScheme.primary,
                                       ),
                                     ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.visibility),
+                                  onPressed: () => _viewCharacter(character),
+                                  tooltip: 'View Character',
+                                ),
+                                if (!character.dead)
+                                  IconButton(
+                                    icon: const Icon(Icons.play_arrow),
+                                    onPressed: () => _playStory(character),
+                                    tooltip: 'Play Story',
+                                  ),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.delete,
+                                    color: colorScheme.error,
+                                  ),
+                                  onPressed: () => _deleteCharacter(character),
+                                  tooltip: 'Delete Character',
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
