@@ -305,9 +305,31 @@ end
 
 ---
 
+## Future Tables (Incremental-Specific)
+
+The following tables will be added to support Incremental-specific features:
+
+### Story Table
+- Story metadata and content references
+- S3 paths to story JSON files
+- Author information and version tracking
+
+### ActiveSegments Table
+- Tracks active story segments with timers
+- Character-to-segment mapping
+- Completion timestamps
+
+### CharacterHistory Table
+- Story completion tracking
+- Path choices made
+- Rewards earned
+
+---
+
 **Notes:**
 
-- All tables are designed for use with Amazon DynamoDB.
+- All tables are designed for use with Amazon DynamoDB and are shared between MUD and Incremental game modes.
+- The GameMode field on characters ensures a character cannot be active in both modes simultaneously.
 - Primary keys are specified for each table to ensure data integrity.
 - Data types correspond to DynamoDB data types (e.g., `STRING`, `NUMBER`, `MAP`, `LIST`, `BOOLEAN`).
 - Maps (`MAP`) and lists (`LIST`) are used to store complex data structures.

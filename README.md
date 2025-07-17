@@ -48,23 +48,24 @@ The system uses AWS Lambda functions as the primary backend, with different fron
 
 ## Architecture
 
-The engine uses a modern cloud-native architecture:
+The engine uses a modern cloud-native architecture with a unified backend serving multiple frontends:
 
 - **Frontend Applications**:
   - Flutter web app for incremental gameplay (`/incremental`)
-  - Flutter portal for account management (`/portal`)
+  - Flutter portal for MUD web interface (`/portal`)
   - SSH server for traditional MUD access (`/server`)
 
-- **Backend Services**:
-  - AWS Lambda functions for game logic (`/lambda`)
-  - DynamoDB for persistent game state
+- **Unified Backend Services** (shared by all game modes):
+  - AWS Lambda functions for all game logic (`/lambda`)
+  - DynamoDB tables for persistent game state
+  - Character GameMode field prevents concurrent MUD/Incremental access
   - S3 for content storage and scripts
-  - Cognito for authentication
-  - API Gateway for RESTful endpoints
+  - Cognito for unified authentication
+  - API Gateway providing RESTful endpoints
 
 - **Shared Libraries**:
   - Python utilities for AWS services (`/eidolon`)
-  - Lua scripts for game mechanics (`/scripts_lua`)
+  - Lua scripts for MUD game mechanics (`/scripts_lua`)
 
 ## Getting Started
 
@@ -149,13 +150,13 @@ python deploy.py --analyze-only
 
 ## Deployment Modes
 
-The engine supports three deployment configurations:
+The engine supports three deployment configurations, all using the same unified backend:
 
-1. **Incremental Mode**: Perfect for casual gaming with automated progression
-2. **MUD Mode**: Traditional multiplayer text adventure experience  
-3. **Hybrid Mode**: Combines both modes for maximum flexibility
+1. **Incremental Mode**: Deploys the incremental game UI with timer-based progression
+2. **MUD Mode**: Deploys the Portal web interface for MUD access (SSH server deployed separately)
+3. **Hybrid Mode**: Deploys the incremental UI while supporting both game types
 
-All modes share the same backend infrastructure, ensuring consistent game mechanics and data persistence.
+All modes share the same Lambda functions and DynamoDB tables. The character GameMode field ensures a character can only be active in one mode at a time, preventing concurrent access issues.
 
 ## Contributing
 

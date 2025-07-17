@@ -2,7 +2,7 @@
 
 ## Overview
 
-Players start in the Incremental game and transition to the MUD after character customization.
+This document describes how characters transition between Incremental and MUD game modes using the shared backend infrastructure. The GameMode field on each character ensures they can only be active in one mode at a time, preventing concurrent access issues.
 
 ## Workflow Steps
 
@@ -15,9 +15,10 @@ Players start in the Incremental game and transition to the MUD after character 
 ### 2. Character Creation
 
 - Player provides character name
-- Name validated against shared bloom filter
-- Player selects archetype
+- Name validated for uniqueness (bloom filter for efficiency)
+- Player selects archetype from shared archetypes table
 - Character created with `GameMode: "Incremental"`
+- Character stored in shared characters table
 
 ### 3. Character Customization (Rapid Inactive)
 
@@ -26,75 +27,60 @@ Players start in the Incremental game and transition to the MUD after character 
 - Skills are dynamically added as used
 - Progress tracked in character record
 
-### 4. MUD Transition
+### 4. Mode Transition
 
-- At end of customization:
-  - Room is selected based on archetype or player choice
-  - Character `GameMode` updated to "MUD"
-  - Character marked as MUD-enabled
-  - Bloom filter updated with character name
+Characters can transition between modes with these safeguards:
 
-### 5. MUD Entry
+**Incremental to MUD:**
+- Character must not have active story segments
+- GameMode updated from "Incremental" to "MUD"
+- Character placed in appropriate room
+- Full MUD gameplay becomes available
 
-- Player can now access MUD client
-- Character appears in selected room
-- Full MUD gameplay available
+**MUD to Incremental:**
+- Character must be in a safe room (not in combat)
+- GameMode updated from "MUD" to "Incremental"
+- Character position preserved for return
+- Incremental story progression resumes
 
-## Shared Bloom Filter Design
+### 5. Concurrent Access Prevention
 
-### Storage Options
+- Lambda functions check GameMode before any character operation
+- Attempts to use character in wrong mode are rejected
+- Clear error messages guide players to switch modes properly
 
-#### Option 1: DynamoDB Table
+## Character Name Management
 
-```
-Table: shared-bloom-filters
-- FilterName: "character-names" (PK)
-- Version: number
-- BitArray: binary data (base64 encoded)
-- Metadata: {size, hash_functions, false_positive_rate}
-- LastUpdated: timestamp
-```
+Since all characters exist in the shared characters table, name uniqueness is enforced at the database level:
 
-#### Option 2: S3 with Lambda
+### Name Validation Process
 
-```
-Bucket: eidolon-shared-data
-Path: /bloom-filters/character-names/current.bloom
-- Use S3 versioning for history
-- Lambda function to update filter
-- CloudFront for fast reads
-```
+1. **Creation Request**: Player submits character name
+2. **Lambda Validation**: 
+   - Check characters table for existing name
+   - Validate name format and content
+   - Use conditional write to ensure uniqueness
+3. **Database Enforcement**: DynamoDB prevents duplicate names
+4. **Error Handling**: Clear message if name already taken
 
-### Update Mechanism
+### Bloom Filter Optimization (Future Enhancement)
 
-1. **Read Path** (Name Validation):
-   - Lambda loads bloom filter from storage
-   - Cache in Lambda memory for performance
-   - Check name against filter
-
-2. **Write Path** (Name Addition):
-   - Queue name additions in DynamoDB
-   - Periodic Lambda rebuilds filter
-   - Updates both MUD and storage
-
-### Implementation Steps
-
-1. Create shared bloom filter storage
-2. Update Incremental Lambda to check bloom filter
-3. Create Lambda for bloom filter updates
-4. Update MUD to read from shared storage
-5. Implement transition logic for character state
+For performance at scale, a bloom filter could be implemented:
+- Fast negative checks (name definitely available)
+- Reduce database queries for popular names
+- Periodic rebuild from characters table
+- Stored in Lambda memory or S3
 
 ## Security Considerations
 
-- Bloom filter is read-only for most operations
-- Only authorized Lambdas can update filter
-- Use IAM roles for access control
-- Consider encryption at rest for sensitive data
+- GameMode field is only modifiable through authorized Lambda functions
+- Mode transitions require validation of game state
+- IAM roles restrict direct database access
+- API Gateway authentication required for all operations
 
 ## Performance Optimization
 
-- Cache bloom filter in Lambda memory
-- Use CloudFront for global distribution
-- Implement exponential backoff for updates
-- Monitor false positive rates
+- Character lookups use DynamoDB's consistent performance
+- GameMode checks are simple string comparisons
+- Lambda functions cache archetype data
+- Conditional writes prevent race conditions
