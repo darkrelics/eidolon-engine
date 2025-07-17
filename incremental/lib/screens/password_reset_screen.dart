@@ -46,14 +46,14 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
     try {
       final authProvider = context.read<AuthProvider>();
       await authProvider.forgotPassword(_emailController.text.trim());
-      
+
       if (mounted) {
         Navigator.pushNamed(
           context,
           '/password-reset-confirm',
           arguments: _emailController.text.trim(),
         );
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Reset code sent to your email'),
@@ -82,9 +82,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reset Password'),
-      ),
+      appBar: AppBar(title: const Text('Reset Password')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -121,8 +119,9 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                          .hasMatch(value)) {
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;

@@ -24,7 +24,8 @@ class CharacterSelectionScreen extends StatefulWidget {
   const CharacterSelectionScreen({super.key});
 
   @override
-  State<CharacterSelectionScreen> createState() => _CharacterSelectionScreenState();
+  State<CharacterSelectionScreen> createState() =>
+      _CharacterSelectionScreenState();
 }
 
 class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
@@ -54,8 +55,10 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
       });
 
       final characters = await _apiService.listCharacters();
-      debugPrint('CharacterSelectionScreen: Loaded ${characters.length} characters');
-      
+      debugPrint(
+        'CharacterSelectionScreen: Loaded ${characters.length} characters',
+      );
+
       if (mounted) {
         setState(() {
           _characters = characters;
@@ -93,7 +96,10 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+              final authProvider = Provider.of<AuthProvider>(
+                context,
+                listen: false,
+              );
               final navigator = Navigator.of(context);
               await authProvider.signOut();
               if (mounted) {
@@ -103,9 +109,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: _buildBody(),
-      ),
+      body: SafeArea(child: _buildBody()),
     );
   }
 
@@ -124,11 +128,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: colorScheme.error,
-              ),
+              Icon(Icons.error_outline, size: 64, color: colorScheme.error),
               const SizedBox(height: 16),
               Text(
                 'Error loading characters',
@@ -139,9 +139,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
               const SizedBox(height: 8),
               Text(
                 _error!,
-                style: TextStyle(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -168,16 +166,11 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                 color: colorScheme.onSurfaceVariant,
               ),
               const SizedBox(height: 16),
-              Text(
-                'No Characters Found',
-                style: theme.textTheme.headlineSmall,
-              ),
+              Text('No Characters Found', style: theme.textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(
                 'Create your first character in the main game to begin your incremental adventure.',
-                style: TextStyle(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -207,19 +200,19 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                   child: ListTile(
                     leading: Icon(
                       character.dead ? Icons.person_off : Icons.person,
-                      color: character.dead 
-                          ? colorScheme.error 
+                      color: character.dead
+                          ? colorScheme.error
                           : colorScheme.primary,
                     ),
                     title: Text(
                       character.name,
                       style: TextStyle(
-                        decoration: character.dead 
-                            ? TextDecoration.lineThrough 
+                        decoration: character.dead
+                            ? TextDecoration.lineThrough
                             : null,
                       ),
                     ),
-                    subtitle: character.dead 
+                    subtitle: character.dead
                         ? Text(
                             'Deceased',
                             style: TextStyle(color: colorScheme.error),
@@ -230,13 +223,15 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                           ),
                     trailing: const Icon(Icons.arrow_forward_ios),
                     enabled: !character.dead,
-                    onTap: character.dead ? null : () {
-                      Navigator.pushReplacementNamed(
-                        context, 
-                        '/game',
-                        arguments: character.name,
-                      );
-                    },
+                    onTap: character.dead
+                        ? null
+                        : () {
+                            Navigator.pushReplacementNamed(
+                              context,
+                              '/game',
+                              arguments: character.name,
+                            );
+                          },
                   ),
                 );
               },

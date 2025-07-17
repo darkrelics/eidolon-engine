@@ -122,7 +122,7 @@ class Character {
   }
 
   /// Get effective score for a challenge (display only)
-  /// 
+  ///
   /// Skills are flexible and can be dynamically added as the game matures.
   /// If a character doesn't have a skill, it's treated as 0.0.
   /// When a character receives XP for a skill they don't have, the skill

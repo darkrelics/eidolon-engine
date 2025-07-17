@@ -229,10 +229,7 @@ def put_item_if_not_exists(table, item: dict, condition_attribute: str):
         - If database error: (False, "Database error")
     """
     try:
-        table.put_item(
-            Item=convert_to_decimal(item),
-            ConditionExpression=f"attribute_not_exists({condition_attribute})"
-        )
+        table.put_item(Item=convert_to_decimal(item), ConditionExpression=f"attribute_not_exists({condition_attribute})")
         return True, None
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":

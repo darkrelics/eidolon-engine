@@ -11,9 +11,7 @@ import 'screens/character_selection_screen.dart';
 void main() {
   runApp(
     MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-      ],
+      providers: [ChangeNotifierProvider(create: (_) => AuthProvider())],
       child: const EidolonIncrementalApp(),
     ),
   );
@@ -39,7 +37,8 @@ class EidolonIncrementalApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegistrationScreen(),
         '/forgot-password': (context) => const PasswordResetScreen(),
-        '/password-reset-confirm': (context) => const PasswordResetConfirmScreen(),
+        '/password-reset-confirm': (context) =>
+            const PasswordResetConfirmScreen(),
         '/account-settings': (context) => const AccountSettingsScreen(),
         '/character-selection': (context) => const CharacterSelectionScreen(),
         '/game': (context) => const MainGameScreen(),
@@ -55,13 +54,13 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, _) {
-        debugPrint('AuthWrapper: Auth status changed to ${authProvider.status}');
+        debugPrint(
+          'AuthWrapper: Auth status changed to ${authProvider.status}',
+        );
         switch (authProvider.status) {
           case AuthStatus.uninitialized:
             return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
+              body: Center(child: CircularProgressIndicator()),
             );
           case AuthStatus.unauthenticated:
             debugPrint('AuthWrapper: Showing LoginScreen');
@@ -71,9 +70,7 @@ class AuthWrapper extends StatelessWidget {
             return const CharacterSelectionScreen();
           case AuthStatus.loading:
             return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
+              body: Center(child: CircularProgressIndicator()),
             );
         }
       },
@@ -123,7 +120,7 @@ class _MainGameScreenState extends State<MainGameScreen> {
                 child: const CharacterPanel(),
               ),
             ),
-            
+
             // Action Panel (Center)
             Expanded(
               flex: 3,
@@ -132,7 +129,7 @@ class _MainGameScreenState extends State<MainGameScreen> {
                 child: const ActionPanel(),
               ),
             ),
-            
+
             // Inventory Panel (Right)
             Expanded(
               flex: 2,
@@ -166,10 +163,7 @@ class CharacterPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Character',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          Text('Character', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 16),
           // Placeholder content
           const Text('Name: Hero'),
@@ -200,7 +194,9 @@ class ActionPanel extends StatelessWidget {
           LinearProgressIndicator(
             value: 0.3,
             minHeight: 20,
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            backgroundColor: Theme.of(
+              context,
+            ).colorScheme.surfaceContainerHighest,
           ),
           const SizedBox(height: 16),
           const Text('Fighting: Giant Rat'),
@@ -220,10 +216,7 @@ class InventoryPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Inventory',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          Text('Inventory', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 16),
           // Placeholder content
           const Text('Gold: 0'),

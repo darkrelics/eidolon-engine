@@ -651,6 +651,8 @@ class EidolonEngineApp:
                 "api_subdomain": params.get("api_subdomain", "api"),
                 "allowed_cors_origins": params.get("allowed_cors_origins", []),
                 "lambda_execution_role_arn": self.iam_stack.lambda_execution_role.role_arn,
+                "default_health": params.get("default_health", 10),
+                "default_essence": params.get("default_essence", 3),
             },
             env=env,
         )
@@ -755,6 +757,8 @@ class EidolonEngineApp:
         if game_config:
             print("   Loading Game configuration")
             params["game_name"] = game_config.get("Name", params.get("game_name", "eidolon-engine"))
+            params["default_health"] = game_config.get("StartingHealth", 10)
+            params["default_essence"] = game_config.get("StartingEssence", 3)
 
     def load_deployment_config(self, params: dict) -> None:
         """Load deployment configuration section."""

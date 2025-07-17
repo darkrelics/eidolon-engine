@@ -24,7 +24,10 @@ class CharacterInfo {
 class ApiService {
   final AuthService _authService;
   final http.Client _httpClient;
-  static const String _apiDomain = String.fromEnvironment('API_DOMAIN', defaultValue: 'api.darkrelics.net');
+  static const String _apiDomain = String.fromEnvironment(
+    'API_DOMAIN',
+    defaultValue: 'api.darkrelics.net',
+  );
   static const String _defaultBaseUrl = 'https://$_apiDomain';
   final String baseUrl;
 
@@ -32,9 +35,9 @@ class ApiService {
     required AuthService authService,
     String? baseUrl,
     http.Client? httpClient,
-  })  : _authService = authService,
-        _httpClient = httpClient ?? http.Client(),
-        baseUrl = baseUrl ?? _defaultBaseUrl;
+  }) : _authService = authService,
+       _httpClient = httpClient ?? http.Client(),
+       baseUrl = baseUrl ?? _defaultBaseUrl;
 
   /// Get authorization headers
   Future<Map<String, String>> _getHeaders() async {
@@ -61,10 +64,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/character/create'),
       headers: headers,
-      body: jsonEncode({
-        'name': name,
-        'archetypeId': archetypeId,
-      }),
+      body: jsonEncode({'name': name, 'archetypeId': archetypeId}),
     );
 
     if (response.statusCode != 200) {
@@ -99,10 +99,10 @@ class ApiService {
   Future<List<CharacterInfo>> listCharacters() async {
     debugPrint('ApiService: Calling listCharacters...');
     debugPrint('ApiService: API URL: $baseUrl/characters');
-    
+
     final headers = await _getHeaders();
     debugPrint('ApiService: Headers prepared, making request...');
-    
+
     final response = await _httpClient.get(
       Uri.parse('$baseUrl/characters'),
       headers: headers,
@@ -125,8 +125,10 @@ class ApiService {
     final characterList = (json['characters'] as List)
         .map((char) => CharacterInfo.fromJson(char as Map<String, dynamic>))
         .toList();
-    
-    debugPrint('ApiService: Successfully parsed ${characterList.length} characters');
+
+    debugPrint(
+      'ApiService: Successfully parsed ${characterList.length} characters',
+    );
     return characterList;
   }
 
@@ -139,10 +141,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/segment/start'),
       headers: headers,
-      body: jsonEncode({
-        'storyId': storyId,
-        'segmentId': segmentId,
-      }),
+      body: jsonEncode({'storyId': storyId, 'segmentId': segmentId}),
     );
 
     if (response.statusCode != 200) {
@@ -154,16 +153,12 @@ class ApiService {
   }
 
   /// Conclude a story segment
-  Future<SegmentOutcome> concludeSegment({
-    required String segmentId,
-  }) async {
+  Future<SegmentOutcome> concludeSegment({required String segmentId}) async {
     final headers = await _getHeaders();
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/segment/conclude'),
       headers: headers,
-      body: jsonEncode({
-        'segmentId': segmentId,
-      }),
+      body: jsonEncode({'segmentId': segmentId}),
     );
 
     if (response.statusCode != 200) {

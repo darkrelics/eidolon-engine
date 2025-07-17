@@ -5,7 +5,6 @@ import os
 import pickle
 from datetime import datetime, timezone
 
-from bloom_filter import BloomFilter
 from botocore.exceptions import ClientError
 
 from eidolon.character import check_character_limit, generate_character_id, get_archetype
@@ -22,10 +21,14 @@ PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
 CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
 ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
 
+# Get default health and essence from environment
+DEFAULT_HEALTH = int(os.environ.get("DEFAULT_HEALTH", "10"))
+DEFAULT_ESSENCE = int(os.environ.get("DEFAULT_ESSENCE", "3"))
+
 # Load bloom filter for name validation
 bloom_filter = None
 try:
-    with open('character_name_filter.pkl', 'rb') as f:
+    with open("character_name_filter.pkl", "rb") as f:
         bloom_filter = pickle.load(f)
         logger.info("Loaded character name bloom filter")
 except Exception as err:
@@ -57,10 +60,10 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "Archetype": archetype_name,
         "Attributes": convert_to_decimal(archetype_data.get("Attributes", {})),
         "Skills": convert_to_decimal(archetype_data.get("Skills", {})),
-        "Health": archetype_data.get("Health", 10),
-        "MaxHealth": archetype_data.get("Health", 10),
-        "Essence": convert_to_decimal(archetype_data.get("Essence", 3)),
-        "MaxEssence": convert_to_decimal(archetype_data.get("Essence", 3)),
+        "Health": archetype_data.get("Health", DEFAULT_HEALTH),
+        "MaxHealth": archetype_data.get("Health", DEFAULT_HEALTH),
+        "Essence": convert_to_decimal(archetype_data.get("Essence", DEFAULT_ESSENCE)),
+        "MaxEssence": convert_to_decimal(archetype_data.get("Essence", DEFAULT_ESSENCE)),
         "Wounds": [],
         "RoomID": 0,  # Always room 0 for incremental
         "Inventory": {},  # Use MUD inventory structure (slot -> itemID)
@@ -175,12 +178,12 @@ def lambda_handler(event, context):
         character_name = body.get("characterName", "").strip()
         archetype_name = body.get("archetype", "").strip()
 
-        if not character_name or not archetype_name:
+        if not character_name:
             return cors_handler.add_cors_headers(
                 {
                     "statusCode": 400,
                     "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": "Missing required fields"}),
+                    "body": json.dumps({"error": "Missing required field: characterName"}),
                 },
                 event,
             )
@@ -221,18 +224,23 @@ def lambda_handler(event, context):
                 event,
             )
 
-        # Validate archetype
+        # Validate archetype or use defaults
         archetypes_table = get_table(ARCHETYPES_TABLE)
-        archetype_data = get_archetype(archetype_name, archetypes_table)
-        if not archetype_data:
-            return cors_handler.add_cors_headers(
-                {
-                    "statusCode": 400,
-                    "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": "Invalid or unavailable archetype"}),
-                },
-                event,
-            )
+        archetype_data = {}
+
+        if archetype_name:
+            # Try to get the archetype data
+            archetype_data = get_archetype(archetype_name, archetypes_table)
+            if not archetype_data:
+                # Invalid archetype provided, use defaults
+                logger.info(
+                    "Invalid archetype provided, using defaults", extra={"archetype_name": archetype_name, "player_id": player_id}
+                )
+                archetype_data = {}
+                archetype_name = "default"
+        else:
+            # No archetype provided, use defaults
+            archetype_name = "default"
 
         # Create the character
         character_id, error_msg = create_character(player_id, character_name, archetype_name, archetype_data)

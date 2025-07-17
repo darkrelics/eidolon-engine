@@ -24,7 +24,8 @@ class AppConfig {
   static const String clientId = String.fromEnvironment('CLIENT_ID');
 
   static String get _devUserPoolId => kDebugMode ? 'us-east-1_devUserPool' : '';
-  static String get _devClientId => kDebugMode ? '1example2client3id4567890abc' : '';
+  static String get _devClientId =>
+      kDebugMode ? '1example2client3id4567890abc' : '';
 
   static String get userPoolIdWithFallback =>
       userPoolId.isNotEmpty ? userPoolId : _devUserPoolId;
@@ -291,10 +292,14 @@ class AuthService {
     await _ensureInitialized();
 
     try {
-      debugPrint('AuthService: isAuthenticated check - _currentUser: ${_currentUser != null}, _session: ${_session != null}');
-      
+      debugPrint(
+        'AuthService: isAuthenticated check - _currentUser: ${_currentUser != null}, _session: ${_session != null}',
+      );
+
       if (_currentUser == null || _session == null) {
-        debugPrint('AuthService: No current session in memory, attempting restore...');
+        debugPrint(
+          'AuthService: No current session in memory, attempting restore...',
+        );
         final restored = await _restoreSession();
         debugPrint('AuthService: Restore session result: $restored');
         if (!restored) return false;
@@ -304,7 +309,7 @@ class AuthService {
 
       final isValid = _session!.isValid();
       debugPrint('AuthService: Session validity: $isValid');
-      
+
       if (!isValid) {
         debugPrint('AuthService: Session invalid, attempting refresh...');
         return await _refreshSession();
@@ -482,7 +487,9 @@ class AuthService {
 
       final accessTokenValue = await _secureStorage.read(key: _accessTokenKey);
       final idTokenValue = await _secureStorage.read(key: _idTokenKey);
-      final refreshTokenValue = await _secureStorage.read(key: _refreshTokenKey);
+      final refreshTokenValue = await _secureStorage.read(
+        key: _refreshTokenKey,
+      );
       final emailValue = await _secureStorage.read(key: _userEmailKey);
 
       final allNull =
@@ -593,5 +600,6 @@ class AuthService {
   CognitoUserSession? get session => _session;
 
   /// Gets the current user's email
-  Future<String?> get currentUserEmail async => await _secureStorage.read(key: _userEmailKey);
+  Future<String?> get currentUserEmail async =>
+      await _secureStorage.read(key: _userEmailKey);
 }

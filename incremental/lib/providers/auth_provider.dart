@@ -17,12 +17,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 
-enum AuthStatus {
-  uninitialized,
-  authenticated,
-  unauthenticated,
-  loading,
-}
+enum AuthStatus { uninitialized, authenticated, unauthenticated, loading }
 
 class AuthProvider extends ChangeNotifier {
   AuthStatus _status = AuthStatus.uninitialized;
@@ -43,14 +38,18 @@ class AuthProvider extends ChangeNotifier {
     try {
       debugPrint('AuthProvider $_instanceId: Initializing auth service...');
       await _authService.initialize();
-      
-      debugPrint('AuthProvider $_instanceId: Checking authentication status...');
+
+      debugPrint(
+        'AuthProvider $_instanceId: Checking authentication status...',
+      );
       final isAuth = await _authService.isAuthenticated();
       debugPrint('AuthProvider $_instanceId: isAuthenticated = $isAuth');
-      
+
       if (isAuth) {
         _userEmail = await _authService.currentUserEmail;
-        debugPrint('AuthProvider $_instanceId: User authenticated as $_userEmail');
+        debugPrint(
+          'AuthProvider $_instanceId: User authenticated as $_userEmail',
+        );
         _status = AuthStatus.authenticated;
       } else {
         debugPrint('AuthProvider $_instanceId: User not authenticated');
@@ -58,7 +57,9 @@ class AuthProvider extends ChangeNotifier {
       }
       notifyListeners();
     } catch (err) {
-      debugPrint('AuthProvider $_instanceId: Error during initialization: $err');
+      debugPrint(
+        'AuthProvider $_instanceId: Error during initialization: $err',
+      );
       _status = AuthStatus.unauthenticated;
       notifyListeners();
     }
@@ -104,9 +105,11 @@ class AuthProvider extends ChangeNotifier {
       await _authService.signIn(email, password);
       _userEmail = email;
       _status = AuthStatus.authenticated;
-      debugPrint('AuthProvider: SignIn successful, status set to authenticated');
+      debugPrint(
+        'AuthProvider: SignIn successful, status set to authenticated',
+      );
       notifyListeners();
-      
+
       // Verify auth status immediately after login
       final isAuth = await _authService.isAuthenticated();
       debugPrint('AuthProvider: Post-login auth check: $isAuth');
@@ -139,7 +142,11 @@ class AuthProvider extends ChangeNotifier {
     await _authService.forgotPassword(email);
   }
 
-  Future<void> confirmPassword(String email, String code, String newPassword) async {
+  Future<void> confirmPassword(
+    String email,
+    String code,
+    String newPassword,
+  ) async {
     await _authService.confirmPassword(email, code, newPassword);
   }
 
@@ -164,7 +171,7 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('AuthProvider: Checking auth status...');
       final isAuth = await _authService.isAuthenticated();
       debugPrint('AuthProvider: Auth check result: $isAuth');
-      
+
       if (isAuth) {
         _userEmail = await _authService.currentUserEmail;
         debugPrint('AuthProvider: User is authenticated as $_userEmail');

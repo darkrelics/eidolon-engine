@@ -272,6 +272,8 @@ class LambdaStack(cdk.Stack):
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "MAX_CHARACTERS_PER_PLAYER": "10",
                 "ALLOWED_ORIGINS": self.cors_origins_str,
+                "DEFAULT_HEALTH": str(config.get("default_health", 10)),
+                "DEFAULT_ESSENCE": str(config.get("default_essence", 3)),
             },
             "Creates new character for players",
             dependencies_layer,

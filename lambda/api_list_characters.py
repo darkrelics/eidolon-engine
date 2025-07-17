@@ -23,11 +23,7 @@ Returns only character names and death status from the player table.
 import os
 
 from eidolon.cors import cors_handler
-<<<<<<< HEAD
-from eidolon.dynamo import get_table, get_item
-=======
 from eidolon.dynamo import get_item, get_table
->>>>>>> develop
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id
 from eidolon.responses import create_response, error_response, not_found_response
@@ -61,19 +57,16 @@ def lambda_handler(event, context):
                 "path": event.get("path"),
             },
         )
-<<<<<<< HEAD
-    
+
     # Log auth details
     headers = event.get("headers", {})
     auth_header = headers.get("Authorization", headers.get("authorization", "NOT PROVIDED"))
     logger.info(f"Authorization header present: {'Bearer' in auth_header}")
-    
+
     # Log request context authorizer
     request_context = event.get("requestContext", {})
     authorizer = request_context.get("authorizer", {})
     logger.info(f"Authorizer claims: {authorizer.get('claims', 'NO CLAIMS')}")
-=======
->>>>>>> develop
 
     # Handle preflight requests
     if event.get("httpMethod") == "OPTIONS":

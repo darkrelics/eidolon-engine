@@ -27,11 +27,7 @@ from datetime import datetime, timezone
 
 import boto3
 
-<<<<<<< HEAD
-from eidolon.dynamo import get_table, delete_item, scan_all_items
-=======
 from eidolon.dynamo import delete_item, get_table, scan_all_items
->>>>>>> develop
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, parse_json_body
 from eidolon.responses import create_response, error_response
