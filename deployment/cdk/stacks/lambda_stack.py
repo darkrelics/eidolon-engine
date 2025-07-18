@@ -177,6 +177,10 @@ class LambdaStack(cdk.Stack):
         # Extract API configuration
         self.api_subdomain = config.get("api_subdomain", "api")
         self.allowed_cors_origins = config.get("allowed_cors_origins", [])
+        
+        # Extract game configuration defaults
+        self.default_health = config.get("default_health", 10)
+        self.default_essence = config.get("default_essence", 3)
 
         # Store CORS origins for Lambda environment
         self.cors_origins_str: str = ",".join(self.allowed_cors_origins) if self.allowed_cors_origins else ""
@@ -272,8 +276,8 @@ class LambdaStack(cdk.Stack):
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "MAX_CHARACTERS_PER_PLAYER": "10",
                 "ALLOWED_ORIGINS": self.cors_origins_str,
-                "DEFAULT_HEALTH": str(config.get("default_health", 10)),
-                "DEFAULT_ESSENCE": str(config.get("default_essence", 3)),
+                "DEFAULT_HEALTH": str(self.default_health),
+                "DEFAULT_ESSENCE": str(self.default_essence),
             },
             "Creates new character for players",
             dependencies_layer,

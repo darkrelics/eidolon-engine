@@ -15,7 +15,8 @@ This document describes how characters transition between Incremental and MUD ga
 ### 2. Character Creation
 
 - Player provides character name
-- Name validated for uniqueness (bloom filter for efficiency)
+- Name validated against restricted names (bloom filter check)
+- Name uniqueness enforced by DynamoDB conditional write
 - Player selects archetype from shared archetypes table
 - Character created with `GameMode: "Incremental"`
 - Character stored in shared characters table

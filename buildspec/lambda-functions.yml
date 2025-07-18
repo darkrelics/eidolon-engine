@@ -4,6 +4,8 @@ phases:
   install:
     runtime-versions:
       python: 3.12
+    commands:
+      - pip install bloom-filter
 
   build:
     commands:
@@ -13,7 +15,7 @@ phases:
 
       # Generate bloom filter data
       - echo "Generating bloom filter data..."
-      - python3 scripts/generate_bloom_filter.py
+      - python3 scripts_python/generate_bloom_filter.py
 
       - |
         for func in lambda/*.py; do
