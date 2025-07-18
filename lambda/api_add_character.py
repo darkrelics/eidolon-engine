@@ -65,7 +65,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "Essence": convert_to_decimal(archetype_data.get("Essence", DEFAULT_ESSENCE)),
         "MaxEssence": convert_to_decimal(archetype_data.get("Essence", DEFAULT_ESSENCE)),
         "Wounds": [],
-        "RoomID": 0,  # Always room 0 for incremental
+        "RoomID": archetype_data.get("StartRoom", 0),  # Use archetype's StartRoom or default to 0
         "Inventory": {},  # Use MUD inventory structure (slot -> itemID)
         "Resources": {},
         "Progress": {},  # Track story progress flags and achievements

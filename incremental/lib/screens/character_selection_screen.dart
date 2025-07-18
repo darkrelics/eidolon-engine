@@ -88,6 +88,10 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
         title: const Text('Select Character'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _showAddCharacterDialog,
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
               Navigator.pushNamed(context, '/account-settings');
@@ -111,6 +115,201 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
       ),
       body: SafeArea(child: _buildBody()),
     );
+  }
+
+  Future<void> _showAddCharacterDialog() async {
+    final nameController = TextEditingController();
+    String? selectedArchetype;
+    List<ArchetypeInfo>? archetypes;
+    bool isLoadingArchetypes = true;
+
+    // Load archetypes
+    try {
+      archetypes = await _apiService.getArchetypes();
+      if (archetypes.isNotEmpty) {
+        selectedArchetype = archetypes.first.name;
+      }
+      isLoadingArchetypes = false;
+    } catch (e) {
+      debugPrint('Error loading archetypes: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load archetypes: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Create New Character'),
+          content: isLoadingArchetypes
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Character Name',
+                        hintText: 'Enter character name',
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Archetype:'),
+                    const SizedBox(height: 8),
+                    DropdownButton<String>(
+                      isExpanded: true,
+                      value: selectedArchetype,
+                      items: archetypes?.map((archetype) {
+                        return DropdownMenuItem(
+                          value: archetype.name,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(archetype.name),
+                              if (archetype.description.isNotEmpty)
+                                Text(
+                                  archetype.description,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                            ],
+                          ),
+                        );
+                      }).toList() ?? [],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedArchetype = value;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: isLoadingArchetypes ? null : () async {
+                final name = nameController.text.trim();
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a character name')),
+                  );
+                  return;
+                }
+                
+                Navigator.of(context).pop();
+                await _createCharacter(name, selectedArchetype!);
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _createCharacter(String name, String archetype) async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      await _apiService.addCharacter(name: name, archetype: archetype);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Created character: $name')),
+        );
+      }
+
+      // Reload characters
+      await _loadCharacters();
+    } catch (e) {
+      debugPrint('Error creating character: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create character: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showDeleteCharacterDialog(String characterName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Character'),
+        content: Text('Are you sure you want to delete "$characterName"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed ?? false) {
+      await _deleteCharacter(characterName);
+    }
+  }
+
+  Future<void> _deleteCharacter(String name) async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      await _apiService.deleteCharacter(name);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Deleted character: $name')),
+        );
+      }
+
+      // Reload characters
+      await _loadCharacters();
+    } catch (e) {
+      debugPrint('Error deleting character: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete character: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildBody() {
@@ -169,9 +368,15 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
               Text('No Characters Found', style: theme.textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(
-                'Create your first character in the main game to begin your incremental adventure.',
+                'Create your first character to begin your incremental adventure.',
                 style: TextStyle(color: colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: _showAddCharacterDialog,
+                icon: const Icon(Icons.add),
+                label: const Text('Create Character'),
               ),
             ],
           ),
@@ -221,7 +426,16 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                             'Active',
                             style: TextStyle(color: colorScheme.primary),
                           ),
-                    trailing: const Icon(Icons.arrow_forward_ios),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () => _showDeleteCharacterDialog(character.name),
+                        ),
+                        const Icon(Icons.arrow_forward_ios),
+                      ],
+                    ),
                     enabled: !character.dead,
                     onTap: character.dead
                         ? null
