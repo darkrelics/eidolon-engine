@@ -118,113 +118,105 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
   }
 
   Future<void> _showAddCharacterDialog() async {
-    final nameController = TextEditingController();
-    String? selectedArchetype;
-    List<ArchetypeInfo>? archetypes;
-    bool isLoadingArchetypes = true;
-
-    // Load archetypes
+    // First load archetypes
+    List<ArchetypeInfo> archetypes = [];
     try {
       archetypes = await _apiService.getArchetypes();
-      if (archetypes.isNotEmpty) {
-        selectedArchetype = archetypes.first.name;
-      }
-      isLoadingArchetypes = false;
     } catch (e) {
       debugPrint('Error loading archetypes: $e');
-      // Continue with no archetypes - the server will use defaults
-      archetypes = [];
-      isLoadingArchetypes = false;
+      // Continue with empty archetypes - the server will use defaults
     }
 
     if (!mounted) return;
 
+    final nameController = TextEditingController();
+    String? selectedArchetype = archetypes.isNotEmpty ? archetypes.first.name : null;
+
     await showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Create New Character'),
-          content: isLoadingArchetypes
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Character Name',
-                        hintText: 'Enter character name',
+      builder: (context) => AlertDialog(
+        title: const Text('Create New Character'),
+        content: StatefulBuilder(
+          builder: (context, setDialogState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Character Name',
+                  hintText: 'Enter character name',
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              if (archetypes.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text('Archetype:'),
+                const SizedBox(height: 8),
+                DropdownButton<String>(
+                  isExpanded: true,
+                  value: selectedArchetype,
+                  items: archetypes.map((archetype) {
+                    return DropdownMenuItem(
+                      value: archetype.name,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(archetype.name),
+                          if (archetype.description.isNotEmpty)
+                            Text(
+                              archetype.description,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                        ],
                       ),
-                      textCapitalization: TextCapitalization.words,
-                    ),
-                    if (archetypes != null && archetypes.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      const Text('Archetype:'),
-                      const SizedBox(height: 8),
-                      DropdownButton<String>(
-                        isExpanded: true,
-                        value: selectedArchetype,
-                        items: archetypes.map((archetype) {
-                          return DropdownMenuItem(
-                            value: archetype.name,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(archetype.name),
-                                if (archetype.description.isNotEmpty)
-                                  Text(
-                                    archetype.description,
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            selectedArchetype = value;
-                          });
-                        },
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setDialogState(() {
+                      selectedArchetype = value;
+                    });
+                  },
+                ),
+              ] else ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                    ] else ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 20,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'No archetypes available. Default stats will be used.',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'No archetypes available. Default stats will be used.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
+              ],
+            ],
+          ),
+        ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: isLoadingArchetypes ? null : () async {
+              onPressed: () async {
                 final name = nameController.text.trim();
                 if (name.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -234,12 +226,12 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                 }
                 
                 Navigator.of(context).pop();
+                debugPrint('Creating character with name: $name, archetype: ${selectedArchetype ?? 'default'}');
                 await _createCharacter(name, selectedArchetype ?? '');
               },
               child: const Text('Create'),
             ),
           ],
-        ),
       ),
     );
   }
