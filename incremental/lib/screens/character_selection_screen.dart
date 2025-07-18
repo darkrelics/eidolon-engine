@@ -132,15 +132,9 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
       isLoadingArchetypes = false;
     } catch (e) {
       debugPrint('Error loading archetypes: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load archetypes: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-      return;
+      // Continue with no archetypes - the server will use defaults
+      archetypes = [];
+      isLoadingArchetypes = false;
     }
 
     if (!mounted) return;
@@ -164,35 +158,64 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                       ),
                       textCapitalization: TextCapitalization.words,
                     ),
-                    const SizedBox(height: 16),
-                    const Text('Archetype:'),
-                    const SizedBox(height: 8),
-                    DropdownButton<String>(
-                      isExpanded: true,
-                      value: selectedArchetype,
-                      items: archetypes?.map((archetype) {
-                        return DropdownMenuItem(
-                          value: archetype.name,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(archetype.name),
-                              if (archetype.description.isNotEmpty)
-                                Text(
-                                  archetype.description,
-                                  style: Theme.of(context).textTheme.bodySmall,
+                    if (archetypes != null && archetypes.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Text('Archetype:'),
+                      const SizedBox(height: 8),
+                      DropdownButton<String>(
+                        isExpanded: true,
+                        value: selectedArchetype,
+                        items: archetypes.map((archetype) {
+                          return DropdownMenuItem(
+                            value: archetype.name,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(archetype.name),
+                                if (archetype.description.isNotEmpty)
+                                  Text(
+                                    archetype.description,
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedArchetype = value;
+                          });
+                        },
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceVariant,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'No archetypes available. Default stats will be used.',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
-                            ],
-                          ),
-                        );
-                      }).toList() ?? [],
-                      onChanged: (value) {
-                        setState(() {
-                          selectedArchetype = value;
-                        });
-                      },
-                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
           actions: [
@@ -211,7 +234,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                 }
                 
                 Navigator.of(context).pop();
-                await _createCharacter(name, selectedArchetype!);
+                await _createCharacter(name, selectedArchetype ?? '');
               },
               child: const Text('Create'),
             ),
