@@ -238,11 +238,15 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
 
   Future<void> _createCharacter(String name, String archetype) async {
     try {
+      debugPrint('CharacterSelectionScreen: _createCharacter called with name: $name, archetype: $archetype');
+      
       setState(() {
         _isLoading = true;
       });
 
-      await _apiService.addCharacter(name: name, archetype: archetype);
+      debugPrint('CharacterSelectionScreen: Calling API to add character...');
+      final characterId = await _apiService.addCharacter(name: name, archetype: archetype);
+      debugPrint('CharacterSelectionScreen: Character created with ID: $characterId');
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -251,16 +255,18 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
       }
 
       // Reload characters
+      debugPrint('CharacterSelectionScreen: Reloading characters...');
       await _loadCharacters();
-    } catch (e) {
-      debugPrint('Error creating character: $e');
+    } catch (e, stackTrace) {
+      debugPrint('CharacterSelectionScreen: Error creating character: $e');
+      debugPrint('CharacterSelectionScreen: Stack trace: $stackTrace');
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to create character: $e'),
+            content: Text('Failed to create character: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
