@@ -37,6 +37,36 @@ CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
 ITEMS_TABLE = os.environ.get("ITEMS_TABLE", "items")
 
 
+def get_character_name_by_id(player_id, character_id) -> str:
+    """
+    Get character name by ID and verify ownership.
+    
+    Args:
+        player_id: Cognito user ID
+        character_id: Character UUID
+        
+    Returns:
+        Character name if owned by player, empty string otherwise
+    """
+    # Get player record
+    players_table = get_table(PLAYERS_TABLE)
+    player_data = get_item(players_table, {"PlayerID": player_id})
+    
+    if not player_data:
+        logger.warning("Player not found", extra={"player_id": player_id})
+        return ""
+    
+    character_list = player_data.get("CharacterList", {})
+    
+    # Find character by UUID
+    for char_name, char_info in character_list.items():
+        if char_info.get("UUID") == character_id:
+            return char_name
+    
+    logger.warning("Character not found for player", extra={"character_id": character_id, "player_id": player_id})
+    return ""
+
+
 def verify_character_ownership(player_id, character_name) -> tuple:
     """
     Verify that a character belongs to the specified player.
@@ -202,23 +232,17 @@ def lambda_handler(event, context) -> dict:
         if auth_error:
             return auth_error
 
-        # Parse request body
-        body, parse_error = parse_json_body(event)
-        if parse_error:
-            return cors_handler.add_cors_headers(parse_error, event)
+        # Get character ID from path parameters
+        path_parameters = event.get("pathParameters", {})
+        character_id = path_parameters.get("characterId", "").strip()
+        
+        if not character_id:
+            return cors_handler.add_cors_headers(error_response("Missing character ID"), event)
 
-        # Validate required fields
-        is_valid, error_msg = validate_required_fields(body, ["characterName"])
-        if not is_valid:
-            return cors_handler.add_cors_headers(error_response(error_msg), event)
-
-        character_name = body["characterName"].strip()
-
-        # Verify ownership
-        is_owner, character_id = verify_character_ownership(player_id, character_name)
-
-        if not is_owner:
-            return cors_handler.add_cors_headers(error_response("Character not found or access denied", status_code=403), event)
+        # Get character name and verify ownership
+        character_name = get_character_name_by_id(player_id, character_id)
+        if not character_name:
+            return cors_handler.add_cors_headers(error_response("Character not found or access denied", status_code=404), event)
 
         # Delete the character
         if not delete_character(player_id, character_name, character_id):

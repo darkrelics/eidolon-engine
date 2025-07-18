@@ -253,12 +253,12 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
     }
   }
 
-  Future<void> _showDeleteCharacterDialog(String characterName) async {
+  Future<void> _showDeleteCharacterDialog(CharacterInfo character) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Character'),
-        content: Text('Are you sure you want to delete "$characterName"? This action cannot be undone.'),
+        content: Text('Are you sure you want to delete "${character.name}"? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -276,21 +276,21 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
     );
 
     if (confirmed ?? false) {
-      await _deleteCharacter(characterName);
+      await _deleteCharacter(character);
     }
   }
 
-  Future<void> _deleteCharacter(String name) async {
+  Future<void> _deleteCharacter(CharacterInfo character) async {
     try {
       setState(() {
         _isLoading = true;
       });
 
-      await _apiService.deleteCharacter(name);
+      await _apiService.deleteCharacter(character.id);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Deleted character: $name')),
+          SnackBar(content: Text('Deleted character: ${character.name}')),
         );
       }
 
@@ -431,7 +431,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.delete),
-                          onPressed: () => _showDeleteCharacterDialog(character.name),
+                          onPressed: () => _showDeleteCharacterDialog(character),
                         ),
                         const Icon(Icons.arrow_forward_ios),
                       ],

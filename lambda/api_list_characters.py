@@ -86,10 +86,14 @@ def lambda_handler(event, context):
             return cors_handler.add_cors_headers(not_found_response("Player"), event)
         character_list = player_data.get("CharacterList", {})
 
-        # Build character list with name and death status
+        # Build character list with name, id, and death status
         characters: list = []
         for char_name, char_info in character_list.items():
-            characters.append({"name": char_name, "dead": char_info.get("Dead", False)})
+            characters.append({
+                "name": char_name,
+                "id": char_info.get("UUID", ""),
+                "dead": char_info.get("Dead", False)
+            })
 
         # Sort by name for consistent ordering
         characters.sort(key=lambda x: x["name"])

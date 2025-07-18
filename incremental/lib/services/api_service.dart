@@ -8,13 +8,15 @@ import 'auth_service.dart';
 /// Character info for listing
 class CharacterInfo {
   final String name;
+  final String id;
   final bool dead;
 
-  CharacterInfo({required this.name, required this.dead});
+  CharacterInfo({required this.name, required this.id, required this.dead});
 
   factory CharacterInfo.fromJson(Map<String, dynamic> json) {
     return CharacterInfo(
       name: json['name'] as String,
+      id: json['id'] as String? ?? '',
       dead: json['dead'] as bool? ?? false,
     );
   }
@@ -63,7 +65,7 @@ class ApiService {
     debugPrint('ApiService: Adding character - name: $name, archetype: $archetype');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/character/add'),
+      Uri.parse('$baseUrl/characters'),
       headers: headers,
       body: jsonEncode({
         'characterName': name,
@@ -84,15 +86,12 @@ class ApiService {
   }
 
   /// Delete a character
-  Future<void> deleteCharacter(String characterName) async {
-    debugPrint('ApiService: Deleting character - name: $characterName');
+  Future<void> deleteCharacter(String characterId) async {
+    debugPrint('ApiService: Deleting character - id: $characterId');
     final headers = await _getHeaders();
-    final response = await _httpClient.post(
-      Uri.parse('$baseUrl/character/delete'),
+    final response = await _httpClient.delete(
+      Uri.parse('$baseUrl/characters/$characterId'),
       headers: headers,
-      body: jsonEncode({
-        'characterName': characterName,
-      }),
     );
 
     debugPrint('ApiService: Delete character response status: ${response.statusCode}');
