@@ -76,7 +76,7 @@ class ApiService {
     debugPrint('ApiService: Add character response status: ${response.statusCode}');
     debugPrint('ApiService: Add character response body: ${response.body}');
 
-    if (response.statusCode != 200) {
+    if (response.statusCode != 200 && response.statusCode != 201) {
       final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
       throw Exception(errorBody['error'] ?? 'Failed to add character');
     }
