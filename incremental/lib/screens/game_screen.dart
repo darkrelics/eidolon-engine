@@ -43,13 +43,17 @@ class _GameScreenState extends State<GameScreen> {
         _error = null;
       });
 
-      // First select the character
-      await _apiService.selectCharacter(_characterInfo!.id);
+      // Load the character data by ID
+      final character = await _apiService.getCharacterById(_characterInfo!.id);
       
-      // Then load the character data
-      await _loadCharacter();
+      if (mounted) {
+        setState(() {
+          _character = character;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      debugPrint('Error selecting character: $e');
+      debugPrint('Error loading character: $e');
       if (mounted) {
         setState(() {
           _error = e.toString();
@@ -60,13 +64,15 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _loadCharacter() async {
+    if (_characterInfo == null) return;
+    
     try {
       setState(() {
         _isLoading = true;
         _error = null;
       });
 
-      final character = await _apiService.getCharacter();
+      final character = await _apiService.getCharacterById(_characterInfo!.id);
       
       if (mounted) {
         setState(() {
