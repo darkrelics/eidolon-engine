@@ -464,7 +464,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                             Navigator.pushReplacementNamed(
                               context,
                               '/game',
-                              arguments: character.name,
+                              arguments: character,
                             );
                           },
                   ),

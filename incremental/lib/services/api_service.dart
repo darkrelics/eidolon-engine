@@ -103,6 +103,25 @@ class ApiService {
     }
   }
 
+  /// Select a character to play
+  Future<void> selectCharacter(String characterId) async {
+    debugPrint('ApiService: Selecting character - id: $characterId');
+    final headers = await _getHeaders();
+    final response = await _httpClient.post(
+      Uri.parse('$baseUrl/character/select'),
+      headers: headers,
+      body: jsonEncode({'characterId': characterId}),
+    );
+
+    debugPrint('ApiService: Select character response status: ${response.statusCode}');
+    debugPrint('ApiService: Select character response body: ${response.body}');
+
+    if (response.statusCode != 200) {
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to select character');
+    }
+  }
+
   /// Get current character
   Future<Character?> getCharacter() async {
     final headers = await _getHeaders();
