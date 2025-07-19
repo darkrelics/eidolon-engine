@@ -100,8 +100,11 @@ def update_item(table, key: dict, update_expression: str, expression_values: dic
         kwargs = {
             "Key": key,
             "UpdateExpression": update_expression,
-            "ExpressionAttributeValues": convert_to_decimal(expression_values),
         }
+
+        # Only add ExpressionAttributeValues if provided and not empty
+        if expression_values:
+            kwargs["ExpressionAttributeValues"] = convert_to_decimal(expression_values)
 
         if expression_names:
             kwargs["ExpressionAttributeNames"] = expression_names
@@ -151,9 +154,12 @@ def update_item_with_condition(
         kwargs = {
             "Key": key,
             "UpdateExpression": update_expression,
-            "ExpressionAttributeValues": convert_to_decimal(expression_values),
             "ConditionExpression": condition_expression,
         }
+
+        # Only add ExpressionAttributeValues if provided and not empty
+        if expression_values:
+            kwargs["ExpressionAttributeValues"] = convert_to_decimal(expression_values)
 
         if expression_names:
             kwargs["ExpressionAttributeNames"] = expression_names

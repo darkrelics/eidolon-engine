@@ -165,28 +165,29 @@ def delete_character(player_id, character_name, character_id) -> bool:
         bool: True if successful
     """
     try:
-        # Delete character items first
-        items_deleted = delete_character_items(character_id)
-        logger.info("Deleted items for character", extra={"items_deleted": items_deleted, "character_id": character_id})
-
-        # Delete character from characters table
-        characters_table = get_table(CHARACTERS_TABLE)
-        if not delete_item(characters_table, {"CharacterID": character_id}):
-            return False
-
-        # Remove character from player's character list
+        # First remove character from player's character list
         players_table = get_table(PLAYERS_TABLE)
         success, error_msg = update_item_with_condition(
             players_table,
             {"PlayerID": player_id},
             "REMOVE CharacterList.#name",
-            {},
+            {},  # REMOVE operations don't need expression values
             "attribute_exists(CharacterList.#name)",
             {"#name": character_name},
         )
 
         if not success:
             logger.error("Failed to remove character from player list", extra={"error": error_msg})
+            return False
+
+        # Delete character items
+        items_deleted = delete_character_items(character_id)
+        logger.info("Deleted items for character", extra={"items_deleted": items_deleted, "character_id": character_id})
+
+        # Finally delete character from characters table
+        characters_table = get_table(CHARACTERS_TABLE)
+        if not delete_item(characters_table, {"CharacterID": character_id}):
+            logger.error("Failed to delete character record")
             return False
 
         logger.info(
