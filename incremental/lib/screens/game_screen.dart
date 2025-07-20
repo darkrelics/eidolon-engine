@@ -28,14 +28,25 @@ class _GameScreenState extends State<GameScreen> {
     super.didChangeDependencies();
     // Get character info from route arguments
     final args = ModalRoute.of(context)?.settings.arguments;
+    debugPrint('GameScreen: didChangeDependencies called, args type: ${args.runtimeType}');
+    debugPrint('GameScreen: args: $args');
     if (args is CharacterInfo && args != _characterInfo) {
+      debugPrint('GameScreen: Got CharacterInfo - name: ${args.name}, id: ${args.id}');
       _characterInfo = args;
       _selectAndLoadCharacter();
+    } else {
+      debugPrint('GameScreen: No valid CharacterInfo in arguments');
     }
   }
 
   Future<void> _selectAndLoadCharacter() async {
-    if (_characterInfo == null) return;
+    debugPrint('GameScreen: _selectAndLoadCharacter called');
+    if (_characterInfo == null) {
+      debugPrint('GameScreen: _characterInfo is null, returning');
+      return;
+    }
+    
+    debugPrint('GameScreen: Loading character with ID: ${_characterInfo!.id}');
     
     try {
       setState(() {
@@ -44,7 +55,9 @@ class _GameScreenState extends State<GameScreen> {
       });
 
       // Load the character data by ID
+      debugPrint('GameScreen: Calling getCharacterById...');
       final character = await _apiService.getCharacterById(_characterInfo!.id);
+      debugPrint('GameScreen: Character loaded: ${character != null ? 'success' : 'null'}');
       
       if (mounted) {
         setState(() {
@@ -53,7 +66,8 @@ class _GameScreenState extends State<GameScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading character: $e');
+      debugPrint('GameScreen: ERROR loading character: $e');
+      debugPrint('GameScreen: Error stack trace: ${StackTrace.current}');
       if (mounted) {
         setState(() {
           _error = e.toString();
