@@ -1,12 +1,12 @@
 PyYAML==6.0.2
-boto3==1.39.3
+boto3==1.39.9
 aws-cdk-lib==2.203.1
 constructs==10.4.2
 attrs==25.3.0
 aws-cdk.asset-awscli-v1==2.2.242
 aws-cdk.asset-node-proxy-agent-v6==2.1.0
 aws-cdk.cloud-assembly-schema==44.9.0
-botocore==1.39.3
+botocore==1.39.9
 cattrs==24.1.3
 importlib_resources==6.5.2
 jmespath==1.0.1
