@@ -83,8 +83,11 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "LastPlayed": timestamp,
     }
 
+    # Get table resources first
+    players_table = None
+    characters_table = None
+    
     try:
-        # Get table resources
         players_table = get_table(PLAYERS_TABLE)
         characters_table = get_table(CHARACTERS_TABLE)
 
@@ -121,10 +124,11 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
             "Error creating character", extra={"error": str(err), "character_name": character_name, "player_id": player_id}
         )
         # Attempt to rollback character creation if player update failed
-        try:
-            characters_table.delete_item(Key={"CharacterID": character_id})
-        except ClientError as rollback_err:
-            logger.error("Failed to rollback character creation", extra={"error": str(rollback_err), "character_id": character_id})
+        if characters_table:
+            try:
+                characters_table.delete_item(Key={"CharacterID": character_id})
+            except ClientError as rollback_err:
+                logger.error("Failed to rollback character creation", extra={"error": str(rollback_err), "character_id": character_id})
         return None, "Failed to create character"
 
 

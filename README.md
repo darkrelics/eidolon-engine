@@ -31,6 +31,7 @@ The system uses AWS Lambda functions as the primary backend, with different fron
 ## Key Features
 
 ### Game Features
+
 - Character progression through skills and attributes (no levels)
 - Timer-based incremental gameplay mechanics
 - Real-time MUD interactions via SSH
@@ -38,6 +39,7 @@ The system uses AWS Lambda functions as the primary backend, with different fron
 - Lua scripting for game content
 
 ### Technical Features
+
 - AWS Lambda backend for all game logic
 - DynamoDB for data persistence
 - Infrastructure as Code using AWS CDK
@@ -51,11 +53,13 @@ The system uses AWS Lambda functions as the primary backend, with different fron
 The engine uses a modern cloud-native architecture with a unified backend serving multiple frontends:
 
 - **Frontend Applications**:
+
   - Flutter web app for incremental gameplay (`/incremental`)
   - Flutter portal for MUD web interface (`/portal`)
   - SSH server for traditional MUD access (`/server`)
 
 - **Unified Backend Services** (shared by all game modes):
+
   - AWS Lambda functions for all game logic (`/lambda`)
   - DynamoDB tables for persistent game state
   - Character GameMode field prevents concurrent MUD/Incremental access
@@ -73,19 +77,21 @@ The engine uses a modern cloud-native architecture with a unified backend servin
 
 - Python 3.12+
 - Go 1.24+ (for MUD server)
-- Flutter 3.29+ (for web interfaces)
+- Flutter 3.32+ (for web interfaces)
 - AWS CLI configured with appropriate credentials
 - AWS CDK 2.x
 
 ### Quick Start
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/robinje/eidolon-engine.git
    cd eidolon-engine
    ```
 
 2. **Deploy AWS infrastructure**:
+
    ```bash
    cd deployment
    pip install -r ../requirements/deployment-requirements.txt
@@ -93,6 +99,7 @@ The engine uses a modern cloud-native architecture with a unified backend servin
    ```
 
 3. **Choose deployment mode**:
+
    - **Incremental Only**: Deploys incremental game UI and Lambda backend
    - **MUD Only**: Deploys portal UI, Lambda backend, and prepares for server
    - **Hybrid**: Full deployment with all components
@@ -161,6 +168,7 @@ All modes share the same Lambda functions and DynamoDB tables. The character Gam
 ## Contributing
 
 Contributions are welcome. Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
+
 - Code style and standards
 - Testing requirements
 - Pull request process
