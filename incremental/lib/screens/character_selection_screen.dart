@@ -19,6 +19,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../utils/error_handler.dart';
 
 class CharacterSelectionScreen extends StatefulWidget {
   const CharacterSelectionScreen({super.key});
@@ -266,7 +267,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to create character: ${e.toString()}'),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'createCharacter')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -325,7 +326,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to delete character: $e'),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'deleteCharacter')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

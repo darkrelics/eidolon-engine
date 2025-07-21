@@ -17,6 +17,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/error_handler.dart';
 
 class PasswordResetScreen extends StatefulWidget {
   const PasswordResetScreen({super.key});
@@ -65,7 +66,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'forgotPassword')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

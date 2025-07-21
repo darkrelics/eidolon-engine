@@ -17,6 +17,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/error_handler.dart';
 
 class PasswordResetConfirmScreen extends StatefulWidget {
   const PasswordResetConfirmScreen({super.key});
@@ -90,7 +91,7 @@ class _PasswordResetConfirmScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'confirmPassword')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -127,7 +128,7 @@ class _PasswordResetConfirmScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'confirmPassword')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

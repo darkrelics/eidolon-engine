@@ -77,6 +77,12 @@ class AuthSignOutException implements Exception {
 class AuthExceptionMapper {
   static String mapToUserFriendlyMessage(dynamic error) {
     if (error is CognitoClientException) {
+      // Log the error code in debug mode to help diagnose issues
+      if (kDebugMode) {
+        debugPrint('AuthExceptionMapper: Cognito error code: ${error.code}');
+        debugPrint('AuthExceptionMapper: Cognito error message: ${error.message}');
+      }
+      
       switch (error.code) {
         case 'UserNotFoundException':
         case 'NotAuthorizedException':
@@ -89,7 +95,7 @@ class AuthExceptionMapper {
           }
           return 'Please check your input and try again';
         case 'UsernameExistsException':
-          return 'An account with this email already exists';
+          return 'The Player Account already exists.';
         case 'LimitExceededException':
           return 'Too many attempts. Please try again later';
         case 'InvalidPasswordException':
@@ -99,9 +105,23 @@ class AuthExceptionMapper {
         case 'ExpiredCodeException':
           return 'Verification code has expired. Please request a new one';
         default:
+          // Check if the error message contains username exists indication
+          if (error.message?.toLowerCase().contains('username exists') == true ||
+              error.message?.toLowerCase().contains('user already exists') == true ||
+              error.message?.toLowerCase().contains('already registered') == true) {
+            return 'The Player Account already exists.';
+          }
           return 'An error occurred. Please try again';
       }
     }
+    
+    // Additional check for non-Cognito exceptions that might indicate duplicate account
+    if (error.toString().toLowerCase().contains('username exists') ||
+        error.toString().toLowerCase().contains('user already exists') ||
+        error.toString().toLowerCase().contains('already registered')) {
+      return 'The Player Account already exists.';
+    }
+    
     return 'An unexpected error occurred. Please try again';
   }
 }

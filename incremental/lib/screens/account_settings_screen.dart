@@ -17,6 +17,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/error_handler.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -44,7 +45,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error signing out: ${e.toString()}'),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signOut')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -86,7 +87,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error deleting account: ${e.toString()}'),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'deleteAccount')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
