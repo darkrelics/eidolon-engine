@@ -114,7 +114,7 @@ func (p *Player) SelectCharacter(character *Character) {
 func ProcessCommand(ctx context.Context, character *Character, input string) {
     // Parse and execute command without needing to access through player
     cmd, args := parseCommand(input)
-    
+
     switch cmd {
     case "get":
         executeGet(character.game, character, args)

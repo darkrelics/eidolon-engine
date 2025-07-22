@@ -146,16 +146,16 @@ This consolidation follows the codebase principle of "simplicity of code is high
 
 - All resources use simple names for clarity and consistency:
   - DynamoDB tables (unified): `players`, `characters`, `archetypes`, `items`, `progress`, `resources`, `rooms`, `exits`, `prototypes`, `motd`, `story`
-  - S3 buckets: 
+  - S3 buckets:
     - Portal: `darkrelics-portal` (default) or custom name
-    - Scripts: `darkrelics-scripts` (default) or custom name  
+    - Scripts: `darkrelics-scripts` (default) or custom name
     - Lambda: `{game_name}-lambda-{account_id}` (e.g., `eidolon-engine-lambda-123456789012`)
   - CloudWatch log group: `/aws/eidolon/server`
   - Cognito user pool: `eidolon-users`
   - CodeBuild project: `eidolon-codebuild`
   - CloudFront: `eidolon-distribution`
   - API Gateway: `eidolon-api` at `api.{domain}`
-  - IAM resources: 
+  - IAM resources:
     - Role: `{game_name}-server-execution-role`
     - Policies: `eidolon-{game_name}-dynamodb-access`, `eidolon-{game_name}-cloudwatch-access`
 - CDK stack names are simple service names: `iam`, `s3`, `dynamodb`, `cognito`, `cloudwatch`, `codebuild`, `base-lambda`, `lambda`, `cloudfront`

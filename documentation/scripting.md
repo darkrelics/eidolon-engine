@@ -206,7 +206,8 @@ Room scripts handle room-specific interactions and are loaded when a room has a 
 - Provide periodic ambient effects
 - Modify room state dynamically
 
-**Configuration**: 
+**Configuration**:
+
 - Set `scriptID` field in room data to script name (without .lua extension)
 - Scripts can be enabled/disabled at runtime using the `scriptActive` flag
 - When `scriptActive` is false, the script won't handle commands or events
@@ -297,7 +298,6 @@ The scripting system provides robust error handling:
 2. **Commands not working**: Verify command is listed in SCRIPT_INFO.commands
 3. **Events not firing**: Ensure event names match exactly and are declared
 4. **Performance issues**: Check for infinite loops in onTick functions
-
 
 ## Updating Scripts
 

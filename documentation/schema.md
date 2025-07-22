@@ -16,12 +16,12 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 ## Player Table
 
-| Field           | Type     | Description                                               |
-| --------------- | -------- | --------------------------------------------------------- |
-| `PlayerID`      | `STRING` | UUID of the player (UUIDv4).                              |
-| `Email`         | `STRING` | Email address of the player.                              |
+| Field           | Type     | Description                                                      |
+| --------------- | -------- | ---------------------------------------------------------------- |
+| `PlayerID`      | `STRING` | UUID of the player (UUIDv4).                                     |
+| `Email`         | `STRING` | Email address of the player.                                     |
 | `CharacterList` | `MAP`    | Map of character names to character info (UUID, Dead, GameMode). |
-| `SeenMotD`      | `LIST`   | List of UUIDs of messages of the day the player has seen. |
+| `SeenMotD`      | `LIST`   | List of UUIDs of messages of the day the player has seen.        |
 
 - **`PlayerID`**: A UUIDv4 stored as a string, serving as the primary key.
 - **`Email`**: The email address associated with the player account.
@@ -68,15 +68,15 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 ## Rooms Table
 
-| Field          | Type      | Description                                     |
-| -------------- | --------- | ----------------------------------------------- |
-| `RoomID`       | `NUMBER`  | Unique identifier of the room.                  |
-| `Area`         | `STRING`  | Name of the area or region the room belongs to. |
-| `Title`        | `STRING`  | Title or name of the room.                      |
-| `Description`  | `STRING`  | Text description of the room.                   |
-| `ExitID`       | `LIST`    | List of exit UUIDs from this room.             |
-| `ScriptID`     | `STRING`  | ID of the Lua script associated with the room.  |
-| `Persistent`   | `BOOLEAN` | Whether the room persists when empty.          |
+| Field         | Type      | Description                                     |
+| ------------- | --------- | ----------------------------------------------- |
+| `RoomID`      | `NUMBER`  | Unique identifier of the room.                  |
+| `Area`        | `STRING`  | Name of the area or region the room belongs to. |
+| `Title`       | `STRING`  | Title or name of the room.                      |
+| `Description` | `STRING`  | Text description of the room.                   |
+| `ExitID`      | `LIST`    | List of exit UUIDs from this room.              |
+| `ScriptID`    | `STRING`  | ID of the Lua script associated with the room.  |
+| `Persistent`  | `BOOLEAN` | Whether the room persists when empty.           |
 
 - **`RoomID`**: Serves as the primary key for the room.
 - **`Area`**: The broader area or zone where the room is located.
@@ -90,15 +90,15 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 ## Exits Table
 
-| Field        | Type      | Description                                     |
-| ------------ | --------- | ----------------------------------------------- |
-| `ExitID`     | `STRING`  | UUID of the exit.                               |
-| `Direction`  | `STRING`  | Direction of the exit (e.g., "north", "south"). |
-| `TargetRoom` | `NUMBER`  | ID of the room the exit leads to.               |
-| `Visible`    | `BOOLEAN` | Indicates if the exit is visible to players.    |
-| `Description`| `STRING`  | Description of the exit.                        |
-| `ArrivalText`| `STRING`  | Text shown when character arrives from this exit.|
-| `ScriptID`   | `STRING`  | ID of the Lua script for exit interactions.    |
+| Field         | Type      | Description                                       |
+| ------------- | --------- | ------------------------------------------------- |
+| `ExitID`      | `STRING`  | UUID of the exit.                                 |
+| `Direction`   | `STRING`  | Direction of the exit (e.g., "north", "south").   |
+| `TargetRoom`  | `NUMBER`  | ID of the room the exit leads to.                 |
+| `Visible`     | `BOOLEAN` | Indicates if the exit is visible to players.      |
+| `Description` | `STRING`  | Description of the exit.                          |
+| `ArrivalText` | `STRING`  | Text shown when character arrives from this exit. |
+| `ScriptID`    | `STRING`  | ID of the Lua script for exit interactions.       |
 
 - **`ExitID`**: The UUID of the exit, serving as the primary key.
 - **`Direction`**: The cardinal direction or named exit.
@@ -229,12 +229,12 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 ## MOTD Table (Messages of the Day)
 
-| Field      | Type     | Description                                   |
-| ---------- | -------- | --------------------------------------------- |
-| `MotdID`   | `STRING` | UUID of the message.                          |
-| `Message`  | `STRING` | The text content of the message.              |
-| `CreatedAt`| `STRING` | Timestamp when the message was created.       |
-| `Active`   | `BOOL`   | Whether this message is currently active.     |
+| Field       | Type     | Description                               |
+| ----------- | -------- | ----------------------------------------- |
+| `MotdID`    | `STRING` | UUID of the message.                      |
+| `Message`   | `STRING` | The text content of the message.          |
+| `CreatedAt` | `STRING` | Timestamp when the message was created.   |
+| `Active`    | `BOOL`   | Whether this message is currently active. |
 
 - **`MotdID`**: Primary key, uniquely identifies the message.
 - **`Message`**: The actual message displayed to players.
@@ -330,10 +330,10 @@ end
 
 ## Story Table
 
-| Field     | Type     | Description                                   |
-| --------- | -------- | --------------------------------------------- |
-| `PlayerID`| `STRING` | UUID of the player (partition key).           |
-| `StoryID` | `STRING` | UUID of the story (sort key).                 |
+| Field      | Type     | Description                         |
+| ---------- | -------- | ----------------------------------- |
+| `PlayerID` | `STRING` | UUID of the player (partition key). |
+| `StoryID`  | `STRING` | UUID of the story (sort key).       |
 
 - **`PlayerID`**: Player UUID as partition key for efficient queries.
 - **`StoryID`**: Story UUID as sort key, allowing multiple stories per player.
@@ -341,12 +341,12 @@ end
 
 ## ActiveSegments Table
 
-| Field        | Type     | Description                                   |
-| ------------ | -------- | --------------------------------------------- |
-| `CharacterID`| `STRING` | UUID of the character.                        |
-| `SegmentID`  | `STRING` | ID of the active story segment.               |
-| `StartTime`  | `STRING` | Timestamp when segment started.               |
-| `EndTime`    | `STRING` | Timestamp when segment should complete.       |
+| Field         | Type     | Description                             |
+| ------------- | -------- | --------------------------------------- |
+| `CharacterID` | `STRING` | UUID of the character.                  |
+| `SegmentID`   | `STRING` | ID of the active story segment.         |
+| `StartTime`   | `STRING` | Timestamp when segment started.         |
+| `EndTime`     | `STRING` | Timestamp when segment should complete. |
 
 - Tracks active story segments with timers
 - Character-to-segment mapping
@@ -354,13 +354,13 @@ end
 
 ## CharacterHistory Table
 
-| Field        | Type     | Description                                   |
-| ------------ | -------- | --------------------------------------------- |
-| `CharacterID`| `STRING` | UUID of the character.                        |
-| `StoryID`    | `STRING` | UUID of the completed story.                  |
-| `CompletedAt`| `STRING` | Timestamp of completion.                      |
-| `Choices`    | `MAP`    | Path choices made during the story.           |
-| `Rewards`    | `MAP`    | Rewards earned from story completion.         |
+| Field         | Type     | Description                           |
+| ------------- | -------- | ------------------------------------- |
+| `CharacterID` | `STRING` | UUID of the character.                |
+| `StoryID`     | `STRING` | UUID of the completed story.          |
+| `CompletedAt` | `STRING` | Timestamp of completion.              |
+| `Choices`     | `MAP`    | Path choices made during the story.   |
+| `Rewards`     | `MAP`    | Rewards earned from story completion. |
 
 - Story completion tracking
 - Path choices made

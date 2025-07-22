@@ -21,6 +21,7 @@ CloudFrontDistributions:
 ```
 
 The CDK deployment automatically allows CORS from:
+
 - Your configured domain (with https://, https://www., http://, http://www.)
 - CloudFront distribution URLs
 - Common localhost ports for development (3000, 8080, 8000)
@@ -42,8 +43,8 @@ The `configure_cors.py` script exists but its output is not currently used by th
 ```yaml
 # These fields are written by configure_cors.py but NOT USED
 CORS:
-  MUDOrigins:     # Not read by CDK
-  IncrementalOrigins:  # Not read by CDK
+  MUDOrigins: # Not read by CDK
+  IncrementalOrigins: # Not read by CDK
 ```
 
 ## Technical Implementation
@@ -127,6 +128,7 @@ curl https://mud-api.yourdomain.com/characters \
 To add custom CORS origins beyond the automatic CloudFront/domain configuration:
 
 1. Add them to the `CORS.AllowedOrigins` field in `config.yml`:
+
    ```yaml
    CORS:
      AllowedOrigins:

@@ -10,7 +10,7 @@ The Eidolon Engine supports three deployment modes, all sharing the same backend
 | -------------------------- | -------------------------- | ---------------------------- | ---------------------------- |
 | **Frontend Deployed**      | Portal (Flutter web)       | Incremental (Flutter web)    | Incremental (Flutter web)    |
 | **Primary Interface**      | Web portal for MUD         | Timer-based incremental game | Timer-based incremental game |
-| **SSH Server**             | Deployed separately*       | Not used                     | Deployed separately*         |
+| **SSH Server**             | Deployed separately\*      | Not used                     | Deployed separately\*        |
 | **Backend Infrastructure** | Full shared backend        | Full shared backend          | Full shared backend          |
 | **Lambda Functions**       | All functions available    | All functions available      | All functions available      |
 | **DynamoDB Tables**        | All tables available       | All tables available         | All tables available         |
@@ -18,7 +18,7 @@ The Eidolon Engine supports three deployment modes, all sharing the same backend
 | **GameMode Values**        | "MUD"                      | "Incremental"                | "MUD" or "Incremental"       |
 | **Use Case**               | Traditional MUD experience | Casual incremental gameplay  | Full game experience         |
 
-*The SSH server (`./server`) will be integrated into the deployment process when the Incremental component is ready for Alpha testing.
+\*The SSH server (`./server`) will be integrated into the deployment process when the Incremental component is ready for Alpha testing.
 
 ## Deployment Commands
 

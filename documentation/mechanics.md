@@ -95,11 +95,11 @@ kVar controls **by how much** winners win through variance scaling.
 
 minSig provides an absolute floor for variance to prevent degenerate cases.
 
-| minSig Value | Effect | Game Feel |
-| ------------ | ------ | --------- |
-| 0.10 | Minimal safety | Allows very tight distributions in extreme mismatches |
-| 0.25 | Standard safety | Ensures some randomness even in dominant positions |
-| 0.50 | High floor | Maintains significant uncertainty in all matchups |
+| minSig Value | Effect          | Game Feel                                             |
+| ------------ | --------------- | ----------------------------------------------------- |
+| 0.10         | Minimal safety  | Allows very tight distributions in extreme mismatches |
+| 0.25         | Standard safety | Ensures some randomness even in dominant positions    |
+| 0.50         | High floor      | Maintains significant uncertainty in all matchups     |
 
 **Tuning Guide:**
 

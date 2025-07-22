@@ -113,7 +113,6 @@ All Lambda functions must follow these parameter standards:
 - **Query Parameters**: Use for resource-specific operations (GET, DELETE)
   - Example: `/characters?characterId=123`
   - Use `get_query_parameter()` from `eidolon.requests`
-  
 - **Request Body**: Use for data submission (POST, PUT, PATCH)
   - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
   - Use `parse_json_body()` from `eidolon.requests`

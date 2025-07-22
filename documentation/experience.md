@@ -232,6 +232,7 @@ The hide system demonstrates both static and opposed checks working together:
 ### Thread Safety
 
 All experience operations are mutex-protected for safe concurrent access. Both `AwardSkillXP` and `AwardAttributeXP` use:
+
 - `c.mutex.Lock()` at start of operation
 - `defer c.mutex.Unlock()` for guaranteed cleanup
 
@@ -242,6 +243,7 @@ Skills and attributes are automatically saved with character data - no separate 
 ### Logging
 
 The system implements comprehensive logging for all XP awards:
+
 - Skill XP awards are logged with character name, skill, and amount
 - Attribute XP awards are logged with character name, attribute, and amount
 - Failed XP calculations are logged for debugging
@@ -249,6 +251,7 @@ The system implements comprehensive logging for all XP awards:
 ### Score Calculation
 
 When awarding XP, the system:
+
 1. Calculates XP required for next increment: `xpRequired = xpProgressionBase * math.Pow(xpProgressionRatio, currentScore)`
 2. Determines score increment: `scoreIncrement = xpGained / xpRequired`
 3. Caps final score at `maxScore` (10.0)
@@ -264,6 +267,7 @@ Experience calculations are lightweight (a few multiplications and one power ope
 ### Testing
 
 Comprehensive test coverage exists in `experience_test.go`, including:
+
 - Unit tests for all experience calculation functions
 - Integration tests for the complete XP award flow
 - Edge case testing for score caps and boundary conditions

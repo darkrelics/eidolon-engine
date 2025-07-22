@@ -184,19 +184,18 @@ Logging:
 
 All AWS resources use simple, unprefixed names for clarity:
 
-| Resource Type           | Naming Pattern                | Example                                                  |
-| ----------------------- | ----------------------------- | -------------------------------------------------------- |
-| DynamoDB Tables         | `{table_type}`                | `players`, `characters`, `rooms`                         |
-| S3 Buckets              | Various patterns              | `eidolon-portal`, `{game}-lambda-{account}`             |
-| CloudWatch Log Group    | `/aws/eidolon/server`         | `/aws/eidolon/server`                                    |
-| Cognito User Pool       | `eidolon-users`               | `eidolon-users`                                          |
-| CodeBuild Project       | `eidolon-codebuild`           | `eidolon-codebuild`                                      |
-| CloudFront Distribution | `eidolon-distribution`        | `eidolon-distribution`                                   |
-| IAM Role                | `{game}-server-execution-role`| `eidolon-engine-server-execution-role`                   |
-| IAM Policies            | `eidolon-{game}-{service}-access` | `eidolon-eidolon-engine-dynamodb-access`            |
-| CDK Stack Names         | `{service}`                   | `iam`, `s3`, `dynamodb`, `cognito`, `cloudwatch`, `codebuild`, `base-lambda`, `lambda`, `cloudfront` |
-| API Gateway             | Single unified API            | `api.{domain}`                                           |
-
+| Resource Type           | Naming Pattern                    | Example                                                                                              |
+| ----------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| DynamoDB Tables         | `{table_type}`                    | `players`, `characters`, `rooms`                                                                     |
+| S3 Buckets              | Various patterns                  | `eidolon-portal`, `{game}-lambda-{account}`                                                          |
+| CloudWatch Log Group    | `/aws/eidolon/server`             | `/aws/eidolon/server`                                                                                |
+| Cognito User Pool       | `eidolon-users`                   | `eidolon-users`                                                                                      |
+| CodeBuild Project       | `eidolon-codebuild`               | `eidolon-codebuild`                                                                                  |
+| CloudFront Distribution | `eidolon-distribution`            | `eidolon-distribution`                                                                               |
+| IAM Role                | `{game}-server-execution-role`    | `eidolon-engine-server-execution-role`                                                               |
+| IAM Policies            | `eidolon-{game}-{service}-access` | `eidolon-eidolon-engine-dynamodb-access`                                                             |
+| CDK Stack Names         | `{service}`                       | `iam`, `s3`, `dynamodb`, `cognito`, `cloudwatch`, `codebuild`, `base-lambda`, `lambda`, `cloudfront` |
+| API Gateway             | Single unified API                | `api.{domain}`                                                                                       |
 
 ## Resource Management
 
@@ -223,7 +222,6 @@ Tables are created with:
 - **Billing**: Pay-per-request (on-demand)
 - **Backup**: Point-in-time recovery enabled
 - **Retention**: Tables retained on stack deletion
-
 
 ### CloudWatch Logs
 
@@ -361,7 +359,6 @@ aws codebuild start-build --project-name eidolon-portal-build
 # Navigate to CodeBuild → eidolon-portal-build → Start build
 ```
 
-
 ## Phased Deployment Details
 
 The deployment process is divided into six phases to ensure proper dependency resolution:
@@ -493,7 +490,7 @@ If you encounter errors like "SSM parameter /cdk-bootstrap/hnb659fds/version not
    - "Policy already exists": Delete conflicting IAM policies first
    - "Bucket already exists": The CDK assets bucket exists from a previous bootstrap
    - "SSM parameter already exists": Delete the parameter with `aws ssm delete-parameter --name /cdk-bootstrap/hnb659fds/version`
-   
+
    The deployment system includes specific CDK bootstrap error detection and provides helpful error messages when bootstrap is required.
 
 ### Configuration File Path
@@ -611,4 +608,3 @@ Deployment state is tracked in:
 - `.deployment_state.json` - Local state file
 - CloudFormation stack outputs - Resource identifiers
 - `config.yml` - Runtime configuration
-
