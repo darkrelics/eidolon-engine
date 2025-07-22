@@ -20,6 +20,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint('GameScreen: initState called');
     _apiService = ApiService(authService: AuthService.instance);
   }
 

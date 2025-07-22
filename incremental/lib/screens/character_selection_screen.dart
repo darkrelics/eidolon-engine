@@ -424,50 +424,59 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                 final character = _characters![index];
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: Icon(
-                      character.dead ? Icons.person_off : Icons.person,
-                      color: character.dead
-                          ? colorScheme.error
-                          : colorScheme.primary,
-                    ),
-                    title: Text(
-                      character.name,
-                      style: TextStyle(
-                        decoration: character.dead
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
-                    ),
-                    subtitle: character.dead
-                        ? Text(
-                            'Deceased',
-                            style: TextStyle(color: colorScheme.error),
-                          )
-                        : Text(
-                            'Active',
-                            style: TextStyle(color: colorScheme.primary),
-                          ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () => _showDeleteCharacterDialog(character),
-                        ),
-                        const Icon(Icons.arrow_forward_ios),
-                      ],
-                    ),
-                    enabled: !character.dead,
+                  child: InkWell(
                     onTap: character.dead
                         ? null
                         : () {
-                            Navigator.pushReplacementNamed(
-                              context,
-                              '/game',
-                              arguments: character,
-                            );
+                            debugPrint('CharacterSelectionScreen: Character tapped - ${character.name} (${character.id})');
+                            debugPrint('CharacterSelectionScreen: Navigating to /game with character data');
+                            try {
+                              Navigator.pushReplacementNamed(
+                                context,
+                                '/game',
+                                arguments: character,
+                              );
+                              debugPrint('CharacterSelectionScreen: Navigation call completed');
+                            } catch (e) {
+                              debugPrint('CharacterSelectionScreen: Navigation error: $e');
+                            }
                           },
+                    child: ListTile(
+                      leading: Icon(
+                        character.dead ? Icons.person_off : Icons.person,
+                        color: character.dead
+                            ? colorScheme.error
+                            : colorScheme.primary,
+                      ),
+                      title: Text(
+                        character.name,
+                        style: TextStyle(
+                          decoration: character.dead
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                      subtitle: character.dead
+                          ? Text(
+                              'Deceased',
+                              style: TextStyle(color: colorScheme.error),
+                            )
+                          : Text(
+                              'Active',
+                              style: TextStyle(color: colorScheme.primary),
+                            ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () => _showDeleteCharacterDialog(character),
+                          ),
+                          const Icon(Icons.arrow_forward_ios),
+                        ],
+                      ),
+                      enabled: !character.dead,
+                    ),
                   ),
                 );
               },
