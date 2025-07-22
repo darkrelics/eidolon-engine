@@ -33,12 +33,14 @@ This document describes how characters transition between Incremental and MUD ga
 Characters can transition between modes with these safeguards:
 
 **Incremental to MUD:**
+
 - Character must not have active story segments
 - GameMode updated from "Incremental" to "MUD"
 - Character placed in appropriate room
 - Full MUD gameplay becomes available
 
 **MUD to Incremental:**
+
 - Character must be in a safe room (not in combat)
 - GameMode updated from "MUD" to "Incremental"
 - Character position preserved for return
@@ -57,7 +59,7 @@ Since all characters exist in the shared characters table, name uniqueness is en
 ### Name Validation Process
 
 1. **Creation Request**: Player submits character name
-2. **Lambda Validation**: 
+2. **Lambda Validation**:
    - Check characters table for existing name
    - Validate name format and content
    - Use conditional write to ensure uniqueness
@@ -67,6 +69,7 @@ Since all characters exist in the shared characters table, name uniqueness is en
 ### Bloom Filter Optimization (Future Enhancement)
 
 For performance at scale, a bloom filter could be implemented:
+
 - Fast negative checks (name definitely available)
 - Reduce database queries for popular names
 - Periodic rebuild from characters table

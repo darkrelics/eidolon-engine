@@ -30,19 +30,19 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 ## Character Table
 
-| Field           | Type     | Description                                                 |
-| --------------- | -------- | ----------------------------------------------------------- |
-| `CharacterID`   | `STRING` | UUID of the character.                                      |
-| `PlayerID`      | `STRING` | Email of the player who owns the character.                 |
-| `CharacterName` | `STRING` | Name of the character.                                      |
+| Field           | Type     | Description                                                    |
+| --------------- | -------- | -------------------------------------------------------------- |
+| `CharacterID`   | `STRING` | UUID of the character.                                         |
+| `PlayerID`      | `STRING` | Email of the player who owns the character.                    |
+| `CharacterName` | `STRING` | Name of the character.                                         |
 | `GameMode`      | `STRING` | Current mode: "MUD" or "Incremental" (prevents concurrent use) |
-| `RoomID`        | `NUMBER` | ID of the room the character is currently in.               |
-| `Inventory`     | `MAP`    | Map of inventory slots to item UUIDs.                       |
-| `Attributes`    | `MAP`    | Map of attribute names to their values (e.g., Strength: 4). |
-| `Skills`        | `MAP`    | Map of skill names to their values (e.g., Stealth: 3).      |
-| `Essence`       | `NUMBER` | The character's essence or magical energy.                  |
-| `Health`        | `NUMBER` | The character's current health points.                      |
-| `Hidden`        | `BOOL`   | Whether the character is currently hidden.                  |
+| `RoomID`        | `NUMBER` | ID of the room the character is currently in.                  |
+| `Inventory`     | `MAP`    | Map of inventory slots to item UUIDs.                          |
+| `Attributes`    | `MAP`    | Map of attribute names to their values (e.g., Strength: 4).    |
+| `Skills`        | `MAP`    | Map of skill names to their values (e.g., Stealth: 3).         |
+| `Essence`       | `NUMBER` | The character's essence or magical energy.                     |
+| `Health`        | `NUMBER` | The character's current health points.                         |
+| `Hidden`        | `BOOL`   | Whether the character is currently hidden.                     |
 
 - **`CharacterID`**: The UUID of the character, serving as the primary key.
 - **`PlayerID`**: The email address of the player who owns this character.
@@ -310,16 +310,19 @@ end
 The following tables will be added to support Incremental-specific features:
 
 ### Story Table
+
 - Story metadata and content references
 - S3 paths to story JSON files
 - Author information and version tracking
 
 ### ActiveSegments Table
+
 - Tracks active story segments with timers
 - Character-to-segment mapping
 - Completion timestamps
 
 ### CharacterHistory Table
+
 - Story completion tracking
 - Path choices made
 - Rewards earned

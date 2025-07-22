@@ -9,6 +9,7 @@ All Lambda functions in this directory serve both the MUD Portal and Incremental
 ## Current Implementation Status
 
 The Incremental mode currently supports:
+
 - User login and account creation (via Cognito)
 - Account validation
 - Account deletion (though the Lambda is inefficient)
@@ -16,6 +17,7 @@ The Incremental mode currently supports:
 - Character creation UI (but backend Lambda has issues)
 
 Known issues:
+
 - Character creation Lambda expects an optional bloom filter file for restricted names (missing file is logged but doesn't break functionality)
 - Character deletion Lambda implementation status unclear
 - Account deletion Lambda works but needs optimization for efficiency
@@ -32,18 +34,22 @@ Known issues:
 These functions handle character operations for both Portal and Incremental interfaces:
 
 #### Working Functions:
+
 - `api_list_characters.py` - List all characters for a player ✓
 
 #### Functions with Issues:
+
 - `api_add_character.py` - Create new character (works but expects optional bloom filter file for restricted names)
 - `api_delete_character.py` - Delete a character (implementation status unclear)
 - `cognito_delete_player.py` - Account deletion trigger (works but inefficient implementation)
 
 #### Status Unknown:
+
 - `api_get_character.py` - Get character details
 - `api_get_archetypes.py` - Get available character archetypes
 
 #### Not Yet Implemented:
+
 - Character state saving functionality
 - Story progression APIs
 - Segment management APIs
@@ -51,6 +57,7 @@ These functions handle character operations for both Portal and Incremental inte
 ### Future Additions
 
 Additional Lambda functions will be added for Incremental-specific features:
+
 - Story progression tracking
 - Segment management
 - Plot state handling
@@ -84,6 +91,7 @@ All tables are shared between MUD and Incremental game modes:
 - `MOTD_TABLE` - Messages of the day
 
 Future Incremental-specific tables:
+
 - `STORY_TABLE` - Story metadata
 - `ACTIVE_SEGMENTS_TABLE` - Active story segments
 - `CHARACTER_HISTORY_TABLE` - Story completion tracking

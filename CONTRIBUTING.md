@@ -37,6 +37,7 @@ Thank you for your interest in contributing to Eidolon Engine. This document pro
 - **AWS API responses** should not be cached
 
 Example:
+
 ```python
 def process_character(character_data: dict) -> dict:
     """Process character data from DynamoDB."""
@@ -57,6 +58,7 @@ def process_character(character_data: dict) -> dict:
 - **No Hungarian notation** - use Go naming conventions
 
 Example:
+
 ```go
 func ProcessCharacter(ctx context.Context, data CharacterData) error {
     if err := validateData(data); err != nil {
@@ -160,12 +162,14 @@ Understand where your code belongs:
 ### Local Development
 
 1. **Python Dependencies**
+
    ```bash
    pip install -r requirements/dev-requirements.txt
    pip install -r requirements/lambda-requirements.txt
    ```
 
 2. **Go Dependencies**
+
    ```bash
    cd server
    go mod download
@@ -198,6 +202,7 @@ Understand where your code belongs:
 ### Error Handling
 
 Python:
+
 ```python
 try:
     result = aws_operation()
@@ -207,6 +212,7 @@ except ClientError as err:
 ```
 
 Go:
+
 ```go
 if err := operation(); err != nil {
     return fmt.Errorf("operation failed: %w", err)
