@@ -9,12 +9,9 @@ phases:
 
   build:
     commands:
-      - echo Building Lambda functions with shared eidolon module
-
       - mkdir -p build_temp
 
       # Generate bloom filter data
-      - echo "Generating bloom filter data..."
       - python3 scripts_python/generate_bloom_filter.py
 
       - |
@@ -24,20 +21,20 @@ phases:
             # Convert snake_case to kebab-case for zip file name
             zip_name=$(echo "$func_name" | sed 's/_/-/g')
             echo "Packaging $func_name as $zip_name.zip..."
-            
+
             mkdir -p "build_temp/$func_name"
-            
+
             cp "$func" "build_temp/$func_name/"
-            
+
             if grep -q "from eidolon" "$func"; then
               cp -r eidolon "build_temp/$func_name/"
             fi
-            
+
             # Include bloom filter data for api_add_character
             if [ "$func_name" = "api_add_character" ]; then
               cp lambda/character_name_filter.pkl "build_temp/$func_name/"
             fi
-            
+
             cd "build_temp/$func_name"
             zip -r "../../lambda/$zip_name.zip" .
             cd ../..

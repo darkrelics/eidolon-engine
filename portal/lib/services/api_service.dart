@@ -39,7 +39,7 @@ class Character {
 
   factory Character.fromJson(Map<String, dynamic> json) {
     return Character(
-      id: json['uuid'] as String? ?? json['CharacterID'] as String? ?? '',
+      id: json['CharacterID'] as String? ?? json['id'] as String? ?? json['characterId'] as String? ?? '',
       name: json['name'] as String,
       dead: json['dead'] as bool? ?? false,
       attributes: json['Attributes'] as Map<String, dynamic>?,

@@ -228,7 +228,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                 
                 Navigator.of(context).pop();
                 debugPrint('Creating character with name: $name, archetype: ${selectedArchetype ?? 'default'}');
-                await _createCharacter(name, selectedArchetype ?? '');
+                await _createCharacter(name, selectedArchetype ?? 'default');
               },
               child: const Text('Create'),
             ),

@@ -25,7 +25,7 @@ import os
 from eidolon.cors import cors_handler
 from eidolon.dynamo import delete_item, get_item, get_table, update_item_with_condition
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
+from eidolon.requests import extract_player_id, get_query_parameter
 from eidolon.responses import error_response, success_response
 
 # Configure logging
@@ -233,12 +233,10 @@ def lambda_handler(event, context) -> dict:
         if auth_error:
             return auth_error
 
-        # Get character ID from path parameters
-        path_parameters = event.get("pathParameters", {})
-        character_id = path_parameters.get("characterId", "").strip()
-
-        if not character_id:
-            return cors_handler.add_cors_headers(error_response("Missing character ID"), event)
+        # Get character ID from query parameters
+        character_id, error_msg = get_query_parameter(event, "characterId", required=True)
+        if error_msg:
+            return cors_handler.add_cors_headers(error_response(error_msg), event)
 
         # Get character name and verify ownership
         character_name = get_character_name_by_id(player_id, character_id)

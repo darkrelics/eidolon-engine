@@ -90,7 +90,7 @@ class ApiService {
     debugPrint('ApiService: Deleting character - id: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.delete(
-      Uri.parse('$baseUrl/characters/$characterId'),
+      Uri.parse('$baseUrl/characters?characterId=$characterId'),
       headers: headers,
     );
 
