@@ -144,9 +144,7 @@ def lambda_handler(event, context) -> dict:
         if error_msg:
             return cors_handler.add_cors_headers(error_response(error_msg), event)
 
-        logger.info(
-            "Extracting character ID from query parameters", extra={"character_id": character_id}
-        )
+        logger.info("Extracting character ID from query parameters", extra={"character_id": character_id})
 
         # Get character data
         character = get_character_by_id(character_id, player_id)
