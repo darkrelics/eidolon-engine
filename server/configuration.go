@@ -90,13 +90,6 @@ type Configuration struct {
 		ConnectionAcceptTimeoutSeconds int    `yaml:"ConnectionAcceptTimeoutSeconds"` // Connection accept timeout (default: 1)
 	} `yaml:"SSH"`
 
-	// Server settings
-	Server struct {
-		SessionCleanupIntervalSeconds int `yaml:"SessionCleanupIntervalSeconds"` // Stale session cleanup interval (default: 300)
-		SessionIdleTimeoutSeconds     int `yaml:"SessionIdleTimeoutSeconds"`     // Session idle timeout (default: 1800)
-		ConsoleIdleTimeoutSeconds     int `yaml:"ConsoleIdleTimeoutSeconds"`     // Console idle timeout (default: 30)
-	} `yaml:"Server"`
-
 	// CloudWatch settings
 	CloudWatch struct {
 		MetricsIntervalSeconds int `yaml:"MetricsIntervalSeconds"` // Metrics submission interval (default: 60)
@@ -177,17 +170,6 @@ func setConfigDefaults(config *Configuration) {
 	}
 	if config.SSH.ConnectionAcceptTimeoutSeconds <= 0 {
 		config.SSH.ConnectionAcceptTimeoutSeconds = 1
-	}
-
-	// Server defaults
-	if config.Server.SessionCleanupIntervalSeconds <= 0 {
-		config.Server.SessionCleanupIntervalSeconds = 300 // 5 minutes
-	}
-	if config.Server.SessionIdleTimeoutSeconds <= 0 {
-		config.Server.SessionIdleTimeoutSeconds = 1800 // 30 minutes
-	}
-	if config.Server.ConsoleIdleTimeoutSeconds <= 0 {
-		config.Server.ConsoleIdleTimeoutSeconds = 30
 	}
 
 	// CloudWatch defaults

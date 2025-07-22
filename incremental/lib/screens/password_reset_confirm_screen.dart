@@ -17,20 +17,23 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/error_handler.dart';
 
 class PasswordResetConfirmScreen extends StatefulWidget {
   const PasswordResetConfirmScreen({super.key});
 
   @override
-  State<PasswordResetConfirmScreen> createState() => _PasswordResetConfirmScreenState();
+  State<PasswordResetConfirmScreen> createState() =>
+      _PasswordResetConfirmScreenState();
 }
 
-class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen> {
+class _PasswordResetConfirmScreenState
+    extends State<PasswordResetConfirmScreen> {
   final _formKey = GlobalKey<FormState>();
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  
+
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
@@ -74,7 +77,7 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
         _codeController.text.trim(),
         _passwordController.text,
       );
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -88,7 +91,7 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'confirmPassword')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -112,7 +115,7 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
     try {
       final authProvider = context.read<AuthProvider>();
       await authProvider.forgotPassword(_email!);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -125,7 +128,7 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'confirmPassword')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -164,9 +167,7 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reset Password'),
-      ),
+      appBar: AppBar(title: const Text('Reset Password')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -245,7 +246,8 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
                         ),
                         onPressed: () {
                           setState(() {
-                            _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                            _isConfirmPasswordVisible =
+                                !_isConfirmPasswordVisible;
                           });
                         },
                       ),

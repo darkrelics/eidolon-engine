@@ -24,7 +24,8 @@ class AppConfig {
   static const String clientId = String.fromEnvironment('CLIENT_ID');
 
   static String get _devUserPoolId => kDebugMode ? 'us-east-1_devUserPool' : '';
-  static String get _devClientId => kDebugMode ? '1example2client3id4567890abc' : '';
+  static String get _devClientId =>
+      kDebugMode ? '1example2client3id4567890abc' : '';
 
   static String get userPoolIdWithFallback =>
       userPoolId.isNotEmpty ? userPoolId : _devUserPoolId;
@@ -76,6 +77,12 @@ class AuthSignOutException implements Exception {
 class AuthExceptionMapper {
   static String mapToUserFriendlyMessage(dynamic error) {
     if (error is CognitoClientException) {
+      // Log the error code in debug mode to help diagnose issues
+      if (kDebugMode) {
+        debugPrint('AuthExceptionMapper: Cognito error code: ${error.code}');
+        debugPrint('AuthExceptionMapper: Cognito error message: ${error.message}');
+      }
+      
       switch (error.code) {
         case 'UserNotFoundException':
         case 'NotAuthorizedException':
@@ -88,7 +95,7 @@ class AuthExceptionMapper {
           }
           return 'Please check your input and try again';
         case 'UsernameExistsException':
-          return 'An account with this email already exists';
+          return 'The Player Account already exists.';
         case 'LimitExceededException':
           return 'Too many attempts. Please try again later';
         case 'InvalidPasswordException':
@@ -98,9 +105,23 @@ class AuthExceptionMapper {
         case 'ExpiredCodeException':
           return 'Verification code has expired. Please request a new one';
         default:
+          // Check if the error message contains username exists indication
+          if (error.message?.toLowerCase().contains('username exists') == true ||
+              error.message?.toLowerCase().contains('user already exists') == true ||
+              error.message?.toLowerCase().contains('already registered') == true) {
+            return 'The Player Account already exists.';
+          }
           return 'An error occurred. Please try again';
       }
     }
+    
+    // Additional check for non-Cognito exceptions that might indicate duplicate account
+    if (error.toString().toLowerCase().contains('username exists') ||
+        error.toString().toLowerCase().contains('user already exists') ||
+        error.toString().toLowerCase().contains('already registered')) {
+      return 'The Player Account already exists.';
+    }
+    
     return 'An unexpected error occurred. Please try again';
   }
 }
@@ -291,14 +312,26 @@ class AuthService {
     await _ensureInitialized();
 
     try {
+      debugPrint(
+        'AuthService: isAuthenticated check - _currentUser: ${_currentUser != null}, _session: ${_session != null}',
+      );
+
       if (_currentUser == null || _session == null) {
+        debugPrint(
+          'AuthService: No current session in memory, attempting restore...',
+        );
         final restored = await _restoreSession();
+        debugPrint('AuthService: Restore session result: $restored');
         if (!restored) return false;
       }
 
       if (_session == null) return false;
 
-      if (!_session!.isValid()) {
+      final isValid = _session!.isValid();
+      debugPrint('AuthService: Session validity: $isValid');
+
+      if (!isValid) {
+        debugPrint('AuthService: Session invalid, attempting refresh...');
         return await _refreshSession();
       }
 
@@ -474,7 +507,9 @@ class AuthService {
 
       final accessTokenValue = await _secureStorage.read(key: _accessTokenKey);
       final idTokenValue = await _secureStorage.read(key: _idTokenKey);
-      final refreshTokenValue = await _secureStorage.read(key: _refreshTokenKey);
+      final refreshTokenValue = await _secureStorage.read(
+        key: _refreshTokenKey,
+      );
       final emailValue = await _secureStorage.read(key: _userEmailKey);
 
       final allNull =
@@ -585,5 +620,6 @@ class AuthService {
   CognitoUserSession? get session => _session;
 
   /// Gets the current user's email
-  Future<String?> get currentUserEmail async => await _secureStorage.read(key: _userEmailKey);
+  Future<String?> get currentUserEmail async =>
+      await _secureStorage.read(key: _userEmailKey);
 }

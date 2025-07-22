@@ -19,12 +19,14 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../utils/error_handler.dart';
 
 class CharacterSelectionScreen extends StatefulWidget {
   const CharacterSelectionScreen({super.key});
 
   @override
-  State<CharacterSelectionScreen> createState() => _CharacterSelectionScreenState();
+  State<CharacterSelectionScreen> createState() =>
+      _CharacterSelectionScreenState();
 }
 
 class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
@@ -36,6 +38,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint('CharacterSelectionScreen: initState called');
     _initializeApiService();
     _loadCharacters();
   }
@@ -46,13 +49,17 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
 
   Future<void> _loadCharacters() async {
     try {
+      debugPrint('CharacterSelectionScreen: Loading characters...');
       setState(() {
         _isLoading = true;
         _error = null;
       });
 
       final characters = await _apiService.listCharacters();
-      
+      debugPrint(
+        'CharacterSelectionScreen: Loaded ${characters.length} characters',
+      );
+
       if (mounted) {
         setState(() {
           _characters = characters;
@@ -60,6 +67,8 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
         });
       }
     } catch (e) {
+      debugPrint('CharacterSelectionScreen: ERROR loading characters: $e');
+      debugPrint('CharacterSelectionScreen: Error type: ${e.runtimeType}');
       if (mounted) {
         setState(() {
           _error = e.toString();
@@ -80,6 +89,10 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
         title: const Text('Select Character'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _showAddCharacterDialog,
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
               Navigator.pushNamed(context, '/account-settings');
@@ -88,7 +101,10 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+              final authProvider = Provider.of<AuthProvider>(
+                context,
+                listen: false,
+              );
               final navigator = Navigator.of(context);
               await authProvider.signOut();
               if (mounted) {
@@ -98,10 +114,224 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: _buildBody(),
+      body: SafeArea(child: _buildBody()),
+    );
+  }
+
+  Future<void> _showAddCharacterDialog() async {
+    // First load archetypes
+    List<ArchetypeInfo> archetypes = [];
+    try {
+      archetypes = await _apiService.getArchetypes();
+    } catch (e) {
+      debugPrint('Error loading archetypes: $e');
+      // Continue with empty archetypes - the server will use defaults
+    }
+
+    if (!mounted) return;
+
+    final nameController = TextEditingController();
+    String? selectedArchetype = archetypes.isNotEmpty ? archetypes.first.name : null;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create New Character'),
+        content: StatefulBuilder(
+          builder: (context, setDialogState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Character Name',
+                  hintText: 'Enter character name',
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              if (archetypes.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text('Archetype:'),
+                const SizedBox(height: 8),
+                DropdownButton<String>(
+                  isExpanded: true,
+                  value: selectedArchetype,
+                  items: archetypes.map((archetype) {
+                    return DropdownMenuItem(
+                      value: archetype.name,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(archetype.name),
+                          if (archetype.description.isNotEmpty)
+                            Text(
+                              archetype.description,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setDialogState(() {
+                      selectedArchetype = value;
+                    });
+                  },
+                ),
+              ] else ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'No archetypes available. Default stats will be used.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a character name')),
+                  );
+                  return;
+                }
+                
+                Navigator.of(context).pop();
+                debugPrint('Creating character with name: $name, archetype: ${selectedArchetype ?? 'default'}');
+                await _createCharacter(name, selectedArchetype ?? 'default');
+              },
+              child: const Text('Create'),
+            ),
+          ],
       ),
     );
+  }
+
+  Future<void> _createCharacter(String name, String archetype) async {
+    try {
+      debugPrint('CharacterSelectionScreen: _createCharacter called with name: $name, archetype: $archetype');
+      
+      setState(() {
+        _isLoading = true;
+      });
+
+      debugPrint('CharacterSelectionScreen: Calling API to add character...');
+      final characterId = await _apiService.addCharacter(name: name, archetype: archetype);
+      debugPrint('CharacterSelectionScreen: Character created with ID: $characterId');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Created character: $name')),
+        );
+      }
+
+      // Reload characters
+      debugPrint('CharacterSelectionScreen: Reloading characters...');
+      await _loadCharacters();
+    } catch (e, stackTrace) {
+      debugPrint('CharacterSelectionScreen: Error creating character: $e');
+      debugPrint('CharacterSelectionScreen: Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'createCharacter')),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showDeleteCharacterDialog(CharacterInfo character) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Character'),
+        content: Text('Are you sure you want to delete "${character.name}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed ?? false) {
+      await _deleteCharacter(character);
+    }
+  }
+
+  Future<void> _deleteCharacter(CharacterInfo character) async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      await _apiService.deleteCharacter(character.id);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Deleted character: ${character.name}')),
+        );
+      }
+
+      // Reload characters
+      await _loadCharacters();
+    } catch (e) {
+      debugPrint('Error deleting character: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'deleteCharacter')),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildBody() {
@@ -119,11 +349,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: colorScheme.error,
-              ),
+              Icon(Icons.error_outline, size: 64, color: colorScheme.error),
               const SizedBox(height: 16),
               Text(
                 'Error loading characters',
@@ -134,9 +360,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
               const SizedBox(height: 8),
               Text(
                 _error!,
-                style: TextStyle(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -163,17 +387,18 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                 color: colorScheme.onSurfaceVariant,
               ),
               const SizedBox(height: 16),
-              Text(
-                'No Characters Found',
-                style: theme.textTheme.headlineSmall,
-              ),
+              Text('No Characters Found', style: theme.textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(
-                'Create your first character in the main game to begin your incremental adventure.',
-                style: TextStyle(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                'Create your first character to begin your incremental adventure.',
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: _showAddCharacterDialog,
+                icon: const Icon(Icons.add),
+                label: const Text('Create Character'),
               ),
             ],
           ),
@@ -199,39 +424,59 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                 final character = _characters![index];
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: Icon(
-                      character.dead ? Icons.person_off : Icons.person,
-                      color: character.dead 
-                          ? colorScheme.error 
-                          : colorScheme.primary,
-                    ),
-                    title: Text(
-                      character.name,
-                      style: TextStyle(
-                        decoration: character.dead 
-                            ? TextDecoration.lineThrough 
-                            : null,
+                  child: InkWell(
+                    onTap: character.dead
+                        ? null
+                        : () {
+                            debugPrint('CharacterSelectionScreen: Character tapped - ${character.name} (${character.id})');
+                            debugPrint('CharacterSelectionScreen: Navigating to /game with character data');
+                            try {
+                              Navigator.pushReplacementNamed(
+                                context,
+                                '/game',
+                                arguments: character,
+                              );
+                              debugPrint('CharacterSelectionScreen: Navigation call completed');
+                            } catch (e) {
+                              debugPrint('CharacterSelectionScreen: Navigation error: $e');
+                            }
+                          },
+                    child: ListTile(
+                      leading: Icon(
+                        character.dead ? Icons.person_off : Icons.person,
+                        color: character.dead
+                            ? colorScheme.error
+                            : colorScheme.primary,
                       ),
-                    ),
-                    subtitle: character.dead 
-                        ? Text(
-                            'Deceased',
-                            style: TextStyle(color: colorScheme.error),
-                          )
-                        : Text(
-                            'Active',
-                            style: TextStyle(color: colorScheme.primary),
+                      title: Text(
+                        character.name,
+                        style: TextStyle(
+                          decoration: character.dead
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                      subtitle: character.dead
+                          ? Text(
+                              'Deceased',
+                              style: TextStyle(color: colorScheme.error),
+                            )
+                          : Text(
+                              'Active',
+                              style: TextStyle(color: colorScheme.primary),
+                            ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () => _showDeleteCharacterDialog(character),
                           ),
-                    trailing: const Icon(Icons.arrow_forward_ios),
-                    enabled: !character.dead,
-                    onTap: character.dead ? null : () {
-                      Navigator.pushReplacementNamed(
-                        context, 
-                        '/game',
-                        arguments: character.name,
-                      );
-                    },
+                          const Icon(Icons.arrow_forward_ios),
+                        ],
+                      ),
+                      enabled: !character.dead,
+                    ),
                   ),
                 );
               },

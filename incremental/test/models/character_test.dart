@@ -43,10 +43,7 @@ void main() {
           'Foraging': 0.0,
           'Appraise': 0.0,
         },
-        'resources': {
-          'gold': 100,
-          'supplies': 10,
-        },
+        'resources': {'gold': 100, 'supplies': 10},
         'lastUpdated': '2024-01-01T00:00:00.000Z',
       };
     });
@@ -102,7 +99,7 @@ void main() {
       expect(updated.health, equals(5.0));
       expect(updated.resources['gold'], equals(150));
       expect(updated.resources['supplies'], equals(5));
-      
+
       // Unchanged fields remain the same
       expect(updated.name, equals(character.name));
       expect(updated.essence, equals(character.essence));
@@ -119,14 +116,14 @@ void main() {
     test('equality based on id and lastUpdated', () {
       final character1 = Character.fromJson(validJson);
       final character2 = Character.fromJson(validJson);
-      
+
       expect(character1, equals(character2));
-      
+
       // Different lastUpdated
       validJson['lastUpdated'] = '2024-01-02T00:00:00.000Z';
       final character3 = Character.fromJson(validJson);
       expect(character1, isNot(equals(character3)));
-      
+
       // Different id
       validJson['id'] = 'different-id';
       validJson['lastUpdated'] = '2024-01-01T00:00:00.000Z';

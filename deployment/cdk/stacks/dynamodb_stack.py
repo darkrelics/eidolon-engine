@@ -84,7 +84,7 @@ class DynamoDBStack(Stack):
         """
         return [
             {"name": "players", "pk": "PlayerID", "pk_type": "S", "sk": ""},
-            {"name": "characters", "pk": "CharacterID", "pk_type": "S", "sk": "PlayerID", "sk_type": "S"},
+            {"name": "characters", "pk": "CharacterID", "pk_type": "S", "sk": ""},
             {"name": "rooms", "pk": "RoomID", "pk_type": "N", "sk": ""},
             {"name": "exits", "pk": "ExitID", "pk_type": "S", "sk": ""},
             {"name": "items", "pk": "ItemID", "pk_type": "S", "sk": ""},

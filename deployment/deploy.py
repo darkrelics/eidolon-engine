@@ -107,16 +107,16 @@ class IncrementalDeploymentOrchestrator:
         config: dict = self.config_manager.config
         if "Game" in config:
             game_config = config["Game"]
-            params["game_name"] = game_config.get("name", params["game_name"])
+            params["game_name"] = game_config.get("Name", params["game_name"])
         # Check both AWS and Contact sections for email (template uses Contact)
         if "Contact" in config:
             params["contact_email"] = config["Contact"].get("Email", params["contact_email"])
         if "AWS" in config:
             aws_config = config["AWS"]
-            params["contact_email"] = aws_config.get("contact_email", params["contact_email"])
+            params["contact_email"] = aws_config.get("ContactEmail", params["contact_email"])
         if "CloudFront" in config:
             cf_config = config["CloudFront"]
-            params["cloudfront_distribution_id"] = cf_config.get("distribution_id", params.get("cloudfront_distribution_id"))
+            params["cloudfront_distribution_id"] = cf_config.get("DistributionId", params.get("cloudfront_distribution_id"))
         if "DynamoDB" in config and "Tables" in config["DynamoDB"]:
             # Load existing DynamoDB table names if configured
             params["dynamodb_tables"] = config["DynamoDB"]["Tables"]
@@ -405,9 +405,9 @@ class IncrementalDeploymentOrchestrator:
                 if phase_success and phase["name"] == "Distribution":
                     # Always update S3 bucket policy for CloudFront access, even if cloudfront stack wasn't deployed
                     # This ensures the policy is correct even after manual changes or drift
-                    if self.config_manager.config.get("CloudFront", {}).get("distribution_id"):
+                    if self.config_manager.config.get("CloudFront", {}).get("DistributionId"):
                         print("\n  Ensuring S3 bucket policy is configured for CloudFront...")
-                        self.update_s3_bucket_policy_for_cloudfront(plan["parameters"])
+                        self.update_s3_bucket_policy_for_cloudfront()
 
                 # Check if we need to update Lambda functions after Application Layer
                 if phase_success and phase["name"] == "Application Layer":
@@ -714,7 +714,6 @@ class IncrementalDeploymentOrchestrator:
                         all_valid = False
                 else:
                     print(f"  - {bucket_type} Bucket: Not configured")
-
             # Check if any buckets are missing
             if not any(s3_config.get(key) for key in bucket_types.values()):
                 print("  ⚠ No S3 buckets configured")
@@ -778,7 +777,7 @@ class IncrementalDeploymentOrchestrator:
             if config.get("CloudFront") is None:
                 print("  ⚠ CloudFront: Not configured")
             else:
-                distribution_id = config.get("CloudFront", {}).get("distribution_id", "")
+                distribution_id = config.get("CloudFront", {}).get("DistributionId", "")
                 if distribution_id:
                     try:
                         cf_client = self.session.client("cloudfront")
@@ -1302,12 +1301,8 @@ class IncrementalDeploymentOrchestrator:
             print(f"    Error configuring Cognito: {err}")
             print("    Settings will need to be configured manually")
 
-    def update_s3_bucket_policy_for_cloudfront(self, parameters: dict):
-        """Update S3 bucket policy to allow CloudFront access.
-
-        Args:
-            parameters: Deployment parameters containing bucket and distribution info
-        """
+    def update_s3_bucket_policy_for_cloudfront(self):
+        """Update S3 bucket policy to allow CloudFront access."""
         print("\n  Updating CloudFront configuration and S3 bucket policy...")
 
         # Initialize variables outside try block
@@ -1321,7 +1316,7 @@ class IncrementalDeploymentOrchestrator:
                 return
 
             # Get distribution ID from config
-            distribution_id = self.config_manager.config.get("CloudFront", {}).get("distribution_id", "")
+            distribution_id = self.config_manager.config.get("CloudFront", {}).get("DistributionId", "")
             if not distribution_id:
                 print("    CloudFront distribution ID not found, skipping policy update")
                 return
@@ -1340,7 +1335,6 @@ class IncrementalDeploymentOrchestrator:
 
             # Track if we need to update the distribution
             needs_distribution_update = False
-
             # Check if OAI already exists in the distribution
             oai_id = None
             origin_to_update = None
@@ -1373,7 +1367,6 @@ class IncrementalDeploymentOrchestrator:
                         print(f"      Origin lacks S3OriginConfig, has: {list(origin.keys())}")
                         needs_distribution_update = True
                     break
-
             if origin_to_update is None:
                 print(f"    WARNING: No origin found for bucket {bucket_name}")
                 print("    Available origins:")
@@ -1456,7 +1449,6 @@ class IncrementalDeploymentOrchestrator:
             except ClientError as err:
                 if err.response.get("Error", {}).get("Code") != "NoSuchBucketPolicy":
                     print(f"    Note: Could not delete existing policy: {err}")
-
             # Only create and apply new policy if we have an OAI
             if oai_id:
                 # Create policy statements

@@ -94,9 +94,9 @@ class ConfigurationUpdater:
     def _update_cloudfront_config(self, outputs: dict):
         """Update CloudFront configuration section."""
         config_data = {
-            "distribution_id": outputs.get("DistributionId", ""),
-            "domain_name": outputs.get("DistributionDomainName", ""),
-            "portal_url": outputs.get("PortalUrl", ""),
+            "DistributionId": outputs.get("DistributionId", ""),
+            "DomainName": outputs.get("DistributionDomainName", ""),
+            "PortalUrl": outputs.get("PortalUrl", ""),
         }
         self.config_manager.update_section("CloudFront", config_data)
 

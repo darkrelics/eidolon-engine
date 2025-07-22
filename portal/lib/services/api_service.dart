@@ -19,15 +19,37 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
 class Character {
+  final String id;
   final String name;
   final bool dead;
+  final Map<String, dynamic>? attributes;
+  final Map<String, dynamic>? skills;
+  final int? health;
+  final int? maxHealth;
 
-  Character({required this.name, required this.dead});
+  Character({
+    required this.id,
+    required this.name,
+    required this.dead,
+    this.attributes,
+    this.skills,
+    this.health,
+    this.maxHealth,
+  });
 
   factory Character.fromJson(Map<String, dynamic> json) {
     return Character(
+      id:
+          json['CharacterID'] as String? ??
+          json['id'] as String? ??
+          json['characterId'] as String? ??
+          '',
       name: json['name'] as String,
       dead: json['dead'] as bool? ?? false,
+      attributes: json['Attributes'] as Map<String, dynamic>?,
+      skills: json['Skills'] as Map<String, dynamic>?,
+      health: json['Health'] as int?,
+      maxHealth: json['MaxHealth'] as int?,
     );
   }
 }
@@ -75,6 +97,68 @@ class ApiService {
       return [];
     } else {
       throw Exception('Failed to load characters: ${response.statusCode}');
+    }
+  }
+
+  Future<Character> getCharacter(String characterId) async {
+    final session = _authService.session;
+    if (session == null) {
+      throw Exception('User not authenticated');
+    }
+
+    final idToken = session.getIdToken().getJwtToken();
+    if (idToken == null || idToken.isEmpty) {
+      throw Exception('No ID token available');
+    }
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/character?characterId=$characterId'),
+      headers: {
+        'Authorization': 'Bearer $idToken',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      final characterData = data['character'] as Map<String, dynamic>;
+      return Character.fromJson(characterData);
+    } else if (response.statusCode == 401) {
+      throw Exception('Unauthorized');
+    } else if (response.statusCode == 404) {
+      throw Exception('Character not found');
+    } else {
+      throw Exception('Failed to load character: ${response.statusCode}');
+    }
+  }
+
+  Future<void> deleteCharacter(String characterId) async {
+    final session = _authService.session;
+    if (session == null) {
+      throw Exception('User not authenticated');
+    }
+
+    final idToken = session.getIdToken().getJwtToken();
+    if (idToken == null || idToken.isEmpty) {
+      throw Exception('No ID token available');
+    }
+
+    final response = await http.delete(
+      Uri.parse('$_baseUrl/character?characterId=$characterId'),
+      headers: {
+        'Authorization': 'Bearer $idToken',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      if (response.statusCode == 401) {
+        throw Exception('Unauthorized');
+      } else if (response.statusCode == 404) {
+        throw Exception('Character not found');
+      } else {
+        throw Exception('Failed to delete character: ${response.statusCode}');
+      }
     }
   }
 }

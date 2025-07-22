@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/character.dart';
 import '../models/segment_outcome.dart';
@@ -7,13 +8,15 @@ import 'auth_service.dart';
 /// Character info for listing
 class CharacterInfo {
   final String name;
+  final String id;
   final bool dead;
 
-  CharacterInfo({required this.name, required this.dead});
+  CharacterInfo({required this.name, required this.id, required this.dead});
 
   factory CharacterInfo.fromJson(Map<String, dynamic> json) {
     return CharacterInfo(
       name: json['name'] as String,
+      id: json['id'] as String? ?? '',
       dead: json['dead'] as bool? ?? false,
     );
   }
@@ -23,7 +26,10 @@ class CharacterInfo {
 class ApiService {
   final AuthService _authService;
   final http.Client _httpClient;
-  static const String _apiDomain = String.fromEnvironment('API_DOMAIN', defaultValue: 'api.darkrelics.net');
+  static const String _apiDomain = String.fromEnvironment(
+    'API_DOMAIN',
+    defaultValue: 'api.darkrelics.net',
+  );
   static const String _defaultBaseUrl = 'https://$_apiDomain';
   final String baseUrl;
 
@@ -31,53 +37,86 @@ class ApiService {
     required AuthService authService,
     String? baseUrl,
     http.Client? httpClient,
-  })  : _authService = authService,
-        _httpClient = httpClient ?? http.Client(),
-        baseUrl = baseUrl ?? _defaultBaseUrl;
+  }) : _authService = authService,
+       _httpClient = httpClient ?? http.Client(),
+       baseUrl = baseUrl ?? _defaultBaseUrl;
 
   /// Get authorization headers
   Future<Map<String, String>> _getHeaders() async {
+    debugPrint('ApiService: Getting ID token...');
     final token = await _authService.getIdToken();
     if (token == null) {
+      debugPrint('ApiService: ERROR - No ID token available');
       throw Exception('Not authenticated');
     }
 
+    debugPrint('ApiService: Got ID token, length: ${token.length}');
     return {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
   }
 
-  /// Create a new character
-  Future<Character> createCharacter({
+  /// Add a new character
+  Future<String> addCharacter({
     required String name,
-    required String archetypeId,
+    required String archetype,
   }) async {
+    debugPrint('ApiService: Adding character - name: $name, archetype: $archetype');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/character/create'),
+      Uri.parse('$baseUrl/characters'),
       headers: headers,
       body: jsonEncode({
-        'name': name,
-        'archetypeId': archetypeId,
+        'characterName': name,
+        'archetype': archetype,
       }),
     );
 
-    if (response.statusCode != 200) {
-      throw Exception('Failed to create character: ${response.body}');
+    debugPrint('ApiService: Add character response status: ${response.statusCode}');
+    debugPrint('ApiService: Add character response body: ${response.body}');
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to add character');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return Character.fromJson(json['character'] as Map<String, dynamic>);
+    return json['characterId'] as String;
   }
 
-  /// Get current character
-  Future<Character?> getCharacter() async {
+  /// Delete a character
+  Future<void> deleteCharacter(String characterId) async {
+    debugPrint('ApiService: Deleting character - id: $characterId');
     final headers = await _getHeaders();
-    final response = await _httpClient.get(
-      Uri.parse('$baseUrl/character'),
+    final response = await _httpClient.delete(
+      Uri.parse('$baseUrl/characters?characterId=$characterId'),
       headers: headers,
     );
+
+    debugPrint('ApiService: Delete character response status: ${response.statusCode}');
+    debugPrint('ApiService: Delete character response body: ${response.body}');
+
+    if (response.statusCode != 200) {
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to delete character');
+    }
+  }
+
+  /// Get character by ID
+  Future<Character?> getCharacterById(String characterId) async {
+    debugPrint('ApiService: Getting character by ID: $characterId');
+    final headers = await _getHeaders();
+    final uri = Uri.parse('$baseUrl/characters?characterId=$characterId');
+    debugPrint('ApiService: Request URI: $uri');
+    
+    final response = await _httpClient.get(
+      uri,
+      headers: headers,
+    );
+
+    debugPrint('ApiService: Get character response status: ${response.statusCode}');
+    debugPrint('ApiService: Get character response body: ${response.body}');
 
     if (response.statusCode == 404) {
       return null;
@@ -93,17 +132,27 @@ class ApiService {
 
   /// List all characters for the player
   Future<List<CharacterInfo>> listCharacters() async {
+    debugPrint('ApiService: Calling listCharacters...');
+    debugPrint('ApiService: API URL: $baseUrl/characters');
+
     final headers = await _getHeaders();
+    debugPrint('ApiService: Headers prepared, making request...');
+
     final response = await _httpClient.get(
       Uri.parse('$baseUrl/characters'),
       headers: headers,
     );
 
+    debugPrint('ApiService: Response status: ${response.statusCode}');
+    debugPrint('ApiService: Response body: ${response.body}');
+
     if (response.statusCode == 404) {
+      debugPrint('ApiService: No characters found (404)');
       return [];
     }
 
     if (response.statusCode != 200) {
+      debugPrint('ApiService: ERROR - Failed to list characters');
       throw Exception('Failed to list characters: ${response.body}');
     }
 
@@ -111,6 +160,10 @@ class ApiService {
     final characterList = (json['characters'] as List)
         .map((char) => CharacterInfo.fromJson(char as Map<String, dynamic>))
         .toList();
+
+    debugPrint(
+      'ApiService: Successfully parsed ${characterList.length} characters',
+    );
     return characterList;
   }
 
@@ -123,10 +176,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/segment/start'),
       headers: headers,
-      body: jsonEncode({
-        'storyId': storyId,
-        'segmentId': segmentId,
-      }),
+      body: jsonEncode({'storyId': storyId, 'segmentId': segmentId}),
     );
 
     if (response.statusCode != 200) {
@@ -138,16 +188,12 @@ class ApiService {
   }
 
   /// Conclude a story segment
-  Future<SegmentOutcome> concludeSegment({
-    required String segmentId,
-  }) async {
+  Future<SegmentOutcome> concludeSegment({required String segmentId}) async {
     final headers = await _getHeaders();
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/segment/conclude'),
       headers: headers,
-      body: jsonEncode({
-        'segmentId': segmentId,
-      }),
+      body: jsonEncode({'segmentId': segmentId}),
     );
 
     if (response.statusCode != 200) {
@@ -207,6 +253,60 @@ class ApiService {
     return stories
         .map((s) => StoryMetadata.fromJson(s as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Get available archetypes
+  Future<List<ArchetypeInfo>> getArchetypes() async {
+    debugPrint('ApiService: Getting archetypes...');
+    final headers = await _getHeaders();
+    final response = await _httpClient.get(
+      Uri.parse('$baseUrl/archetypes'),
+      headers: headers,
+    );
+
+    debugPrint('ApiService: Get archetypes response status: ${response.statusCode}');
+    debugPrint('ApiService: Get archetypes response body: ${response.body}');
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to get archetypes: ${response.body}');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final archetypes = (json['archetypes'] as List)
+        .map((a) => ArchetypeInfo.fromJson(a as Map<String, dynamic>))
+        .toList();
+
+    return archetypes;
+  }
+}
+
+/// Archetype info for character creation
+class ArchetypeInfo {
+  final String name;
+  final String description;
+  final Map<String, dynamic> attributes;
+  final Map<String, dynamic> skills;
+  final int health;
+  final int essence;
+
+  ArchetypeInfo({
+    required this.name,
+    required this.description,
+    required this.attributes,
+    required this.skills,
+    required this.health,
+    required this.essence,
+  });
+
+  factory ArchetypeInfo.fromJson(Map<String, dynamic> json) {
+    return ArchetypeInfo(
+      name: json['ArchetypeName'] as String,
+      description: json['Description'] as String? ?? '',
+      attributes: Map<String, dynamic>.from(json['Attributes'] ?? {}),
+      skills: Map<String, dynamic>.from(json['Skills'] ?? {}),
+      health: json['Health'] as int? ?? 10,
+      essence: json['Essence'] as int? ?? 3,
+    );
   }
 }
 

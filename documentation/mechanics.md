@@ -57,7 +57,7 @@ The system uses a normal distribution with two key transformations:
 
 ## Tuning Parameters
 
-The system exposes two constants that control game feel:
+The system exposes three constants that control game feel:
 
 ### kShift (Default: 0.20) - The Gravity Well
 
@@ -90,6 +90,22 @@ kVar controls **by how much** winners win through variance scaling.
 - Increase for more cinematic, swingy results
 - Decrease for tighter, more chess-like play
 - Does NOT affect overall win rates, only margin of victory
+
+### minSig (Default: 0.25) - The Safety Net
+
+minSig provides an absolute floor for variance to prevent degenerate cases.
+
+| minSig Value | Effect          | Game Feel                                             |
+| ------------ | --------------- | ----------------------------------------------------- |
+| 0.10         | Minimal safety  | Allows very tight distributions in extreme mismatches |
+| 0.25         | Standard safety | Ensures some randomness even in dominant positions    |
+| 0.50         | High floor      | Maintains significant uncertainty in all matchups     |
+
+**Tuning Guide:**
+
+- Rarely needs adjustment
+- Prevents sigma from becoming too small when ratings are extremely different
+- Ensures there's always some chance of unexpected outcomes
 
 ## Practical Examples
 
@@ -185,6 +201,16 @@ The system uses `crypto/rand` for true randomness:
 - Prevents prediction or manipulation of outcomes
 - Suitable for competitive or high-stakes gameplay
 - Cannot be seeded for replay/debugging (use test framework for deterministic testing)
+
+### Random Number Generation
+
+The system generates normal distribution samples using the Box-Muller transform:
+
+1. Generate two uniform random values (u1, u2) using crypto/rand
+2. Transform to normal distribution: `z = sqrt(-2 * ln(u1)) * cos(2π * u2)`
+3. Apply mean shift and variance scaling to get final outcome
+
+This method efficiently produces high-quality normal distribution samples from uniform random inputs.
 
 ## Tuning Workflow
 

@@ -49,10 +49,11 @@ python3 deploy.py --region us-east-1
 
 The system will:
 
-1. Prompt for required parameters (game name, email, GitHub details)
-2. Create all necessary AWS resources
-3. Save configuration to `config.yml`
-4. Deploy Lua scripts to S3
+1. Initialize configuration from `config.template.yml` if no config exists
+2. Prompt for required parameters (game name, email, GitHub details)
+3. Create all necessary AWS resources
+4. Save configuration to `config.yml`
+5. Deploy Lua scripts to S3
 
 ### 2. Existing Infrastructure Deployment
 
@@ -70,7 +71,7 @@ The system will:
 
 1. Detect existing CloudFormation stacks
 2. Find existing S3 buckets, DynamoDB tables, and other resources
-3. Import compatible resources (DynamoDB, CloudWatch, S3)
+3. Validate existing resources
 4. Create new resources only where needed
 5. Update configuration with all resource identifiers
 
@@ -116,11 +117,11 @@ During first deployment, you'll be prompted for:
 - **Contact Email**: Administrator email for notifications
 - **GitHub Owner**: GitHub username or organization
 - **GitHub Repository**: Repository name containing the code
-- **GitHub Branch**: Branch to deploy from (default: `main`)
+- **GitHub Branch**: Branch to deploy from (default: `develop`)
 
 ### Configuration File
 
-The system creates and maintains `config.yml`:
+The system creates and maintains `config.yml`. If no configuration exists, it initializes from `config.template.yml`:
 
 ```yaml
 Game:
@@ -183,19 +184,18 @@ Logging:
 
 All AWS resources use simple, unprefixed names for clarity:
 
-| Resource Type           | Naming Pattern                | Example                                                  |
-| ----------------------- | ----------------------------- | -------------------------------------------------------- |
-| DynamoDB Tables         | `eidolon-{table_type}`        | `eidolon-players`, `eidolon-characters`, `eidolon-rooms` |
-| S3 Buckets              | `eidolon-{type}`              | `eidolon-portal`                                         |
-| CloudWatch Log Group    | `/aws/eidolon/server`         | `/aws/eidolon/server`                                    |
-| Cognito User Pool       | `users`                       | `users`                                                  |
-| CodeBuild Project       | `eidolon-portal-build`        | `eidolon-portal-build`                                   |
-| CloudFront Distribution | `eidolon-portal-distribution` | `eidolon-portal-distribution`                            |
-| IAM Policies            | `{service}-access`            | `dynamodb-access`                                        |
-| CDK Stack Names         | `{service}`                   | `cognito`, `dynamodb`, `s3`, `lambda`, `cloudfront`      |
-| API Gateway             | Single unified API            | `api.{domain}`                                           |
-
-Legacy CloudFormation stacks with `eidolon-` prefix are still supported for backward compatibility.
+| Resource Type           | Naming Pattern                    | Example                                                                                              |
+| ----------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| DynamoDB Tables         | `{table_type}`                    | `players`, `characters`, `rooms`                                                                     |
+| S3 Buckets              | Various patterns                  | `eidolon-portal`, `{game}-lambda-{account}`                                                          |
+| CloudWatch Log Group    | `/aws/eidolon/server`             | `/aws/eidolon/server`                                                                                |
+| Cognito User Pool       | `eidolon-users`                   | `eidolon-users`                                                                                      |
+| CodeBuild Project       | `eidolon-codebuild`               | `eidolon-codebuild`                                                                                  |
+| CloudFront Distribution | `eidolon-distribution`            | `eidolon-distribution`                                                                               |
+| IAM Role                | `{game}-server-execution-role`    | `eidolon-engine-server-execution-role`                                                               |
+| IAM Policies            | `eidolon-{game}-{service}-access` | `eidolon-eidolon-engine-dynamodb-access`                                                             |
+| CDK Stack Names         | `{service}`                       | `iam`, `s3`, `dynamodb`, `cognito`, `cloudwatch`, `codebuild`, `base-lambda`, `lambda`, `cloudfront` |
+| API Gateway             | Single unified API                | `api.{domain}`                                                                                       |
 
 ## Resource Management
 
@@ -223,28 +223,17 @@ Tables are created with:
 - **Backup**: Point-in-time recovery enabled
 - **Retention**: Tables retained on stack deletion
 
-Existing tables are automatically imported if they match the naming pattern.
-
 ### CloudWatch Logs
 
 Log groups are created with configurable retention (default: 365 days).
-Existing log groups are imported and settings preserved.
 
 ### CloudFront Distribution
 
 The system manages CloudFront for portal distribution:
 
-- **Existing distributions**: Can be imported by ID
 - **New distributions**: Created with optimized caching
 - **Security**: Uses Origin Access Identity for S3 access
 - **HTTPS**: Enforces secure connections
-
-To use an existing CloudFront distribution, add to `config.yml` before deployment:
-
-```yaml
-CloudFront:
-  distribution_id: E1234567890ABC
-```
 
 ## Deployment Workflow
 
@@ -279,10 +268,12 @@ python3 deployment/deploy.py
 This will:
 
 - Check AWS access and display account information
+- Synchronize AWS state before deployment
 - Validate existing resources if config.yml exists
 - Deploy infrastructure in the correct order
-- Execute builds automatically
+- Execute builds automatically with Lambda artifact validation
 - Update config.yml throughout the process
+- Track deployment events in state manager
 
 ### 2. Validate Existing Infrastructure
 
@@ -295,7 +286,7 @@ python3 deployment/deploy.py --validate
 This validates all resources in config.yml against AWS and reports:
 
 - Missing resources
-- Configuration drift
+- Configuration drift (with detailed drift detection and reporting)
 - Access issues
 
 ### 3. Analyze Without Deploying
@@ -354,7 +345,7 @@ When CloudFront is configured, the build process automatically:
 - Ensures users immediately see updated content
 - No manual cache clearing required
 
-The invalidation only runs if a CloudFront distribution ID is available, making the process backward compatible with S3-only deployments.
+The invalidation only runs if a CloudFront distribution ID is available.
 
 ### Manual Portal Deployment
 
@@ -367,30 +358,6 @@ aws codebuild start-build --project-name eidolon-portal-build
 # Or through AWS Console
 # Navigate to CodeBuild → eidolon-portal-build → Start build
 ```
-
-## Migration Guide
-
-### From Separated Backend Deployment
-
-If migrating from the previous deployment with separate MUD and Incremental backends:
-
-1. **Backend is now unified** - All modes share the same tables and APIs
-2. **Table names are simplified** - No more `mud-` or `incremental-` prefixes
-3. **Single API Gateway** - One API serves all game modes at `api.{domain}`
-4. **Choose deployment mode** - Based on which frontend you need
-
-The deployment system will automatically handle resource migration.
-
-### From CloudFormation
-
-If you have existing CloudFormation stacks (`eidolon-*`):
-
-1. **The system will detect them automatically**
-2. **DynamoDB and CloudWatch resources will be adopted**
-3. **S3 buckets will be detected and used**
-4. **Cognito and CodeBuild will coexist** (manual migration needed)
-
-No need to delete CloudFormation stacks first - the system handles coexistence.
 
 ## Phased Deployment Details
 
@@ -424,15 +391,16 @@ The deployment process is divided into six phases to ensure proper dependency re
 ### Phase 5: Application Layer
 
 - **Base Lambda Layer** - Shared dependencies
-- **Lambda Functions** - API handlers
+- **Lambda Functions** - API handlers (with automatic updates from S3 when no CDK changes detected)
 - **API Gateway** - RESTful API with custom domain
-- **Cognito Triggers** - Post-confirmation Lambda
+- **Cognito Triggers** - Post-confirmation Lambda (configured via boto3 post-deployment to avoid circular dependencies)
 
 ### Phase 6: Distribution
 
 - **CloudFront** - CDN for frontend application
+- **S3 Bucket Policy Updates** - Automatic CloudFront OAI configuration after distribution deployment
 
-Each phase only proceeds if the previous phase succeeded. Failed deployments can be resumed from where they left off.
+Each phase only proceeds if the previous phase succeeded. Failed deployments can be resumed from where they left off. Progress is reported in detail via the CDKProgressReporter.
 
 ## Deployment Recovery (Fail-Forward Approach)
 
@@ -461,7 +429,7 @@ cdk list
 Common fixes:
 
 - **Permission errors**: Update IAM policies
-- **Resource conflicts**: Rename resources or import existing ones
+- **Resource conflicts**: Rename resources to avoid conflicts
 - **Limit exceeded**: Request AWS quota increases
 - **Invalid parameters**: Correct configuration values
 
@@ -523,6 +491,8 @@ If you encounter errors like "SSM parameter /cdk-bootstrap/hnb659fds/version not
    - "Bucket already exists": The CDK assets bucket exists from a previous bootstrap
    - "SSM parameter already exists": Delete the parameter with `aws ssm delete-parameter --name /cdk-bootstrap/hnb659fds/version`
 
+   The deployment system includes specific CDK bootstrap error detection and provides helpful error messages when bootstrap is required.
+
 ### Configuration File Path
 
 The deployment system expects `config.yml` to be in the project root directory (one level up from the `deployment/` directory). If you see "No configuration found" errors:
@@ -554,9 +524,9 @@ Game:
 
 ### "Table already exists"
 
-The system should auto-import existing tables. If not:
+If tables already exist with the expected names:
 
-1. Ensure table follows naming convention: `eidolon-{table-type}` (e.g., `eidolon-players`, `eidolon-characters`)
+1. Ensure table follows naming convention: `{table-type}` (e.g., `players`, `characters`)
 2. Check table is in the same region
 3. Verify AWS credentials have access
 
@@ -638,13 +608,3 @@ Deployment state is tracked in:
 - `.deployment_state.json` - Local state file
 - CloudFormation stack outputs - Resource identifiers
 - `config.yml` - Runtime configuration
-
-## Legacy Systems
-
-The following systems are replaced by the CDK deployment:
-
-- `deployment/deploy-old.py` - Legacy CloudFormation deployment script
-- `cloudformation/*.yml` - CloudFormation templates (for reference only)
-- Manual resource creation in AWS Console
-
-Use `deploy.py` for all infrastructure management.

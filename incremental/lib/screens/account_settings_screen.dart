@@ -17,6 +17,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/error_handler.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -36,7 +37,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     try {
       final authProvider = context.read<AuthProvider>();
       await authProvider.signOut();
-      
+
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/login');
       }
@@ -44,7 +45,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error signing out: ${e.toString()}'),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signOut')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -72,7 +73,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     try {
       final authProvider = context.read<AuthProvider>();
       await authProvider.deleteAccount();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -86,7 +87,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error deleting account: ${e.toString()}'),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'deleteAccount')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -102,58 +103,60 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
   Future<bool> _showDeleteConfirmationDialog() async {
     return await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Account?'),
-          content: const Text(
-            'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently lost.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.error,
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Delete Account?'),
+              content: const Text(
+                'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently lost.',
               ),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    ) ?? false;
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  child: const Text('Delete'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
   }
 
   Future<bool> _showFinalDeleteConfirmationDialog() async {
     return await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Final Confirmation'),
-          content: const Text(
-            'This is your last chance. Your account and all associated data will be permanently deleted. Are you absolutely sure?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Final Confirmation'),
+              content: const Text(
+                'This is your last chance. Your account and all associated data will be permanently deleted. Are you absolutely sure?',
               ),
-              child: const Text('Yes, Delete My Account'),
-            ),
-          ],
-        );
-      },
-    ) ?? false;
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  child: const Text('Yes, Delete My Account'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
   }
 
   @override
@@ -162,9 +165,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     final userEmail = authProvider.userEmail;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Account Settings'),
-      ),
+      appBar: AppBar(title: const Text('Account Settings')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -224,7 +225,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                         color: Theme.of(context).colorScheme.error,
                       ),
                     ),
-                    subtitle: const Text('Permanently delete your account and all data'),
+                    subtitle: const Text(
+                      'Permanently delete your account and all data',
+                    ),
                     trailing: const Icon(Icons.arrow_forward_ios),
                     onTap: _isLoading ? null : _handleDeleteAccount,
                   ),

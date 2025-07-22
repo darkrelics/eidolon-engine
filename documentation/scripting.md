@@ -206,7 +206,11 @@ Room scripts handle room-specific interactions and are loaded when a room has a 
 - Provide periodic ambient effects
 - Modify room state dynamically
 
-**Configuration**: Set `scriptID` field in room data to script name (without .lua extension)
+**Configuration**:
+
+- Set `scriptID` field in room data to script name (without .lua extension)
+- Scripts can be enabled/disabled at runtime using the `scriptActive` flag
+- When `scriptActive` is false, the script won't handle commands or events
 
 ### Future Script Types
 
@@ -225,10 +229,10 @@ Room scripts handle room-specific interactions and are loaded when a room has a 
 
 ### Concurrency
 
-- Each script execution runs in a separate Lua coroutine
+- Each room gets its own isolated Lua state to prevent cross-contamination
 - Scripts cannot block the main game loop
-- Shared state must be managed carefully
-- Use Lua's built-in thread safety features
+- Room-specific states ensure scripts in different rooms don't interfere
+- Thread-safe operations are enforced through mutex protection
 
 ### Resource Management
 
@@ -241,9 +245,9 @@ Room scripts handle room-specific interactions and are loaded when a room has a 
 Add script configuration to your `config.yml`:
 
 ```yaml
-game:
-  scriptsS3Bucket: "eidolon-scripts"
-  scriptsS3Prefix: "scripts/" # Optional, defaults to "scripts/"
+Game:
+  ScriptsS3Bucket: "eidolon-scripts"
+  ScriptsS3Prefix: "scripts/" # Optional, defaults to "scripts/"
 ```
 
 ## Best Practices
@@ -283,6 +287,8 @@ The scripting system provides robust error handling:
 - Runtime errors are caught and logged without crashing the server
 - Failed commands return false, allowing fallback to default handlers
 - Missing event handlers are silently ignored
+- Panic recovery ensures script errors never crash the game server
+- All script executions are protected to maintain server stability
 
 ## Troubleshooting
 
@@ -293,20 +299,7 @@ The scripting system provides robust error handling:
 3. **Events not firing**: Ensure event names match exactly and are declared
 4. **Performance issues**: Check for infinite loops in onTick functions
 
-### Debugging Commands
-
-```bash
-# Check script cache status
-curl /admin/scripts/stats
-
-# Reload specific script
-curl -X POST /admin/scripts/reload/room_tavern
-
-# View script metadata
-curl /admin/scripts/info/room_tavern
-```
-
-## Migration Guide
+## Updating Scripts
 
 When updating scripts:
 

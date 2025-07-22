@@ -25,7 +25,7 @@ import os
 from eidolon.cors import cors_handler
 from eidolon.dynamo import delete_item, get_item, get_table, update_item_with_condition
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, parse_json_body, validate_required_fields
+from eidolon.requests import extract_player_id, get_query_parameter
 from eidolon.responses import error_response, success_response
 
 # Configure logging
@@ -35,6 +35,36 @@ logger = get_logger(__name__)
 PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
 CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
 ITEMS_TABLE = os.environ.get("ITEMS_TABLE", "items")
+
+
+def get_character_name_by_id(player_id, character_id) -> str:
+    """
+    Get character name by ID and verify ownership.
+
+    Args:
+        player_id: Cognito user ID
+        character_id: Character UUID
+
+    Returns:
+        Character name if owned by player, empty string otherwise
+    """
+    # Get player record
+    players_table = get_table(PLAYERS_TABLE)
+    player_data = get_item(players_table, {"PlayerID": player_id})
+
+    if not player_data:
+        logger.warning("Player not found", extra={"player_id": player_id})
+        return ""
+
+    character_list = player_data.get("CharacterList", {})
+
+    # Find character by UUID
+    for char_name, char_info in character_list.items():
+        if char_info.get("UUID") == character_id:
+            return char_name
+
+    logger.warning("Character not found for player", extra={"character_id": character_id, "player_id": player_id})
+    return ""
 
 
 def verify_character_ownership(player_id, character_name) -> tuple:
@@ -135,28 +165,29 @@ def delete_character(player_id, character_name, character_id) -> bool:
         bool: True if successful
     """
     try:
-        # Delete character items first
-        items_deleted = delete_character_items(character_id)
-        logger.info("Deleted items for character", extra={"items_deleted": items_deleted, "character_id": character_id})
-
-        # Delete character from characters table
-        characters_table = get_table(CHARACTERS_TABLE)
-        if not delete_item(characters_table, {"CharacterID": character_id}):
-            return False
-
-        # Remove character from player's character list
+        # First remove character from player's character list
         players_table = get_table(PLAYERS_TABLE)
         success, error_msg = update_item_with_condition(
             players_table,
             {"PlayerID": player_id},
             "REMOVE CharacterList.#name",
-            {},
+            {},  # REMOVE operations don't need expression values
             "attribute_exists(CharacterList.#name)",
             {"#name": character_name},
         )
 
         if not success:
             logger.error("Failed to remove character from player list", extra={"error": error_msg})
+            return False
+
+        # Delete character items
+        items_deleted = delete_character_items(character_id)
+        logger.info("Deleted items for character", extra={"items_deleted": items_deleted, "character_id": character_id})
+
+        # Finally delete character from characters table
+        characters_table = get_table(CHARACTERS_TABLE)
+        if not delete_item(characters_table, {"CharacterID": character_id}):
+            logger.error("Failed to delete character record")
             return False
 
         logger.info(
@@ -202,23 +233,15 @@ def lambda_handler(event, context) -> dict:
         if auth_error:
             return auth_error
 
-        # Parse request body
-        body, parse_error = parse_json_body(event)
-        if parse_error:
-            return cors_handler.add_cors_headers(parse_error, event)
-
-        # Validate required fields
-        is_valid, error_msg = validate_required_fields(body, ["characterName"])
-        if not is_valid:
+        # Get character ID from query parameters
+        character_id, error_msg = get_query_parameter(event, "characterId", required=True)
+        if error_msg:
             return cors_handler.add_cors_headers(error_response(error_msg), event)
 
-        character_name = body["characterName"].strip()
-
-        # Verify ownership
-        is_owner, character_id = verify_character_ownership(player_id, character_name)
-
-        if not is_owner:
-            return cors_handler.add_cors_headers(error_response("Character not found or access denied", status_code=403), event)
+        # Get character name and verify ownership
+        character_name = get_character_name_by_id(player_id, character_id)
+        if not character_name:
+            return cors_handler.add_cors_headers(error_response("Character not found or access denied", status_code=404), event)
 
         # Delete the character
         if not delete_character(player_id, character_name, character_id):

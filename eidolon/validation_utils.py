@@ -67,6 +67,18 @@ def validate_character_name(name: str) -> tuple:
     if letter_count / len(name) < 0.5:
         return False, "Name must be primarily letters"
 
+    # Check reserved prefixes
+    name_lower = name.lower()
+    reserved_prefixes = ["gm_", "admin_", "mod_", "system_", "server_", "npc_"]
+    for prefix in reserved_prefixes:
+        if name_lower.startswith(prefix):
+            return False, "Name uses reserved prefix"
+
+    # Check reserved exact names
+    reserved_names = ["admin", "administrator", "moderator", "gamemaster", "system"]
+    if name_lower in reserved_names:
+        return False, "Name is reserved"
+
     return True, None
 
 

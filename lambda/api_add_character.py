@@ -2,13 +2,14 @@
 
 import json
 import os
+import pickle
 from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
 from eidolon.character import check_character_limit, generate_character_id, get_archetype
 from eidolon.cors import cors_handler
-from eidolon.dynamo import convert_to_decimal, get_table
+from eidolon.dynamo import convert_to_decimal, get_table, put_item_if_not_exists
 from eidolon.logger import get_logger
 from eidolon.validation_utils import validate_character_name
 
@@ -19,6 +20,19 @@ logger = get_logger(__name__)
 PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
 CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
 ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
+
+# Get default health and essence from environment
+DEFAULT_HEALTH = int(os.environ.get("DEFAULT_HEALTH", "10"))
+DEFAULT_ESSENCE = int(os.environ.get("DEFAULT_ESSENCE", "3"))
+
+# Load bloom filter for name validation
+bloom_filter = None
+try:
+    with open("character_name_filter.pkl", "rb") as f:
+        bloom_filter = pickle.load(f)
+        logger.info("Loaded character name bloom filter")
+except Exception as err:
+    logger.error("Failed to load bloom filter", extra={"error": str(err)})
 
 
 def create_character(player_id, character_name, archetype_name, archetype_data):
@@ -31,10 +45,22 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         archetype_data: Archetype data from DynamoDB
 
     Returns:
-        Character ID if successful, None otherwise
+        Tuple of (character_id, error_message)
+        - If successful: (character_id, None)
+        - If failed: (None, error_message)
     """
     character_id = generate_character_id()
     timestamp = datetime.now(timezone.utc).isoformat()
+
+    logger.info(
+        "Creating new character",
+        extra={
+            "player_id": player_id,
+            "character_name": character_name,
+            "archetype_name": archetype_name,
+            "character_id": character_id,
+        },
+    )
 
     # Build character record
     character_item = {
@@ -44,12 +70,12 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "Archetype": archetype_name,
         "Attributes": convert_to_decimal(archetype_data.get("Attributes", {})),
         "Skills": convert_to_decimal(archetype_data.get("Skills", {})),
-        "Health": archetype_data.get("Health", 10),
-        "MaxHealth": archetype_data.get("Health", 10),
-        "Essence": convert_to_decimal(archetype_data.get("Essence", 3)),
-        "MaxEssence": convert_to_decimal(archetype_data.get("Essence", 3)),
+        "Health": archetype_data.get("Health", DEFAULT_HEALTH),
+        "MaxHealth": archetype_data.get("Health", DEFAULT_HEALTH),
+        "Essence": convert_to_decimal(archetype_data.get("Essence", DEFAULT_ESSENCE)),
+        "MaxEssence": convert_to_decimal(archetype_data.get("Essence", DEFAULT_ESSENCE)),
         "Wounds": [],
-        "RoomID": 0,  # Always room 0 for incremental
+        "RoomID": archetype_data.get("StartRoom", 0),  # Use archetype's StartRoom or default to 0
         "Inventory": {},  # Use MUD inventory structure (slot -> itemID)
         "Resources": {},
         "Progress": {},  # Track story progress flags and achievements
@@ -67,13 +93,37 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         "LastPlayed": timestamp,
     }
 
+    # Get table resources first
+    players_table = None
+    characters_table = None
+
     try:
-        # Get table resources
         players_table = get_table(PLAYERS_TABLE)
         characters_table = get_table(CHARACTERS_TABLE)
 
+        # First, try to create the character record with conditional write
+        logger.info("Attempting to create character record", extra={"character_id": character_id})
+        success, error_msg = put_item_if_not_exists(characters_table, character_item, "CharacterName")
+        if not success:
+            if error_msg == "Item already exists":
+                logger.info(
+                    "Character name already taken",
+                    extra={"character_name": character_name, "player_id": player_id},
+                )
+                return None, "Character name is already taken"
+            else:
+                logger.error("Failed to create character record", extra={"character_name": character_name, "error": error_msg})
+                return None, "Failed to create character"
+
+        logger.info("Character record created successfully", extra={"character_id": character_id})
+
         # Update player's character list
         character_info = {"UUID": character_id, "Dead": False, "GameMode": "Incremental"}
+
+        logger.info(
+            "Updating player character list",
+            extra={"player_id": player_id, "character_name": character_name, "character_info": character_info},
+        )
 
         players_table.update_item(
             Key={"PlayerID": player_id},
@@ -82,30 +132,30 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
             ExpressionAttributeValues={":info": character_info, ":timestamp": timestamp},
         )
 
-        # Create character record
-        characters_table.put_item(Item=character_item)
-
         logger.info(
-            "Created incremental character",
-            extra={"character_name": character_name, "character_id": character_id, "player_id": player_id},
+            "Character creation completed successfully",
+            extra={
+                "character_name": character_name,
+                "character_id": character_id,
+                "player_id": player_id,
+                "archetype": archetype_name,
+            },
         )
-        return character_id
+        return character_id, None
 
     except ClientError as err:
         logger.error(
             "Error creating character", extra={"error": str(err), "character_name": character_name, "player_id": player_id}
         )
-        # Attempt to rollback player update
-        try:
-            # Reuse existing players_table from line 54
-            players_table.update_item(
-                Key={"PlayerID": player_id},
-                UpdateExpression="REMOVE CharacterList.#name",
-                ExpressionAttributeNames={"#name": character_name},
-            )
-        except ClientError as rollback_err:
-            logger.error("Failed to rollback player update", extra={"error": str(rollback_err), "character_name": character_name})
-        return None
+        # Attempt to rollback character creation if player update failed
+        if characters_table:
+            try:
+                characters_table.delete_item(Key={"CharacterID": character_id})
+            except ClientError as rollback_err:
+                logger.error(
+                    "Failed to rollback character creation", extra={"error": str(rollback_err), "character_id": character_id}
+                )
+        return None, "Failed to create character"
 
 
 def lambda_handler(event, context):
@@ -158,12 +208,17 @@ def lambda_handler(event, context):
         character_name = body.get("characterName", "").strip()
         archetype_name = body.get("archetype", "").strip()
 
-        if not character_name or not archetype_name:
+        logger.info(
+            "Character creation request received",
+            extra={"player_id": player_id, "character_name": character_name, "archetype_name": archetype_name or "default"},
+        )
+
+        if not character_name:
             return cors_handler.add_cors_headers(
                 {
                     "statusCode": 400,
                     "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": "Missing required fields"}),
+                    "body": json.dumps({"error": "Missing required field: characterName"}),
                 },
                 event,
             )
@@ -180,9 +235,29 @@ def lambda_handler(event, context):
                 event,
             )
 
+        # Check bloom filter for restricted names
+        if bloom_filter and character_name.lower() in bloom_filter:
+            return cors_handler.add_cors_headers(
+                {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "Character name is not available"}),
+                },
+                event,
+            )
+
         # Check character limit
         players_table = get_table(PLAYERS_TABLE)
         can_create, current_count = check_character_limit(player_id, players_table)
+        logger.info(
+            "Character limit check",
+            extra={
+                "player_id": player_id,
+                "current_count": current_count,
+                "can_create": can_create,
+                "max_allowed": os.environ.get("MAX_CHARACTERS_PER_PLAYER", "10"),
+            },
+        )
         if not can_create:
             return cors_handler.add_cors_headers(
                 {
@@ -193,27 +268,47 @@ def lambda_handler(event, context):
                 event,
             )
 
-        # Validate archetype
+        # Validate archetype or use defaults
         archetypes_table = get_table(ARCHETYPES_TABLE)
-        archetype_data = get_archetype(archetype_name, archetypes_table)
-        if not archetype_data:
-            return cors_handler.add_cors_headers(
-                {
-                    "statusCode": 400,
-                    "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": "Invalid or unavailable archetype"}),
-                },
-                event,
-            )
+        archetype_data = {}
+
+        if archetype_name:
+            # Try to get the archetype data
+            logger.info("Looking up archetype", extra={"archetype_name": archetype_name})
+            archetype_data = get_archetype(archetype_name, archetypes_table)
+            if not archetype_data:
+                # Invalid archetype provided, use defaults
+                logger.info(
+                    "Invalid archetype provided, using defaults",
+                    extra={"requested_archetype": archetype_name, "player_id": player_id},
+                )
+                archetype_data = {}
+                archetype_name = "default"
+            else:
+                logger.info(
+                    "Archetype found",
+                    extra={
+                        "archetype_name": archetype_name,
+                        "has_attributes": bool(archetype_data.get("Attributes")),
+                        "has_skills": bool(archetype_data.get("Skills")),
+                        "health": archetype_data.get("Health", DEFAULT_HEALTH),
+                        "essence": archetype_data.get("Essence", DEFAULT_ESSENCE),
+                    },
+                )
+        else:
+            # No archetype provided, use defaults
+            logger.info("No archetype specified, using defaults")
+            archetype_name = "default"
 
         # Create the character
-        character_id = create_character(player_id, character_name, archetype_name, archetype_data)
+        character_id, error_msg = create_character(player_id, character_name, archetype_name, archetype_data)
         if not character_id:
+            status_code = 409 if error_msg == "Character name is already taken" else 500
             return cors_handler.add_cors_headers(
                 {
-                    "statusCode": 500,
+                    "statusCode": status_code,
                     "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": "Failed to create character"}),
+                    "body": json.dumps({"error": error_msg or "Failed to create character"}),
                 },
                 event,
             )

@@ -37,14 +37,14 @@ class CharacterProvider extends ChangeNotifier {
       final segmentJson = _prefs.getString(_activeSegmentKey);
       if (segmentJson != null) {
         _activeSegment = ActiveSegment.fromJson(jsonDecode(segmentJson));
-        
+
         // Clear expired segments
         if (_activeSegment!.isExpired) {
           _activeSegment = null;
           await _prefs.remove(_activeSegmentKey);
         }
       }
-      
+
       notifyListeners();
     } catch (e) {
       debugPrint('Failed to load character from storage: $e');
@@ -55,10 +55,10 @@ class CharacterProvider extends ChangeNotifier {
   Future<void> updateCharacter(Character newCharacter) async {
     _character = newCharacter;
     _error = null;
-    
+
     // Save to storage
     await _prefs.setString(_characterKey, jsonEncode(newCharacter.toJson()));
-    
+
     notifyListeners();
   }
 
@@ -66,10 +66,10 @@ class CharacterProvider extends ChangeNotifier {
   Future<void> setActiveSegment(ActiveSegment segment) async {
     _activeSegment = segment;
     _error = null;
-    
+
     // Save to storage
     await _prefs.setString(_activeSegmentKey, jsonEncode(segment));
-    
+
     notifyListeners();
   }
 
@@ -84,7 +84,7 @@ class CharacterProvider extends ChangeNotifier {
   Future<void> applySegmentOutcome(SegmentOutcome outcome) async {
     // Update character with server-calculated values
     await updateCharacter(outcome.updatedCharacter);
-    
+
     // Clear the active segment
     await clearActiveSegment();
   }
@@ -99,10 +99,10 @@ class CharacterProvider extends ChangeNotifier {
     _character = null;
     _activeSegment = null;
     _error = null;
-    
+
     await _prefs.remove(_characterKey);
     await _prefs.remove(_activeSegmentKey);
-    
+
     notifyListeners();
   }
 
@@ -142,12 +142,12 @@ class CharacterProvider extends ChangeNotifier {
   /// Check if character meets resource requirements
   bool meetsRequirements(Map<String, int> requirements) {
     if (_character == null) return false;
-    
+
     for (final entry in requirements.entries) {
       final current = _character!.resources[entry.key] ?? 0;
       if (current < entry.value) return false;
     }
-    
+
     return true;
   }
 }

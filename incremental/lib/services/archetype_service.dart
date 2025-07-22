@@ -12,18 +12,16 @@ class ArchetypeService {
   static const String _cachedManifestKey = 'cached_archetype_manifest';
   static const String _cachedArchetypesKey = 'cached_archetypes';
   static const String _lastUpdateCheckKey = 'archetype_last_update_check';
-  
+
   final SharedPreferences _prefs;
   final http.Client _httpClient;
-  
+
   ArchetypeManifest? _manifest;
   final Map<String, Archetype> _archetypeCache = {};
-  
-  ArchetypeService({
-    required SharedPreferences prefs,
-    http.Client? httpClient,
-  }) : _prefs = prefs,
-       _httpClient = httpClient ?? http.Client();
+
+  ArchetypeService({required SharedPreferences prefs, http.Client? httpClient})
+    : _prefs = prefs,
+      _httpClient = httpClient ?? http.Client();
 
   /// Get manifest URL from environment or preferences
   String? get manifestUrl {
@@ -78,7 +76,10 @@ class ArchetypeService {
 
     // Save manifest
     await _prefs.setString(_cachedManifestKey, response.body);
-    await _prefs.setInt(_lastUpdateCheckKey, DateTime.now().millisecondsSinceEpoch);
+    await _prefs.setInt(
+      _lastUpdateCheckKey,
+      DateTime.now().millisecondsSinceEpoch,
+    );
 
     // Download updated archetypes
     for (final entry in _manifest!.archetypes.entries) {
@@ -96,9 +97,9 @@ class ArchetypeService {
 
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       final archetype = Archetype.fromJson(json);
-      
+
       _archetypeCache[id] = archetype;
-      
+
       // Cache to storage
       final cached = _prefs.getString(_cachedArchetypesKey) ?? '{}';
       final cachedMap = jsonDecode(cached) as Map<String, dynamic>;
@@ -117,7 +118,9 @@ class ArchetypeService {
     try {
       final cachedMap = jsonDecode(cached) as Map<String, dynamic>;
       for (final entry in cachedMap.entries) {
-        final archetype = Archetype.fromJson(entry.value as Map<String, dynamic>);
+        final archetype = Archetype.fromJson(
+          entry.value as Map<String, dynamic>,
+        );
         _archetypeCache[entry.key] = archetype;
       }
     } catch (e) {
@@ -134,13 +137,15 @@ class ArchetypeService {
         debugPrint('No test archetypes path configured');
         return;
       }
-      
+
       final jsonString = await rootBundle.loadString(path);
       final json = jsonDecode(jsonString) as Map<String, dynamic>;
       final archetypes = json['archetypes'] as Map<String, dynamic>;
-      
+
       for (final entry in archetypes.entries) {
-        final archetype = Archetype.fromJson(entry.value as Map<String, dynamic>);
+        final archetype = Archetype.fromJson(
+          entry.value as Map<String, dynamic>,
+        );
         _archetypeCache[entry.key] = archetype;
       }
     } catch (e) {

@@ -99,29 +99,27 @@ type Item struct {
 
 ### Pattern 1: Bridging the Domains (Command Execution)
 
-This is the most critical pattern for handling player input. It safely passes control from the System/Session domain to the Game World domain.
+This is the most critical pattern for handling player input. In the actual implementation, the player-character relationship is established once during character selection, and commands are processed directly with the character reference.
 
 ```go
-func executeCommand(game *Game, player *Player, command string) {
-    // 1. Parse command without any locks.
-    cmd, args := parseCommand(command)
+// Character selection establishes the relationship once
+func (p *Player) SelectCharacter(character *Character) {
+    p.mutex.Lock()
+    p.character = character
+    character.player = p
+    p.mutex.Unlock()
+}
 
-    // 2. Bridge Step 1: Lock within the System Domain to get a reference.
-    player.mutex.RLock()
-    character := player.character
-    player.mutex.RUnlock() // Explicitly unlock before touching the Game World.
+// Commands are then processed directly with the character
+func ProcessCommand(ctx context.Context, character *Character, input string) {
+    // Parse and execute command without needing to access through player
+    cmd, args := parseCommand(input)
 
-    if character == nil {
-        return
-    }
-
-    // 3. Bridge Step 2: Now, operate purely within the Game World domain.
-    // No System/Session locks are held at this point.
     switch cmd {
     case "get":
-        executeGet(game, character, args)
+        executeGet(character.game, character, args)
     case "look":
-        executeLook(game, character)
+        executeLook(character.game, character)
     }
 }
 ```

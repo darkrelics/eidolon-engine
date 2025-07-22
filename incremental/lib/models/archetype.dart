@@ -79,11 +79,7 @@ class StartingItem {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'PrototypeID': prototypeID,
-      'Slot': slot,
-      'IsWorn': isWorn,
-    };
+    return {'PrototypeID': prototypeID, 'Slot': slot, 'IsWorn': isWorn};
   }
 }
 
