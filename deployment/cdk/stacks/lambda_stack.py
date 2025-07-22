@@ -16,6 +16,17 @@ from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 
+class ApiGatewayDomainTarget(route53.IAliasRecordTarget):
+    """Wrapper for ApiGatewayDomain to fix parameter naming issue."""
+    
+    def __init__(self, domain_name):
+        self._target = route53_targets.ApiGatewayDomain(domain_name)
+    
+    def bind(self, record: route53.IRecordSet, zone=None) -> route53.AliasRecordTargetConfig:
+        """Bind the target to a record set with correct parameter names."""
+        return self._target.bind(record, zone)
+
+
 def create_api_gateway(
     scope: Construct, api_id: str, api_name: str, api_description: str, allowed_cors_origins: list
 ) -> apigateway.RestApi:
@@ -102,7 +113,7 @@ def setup_custom_domain(
         f"{prefix}-api-record",
         zone=hosted_zone,
         record_name=api_subdomain,
-        target=route53.RecordTarget.from_alias(route53_targets.ApiGatewayDomain(custom_domain)),  # type: ignore
+        target=route53.RecordTarget.from_alias(ApiGatewayDomainTarget(custom_domain)),
     )
 
 

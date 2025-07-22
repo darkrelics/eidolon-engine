@@ -75,13 +75,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       await authProvider.deleteAccount();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Your account has been deleted'),
-            backgroundColor: Colors.green,
-          ),
+        Navigator.pushReplacementNamed(
+          context,
+          '/login',
+          arguments: {'message': 'Your account has been deleted'},
         );
-        Navigator.pushReplacementNamed(context, '/login');
       }
     } catch (e) {
       if (mounted) {
