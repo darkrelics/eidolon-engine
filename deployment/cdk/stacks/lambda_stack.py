@@ -177,7 +177,7 @@ class LambdaStack(cdk.Stack):
         # Extract API configuration
         self.api_subdomain = config.get("api_subdomain", "api")
         self.allowed_cors_origins = config.get("allowed_cors_origins", [])
-        
+
         # Extract game configuration defaults
         self.default_health = config.get("default_health", 10)
         self.default_essence = config.get("default_essence", 3)

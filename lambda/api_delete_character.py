@@ -23,9 +23,9 @@ Ensures the character belongs to the player before deletion.
 import os
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_table, get_item, delete_item, update_item_with_condition
+from eidolon.dynamo import delete_item, get_item, get_table, update_item_with_condition
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, parse_json_body, validate_required_fields
+from eidolon.requests import extract_player_id
 from eidolon.responses import error_response, success_response
 
 # Configure logging
@@ -40,29 +40,29 @@ ITEMS_TABLE = os.environ.get("ITEMS_TABLE", "items")
 def get_character_name_by_id(player_id, character_id) -> str:
     """
     Get character name by ID and verify ownership.
-    
+
     Args:
         player_id: Cognito user ID
         character_id: Character UUID
-        
+
     Returns:
         Character name if owned by player, empty string otherwise
     """
     # Get player record
     players_table = get_table(PLAYERS_TABLE)
     player_data = get_item(players_table, {"PlayerID": player_id})
-    
+
     if not player_data:
         logger.warning("Player not found", extra={"player_id": player_id})
         return ""
-    
+
     character_list = player_data.get("CharacterList", {})
-    
+
     # Find character by UUID
     for char_name, char_info in character_list.items():
         if char_info.get("UUID") == character_id:
             return char_name
-    
+
     logger.warning("Character not found for player", extra={"character_id": character_id, "player_id": player_id})
     return ""
 
@@ -236,7 +236,7 @@ def lambda_handler(event, context) -> dict:
         # Get character ID from path parameters
         path_parameters = event.get("pathParameters", {})
         character_id = path_parameters.get("characterId", "").strip()
-        
+
         if not character_id:
             return cors_handler.add_cors_headers(error_response("Missing character ID"), event)
 

@@ -25,7 +25,7 @@ import os
 from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float, get_item, get_table
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, get_query_parameter
+from eidolon.requests import extract_player_id
 from eidolon.responses import create_response, error_response, not_found_response
 
 # Configure logging
@@ -48,7 +48,7 @@ def get_character_by_id(character_id, player_id):
         Character data or None if not found or not owned by player
     """
     logger.info("Getting character by ID", extra={"character_id": character_id, "player_id": player_id})
-    
+
     characters_table = get_table(CHARACTERS_TABLE)
     character = get_item(characters_table, {"CharacterID": character_id})
 
@@ -60,22 +60,18 @@ def get_character_by_id(character_id, player_id):
     character_owner = character.get("PlayerID")
     if character_owner != player_id:
         logger.warning(
-            "Character ownership mismatch", 
-            extra={
-                "character_id": character_id, 
-                "player_id": player_id,
-                "character_owner": character_owner
-            }
+            "Character ownership mismatch",
+            extra={"character_id": character_id, "player_id": player_id, "character_owner": character_owner},
         )
         return None
 
     logger.info(
-        "Character retrieved successfully", 
+        "Character retrieved successfully",
         extra={
             "character_id": character_id,
             "character_name": character.get("CharacterName"),
-            "game_mode": character.get("GameMode")
-        }
+            "game_mode": character.get("GameMode"),
+        },
     )
     return character
 
@@ -91,22 +87,22 @@ def get_active_segment(player_id):
         Active segment data or None
     """
     logger.info("Checking for active segment", extra={"player_id": player_id})
-    
+
     active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
     active_segment = get_item(active_segments_table, {"PlayerID": player_id})
-    
+
     if active_segment:
         logger.info(
-            "Active segment found", 
+            "Active segment found",
             extra={
                 "player_id": player_id,
                 "segment_id": active_segment.get("SegmentID"),
-                "story_id": active_segment.get("StoryID")
-            }
+                "story_id": active_segment.get("StoryID"),
+            },
         )
     else:
         logger.info("No active segment for player", extra={"player_id": player_id})
-    
+
     return active_segment
 
 
@@ -146,15 +142,11 @@ def lambda_handler(event, context) -> dict:
         # Get character ID from path parameters (API Gateway passes {characterId} as path parameter)
         path_params = event.get("pathParameters", {})
         character_id = path_params.get("characterId")
-        
+
         logger.info(
-            "Extracting character ID from path parameters", 
-            extra={
-                "path_params": path_params,
-                "character_id": character_id
-            }
+            "Extracting character ID from path parameters", extra={"path_params": path_params, "character_id": character_id}
         )
-        
+
         if not character_id:
             logger.error("Missing character ID in path parameters", extra={"path_params": path_params})
             return cors_handler.add_cors_headers(error_response("Missing required path parameter: characterId"), event)
@@ -163,13 +155,7 @@ def lambda_handler(event, context) -> dict:
         character = get_character_by_id(character_id, player_id)
 
         if not character:
-            logger.warning(
-                "Character not found or access denied", 
-                extra={
-                    "character_id": character_id,
-                    "player_id": player_id
-                }
-            )
+            logger.warning("Character not found or access denied", extra={"character_id": character_id, "player_id": player_id})
             return cors_handler.add_cors_headers(not_found_response("Character"), event)
 
         # Get active segment if any
@@ -183,13 +169,13 @@ def lambda_handler(event, context) -> dict:
 
         # Return success response
         logger.info(
-            "Character data retrieved successfully", 
+            "Character data retrieved successfully",
             extra={
                 "status_code": 200,
                 "character_id": character_id,
                 "character_name": character.get("CharacterName"),
-                "has_active_segment": active_segment is not None
-            }
+                "has_active_segment": active_segment is not None,
+            },
         )
         return cors_handler.add_cors_headers(create_response(200, response_data), event)
 
