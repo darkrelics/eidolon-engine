@@ -107,7 +107,7 @@ class ApiService {
   Future<Character?> getCharacterById(String characterId) async {
     debugPrint('ApiService: Getting character by ID: $characterId');
     final headers = await _getHeaders();
-    final uri = Uri.parse('$baseUrl/characters/$characterId');
+    final uri = Uri.parse('$baseUrl/characters?characterId=$characterId');
     debugPrint('ApiService: Request URI: $uri');
     
     final response = await _httpClient.get(

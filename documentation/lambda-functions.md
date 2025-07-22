@@ -100,6 +100,30 @@ Future Incremental-specific tables:
 
 - `ALLOWED_ORIGINS` - Comma-separated list of allowed CORS origins
 
+## API Design Standards
+
+### Parameter Passing
+
+All Lambda functions must follow these parameter standards:
+
+- **Query Parameters**: Use for resource-specific operations (GET, DELETE)
+  - Example: `/characters?characterId=123`
+  - Use `get_query_parameter()` from `eidolon.requests`
+  
+- **Request Body**: Use for data submission (POST, PUT, PATCH)
+  - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
+  - Use `parse_json_body()` from `eidolon.requests`
+
+- **Path Parameters**: **NEVER** use for IDs - always use query parameters instead
+  - ❌ Wrong: `/characters/123`
+  - ✅ Correct: `/characters?characterId=123`
+
+### Consistency Requirements
+
+- All Lambda functions that accept character IDs must use query parameters
+- Frontend implementations must match backend parameter expectations
+- Always use the standard utility functions from `eidolon.requests`
+
 ## Deployment
 
 Lambda functions are packaged and deployed through AWS CodeBuild:

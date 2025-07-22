@@ -25,7 +25,7 @@ import os
 from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float, get_item, get_table
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
+from eidolon.requests import extract_player_id, get_query_parameter
 from eidolon.responses import create_response, error_response, not_found_response
 
 # Configure logging
@@ -139,17 +139,14 @@ def lambda_handler(event, context) -> dict:
         if auth_error:
             return auth_error
 
-        # Get character ID from path parameters (API Gateway passes {characterId} as path parameter)
-        path_params = event.get("pathParameters", {})
-        character_id = path_params.get("characterId")
+        # Get character ID from query parameters
+        character_id, error_msg = get_query_parameter(event, "characterId", required=True)
+        if error_msg:
+            return cors_handler.add_cors_headers(error_response(error_msg), event)
 
         logger.info(
-            "Extracting character ID from path parameters", extra={"path_params": path_params, "character_id": character_id}
+            "Extracting character ID from query parameters", extra={"character_id": character_id}
         )
-
-        if not character_id:
-            logger.error("Missing character ID in path parameters", extra={"path_params": path_params})
-            return cors_handler.add_cors_headers(error_response("Missing required path parameter: characterId"), event)
 
         # Get character data
         character = get_character_by_id(character_id, player_id)

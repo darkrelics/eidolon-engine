@@ -197,6 +197,21 @@ Understand where your code belongs:
 - Follow the shared module pattern in `/eidolon`
 - Test locally before deployment
 
+### API Design Standards
+
+- **Parameter Passing**:
+  - Use query parameters for resource-specific operations (GET, DELETE)
+  - Use request body (JSON) for data submission (POST, PUT, PATCH)
+  - Never use path parameters for IDs - always use query parameters
+  - Example: `/characters?characterId=123` NOT `/characters/123`
+
+- **Consistency**:
+  - All Lambda functions that accept character IDs must use query parameters
+  - Frontend code must match backend parameter expectations
+  - Use standard utility functions from `eidolon.requests`:
+    - `get_query_parameter()` for query parameters
+    - `parse_json_body()` for request body parsing
+
 ## Common Patterns
 
 ### Error Handling
