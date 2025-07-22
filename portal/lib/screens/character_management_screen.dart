@@ -72,65 +72,71 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
   Future<void> _viewCharacter(Character character) async {
     try {
       final fullCharacter = await _apiService.getCharacter(character.id);
-      
+
       if (!mounted) return;
-      
+
       await showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: Text(fullCharacter.name),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  fullCharacter.dead ? 'Status: Deceased' : 'Status: Active',
-                  style: TextStyle(
-                    color: fullCharacter.dead
-                        ? Theme.of(context).colorScheme.error
-                        : Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
+        builder:
+            (context) => AlertDialog(
+              title: Text(fullCharacter.name),
+              content: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      fullCharacter.dead
+                          ? 'Status: Deceased'
+                          : 'Status: Active',
+                      style: TextStyle(
+                        color:
+                            fullCharacter.dead
+                                ? Theme.of(context).colorScheme.error
+                                : Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (fullCharacter.health != null &&
+                        fullCharacter.maxHealth != null)
+                      Text(
+                        'Health: ${fullCharacter.health}/${fullCharacter.maxHealth}',
+                      ),
+                    const SizedBox(height: 8),
+                    if (fullCharacter.attributes != null) ...[
+                      const Text(
+                        'Attributes:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      ...fullCharacter.attributes!.entries.map(
+                        (e) => Text('  ${e.key}: ${e.value}'),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    if (fullCharacter.skills != null) ...[
+                      const Text(
+                        'Skills:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      ...fullCharacter.skills!.entries.map(
+                        (e) => Text('  ${e.key}: ${e.value}'),
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 16),
-                if (fullCharacter.health != null &&
-                    fullCharacter.maxHealth != null)
-                  Text('Health: ${fullCharacter.health}/${fullCharacter.maxHealth}'),
-                const SizedBox(height: 8),
-                if (fullCharacter.attributes != null) ...[
-                  const Text(
-                    'Attributes:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  ...fullCharacter.attributes!.entries.map(
-                    (e) => Text('  ${e.key}: ${e.value}'),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                if (fullCharacter.skills != null) ...[
-                  const Text(
-                    'Skills:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  ...fullCharacter.skills!.entries.map(
-                    (e) => Text('  ${e.key}: ${e.value}'),
-                  ),
-                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('CLOSE'),
+                ),
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('CLOSE'),
-            ),
-          ],
-        ),
       );
     } catch (e) {
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error loading character: ${e.toString()}'),
@@ -158,9 +164,7 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
           if (!mounted) return;
 
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Character deleted successfully'),
-            ),
+            const SnackBar(content: Text('Character deleted successfully')),
           );
         } catch (e) {
           if (!mounted) return;
@@ -180,9 +184,7 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
   void _playStory(Character character) {
     // TODO: Navigate to story gameplay screen
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Story gameplay coming soon!'),
-      ),
+      const SnackBar(content: Text('Story gameplay coming soon!')),
     );
   }
 
