@@ -49,9 +49,13 @@ This ensures:
 
 #### Base Constants
 
-- `BASE_XP = 0.25` - Base experience per action
-- `FAILURE_PENALTY = 0.5` - Failed actions give 50% XP
-- `ATTRIBUTE_XP_RATIO = 0.1` - Attributes gain 10% of skill XP
+- `baseXP = 0.25` - Base experience per action
+- `failurePenalty = 0.5` - Failed actions give 50% XP
+- `attributeXPRatio = 0.1` - Attributes gain 10% of skill XP
+- `varianceExponent = 2.0` - Exponent for variance modifier calculation
+- `xpProgressionBase = 10.0` - Base multiplier for XP requirements
+- `xpProgressionRatio = 3.5` - Exponential growth factor for XP requirements
+- `maxScore = 10.0` - Hard cap on skill/attribute values
 
 ## Developer Guide
 
@@ -227,16 +231,39 @@ The hide system demonstrates both static and opposed checks working together:
 
 ### Thread Safety
 
-All experience operations are mutex-protected for safe concurrent access.
+All experience operations are mutex-protected for safe concurrent access. Both `AwardSkillXP` and `AwardAttributeXP` use:
+- `c.mutex.Lock()` at start of operation
+- `defer c.mutex.Unlock()` for guaranteed cleanup
 
 ### Persistence
 
-Skills and attributes are automatically saved with character data - no separate experience tracking needed.
+Skills and attributes are automatically saved with character data - no separate experience tracking needed. The character's `lastEdited` timestamp is automatically updated whenever XP is awarded, providing audit trails for progression.
+
+### Logging
+
+The system implements comprehensive logging for all XP awards:
+- Skill XP awards are logged with character name, skill, and amount
+- Attribute XP awards are logged with character name, attribute, and amount
+- Failed XP calculations are logged for debugging
+
+### Score Calculation
+
+When awarding XP, the system:
+1. Calculates XP required for next increment: `xpRequired = xpProgressionBase * math.Pow(xpProgressionRatio, currentScore)`
+2. Determines score increment: `scoreIncrement = xpGained / xpRequired`
+3. Caps final score at `maxScore` (10.0)
 
 ### Floating Point Precision
 
-The system uses 64-bit floats, providing sufficient precision for millions of increments without drift.
+The system uses 64-bit floats (float64), providing sufficient precision for millions of increments without drift.
 
 ### Performance
 
 Experience calculations are lightweight (a few multiplications and one power operation) and suitable for real-time combat.
+
+### Testing
+
+Comprehensive test coverage exists in `experience_test.go`, including:
+- Unit tests for all experience calculation functions
+- Integration tests for the complete XP award flow
+- Edge case testing for score caps and boundary conditions

@@ -10,13 +10,15 @@ The Eidolon Engine supports three deployment modes, all sharing the same backend
 | -------------------------- | -------------------------- | ---------------------------- | ---------------------------- |
 | **Frontend Deployed**      | Portal (Flutter web)       | Incremental (Flutter web)    | Incremental (Flutter web)    |
 | **Primary Interface**      | Web portal for MUD         | Timer-based incremental game | Timer-based incremental game |
-| **SSH Server**             | Deployed separately        | Not used                     | Deployed separately          |
+| **SSH Server**             | Deployed separately*       | Not used                     | Deployed separately*         |
 | **Backend Infrastructure** | Full shared backend        | Full shared backend          | Full shared backend          |
 | **Lambda Functions**       | All functions available    | All functions available      | All functions available      |
 | **DynamoDB Tables**        | All tables available       | All tables available         | All tables available         |
 | **Character Support**      | MUD mode only              | Incremental mode only        | Both modes supported         |
 | **GameMode Values**        | "MUD"                      | "Incremental"                | "MUD" or "Incremental"       |
 | **Use Case**               | Traditional MUD experience | Casual incremental gameplay  | Full game experience         |
+
+*The SSH server (`./server`) will be integrated into the deployment process when the Incremental component is ready for Alpha testing.
 
 ## Deployment Commands
 
@@ -28,7 +30,7 @@ python deployment/deploy.py --deploy-mud
 python deployment/deploy.py --deploy-incremental
 
 # Deploy in Hybrid mode (default)
-python deployment/deploy.py --deploy-both
+python deployment/deploy.py
 ```
 
 ## Frontend Applications
@@ -51,12 +53,12 @@ python deployment/deploy.py --deploy-both
 
 ### Lambda Functions
 
-All Lambda functions are available in all modes:
+All Lambda functions are deployed uniformly to support both Portal and Incremental frontends. There are no platform-specific Lambda functions:
 
 - Character management (create, list, delete, save)
 - Authentication triggers
 - Game state management
-- Future: Story progression, segment tracking
+- Story progression functionality
 
 ### DynamoDB Tables
 
@@ -65,16 +67,12 @@ All tables are shared across modes:
 - Players (unified authentication)
 - Characters (with GameMode field)
 - Archetypes, Items, Rooms, Exits
-- Prototypes, MOTD
-- Future: Stories, ActiveSegments, CharacterHistory
+- Prototypes, MOTD, Story
+- Future: Segment, History
 
 ### Character Mode Switching
 
-The GameMode field on each character controls which game mode can access it:
-
-- Characters can switch between modes (with restrictions)
-- Prevents concurrent access from both modes
-- Enforced by Lambda function validation
+The GameMode field on each character indicates which game mode it belongs to. The infrastructure for character mode switching between MUD and Incremental modes is represented in the data structures but is not currently enforced. This feature is still being considered for future implementation.
 
 ## Choosing a Deployment Mode
 

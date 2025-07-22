@@ -27,7 +27,6 @@ All deployment modes (MUD, Incremental, Hybrid) share:
 - Manages parameter loading and user prompts
 - Executes CDK deployments via subprocess
 - Updates configuration files with deployment outputs
-- Handles CloudFormation to CDK migration
 - Implements fail-forward approach for error recovery
 
 ### 2. State Manager (`deployment/state_manager.py`)
@@ -48,6 +47,7 @@ All deployment modes (MUD, Incremental, Hybrid) share:
 
 - **app.py**: Main CDK application entry point with mode-aware deployment
 - **stacks/**: Individual CDK stack definitions
+  - `iam_stack.py`: IAM roles and policies for server execution
   - `s3_stack.py`: S3 buckets with smart existing bucket detection
   - `dynamodb_stack.py`: Unified DynamoDB tables for all modes
   - `cognito_stack.py`: User authentication infrastructure (shared)
@@ -84,22 +84,18 @@ All deployment modes (MUD, Incremental, Hybrid) share:
    - Prompt user for any missing required parameters
 
 3. **Discovery & Analysis Phase**
-   - Query existing CloudFormation stacks (both CDK and legacy)
-   - Map legacy CloudFormation resources to CDK expectations
-   - Determine migration strategy (adopt, coexist, or greenfield)
+   - Query existing CloudFormation stacks
    - Validate existing resources for drift detection
    - Generate drift report for any configuration mismatches
 
 4. **Planning Phase**
    - Identify stacks to create vs update
-   - Determine resource adoption requirements
    - Build comprehensive deployment plan
    - Present plan to user for approval
 
 5. **Execution Phase**
    - Set up CDK environment variables and context
    - Pass deployment mode to CDK context
-   - Pass adopted resource information to CDK
    - Execute `cdk deploy --all` with appropriate parameters
    - CDK creates unified backend for all modes
    - CDK selects frontend based on deployment mode
@@ -146,37 +142,23 @@ The implementation consolidates functionality into fewer modules than originally
 
 This consolidation follows the codebase principle of "simplicity of code is high priority" and reduces complexity while maintaining all required functionality.
 
-### Migration Support
-
-The system supports multiple migration scenarios:
-
-1. **Greenfield**: Complete new deployment with no existing resources
-2. **Adoption**: Import existing resources (DynamoDB tables, S3 buckets) into CDK management
-3. **Coexistence**: CDK stacks work alongside legacy CloudFormation stacks when adoption isn't possible
-4. **Mode Migration**: Transition from separated backends to unified architecture
-
-#### Unified Backend Migration
-
-When migrating from separated MUD/Incremental backends:
-
-- Tables are consolidated (no more mode-specific prefixes)
-- Single API Gateway replaces mode-specific APIs
-- Lambda functions serve all game modes
-- Frontend selection determines user experience
-
 ### Resource Naming
 
-- All resources use simple, unprefixed names for clarity and consistency:
-  - DynamoDB tables (unified): `eidolon-players`, `eidolon-characters`, `eidolon-archetypes`, `eidolon-items`, `eidolon-progress`, `eidolon-resources`, `eidolon-rooms`, `eidolon-exits`, `eidolon-prototypes`, `eidolon-motd`
-  - S3 buckets: `eidolon-portal`, `eidolon-scripts`, `eidolon-lambda`
+- All resources use simple names for clarity and consistency:
+  - DynamoDB tables (unified): `players`, `characters`, `archetypes`, `items`, `progress`, `resources`, `rooms`, `exits`, `prototypes`, `motd`, `story`
+  - S3 buckets: 
+    - Portal: `darkrelics-portal` (default) or custom name
+    - Scripts: `darkrelics-scripts` (default) or custom name  
+    - Lambda: `{game_name}-lambda-{account_id}` (e.g., `eidolon-engine-lambda-123456789012`)
   - CloudWatch log group: `/aws/eidolon/server`
   - Cognito user pool: `eidolon-users`
   - CodeBuild project: `eidolon-codebuild`
   - CloudFront: `eidolon-distribution`
   - API Gateway: `eidolon-api` at `api.{domain}`
-  - IAM policies: `eidolon-dynamodb-access`, `eidolon-cloudwatch-access`
-- Legacy CloudFormation stacks are still detected with `eidolon-` prefix for backward compatibility
-- CDK stack names are simple service names: `cognito`, `dynamodb`, `cloudwatch`, `s3`, `cloudfront`, `codebuild`, `lambda`, `base-lambda`
+  - IAM resources: 
+    - Role: `{game_name}-server-execution-role`
+    - Policies: `eidolon-{game_name}-dynamodb-access`, `eidolon-{game_name}-cloudwatch-access`
+- CDK stack names are simple service names: `iam`, `s3`, `dynamodb`, `cognito`, `cloudwatch`, `codebuild`, `base-lambda`, `lambda`, `cloudfront`
 
 ### CI/CD Integration
 
@@ -188,7 +170,6 @@ The CodeBuild stack is integrated with CloudFront for seamless deployments:
 - **Automatic cache invalidation**: Build process invalidates CloudFront distribution after S3 sync
 - **Conditional invalidation**: Only runs when CloudFront distribution ID is configured
 - **IAM permissions**: CodeBuild role includes cloudfront:CreateInvalidation permission
-- **Backward compatibility**: Works with both CloudFront and S3-only deployments
 
 This ensures zero-downtime deployments with immediate content updates for end users.
 

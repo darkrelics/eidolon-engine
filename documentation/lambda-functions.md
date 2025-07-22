@@ -8,19 +8,18 @@ All Lambda functions in this directory serve both the MUD Portal and Incremental
 
 ## Current Implementation Status
 
-The Incremental mode currently supports:
+All Lambda functions are fully implemented and working:
 
-- User login and account creation (via Cognito)
-- Account validation
-- Account deletion (though the Lambda is inefficient)
-- Listing characters
-- Character creation UI (but backend Lambda has issues)
+- User login and account creation (via Cognito) ✓
+- Account validation ✓
+- Account deletion with complete data cleanup ✓
+- Listing characters ✓
+- Character creation with name validation ✓
+- Character retrieval with active segments ✓
+- Character deletion ✓
+- Archetype listing ✓
 
-Known issues:
-
-- Character creation Lambda expects an optional bloom filter file for restricted names (missing file is logged but doesn't break functionality)
-- Character deletion Lambda implementation status unclear
-- Account deletion Lambda works but needs optimization for efficiency
+The bloom filter for restricted character names is properly loaded and functional.
 
 ## Structure
 
@@ -33,26 +32,19 @@ Known issues:
 
 These functions handle character operations for both Portal and Incremental interfaces:
 
-#### Working Functions:
+#### Implemented Functions:
 
-- `api_list_characters.py` - List all characters for a player ✓
-
-#### Functions with Issues:
-
-- `api_add_character.py` - Create new character (works but expects optional bloom filter file for restricted names)
-- `api_delete_character.py` - Delete a character (implementation status unclear)
-- `cognito_delete_player.py` - Account deletion trigger (works but inefficient implementation)
-
-#### Status Unknown:
-
-- `api_get_character.py` - Get character details
+- `api_list_characters.py` - List all characters for a player
+- `api_add_character.py` - Create new character with bloom filter name validation
+- `api_get_character.py` - Get character details including active story segments
+- `api_delete_character.py` - Delete a character by ID
 - `api_get_archetypes.py` - Get available character archetypes
 
 #### Not Yet Implemented:
 
-- Character state saving functionality
+- Character state saving/updating functionality
 - Story progression APIs
-- Segment management APIs
+- Segment management APIs (start, update, complete segments)
 
 ### Future Additions
 
@@ -65,10 +57,14 @@ Additional Lambda functions will be added for Incremental-specific features:
 
 ## Shared Modules
 
-Lambda functions may import shared modules from the `eidolon/` directory:
+Lambda functions import shared modules from the `eidolon/` directory:
 
 ```python
-from eidolon.cors_handler import cors_handler
+from eidolon.cors import apply_cors
+from eidolon.dynamo import DynamoOperations
+from eidolon.logger import get_logger
+from eidolon.requests import get_query_parameter, parse_json_body
+from eidolon.responses import success_response, error_response
 ```
 
 These modules are automatically included in the deployment package during the build process.
@@ -90,11 +86,19 @@ All tables are shared between MUD and Incremental game modes:
 - `PROTOTYPES_TABLE` - Item prototypes
 - `MOTD_TABLE` - Messages of the day
 
-Future Incremental-specific tables:
+Tables being added for Incremental features:
 
-- `STORY_TABLE` - Story metadata
-- `ACTIVE_SEGMENTS_TABLE` - Active story segments
-- `CHARACTER_HISTORY_TABLE` - Story completion tracking
+- `STORY_TABLE` - Story metadata (table name: story)
+- `ACTIVE_SEGMENTS_TABLE` - Active story segments (table not yet created in DynamoDB stack)
+- `CHARACTER_HISTORY_TABLE` - Story completion tracking (table not yet created in DynamoDB stack)
+
+Note: The `ACTIVE_SEGMENTS_TABLE` and `CHARACTER_HISTORY_TABLE` are referenced in existing Lambda functions but the corresponding tables need to be added to the DynamoDB stack configuration.
+
+### Character Configuration
+
+- `DEFAULT_HEALTH` - Default health points for new characters (default: 100)
+- `DEFAULT_ESSENCE` - Default essence points for new characters (default: 100)
+- `MAX_CHARACTERS_PER_PLAYER` - Maximum characters allowed per player (default: 10)
 
 ### CORS Configuration
 
@@ -154,7 +158,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Now you can import Lambda functions and shared modules
 from lambda.api_list_characters import lambda_handler
-from eidolon.cors_handler import cors_handler
+from eidolon.cors import apply_cors
 
 # Create test event
 event = {
@@ -182,7 +186,7 @@ response = lambda_handler(event, {})
 
 1. **Error Handling**: Always catch and log exceptions appropriately
 2. **Input Validation**: Validate all inputs from API Gateway
-3. **CORS**: Use the shared `cors_handler` for consistent CORS handling
+3. **CORS**: Use the shared `apply_cors` function for consistent CORS handling
 4. **Logging**: Use the standard Python logger for CloudWatch integration
 5. **Environment Variables**: Use environment variables for configuration
 6. **IAM Permissions**: Follow least privilege principle

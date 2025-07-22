@@ -18,12 +18,14 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 | Field           | Type     | Description                                               |
 | --------------- | -------- | --------------------------------------------------------- |
-| `PlayerID`      | `STRING` | Email of the player.                                      |
-| `CharacterList` | `MAP`    | Map of character names to their UUIDs.                    |
+| `PlayerID`      | `STRING` | UUID of the player (UUIDv4).                              |
+| `Email`         | `STRING` | Email address of the player.                              |
+| `CharacterList` | `MAP`    | Map of character names to character info (UUID, Dead, GameMode). |
 | `SeenMotD`      | `LIST`   | List of UUIDs of messages of the day the player has seen. |
 
-- **`PlayerID`**: The email address of the player, serving as the primary key.
-- **`CharacterList`**: A map where the key is the character's name and the value is the character's UUID as a string.
+- **`PlayerID`**: A UUIDv4 stored as a string, serving as the primary key.
+- **`Email`**: The email address associated with the player account.
+- **`CharacterList`**: A map where the key is the character's name and the value contains character info including UUID, Dead status, and GameMode.
 - **`SeenMotD`**: A list of UUIDs representing the messages of the day that the player has viewed.
 
 ---
@@ -33,7 +35,7 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 | Field           | Type     | Description                                                    |
 | --------------- | -------- | -------------------------------------------------------------- |
 | `CharacterID`   | `STRING` | UUID of the character.                                         |
-| `PlayerID`      | `STRING` | Email of the player who owns the character.                    |
+| `PlayerID`      | `STRING` | UUID of the player who owns the character.                     |
 | `CharacterName` | `STRING` | Name of the character.                                         |
 | `GameMode`      | `STRING` | Current mode: "MUD" or "Incremental" (prevents concurrent use) |
 | `RoomID`        | `NUMBER` | ID of the room the character is currently in.                  |
@@ -42,10 +44,13 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 | `Skills`        | `MAP`    | Map of skill names to their values (e.g., Stealth: 3).         |
 | `Essence`       | `NUMBER` | The character's essence or magical energy.                     |
 | `Health`        | `NUMBER` | The character's current health points.                         |
+| `MaxHealth`     | `NUMBER` | The character's maximum health points.                         |
 | `Hidden`        | `BOOL`   | Whether the character is currently hidden.                     |
+| `Wounds`        | `LIST`   | List of wounds affecting the character.                        |
+| `CharState`     | `STRING` | Current character state (e.g., "normal", "combat").            |
 
 - **`CharacterID`**: The UUID of the character, serving as the primary key.
-- **`PlayerID`**: The email address of the player who owns this character.
+- **`PlayerID`**: The UUID of the player who owns this character.
 - **`CharacterName`**: The name given to the character by the player.
 - **`GameMode`**: Indicates whether character is currently in "MUD" or "Incremental" mode. This field prevents a character from being used in both modes simultaneously.
 - **`RoomID`**: The ID of the room where the character is located.
@@ -54,7 +59,10 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 - **`Skills`**: A map of character skills (e.g., Stealth, Archery) to their numerical values.
 - **`Essence`**: Represents the character's magical energy or mana.
 - **`Health`**: Indicates the character's current health status.
+- **`MaxHealth`**: The character's maximum health capacity.
 - **`Hidden`**: Boolean indicating whether the character is currently hidden from other players.
+- **`Wounds`**: List of wound objects affecting the character's performance.
+- **`CharState`**: Current state of the character (normal, combat, etc.).
 
 ---
 
@@ -66,9 +74,9 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 | `Area`         | `STRING`  | Name of the area or region the room belongs to. |
 | `Title`        | `STRING`  | Title or name of the room.                      |
 | `Description`  | `STRING`  | Text description of the room.                   |
-| `ExitID`       | `LIST`    | Map of exit directions to exit UUIDs.           |
+| `ExitID`       | `LIST`    | List of exit UUIDs from this room.             |
 | `ScriptID`     | `STRING`  | ID of the Lua script associated with the room.  |
-| `ScriptActive` | `BOOLEAN` | Indicates if the room script is active.         |
+| `Persistent`   | `BOOLEAN` | Whether the room persists when empty.          |
 
 - **`RoomID`**: Serves as the primary key for the room.
 - **`Area`**: The broader area or zone where the room is located.
@@ -76,7 +84,7 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 - **`Description`**: A detailed description that players see upon entering.
 - **`ExitID`**: A list of UUIDs representing exits from the room.
 - **`ScriptID`**: The filename (without .lua extension) of the Lua script associated with this room. Scripts are stored in S3.
-- **`ScriptActive`**: Boolean flag indicating whether the room's script is currently active and should handle events/commands.
+- **`Persistent`**: Whether the room remains in memory when no characters are present.
 
 ---
 
@@ -88,11 +96,17 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 | `Direction`  | `STRING`  | Direction of the exit (e.g., "north", "south"). |
 | `TargetRoom` | `NUMBER`  | ID of the room the exit leads to.               |
 | `Visible`    | `BOOLEAN` | Indicates if the exit is visible to players.    |
+| `Description`| `STRING`  | Description of the exit.                        |
+| `ArrivalText`| `STRING`  | Text shown when character arrives from this exit.|
+| `ScriptID`   | `STRING`  | ID of the Lua script for exit interactions.    |
 
 - **`ExitID`**: The UUID of the exit, serving as the primary key.
 - **`Direction`**: The cardinal direction or named exit.
 - **`TargetRoom`**: The `RoomID` of the destination room.
 - **`Visible`**: A flag indicating whether the exit is visible to players.
+- **`Description`**: Optional description of what the exit looks like.
+- **`ArrivalText`**: Custom message shown when entering from this exit.
+- **`ScriptID`**: Optional Lua script for special exit behavior.
 
 ---
 
@@ -194,29 +208,38 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 | `ArchetypeName` | `STRING` | Name of the archetype.                     |
 | `Description`   | `STRING` | Description of the archetype.              |
 | `Attributes`    | `MAP`    | Default attributes for the archetype.      |
-| `Abilities`     | `MAP`    | Default abilities for the archetype.       |
+| `Skills`        | `MAP`    | Default skills for the archetype.          |
 | `StartRoom`     | `NUMBER` | ID of the starting room for the archetype. |
+| `StartingItems` | `LIST`   | List of items given at character creation. |
+| `Health`        | `NUMBER` | Starting health points.                    |
+| `Essence`       | `NUMBER` | Starting essence points.                   |
+| `Player`        | `BOOL`   | Whether this archetype is for players.     |
 
 - **`ArchetypeName`**: Primary key for the archetype.
 - **`Description`**: Explains the archetype's role or characteristics.
-- **`Attributes`**: Base attribute values assigned to the archetype.
-- **`Abilities`**: Starting abilities associated with the archetype.
+- **`Attributes`**: Base attribute values assigned to the archetype (e.g., Strength: 4).
+- **`Skills`**: Starting skill values for the archetype (e.g., Swordsmanship: 2).
+- **`StartRoom`**: The room ID where characters of this archetype begin.
+- **`StartingItems`**: Items automatically given when a character is created.
+- **`Health`**: Base health points for the archetype.
+- **`Essence`**: Base essence/mana points for the archetype.
+- **`Player`**: Indicates if this archetype is available for player characters.
 
 ---
 
 ## MOTD Table (Messages of the Day)
 
-| Field     | Type     | Description                                   |
-| --------- | -------- | --------------------------------------------- |
-| `MotdID`  | `STRING` | UUID of the message.                          |
-| `Content` | `STRING` | The text content of the message.              |
-| `Date`    | `STRING` | Date when the message was created or updated. |
-| `Author`  | `STRING` | Author or creator of the message.             |
+| Field      | Type     | Description                                   |
+| ---------- | -------- | --------------------------------------------- |
+| `MotdID`   | `STRING` | UUID of the message.                          |
+| `Message`  | `STRING` | The text content of the message.              |
+| `CreatedAt`| `STRING` | Timestamp when the message was created.       |
+| `Active`   | `BOOL`   | Whether this message is currently active.     |
 
 - **`MotdID`**: Primary key, uniquely identifies the message.
-- **`Content`**: The actual message displayed to players.
-- **`Date`**: Used to determine if players have seen the latest message.
-- **`Author`**: Identifies who created or modified the message.
+- **`Message`**: The actual message displayed to players.
+- **`CreatedAt`**: Timestamp used to determine if players have seen the latest message.
+- **`Active`**: Flag to enable/disable messages without deletion.
 
 ---
 
@@ -305,23 +328,39 @@ end
 
 ---
 
-## Future Tables (Incremental-Specific)
+## Story Table
 
-The following tables will be added to support Incremental-specific features:
+| Field     | Type     | Description                                   |
+| --------- | -------- | --------------------------------------------- |
+| `PlayerID`| `STRING` | UUID of the player (partition key).           |
+| `StoryID` | `STRING` | UUID of the story (sort key).                 |
 
-### Story Table
+- **`PlayerID`**: Player UUID as partition key for efficient queries.
+- **`StoryID`**: Story UUID as sort key, allowing multiple stories per player.
+- Story metadata and content references stored in S3.
 
-- Story metadata and content references
-- S3 paths to story JSON files
-- Author information and version tracking
+## ActiveSegments Table
 
-### ActiveSegments Table
+| Field        | Type     | Description                                   |
+| ------------ | -------- | --------------------------------------------- |
+| `CharacterID`| `STRING` | UUID of the character.                        |
+| `SegmentID`  | `STRING` | ID of the active story segment.               |
+| `StartTime`  | `STRING` | Timestamp when segment started.               |
+| `EndTime`    | `STRING` | Timestamp when segment should complete.       |
 
 - Tracks active story segments with timers
 - Character-to-segment mapping
 - Completion timestamps
 
-### CharacterHistory Table
+## CharacterHistory Table
+
+| Field        | Type     | Description                                   |
+| ------------ | -------- | --------------------------------------------- |
+| `CharacterID`| `STRING` | UUID of the character.                        |
+| `StoryID`    | `STRING` | UUID of the completed story.                  |
+| `CompletedAt`| `STRING` | Timestamp of completion.                      |
+| `Choices`    | `MAP`    | Path choices made during the story.           |
+| `Rewards`    | `MAP`    | Rewards earned from story completion.         |
 
 - Story completion tracking
 - Path choices made
