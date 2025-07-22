@@ -51,6 +51,16 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
     """
     character_id = generate_character_id()
     timestamp = datetime.now(timezone.utc).isoformat()
+    
+    logger.info(
+        "Creating new character", 
+        extra={
+            "player_id": player_id,
+            "character_name": character_name,
+            "archetype_name": archetype_name,
+            "character_id": character_id
+        }
+    )
 
     # Build character record
     character_item = {
@@ -92,6 +102,7 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         characters_table = get_table(CHARACTERS_TABLE)
 
         # First, try to create the character record with conditional write
+        logger.info("Attempting to create character record", extra={"character_id": character_id})
         success, error_msg = put_item_if_not_exists(characters_table, character_item, "CharacterName")
         if not success:
             if error_msg == "Item already exists":
@@ -101,10 +112,28 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
                 )
                 return None, "Character name is already taken"
             else:
+                logger.error(
+                    "Failed to create character record",
+                    extra={
+                        "character_name": character_name,
+                        "error": error_msg
+                    }
+                )
                 return None, "Failed to create character"
+
+        logger.info("Character record created successfully", extra={"character_id": character_id})
 
         # Update player's character list
         character_info = {"UUID": character_id, "Dead": False, "GameMode": "Incremental"}
+        
+        logger.info(
+            "Updating player character list",
+            extra={
+                "player_id": player_id,
+                "character_name": character_name,
+                "character_info": character_info
+            }
+        )
 
         players_table.update_item(
             Key={"PlayerID": player_id},
@@ -114,8 +143,13 @@ def create_character(player_id, character_name, archetype_name, archetype_data):
         )
 
         logger.info(
-            "Created incremental character",
-            extra={"character_name": character_name, "character_id": character_id, "player_id": player_id},
+            "Character creation completed successfully",
+            extra={
+                "character_name": character_name,
+                "character_id": character_id,
+                "player_id": player_id,
+                "archetype": archetype_name
+            },
         )
         return character_id, None
 
@@ -181,6 +215,15 @@ def lambda_handler(event, context):
         # Extract and validate required fields
         character_name = body.get("characterName", "").strip()
         archetype_name = body.get("archetype", "").strip()
+        
+        logger.info(
+            "Character creation request received",
+            extra={
+                "player_id": player_id,
+                "character_name": character_name,
+                "archetype_name": archetype_name or "default"
+            }
+        )
 
         if not character_name:
             return cors_handler.add_cors_headers(
@@ -218,6 +261,15 @@ def lambda_handler(event, context):
         # Check character limit
         players_table = get_table(PLAYERS_TABLE)
         can_create, current_count = check_character_limit(player_id, players_table)
+        logger.info(
+            "Character limit check",
+            extra={
+                "player_id": player_id,
+                "current_count": current_count,
+                "can_create": can_create,
+                "max_allowed": os.environ.get("MAX_CHARACTERS_PER_PLAYER", "10")
+            }
+        )
         if not can_create:
             return cors_handler.add_cors_headers(
                 {
@@ -234,16 +286,33 @@ def lambda_handler(event, context):
 
         if archetype_name:
             # Try to get the archetype data
+            logger.info("Looking up archetype", extra={"archetype_name": archetype_name})
             archetype_data = get_archetype(archetype_name, archetypes_table)
             if not archetype_data:
                 # Invalid archetype provided, use defaults
                 logger.info(
-                    "Invalid archetype provided, using defaults", extra={"archetype_name": archetype_name, "player_id": player_id}
+                    "Invalid archetype provided, using defaults", 
+                    extra={
+                        "requested_archetype": archetype_name, 
+                        "player_id": player_id
+                    }
                 )
                 archetype_data = {}
                 archetype_name = "default"
+            else:
+                logger.info(
+                    "Archetype found",
+                    extra={
+                        "archetype_name": archetype_name,
+                        "has_attributes": bool(archetype_data.get("Attributes")),
+                        "has_skills": bool(archetype_data.get("Skills")),
+                        "health": archetype_data.get("Health", DEFAULT_HEALTH),
+                        "essence": archetype_data.get("Essence", DEFAULT_ESSENCE)
+                    }
+                )
         else:
             # No archetype provided, use defaults
+            logger.info("No archetype specified, using defaults")
             archetype_name = "default"
 
         # Create the character

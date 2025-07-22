@@ -76,30 +76,59 @@ def lambda_handler(event, context):
         # Extract player ID from Cognito authorizer
         player_id, auth_error = extract_player_id(event)
         if auth_error:
+            logger.error("Authentication failed", extra={"error": auth_error})
             return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
+
+        logger.info("Player authenticated", extra={"player_id": player_id})
 
         # Get player data from players table
         players_table = get_table(PLAYERS_TABLE)
         player_data = get_item(players_table, {"PlayerID": player_id})
 
         if not player_data:
+            logger.warning("Player not found in database", extra={"player_id": player_id})
             return cors_handler.add_cors_headers(not_found_response("Player"), event)
+        
         character_list = player_data.get("CharacterList", {})
+        logger.info(
+            "Player data retrieved", 
+            extra={
+                "player_id": player_id,
+                "character_count": len(character_list)
+            }
+        )
 
         # Build character list with name, id, and death status
         characters: list = []
         for char_name, char_info in character_list.items():
-            characters.append({
+            char_data = {
                 "name": char_name,
                 "id": char_info.get("UUID", ""),
                 "dead": char_info.get("Dead", False)
-            })
+            }
+            characters.append(char_data)
+            logger.debug(
+                "Processing character", 
+                extra={
+                    "character_name": char_name,
+                    "character_id": char_data["id"],
+                    "is_dead": char_data["dead"]
+                }
+            )
 
         # Sort by name for consistent ordering
         characters.sort(key=lambda x: x["name"])
 
         # Return success response
-        logger.info("Lambda response", extra={"status_code": 200})
+        logger.info(
+            "Character list prepared successfully", 
+            extra={
+                "status_code": 200,
+                "player_id": player_id,
+                "character_count": len(characters),
+                "character_names": [c["name"] for c in characters]
+            }
+        )
         return cors_handler.add_cors_headers(create_response(200, {"characters": characters}), event)
 
     except Exception as err:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/character.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../utils/error_handler.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -71,7 +72,7 @@ class _GameScreenState extends State<GameScreen> {
       debugPrint('GameScreen: Error stack trace: ${StackTrace.current}');
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = ErrorHandler.getUserFriendlyMessage(e, context: 'loading character');
           _isLoading = false;
         });
       }
@@ -99,7 +100,7 @@ class _GameScreenState extends State<GameScreen> {
       debugPrint('Error loading character: $e');
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = ErrorHandler.getUserFriendlyMessage(e, context: 'loading character');
           _isLoading = false;
         });
       }

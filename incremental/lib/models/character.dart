@@ -39,53 +39,66 @@ class Character {
 
   /// Create character from server response
   factory Character.fromJson(Map<String, dynamic> json) {
+    // Parse attributes and skills, converting numbers to doubles
+    final Map<String, double> parsedAttributes = {};
+    final rawAttributes = json['Attributes'] ?? {};
+    for (final entry in rawAttributes.entries) {
+      parsedAttributes[entry.key] = (entry.value as num).toDouble();
+    }
+    
+    final Map<String, double> parsedSkills = {};
+    final rawSkills = json['Skills'] ?? {};
+    for (final entry in rawSkills.entries) {
+      parsedSkills[entry.key] = (entry.value as num).toDouble();
+    }
+    
+    final Map<String, int> parsedResources = {};
+    final rawResources = json['Resources'] ?? {};
+    for (final entry in rawResources.entries) {
+      parsedResources[entry.key] = (entry.value as num).toInt();
+    }
+    
+    // The archetype from server is just a string name, not an object with ID
+    final archetypeName = json['Archetype'] as String? ?? 'default';
+    
     return Character(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      archetypeId: json['archetypeId'] as String,
-      archetypeName: json['archetypeName'] as String,
-      health: (json['health'] as num).toDouble(),
-      maxHealth: (json['maxHealth'] as num).toDouble(),
-      essence: (json['essence'] as num).toDouble(),
-      maxEssence: (json['maxEssence'] as num).toDouble(),
-      attributes: Map<String, double>.from(
-        (json['attributes'] as Map).map(
-          (key, value) => MapEntry(key, (value as num).toDouble()),
-        ),
-      ),
-      skills: Map<String, double>.from(
-        (json['skills'] as Map).map(
-          (key, value) => MapEntry(key, (value as num).toDouble()),
-        ),
-      ),
-      resources: Map<String, int>.from(json['resources'] ?? {}),
-      inventory: Map<String, String>.from(json['inventory'] ?? {}),
-      progress: Map<String, dynamic>.from(json['progress'] ?? {}),
-      storyState: json['storyState'] as Map<String, dynamic>?,
-      gameMode: json['gameMode'] as String? ?? 'Incremental',
-      lastUpdated: DateTime.parse(json['lastUpdated'] as String),
+      id: json['CharacterID'] as String,
+      name: json['CharacterName'] as String,
+      archetypeId: archetypeName, // Use archetype name as ID for now
+      archetypeName: archetypeName,
+      health: (json['Health'] as num).toDouble(),
+      maxHealth: (json['MaxHealth'] as num).toDouble(),
+      essence: (json['Essence'] as num).toDouble(),
+      maxEssence: (json['MaxEssence'] as num).toDouble(),
+      attributes: parsedAttributes,
+      skills: parsedSkills,
+      resources: parsedResources,
+      inventory: Map<String, String>.from(json['Inventory'] ?? {}),
+      progress: Map<String, dynamic>.from(json['Progress'] ?? {}),
+      storyState: json['StoryState'] as Map<String, dynamic>?,
+      gameMode: json['GameMode'] as String? ?? 'Incremental',
+      lastUpdated: DateTime.parse(json['UpdatedAt'] as String),
     );
   }
 
   /// Convert to JSON for API requests
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'name': name,
-      'archetypeId': archetypeId,
-      'archetypeName': archetypeName,
-      'health': health,
-      'maxHealth': maxHealth,
-      'essence': essence,
-      'maxEssence': maxEssence,
-      'attributes': attributes,
-      'skills': skills,
-      'resources': resources,
-      'inventory': inventory,
-      'progress': progress,
-      'storyState': storyState,
-      'gameMode': gameMode,
-      'lastUpdated': lastUpdated.toIso8601String(),
+      'CharacterID': id,
+      'CharacterName': name,
+      'Archetype': archetypeName,
+      'Health': health,
+      'MaxHealth': maxHealth,
+      'Essence': essence,
+      'MaxEssence': maxEssence,
+      'Attributes': attributes,
+      'Skills': skills,
+      'Resources': resources,
+      'Inventory': inventory,
+      'Progress': progress,
+      'StoryState': storyState,
+      'GameMode': gameMode,
+      'UpdatedAt': lastUpdated.toIso8601String(),
     };
   }
 
