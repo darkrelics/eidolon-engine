@@ -82,8 +82,8 @@ Present three action buttons:
 #### 3.2.1 Story Participation Flow
 1. System validates prerequisites and availability
 2. Player selects story from available list
-3. Character state transitions to Incremental mode
-4. Story participation key is assigned to character
+3. Character state transitions to Incremental mode via GameMode field
+4. Story participation record created in story table
 5. First segment (typically decision) is presented
 6. Player makes decision, timeout triggers default decision based on character/world state
 7. Narrative segment processes based on decision and character stats
@@ -95,7 +95,8 @@ Present three action buttons:
 #### 3.2.2 Segment Processing Requirements
 - **Minimum Segment Duration**: 1 minute
 - **Maximum Segment Duration**: 24 hours
-- **Processing Time Limit**: No Lambda function execution exceeds 30 seconds
+- **Processing Resolution**: 1 second (aligned with MUD ticker)
+- **Processing Time Limit**: Lambda functions complete within 30 seconds
 - **Auto-Progress**: Segments advance automatically after timer expiration
 - **Offline Progression**: Calculate results for segments completed while offline
 - **Default Decisions**: System determines optimal choice when player doesn't respond
@@ -103,18 +104,19 @@ Present three action buttons:
 ### 3.3 Character State Management
 
 #### 3.3.1 Mode Transition Requirements
-- **Lock Mechanism**: Character cannot be active in both modes simultaneously
-- **MUD Block**: Characters in incremental stories cannot login to MUD
-- **Incremental Block**: Characters logged into MUD cannot start incremental stories
+- **Lock Mechanism**: GameMode field prevents simultaneous mode access
+- **MUD Block**: Characters with GameMode="Incremental" cannot login to MUD
+- **Incremental Block**: Characters with GameMode="MUD" cannot start incremental stories
 - **Transition Validation**: Verify character is not in combat or other locked states
 - **Timeout Protection**: Automatic mode release after extended inactivity
 
 #### 3.3.2 Story Participation Tracking
-- **Active Story Key**: Track current story and segment position
-- **Completion History**: Record completed stories and outcomes
+- **Story Table**: Tracks active/completed stories per character
+- **Current Segment**: Stored in story participation record
+- **Completion History**: Maintained in story table with timestamps
 - **Daily Reset**: Clear daily story participation at server reset time
 - **Cooldown Management**: Enforce story-specific cooldown periods
-- **Available Stories**: Maintain list of unlocked stories in character record
+- **Available Stories**: Maintain list in character record
 
 ### 3.4 Story Types and Availability
 
@@ -154,129 +156,125 @@ Present three action buttons:
 
 ### 4.1 Frontend Architecture (Flutter)
 
-#### 4.1.1 Application Structure
+#### 4.1.1 Application Integration
+The incremental game will be integrated into the existing portal structure:
 ```
-incremental/
+portal/
 ├── lib/
-│   ├── models/          # Data models for stories, characters
-│   ├── providers/       # State management (Provider/Riverpod)
-│   ├── screens/         # UI screens
-│   │   ├── story_selection.dart
-│   │   ├── story_display.dart
-│   │   ├── equipment_management.dart
-│   │   └── character_status.dart
-│   ├── services/        # API communication layer
-│   ├── widgets/         # Reusable UI components
-│   └── utils/           # Helper functions and constants
+│   ├── screens/
+│   │   ├── incremental/
+│   │   │   ├── story_selection_screen.dart
+│   │   │   ├── story_display_screen.dart
+│   │   │   ├── equipment_management_screen.dart
+│   │   │   └── character_status_screen.dart
+│   ├── services/
+│   │   └── api_service.dart  # Extended with incremental endpoints
+│   ├── models/
+│   │   └── story.dart        # New story data models
+│   └── providers/
+│       └── incremental_state.dart  # New state management
 ```
 
 #### 4.1.2 State Management Requirements
 - **Global State**: Character data, active story, timer states
 - **Local State**: UI interactions, form inputs
 - **Persistence**: Cache story progress locally for offline viewing
-- **Synchronization**: Event-driven updates from backend
+- **Synchronization**: Polling-based updates from backend
 
 #### 4.1.3 API Communication Layer
-- **REST API Integration**: Communicate with API Gateway endpoints
-- **Polling Strategy**: Intelligent polling based on segment completion times
-- **Authentication**: AWS Cognito token management
-- **Error Handling**: Graceful degradation on connection issues
+- **REST API Integration**: Reuse existing API Gateway endpoints
+- **Polling Strategy**: Smart polling based on segment completion times
+- **Authentication**: Existing Cognito token management
+- **Error Handling**: Use standardized eidolon response patterns
 - **Request Queue**: Buffer actions during poor connectivity
 
 ### 4.2 Backend Architecture
 
 #### 4.2.1 Lambda Functions
-New Lambda functions required:
+New Lambda functions following existing patterns:
 
-**StoryManager Lambda**
+**api_get_stories**
 - Retrieve available stories for character
-- Filter stories based on character's unlocked list
-- Initialize story session
-- Return story content and initial segment
+- Filter based on prerequisites and cooldowns
+- Return formatted story list
 
-**SegmentProcessor Lambda**
-- Process player decisions
-- Calculate default decisions based on character state
-- Calculate narrative outcomes based on character stats
-- Apply character sheet updates
-- Advance to next segment
-- Handle timeout scenarios
-- Cache character state for segments < 120 minutes
+**api_start_story**
+- Validate character can start story
+- Set GameMode to "Incremental"
+- Initialize story participation record
+- Return first segment
 
-**EquipmentManager Lambda**
-- Retrieve character inventory
-- Process equipment changes
-- Handle trivial item purchases
-- Validate equipment requirements
+**api_submit_decision**
+- Record player decision
+- Schedule next segment processing
+- Return acknowledgment
 
-**StoryScheduler Lambda**
-- Manage timed segment progression
-- Process offline advancement
-- Handle daily story resets
-- Cleanup abandoned story sessions
+**api_get_segment**
+- Retrieve current segment state
+- Calculate time remaining
+- Return segment data
 
-**StoryTimingService (Fargate Container)**
-- Maintain in-memory queue of upcoming segment completions
-- Process segment timeouts in batches
-- Calculate narrative outcomes for expired segments
-- Update character states and story progression
-- Monitor DynamoDB Streams for new stories
-- Emit metrics on processing performance
+**api_complete_segment**
+- Process segment outcome
+- Apply character updates
+- Advance to next segment or complete story
+
+**api_abandon_story**
+- Clear active story
+- Reset GameMode to "None"
+- Apply abandonment penalties if any
 
 #### 4.2.2 Database Schema (DynamoDB)
 
-**Stories Table**
+**Story Table (Existing, Extended)**
 ```
 {
-  storyId: String (PK),
-  storyType: String (one-time|daily|repeatable),
-  title: String,
-  description: String,
-  prerequisites: Map,
-  estimatedDuration: Number,
-  segments: List[
+  PlayerID: String (PK),
+  StoryID: String (SK),
+  Status: String (active|completed|abandoned),
+  CurrentSegment: String,
+  SegmentStartTime: Number,
+  NextCompletionTime: Number,
+  Decisions: Map,
+  Outcomes: List,
+  StartTime: Number,
+  CompletionTime: Number,
+  TTL: Number  // For automatic cleanup
+}
+```
+
+**Stories Definition Table (New)**
+```
+{
+  StoryID: String (PK),
+  StoryType: String (one-time|daily|repeatable),
+  Title: String,
+  Description: String,
+  Prerequisites: Map,
+  EstimatedDuration: Number,
+  Segments: List[
     {
-      segmentId: String,
-      type: String (decision|narrative),
-      content: String,
-      imageUrl: String (optional),
-      duration: Number,
-      options: List (for decisions),
-      defaultDecisionLogic: String,
-      outcomes: Map (for narratives)
+      SegmentID: String,
+      Type: String (decision|narrative),
+      Content: String,
+      ImageUrl: String (optional),
+      Duration: Number,
+      Options: List (for decisions),
+      DefaultDecisionLogic: String,
+      Outcomes: Map (for narratives)
     }
   ]
 }
 ```
 
-**StoryParticipation Table**
+**Character Table (Existing fields utilized)**
 ```
 {
-  characterId: String (PK),
-  storyId: String (SK),
-  currentSegment: String,
-  startTime: Number,
-  lastActivityTime: Number,
-  decisions: Map,
-  outcomes: List,
-  status: String (active|completed|abandoned),
-  completionCount: Number
-}
-```
-
-**Character Table (Updated fields)**
-```
-{
-  characterId: String (PK),
-  // Existing MUD fields...
-  gameMode: {
-    mode: String (MUD|Incremental|None),
-    lastTransition: Number,
-    activeStoryId: String (optional),
-    lockExpiration: Number
-  },
-  availableStories: List[String], // Story IDs this character has unlocked
-  // Other existing fields...
+  CharacterID: String (PK),
+  PlayerID: String,  // Existing attribute
+  GameMode: String,  // Existing field (MUD|Incremental|None)
+  AvailableStories: List[String],  // New field
+  // All other existing MUD fields...
 }
 ```
 
@@ -292,7 +290,7 @@ New Lambda functions required:
 - Abstract MUD combat into narrative outcomes
 - Calculate damage/health changes over segment duration
 - Apply same formulas but in bulk processing
-- Maintain combat log for detailed review
+- Maintain outcome log for review
 
 #### 4.3.3 Experience and Progression
 - Award experience based on segment difficulty
@@ -306,32 +304,31 @@ New Lambda functions required:
 #### 4.4.1 Concurrent User Support
 - **Incremental Mode**: 10,000 concurrent users
 - **Response Time**: < 2 seconds for all user actions
-- **Lambda Concurrency**: Configure appropriate limits
-- **Database Capacity**: Provision adequate read/write units
+- **Lambda Concurrency**: Use default AWS limits
+- **Database Capacity**: Pay-per-request (auto-scaling)
 
 #### 4.4.2 Caching Strategy
-- **Story Content**: Retrieved dynamically via Lambda functions
-- **Character State**: Cached in Lambda for segments < 120 minutes
-- **Session Data**: DragonFly on EC2 if needed (avoid if possible)
+- **Story Definitions**: Cache in Lambda memory
+- **Character State**: Brief caching during active segments
 - **Static Assets**: S3 with CloudFront distribution
 
 #### 4.4.3 Timing Service Architecture
-- **Fargate Container**: Persistent service for story timing
-- **DynamoDB Streams**: Real-time notification of story events
-- **Batch Processing**: Efficient handling of multiple completions
-- **High Availability**: Multi-AZ deployment with auto-scaling
+- **EventBridge Rules**: Schedule segment completions
+- **Lambda Processing**: Handle completions at 1-second resolution
+- **Batch Processing**: Group simultaneous completions
+- **Failure Handling**: Retry logic with exponential backoff
 
 ### 4.5 Security Requirements
 
 #### 4.5.1 Authentication and Authorization
-- AWS Cognito integration for user authentication
+- AWS Cognito integration (existing)
 - JWT token validation on all API calls
-- Character ownership verification
+- Character ownership verification via PlayerID
 
 #### 4.5.2 Anti-Cheat Measures
 - Server-side validation of all game actions
 - Timestamp verification for segment progression
-- Rate limiting on API endpoints
+- Rate limiting on API endpoints (existing)
 - Outcome validation within defined parameters
 
 ### 4.6 Monitoring and Analytics
@@ -339,8 +336,8 @@ New Lambda functions required:
 #### 4.6.1 Operational Metrics
 - Lambda execution duration and errors
 - API Gateway response times
-- DynamoDB throttling events
-- Concurrent user counts by mode
+- DynamoDB consumed capacity
+- EventBridge rule execution
 
 #### 4.6.2 Game Analytics
 - Story completion rates
@@ -350,22 +347,23 @@ New Lambda functions required:
 - Equipment usage statistics
 
 #### 4.6.3 Audit Trail
-- CloudWatch Logs for all character progression events
-- Structured logging for analytics queries
-- Retention policies for compliance
+- CloudWatch Logs for all progression events
+- Structured logging using eidolon logger
+- Standard retention policies
 
 ## 5. Technical Constraints
 
 ### 5.1 Platform Requirements
 - Flutter 3.32+ for web application
 - AWS Lambda with Python 3.12+ runtime
-- DynamoDB for persistent storage
-- API Gateway REST APIs
-- ECS Fargate for story timing service
+- DynamoDB with existing table structure
+- API Gateway REST APIs (existing)
+- EventBridge for timing (replaces Fargate)
 - CloudWatch for logging and monitoring
 
 ### 5.2 Integration Constraints
 - Maintain compatibility with existing MUD character system
+- Use existing shared tables (no separate incremental tables)
 - Preserve all game mechanics calculations
 - Support future addition of new story types
 - Single-player experience only
@@ -374,16 +372,16 @@ New Lambda functions required:
 ## 6. Data Management
 
 ### 6.1 Character Data Integrity
-- Atomic updates for mode transitions
-- Transaction support for character modifications
+- Use existing DynamoDB transaction patterns
+- GameMode field ensures mode exclusivity
 - CloudWatch audit trail for progression events
-- Backup and recovery procedures
+- Standard backup and recovery procedures
 
 ### 6.2 Timing Service Management
-- Container orchestration via ECS
-- Auto-scaling based on queue depth
-- Health checks and automatic recovery
-- State checkpointing to DynamoDB
+- EventBridge rules created per active segment
+- Automatic cleanup of completed segments
+- Lambda functions handle rule execution
+- CloudWatch monitoring of timing accuracy
 
 ## 7. Acceptance Criteria
 
@@ -392,7 +390,7 @@ New Lambda functions required:
 - Seamless character transition between modes
 - Equipment changes persist across modes
 - Proper timeout handling with default decisions
-- Mode exclusivity enforced (no simultaneous MUD/Incremental)
+- Mode exclusivity enforced via GameMode field
 
 ### 7.2 Performance Acceptance
 - Support 10,000 concurrent incremental users
@@ -407,21 +405,42 @@ New Lambda functions required:
 - Responsive design across devices
 - Accessible to screen readers
 
-## 8. Technical Appendices
+## 8. Implementation Priorities
 
-### 8.1 API Documentation
-- Endpoint specifications
-- Request/response formats
-- Error code definitions
-- Rate limiting details
+### 8.1 Phase 1: Core Story System (Weeks 1-3)
+- Story definition table and Lambda functions
+- Basic story flow (start, decision, complete)
+- GameMode enforcement
+- Simple timer implementation
 
-### 8.2 Database Indexes
-- Partition and sort key strategies
-- GSI requirements for queries
-- DynamoDB Streams configuration
+### 8.2 Phase 2: Flutter Integration (Weeks 4-5)
+- Story selection and display screens
+- API service extensions
+- Basic polling implementation
+- Error handling integration
 
-### 8.3 Event Configuration
-- EventBridge rule definitions
-- Lambda trigger configurations
-- CloudWatch event patterns
-- Error handling strategies
+### 8.3 Phase 3: Advanced Features (Weeks 6-8)
+- Equipment management
+- Daily/repeatable stories
+- Story unlocking mechanisms
+- Performance optimization
+
+## 9. Simplified Architecture Benefits
+
+### 9.1 Reduced Complexity
+- No Fargate container service needed
+- Reuse existing Lambda patterns
+- Shared tables eliminate data synchronization
+- Standard error handling via eidolon package
+
+### 9.2 Cost Optimization
+- Serverless pricing model
+- No always-on container costs
+- Efficient use of existing infrastructure
+- Pay-per-use scaling
+
+### 9.3 Maintenance Benefits
+- Consistent patterns across all Lambda functions
+- Single deployment pipeline
+- Unified monitoring and logging
+- Simplified debugging

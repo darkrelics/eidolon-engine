@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-This document provides the technical design specifications for implementing the Incremental Game component of the Eidolon Engine. It details the system architecture, data flows, API specifications, and integration patterns required to deliver a timer-based story progression system that seamlessly integrates with the existing MUD infrastructure.
+This document provides the technical design specifications for implementing the Incremental Game component of the Eidolon Engine. It details the system architecture, data flows, API specifications, and integration patterns required to deliver a timer-based story progression system that seamlessly integrates with the existing MUD infrastructure using a simplified serverless approach.
 
 ## 2. System Architecture Overview
 
@@ -11,168 +11,53 @@ This document provides the technical design specifications for implementing the 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │  Flutter Web    │────▶│   API Gateway    │────▶│ Lambda Functions│
-│  Application    │     │   (REST API)     │     │  (Python 3.12)  │
+│  Portal (Shared)│     │   (Existing)     │     │  (Dual-Purpose) │
 └─────────────────┘     └──────────────────┘     └────────┬────────┘
                                                            │
-         ┌─────────────────────────────────────────────────┼────────────────┐
-         │                                                 │                │
-   ┌─────▼──────┐          ┌───────────────┐     ┌───────▼──────┐  ┌──────▼──────┐
-   │  DynamoDB  │◀─────────│ Fargate       │     │  DynamoDB    │  │ CloudWatch  │
-   │  Tables    │ Streams  │ Timing Service│     │  Streams     │  │   Logs      │
-   └────────────┘          └───────────────┘     └──────────────┘  └─────────────┘
+                    ┌──────────────────────────────────────┼──────┐
+                    │                                      │      │
+              ┌─────▼─────┐                        ┌──────▼──────┤
+              │ DynamoDB  │                        │ EventBridge │
+              │ (Shared)  │                        │  (Timers)   │
+              └───────────┘                        └─────────────┘
 ```
 
 ### 2.2 Component Interactions
 
-The Incremental Game system operates as a parallel gameplay mode to the MUD, sharing the same backend infrastructure but providing a distinct user experience through:
+The Incremental Game system operates as an alternative gameplay mode to the MUD, leveraging the existing infrastructure:
 
-1. **Shared Data Layer**: Common DynamoDB tables for character data
-2. **Mode Exclusivity**: Mutex-like locking preventing concurrent access
-3. **Timing Service**: Fargate container managing story progression
-4. **Stateless Compute**: Lambda functions for all user-initiated actions
-5. **Stream Processing**: DynamoDB Streams triggering timing updates
+1. **Shared Data Layer**: All existing DynamoDB tables used by both modes
+2. **Mode Exclusivity**: GameMode field prevents concurrent access
+3. **Timing Service**: EventBridge rules for segment scheduling at 1-second resolution
+4. **Stateless Compute**: Lambda functions handle all game logic
+5. **Unified Portal**: Single Flutter web app serves both game modes
 
 ## 3. Data Architecture
 
 ### 3.1 DynamoDB Table Designs
 
-#### 3.1.1 Stories Table
+#### 3.1.1 Story Table (Existing, Extended)
+
 ```python
-# Primary Key Structure
-PK: STORY#{storyId}
-SK: METADATA
-
-# Attributes
+# Uses existing story table with PlayerID/StoryID composite key
 {
-    "PK": "STORY#adv_forest_001",
-    "SK": "METADATA",
-    "storyId": "adv_forest_001",
-    "storyType": "daily",  # one-time|daily|repeatable
-    "title": "The Whispering Woods",
-    "description": "A mysterious force draws you into the ancient forest...",
-    "estimatedDuration": 3600,  # seconds
-    "prerequisites": {
-        "minSkills": {
-            "survival": 10,
-            "combat": 5
-        },
-        "requiredItems": ["map_fragment"],
-        "requiredRooms": ["town_square"]
-    },
-    "segments": [
-        {
-            "segmentId": "seg_001",
-            "type": "decision",
-            "content": "You stand at the forest edge. The path splits...",
-            "imageUrl": "s3://bucket/images/forest_edge.jpg",
-            "duration": 300,  # 5 minutes
-            "options": [
-                {
-                    "id": "opt_left",
-                    "text": "Take the moonlit path",
-                    "skillChecks": ["perception", "nature"]
-                },
-                {
-                    "id": "opt_right",
-                    "text": "Follow the ancient markers",
-                    "skillChecks": ["history", "navigation"]
-                }
-            ],
-            "defaultDecisionLogic": "highest_skill:perception,nature,history,navigation"
-        },
-        {
-            "segmentId": "seg_002",
-            "type": "narrative",
-            "duration": 600,  # 10 minutes
-            "content": {
-                "base": "You venture deeper into the woods...",
-                "outcomes": {
-                    "death": {
-                        "text": "The forest claims another victim...",
-                        "effects": {
-                            "health": 0,
-                            "room": "death_realm"
-                        }
-                    },
-                    "failure": {
-                        "text": "You stumble through brambles...",
-                        "effects": {
-                            "health": -20,
-                            "experience": 10
-                        }
-                    },
-                    "minimal": {
-                        "text": "You make slow progress...",
-                        "effects": {
-                            "health": -5,
-                            "experience": 25
-                        }
-                    },
-                    "normal": {
-                        "text": "You navigate successfully...",
-                        "effects": {
-                            "experience": 50,
-                            "items": ["herb_bundle"]
-                        }
-                    },
-                    "exceptional": {
-                        "text": "Your expertise shines through...",
-                        "effects": {
-                            "experience": 100,
-                            "items": ["rare_herb", "gold:50"],
-                            "skills": {"survival": 1}
-                        }
-                    }
-                }
-            }
-        }
-    ],
-    "created": "2025-01-15T10:00:00Z",
-    "version": 1
-}
-```
-
-#### 3.1.2 StoryParticipation Table
-```python
-# Primary Key Structure
-PK: CHAR#{characterId}
-SK: STORY#{storyId}#{timestamp}
-
-# GSI for Active Stories
-GSI1PK: ACTIVE#{characterId}
-GSI1SK: STORY#{storyId}
-
-# GSI for Timing Service
-GSI2PK: COMPLETION#{YYYY-MM-DD-HH}
-GSI2SK: {completionTimestamp}#{characterId}
-
-# Attributes
-{
-    "PK": "CHAR#abc123",
-    "SK": "STORY#adv_forest_001#1737000000",
-    "GSI1PK": "ACTIVE#abc123",  # Only for active stories
-    "GSI1SK": "STORY#adv_forest_001",
-    "GSI2PK": "COMPLETION#2025-01-15-10",  # Hour bucket for timing service
-    "GSI2SK": "1737003600#abc123",  # Next completion time
-    "characterId": "abc123",
-    "storyId": "adv_forest_001",
-    "status": "active",  # active|completed|abandoned
-    "currentSegment": "seg_002",
-    "segmentStartTime": 1737000300,
-    "nextCompletionTime": 1737003600,  # When current segment completes
-    "storyStartTime": 1737000000,
-    "lastActivityTime": 1737000300,
-    "decisions": {
-        "seg_001": {
-            "choice": "opt_left",
+    "PlayerID": "player-uuid-123",      # PK
+    "StoryID": "forest-adventure#2024", # SK (includes timestamp for history)
+    "Status": "active",                 # active|completed|abandoned
+    "CurrentSegment": "seg-002",
+    "SegmentStartTime": 1737000300,
+    "NextCompletionTime": 1737003600,
+    "Decisions": {
+        "seg-001": {
+            "choice": "take-left-path",
             "timestamp": 1737000250,
             "automated": false
         }
     },
-    "outcomes": [
+    "Outcomes": [
         {
-            "segmentId": "seg_002",
-            "result": "normal",
+            "segmentId": "seg-002",
+            "result": "normal-success",
             "timestamp": 1737000900,
             "effects": {
                 "experience": 50,
@@ -180,516 +65,661 @@ GSI2SK: {completionTimestamp}#{characterId}
             }
         }
     ],
-    "ttl": 1737086400  # 24 hours for active, indefinite for completed
+    "StartTime": 1737000000,
+    "CompletionTime": null,
+    "TTL": 1737086400  # Auto-cleanup after 24 hours for active stories
 }
 ```
 
-#### 3.1.3 Character Table Updates
+#### 3.1.2 Stories Definition Table (New)
+
 ```python
-# Existing character record with incremental additions
+# Simple table for story definitions
 {
-    "PK": "CHAR#abc123",
-    "SK": "PROFILE",
-    # ... existing MUD fields ...
-    
-    # Incremental Game additions
-    "gameMode": {
-        "mode": "Incremental",  # MUD|Incremental|None
-        "lastTransition": 1737000000,
-        "activeStoryId": "adv_forest_001",
-        "lockExpiration": 1737003600,  # 1 hour timeout
-        "lockToken": "uuid-v4-token"  # For distributed lock verification
+    "StoryID": "forest-adventure",      # PK
+    "StoryType": "daily",               # one-time|daily|repeatable
+    "Title": "The Whispering Woods",
+    "Description": "A mysterious force draws you into the ancient forest...",
+    "EstimatedDuration": 3600,          # seconds
+    "Prerequisites": {
+        "minSkills": {
+            "survival": 10,
+            "combat": 5
+        },
+        "requiredItems": ["map_fragment"],
+        "requiredRooms": ["town_square"]
     },
-    "availableStories": [
-        "adv_forest_001",
-        "daily_patrol_001",
-        "tutorial_001"
+    "Segments": [
+        {
+            "segmentId": "seg-001",
+            "type": "decision",
+            "content": "You stand at the forest edge. The path splits...",
+            "imageUrl": "s3://scripts-bucket/images/forest_edge.jpg",
+            "duration": 300,  # 5 minutes
+            "options": [
+                {
+                    "id": "take-left-path",
+                    "text": "Take the moonlit path",
+                    "skillChecks": ["perception", "nature"]
+                },
+                {
+                    "id": "follow-markers",
+                    "text": "Follow the ancient markers",
+                    "skillChecks": ["history", "navigation"]
+                }
+            ],
+            "defaultDecisionLogic": "highest_skill"
+        },
+        {
+            "segmentId": "seg-002",
+            "type": "narrative",
+            "duration": 600,  # 10 minutes
+            "content": {
+                "base": "You venture deeper into the woods...",
+                "outcomes": {
+                    "death": {
+                        "text": "The forest claims another victim...",
+                        "effects": {"health": 0, "room": "death_realm"}
+                    },
+                    "failure": {
+                        "text": "You stumble through brambles...",
+                        "effects": {"health": -20, "experience": 10}
+                    },
+                    "minimal": {
+                        "text": "You make slow progress...",
+                        "effects": {"health": -5, "experience": 25}
+                    },
+                    "normal": {
+                        "text": "You navigate successfully...",
+                        "effects": {"experience": 50, "items": ["herb_bundle"]}
+                    },
+                    "exceptional": {
+                        "text": "Your expertise shines through...",
+                        "effects": {"experience": 100, "items": ["rare_herb"], "gold": 50}
+                    }
+                }
+            }
+        }
     ],
-    "storyStats": {
-        "completed": 15,
-        "abandoned": 3,
-        "lastDaily": "2025-01-15"
-    }
+    "Version": 1,
+    "Created": "2025-01-15T10:00:00Z"
+}
+```
+
+#### 3.1.3 Character Table (Existing Fields Utilized)
+
+```python
+# No schema changes needed, using existing fields
+{
+    "CharacterID": "char-uuid-456",     # PK
+    "PlayerID": "player-uuid-123",      # Existing attribute
+    "GameMode": "Incremental",          # Existing field (MUD|Incremental|None)
+    "AvailableStories": [               # New field to add
+        "forest-adventure",
+        "daily-patrol",
+        "tutorial"
+    ],
+    # All other existing MUD fields remain unchanged...
 }
 ```
 
 ### 3.2 Data Access Patterns
 
 #### 3.2.1 Primary Access Patterns
-1. **Get Available Stories**: Query character's availableStories list
-2. **Check Story Participation**: Query StoryParticipation by characterId + storyId
-3. **Get Active Story**: GSI query for ACTIVE#{characterId}
-4. **Update Segment Progress**: Transactional write to StoryParticipation
-5. **Mode Transition**: Conditional update on Character gameMode
-6. **Timing Queue**: GSI2 query by completion hour bucket
 
-#### 3.2.2 Secondary Access Patterns
-1. **Daily Reset**: Batch update for daily story availability
-2. **Timeout Processing**: Query GSI2 for expired segments
-3. **Analytics Aggregation**: Stream processing of completion events
+1. **Get Available Stories**: Read character's AvailableStories list
+2. **Check Story Participation**: Query story table by PlayerID + StoryID
+3. **Get Active Story**: Query story table for Status="active"
+4. **Update Segment Progress**: Transactional update to story record
+5. **Mode Transition**: Update character GameMode field
+
+#### 3.2.2 No GSIs Required
+
+The simplified architecture avoids Global Secondary Indexes by:
+
+- Using direct key lookups where possible
+- Accepting slightly less efficient queries for admin operations
+- Leveraging existing table structures
 
 ## 4. API Design
 
 ### 4.1 RESTful Endpoints
 
+All endpoints follow existing Lambda patterns and extend the current API Gateway.
+
 #### 4.1.1 Story Management APIs
 
-**GET /incremental/stories/available**
-```
-Purpose: Retrieve stories available to the character
-Headers: Authorization: Bearer {cognito-jwt-token}
-Response: List of available stories with cooldowns and prerequisites
+**GET /stories**
+
+```python
+# Lambda: api_get_stories
+Purpose: Retrieve available stories for character
+Query Parameters: characterId
+Response: {
+    "stories": [
+        {
+            "storyId": "forest-adventure",
+            "title": "The Whispering Woods",
+            "type": "daily",
+            "available": true,
+            "cooldownRemaining": 0,
+            "estimatedDuration": 3600
+        }
+    ]
+}
 ```
 
-**POST /incremental/stories/start**
-```
-Purpose: Initialize a new story participation
-Request: { "storyId": "adv_forest_001" }
-Response: Current segment details and timing information
-Error Cases: CHARACTER_MODE_CONFLICT, STORY_NOT_AVAILABLE
+**POST /stories/start**
+
+```python
+# Lambda: api_start_story
+Purpose: Begin a new story
+Request: {
+    "characterId": "char-uuid-456",
+    "storyId": "forest-adventure"
+}
+Response: {
+    "segment": {
+        "segmentId": "seg-001",
+        "type": "decision",
+        "content": "You stand at the forest edge...",
+        "options": [...],
+        "timeRemaining": 300
+    }
+}
+Error Cases:
+- 409: Character already in story or MUD mode
+- 403: Story not available
 ```
 
-**GET /incremental/stories/current**
-```
-Purpose: Get current story state and progress
-Response: Active story details, current segment, time remaining
+**GET /stories/current**
+
+```python
+# Lambda: api_get_current_story
+Purpose: Get active story state
+Query Parameters: characterId
+Response: Current story and segment details
 ```
 
-#### 4.1.2 Segment Management APIs
+#### 4.1.2 Segment APIs
 
-**POST /incremental/segments/decision**
-```
-Purpose: Submit player decision for current segment
-Request: { "decision": "opt_left" }
-Response: Processing time until next segment
-```
+**POST /segments/decision**
 
-**GET /incremental/segments/result**
-```
-Purpose: Retrieve completed segment outcome
-Query Parameters: segmentId
-Response: Outcome narrative, effects, and next segment info
-```
-
-**POST /incremental/stories/abandon**
-```
-Purpose: Abandon current story
-Response: Confirmation and character state reset
+```python
+# Lambda: api_submit_decision
+Purpose: Submit player decision
+Request: {
+    "characterId": "char-uuid-456",
+    "decision": "take-left-path"
+}
+Response: {
+    "accepted": true,
+    "nextSegmentTime": 1737003600
+}
 ```
 
-**POST /incremental/stories/rest**
-```
-Purpose: Pause story progression
-Response: Rest duration and recovery effects
-```
+**GET /segments/outcome**
 
-#### 4.1.3 Equipment Management APIs
-
-**GET /incremental/equipment**
-```
-Purpose: Retrieve character inventory and equipped items
-Response: Full inventory list with equipment slots
-```
-
-**POST /incremental/equipment/equip**
-```
-Purpose: Change equipped item
-Request: { "itemId": "sword_steel_001", "slot": "weapon" }
-Response: Success confirmation with previous item
+```python
+# Lambda: api_get_segment_outcome
+Purpose: Retrieve completed segment results
+Query Parameters: characterId, segmentId
+Response: {
+    "outcome": "normal",
+    "narrative": "You navigate successfully...",
+    "effects": {
+        "experience": 50,
+        "items": ["herb_bundle"]
+    }
+}
 ```
 
-**POST /incremental/equipment/purchase**
+**POST /stories/abandon**
+
+```python
+# Lambda: api_abandon_story
+Purpose: Exit current story
+Request: { "characterId": "char-uuid-456" }
+Response: { "abandoned": true }
 ```
-Purpose: Buy trivial items from shop
-Request: { "itemId": "health_potion", "quantity": 5 }
-Response: Purchase confirmation and remaining gold
-```
 
-### 4.2 Client Polling Strategy
+### 4.2 Client Communication Strategy
 
-The Flutter client implements intelligent polling based on game state:
+The Flutter portal implements smart polling:
 
-1. **Active Segment Polling**
-   - Start polling 30 seconds before expected completion
-   - Exponential backoff: 30s, 15s, 5s, 2s, 1s
-   - Immediate poll after segment completes
+1. **Active Story Polling**
 
-2. **Idle State**
-   - Check every 5 minutes for story unlocks
-   - Check on app resume/focus
-   - No polling when no active story
+   - Poll `/stories/current` based on segment duration
+   - Start frequent polling 30 seconds before completion
+   - Use exponential backoff: 30s → 15s → 5s → 1s
 
-3. **Decision Windows**
-   - Poll every 30 seconds during decision segments
+2. **Decision Windows**
+
+   - Check every 30 seconds during decision segments
    - Immediate update after decision submission
 
-## 5. Core Service Specifications
+3. **Idle Optimization**
+   - No polling when no active story
+   - Check for new stories on screen focus
 
-### 5.1 Lambda Functions
+## 5. Lambda Function Specifications
 
-#### 5.1.1 StoryManager Lambda
-**Purpose**: Handle story discovery, validation, and initialization
+### 5.1 Core Lambda Functions
 
-**Operations**:
-- List available stories based on character state
-- Validate story prerequisites and cooldowns
-- Initialize story participation with mode locking
-- Create DynamoDB Stream record for timing service
+All Lambda functions follow the existing pattern in the `lambda/` directory and use the `eidolon` package for standardized responses, logging, and error handling.
 
-**Key Behaviors**:
-- Performs transactional updates to ensure mode exclusivity
-- Validates character not in MUD mode before starting
-- Sets initial timing information for first segment
-- Handles one-time/daily/repeatable story logic
+#### 5.1.1 api_get_stories
 
-#### 5.1.2 SegmentProcessor Lambda
-**Purpose**: Process player decisions and retrieve outcomes
-
-**Operations**:
-- Record player decisions with timestamps
-- Return calculated outcomes from timing service
-- Handle decision timeouts with default logic
-- Update story progression state
-
-**Key Behaviors**:
-- Validates decisions against current segment
-- Caches character state for segments < 120 minutes
-- Ensures progression rate doesn't exceed MUD speed
-- Updates GSI2 timing indexes for next segment
-
-#### 5.1.3 EquipmentManager Lambda
-**Purpose**: Handle equipment and inventory operations
-
-**Operations**:
-- Retrieve current equipment and inventory
-- Process equipment changes
-- Handle trivial item purchases
-- Validate equipment requirements
-
-**Key Behaviors**:
-- Prevents equipment changes during active combat
-- Validates character owns items before equipping
-- Maintains transaction logs for all changes
-
-### 5.2 Fargate Timing Service
-
-#### 5.2.1 Service Architecture
-
-The timing service runs as a containerized application in ECS Fargate:
-
-**Container Specifications**:
-- Language: Python 3.12 or Go 1.24
-- Memory: 4GB (for in-memory queue)
-- vCPU: 1.0
-- Desired Count: 2 (for redundancy)
-- Auto-scaling: Based on queue depth
-
-**Core Components**:
-1. **Timing Queue Manager**: Maintains priority queue of upcoming completions
-2. **DynamoDB Stream Processor**: Receives new stories and decisions
-3. **Batch Processor**: Handles segment completions in batches
-4. **State Checkpointer**: Periodically saves queue state
-5. **Metrics Publisher**: Emits CloudWatch metrics
-
-#### 5.2.2 Processing Flow
-
-**Initialization**:
-1. On startup, query GSI2 for all pending completions
-2. Load into in-memory priority queue
-3. Start DynamoDB Streams consumer
-4. Begin processing loop
-
-**Main Processing Loop**:
-1. Every 10 seconds, check for due completions
-2. Batch all completions within window
-3. For each completion:
-   - Retrieve story and segment data
-   - Calculate outcome based on character stats
-   - Apply effects to character
-   - Update participation record
-   - Add next segment to queue if applicable
-4. Batch write all updates to DynamoDB
-5. Emit metrics on processing performance
-
-**Stream Processing**:
-1. New story starts add first segment to queue
-2. Player decisions update completion times
-3. Story abandonment removes from queue
-4. Mode changes trigger queue updates
-
-**High Availability**:
-- Two containers run simultaneously
-- Partition work by character ID hash
-- Use DynamoDB conditional writes to prevent double processing
-- Checkpoint queue state every 5 minutes
-
-#### 5.2.3 Outcome Calculation
-
-The timing service implements the core game mechanics:
-
-**Skill Check System**:
-- Aggregate all relevant skills for the segment
-- Apply equipment modifiers
-- Calculate success probabilities
-- Ensure outcomes align with MUD progression rates
-
-**Default Decision Logic**:
-- For timeouts, evaluate all options
-- Select based on character's highest relevant skill
-- Consider safety vs reward based on character state
-- Log automated decisions for analytics
-
-**Batch Optimization**:
-- Group characters by similar segments
-- Reuse calculated probabilities
-- Minimize DynamoDB reads via caching
-- Write results in 25-item batches
-
-### 5.3 Daily Reset Process
-
-A scheduled Lambda function handles daily resets:
-
-1. **Trigger**: CloudWatch Events rule at midnight UTC
-2. **Process**:
-   - Query for all daily story completions
-   - Reset completion flags for new day
-   - Update character lastDaily timestamps
-   - Clear daily story cooldowns
-3. **Optimization**: Process in batches of 100 characters
-
-## 6. Flutter Client Architecture
-
-### 6.1 State Management
-
-The Flutter app uses Riverpod for state management:
-
-**Key Providers**:
-- `characterProvider`: Current character state
-- `storyProvider`: Active story and segment
-- `timerProvider`: Local countdown timers
-- `inventoryProvider`: Equipment and items
-
-**State Synchronization**:
-1. Initial load fetches all state
-2. Actions trigger immediate API calls
-3. Polling updates state based on timers
-4. Local timers provide UI updates between polls
-
-### 6.2 Polling Implementation
-
-```
-Polling Strategy:
-- Use Timer.periodic for countdown displays
-- HTTP polling based on expected completion
-- Exponential backoff near completion time
-- Immediate fetch after user actions
-- Cancel timers when app backgrounds
+```python
+"""Get available stories for a character."""
+# Key Operations:
+- Fetch character record to get AvailableStories list
+- Load story definitions from cache or DynamoDB
+- Check participation history for cooldowns
+- Filter by prerequisites
+- Return formatted list using eidolon.responses
 ```
 
-### 6.3 Offline Handling
+#### 5.1.2 api_start_story
 
-**Local Storage**:
-- Cache current story state
-- Store last known timers
-- Queue actions when offline
+```python
+"""Initialize story participation."""
+# Key Operations:
+- Verify character GameMode is "None"
+- Set GameMode to "Incremental" (atomic update)
+- Create story participation record
+- Schedule first segment completion via EventBridge
+- Return first segment details
+# Error Handling:
+- Use eidolon.responses.error_response for conflicts
+- Log with eidolon.logger
+```
 
-**Reconnection**:
-- Sync state on app resume
-- Process queued actions
-- Update timers from server
+#### 5.1.3 api_submit_decision
 
-## 7. Security Considerations
+```python
+"""Record player decision and schedule next segment."""
+# Key Operations:
+- Validate decision against current segment options
+- Update story record with decision
+- Calculate next segment timing
+- Create/update EventBridge rule for completion
+- Return acknowledgment
+```
 
-### 7.1 Mode Lock Implementation
+#### 5.1.4 api_process_segment
 
-**Lock Acquisition Process**:
-1. Check current mode is None or expired
-2. Atomically update with conditional write
-3. Set expiration time and generate token
-4. Return token for subsequent operations
+```python
+"""Process segment completion (triggered by EventBridge)."""
+# Key Operations:
+- Retrieve story and character data
+- Calculate outcome based on character stats/skills
+- Apply effects to character record
+- Update story progression
+- Schedule next segment or complete story
+# Note: This runs automatically, not called by client
+```
 
-**Lock Validation**:
-- All incremental operations verify mode
-- MUD login checks for incremental lock
-- Automatic cleanup of expired locks
+### 5.2 EventBridge Timer Implementation
+
+Instead of a Fargate container, use EventBridge for timing:
+
+```python
+def schedule_segment_completion(player_id, story_id, segment_id, completion_time):
+    """Create one-time EventBridge rule for segment completion."""
+    rule_name = f"segment-{player_id}-{segment_id}"
+
+    eventbridge.put_rule(
+        Name=rule_name,
+        ScheduleExpression=f"at({completion_time.isoformat()})",
+        State='ENABLED'
+    )
+
+    # Target the segment processor Lambda
+    eventbridge.put_targets(
+        Rule=rule_name,
+        Targets=[{
+            'Id': '1',
+            'Arn': segment_processor_lambda_arn,
+            'Input': json.dumps({
+                'playerId': player_id,
+                'storyId': story_id,
+                'segmentId': segment_id
+            })
+        }]
+    )
+```
+
+### 5.3 Outcome Calculation Logic
+
+The segment processor implements MUD-compatible mechanics:
+
+```python
+def calculate_narrative_outcome(character, segment, decision=None):
+    """Determine narrative outcome based on character stats."""
+    # Aggregate relevant skills
+    skill_total = sum(character.get('skills', {}).get(skill, 0)
+                     for skill in segment.get('relevantSkills', []))
+
+    # Apply equipment modifiers
+    equipment_bonus = calculate_equipment_bonus(character, segment)
+
+    # Calculate success probability (same as MUD combat)
+    success_chance = (skill_total + equipment_bonus) / 100.0
+
+    # Roll for outcome
+    roll = random.random()
+
+    if roll < 0.05:  # 5% critical failure
+        return 'death'
+    elif roll < 0.20:  # 15% failure
+        return 'failure'
+    elif roll < 0.50:  # 30% minimal success
+        return 'minimal'
+    elif roll < 0.90:  # 40% normal success
+        return 'normal'
+    else:  # 10% exceptional success
+        return 'exceptional'
+```
+
+## 6. Flutter Portal Integration
+
+### 6.1 New Screens
+
+Add to existing portal structure:
+
+```dart
+// portal/lib/screens/incremental/
+story_selection_screen.dart    // List available stories
+story_display_screen.dart      // Show current segment
+equipment_screen.dart          // Manage equipment (reuse existing)
+```
+
+### 6.2 State Management
+
+Extend existing providers:
+
+```dart
+// portal/lib/providers/incremental_state.dart
+class IncrementalState extends ChangeNotifier {
+  Story? activeStory;
+  Segment? currentSegment;
+  Timer? pollingTimer;
+  DateTime? segmentCompleteTime;
+
+  // Reuse existing ApiService for all calls
+  final ApiService _api;
+
+  Future<void> startStory(String storyId) async {
+    final response = await _api.post('/stories/start', {
+      'characterId': currentCharacter.id,
+      'storyId': storyId
+    });
+    // Update state and start polling
+  }
+}
+```
+
+### 6.3 Navigation Integration
+
+Update character management screen:
+
+```dart
+// Add button to enter incremental mode
+if (character.gameMode == 'None') {
+  ElevatedButton(
+    onPressed: () => Navigator.pushNamed(
+      context,
+      '/incremental/stories'
+    ),
+    child: Text('Play Story Mode'),
+  );
+} else if (character.gameMode == 'Incremental') {
+  ElevatedButton(
+    onPressed: () => Navigator.pushNamed(
+      context,
+      '/incremental/current'
+    ),
+    child: Text('Continue Story'),
+  );
+}
+```
+
+## 7. Security and Validation
+
+### 7.1 Mode Exclusivity
+
+Enforce through GameMode field:
+
+```python
+def validate_mode_transition(character, target_mode):
+    """Ensure character can transition to target mode."""
+    current_mode = character.get('GameMode', 'None')
+
+    if current_mode == target_mode:
+        return True
+
+    if current_mode == 'MUD':
+        raise ValueError("Character active in MUD")
+
+    if current_mode == 'Incremental':
+        raise ValueError("Character in story mode")
+
+    # Check for expired locks (1 hour timeout)
+    last_transition = character.get('LastModeTransition', 0)
+    if time.time() - last_transition < 3600:
+        return True
+
+    return True
+```
 
 ### 7.2 Input Validation
 
-**API Gateway Validation**:
-- Request schemas for all endpoints
-- Parameter format validation
-- Rate limiting per character
+Use existing eidolon validation patterns:
 
-**Lambda Validation**:
-- Character ownership verification
-- Story availability checks
-- Decision option validation
-- Timing window enforcement
+```python
+from eidolon.validation_utils import validate_uuid, validate_string
 
-## 8. Performance Optimization
+def validate_story_request(event):
+    """Validate story API request."""
+    character_id = event.get('characterId')
+    if not validate_uuid(character_id):
+        return error_response("Invalid character ID")
 
-### 8.1 Fargate Service Optimization
+    story_id = event.get('storyId')
+    if not validate_string(story_id, max_length=50):
+        return error_response("Invalid story ID")
+```
 
-**Memory Management**:
-- Use efficient data structures for queue
-- Implement queue size limits
-- Periodic garbage collection
-- Memory profiling in production
+## 8. Monitoring and Analytics
 
-**Batch Processing**:
-- Group similar operations
-- Minimize DynamoDB API calls
-- Use parallel processing where safe
-- Implement circuit breakers
+### 8.1 CloudWatch Metrics
 
-### 8.2 DynamoDB Optimization
+Emit custom metrics using existing patterns:
 
-**Index Design**:
-- GSI2 enables efficient time-based queries
-- Partition timing data by hour buckets
-- Project only necessary attributes
+```python
+from eidolon.logger import get_logger
+logger = get_logger(__name__)
 
-**Write Optimization**:
-- Batch writes up to 25 items
-- Use conditional writes sparingly
-- Implement exponential backoff
-- Monitor for hot partitions
+# Log story events
+logger.info("Story started", extra={
+    "story_id": story_id,
+    "character_id": character_id,
+    "story_type": story_type
+})
 
-### 8.3 Caching Strategy
+# Track completion rates
+cloudwatch.put_metric_data(
+    Namespace='eidolon/incremental',
+    MetricData=[{
+        'MetricName': 'StoryCompletion',
+        'Value': 1,
+        'Dimensions': [
+            {'Name': 'StoryId', 'Value': story_id},
+            {'Name': 'Outcome', 'Value': outcome}
+        ]
+    }]
+)
+```
 
-**Lambda Caching**:
-- Story definitions cached for 5 minutes
-- Character state for active segments < 2 hours
-- Use Lambda container reuse
+### 8.2 Error Tracking
 
-**Client Caching**:
-- Story list cached for session
-- Timer states persisted locally
-- Image assets cached indefinitely
+Leverage existing error patterns:
 
-## 9. Monitoring and Observability
+```python
+try:
+    # Story logic
+except ValidationError as e:
+    logger.warning("Validation failed", extra={"error": str(e)})
+    return validation_error_response(e.field, e.message)
+except Exception as e:
+    logger.error("Story processing failed", extra={"error": str(e)}, exc_info=True)
+    return internal_error_response(context.aws_request_id)
+```
 
-### 9.1 Metrics
+## 9. Deployment Strategy
 
-**Timing Service Metrics**:
-- Queue depth
-- Processing latency
-- Completions per second
-- Error rates by type
-- Memory utilization
+### 9.1 CDK Integration
 
-**API Metrics**:
-- Request rates by endpoint
-- Response times
-- Error rates
-- Active stories count
+Add new Lambda functions to existing stack:
 
-### 9.2 Logging
+```python
+# deployment/cdk/stacks/lambda_stack.py
+# Add to existing Lambda definitions:
 
-**Structured Log Format**:
-- Timestamp
-- Service name
-- Operation
-- Character ID
-- Story ID
-- Outcome
-- Processing time
+self.story_functions = [
+    ("api-get-stories", "api_get_stories.lambda_handler"),
+    ("api-start-story", "api_start_story.lambda_handler"),
+    ("api-submit-decision", "api_submit_decision.lambda_handler"),
+    ("api-get-segment-outcome", "api_get_segment_outcome.lambda_handler"),
+    ("api-abandon-story", "api_abandon_story.lambda_handler"),
+    ("process-segment", "process_segment.lambda_handler"),
+]
 
-**Log Aggregation**:
-- CloudWatch Logs for all services
-- Log Insights for querying
-- Alarms on error patterns
+# Add EventBridge rule for segment processor
+self.segment_processor_rule = events.Rule(
+    self, "segment-processor-rule",
+    schedule=events.Schedule.rate(Duration.seconds(1))
+)
+```
 
-### 9.3 Tracing
+### 9.2 API Gateway Routes
 
-**X-Ray Integration**:
-- Trace requests across services
-- Identify performance bottlenecks
-- Monitor DynamoDB latency
-- Track timing service processing
+Extend existing API:
 
-## 10. Deployment Strategy
+```python
+# Add to API Gateway configuration
+story_routes = [
+    ("GET", "/stories", "api-get-stories"),
+    ("POST", "/stories/start", "api-start-story"),
+    ("GET", "/stories/current", "api-get-current-story"),
+    ("POST", "/segments/decision", "api-submit-decision"),
+    ("GET", "/segments/outcome", "api-get-segment-outcome"),
+    ("POST", "/stories/abandon", "api-abandon-story"),
+]
+```
 
-### 10.1 Multi-Account Setup
+### 9.3 Database Updates
 
-**Account Structure**:
-- DEV: Full stack, reduced scale
-- QA: Production configuration
-- PROD: Full scale with redundancy
+Add story definition table to DynamoDB stack:
 
-**Deployment Process**:
-1. CDK deploys infrastructure
-2. Lambda functions via SAM
-3. Fargate service via ECS
-4. API Gateway stages
+```python
+# deployment/cdk/stacks/dynamodb_stack.py
+# Add to table configurations:
+{"name": "story_definitions", "pk": "StoryID", "pk_type": "S"}
+```
 
-### 10.2 Testing Approach
+## 10. Cost Analysis
 
-**DEV Environment**:
-- Single Fargate container
-- Reduced polling intervals
-- Synthetic test data
-- Open CORS for testing
+### 10.1 Simplified Cost Structure
 
-**QA Environment**:
-- Production-like configuration
-- Load testing capabilities
-- Full monitoring stack
-- Performance baselines
+With the serverless approach:
 
-**Production Safeguards**:
-- Blue-green deployments
-- Canary releases for Lambda
-- Automated rollback triggers
-- Change approval process
+**Monthly Costs (10,000 concurrent users)**:
 
-## 11. Cost Optimization
+- Lambda invocations: ~$50-100
+- EventBridge rules: ~$10-20
+- DynamoDB (pay-per-request): ~$100-200
+- No Fargate costs: $0
+- **Total: ~$160-320/month**
 
-### 11.1 Service Costs
+### 10.2 Cost Optimization
 
-**Primary Cost Drivers**:
-- Fargate containers (24/7 operation)
-- DynamoDB reads/writes
-- Lambda invocations
-- Data transfer
+1. **Lambda Optimization**:
 
-**Optimization Strategies**:
-- Right-size Fargate containers
-- Use DynamoDB on-demand pricing
-- Implement efficient caching
-- Minimize polling frequency
+   - Minimize cold starts by keeping functions warm
+   - Use appropriate memory allocation (256MB typical)
 
-### 11.2 Scaling Considerations
+2. **EventBridge Efficiency**:
 
-**At 10,000 concurrent users**:
-- ~100 segment completions/minute
-- ~1000 API requests/minute
-- 2-3 Fargate containers needed
-- ~$500-800/month estimated cost
+   - Clean up completed rules promptly
+   - Batch similar timings when possible
 
-## 12. Future Enhancements
+3. **DynamoDB Efficiency**:
+   - Use TTL for automatic cleanup
+   - Minimize unnecessary reads
 
-### 12.1 Potential Improvements
+## 11. Implementation Timeline
 
-1. **Push Notifications**: Add SNS for mobile alerts
-2. **Predictive Caching**: Pre-calculate likely outcomes
-3. **Story Analytics**: Detailed player behavior tracking
-4. **A/B Testing**: Framework for story variants
+### 11.1 Phase 1: Core Story System (Week 1-2)
 
-### 12.2 Scalability Path
+- Create story definition table
+- Implement core Lambda functions
+- Basic EventBridge timer logic
+- Manual story creation tools
 
-1. **Horizontal Scaling**: Add Fargate containers
-2. **Regional Distribution**: Multi-region deployment
-3. **Caching Layer**: Add ElastiCache if needed
-4. **Queue Service**: Consider SQS for extreme scale
+### 11.2 Phase 2: Flutter Integration (Week 3-4)
+
+- Story selection screen
+- Story display/decision UI
+- Polling implementation
+- Error handling
+
+### 11.3 Phase 3: Game Mechanics (Week 5-6)
+
+- Skill check calculations
+- Equipment integration
+- Progression balancing
+- Daily story reset logic
+
+### 11.4 Phase 4: Polish & Testing (Week 7-8)
+
+- Performance optimization
+- Comprehensive testing
+- Analytics implementation
+- Documentation
+
+## 12. Benefits of Simplified Architecture
+
+### 12.1 Development Benefits
+
+- No new infrastructure patterns to learn
+- Reuse existing Lambda/API patterns
+- Consistent error handling via eidolon
+- Single deployment pipeline
+
+### 12.2 Operational Benefits
+
+- No container management
+- Automatic scaling with Lambda
+- Pay-per-use pricing
+- Unified monitoring
+
+### 12.3 Maintenance Benefits
+
+- Fewer moving parts
+- Standard AWS services only
+- No custom timing service to maintain
+- Simple debugging with CloudWatch
 
 ## 13. Conclusion
 
-This technical design provides a robust, scalable architecture for the Eidolon Engine Incremental Game. The combination of serverless Lambda functions for user interactions and a persistent Fargate service for timing creates an efficient system that can handle 10,000 concurrent users while maintaining sub-second response times and ensuring progression rates align with MUD gameplay.
+This simplified technical design leverages the existing Eidolon Engine infrastructure to implement the incremental game with minimal additional complexity. By using shared tables, dual-purpose Lambda functions, and EventBridge for timing, the system can support 10,000 concurrent users while maintaining consistency with the MUD game mechanics and keeping operational costs low.
 
-Key architectural benefits:
-- Simplified client with REST-only communication
-- Efficient batch processing in Fargate
-- Cost-effective timing management
-- Clear separation of concerns
-- Strong consistency guarantees
+Key architectural decisions:
+
+- Shared DynamoDB tables eliminate synchronization needs
+- EventBridge replaces complex Fargate timing service
+- Existing Lambda patterns ensure consistency
+- GameMode field provides simple mode exclusivity
+- 1-second resolution aligns with MUD ticker

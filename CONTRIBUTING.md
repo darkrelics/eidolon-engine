@@ -129,16 +129,19 @@ Understand where your code belongs:
 ## Pull Request Process
 
 1. **Branch Naming**
+
    - Feature: `feature/description`
    - Bugfix: `bugfix/issue-number`
    - Hotfix: `hotfix/description`
 
 2. **Commit Messages**
+
    - Use clear, descriptive messages
    - Reference issue numbers when applicable
    - Example: `Add character inventory management (#123)`
 
 3. **Pull Request Description**
+
    - Describe what changes you've made
    - Explain why the changes are needed
    - List any breaking changes
@@ -200,6 +203,7 @@ Understand where your code belongs:
 ### API Design Standards
 
 - **Parameter Passing**:
+
   - Use query parameters for resource-specific operations (GET, DELETE)
   - Use request body (JSON) for data submission (POST, PUT, PATCH)
   - Never use path parameters for IDs - always use query parameters
