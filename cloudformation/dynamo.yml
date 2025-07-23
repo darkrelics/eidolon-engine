@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "DynamoDB tables for Eidolon Engine"
 
+Parameters:
+  GameName:
+    Type: String
+    Default: "eidolon"
+    Description: "Name of the game"
+
 Resources:
   PlayersTable:
     Type: AWS::DynamoDB::Table
@@ -13,6 +19,7 @@ Resources:
         - AttributeName: PlayerID
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
 
   CharactersTable:
     Type: AWS::DynamoDB::Table
@@ -25,6 +32,7 @@ Resources:
         - AttributeName: CharacterID
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
 
   RoomsTable:
     Type: AWS::DynamoDB::Table
@@ -37,6 +45,7 @@ Resources:
         - AttributeName: RoomID
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
 
   ExitsTable:
     Type: AWS::DynamoDB::Table
@@ -49,6 +58,7 @@ Resources:
         - AttributeName: ExitID
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
 
   ItemsTable:
     Type: AWS::DynamoDB::Table
@@ -61,6 +71,7 @@ Resources:
         - AttributeName: ItemID
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
 
   ItemPrototypesTable:
     Type: AWS::DynamoDB::Table
@@ -73,6 +84,7 @@ Resources:
         - AttributeName: PrototypeID
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
 
   ArchetypesTable:
     Type: AWS::DynamoDB::Table
@@ -85,6 +97,7 @@ Resources:
         - AttributeName: ArchetypeName
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
 
   MOTDTable:
     Type: AWS::DynamoDB::Table
@@ -97,84 +110,48 @@ Resources:
         - AttributeName: MotdID
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
 
-  # Incremental Game Tables
-  IncrementalCharactersTable:
+  # Shared story table for incremental game
+  StoryTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: incremental_characters
+      TableName: story
       AttributeDefinitions:
         - AttributeName: PlayerID
-          AttributeType: S
-      KeySchema:
-        - AttributeName: PlayerID
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
-
-  ActiveSegmentsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: active_segments
-      AttributeDefinitions:
-        - AttributeName: PlayerID
-          AttributeType: S
-      KeySchema:
-        - AttributeName: PlayerID
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
-
-  StoryRegistryTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: story_registry
-      AttributeDefinitions:
-        - AttributeName: StoryID
-          AttributeType: S
-        - AttributeName: Version
-          AttributeType: N
-      KeySchema:
-        - AttributeName: StoryID
-          KeyType: HASH
-        - AttributeName: Version
-          KeyType: RANGE
-      BillingMode: PAY_PER_REQUEST
-
-  StoryManifestTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: story_manifest
-      AttributeDefinitions:
-        - AttributeName: ManifestType
           AttributeType: S
         - AttributeName: StoryID
           AttributeType: S
       KeySchema:
-        - AttributeName: ManifestType
+        - AttributeName: PlayerID
           KeyType: HASH
         - AttributeName: StoryID
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
 
-  CharacterHistoryTable:
+  # Story definitions table (new)
+  StoryDefinitionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: character_history
+      TableName: story_definitions
       AttributeDefinitions:
-        - AttributeName: PlayerID
+        - AttributeName: StoryID
           AttributeType: S
-        - AttributeName: Timestamp
-          AttributeType: N
       KeySchema:
-        - AttributeName: PlayerID
+        - AttributeName: StoryID
           KeyType: HASH
-        - AttributeName: Timestamp
-          KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
 
   EidolonDynamoDBPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: EidolonDynamoDBReadWritePolicy
+      ManagedPolicyName: !Sub "${GameName}-dynamodb-access"
+      Description: !Sub "Policy for accessing ${GameName} Eidolon Engine DynamoDB tables"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -184,78 +161,85 @@ Resources:
               - dynamodb:PutItem
               - dynamodb:UpdateItem
               - dynamodb:DeleteItem
-              - dynamodb:BatchGetItem
-              - dynamodb:BatchWriteItem
               - dynamodb:Query
               - dynamodb:Scan
+              - dynamodb:BatchGetItem
+              - dynamodb:BatchWriteItem
             Resource:
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/players"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/characters"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/rooms"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/exits"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/items"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/prototypes"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/archetypes"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/motd"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/incremental_characters"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/active_segments"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/story_registry"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/story_manifest"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/character_history"
+              - !GetAtt PlayersTable.Arn
+              - !GetAtt CharactersTable.Arn
+              - !GetAtt RoomsTable.Arn
+              - !GetAtt ExitsTable.Arn
+              - !GetAtt ItemsTable.Arn
+              - !GetAtt ItemPrototypesTable.Arn
+              - !GetAtt ArchetypesTable.Arn
+              - !GetAtt MOTDTable.Arn
+              - !GetAtt StoryTable.Arn
+              - !GetAtt StoryDefinitionsTable.Arn
 
 Outputs:
-  PlayersTableArn:
-    Description: "ARN of the Players table"
-    Value: !GetAtt PlayersTable.Arn
+  PlayersTableName:
+    Description: "DynamoDB table name for players"
+    Value: !Ref PlayersTable
+    Export:
+      Name: !Sub "${AWS::StackName}-PlayersTableName"
 
-  CharactersTableArn:
-    Description: "ARN of the Characters table"
-    Value: !GetAtt CharactersTable.Arn
+  CharactersTableName:
+    Description: "DynamoDB table name for characters"
+    Value: !Ref CharactersTable
+    Export:
+      Name: !Sub "${AWS::StackName}-CharactersTableName"
 
-  RoomsTableArn:
-    Description: "ARN of the Rooms table"
-    Value: !GetAtt RoomsTable.Arn
+  RoomsTableName:
+    Description: "DynamoDB table name for rooms"
+    Value: !Ref RoomsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-RoomsTableName"
 
-  ExitsTableArn:
-    Description: "ARN of the Exits table"
-    Value: !GetAtt ExitsTable.Arn
+  ExitsTableName:
+    Description: "DynamoDB table name for exits"
+    Value: !Ref ExitsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ExitsTableName"
 
-  ItemsTableArn:
-    Description: "ARN of the Items table"
-    Value: !GetAtt ItemsTable.Arn
+  ItemsTableName:
+    Description: "DynamoDB table name for items"
+    Value: !Ref ItemsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ItemsTableName"
 
-  ItemPrototypesTableArn:
-    Description: "ARN of the ItemPrototypes table"
-    Value: !GetAtt ItemPrototypesTable.Arn
+  PrototypesTableName:
+    Description: "DynamoDB table name for prototypes"
+    Value: !Ref ItemPrototypesTable
+    Export:
+      Name: !Sub "${AWS::StackName}-PrototypesTableName"
 
-  ArchetypesTableArn:
-    Description: "ARN of the Archetypes table"
-    Value: !GetAtt ArchetypesTable.Arn
+  ArchetypesTableName:
+    Description: "DynamoDB table name for archetypes"
+    Value: !Ref ArchetypesTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ArchetypesTableName"
 
-  MOTDTableArn:
-    Description: "ARN of the MotD table"
-    Value: !GetAtt MOTDTable.Arn
+  MotdTableName:
+    Description: "DynamoDB table name for motd"
+    Value: !Ref MOTDTable
+    Export:
+      Name: !Sub "${AWS::StackName}-MotdTableName"
 
-  IncrementalCharactersTableArn:
-    Description: "ARN of the Incremental Characters table"
-    Value: !GetAtt IncrementalCharactersTable.Arn
+  StoryTableName:
+    Description: "DynamoDB table name for story"
+    Value: !Ref StoryTable
+    Export:
+      Name: !Sub "${AWS::StackName}-StoryTableName"
 
-  ActiveSegmentsTableArn:
-    Description: "ARN of the Active Segments table"
-    Value: !GetAtt ActiveSegmentsTable.Arn
+  StoryDefinitionsTableName:
+    Description: "DynamoDB table name for story definitions"
+    Value: !Ref StoryDefinitionsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-StoryDefinitionsTableName"
 
-  StoryRegistryTableArn:
-    Description: "ARN of the Story Registry table"
-    Value: !GetAtt StoryRegistryTable.Arn
-
-  StoryManifestTableArn:
-    Description: "ARN of the Story Manifest table"
-    Value: !GetAtt StoryManifestTable.Arn
-
-  CharacterHistoryTableArn:
-    Description: "ARN of the Character History table"
-    Value: !GetAtt CharacterHistoryTable.Arn
-
-  EidolonDynamoDBPolicyArn:
-    Description: "ARN of the Eidolon Engine DynamoDB Read/Write Policy"
+  DynamoDBAccessPolicyArn:
+    Description: "ARN of the DynamoDB access policy"
     Value: !Ref EidolonDynamoDBPolicy
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBAccessPolicyArn"
