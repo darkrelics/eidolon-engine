@@ -66,7 +66,9 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'forgotPassword')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'forgotPassword'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

@@ -235,6 +235,12 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 				character.essence = float64(archetypeObj.Essence)
 			}
 
+			// Copy available stories from archetype
+			if len(archetypeObj.AvailableStories) > 0 {
+				character.availableStories = make([]string, len(archetypeObj.AvailableStories))
+				copy(character.availableStories, archetypeObj.AvailableStories)
+			}
+
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
 				character.room = startRoom
 			} else if defaultRoom, ok := p.server.game.rooms[0]; ok {

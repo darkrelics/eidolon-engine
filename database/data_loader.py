@@ -164,6 +164,10 @@ def store_archetypes(archetypes_data):
                 archetype_item["Health"] = archetype["Health"]
             if "Essence" in archetype:
                 archetype_item["Essence"] = archetype["Essence"]
+            
+            # Add optional AvailableStories field if present
+            if "AvailableStories" in archetype:
+                archetype_item["AvailableStories"] = archetype["AvailableStories"]
 
             # Build update expression dynamically
             update_expression = "SET "
@@ -486,6 +490,13 @@ def display_archetypes(archetypes):
                 print(f"    Prototype: {item.get('PrototypeID', 'Unknown')}")
                 print(f"      Slot: {item.get('Slot', 'Unspecified')}")
                 print(f"      Worn: {item.get('IsWorn', False)}")
+        
+        # Add available stories information
+        available_stories = archetype.get("AvailableStories", [])
+        if available_stories:
+            print("  Available Stories:")
+            for story_id in available_stories:
+                print(f"    {story_id}")
         print()
 
 

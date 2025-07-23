@@ -46,7 +46,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signOut')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'signOut'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -79,14 +81,18 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         Navigator.pushReplacementNamed(
           context,
           '/login',
-          arguments: {NavigationConstants.messageKey: 'Your account has been deleted'},
+          arguments: {
+            NavigationConstants.messageKey: 'Your account has been deleted',
+          },
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'deleteAccount')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'deleteAccount'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

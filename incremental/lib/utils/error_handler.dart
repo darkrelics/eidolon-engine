@@ -29,37 +29,37 @@ class ErrorHandler {
         debugPrint('ErrorHandler: Stack trace: ${error.stackTrace}');
       }
     }
-    
+
     // Check if the error already has a user-friendly message
     final errorString = error.toString();
-    
+
     // If it's already a user-friendly message (doesn't contain technical jargon), return it
     if (_isUserFriendlyMessage(errorString)) {
       return errorString;
     }
-    
+
     // Map specific error types to user-friendly messages
     if (errorString.toLowerCase().contains('network')) {
       return 'Network error. Please check your connection and try again.';
     }
-    
+
     if (errorString.toLowerCase().contains('timeout')) {
       return 'Request timed out. Please try again.';
     }
-    
-    if (errorString.toLowerCase().contains('permission') || 
+
+    if (errorString.toLowerCase().contains('permission') ||
         errorString.toLowerCase().contains('forbidden')) {
       return 'You don\'t have permission to perform this action.';
     }
-    
+
     if (errorString.toLowerCase().contains('not found')) {
       return 'The requested resource was not found.';
     }
-    
+
     // Return a generic user-friendly message for unknown errors
     return 'An error occurred. Please try again later.';
   }
-  
+
   /// Checks if a message is already user-friendly
   static bool _isUserFriendlyMessage(String message) {
     // Messages that come from AuthExceptionMapper are already user-friendly
@@ -75,13 +75,13 @@ class ErrorHandler {
       'already exists',
       'Please try again',
     ];
-    
+
     for (final phrase in userFriendlyPhrases) {
       if (message.contains(phrase)) {
         return true;
       }
     }
-    
+
     // Check if message contains technical jargon
     final technicalTerms = [
       'Exception',
@@ -97,13 +97,13 @@ class ErrorHandler {
       '401',
       '403',
     ];
-    
+
     for (final term in technicalTerms) {
       if (message.contains(term)) {
         return false;
       }
     }
-    
+
     // If it's a short, readable message without technical terms, consider it user-friendly
     return message.length < 100 && !message.contains(':');
   }

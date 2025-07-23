@@ -210,17 +210,18 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 ## Archetypes Table
 
-| Field           | Type     | Description                                |
-| --------------- | -------- | ------------------------------------------ |
-| `ArchetypeName` | `STRING` | Name of the archetype.                     |
-| `Description`   | `STRING` | Description of the archetype.              |
-| `Attributes`    | `MAP`    | Default attributes for the archetype.      |
-| `Skills`        | `MAP`    | Default skills for the archetype.          |
-| `StartRoom`     | `NUMBER` | ID of the starting room for the archetype. |
-| `StartingItems` | `LIST`   | List of items given at character creation. |
-| `Health`        | `NUMBER` | Starting health points.                    |
-| `Essence`       | `NUMBER` | Starting essence points.                   |
-| `Player`        | `BOOL`   | Whether this archetype is for players.     |
+| Field            | Type     | Description                                     |
+| ---------------- | -------- | ----------------------------------------------- |
+| `ArchetypeName`  | `STRING` | Name of the archetype.                          |
+| `Description`    | `STRING` | Description of the archetype.                   |
+| `Attributes`     | `MAP`    | Default attributes for the archetype.           |
+| `Skills`         | `MAP`    | Default skills for the archetype.               |
+| `StartRoom`      | `NUMBER` | ID of the starting room for the archetype.      |
+| `StartingItems`  | `LIST`   | List of items given at character creation.      |
+| `Health`         | `NUMBER` | Starting health points.                         |
+| `Essence`        | `NUMBER` | Starting essence points.                        |
+| `Player`         | `BOOL`   | Whether this archetype is for players.          |
+| `AvailableStories` | `LIST` | List of story IDs available to this archetype. |
 
 - **`ArchetypeName`**: Primary key for the archetype.
 - **`Description`**: Explains the archetype's role or characteristics.
@@ -231,6 +232,7 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 - **`Health`**: Base health points for the archetype.
 - **`Essence`**: Base essence/mana points for the archetype.
 - **`Player`**: Indicates if this archetype is available for player characters.
+- **`AvailableStories`**: List of story IDs (UUIDs) that are made available to characters of this archetype upon creation (e.g., ["f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d"]).
 
 ---
 

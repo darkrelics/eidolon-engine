@@ -17,6 +17,9 @@ class Character {
   final Map<String, dynamic>? storyState; // Current story position
   final String gameMode; // "MUD" or "Incremental"
   final DateTime lastUpdated;
+  final List<String> availableStories;
+  final List<String> abandonedStories;
+  final List<String> completedStories;
 
   Character({
     required this.id,
@@ -35,6 +38,9 @@ class Character {
     this.storyState,
     required this.gameMode,
     required this.lastUpdated,
+    this.availableStories = const [],
+    this.abandonedStories = const [],
+    this.completedStories = const [],
   });
 
   /// Parse a map of dynamic values to doubles
@@ -50,13 +56,19 @@ class Character {
   /// Create character from server response
   factory Character.fromJson(Map<String, dynamic> json) {
     // Parse attributes and skills, converting numbers to doubles
-    final Map<String, double> parsedAttributes = parseMapToDouble(json['Attributes'] ?? {});
-    final Map<String, double> parsedSkills = parseMapToDouble(json['Skills'] ?? {});
-    final Map<String, int> parsedResources = parseMapToInt(json['Resources'] ?? {});
-    
+    final Map<String, double> parsedAttributes = parseMapToDouble(
+      json['Attributes'] ?? {},
+    );
+    final Map<String, double> parsedSkills = parseMapToDouble(
+      json['Skills'] ?? {},
+    );
+    final Map<String, int> parsedResources = parseMapToInt(
+      json['Resources'] ?? {},
+    );
+
     // The archetype from server is just a string name, not an object with ID
     final archetypeName = json['Archetype'] as String? ?? 'default';
-    
+
     return Character(
       id: json['CharacterID'] as String,
       name: json['CharacterName'] as String,
@@ -74,6 +86,15 @@ class Character {
       storyState: json['StoryState'] as Map<String, dynamic>?,
       gameMode: json['GameMode'] as String? ?? 'Incremental',
       lastUpdated: DateTime.parse(json['UpdatedAt'] as String),
+      availableStories: (json['AvailableStories'] as List? ?? [])
+          .map((storyId) => storyId as String)
+          .toList(),
+      abandonedStories: (json['AbandonedStories'] as List? ?? [])
+          .map((storyId) => storyId as String)
+          .toList(),
+      completedStories: (json['CompletedStories'] as List? ?? [])
+          .map((storyId) => storyId as String)
+          .toList(),
     );
   }
 
@@ -95,6 +116,9 @@ class Character {
       'StoryState': storyState,
       'GameMode': gameMode,
       'UpdatedAt': lastUpdated.toIso8601String(),
+      'AvailableStories': availableStories,
+      'AbandonedStories': abandonedStories,
+      'CompletedStories': completedStories,
     };
   }
 
@@ -109,6 +133,9 @@ class Character {
     Map<String, dynamic>? progress,
     Map<String, dynamic>? storyState,
     DateTime? lastUpdated,
+    List<String>? availableStories,
+    List<String>? abandonedStories,
+    List<String>? completedStories,
   }) {
     return Character(
       id: id,
@@ -127,6 +154,9 @@ class Character {
       storyState: storyState ?? this.storyState,
       gameMode: gameMode,
       lastUpdated: lastUpdated ?? this.lastUpdated,
+      availableStories: availableStories ?? this.availableStories,
+      abandonedStories: abandonedStories ?? this.abandonedStories,
+      completedStories: completedStories ?? this.completedStories,
     );
   }
 

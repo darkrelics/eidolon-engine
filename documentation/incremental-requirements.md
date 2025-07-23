@@ -166,6 +166,7 @@ Present three action buttons:
 
 #### 3.5.2 Story Unlock Mechanisms
 
+- Stories provided by character archetype on creation
 - Stories unlocked through Incremental participation
 - Stories unlocked through MUD participation
 - Stories unlocked through external activity (TBD)

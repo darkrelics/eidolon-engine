@@ -154,9 +154,9 @@ GSI: CompletionTimeIndex
     "PlayerID": "player-uuid-123",      # Existing attribute
     "GameMode": "Incremental",          # Existing field (MUD|Incremental|None)
     "AvailableStories": [               # Stories the character can start
-        "forest-adventure-uuid",
-        "daily-patrol-uuid",
-        "tutorial-uuid"
+        "forest-adventure-uuid",        # Initially populated from archetype
+        "daily-patrol-uuid",            # Additional stories can be unlocked
+        "tutorial-uuid"                 # through gameplay
     ],
     "AbandonedStories": [               # Stories started but not finished
         "hard-quest-uuid"
