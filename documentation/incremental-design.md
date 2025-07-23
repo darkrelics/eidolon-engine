@@ -293,13 +293,11 @@ Response: { "abandoned": true }
 The Flutter portal implements smart polling:
 
 1. **Active Story Polling**
-
    - Poll `/stories/current` based on segment duration
    - Start frequent polling 30 seconds before completion
    - Use exponential backoff: 30s → 15s → 5s → 1s
 
 2. **Decision Windows**
-
    - Check every 30 seconds during decision segments
    - Immediate update after decision submission
 
@@ -723,13 +721,11 @@ With the DynamoDB polling approach:
 ### 10.2 Cost Optimization
 
 1. **Lambda Optimization**:
-
    - Minimize cold starts by keeping functions warm
    - Use appropriate memory allocation (256MB typical)
    - Disable polling when no active stories
 
 2. **Polling Efficiency**:
-
    - 10-second intervals balance precision vs cost
    - Process multiple segments per poll cycle
    - Use GSI for efficient time-based queries

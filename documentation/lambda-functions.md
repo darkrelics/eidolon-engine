@@ -114,7 +114,6 @@ All Lambda functions must follow these parameter standards:
   - Example: `/characters?characterId=123`
   - Use `get_query_parameter()` from `eidolon.requests`
 - **Request Body**: Use for data submission (POST, PUT, PATCH)
-
   - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
   - Use `parse_json_body()` from `eidolon.requests`
 
@@ -133,13 +132,11 @@ All Lambda functions must follow these parameter standards:
 Lambda functions are packaged and deployed through AWS CodeBuild:
 
 1. **Build Process** (`buildspec/lambda-functions.yml`):
-
    - Each function is packaged as a separate zip file
    - Shared `eidolon` modules are included if imported
    - Zip files are uploaded to S3
 
 2. **Dependencies** (`buildspec/lambda-layer.yml`):
-
    - Common dependencies are packaged as a Lambda layer
    - Requirements from `requirements/lambda-requirements.txt`
 

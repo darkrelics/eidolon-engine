@@ -24,14 +24,12 @@ This directory contains CloudFormation templates that match the infrastructure c
 The templates have been updated to support the incremental game mode:
 
 - **DynamoDB**:
-
   - Consolidated to use shared tables between MUD and incremental modes
   - Added `story` table with composite key (PlayerID, StoryID)
   - Added `story_definitions` table for story content
   - Removed separate incremental-specific tables
 
 - **Lambda Functions**:
-
   - Added story management functions (get stories, start story, etc.)
   - Added segment processing function for timed story progression
   - All functions are dual-purpose, serving both Portal and Incremental UI
