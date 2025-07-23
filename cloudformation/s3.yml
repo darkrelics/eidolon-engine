@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "S3 buckets for Eidolon Engine"
+
+Parameters:
+  GameName:
+    Type: String
+    Default: "eidolon"
+    Description: "Name of the game"
+
+Resources:
+  PortalBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${GameName}-portal"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+
+  ScriptsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${GameName}-scripts"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+  LambdaBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${GameName}-lambda"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+
+Outputs:
+  PortalBucketName:
+    Description: "Name of the portal S3 bucket"
+    Value: !Ref PortalBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-PortalBucketName"
+
+  PortalBucketArn:
+    Description: "ARN of the portal S3 bucket"
+    Value: !GetAtt PortalBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PortalBucketArn"
+
+  PortalBucketDomainName:
+    Description: "Domain name of the portal S3 bucket"
+    Value: !GetAtt PortalBucket.DomainName
+    Export:
+      Name: !Sub "${AWS::StackName}-PortalBucketDomainName"
+
+  ScriptsBucketName:
+    Description: "Name of the scripts S3 bucket"
+    Value: !Ref ScriptsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ScriptsBucketName"
+
+  ScriptsBucketArn:
+    Description: "ARN of the scripts S3 bucket"
+    Value: !GetAtt ScriptsBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ScriptsBucketArn"
+
+  LambdaBucketName:
+    Description: "Name of the Lambda S3 bucket"
+    Value: !Ref LambdaBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaBucketName"
+
+  LambdaBucketArn:
+    Description: "ARN of the Lambda S3 bucket"
+    Value: !GetAtt LambdaBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaBucketArn"

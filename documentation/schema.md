@@ -32,22 +32,25 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 ## Character Table
 
-| Field           | Type     | Description                                                    |
-| --------------- | -------- | -------------------------------------------------------------- |
-| `CharacterID`   | `STRING` | UUID of the character.                                         |
-| `PlayerID`      | `STRING` | UUID of the player who owns the character.                     |
-| `CharacterName` | `STRING` | Name of the character.                                         |
-| `GameMode`      | `STRING` | Current mode: "MUD" or "Incremental" (prevents concurrent use) |
-| `RoomID`        | `NUMBER` | ID of the room the character is currently in.                  |
-| `Inventory`     | `MAP`    | Map of inventory slots to item UUIDs.                          |
-| `Attributes`    | `MAP`    | Map of attribute names to their values (e.g., Strength: 4).    |
-| `Skills`        | `MAP`    | Map of skill names to their values (e.g., Stealth: 3).         |
-| `Essence`       | `NUMBER` | The character's essence or magical energy.                     |
-| `Health`        | `NUMBER` | The character's current health points.                         |
-| `MaxHealth`     | `NUMBER` | The character's maximum health points.                         |
-| `Hidden`        | `BOOL`   | Whether the character is currently hidden.                     |
-| `Wounds`        | `LIST`   | List of wounds affecting the character.                        |
-| `CharState`     | `STRING` | Current character state (e.g., "normal", "combat").            |
+| Field              | Type     | Description                                                    |
+| ------------------ | -------- | -------------------------------------------------------------- |
+| `CharacterID`      | `STRING` | UUID of the character.                                         |
+| `PlayerID`         | `STRING` | UUID of the player who owns the character.                     |
+| `CharacterName`    | `STRING` | Name of the character.                                         |
+| `GameMode`         | `STRING` | Current mode: "MUD" or "Incremental" (prevents concurrent use) |
+| `RoomID`           | `NUMBER` | ID of the room the character is currently in.                  |
+| `Inventory`        | `MAP`    | Map of inventory slots to item UUIDs.                          |
+| `Attributes`       | `MAP`    | Map of attribute names to their values (e.g., Strength: 4).    |
+| `Skills`           | `MAP`    | Map of skill names to their values (e.g., Stealth: 3).         |
+| `Essence`          | `NUMBER` | The character's essence or magical energy.                     |
+| `Health`           | `NUMBER` | The character's current health points.                         |
+| `MaxHealth`        | `NUMBER` | The character's maximum health points.                         |
+| `Hidden`           | `BOOL`   | Whether the character is currently hidden.                     |
+| `Wounds`           | `LIST`   | List of wounds affecting the character.                        |
+| `CharState`        | `STRING` | Current character state (e.g., "normal", "combat").            |
+| `AvailableStories` | `LIST`   | List of story IDs available to this character.                 |
+| `AbandonedStories` | `LIST`   | List of story IDs the character has abandoned.                 |
+| `CompletedStories` | `LIST`   | List of story IDs the character has completed.                 |
 
 - **`CharacterID`**: The UUID of the character, serving as the primary key.
 - **`PlayerID`**: The UUID of the player who owns this character.
@@ -63,6 +66,9 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 - **`Hidden`**: Boolean indicating whether the character is currently hidden from other players.
 - **`Wounds`**: List of wound objects affecting the character's performance.
 - **`CharState`**: Current state of the character (normal, combat, etc.).
+- **`AvailableStories`**: List of story IDs the character can participate in (e.g., ["forest-adventure-uuid", "daily-patrol-uuid"]).
+- **`AbandonedStories`**: List of story IDs the character started but didn't complete.
+- **`CompletedStories`**: List of story IDs the character has successfully finished.
 
 ---
 
@@ -328,29 +334,86 @@ end
 
 ---
 
-## Story Table
+## Stories Table
 
-| Field      | Type     | Description                         |
-| ---------- | -------- | ----------------------------------- |
-| `PlayerID` | `STRING` | UUID of the player (partition key). |
-| `StoryID`  | `STRING` | UUID of the story (sort key).       |
+| Field               | Type     | Description                                   |
+| ------------------- | -------- | --------------------------------------------- |
+| `StoryID`           | `STRING` | UUID of the story (partition key).            |
+| `Title`             | `STRING` | Display title of the story.                   |
+| `Description`       | `STRING` | Brief description of the story.               |
+| `NarrativeText`     | `STRING` | Full narrative text introducing the story.    |
+| `StoryType`         | `STRING` | Type: one-time, daily, or repeatable.         |
+| `EstimatedDuration` | `NUMBER` | Estimated completion time in seconds.         |
+| `Prerequisites`     | `MAP`    | Requirements to start (skills, items, rooms). |
+| `FirstSegmentID`    | `STRING` | UUID of the starting segment.                 |
+| `Created`           | `STRING` | ISO timestamp when story was created.         |
+| `Version`           | `NUMBER` | Story version for updates.                    |
 
-- **`PlayerID`**: Player UUID as partition key for efficient queries.
-- **`StoryID`**: Story UUID as sort key, allowing multiple stories per player.
-- Story metadata and content references stored in S3.
+- **`StoryID`**: Unique identifier for the story.
+- **`NarrativeText`**: The main story introduction shown to players.
+- **`Prerequisites`**: Map with minSkills, requiredItems, requiredRooms.
+- **`FirstSegmentID`**: Entry point into the segment chain.
+
+## Segments Table
+
+| Field             | Type     | Description                                                   |
+| ----------------- | -------- | ------------------------------------------------------------- |
+| `StoryID`         | `STRING` | UUID of the parent story (partition key).                     |
+| `SegmentID`       | `STRING` | UUID of the segment (sort key).                               |
+| `SegmentType`     | `STRING` | Type: decision or narrative.                                  |
+| `ShortStatus`     | `STRING` | Brief status text shown during segment.                       |
+| `Duration`        | `NUMBER` | Time in seconds for this segment.                             |
+| `DecisionText`    | `STRING` | For decision segments: the choice presented.                  |
+| `DecisionOptions` | `MAP`    | For decision segments: map of option ID to next segment ID.   |
+| `NextSegmentID`   | `STRING` | For narrative segments: UUID of the next segment.             |
+| `DefaultDecision` | `STRING` | For decision segments: which option to auto-select.           |
+| `Challenges`      | `LIST`   | For narrative segments: list of skill/attribute challenges.   |
+| `Results`         | `MAP`    | For narrative segments: outcomes mapped to character updates. |
+
+- **`StoryID` + `SegmentID`**: Composite key for efficient segment lookups.
+- **`SegmentType`**: Determines whether this is a decision point or narrative.
+- **`DecisionOptions`**: Map like {"left-path": "segment-uuid-2", "right-path": "segment-uuid-3"}.
+- **`NextSegmentID`**: For narrative segments, the single next segment in the chain.
+- **`Challenges`**: List of objects with:
+  - `attribute`: Character attribute name (e.g., "Strength", "Agility")
+  - `skill`: Character skill name (e.g., "Combat", "Stealth")
+  - `difficulty`: Target number to beat (typically 7-10)
+  - `attempts`: Number of times to roll
+- **`Results`**: Map of outcome types (death, failure, minimal, normal, exceptional) to:
+  - `narrative`: Text shown for this outcome
+  - `effects`: Character updates (health, experience, items, room)
 
 ## ActiveSegments Table
 
-| Field         | Type     | Description                             |
-| ------------- | -------- | --------------------------------------- |
-| `CharacterID` | `STRING` | UUID of the character.                  |
-| `SegmentID`   | `STRING` | ID of the active story segment.         |
-| `StartTime`   | `STRING` | Timestamp when segment started.         |
-| `EndTime`     | `STRING` | Timestamp when segment should complete. |
+| Field              | Type     | Description                                                |
+| ------------------ | -------- | ---------------------------------------------------------- |
+| `ActiveSegmentID`  | `STRING` | UUID for this active segment instance (partition key).     |
+| `CharacterID`      | `STRING` | UUID of the character.                                     |
+| `StoryID`          | `STRING` | UUID of the story being played.                            |
+| `SegmentID`        | `STRING` | UUID of the current segment definition.                    |
+| `StartTime`        | `NUMBER` | Unix timestamp when segment started.                       |
+| `EndTime`          | `NUMBER` | Unix timestamp when segment will complete.                 |
+| `Status`           | `STRING` | Status: active or completed.                               |
+| `Decision`         | `STRING` | For decision segments: choice made by player.              |
+| `ChallengeResults` | `LIST`   | For narrative segments: results of each challenge roll.    |
+| `Outcome`          | `STRING` | For narrative segments: final outcome (death/failure/etc). |
+| `TTL`              | `NUMBER` | Time-to-live for automatic cleanup.                        |
 
-- Tracks active story segments with timers
-- Character-to-segment mapping
-- Completion timestamps
+- **`ActiveSegmentID`**: Unique identifier for this runtime instance.
+- **`CharacterID`**: Links to the character experiencing this segment.
+- **`EndTime`**: Key field for polling - when this segment completes.
+- **`ChallengeResults`**: Stores each dice roll result for challenges.
+- **`Outcome`**: Determined by aggregating challenge results.
+
+### Global Secondary Index: CompletionTimeIndex
+
+| Field     | Type     | Description                                       |
+| --------- | -------- | ------------------------------------------------- |
+| `Status`  | `STRING` | Partition key - filters for active segments only. |
+| `EndTime` | `NUMBER` | Sort key - enables time-based range queries.      |
+
+- **Projection**: ALL - includes all attributes for efficient polling.
+- **Purpose**: Enables the segment poller Lambda to efficiently query for segments ready to complete.
 
 ## CharacterHistory Table
 

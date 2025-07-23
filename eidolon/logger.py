@@ -113,24 +113,3 @@ def log_duration(func):
             raise
 
     return wrapper
-
-
-def sanitize_error(error) -> str:
-    """Sanitize error messages to avoid exposing sensitive information."""
-    import re
-
-    error_message = str(error)
-
-    # Patterns to redact
-    sensitive_patterns = [
-        r'password["\']?\s*[:=]\s*["\']?[^"\'\s]+',
-        r'token["\']?\s*[:=]\s*["\']?[^"\'\s]+',
-        r'key["\']?\s*[:=]\s*["\']?[^"\'\s]+',
-        r'secret["\']?\s*[:=]\s*["\']?[^"\'\s]+',
-        r"arn:aws:[^:\s]+:[^:\s]+:\d+:[^:\s]+",  # AWS ARNs
-    ]
-
-    for pattern in sensitive_patterns:
-        error_message = re.sub(pattern, "[REDACTED]", error_message, flags=re.IGNORECASE)
-
-    return error_message

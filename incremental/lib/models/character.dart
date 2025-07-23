@@ -37,26 +37,22 @@ class Character {
     required this.lastUpdated,
   });
 
+  /// Parse a map of dynamic values to doubles
+  static Map<String, double> parseMapToDouble(Map<String, dynamic> rawMap) {
+    return rawMap.map((key, value) => MapEntry(key, (value as num).toDouble()));
+  }
+
+  /// Parse a map of dynamic values to integers
+  static Map<String, int> parseMapToInt(Map<String, dynamic> rawMap) {
+    return rawMap.map((key, value) => MapEntry(key, (value as num).toInt()));
+  }
+
   /// Create character from server response
   factory Character.fromJson(Map<String, dynamic> json) {
     // Parse attributes and skills, converting numbers to doubles
-    final Map<String, double> parsedAttributes = {};
-    final rawAttributes = json['Attributes'] ?? {};
-    for (final entry in rawAttributes.entries) {
-      parsedAttributes[entry.key] = (entry.value as num).toDouble();
-    }
-    
-    final Map<String, double> parsedSkills = {};
-    final rawSkills = json['Skills'] ?? {};
-    for (final entry in rawSkills.entries) {
-      parsedSkills[entry.key] = (entry.value as num).toDouble();
-    }
-    
-    final Map<String, int> parsedResources = {};
-    final rawResources = json['Resources'] ?? {};
-    for (final entry in rawResources.entries) {
-      parsedResources[entry.key] = (entry.value as num).toInt();
-    }
+    final Map<String, double> parsedAttributes = parseMapToDouble(json['Attributes'] ?? {});
+    final Map<String, double> parsedSkills = parseMapToDouble(json['Skills'] ?? {});
+    final Map<String, int> parsedResources = parseMapToInt(json['Resources'] ?? {});
     
     // The archetype from server is just a string name, not an object with ID
     final archetypeName = json['Archetype'] as String? ?? 'default';

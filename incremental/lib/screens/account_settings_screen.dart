@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../utils/error_handler.dart';
+import '../constants/navigation_constants.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -75,13 +76,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       await authProvider.deleteAccount();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Your account has been deleted'),
-            backgroundColor: Colors.green,
-          ),
+        Navigator.pushReplacementNamed(
+          context,
+          '/login',
+          arguments: {NavigationConstants.messageKey: 'Your account has been deleted'},
         );
-        Navigator.pushReplacementNamed(context, '/login');
       }
     } catch (e) {
       if (mounted) {

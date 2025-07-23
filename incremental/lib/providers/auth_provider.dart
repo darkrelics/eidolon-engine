@@ -15,6 +15,7 @@
 // limitations under the License.
 
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import '../services/auth_service.dart';
 
 enum AuthStatus { uninitialized, authenticated, unauthenticated, loading }
@@ -23,7 +24,7 @@ class AuthProvider extends ChangeNotifier {
   AuthStatus _status = AuthStatus.uninitialized;
   String? _userEmail;
   final AuthService _authService = AuthService.instance;
-  final String _instanceId = DateTime.now().millisecondsSinceEpoch.toString();
+  final String _instanceId = const Uuid().v7();
 
   AuthStatus get status => _status;
   String? get userEmail => _userEmail;

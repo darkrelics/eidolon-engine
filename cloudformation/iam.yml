@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "IAM roles for Eidolon Engine"
+
+Parameters:
+  GameName:
+    Type: String
+    Default: "eidolon"
+    Description: "Name of the game"
+  DynamoDBAccessPolicyArn:
+    Type: String
+    Description: "ARN of the DynamoDB access policy"
+  CloudWatchPolicyArn:
+    Type: String
+    Description: "ARN of the CloudWatch access policy"
+
+Resources:
+  ServerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${GameName}-server-execution-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - !Ref DynamoDBAccessPolicyArn
+        - !Ref CloudWatchPolicyArn
+      Path: /
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${GameName}-lambda-execution-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - !Ref DynamoDBAccessPolicyArn
+      Path: /
+
+  ServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${GameName}-server-instance-profile"
+      Roles:
+        - !Ref ServerExecutionRole
+
+Outputs:
+  ServerExecutionRoleArn:
+    Description: "ARN of the server execution role"
+    Value: !GetAtt ServerExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ServerExecutionRoleArn"
+
+  ServerExecutionRoleName:
+    Description: "Name of the server execution role"
+    Value: !Ref ServerExecutionRole
+    Export:
+      Name: !Sub "${AWS::StackName}-ServerExecutionRoleName"
+
+  LambdaExecutionRoleArn:
+    Description: "ARN of the Lambda execution role"
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaExecutionRoleArn"
+
+  LambdaExecutionRoleName:
+    Description: "Name of the Lambda execution role"
+    Value: !Ref LambdaExecutionRole
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaExecutionRoleName"
+
+  ServerInstanceProfileArn:
+    Description: "ARN of the server instance profile"
+    Value: !GetAtt ServerInstanceProfile.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ServerInstanceProfileArn"
