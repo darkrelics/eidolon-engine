@@ -11,6 +11,7 @@ The schema facilitates:
 - Item management including stacking, containment, and usage mechanics
 - Archetype templates for character creation
 - Storage of messages of the day for player engagement
+- Incremental story system with segments, active tracking, and time-based progression
 
 By adhering to this schema, developers can ensure data consistency and ease of access across both game modes, while leveraging DynamoDB's capabilities for scalability and performance.
 
@@ -346,13 +347,19 @@ end
 | `EstimatedDuration` | `NUMBER` | Estimated completion time in seconds.         |
 | `Prerequisites`     | `MAP`    | Requirements to start (skills, items, rooms). |
 | `FirstSegmentID`    | `STRING` | UUID of the starting segment.                 |
-| `Created`           | `STRING` | ISO timestamp when story was created.         |
+| `CreatedAt`         | `STRING` | ISO timestamp when story was created.         |
 | `Version`           | `NUMBER` | Story version for updates.                    |
 
-- **`StoryID`**: Unique identifier for the story.
-- **`NarrativeText`**: The main story introduction shown to players.
-- **`Prerequisites`**: Map with minSkills, requiredItems, requiredRooms.
-- **`FirstSegmentID`**: Entry point into the segment chain.
+- **`StoryID`**: Unique identifier for the story definition.
+- **`Title`**: The display name of the story shown in story selection.
+- **`Description`**: Brief summary of the story for the player.
+- **`NarrativeText`**: The full introductory text shown when starting the story.
+- **`StoryType`**: Determines availability - one-time stories can only be completed once per character, daily stories reset at server midnight, repeatable stories have no restrictions.
+- **`EstimatedDuration`**: Total estimated time in seconds to complete all segments.
+- **`Prerequisites`**: Map containing minSkills (minimum skill levels), requiredItems (item IDs), requiredRooms (room IDs the character must have visited).
+- **`FirstSegmentID`**: References the first segment in the Segments table to begin the story chain.
+- **`CreatedAt`**: Timestamp for version tracking and sorting.
+- **`Version`**: Incremented when story content changes.
 
 ## Segments Table
 

@@ -48,7 +48,7 @@ class DynamoDBStack(Stack):
         self.lambda_execution_role_arn = lambda_execution_role_arn
 
         # Define table types upfront
-        self.table_types: list = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story"]
+        self.table_types: list = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story", "segments", "active_segments"]
 
         # Initialize existing tables from context
         self.existing_tables: dict = {}
@@ -91,7 +91,9 @@ class DynamoDBStack(Stack):
             {"name": "prototypes", "pk": "PrototypeID", "pk_type": "S", "sk": ""},
             {"name": "archetypes", "pk": "ArchetypeName", "pk_type": "S", "sk": ""},
             {"name": "motd", "pk": "MotdID", "pk_type": "S", "sk": ""},
-            {"name": "story", "pk": "PlayerID", "pk_type": "S", "sk": "StoryID", "sk_type": "S"},
+            {"name": "story", "pk": "StoryID", "pk_type": "S", "sk": ""},
+            {"name": "segments", "pk": "StoryID", "pk_type": "S", "sk": "SegmentID", "sk_type": "S"},
+            {"name": "active_segments", "pk": "ActiveSegmentID", "pk_type": "S", "sk": ""},
         ]
 
     def _get_table_name(self, config_name: str) -> str:
@@ -187,7 +189,25 @@ class DynamoDBStack(Stack):
 
         # Set UpdateReplacePolicy to Retain to prevent data loss during updates
         cfn_table = table.node.default_child
-        cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN  # type: ignore
+        if cfn_table:
+            cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN  # type: ignore
+
+        # Add Global Secondary Index and TTL for active_segments table
+        if logical_id == "active_segments":
+            table.add_global_secondary_index(
+                index_name="CompletionTimeIndex",
+                partition_key=dynamodb.Attribute(name="Status", type=dynamodb.AttributeType.STRING),
+                sort_key=dynamodb.Attribute(name="EndTime", type=dynamodb.AttributeType.NUMBER),
+                projection_type=dynamodb.ProjectionType.ALL,
+            )
+            
+            # Configure TTL on active_segments table
+            # Cast to CfnTable to access L1 properties
+            if isinstance(cfn_table, dynamodb.CfnTable):
+                cfn_table.time_to_live_specification = dynamodb.CfnTable.TimeToLiveSpecificationProperty(
+                    attribute_name="TTL",
+                    enabled=True
+                )
 
         return table
 
@@ -197,6 +217,14 @@ class DynamoDBStack(Stack):
         if not self.tables:
             raise ValueError("No tables available to create access policy")
 
+        # Build resource list including GSI for active_segments
+        resources = []
+        for table_name, table in self.tables.items():
+            resources.append(table.table_arn)
+            # Add GSI ARN for active_segments table
+            if table_name == "active_segments":
+                resources.append(f"{table.table_arn}/index/CompletionTimeIndex")
+        
         self.table_access_policy = iam.PolicyDocument(
             statements=[
                 iam.PolicyStatement(
@@ -211,7 +239,7 @@ class DynamoDBStack(Stack):
                         "dynamodb:BatchGetItem",
                         "dynamodb:BatchWriteItem",
                     ],
-                    resources=[table.table_arn for table in self.tables.values()],
+                    resources=resources,
                 )
             ]
         )

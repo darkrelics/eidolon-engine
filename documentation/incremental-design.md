@@ -53,7 +53,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
         "requiredRooms": ["town_square"]
     },
     "FirstSegmentID": "seg-uuid-001",
-    "Created": "2025-01-15T10:00:00Z",
+    "CreatedAt": "2025-01-15T10:00:00Z",
     "Version": 1
 }
 ```
@@ -120,6 +120,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 {
     "ActiveSegmentID": "active-seg-uuid-123",  # PK (unique instance)
     "CharacterID": "char-uuid-456",
+    "PlayerID": "player-uuid-789",
     "StoryID": "forest-adventure-uuid",
     "SegmentID": "seg-uuid-002a",
     "StartTime": 1737000300,
@@ -698,10 +699,10 @@ Add story definition table to DynamoDB stack:
 ```python
 # deployment/cdk/stacks/dynamodb_stack.py
 # Add to table configurations:
-{"name": "story_definitions", "pk": "StoryID", "pk_type": "S"}
+{"name": "story", "pk": "StoryID", "pk_type": "S"}
 
-# Add GSI to story table:
-{"name": "CompletionTimeIndex", "pk": "Status", "sk": "NextCompletionTime"}
+# Add GSI to active_segments table:
+{"name": "CompletionTimeIndex", "pk": "Status", "sk": "EndTime"}
 ```
 
 ## 10. Cost Analysis

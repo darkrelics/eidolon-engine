@@ -127,9 +127,9 @@ Present three action buttons:
 
 #### 3.3.2 Story Participation Tracking
 
-- **Story Table**: Tracks active/completed stories per character
-- **Current Segment**: Stored in story participation record
-- **Completion History**: Maintained in story table with timestamps
+- **ActiveSegments Table**: Tracks active story participation per character
+- **Current Segment**: Stored in ActiveSegments record
+- **Completion History**: Maintained in Character table (CompletedStories field)
 - **Daily Reset**: Clear daily story participation at server reset time
 - **Cooldown Management**: Enforce story-specific cooldown periods
 - **Available Stories**: Maintain list in character record
@@ -258,25 +258,7 @@ New Lambda functions following existing patterns:
 
 #### 4.2.2 Database Schema (DynamoDB)
 
-**Story Table (Existing, Extended)**
-
-```
-{
-  PlayerID: String (PK),
-  StoryID: String (SK),
-  Status: String (active|completed|abandoned),
-  CurrentSegment: String,
-  SegmentStartTime: Number,
-  NextCompletionTime: Number,
-  Decisions: Map,
-  Outcomes: List,
-  StartTime: Number,
-  CompletionTime: Number,
-  TTL: Number  // For automatic cleanup
-}
-```
-
-**Stories Definition Table (New)**
+**Story Table (New)**
 
 ```
 {
@@ -301,7 +283,27 @@ New Lambda functions following existing patterns:
 }
 ```
 
-**Character Table (Existing fields utilized)**
+**ActiveSegments Table (New)**
+
+```
+{
+  ActiveSegmentID: String (PK),
+  CharacterID: String,
+  PlayerID: String,
+  StoryID: String,
+  SegmentID: String,
+  StartTime: Number,
+  EndTime: Number,
+  Status: String,
+  Decision: String,
+  ChallengeResults: List,
+  Outcome: String,
+  TTL: Number  // For automatic cleanup after 24 hours
+}
+```
+*Note: Player story participation state is tracked in the ActiveSegments table, not in the Story table. The Story table only contains story definitions.*
+
+**Character Table (Existing, Extended)**
 
 ```
 {
@@ -309,6 +311,8 @@ New Lambda functions following existing patterns:
   PlayerID: String,  // Existing attribute
   GameMode: String,  // Existing field (MUD|Incremental|None)
   AvailableStories: List[String],  // New field
+  AbandonedStories: List[String],  // New field
+  CompletedStories: List[String],  // New field
   // All other existing MUD fields...
 }
 ```
