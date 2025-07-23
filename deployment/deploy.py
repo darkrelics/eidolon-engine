@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from aws_client_factory import AWSClientFactory
@@ -610,6 +611,9 @@ class IncrementalDeploymentOrchestrator:
                 if lambda_projects and not self._validate_lambda_artifacts(params):
                     print("[ERROR] Lambda build artifacts validation failed")
                     return False
+
+            # Invalidate CloudFront distribution after builds complete
+            self._invalidate_cloudfront_distribution()
 
             return True
 
@@ -1485,6 +1489,46 @@ class IncrementalDeploymentOrchestrator:
                 print(f"    Failed to update bucket policy: {err}")
         except Exception as err:
             print(f"    Error updating bucket policy: {err}")
+
+    def _invalidate_cloudfront_distribution(self):
+        """Invalidate CloudFront distribution after builds complete."""
+        try:
+            # Get distribution ID from config
+            distribution_id = self.config_manager.config.get("CloudFront", {}).get("DistributionId", "")
+            if not distribution_id:
+                print("\n[INFO] No CloudFront distribution configured, skipping invalidation")
+                return
+
+            print(f"\nInvalidating CloudFront distribution {distribution_id}...")
+            
+            cf_client = self.session.client("cloudfront", region_name="us-east-1")
+            
+            # Create invalidation
+            response = cf_client.create_invalidation(
+                DistributionId=distribution_id,
+                InvalidationBatch={
+                    'Paths': {
+                        'Quantity': 1,
+                        'Items': ['/*']
+                    },
+                    'CallerReference': f'deployment-{int(time.time())}'
+                }
+            )
+            
+            invalidation_id = response['Invalidation']['Id']
+            print(f"[OK] Created invalidation {invalidation_id}")
+            print("     CloudFront cache will be refreshed in a few minutes")
+            
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code", "")
+            if error_code == "NoSuchDistribution":
+                # distribution_id is defined in the try block above
+                dist_id = self.config_manager.config.get("CloudFront", {}).get("DistributionId", "unknown")
+                print(f"[WARNING] CloudFront distribution {dist_id} not found")
+            else:
+                print(f"[WARNING] Failed to create CloudFront invalidation: {err}")
+        except Exception as err:
+            print(f"[WARNING] Error creating CloudFront invalidation: {err}")
 
 
 def main():
