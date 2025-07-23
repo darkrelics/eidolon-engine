@@ -113,7 +113,7 @@ class CDKApiIntegration:
             if result.returncode != 0:
                 # Check if it's just the bucket already exists error
                 if "already exists" in result.stderr and "cdk-hnb659fds-assets" in result.stderr:
-                    print("⚠️  CDK assets bucket already exists, but bootstrap incomplete")
+                    print("[WARNING]  CDK assets bucket already exists, but bootstrap incomplete")
                     print("This usually means a previous bootstrap attempt failed.")
                     print("Please manually clean up and retry:")
                     print("  1. Delete CloudFormation stack: CDKToolkit")
@@ -122,7 +122,7 @@ class CDKApiIntegration:
                 else:
                     raise CDKDeploymentError(f"CDK bootstrap failed: {result.stderr}", {})
 
-            print("✓ CDK bootstrap completed successfully")
+            print("[OK] CDK bootstrap completed successfully")
 
         except subprocess.CalledProcessError as err:
             raise CDKDeploymentError(f"CDK bootstrap command failed: {str(err)}", {})
@@ -542,13 +542,13 @@ class CDKProgressReporter:
 
                 # Format status
                 if "COMPLETE" in status:
-                    status_icon = "✓"
+                    status_icon = "[OK]"
                 elif "FAILED" in status:
-                    status_icon = "✗"
+                    status_icon = "[FAILED]"
                 elif "IN_PROGRESS" in status:
-                    status_icon = "⟳"
+                    status_icon = "[IN_PROGRESS]"
                 else:
-                    status_icon = "•"
+                    status_icon = "*"
 
                 # Print progress
                 message = f"  {status_icon} {logical_id}: {status}"

@@ -15,29 +15,8 @@ from aws_cdk import aws_route53_targets as route53_targets
 from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
-
-class ApiGatewayDomainTarget(route53.IAliasRecordTarget):
-    """Wrapper for ApiGatewayDomain to fix parameter naming issue.
-
-    The `ApiGatewayDomain` class from the AWS CDK library has a known issue where
-    certain parameters passed to its `bind` method are incorrectly named or mapped.
-    This wrapper class resolves the issue by delegating calls to an instance of
-    `ApiGatewayDomain` while ensuring the correct parameter names are used.
-
-    Use this class when creating alias records for API Gateway custom domains
-    in Route 53. It ensures compatibility and prevents errors related to parameter
-    naming mismatches.
-
-    Args:
-        domain_name: The domain name associated with the API Gateway custom domain.
-    """
-
-    def __init__(self, domain_name):
-        self._target = route53_targets.ApiGatewayDomain(domain_name)
-
-    def bind(self, record: route53.IRecordSet, zone=None) -> route53.AliasRecordTargetConfig:
-        """Bind the target to a record set with correct parameter names."""
-        return self._target.bind(record, zone)
+# Note: Using route53_targets.ApiGatewayDomain directly now
+# The wrapper class was causing JSII serialization issues
 
 
 def create_api_gateway(
@@ -126,7 +105,7 @@ def setup_custom_domain(
         f"{prefix}-api-record",
         zone=hosted_zone,
         record_name=api_subdomain,
-        target=route53.RecordTarget.from_alias(ApiGatewayDomainTarget(custom_domain)),
+        target=route53.RecordTarget.from_alias(route53_targets.ApiGatewayDomain(custom_domain)), # type: ignore
     )
 
 

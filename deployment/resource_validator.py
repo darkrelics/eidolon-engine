@@ -814,7 +814,7 @@ def generate_drift_report(validation_results: dict) -> str:
         report_lines.append("Resources with Configuration Drift:")
         for resource_id, result in validation_results.items():
             if result.drift_detected:
-                report_lines.append(f"\n  • {resource_id} ({result.resource_type}):")
+                report_lines.append(f"\n  - {resource_id} ({result.resource_type}):")
                 for message in result.messages:
                     report_lines.append(f"    - {message}")
 
@@ -823,6 +823,6 @@ def generate_drift_report(validation_results: dict) -> str:
         report_lines.append("\nMissing Resources:")
         for resource_id in missing_resources:
             result = validation_results[resource_id]
-            report_lines.append(f"  • {resource_id} ({result.resource_type})")
+            report_lines.append(f"  - {resource_id} ({result.resource_type})")
 
     return "\n".join(report_lines)

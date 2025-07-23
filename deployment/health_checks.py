@@ -175,24 +175,24 @@ def run_phase_health_check(session: boto3.Session, phase_name: str, deployed_sta
             ]
             result = check_dynamodb_tables_health(session, table_names)
             if not result["healthy"]:
-                print("    ✗ DynamoDB tables unhealthy:")
+                print("    [ERROR] DynamoDB tables unhealthy:")
                 for issue in result["issues"]:
                     print(f"      - {issue}")
                 all_healthy = False
             else:
-                print(f"    ✓ DynamoDB tables healthy ({len(result['healthy_tables'])} tables)")
+                print(f"    [OK] DynamoDB tables healthy ({len(result['healthy_tables'])} tables)")
 
         # Check S3 buckets if s3 stack was deployed
         if "s3" in deployed_stacks:
             bucket_names = [config.get("portal_bucket_name"), config.get("scripts_bucket_name"), config.get("lambda_bucket_name")]
             result = check_s3_buckets_health(session, bucket_names)
             if not result["healthy"]:
-                print("    ✗ S3 buckets unhealthy:")
+                print("    [ERROR] S3 buckets unhealthy:")
                 for issue in result["issues"]:
                     print(f"      - {issue}")
                 all_healthy = False
             else:
-                print(f"    ✓ S3 buckets healthy ({len(result['healthy_buckets'])} buckets)")
+                print(f"    [OK] S3 buckets healthy ({len(result['healthy_buckets'])} buckets)")
 
     elif phase_name == "Application Layer":
         # Check Lambda functions if lambda stack was deployed
@@ -208,26 +208,26 @@ def run_phase_health_check(session: boto3.Session, phase_name: str, deployed_sta
             ]
             result = check_lambda_functions_health(session, function_names)
             if not result["healthy"]:
-                print("    ✗ Lambda functions unhealthy:")
+                print("    [ERROR] Lambda functions unhealthy:")
                 for issue in result["issues"]:
                     print(f"      - {issue}")
                 all_healthy = False
             else:
-                print(f"    ✓ Lambda functions healthy ({len(result['healthy_functions'])} functions)")
+                print(f"    [OK] Lambda functions healthy ({len(result['healthy_functions'])} functions)")
 
         # Check API Gateway
         result = check_api_gateway_health(session, "eidolon-engine-api")
         if not result["healthy"]:
-            print("    ✗ API Gateway unhealthy:")
+            print("    [ERROR] API Gateway unhealthy:")
             for issue in result["issues"]:
                 print(f"      - {issue}")
             all_healthy = False
         else:
-            print("    ✓ API Gateway healthy")
+            print("    [OK] API Gateway healthy")
 
     if all_healthy:
-        print(f"  ✓ All health checks passed for {phase_name}")
+        print(f"  [OK] All health checks passed for {phase_name}")
     else:
-        print(f"  ✗ Health checks failed for {phase_name}")
+        print(f"  [ERROR] Health checks failed for {phase_name}")
 
     return all_healthy

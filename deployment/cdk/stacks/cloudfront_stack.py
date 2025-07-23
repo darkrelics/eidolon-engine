@@ -1,5 +1,6 @@
 """AWS CloudFront stack for Eidolon Engine portal distribution."""
 
+import json
 import boto3
 from aws_cdk import CfnOutput, Duration, Stack
 from aws_cdk import aws_certificatemanager as acm
@@ -59,6 +60,9 @@ class CloudFrontStack(Stack):
                 domain_name=self.get_distribution_domain(existing_distribution_id),
             )
             print(f"Using existing CloudFront distribution: {existing_distribution_id}")
+            
+            # Validate and update bucket policy for the existing distribution
+            self.validate_and_update_bucket_policy(portal_bucket, existing_distribution_id)
         else:
             # Create new distribution
             self.distribution = self.create_distribution(portal_bucket)
@@ -127,7 +131,7 @@ class CloudFrontStack(Stack):
 
             domain_names: list = [portal_domain]
 
-        # Create the distribution
+        # Create the distribution with S3 origin that auto-configures OAI
         distribution = cloudfront.Distribution(
             self,
             "eidolon-portal-distribution",
@@ -135,7 +139,7 @@ class CloudFrontStack(Stack):
             certificate=certificate,
             domain_names=domain_names,
             default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3BucketOrigin(portal_bucket),
+                origin=origins.S3Origin(portal_bucket),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD,
@@ -160,9 +164,6 @@ class CloudFrontStack(Stack):
             http_version=cloudfront.HttpVersion.HTTP2_AND_3,
             price_class=cloudfront.PriceClass.PRICE_CLASS_100,  # US, Canada, Europe
         )
-
-        # Note: S3 bucket policy will be updated post-deployment
-        # CDK has issues updating existing bucket policies
 
         # Create Route53 record if custom domain is configured
         if self.domain_name and self.portal_subdomain and self.hosted_zone_id:
@@ -227,3 +228,97 @@ class CloudFrontStack(Stack):
         except Exception:
             # Fallback to default CloudFront domain pattern
             return f"{distribution_id}.cloudfront.net"
+    
+    def validate_and_update_bucket_policy(self, portal_bucket: s3.IBucket, distribution_id: str) -> None:
+        """Validate and update S3 bucket policy for CloudFront OAI access.
+
+        Args:
+            portal_bucket: S3 bucket containing the portal
+            distribution_id: CloudFront distribution ID
+        """
+        try:
+            # Get distribution details to find OAI
+            cf_client = boto3.client("cloudfront", region_name="us-east-1")
+            dist_response = cf_client.get_distribution(Id=distribution_id)
+            dist_config = dist_response.get("Distribution", {}).get("DistributionConfig", {})
+            
+            # Extract OAI from the first origin
+            origins = dist_config.get("Origins", {}).get("Items", [])
+            if not origins:
+                print("Warning: No origins found in distribution")
+                return
+                
+            s3_origin = origins[0]
+            oai_path = s3_origin.get("S3OriginConfig", {}).get("OriginAccessIdentity", "")
+            
+            if not oai_path:
+                print("Warning: No OAI found in distribution")
+                return
+                
+            # Extract OAI ID from path (format: origin-access-identity/cloudfront/XXXXX)
+            oai_id = oai_path.split("/")[-1]
+            print(f"Found OAI: {oai_id}")
+            
+            # Get current bucket policy
+            s3_client = boto3.client("s3", region_name=self.region)
+            bucket_name = portal_bucket.bucket_name
+            
+            try:
+                policy_response = s3_client.get_bucket_policy(Bucket=bucket_name)
+                current_policy = json.loads(policy_response["Policy"])
+                print("Current bucket policy found")
+            except ClientError as e:
+                if e.response["Error"]["Code"] == "NoSuchBucketPolicy":
+                    print("No existing bucket policy found")
+                    current_policy = {"Version": "2012-10-17", "Statement": []}
+                else:
+                    raise
+            
+            # Expected OAI ARN
+            oai_arn = f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"
+            
+            # Check if policy needs update
+            needs_update = True
+            for statement in current_policy.get("Statement", []):
+                if (statement.get("Principal", {}).get("AWS") == oai_arn and
+                    statement.get("Action") == "s3:GetObject" and
+                    statement.get("Resource") == f"arn:aws:s3:::{bucket_name}/*"):
+                    needs_update = False
+                    print("Bucket policy already correctly configured")
+                    break
+            
+            if needs_update:
+                print("Updating bucket policy for CloudFront OAI access")
+                
+                # Create new policy statement
+                new_statement = {
+                    "Sid": "AllowCloudFrontOAI",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": oai_arn
+                    },
+                    "Action": "s3:GetObject",
+                    "Resource": f"arn:aws:s3:::{bucket_name}/*"
+                }
+                
+                # Remove any existing CloudFront OAI statements
+                current_policy["Statement"] = [
+                    stmt for stmt in current_policy.get("Statement", [])
+                    if not (stmt.get("Sid", "").startswith("AllowCloudFront") or 
+                            "cloudfront:user/CloudFront" in str(stmt.get("Principal", {})))
+                ]
+                
+                # Add new statement
+                current_policy["Statement"].append(new_statement)
+                
+                # Update bucket policy
+                s3_client.put_bucket_policy(
+                    Bucket=bucket_name,
+                    Policy=json.dumps(current_policy)
+                )
+                print(f"Bucket policy updated for OAI: {oai_id}")
+                
+        except Exception as e:
+            print(f"Error validating/updating bucket policy: {e}")
+            # Don't fail the deployment, but log the issue
+            print("Manual bucket policy update may be required")

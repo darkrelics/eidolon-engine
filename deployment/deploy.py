@@ -439,7 +439,7 @@ class IncrementalDeploymentOrchestrator:
                         if lambda_bucket:
                             self._update_lambda_functions_from_s3(lambda_bucket)
                         else:
-                            print("  ⚠ Could not determine Lambda bucket name for updates")
+                            print("  [WARNING] Could not determine Lambda bucket name for updates")
 
                 if result["success"]:
                     print(f"\n[SUCCESS] Phase {i} ({phase['name']}) completed successfully!")
@@ -538,13 +538,13 @@ class IncrementalDeploymentOrchestrator:
             try:
                 # Check if artifact exists
                 s3_client.head_object(Bucket=bucket_name, Key=artifact)
-                print(f"  ✓ {artifact}")
+                print(f"  [OK] {artifact}")
             except ClientError as err:
                 if err.response["Error"]["Code"] == "404":
-                    print(f"  ✗ {artifact} - Not found")
+                    print(f"  [MISSING] {artifact} - Not found")
                     all_valid = False
                 else:
-                    print(f"  ✗ {artifact} - Error: {err}")
+                    print(f"  [ERROR] {artifact} - Error: {err}")
                     all_valid = False
 
         return all_valid
@@ -656,7 +656,7 @@ class IncrementalDeploymentOrchestrator:
 
             for table_type, table_name in config["DynamoDB"]["Tables"].items():
                 if not table_name:
-                    print(f"  ✗ {table_type}: Not configured")
+                    print(f"  [MISSING] {table_type}: Not configured")
                     all_valid = False
                     continue
 
@@ -664,13 +664,13 @@ class IncrementalDeploymentOrchestrator:
                 validation_results[f"DynamoDB:{table_name}"] = result
 
                 if result.exists and result.valid:
-                    print(f"  ✓ {table_type}: {table_name} - OK")
+                    print(f"  [OK] {table_type}: {table_name} - OK")
                 elif result.exists and not result.valid:
-                    print(f"  ⚠ {table_type}: {table_name} - Configuration drift detected")
+                    print(f"  [WARNING] {table_type}: {table_name} - Configuration drift detected")
                     for msg in result.messages:
                         print(f"    - {msg}")
                 else:
-                    print(f"  ✗ {table_type}: {table_name} - Does not exist")
+                    print(f"  [MISSING] {table_type}: {table_name} - Does not exist")
                     all_valid = False
 
         # Validate Cognito User Pool
@@ -684,12 +684,12 @@ class IncrementalDeploymentOrchestrator:
                 validation_results[f"Cognito:{user_pool_id}"] = result
 
                 if result.exists and result.valid:
-                    print(f"  ✓ User Pool: {user_pool_id} - OK")
+                    print(f"  [OK] User Pool: {user_pool_id} - OK")
                 else:
-                    print(f"  ✗ User Pool: {user_pool_id} - {'Invalid' if result.exists else 'Does not exist'}")
+                    print(f"  [ERROR] User Pool: {user_pool_id} - {'Invalid' if result.exists else 'Does not exist'}")
                     all_valid = False
             else:
-                print("  ✗ User Pool: Not configured")
+                print("  [MISSING] User Pool: Not configured")
                 all_valid = False
 
         # Validate S3 Buckets
@@ -708,15 +708,15 @@ class IncrementalDeploymentOrchestrator:
                     validation_results[f"S3:{bucket_name}"] = result
 
                     if result.exists and result.valid:
-                        print(f"  ✓ {bucket_type} Bucket: {bucket_name} - OK")
+                        print(f"  [OK] {bucket_type} Bucket: {bucket_name} - OK")
                     else:
-                        print(f"  ✗ {bucket_type} Bucket: {bucket_name} - {'Access denied' if result.exists else 'Does not exist'}")
+                        print(f"  [ERROR] {bucket_type} Bucket: {bucket_name} - {'Access denied' if result.exists else 'Does not exist'}")
                         all_valid = False
                 else:
                     print(f"  - {bucket_type} Bucket: Not configured")
             # Check if any buckets are missing
             if not any(s3_config.get(key) for key in bucket_types.values()):
-                print("  ⚠ No S3 buckets configured")
+                print("  [WARNING] No S3 buckets configured")
 
         # Validate CloudWatch Log Groups
         if "CloudWatch" in config or "Logging" in config:
@@ -731,13 +731,13 @@ class IncrementalDeploymentOrchestrator:
                 validation_results[f"CloudWatch:{log_group}"] = result
 
                 if result.exists and result.valid:
-                    print(f"  ✓ Log Group: {log_group} - OK")
+                    print(f"  [OK] Log Group: {log_group} - OK")
                 elif result.exists and result.drift_detected:
-                    print(f"  ⚠ Log Group: {log_group} - Configuration drift")
+                    print(f"  [WARNING] Log Group: {log_group} - Configuration drift")
                     for msg in result.messages:
                         print(f"    - {msg}")
                 else:
-                    print(f"  ✗ Log Group: {log_group} - Does not exist")
+                    print(f"  [MISSING] Log Group: {log_group} - Does not exist")
                     all_valid = False
 
         # Validate IAM resources
@@ -752,9 +752,9 @@ class IncrementalDeploymentOrchestrator:
         validation_results[f"IAM:role:{role_name}"] = result
 
         if result.exists and result.valid:
-            print(f"  ✓ Execution Role: {role_name} - OK")
+            print(f"  [OK] Execution Role: {role_name} - OK")
         else:
-            print(f"  ✗ Execution Role: {role_name} - Does not exist")
+            print(f"  [MISSING] Execution Role: {role_name} - Does not exist")
             all_valid = False
 
         # Check IAM policies
@@ -766,31 +766,31 @@ class IncrementalDeploymentOrchestrator:
             validation_results[f"IAM:policy:{policy_name}"] = result
 
             if result.exists and result.valid:
-                print(f"  ✓ Policy: {policy_name} - OK")
+                print(f"  [OK] Policy: {policy_name} - OK")
             else:
-                print(f"  ✗ Policy: {policy_name} - Does not exist")
+                print(f"  [MISSING] Policy: {policy_name} - Does not exist")
                 all_valid = False
 
         # Validate CloudFront Distribution
         if "CloudFront" in config:
             print("\nChecking CloudFront distribution...")
             if config.get("CloudFront") is None:
-                print("  ⚠ CloudFront: Not configured")
+                print("  [WARNING] CloudFront: Not configured")
             else:
                 distribution_id = config.get("CloudFront", {}).get("DistributionId", "")
                 if distribution_id:
                     try:
                         cf_client = self.session.client("cloudfront")
                         cf_client.get_distribution(Id=distribution_id)
-                        print(f"  ✓ Distribution: {distribution_id} - OK")
+                        print(f"  [OK] Distribution: {distribution_id} - OK")
                     except ClientError as err:
                         if err.response["Error"]["Code"] == "NoSuchDistribution":
-                            print(f"  ✗ Distribution: {distribution_id} - Does not exist")
+                            print(f"  [MISSING] Distribution: {distribution_id} - Does not exist")
                         else:
-                            print(f"  ✗ Distribution: {distribution_id} - Error: {err}")
+                            print(f"  [ERROR] Distribution: {distribution_id} - Error: {err}")
                         all_valid = False
                 else:
-                    print("  ⚠ Distribution: Not configured")
+                    print("  [WARNING] Distribution: Not configured")
 
         # Generate drift report if needed
         drift_count = sum(1 for r in validation_results.values() if r.drift_detected)
@@ -815,10 +815,10 @@ class IncrementalDeploymentOrchestrator:
         print(f"Resources with drift: {drift_count}")
 
         if all_valid:
-            print("\n✓ All configured resources are present and valid!")
+            print("\n[SUCCESS] All configured resources are present and valid!")
         else:
             missing = total_resources - existing_resources
-            print(f"\n✗ Validation failed: {missing} missing resource(s)")
+            print(f"\n[FAILED] Validation failed: {missing} missing resource(s)")
             print("\nRun deployment to create missing resources.")
 
         return all_valid
@@ -957,14 +957,14 @@ class IncrementalDeploymentOrchestrator:
         if not self._check_aws_access():
             print("\n[ERROR] Cannot access AWS account. Please check your credentials.")
             return False
-        print("✓ AWS access confirmed")
+        print("[OK] AWS access confirmed")
 
         # Step 2: Check for config.yml
         print("\n[Step 2/7] Checking for existing configuration...")
         config_exists = self.config_manager.exists()
 
         if config_exists:
-            print("✓ Found existing config.yml")
+            print("[OK] Found existing config.yml")
 
             # Step 3: Validate existing resources and update config
             print("\n[Step 3/7] Validating existing resources...")
@@ -974,12 +974,12 @@ class IncrementalDeploymentOrchestrator:
             print("\nUpdating configuration with current AWS state...")
             self._update_config_from_aws()
             self.config_manager.save_config()
-            print("✓ Configuration updated with current state")
+            print("[OK] Configuration updated with current state")
         else:
-            print("⚠ No config.yml found, will create from template")
+            print("[WARNING] No config.yml found, will create from template")
             template_path = Path(__file__).parent / "../config.template.yml"
             if template_path.exists():
-                print("✓ Initializing configuration from template...")
+                print("[OK] Initializing configuration from template...")
                 self.config_manager.merge_with_template(str(template_path))
             validation_passed = False
 
@@ -1008,7 +1008,7 @@ class IncrementalDeploymentOrchestrator:
         if analyze_only:
             print("\n=== ANALYSIS COMPLETE ===")
             if not validation_passed:
-                print("⚠ Resource validation showed missing or invalid resources")
+                print("[WARNING] Resource validation showed missing or invalid resources")
             print("Run without --analyze-only to proceed with deployment.")
             return True
 
@@ -1031,7 +1031,7 @@ class IncrementalDeploymentOrchestrator:
         print("\n[Step 7/7] Finalizing configuration...")
         self._update_config_from_aws()
         self.config_manager.save_config()
-        print(f"✓ Final configuration saved to: {self.config_manager.config_path}")
+        print(f"[OK] Final configuration saved to: {self.config_manager.config_path}")
 
         # Show deployment summary
         print("\n========================================================")
@@ -1055,9 +1055,9 @@ class IncrementalDeploymentOrchestrator:
         # Final validation
         print("\nRunning final validation...")
         if self.validate_configuration(fix_drift=False):
-            print("✓ All resources validated successfully!")
+            print("[OK] All resources validated successfully!")
         else:
-            print("⚠ Some resources may need attention. Run with --validate for details.")
+            print("[WARNING] Some resources may need attention. Run with --validate for details.")
 
         return True
 
@@ -1170,7 +1170,7 @@ class IncrementalDeploymentOrchestrator:
         try:
             response = s3_client.list_objects_v2(Bucket=lambda_bucket)
             if "Contents" not in response:
-                print("    ⚠ No objects found in Lambda bucket")
+                print("    [WARNING] No objects found in Lambda bucket")
                 return
 
             # Filter for .zip files (excluding the lambda-layer directory)
@@ -1181,7 +1181,7 @@ class IncrementalDeploymentOrchestrator:
             ]
 
             if not lambda_artifacts:
-                print("    ⚠ No Lambda function ZIPs found in bucket")
+                print("    [WARNING] No Lambda function ZIPs found in bucket")
                 return
 
             print(f"    Found {len(lambda_artifacts)} Lambda function(s) to update")
@@ -1208,7 +1208,7 @@ class IncrementalDeploymentOrchestrator:
                             break
 
                 if not function_mapping:
-                    print("    ⚠ No matching Lambda functions found")
+                    print("    [WARNING] No matching Lambda functions found")
                     return
 
                 # Update the functions we found
@@ -1217,22 +1217,22 @@ class IncrementalDeploymentOrchestrator:
                     try:
                         # Update function code
                         lambda_client.update_function_code(FunctionName=func_name, S3Bucket=lambda_bucket, S3Key=artifact)
-                        print(f"    ✓ Updated {func_name}")
+                        print(f"    [OK] Updated {func_name}")
                         updated_count += 1
                     except ClientError as err:
-                        print(f"    ✗ Failed to update {func_name}: {err}")
+                        print(f"    [FAILED] Failed to update {func_name}: {err}")
                     except Exception as err:
-                        print(f"    ✗ Error updating {func_name}: {err}")
+                        print(f"    [ERROR] Error updating {func_name}: {err}")
 
                 print(f"    Successfully updated {updated_count} Lambda function(s)")
 
             except Exception as err:
-                print(f"    ✗ Error listing Lambda functions: {err}")
+                print(f"    [ERROR] Error listing Lambda functions: {err}")
 
         except ClientError as err:
-            print(f"    ✗ Failed to list objects in bucket {lambda_bucket}: {err}")
+            print(f"    [ERROR] Failed to list objects in bucket {lambda_bucket}: {err}")
         except Exception as err:
-            print(f"    ✗ Unexpected error: {err}")
+            print(f"    [ERROR] Unexpected error: {err}")
 
     def configure_cognito_triggers(self) -> None:
         """Configure Cognito user pool Lambda triggers and email verification using boto3.
@@ -1510,7 +1510,7 @@ def main():
     except CDKDeploymentError as e:
         # Check if this is specifically the CDK not installed error
         if "AWS CDK CLI is not installed" in str(e):
-            print("\n❌ AWS CDK is not installed on your system.")
+            print("\n[ERROR] AWS CDK is not installed on your system.")
             print("\nTo install AWS CDK, you need Node.js installed first, then run:")
             print("  npm install -g aws-cdk")
             print("\nFor more information, visit: https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html")

@@ -10,14 +10,14 @@ All Lambda functions in this directory serve both the MUD Portal and Incremental
 
 All Lambda functions are fully implemented and working:
 
-- User login and account creation (via Cognito) ✓
-- Account validation ✓
-- Account deletion with complete data cleanup ✓
-- Listing characters ✓
-- Character creation with name validation ✓
-- Character retrieval with active segments ✓
-- Character deletion ✓
-- Archetype listing ✓
+- User login and account creation (via Cognito)
+- Account validation
+- Account deletion with complete data cleanup
+- Listing characters
+- Character creation with name validation
+- Character retrieval with active segments
+- Character deletion
+- Archetype listing
 
 The bloom filter for restricted character names is properly loaded and functional.
 
@@ -118,8 +118,8 @@ All Lambda functions must follow these parameter standards:
   - Use `parse_json_body()` from `eidolon.requests`
 
 - **Path Parameters**: **NEVER** use for IDs - always use query parameters instead
-  - ❌ Wrong: `/characters/123`
-  - ✅ Correct: `/characters?characterId=123`
+  - Wrong: `/characters/123`
+  - Correct: `/characters?characterId=123`
 
 ### Consistency Requirements
 

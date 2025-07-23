@@ -167,13 +167,13 @@ def main() -> None:
     # Verify configuration
     print("\nVerifying configuration...")
     if verify_configuration(user_pool_id, lambda_function_name):
-        print("\n✓ Cognito triggers are properly configured!")
+        print("\n[OK] Cognito triggers are properly configured!")
         print("\nNext steps:")
         print("1. Test user registration again")
         print("2. Check CloudWatch logs for /aws/lambda/cognito-new-player")
         print("3. Verify the Players table has the new user entry")
     else:
-        print("\n✗ Configuration verification failed")
+        print("\n[ERROR] Configuration verification failed")
         sys.exit(1)
 
 
