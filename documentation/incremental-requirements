@@ -1,0 +1,427 @@
+# Eidolon Engine Incremental Game Requirements Document
+
+## 1. Executive Summary
+
+This document outlines the functional and design requirements for the Incremental Game component of the Eidolon Engine. The Incremental Game mode provides a timer-based story progression system that allows players to experience narrative-driven gameplay through automated mechanics while maintaining character progression compatibility with the MUD component.
+
+## 2. System Overview
+
+### 2.1 Purpose
+The Incremental Game component provides an alternative gameplay mode to the traditional MUD experience, allowing players to:
+- Progress through story-driven content with timed segments
+- Make meaningful decisions that affect narrative outcomes
+- Maintain character progression across both Incremental and MUD modes
+- Experience automated gameplay mechanics based on character attributes
+
+### 2.2 Key Features
+- Story-based progression with decision and narrative segments
+- Timer-based gameplay (1 minute to 24 hours per segment)
+- Character state persistence across game modes
+- Equipment management interface
+- Support for 10,000 concurrent users
+- Three story types: one-time, daily, and repeatable
+- Progression rate limited to match MUD gameplay speed
+
+## 3. Functional Requirements
+
+### 3.1 User Interface Requirements
+
+#### 3.1.1 Story Display Screen
+- **Primary Display Area**: Shows current story text with optional accompanying image
+- **Story Progress Indicator**: Visual representation of current position within the story
+- **Timer Display**: Shows remaining time until next segment becomes available
+- **Character Status Bar**: Displays key character stats (Health, Experience, Current Equipment)
+
+#### 3.1.2 Decision Interface
+For decision segments, the interface must display:
+- **Decision Text**: Clear description of the current choice
+- **Option Buttons**: Selectable options for the player's decision
+- **Time Limit Indicator**: If applicable, show countdown for decision timeout
+- **Option Tooltips**: Display potential consequences or skill checks when hovering
+- **Default Decision**: System calculates optimal choice based on character/world state for timeout scenarios
+
+#### 3.1.3 Narrative Result Display
+After each narrative segment completion:
+- **Outcome Text**: Display one of five possible outcomes:
+  - Death narrative
+  - Failure narrative
+  - Minimal success narrative
+  - Normal success narrative
+  - Exceptional success narrative
+- **Rewards Summary**: Show changes to character sheet including:
+  - Health changes
+  - Experience gained
+  - Equipment received
+  - New room location
+
+#### 3.1.4 Segment Completion Options
+Present three action buttons:
+- **Continue**: Proceed to next segment (if available)
+- **Abandon Story**: Exit current story with confirmation dialog
+- **Rest**: Pause story progression and restore character state
+
+#### 3.1.5 Equipment Management Screen
+- **Character Inventory Display**: Grid view of all possessed items
+- **Equipment Slots**: Visual representation of equipped items by slot type
+- **Item Details Panel**: Show item statistics and effects when selected
+- **Shop Interface**: Purchase trivial items using character resources
+- **Drag-and-Drop**: Allow equipment changes through intuitive UI interactions
+- **Access Points**: Available from main menu, during rest periods, and outside of active stories
+
+#### 3.1.6 Story Selection Screen
+- **Available Stories List**: Display only stories meeting character prerequisites
+- **Story Details**: Preview including:
+  - Estimated completion time
+  - Difficulty indicator
+  - Potential rewards
+- **Participation Status**: Show cooldowns for daily stories
+- **Filter Options**: Sort by type, difficulty, or estimated time
+
+### 3.2 Game Flow Requirements
+
+#### 3.2.1 Story Participation Flow
+1. System validates prerequisites and availability
+2. Player selects story from available list
+3. Character state transitions to Incremental mode
+4. Story participation key is assigned to character
+5. First segment (typically decision) is presented
+6. Player makes decision, timeout triggers default decision based on character/world state
+7. Narrative segment processes based on decision and character stats
+8. Outcome is determined and displayed
+9. Character sheet updates are applied
+10. Player chooses to continue, abandon, or rest
+11. Process repeats until story completion or abandonment
+
+#### 3.2.2 Segment Processing Requirements
+- **Minimum Segment Duration**: 1 minute
+- **Maximum Segment Duration**: 24 hours
+- **Processing Time Limit**: No Lambda function execution exceeds 30 seconds
+- **Auto-Progress**: Segments advance automatically after timer expiration
+- **Offline Progression**: Calculate results for segments completed while offline
+- **Default Decisions**: System determines optimal choice when player doesn't respond
+
+### 3.3 Character State Management
+
+#### 3.3.1 Mode Transition Requirements
+- **Lock Mechanism**: Character cannot be active in both modes simultaneously
+- **MUD Block**: Characters in incremental stories cannot login to MUD
+- **Incremental Block**: Characters logged into MUD cannot start incremental stories
+- **Transition Validation**: Verify character is not in combat or other locked states
+- **Timeout Protection**: Automatic mode release after extended inactivity
+
+#### 3.3.2 Story Participation Tracking
+- **Active Story Key**: Track current story and segment position
+- **Completion History**: Record completed stories and outcomes
+- **Daily Reset**: Clear daily story participation at server reset time
+- **Cooldown Management**: Enforce story-specific cooldown periods
+- **Available Stories**: Maintain list of unlocked stories in character record
+
+### 3.4 Story Types and Availability
+
+#### 3.4.1 One-Time Stories
+- Available once per character lifetime
+- Cannot be re-entered after completion or abandonment
+- Typically provide unique rewards or unlock content
+
+#### 3.4.2 Daily Stories
+- Reset availability at server midnight (UTC)
+- Track last participation timestamp
+- Provide consistent daily progression opportunities
+
+#### 3.4.3 Repeatable Stories
+- No cooldown restrictions
+- May have diminishing rewards on repetition
+- Used for farming or practice scenarios
+
+### 3.5 Integration Requirements
+
+#### 3.5.1 MUD Compatibility
+- Character attributes remain consistent across modes
+- Equipment functions identically in both modes
+- Room locations persist between mode switches
+- Skills and abilities apply using same mechanics
+- Shared DynamoDB tables for all character data
+
+#### 3.5.2 Story Unlock Mechanisms
+- Stories unlocked through Incremental participation
+- Stories unlocked through MUD participation
+- Stories unlocked through external activity (TBD)
+- Prerequisites based on skills or attributes
+- Item or quest requirements
+- Room-based story discovery
+
+## 4. Design Requirements
+
+### 4.1 Frontend Architecture (Flutter)
+
+#### 4.1.1 Application Structure
+```
+incremental/
+├── lib/
+│   ├── models/          # Data models for stories, characters
+│   ├── providers/       # State management (Provider/Riverpod)
+│   ├── screens/         # UI screens
+│   │   ├── story_selection.dart
+│   │   ├── story_display.dart
+│   │   ├── equipment_management.dart
+│   │   └── character_status.dart
+│   ├── services/        # API communication layer
+│   ├── widgets/         # Reusable UI components
+│   └── utils/           # Helper functions and constants
+```
+
+#### 4.1.2 State Management Requirements
+- **Global State**: Character data, active story, timer states
+- **Local State**: UI interactions, form inputs
+- **Persistence**: Cache story progress locally for offline viewing
+- **Synchronization**: Event-driven updates from backend
+
+#### 4.1.3 API Communication Layer
+- **REST API Integration**: Communicate with API Gateway endpoints
+- **Polling Strategy**: Intelligent polling based on segment completion times
+- **Authentication**: AWS Cognito token management
+- **Error Handling**: Graceful degradation on connection issues
+- **Request Queue**: Buffer actions during poor connectivity
+
+### 4.2 Backend Architecture
+
+#### 4.2.1 Lambda Functions
+New Lambda functions required:
+
+**StoryManager Lambda**
+- Retrieve available stories for character
+- Filter stories based on character's unlocked list
+- Initialize story session
+- Return story content and initial segment
+
+**SegmentProcessor Lambda**
+- Process player decisions
+- Calculate default decisions based on character state
+- Calculate narrative outcomes based on character stats
+- Apply character sheet updates
+- Advance to next segment
+- Handle timeout scenarios
+- Cache character state for segments < 120 minutes
+
+**EquipmentManager Lambda**
+- Retrieve character inventory
+- Process equipment changes
+- Handle trivial item purchases
+- Validate equipment requirements
+
+**StoryScheduler Lambda**
+- Manage timed segment progression
+- Process offline advancement
+- Handle daily story resets
+- Cleanup abandoned story sessions
+
+**StoryTimingService (Fargate Container)**
+- Maintain in-memory queue of upcoming segment completions
+- Process segment timeouts in batches
+- Calculate narrative outcomes for expired segments
+- Update character states and story progression
+- Monitor DynamoDB Streams for new stories
+- Emit metrics on processing performance
+
+#### 4.2.2 Database Schema (DynamoDB)
+
+**Stories Table**
+```
+{
+  storyId: String (PK),
+  storyType: String (one-time|daily|repeatable),
+  title: String,
+  description: String,
+  prerequisites: Map,
+  estimatedDuration: Number,
+  segments: List[
+    {
+      segmentId: String,
+      type: String (decision|narrative),
+      content: String,
+      imageUrl: String (optional),
+      duration: Number,
+      options: List (for decisions),
+      defaultDecisionLogic: String,
+      outcomes: Map (for narratives)
+    }
+  ]
+}
+```
+
+**StoryParticipation Table**
+```
+{
+  characterId: String (PK),
+  storyId: String (SK),
+  currentSegment: String,
+  startTime: Number,
+  lastActivityTime: Number,
+  decisions: Map,
+  outcomes: List,
+  status: String (active|completed|abandoned),
+  completionCount: Number
+}
+```
+
+**Character Table (Updated fields)**
+```
+{
+  characterId: String (PK),
+  // Existing MUD fields...
+  gameMode: {
+    mode: String (MUD|Incremental|None),
+    lastTransition: Number,
+    activeStoryId: String (optional),
+    lockExpiration: Number
+  },
+  availableStories: List[String], // Story IDs this character has unlocked
+  // Other existing fields...
+}
+```
+
+### 4.3 Game Mechanics Integration
+
+#### 4.3.1 Skill Check System
+- Implement summarized skill checks for narrative segments
+- Use same probability calculations as MUD combat
+- Apply modifiers based on equipment and stats
+- Support multiple simultaneous skill checks
+
+#### 4.3.2 Combat Resolution
+- Abstract MUD combat into narrative outcomes
+- Calculate damage/health changes over segment duration
+- Apply same formulas but in bulk processing
+- Maintain combat log for detailed review
+
+#### 4.3.3 Experience and Progression
+- Award experience based on segment difficulty
+- Scale rewards with character attributes and skills
+- Apply same progression curves as MUD
+- Track skill improvements from story actions
+- **Critical**: Ensure progression rate never exceeds MUD gameplay speed
+
+### 4.4 Performance and Scalability
+
+#### 4.4.1 Concurrent User Support
+- **Incremental Mode**: 10,000 concurrent users
+- **Response Time**: < 2 seconds for all user actions
+- **Lambda Concurrency**: Configure appropriate limits
+- **Database Capacity**: Provision adequate read/write units
+
+#### 4.4.2 Caching Strategy
+- **Story Content**: Retrieved dynamically via Lambda functions
+- **Character State**: Cached in Lambda for segments < 120 minutes
+- **Session Data**: DragonFly on EC2 if needed (avoid if possible)
+- **Static Assets**: S3 with CloudFront distribution
+
+#### 4.4.3 Timing Service Architecture
+- **Fargate Container**: Persistent service for story timing
+- **DynamoDB Streams**: Real-time notification of story events
+- **Batch Processing**: Efficient handling of multiple completions
+- **High Availability**: Multi-AZ deployment with auto-scaling
+
+### 4.5 Security Requirements
+
+#### 4.5.1 Authentication and Authorization
+- AWS Cognito integration for user authentication
+- JWT token validation on all API calls
+- Character ownership verification
+
+#### 4.5.2 Anti-Cheat Measures
+- Server-side validation of all game actions
+- Timestamp verification for segment progression
+- Rate limiting on API endpoints
+- Outcome validation within defined parameters
+
+### 4.6 Monitoring and Analytics
+
+#### 4.6.1 Operational Metrics
+- Lambda execution duration and errors
+- API Gateway response times
+- DynamoDB throttling events
+- Concurrent user counts by mode
+
+#### 4.6.2 Game Analytics
+- Story completion rates
+- Popular decision paths
+- Average session duration
+- Mode transition patterns
+- Equipment usage statistics
+
+#### 4.6.3 Audit Trail
+- CloudWatch Logs for all character progression events
+- Structured logging for analytics queries
+- Retention policies for compliance
+
+## 5. Technical Constraints
+
+### 5.1 Platform Requirements
+- Flutter 3.32+ for web application
+- AWS Lambda with Python 3.12+ runtime
+- DynamoDB for persistent storage
+- API Gateway REST APIs
+- ECS Fargate for story timing service
+- CloudWatch for logging and monitoring
+
+### 5.2 Integration Constraints
+- Maintain compatibility with existing MUD character system
+- Preserve all game mechanics calculations
+- Support future addition of new story types
+- Single-player experience only
+- Progression rate limited to MUD speed
+
+## 6. Data Management
+
+### 6.1 Character Data Integrity
+- Atomic updates for mode transitions
+- Transaction support for character modifications
+- CloudWatch audit trail for progression events
+- Backup and recovery procedures
+
+### 6.2 Timing Service Management
+- Container orchestration via ECS
+- Auto-scaling based on queue depth
+- Health checks and automatic recovery
+- State checkpointing to DynamoDB
+
+## 7. Acceptance Criteria
+
+### 7.1 Functional Acceptance
+- Successfully complete all three story types
+- Seamless character transition between modes
+- Equipment changes persist across modes
+- Proper timeout handling with default decisions
+- Mode exclusivity enforced (no simultaneous MUD/Incremental)
+
+### 7.2 Performance Acceptance
+- Support 10,000 concurrent incremental users
+- Lambda execution under 30 seconds
+- Page load time under 3 seconds
+- 99.9% API availability
+- Character progression rate ≤ MUD progression rate
+
+### 7.3 User Experience Acceptance
+- Intuitive story navigation
+- Clear outcome communication
+- Responsive design across devices
+- Accessible to screen readers
+
+## 8. Technical Appendices
+
+### 8.1 API Documentation
+- Endpoint specifications
+- Request/response formats
+- Error code definitions
+- Rate limiting details
+
+### 8.2 Database Indexes
+- Partition and sort key strategies
+- GSI requirements for queries
+- DynamoDB Streams configuration
+
+### 8.3 Event Configuration
+- EventBridge rule definitions
+- Lambda trigger configurations
+- CloudWatch event patterns
+- Error handling strategies
