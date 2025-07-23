@@ -164,7 +164,7 @@ def store_archetypes(archetypes_data):
                 archetype_item["Health"] = archetype["Health"]
             if "Essence" in archetype:
                 archetype_item["Essence"] = archetype["Essence"]
-            
+
             # Add optional AvailableStories field if present
             if "AvailableStories" in archetype:
                 archetype_item["AvailableStories"] = archetype["AvailableStories"]
@@ -329,13 +329,13 @@ def store_opponents(opponents_data):
                 "Tags": opponent.get("Tags", []),
                 "CreatedAt": opponent.get("CreatedAt", ""),
             }
-            
+
             # Build update expression dynamically
             update_expression = "SET "
             expression_attribute_values = {}
             expression_attribute_names = {}
             expression_parts = []
-            
+
             for key, value in opponent_item.items():
                 if key != "OpponentID":  # Skip the key
                     # Use expression attribute names to avoid reserved keyword issues
@@ -343,9 +343,9 @@ def store_opponents(opponents_data):
                     expression_attribute_names[attr_name_placeholder] = key
                     expression_parts.append(f"{attr_name_placeholder} = :{key.lower()}")
                     expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
-            
+
             update_expression += ", ".join(expression_parts)
-            
+
             opponents_table.update_item(  # type: ignore
                 Key={"OpponentID": opponent["OpponentID"]},
                 UpdateExpression=update_expression,
@@ -367,7 +367,7 @@ def store_story(story_data):
     # Store the story definition
     story_table = get_table(os.environ.get("STORY_TABLE", "story"))
     segments_table = get_table(os.environ.get("SEGMENTS_TABLE", "segments"))
-    
+
     try:
         # Store the main story
         story = story_data.get("story", {})
@@ -384,26 +384,26 @@ def store_story(story_data):
                 "CreatedAt": story["CreatedAt"],
                 "Version": story.get("Version", 1),
             }
-            
+
             # Build update expression
             update_expression = "SET "
             expression_attribute_values = {}
             expression_parts = []
-            
+
             for key, value in story_item.items():
                 if key != "StoryID":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
                     expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
-            
+
             update_expression += ", ".join(expression_parts)
-            
+
             story_table.update_item(  # type: ignore
                 Key={"StoryID": story["StoryID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
             )
             print(f"Story '{story['Title']}' stored successfully")
-        
+
         # Store all segments
         segments = story_data.get("segments", [])
         for segment in segments:
@@ -414,7 +414,7 @@ def store_story(story_data):
                 "ShortStatus": segment["ShortStatus"],
                 "Duration": segment["Duration"],
             }
-            
+
             # Add optional fields based on segment type
             if segment["SegmentType"] == "decision":
                 segment_item["DecisionText"] = segment.get("DecisionText", "")
@@ -428,30 +428,27 @@ def store_story(story_data):
                 segment_item["NextSegmentID"] = segment.get("NextSegmentID")
                 segment_item["Challenges"] = segment.get("Challenges", [])
                 segment_item["Results"] = segment.get("Results", {})
-            
+
             # Build update expression
             update_expression = "SET "
             expression_attribute_values = {}
             expression_parts = []
-            
+
             for key, value in segment_item.items():
                 if key not in ["StoryID", "SegmentID"]:  # Skip the keys
                     expression_parts.append(f"{key} = :{key.lower()}")
                     expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
-            
+
             update_expression += ", ".join(expression_parts)
-            
+
             segments_table.update_item(  # type: ignore
-                Key={
-                    "StoryID": segment["StoryID"],
-                    "SegmentID": segment["SegmentID"]
-                },
+                Key={"StoryID": segment["StoryID"], "SegmentID": segment["SegmentID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        
+
         print(f"Stored {len(segments)} segments successfully")
-        
+
     except Exception as err:
         logging.error(f"An unexpected error occurred while storing story: {str(err)}")
 
@@ -483,16 +480,16 @@ def load_story():
     """
     story_table = get_table(os.environ.get("STORY_TABLE", "story"))
     segments_table = get_table(os.environ.get("SEGMENTS_TABLE", "segments"))
-    
+
     try:
         # Load all stories
         story_response = story_table.scan()  # type: ignore
         stories = story_response.get("Items", [])
-        
+
         # Load all segments
         segments_response = segments_table.scan()  # type: ignore
         segments = segments_response.get("Items", [])
-        
+
         print("Story data loaded from DynamoDB successfully")
         return {"stories": stories, "segments": segments}
     except Exception as err:
@@ -566,7 +563,7 @@ def display_archetypes(archetypes):
                 print(f"    Prototype: {item.get('PrototypeID', 'Unknown')}")
                 print(f"      Slot: {item.get('Slot', 'Unspecified')}")
                 print(f"      Worn: {item.get('IsWorn', False)}")
-        
+
         # Add available stories information
         available_stories = archetype.get("AvailableStories", [])
         if available_stories:
@@ -616,13 +613,13 @@ def display_opponents(opponents_data):
         print(f"  Health: {opponent.get('Health', 0)}")
         print(f"  Weapon Type: {opponent.get('WeaponType', 'Unknown')}")
         print(f"  Weapon Damage: {opponent.get('WeaponDamage', 0)}")
-        
+
         loot_table = opponent.get("LootTable", [])
         if loot_table:
             print("  Loot Table:")
             for loot in loot_table:
                 print(f"    Item: {loot.get('itemId', 'Unknown')} (chance: {loot.get('chance', 0)})")
-        
+
         tags = opponent.get("Tags", [])
         if tags:
             print(f"  Tags: {', '.join(tags)}")
@@ -647,7 +644,7 @@ def display_story(story_data):
         print(f"  First Segment: {story.get('FirstSegmentID', 'None')}")
         print(f"  Version: {story.get('Version', 1)}")
         print()
-    
+
     # Display segments grouped by story
     print("Segments:")
     segments_by_story = {}
@@ -656,7 +653,7 @@ def display_story(story_data):
         if story_id not in segments_by_story:
             segments_by_story[story_id] = []
         segments_by_story[story_id].append(segment)
-    
+
     for story_id, segments in segments_by_story.items():
         print(f"\nSegments for Story {story_id}:")
         for segment in segments:
@@ -664,7 +661,7 @@ def display_story(story_data):
             print(f"    Type: {segment.get('SegmentType')}")
             print(f"    Status: {segment.get('ShortStatus')}")
             print(f"    Duration: {segment.get('Duration')} seconds")
-            
+
             if segment.get("SegmentType") == "decision":
                 print(f"    Decision Text: {segment.get('DecisionText', 'None')}")
                 options = segment.get("DecisionOptions", {})

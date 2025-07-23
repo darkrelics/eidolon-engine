@@ -48,7 +48,21 @@ class DynamoDBStack(Stack):
         self.lambda_execution_role_arn = lambda_execution_role_arn
 
         # Define table types upfront
-        self.table_types: list = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story", "segments", "active_segments", "opponents", "history"]
+        self.table_types: list = [
+            "players",
+            "characters",
+            "rooms",
+            "exits",
+            "items",
+            "prototypes",
+            "archetypes",
+            "motd",
+            "story",
+            "segments",
+            "active_segments",
+            "opponents",
+            "history",
+        ]
 
         # Initialize existing tables from context
         self.existing_tables: dict = {}
@@ -202,13 +216,12 @@ class DynamoDBStack(Stack):
                 sort_key=dynamodb.Attribute(name="EndTime", type=dynamodb.AttributeType.NUMBER),
                 projection_type=dynamodb.ProjectionType.ALL,
             )
-            
+
             # Configure TTL on active_segments table
             # Cast to CfnTable to access L1 properties
             if isinstance(cfn_table, dynamodb.CfnTable):
                 cfn_table.time_to_live_specification = dynamodb.CfnTable.TimeToLiveSpecificationProperty(
-                    attribute_name="TTL",
-                    enabled=True
+                    attribute_name="TTL", enabled=True
                 )
 
         return table
@@ -226,7 +239,7 @@ class DynamoDBStack(Stack):
             # Add GSI ARN for active_segments table
             if table_name == "active_segments":
                 resources.append(f"{table.table_arn}/index/CompletionTimeIndex")
-        
+
         self.table_access_policy = iam.PolicyDocument(
             statements=[
                 iam.PolicyStatement(
