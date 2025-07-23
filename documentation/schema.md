@@ -452,17 +452,17 @@ end
 
 | Field            | Type     | Description                                                          |
 | ---------------- | -------- | -------------------------------------------------------------------- |
-| `CharacterID`    | `STRING` | UUID of the character (partition key).                              |
-| `StoryID`        | `STRING` | UUID of the story (sort key).                                       |
-| `StoryTitle`     | `STRING` | Title of the story for display without additional lookup.           |
-| `StartedAt`      | `STRING` | ISO timestamp when the story began.                                 |
-| `FinishedAt`     | `STRING` | ISO timestamp when the story ended (completion or abandonment).     |
-| `StoryType`      | `STRING` | Type of story (one-time, daily, or repeatable).                     |
-| `SegmentHistory` | `LIST`   | Detailed record of each segment's progression and outcomes.         |
-| `FinalOutcome`   | `STRING` | Overall story result (death, failure, minimal, normal, exceptional).|
-| `TotalDuration`  | `NUMBER` | Total seconds from start to finish.                                 |
-| `Rewards`        | `MAP`    | Aggregated rewards earned (experience, items, gold, room changes).  |
-| `AbandonedCount` | `NUMBER` | Number of times this story was abandoned before completion.         |
+| `CharacterID`    | `STRING` | UUID of the character (partition key).                               |
+| `StoryID`        | `STRING` | UUID of the story (sort key).                                        |
+| `StoryTitle`     | `STRING` | Title of the story for display without additional lookup.            |
+| `StartedAt`      | `STRING` | ISO timestamp when the story began.                                  |
+| `FinishedAt`     | `STRING` | ISO timestamp when the story ended (completion or abandonment).      |
+| `StoryType`      | `STRING` | Type of story (one-time, daily, or repeatable).                      |
+| `SegmentHistory` | `LIST`   | Detailed record of each segment's progression and outcomes.          |
+| `FinalOutcome`   | `STRING` | Overall story result (death, failure, minimal, normal, exceptional). |
+| `TotalDuration`  | `NUMBER` | Total seconds from start to finish.                                  |
+| `Rewards`        | `MAP`    | Aggregated rewards earned (experience, items, gold, room changes).   |
+| `AbandonedCount` | `NUMBER` | Number of times this story was abandoned before completion.          |
 
 - **`CharacterID` + `StoryID`**: Composite primary key enabling efficient queries by character and specific story lookups.
 - **`StoryTitle`**: Cached story title to avoid additional Story table lookup when displaying history.
