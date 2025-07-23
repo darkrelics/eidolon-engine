@@ -36,123 +36,115 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 
 ### 3.1 DynamoDB Table Designs
 
-#### 3.1.1 Story Table (Existing, Extended)
+#### 3.1.1 Stories Table (New)
 
 ```python
-# Uses existing story table with PlayerID/StoryID composite key
+# Master story definitions
 {
-    "PlayerID": "player-uuid-123",      # PK
-    "StoryID": "forest-adventure#2024", # SK (includes timestamp for history)
-    "Status": "active",                 # active|completed|abandoned
-    "CurrentSegment": "seg-002",
-    "SegmentStartTime": 1737000300,
-    "NextCompletionTime": 1737003600,
-    "Decisions": {
-        "seg-001": {
-            "choice": "take-left-path",
-            "timestamp": 1737000250,
-            "automated": false
-        }
+    "StoryID": "forest-adventure-uuid",  # PK
+    "Title": "The Whispering Woods",
+    "Description": "A mysterious force draws you into the ancient forest...",
+    "NarrativeText": "The morning mist clings to the forest floor as you approach...",
+    "StoryType": "daily",               # one-time|daily|repeatable
+    "EstimatedDuration": 3600,          # seconds
+    "Prerequisites": {
+        "minSkills": {"survival": 10, "combat": 5},
+        "requiredItems": ["map_fragment"],
+        "requiredRooms": ["town_square"]
     },
-    "Outcomes": [
-        {
-            "segmentId": "seg-002",
-            "result": "normal-success",
-            "timestamp": 1737000900,
-            "effects": {
-                "experience": 50,
-                "items": ["herb_bundle"]
-            }
-        }
+    "FirstSegmentID": "seg-uuid-001",
+    "Created": "2025-01-15T10:00:00Z",
+    "Version": 1
+}
+```
+
+#### 3.1.2 Segments Table (New)
+
+```python
+# Decision segment example
+{
+    "StoryID": "forest-adventure-uuid",   # PK
+    "SegmentID": "seg-uuid-001",          # SK
+    "SegmentType": "decision",
+    "ShortStatus": "Choosing your path",
+    "Duration": 300,                      # 5 minutes to decide
+    "DecisionText": "You stand at the forest edge. The path splits into two directions.",
+    "DecisionOptions": {
+        "take-left-path": "seg-uuid-002a",
+        "follow-markers": "seg-uuid-002b"
+    },
+    "DefaultDecision": "take-left-path"
+}
+
+# Narrative segment example
+{
+    "StoryID": "forest-adventure-uuid",   # PK
+    "SegmentID": "seg-uuid-002a",         # SK
+    "SegmentType": "narrative",
+    "ShortStatus": "Navigating the moonlit path",
+    "Duration": 600,                      # 10 minutes
+    "NextSegmentID": "seg-uuid-003",     # Single linked list
+    "Challenges": [
+        {"attribute": "Agility", "skill": "Perception", "difficulty": 8, "attempts": 2},
+        {"attribute": "Strength", "skill": "Survival", "difficulty": 7, "attempts": 3}
     ],
-    "StartTime": 1737000000,
-    "CompletionTime": null,
-    "TTL": 1737086400  # Auto-cleanup after 24 hours for active stories
+    "Results": {
+        "death": {
+            "narrative": "The forest claims another victim...",
+            "effects": {"health": 0, "room": "death_realm"}
+        },
+        "failure": {
+            "narrative": "You stumble through brambles...",
+            "effects": {"health": -20, "experience": 10}
+        },
+        "minimal": {
+            "narrative": "You make slow progress...",
+            "effects": {"health": -5, "experience": 25}
+        },
+        "normal": {
+            "narrative": "You navigate successfully...",
+            "effects": {"experience": 50, "items": ["herb_bundle"]}
+        },
+        "exceptional": {
+            "narrative": "Your expertise shines through...",
+            "effects": {"experience": 100, "items": ["rare_herb"], "gold": 50}
+        }
+    }
+}
+```
+
+#### 3.1.3 ActiveSegments Table (New)
+
+```python
+# Tracks runtime segment instances
+{
+    "ActiveSegmentID": "active-seg-uuid-123",  # PK (unique instance)
+    "CharacterID": "char-uuid-456",
+    "StoryID": "forest-adventure-uuid",
+    "SegmentID": "seg-uuid-002a",
+    "StartTime": 1737000300,
+    "EndTime": 1737003900,              # When this segment completes
+    "Status": "active",                 # active|completed
+    "Decision": null,                   # For decision segments
+    "ChallengeResults": [               # For narrative segments
+        {"attribute": "Agility", "skill": "Perception", "effectiveScore": 12, "difficulty": 8, "sigma": 0.82, "success": true},
+        {"attribute": "Agility", "skill": "Perception", "effectiveScore": 12, "difficulty": 8, "sigma": -0.45, "success": false},
+        {"attribute": "Strength", "skill": "Survival", "effectiveScore": 10, "difficulty": 7, "sigma": 0.63, "success": true},
+        {"attribute": "Strength", "skill": "Survival", "effectiveScore": 10, "difficulty": 7, "sigma": 1.21, "success": true},
+        {"attribute": "Strength", "skill": "Survival", "effectiveScore": 10, "difficulty": 7, "sigma": 0.94, "success": true}
+    ],
+    "Outcome": "minimal",               # Calculated from challenges
+    "TTL": 1737090300                  # Auto-cleanup after 24 hours
 }
 
 # Global Secondary Index for polling
 GSI: CompletionTimeIndex
   - PK: Status (active)
-  - SK: NextCompletionTime
+  - SK: EndTime
   - Projection: ALL
 ```
 
-#### 3.1.2 Stories Definition Table (New)
-
-```python
-# Simple table for story definitions
-{
-    "StoryID": "forest-adventure",      # PK
-    "StoryType": "daily",               # one-time|daily|repeatable
-    "Title": "The Whispering Woods",
-    "Description": "A mysterious force draws you into the ancient forest...",
-    "EstimatedDuration": 3600,          # seconds
-    "Prerequisites": {
-        "minSkills": {
-            "survival": 10,
-            "combat": 5
-        },
-        "requiredItems": ["map_fragment"],
-        "requiredRooms": ["town_square"]
-    },
-    "Segments": [
-        {
-            "segmentId": "seg-001",
-            "type": "decision",
-            "content": "You stand at the forest edge. The path splits...",
-            "imageUrl": "s3://scripts-bucket/images/forest_edge.jpg",
-            "duration": 300,  # 5 minutes
-            "options": [
-                {
-                    "id": "take-left-path",
-                    "text": "Take the moonlit path",
-                    "skillChecks": ["perception", "nature"]
-                },
-                {
-                    "id": "follow-markers",
-                    "text": "Follow the ancient markers",
-                    "skillChecks": ["history", "navigation"]
-                }
-            ],
-            "defaultDecisionLogic": "highest_skill"
-        },
-        {
-            "segmentId": "seg-002",
-            "type": "narrative",
-            "duration": 600,  # 10 minutes
-            "content": {
-                "base": "You venture deeper into the woods...",
-                "outcomes": {
-                    "death": {
-                        "text": "The forest claims another victim...",
-                        "effects": {"health": 0, "room": "death_realm"}
-                    },
-                    "failure": {
-                        "text": "You stumble through brambles...",
-                        "effects": {"health": -20, "experience": 10}
-                    },
-                    "minimal": {
-                        "text": "You make slow progress...",
-                        "effects": {"health": -5, "experience": 25}
-                    },
-                    "normal": {
-                        "text": "You navigate successfully...",
-                        "effects": {"experience": 50, "items": ["herb_bundle"]}
-                    },
-                    "exceptional": {
-                        "text": "Your expertise shines through...",
-                        "effects": {"experience": 100, "items": ["rare_herb"], "gold": 50}
-                    }
-                }
-            }
-        }
-    ],
-    "Version": 1,
-    "Created": "2025-01-15T10:00:00Z"
-}
-```
-
-#### 3.1.3 Character Table (Existing Fields Utilized)
+#### 3.1.4 Character Table (Existing Fields Utilized)
 
 ```python
 # No schema changes needed, using existing fields
@@ -160,10 +152,17 @@ GSI: CompletionTimeIndex
     "CharacterID": "char-uuid-456",     # PK
     "PlayerID": "player-uuid-123",      # Existing attribute
     "GameMode": "Incremental",          # Existing field (MUD|Incremental|None)
-    "AvailableStories": [               # New field to add
-        "forest-adventure",
-        "daily-patrol",
-        "tutorial"
+    "AvailableStories": [               # Stories the character can start
+        "forest-adventure-uuid",
+        "daily-patrol-uuid",
+        "tutorial-uuid"
+    ],
+    "AbandonedStories": [               # Stories started but not finished
+        "hard-quest-uuid"
+    ],
+    "CompletedStories": [               # Stories successfully completed
+        "intro-quest-uuid",
+        "easy-quest-uuid"
     ],
     # All other existing MUD fields remain unchanged...
 }
@@ -174,10 +173,10 @@ GSI: CompletionTimeIndex
 #### 3.2.1 Primary Access Patterns
 
 1. **Get Available Stories**: Read character's AvailableStories list
-2. **Check Story Participation**: Query story table by PlayerID + StoryID
-3. **Get Active Story**: Query story table for Status="active"
-4. **Update Segment Progress**: Transactional update to story record
-5. **Mode Transition**: Update character GameMode field
+2. **Check Story Status**: Check if story in Abandoned/Completed lists
+3. **Get Active Segments**: Query ActiveSegments by CharacterID
+4. **Process Segment Completion**: Update ActiveSegments record
+5. **Update Story Lists**: Move story IDs between Available/Abandoned/Completed
 
 #### 3.2.2 No GSIs Required
 
@@ -333,8 +332,9 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 # Key Operations:
 - Verify character GameMode is "None"
 - Set GameMode to "Incremental" (atomic update)
-- Create story participation record with NextCompletionTime
-- Enable polling rule if first active story
+- Create first ActiveSegments record
+- Remove story from AvailableStories list
+- Enable polling rule if first active segment
 - Return first segment details
 # Error Handling:
 - Use eidolon.responses.error_response for conflicts
@@ -392,9 +392,9 @@ def segment_poller_handler(event, context):
 
     # Query GSI for segments due for completion
     response = dynamodb.query(
-        TableName='story',
+        TableName='active_segments',
         IndexName='CompletionTimeIndex',
-        KeyConditionExpression='#status = :active AND NextCompletionTime <= :now',
+        KeyConditionExpression='#status = :active AND EndTime <= :now',
         ExpressionAttributeNames={'#status': 'Status'},
         ExpressionAttributeValues={
             ':active': 'active',
@@ -403,18 +403,20 @@ def segment_poller_handler(event, context):
     )
 
     # Process each due segment
-    for story in response['Items']:
+    for segment in response['Items']:
         process_segment_completion(
-            story['PlayerID'],
-            story['StoryID'],
-            story['CurrentSegment']
+            segment['SegmentID'],
+            segment['PlayerID'],
+            segment['CharacterID'],
+            segment['StoryID'],
+            segment['SegmentDefinitionID']
         )
 
 def enable_polling_if_needed():
-    """Enable polling when active stories exist."""
-    # Check if any active stories exist
+    """Enable polling when active segments exist."""
+    # Check if any active segments exist
     response = dynamodb.query(
-        TableName='story',
+        TableName='active_segments',
         IndexName='CompletionTimeIndex',
         KeyConditionExpression='#status = :active',
         ExpressionAttributeNames={'#status': 'Status'},
@@ -433,32 +435,64 @@ def enable_polling_if_needed():
 The segment processor implements MUD-compatible mechanics:
 
 ```python
-def calculate_narrative_outcome(character, segment, decision=None):
-    """Determine narrative outcome based on character stats."""
-    # Aggregate relevant skills
-    skill_total = sum(character.get('skills', {}).get(skill, 0)
-                     for skill in segment.get('relevantSkills', []))
+def calculate_narrative_outcome(character, segment):
+    """Determine narrative outcome based on character stats using MUD mechanics."""
+    from eidolon.mechanics import ResolveStaticCheck
 
-    # Apply equipment modifiers
-    equipment_bonus = calculate_equipment_bonus(character, segment)
+    total_sigma = 0.0
+    total_attempts = 0
+    critical_failures = 0
 
-    # Calculate success probability (same as MUD combat)
-    success_chance = (skill_total + equipment_bonus) / 100.0
+    # Process each challenge using the MUD mechanics system
+    for challenge in segment.get('Challenges', []):
+        attribute_value = character.get('Attributes', {}).get(challenge['attribute'], 0)
+        skill_value = character.get('Skills', {}).get(challenge['skill'], 0)
 
-    # Roll for outcome
-    roll = random.random()
+        # Combined effective score (attribute + skill)
+        effective_score = attribute_value + skill_value
+        difficulty = challenge['difficulty']  # Typically 7-10
 
-    if roll < 0.05:  # 5% critical failure
-        return 'death'
-    elif roll < 0.20:  # 15% failure
+        # Run multiple attempts for this challenge
+        for _ in range(challenge['attempts']):
+            outcome = ResolveStaticCheck(effective_score, difficulty)
+            total_attempts += 1
+            total_sigma += outcome.Sigma
+
+            # Track critical failures (very negative sigma)
+            if outcome.Sigma < -2.0:
+                critical_failures += 1
+
+    # Calculate average sigma across all attempts
+    if total_attempts == 0:
         return 'failure'
-    elif roll < 0.50:  # 30% minimal success
+
+    avg_sigma = total_sigma / total_attempts
+
+    # Map sigma values to story outcomes
+    # Critical failures can lead to death
+    if critical_failures >= 2 or avg_sigma < -2.0:
+        return 'death'
+    elif avg_sigma < -1.0:
+        return 'failure'
+    elif avg_sigma < 0:
         return 'minimal'
-    elif roll < 0.90:  # 40% normal success
+    elif avg_sigma < 1.0:
         return 'normal'
-    else:  # 10% exceptional success
+    else:
         return 'exceptional'
 ```
+
+### 5.4 Difficulty Guidelines
+
+Following the MUD mechanics system, story challenges use these difficulty levels:
+
+- **4**: Easy task (high success rate)
+- **6**: Moderate task
+- **8**: Hard task (typical for most story challenges)
+- **10**: Very hard task
+- **12+**: Exceptional task (rare, for epic moments)
+
+Most incremental story challenges will use difficulties between 7-10, providing a balanced experience where character progression matters but outcomes aren't guaranteed.
 
 ## 6. Flutter Portal Integration
 
