@@ -68,10 +68,11 @@ class _LoginScreenState extends State<LoginScreen> {
         _handleNavigation(context, widget.redirectRoute, widget.redirectArgs);
       }
     } catch (e) {
+      debugPrint('Login error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: const Text('Failed to authenticate. Please try again.'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -86,9 +87,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleNavigation(BuildContext context, String? route, Object? args) {
-    final targetRoute = route ?? '/characters';
+    final targetRoute = route ?? '/character-management';
 
-    if (targetRoute == '/characters') {
+    if (targetRoute == '/character-management') {
       Navigator.of(context).pushReplacementNamed(targetRoute);
     } else {
       Navigator.of(context).pushReplacementNamed(targetRoute, arguments: args);
