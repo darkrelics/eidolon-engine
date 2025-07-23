@@ -16,9 +16,9 @@ This document provides the technical design specifications for implementing the 
                                                            │
                     ┌──────────────────────────────────────┼──────┐
                     │                                      │      │
-              ┌─────▼─────┐                        ┌──────▼──────┤
+              ┌─────▼─────┐                        ┌──────▼──────┐
               │ DynamoDB  │                        │ EventBridge │
-              │ (Shared)  │                        │  (Timers)   │
+              │ (Shared)  │                        │  (Polling)  │
               └───────────┘                        └─────────────┘
 ```
 
@@ -28,7 +28,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 
 1. **Shared Data Layer**: All existing DynamoDB tables used by both modes
 2. **Mode Exclusivity**: GameMode field prevents concurrent access
-3. **Timing Service**: EventBridge rules for segment scheduling at 1-second resolution
+3. **Timing Service**: DynamoDB polling with EventBridge-triggered Lambda at 10-second intervals
 4. **Stateless Compute**: Lambda functions handle all game logic
 5. **Unified Portal**: Single Flutter web app serves both game modes
 
@@ -69,6 +69,12 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "CompletionTime": null,
     "TTL": 1737086400  # Auto-cleanup after 24 hours for active stories
 }
+
+# Global Secondary Index for polling
+GSI: CompletionTimeIndex
+  - PK: Status (active)
+  - SK: NextCompletionTime
+  - Projection: ALL
 ```
 
 #### 3.1.2 Stories Definition Table (New)
@@ -327,8 +333,8 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 # Key Operations:
 - Verify character GameMode is "None"
 - Set GameMode to "Incremental" (atomic update)
-- Create story participation record
-- Schedule first segment completion via EventBridge
+- Create story participation record with NextCompletionTime
+- Enable polling rule if first active story
 - Return first segment details
 # Error Handling:
 - Use eidolon.responses.error_response for conflicts
@@ -342,8 +348,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 # Key Operations:
 - Validate decision against current segment options
 - Update story record with decision
-- Calculate next segment timing
-- Create/update EventBridge rule for completion
+- Calculate and set NextCompletionTime in story record
 - Return acknowledgment
 ```
 
@@ -355,39 +360,72 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - Retrieve story and character data
 - Calculate outcome based on character stats/skills
 - Apply effects to character record
-- Update story progression
-- Schedule next segment or complete story
-# Note: This runs automatically, not called by client
+- Update story progression with new NextCompletionTime
+- If story complete, check if polling should be disabled
+# Note: Called by segment poller Lambda
 ```
 
-### 5.2 EventBridge Timer Implementation
+### 5.2 DynamoDB Polling Implementation
 
-Instead of a Fargate container, use EventBridge for timing:
+Use a single EventBridge rule to trigger polling Lambda every 10 seconds:
 
 ```python
-def schedule_segment_completion(player_id, story_id, segment_id, completion_time):
-    """Create one-time EventBridge rule for segment completion."""
-    rule_name = f"segment-{player_id}-{segment_id}"
-
+def setup_polling_rule():
+    """Create EventBridge rule for segment polling."""
     eventbridge.put_rule(
-        Name=rule_name,
-        ScheduleExpression=f"at({completion_time.isoformat()})",
-        State='ENABLED'
+        Name='incremental-segment-poller',
+        ScheduleExpression='rate(10 seconds)',
+        State='DISABLED'  # Enable when incremental mode has active users
     )
 
-    # Target the segment processor Lambda
     eventbridge.put_targets(
-        Rule=rule_name,
+        Rule='incremental-segment-poller',
         Targets=[{
             'Id': '1',
-            'Arn': segment_processor_lambda_arn,
-            'Input': json.dumps({
-                'playerId': player_id,
-                'storyId': story_id,
-                'segmentId': segment_id
-            })
+            'Arn': segment_poller_lambda_arn
         }]
     )
+
+def segment_poller_handler(event, context):
+    """Poll for segments ready to complete."""
+    current_time = int(time.time())
+
+    # Query GSI for segments due for completion
+    response = dynamodb.query(
+        TableName='story',
+        IndexName='CompletionTimeIndex',
+        KeyConditionExpression='#status = :active AND NextCompletionTime <= :now',
+        ExpressionAttributeNames={'#status': 'Status'},
+        ExpressionAttributeValues={
+            ':active': 'active',
+            ':now': current_time
+        }
+    )
+
+    # Process each due segment
+    for story in response['Items']:
+        process_segment_completion(
+            story['PlayerID'],
+            story['StoryID'],
+            story['CurrentSegment']
+        )
+
+def enable_polling_if_needed():
+    """Enable polling when active stories exist."""
+    # Check if any active stories exist
+    response = dynamodb.query(
+        TableName='story',
+        IndexName='CompletionTimeIndex',
+        KeyConditionExpression='#status = :active',
+        ExpressionAttributeNames={'#status': 'Status'},
+        ExpressionAttributeValues={':active': 'active'},
+        Limit=1
+    )
+
+    if response['Count'] > 0:
+        eventbridge.enable_rule(Name='incremental-segment-poller')
+    else:
+        eventbridge.disable_rule(Name='incremental-segment-poller')
 ```
 
 ### 5.3 Outcome Calculation Logic
@@ -593,13 +631,15 @@ self.story_functions = [
     ("api-submit-decision", "api_submit_decision.lambda_handler"),
     ("api-get-segment-outcome", "api_get_segment_outcome.lambda_handler"),
     ("api-abandon-story", "api_abandon_story.lambda_handler"),
+    ("segment-poller", "segment_poller.lambda_handler"),
     ("process-segment", "process_segment.lambda_handler"),
 ]
 
-# Add EventBridge rule for segment processor
-self.segment_processor_rule = events.Rule(
-    self, "segment-processor-rule",
-    schedule=events.Schedule.rate(Duration.seconds(1))
+# Add EventBridge rule for segment polling
+self.segment_poller_rule = events.Rule(
+    self, "incremental-segment-poller",
+    schedule=events.Schedule.rate(Duration.seconds(10)),
+    enabled=False  # Enable dynamically when needed
 )
 ```
 
@@ -627,21 +667,24 @@ Add story definition table to DynamoDB stack:
 # deployment/cdk/stacks/dynamodb_stack.py
 # Add to table configurations:
 {"name": "story_definitions", "pk": "StoryID", "pk_type": "S"}
+
+# Add GSI to story table:
+{"name": "CompletionTimeIndex", "pk": "Status", "sk": "NextCompletionTime"}
 ```
 
 ## 10. Cost Analysis
 
 ### 10.1 Simplified Cost Structure
 
-With the serverless approach:
+With the DynamoDB polling approach:
 
 **Monthly Costs (10,000 concurrent users)**:
 
-- Lambda invocations: ~$50-100
-- EventBridge rules: ~$10-20
-- DynamoDB (pay-per-request): ~$100-200
+- Lambda invocations: ~$100-150 (includes polling overhead)
+- EventBridge rules: <$1 (single polling rule)
+- DynamoDB (pay-per-request): ~$150-250 (includes GSI queries)
 - No Fargate costs: $0
-- **Total: ~$160-320/month**
+- **Total: ~$250-400/month**
 
 ### 10.2 Cost Optimization
 
@@ -649,23 +692,26 @@ With the serverless approach:
 
    - Minimize cold starts by keeping functions warm
    - Use appropriate memory allocation (256MB typical)
+   - Disable polling when no active stories
 
-2. **EventBridge Efficiency**:
+2. **Polling Efficiency**:
 
-   - Clean up completed rules promptly
-   - Batch similar timings when possible
+   - 10-second intervals balance precision vs cost
+   - Process multiple segments per poll cycle
+   - Use GSI for efficient time-based queries
 
 3. **DynamoDB Efficiency**:
    - Use TTL for automatic cleanup
-   - Minimize unnecessary reads
+   - Batch process segment updates
+   - Efficient GSI usage for polling queries
 
 ## 11. Implementation Timeline
 
 ### 11.1 Phase 1: Core Story System (Week 1-2)
 
-- Create story definition table
+- Create story definition table with GSI
 - Implement core Lambda functions
-- Basic EventBridge timer logic
+- DynamoDB polling infrastructure
 - Manual story creation tools
 
 ### 11.2 Phase 2: Flutter Integration (Week 3-4)
@@ -704,22 +750,26 @@ With the serverless approach:
 - Automatic scaling with Lambda
 - Pay-per-use pricing
 - Unified monitoring
+- Enable/disable polling based on usage
 
 ### 12.3 Maintenance Benefits
 
 - Fewer moving parts
 - Standard AWS services only
-- No custom timing service to maintain
-- Simple debugging with CloudWatch
+- Simple polling pattern to maintain
+- Efficient debugging with CloudWatch
+- GSI provides fast time-based queries
 
 ## 13. Conclusion
 
-This simplified technical design leverages the existing Eidolon Engine infrastructure to implement the incremental game with minimal additional complexity. By using shared tables, dual-purpose Lambda functions, and EventBridge for timing, the system can support 10,000 concurrent users while maintaining consistency with the MUD game mechanics and keeping operational costs low.
+This simplified technical design leverages the existing Eidolon Engine infrastructure to implement the incremental game with minimal additional complexity. By using shared tables, dual-purpose Lambda functions, and DynamoDB polling with EventBridge, the system can support 10,000 concurrent users while maintaining consistency with the MUD game mechanics and keeping operational costs low.
 
 Key architectural decisions:
 
 - Shared DynamoDB tables eliminate synchronization needs
-- EventBridge replaces complex Fargate timing service
+- DynamoDB + 10-second polling provides scalable timing
+- GSI enables efficient time-based queries
+- Enable/disable polling based on active stories
 - Existing Lambda patterns ensure consistency
 - GameMode field provides simple mode exclusivity
-- 1-second resolution aligns with MUD ticker
+- 10-second resolution balances precision and cost
