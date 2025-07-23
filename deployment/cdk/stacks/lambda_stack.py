@@ -18,16 +18,16 @@ from constructs import Construct
 
 class ApiGatewayDomainTarget(route53.IAliasRecordTarget):
     """Wrapper for ApiGatewayDomain to fix parameter naming issue.
-    
+
     The `ApiGatewayDomain` class from the AWS CDK library has a known issue where
     certain parameters passed to its `bind` method are incorrectly named or mapped.
     This wrapper class resolves the issue by delegating calls to an instance of
     `ApiGatewayDomain` while ensuring the correct parameter names are used.
-    
+
     Use this class when creating alias records for API Gateway custom domains
     in Route 53. It ensures compatibility and prevents errors related to parameter
     naming mismatches.
-    
+
     Args:
         domain_name: The domain name associated with the API Gateway custom domain.
     """
