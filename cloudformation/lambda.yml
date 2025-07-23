@@ -184,7 +184,7 @@ Resources:
           CHARACTERS_TABLE: characters
           STORY_DEFINITIONS_TABLE: story_definitions
           STORY_TABLE: story
-      MemorySize: 256
+      MemorySize: 128
       Timeout: 30
       Role: !ImportValue
         Fn::Sub: "iam-${AWS::StackName}-LambdaExecutionRoleArn"
@@ -203,10 +203,12 @@ Resources:
       Environment:
         Variables:
           CHARACTERS_TABLE: characters
-          STORY_DEFINITIONS_TABLE: story_definitions
           STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          OPPONENTS_TABLE: opponents
           SEGMENT_PROCESSOR_FUNCTION_ARN: !GetAtt ProcessSegmentFunction.Arn
-      MemorySize: 256
+      MemorySize: 128
       Timeout: 30
       Role: !ImportValue
         Fn::Sub: "iam-${AWS::StackName}-LambdaExecutionRoleArn"
@@ -225,10 +227,12 @@ Resources:
       Environment:
         Variables:
           CHARACTERS_TABLE: characters
-          STORY_DEFINITIONS_TABLE: story_definitions
           STORY_TABLE: story
-      MemorySize: 512
-      Timeout: 60
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          OPPONENTS_TABLE: opponents
+      MemorySize: 128
+      Timeout: 30
       Role: !ImportValue
         Fn::Sub: "iam-${AWS::StackName}-LambdaExecutionRoleArn"
 

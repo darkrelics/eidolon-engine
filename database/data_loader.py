@@ -303,6 +303,60 @@ def load_item_prototypes():
         return {}
 
 
+def store_opponents(opponents_data):
+    """
+    Stores opponent data into the 'opponents' DynamoDB table using update operations.
+
+    Args:
+        opponents_data (dict): The opponents data to store.
+    """
+    opponents_table = get_table(os.environ.get("OPPONENTS_TABLE", "opponents"))
+    try:
+        for opponent in opponents_data.get("opponents", []):
+            opponent_item = {
+                "OpponentID": opponent["OpponentID"],
+                "Name": opponent["Name"],
+                "Description": opponent.get("Description", ""),
+                "CombatRating": opponent["CombatRating"],
+                "DefenseRating": opponent["DefenseRating"],
+                "DamageRating": opponent["DamageRating"],
+                "Toughness": opponent["Toughness"],
+                "ArmorRating": opponent.get("ArmorRating", 0),
+                "Health": opponent["Health"],
+                "WeaponType": opponent.get("WeaponType", "bashing"),
+                "WeaponDamage": opponent["WeaponDamage"],
+                "LootTable": opponent.get("LootTable", []),
+                "Tags": opponent.get("Tags", []),
+                "CreatedAt": opponent.get("CreatedAt", ""),
+            }
+            
+            # Build update expression dynamically
+            update_expression = "SET "
+            expression_attribute_values = {}
+            expression_attribute_names = {}
+            expression_parts = []
+            
+            for key, value in opponent_item.items():
+                if key != "OpponentID":  # Skip the key
+                    # Use expression attribute names to avoid reserved keyword issues
+                    attr_name_placeholder = f"#{key}"
+                    expression_attribute_names[attr_name_placeholder] = key
+                    expression_parts.append(f"{attr_name_placeholder} = :{key.lower()}")
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+            
+            update_expression += ", ".join(expression_parts)
+            
+            opponents_table.update_item(  # type: ignore
+                Key={"OpponentID": opponent["OpponentID"]},
+                UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
+        print("Opponent data stored in DynamoDB successfully")
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while storing opponents: {str(err)}")
+
+
 def store_story(story_data):
     """
     Stores story and segments data into DynamoDB tables.
@@ -366,6 +420,10 @@ def store_story(story_data):
                 segment_item["DecisionText"] = segment.get("DecisionText", "")
                 segment_item["DecisionOptions"] = segment.get("DecisionOptions", {})
                 segment_item["DefaultDecision"] = segment.get("DefaultDecision", "")
+            elif segment["SegmentType"] == "combat":
+                segment_item["NextSegmentID"] = segment.get("NextSegmentID")
+                segment_item["Combat"] = segment.get("Combat", {})
+                segment_item["Results"] = segment.get("Results", {})
             else:  # narrative
                 segment_item["NextSegmentID"] = segment.get("NextSegmentID")
                 segment_item["Challenges"] = segment.get("Challenges", [])
@@ -396,6 +454,24 @@ def store_story(story_data):
         
     except Exception as err:
         logging.error(f"An unexpected error occurred while storing story: {str(err)}")
+
+
+def load_opponents():
+    """
+    Loads opponent data from the 'opponents' DynamoDB table.
+
+    Returns:
+        dict: A dictionary containing the opponents.
+    """
+    opponents_table = get_table(os.environ.get("OPPONENTS_TABLE", "opponents"))
+    try:
+        response = opponents_table.scan()  # type: ignore
+        opponents = {"opponents": response.get("Items", [])}
+        print("Opponent data loaded from DynamoDB successfully")
+        return opponents
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while loading opponents: {str(err)}")
+        return {}
 
 
 def load_story():
@@ -520,6 +596,39 @@ def display_item_prototypes(prototypes):
         print()
 
 
+def display_opponents(opponents_data):
+    """
+    Displays opponent information.
+
+    Args:
+        opponents_data (dict): The opponents data to display.
+    """
+    print("Opponents:")
+    for opponent in opponents_data.get("opponents", []):
+        print(f"Opponent ID: {opponent.get('OpponentID', 'No ID')}")
+        print(f"  Name: {opponent.get('Name', 'No Name')}")
+        print(f"  Description: {opponent.get('Description', 'No description')}")
+        print(f"  Combat Rating: {opponent.get('CombatRating', 0)}")
+        print(f"  Defense Rating: {opponent.get('DefenseRating', 0)}")
+        print(f"  Damage Rating: {opponent.get('DamageRating', 0)}")
+        print(f"  Toughness: {opponent.get('Toughness', 0)}")
+        print(f"  Armor Rating: {opponent.get('ArmorRating', 0)}")
+        print(f"  Health: {opponent.get('Health', 0)}")
+        print(f"  Weapon Type: {opponent.get('WeaponType', 'Unknown')}")
+        print(f"  Weapon Damage: {opponent.get('WeaponDamage', 0)}")
+        
+        loot_table = opponent.get("LootTable", [])
+        if loot_table:
+            print("  Loot Table:")
+            for loot in loot_table:
+                print(f"    Item: {loot.get('itemId', 'Unknown')} (chance: {loot.get('chance', 0)})")
+        
+        tags = opponent.get("Tags", [])
+        if tags:
+            print(f"  Tags: {', '.join(tags)}")
+        print()
+
+
 def display_story(story_data):
     """
     Displays story and segments information.
@@ -563,6 +672,12 @@ def display_story(story_data):
                     print("    Options:")
                     for opt_key, opt_value in options.items():
                         print(f"      {opt_key}: -> {opt_value}")
+            elif segment.get("SegmentType") == "combat":
+                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
+                combat = segment.get("Combat", {})
+                if combat:
+                    print(f"    Opponent ID: {combat.get('opponentId', 'None')}")
+                    print(f"    Max Rounds: {combat.get('maxRounds', 0)}")
             else:
                 print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
                 challenges = segment.get("Challenges", [])
@@ -586,6 +701,7 @@ def main():
     parser.add_argument("-a", "--archetypes", default="../data/test_archetypes.json", help="Path to the Archetypes JSON file.")
     parser.add_argument("-p", "--prototypes", default="../data/test_prototypes.json", help="Path to the Prototypes JSON file.")
     parser.add_argument("-s", "--story", default="../data/test_story.json", help="Path to the Story JSON file.")
+    parser.add_argument("-o", "--opponents", default="../data/test_opponents.json", help="Path to the Opponents JSON file.")
     parser.add_argument("-region", default="us-east-1", help="AWS region for DynamoDB.")
     args = parser.parse_args()
 
@@ -612,6 +728,10 @@ def main():
         story_data = load_json(args.story)
         store_story(story_data)
 
+        # Load and store opponents
+        opponents_data = load_json(args.opponents)
+        store_opponents(opponents_data)
+
         # Load data from DynamoDB and display
         loaded_exits = load_exits()
         display_exits(loaded_exits)
@@ -627,6 +747,9 @@ def main():
 
         loaded_story = load_story()
         display_story(loaded_story)
+
+        loaded_opponents = load_opponents()
+        display_opponents(loaded_opponents)
 
     except Exception as err:
         logging.error(f"An unexpected error occurred: {str(err)}")

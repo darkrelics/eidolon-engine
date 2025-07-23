@@ -48,7 +48,7 @@ class DynamoDBStack(Stack):
         self.lambda_execution_role_arn = lambda_execution_role_arn
 
         # Define table types upfront
-        self.table_types: list = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story", "segments", "active_segments"]
+        self.table_types: list = ["players", "characters", "rooms", "exits", "items", "prototypes", "archetypes", "motd", "story", "segments", "active_segments", "opponents"]
 
         # Initialize existing tables from context
         self.existing_tables: dict = {}
@@ -94,6 +94,7 @@ class DynamoDBStack(Stack):
             {"name": "story", "pk": "StoryID", "pk_type": "S", "sk": ""},
             {"name": "segments", "pk": "StoryID", "pk_type": "S", "sk": "SegmentID", "sk_type": "S"},
             {"name": "active_segments", "pk": "ActiveSegmentID", "pk_type": "S", "sk": ""},
+            {"name": "opponents", "pk": "OpponentID", "pk_type": "S", "sk": ""},
         ]
 
     def _get_table_name(self, config_name: str) -> str:

@@ -112,27 +112,81 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: true
 
-  # Shared story table for incremental game
+  # Story definition table for incremental game
   StoryTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: story
       AttributeDefinitions:
-        - AttributeName: PlayerID
-          AttributeType: S
         - AttributeName: StoryID
           AttributeType: S
       KeySchema:
-        - AttributeName: PlayerID
-          KeyType: HASH
         - AttributeName: StoryID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  # Segments table for story segments
+  SegmentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: segments
+      AttributeDefinitions:
+        - AttributeName: StoryID
+          AttributeType: S
+        - AttributeName: SegmentID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: StoryID
+          KeyType: HASH
+        - AttributeName: SegmentID
           KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  # Active segments table for runtime tracking
+  ActiveSegmentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: active_segments
+      AttributeDefinitions:
+        - AttributeName: ActiveSegmentID
+          AttributeType: S
+        - AttributeName: Status
+          AttributeType: S
+        - AttributeName: EndTime
+          AttributeType: N
+      KeySchema:
+        - AttributeName: ActiveSegmentID
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: CompletionTimeIndex
+          KeySchema:
+            - AttributeName: Status
+              KeyType: HASH
+            - AttributeName: EndTime
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: true
       TimeToLiveSpecification:
         AttributeName: TTL
         Enabled: true
 
+  # Opponents table for combat encounters
+  OpponentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: opponents
+      AttributeDefinitions:
+        - AttributeName: OpponentID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: OpponentID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
 
   EidolonDynamoDBPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -162,6 +216,10 @@ Resources:
               - !GetAtt ArchetypesTable.Arn
               - !GetAtt MOTDTable.Arn
               - !GetAtt StoryTable.Arn
+              - !GetAtt SegmentsTable.Arn
+              - !GetAtt ActiveSegmentsTable.Arn
+              - !Sub "${ActiveSegmentsTable.Arn}/index/CompletionTimeIndex"
+              - !GetAtt OpponentsTable.Arn
 
 Outputs:
   PlayersTableName:
@@ -218,6 +276,23 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-StoryTableName"
 
+  SegmentsTableName:
+    Description: "DynamoDB table name for segments"
+    Value: !Ref SegmentsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-SegmentsTableName"
+
+  ActiveSegmentsTableName:
+    Description: "DynamoDB table name for active segments"
+    Value: !Ref ActiveSegmentsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ActiveSegmentsTableName"
+
+  OpponentsTableName:
+    Description: "DynamoDB table name for opponents"
+    Value: !Ref OpponentsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-OpponentsTableName"
 
   DynamoDBAccessPolicyArn:
     Description: "ARN of the DynamoDB access policy"

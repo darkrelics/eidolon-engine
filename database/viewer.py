@@ -34,6 +34,7 @@ TABLE_NAMES = {
     "story": os.environ.get("STORY_TABLE", "story"),
     "segments": os.environ.get("SEGMENTS_TABLE", "segments"),
     "active_segments": os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments"),
+    "opponents": os.environ.get("OPPONENTS_TABLE", "opponents"),
     "character_history": os.environ.get("CHARACTER_HISTORY_TABLE", "character_history"),
 }
 

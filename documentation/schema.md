@@ -47,8 +47,8 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 | `Health`           | `NUMBER` | The character's current health points.                         |
 | `MaxHealth`        | `NUMBER` | The character's maximum health points.                         |
 | `Hidden`           | `BOOL`   | Whether the character is currently hidden.                     |
-| `Wounds`           | `LIST`   | List of wounds affecting the character.                        |
-| `CharState`        | `STRING` | Current character state (e.g., "normal", "combat").            |
+| `Wounds`           | `LIST`   | List of wound objects affecting the character.                 |
+| `CharState`        | `STRING` | Current character state (e.g., "standing", "unconscious").     |
 | `AvailableStories` | `LIST`   | List of story IDs available to this character.                 |
 | `AbandonedStories` | `LIST`   | List of story IDs the character has abandoned.                 |
 | `CompletedStories` | `LIST`   | List of story IDs the character has completed.                 |
@@ -65,11 +65,24 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 - **`Health`**: Indicates the character's current health status.
 - **`MaxHealth`**: The character's maximum health capacity.
 - **`Hidden`**: Boolean indicating whether the character is currently hidden from other players.
-- **`Wounds`**: List of wound objects affecting the character's performance.
-- **`CharState`**: Current state of the character (normal, combat, etc.).
+- **`Wounds`**: List of wound objects affecting the character's performance. Each wound object contains:
+  - `damage_type`: STRING - Type of damage ("bashing", "lethal", or "aggravated")
+  - `heal_at`: STRING - ISO timestamp when the wound will heal
+- **`CharState`**: Current state of the character ("standing", "unconscious", "dead", "ghost").
 - **`AvailableStories`**: List of story IDs the character can participate in (e.g., ["forest-adventure-uuid", "daily-patrol-uuid"]).
 - **`AbandonedStories`**: List of story IDs the character started but didn't complete.
 - **`CompletedStories`**: List of story IDs the character has successfully finished.
+
+### Wound System Details
+
+The wound system is shared between MUD and Incremental modes:
+
+- **Bashing Damage**: Non-lethal bruising that heals in 15 minutes
+- **Lethal Damage**: Serious wounds that heal in 6 hours
+- **Aggravated Damage**: Severe wounds that heal in 7 days
+- Characters at 0 health with only bashing damage become unconscious
+- Characters at 0 health with any lethal/aggravated damage die
+- Wounds persist across game modes - injuries from MUD combat affect Incremental stories and vice versa
 
 ---
 
@@ -210,18 +223,18 @@ By adhering to this schema, developers can ensure data consistency and ease of a
 
 ## Archetypes Table
 
-| Field            | Type     | Description                                     |
-| ---------------- | -------- | ----------------------------------------------- |
-| `ArchetypeName`  | `STRING` | Name of the archetype.                          |
-| `Description`    | `STRING` | Description of the archetype.                   |
-| `Attributes`     | `MAP`    | Default attributes for the archetype.           |
-| `Skills`         | `MAP`    | Default skills for the archetype.               |
-| `StartRoom`      | `NUMBER` | ID of the starting room for the archetype.      |
-| `StartingItems`  | `LIST`   | List of items given at character creation.      |
-| `Health`         | `NUMBER` | Starting health points.                         |
-| `Essence`        | `NUMBER` | Starting essence points.                        |
-| `Player`         | `BOOL`   | Whether this archetype is for players.          |
-| `AvailableStories` | `LIST` | List of story IDs available to this archetype. |
+| Field              | Type     | Description                                    |
+| ------------------ | -------- | ---------------------------------------------- |
+| `ArchetypeName`    | `STRING` | Name of the archetype.                         |
+| `Description`      | `STRING` | Description of the archetype.                  |
+| `Attributes`       | `MAP`    | Default attributes for the archetype.          |
+| `Skills`           | `MAP`    | Default skills for the archetype.              |
+| `StartRoom`        | `NUMBER` | ID of the starting room for the archetype.     |
+| `StartingItems`    | `LIST`   | List of items given at character creation.     |
+| `Health`           | `NUMBER` | Starting health points.                        |
+| `Essence`          | `NUMBER` | Starting essence points.                       |
+| `Player`           | `BOOL`   | Whether this archetype is for players.         |
+| `AvailableStories` | `LIST`   | List of story IDs available to this archetype. |
 
 - **`ArchetypeName`**: Primary key for the archetype.
 - **`Description`**: Explains the archetype's role or characteristics.
@@ -365,54 +378,65 @@ end
 
 ## Segments Table
 
-| Field             | Type     | Description                                                   |
-| ----------------- | -------- | ------------------------------------------------------------- |
-| `StoryID`         | `STRING` | UUID of the parent story (partition key).                     |
-| `SegmentID`       | `STRING` | UUID of the segment (sort key).                               |
-| `SegmentType`     | `STRING` | Type: decision or narrative.                                  |
-| `ShortStatus`     | `STRING` | Brief status text shown during segment.                       |
-| `Duration`        | `NUMBER` | Time in seconds for this segment.                             |
-| `DecisionText`    | `STRING` | For decision segments: the choice presented.                  |
-| `DecisionOptions` | `MAP`    | For decision segments: map of option ID to next segment ID.   |
-| `NextSegmentID`   | `STRING` | For narrative segments: UUID of the next segment.             |
-| `DefaultDecision` | `STRING` | For decision segments: which option to auto-select.           |
-| `Challenges`      | `LIST`   | For narrative segments: list of skill/attribute challenges.   |
-| `Results`         | `MAP`    | For narrative segments: outcomes mapped to character updates. |
+| Field             | Type     | Description                                                 |
+| ----------------- | -------- | ----------------------------------------------------------- |
+| `StoryID`         | `STRING` | UUID of the parent story (partition key).                   |
+| `SegmentID`       | `STRING` | UUID of the segment (sort key).                             |
+| `SegmentType`     | `STRING` | Type: decision, narrative, or combat.                       |
+| `ShortStatus`     | `STRING` | Brief status text shown during segment.                     |
+| `Duration`        | `NUMBER` | Time in seconds for this segment.                           |
+| `DecisionText`    | `STRING` | For decision segments: the choice presented.                |
+| `DecisionOptions` | `MAP`    | For decision segments: map of option ID to next segment ID. |
+| `NextSegmentID`   | `STRING` | For narrative/combat segments: UUID of the next segment.    |
+| `DefaultDecision` | `STRING` | For decision segments: which option to auto-select.         |
+| `Challenges`      | `LIST`   | For narrative segments: list of skill/attribute challenges. |
+| `Combat`          | `MAP`    | For combat segments: combat configuration.                  |
+| `Results`         | `MAP`    | For narrative/combat segments: outcomes mapped to updates.  |
 
 - **`StoryID` + `SegmentID`**: Composite key for efficient segment lookups.
-- **`SegmentType`**: Determines whether this is a decision point or narrative.
+- **`SegmentType`**: Determines segment behavior - decision, narrative, or combat.
 - **`DecisionOptions`**: Map like {"left-path": "segment-uuid-2", "right-path": "segment-uuid-3"}.
-- **`NextSegmentID`**: For narrative segments, the single next segment in the chain.
+- **`NextSegmentID`**: For narrative/combat segments, the single next segment in the chain.
 - **`Challenges`**: List of objects with:
   - `attribute`: Character attribute name (e.g., "Strength", "Agility")
   - `skill`: Character skill name (e.g., "Combat", "Stealth")
   - `difficulty`: Target number to beat (typically 7-10)
   - `attempts`: Number of times to roll
+- **`Combat`**: For combat segments, contains:
+  - `opponentId`: UUID reference to Opponents table
+  - `maxRounds`: Maximum combat rounds before forced resolution
+  - `environment`: Optional combat modifiers (lighting, terrain)
 - **`Results`**: Map of outcome types (death, failure, minimal, normal, exceptional) to:
   - `narrative`: Text shown for this outcome
-  - `effects`: Character updates (health, experience, items, room)
+  - `effects`: Character updates (items, room changes)
+  - Note: Damage is applied directly through MUD wound system during combat
 
 ## ActiveSegments Table
 
-| Field              | Type     | Description                                                |
-| ------------------ | -------- | ---------------------------------------------------------- |
-| `ActiveSegmentID`  | `STRING` | UUID for this active segment instance (partition key).     |
-| `CharacterID`      | `STRING` | UUID of the character.                                     |
-| `StoryID`          | `STRING` | UUID of the story being played.                            |
-| `SegmentID`        | `STRING` | UUID of the current segment definition.                    |
-| `StartTime`        | `NUMBER` | Unix timestamp when segment started.                       |
-| `EndTime`          | `NUMBER` | Unix timestamp when segment will complete.                 |
-| `Status`           | `STRING` | Status: active or completed.                               |
-| `Decision`         | `STRING` | For decision segments: choice made by player.              |
-| `ChallengeResults` | `LIST`   | For narrative segments: results of each challenge roll.    |
-| `Outcome`          | `STRING` | For narrative segments: final outcome (death/failure/etc). |
-| `TTL`              | `NUMBER` | Time-to-live for automatic cleanup.                        |
+| Field              | Type     | Description                                               |
+| ------------------ | -------- | --------------------------------------------------------- |
+| `ActiveSegmentID`  | `STRING` | UUID for this active segment instance (partition key).    |
+| `CharacterID`      | `STRING` | UUID of the character.                                    |
+| `StoryID`          | `STRING` | UUID of the story being played.                           |
+| `SegmentID`        | `STRING` | UUID of the current segment definition.                   |
+| `StartTime`        | `NUMBER` | Unix timestamp when segment started.                      |
+| `EndTime`          | `NUMBER` | Unix timestamp when segment will complete.                |
+| `Status`           | `STRING` | Status: active or completed.                              |
+| `Decision`         | `STRING` | For decision segments: choice made by player.             |
+| `ChallengeResults` | `LIST`   | For narrative segments: results of each challenge roll.   |
+| `CombatState`      | `MAP`    | For combat segments: tracks ongoing combat state.         |
+| `Outcome`          | `STRING` | Final outcome (death/failure/minimal/normal/exceptional). |
+| `TTL`              | `NUMBER` | Time-to-live for automatic cleanup.                       |
 
 - **`ActiveSegmentID`**: Unique identifier for this runtime instance.
 - **`CharacterID`**: Links to the character experiencing this segment.
 - **`EndTime`**: Key field for polling - when this segment completes.
-- **`ChallengeResults`**: Stores each dice roll result for challenges.
-- **`Outcome`**: Determined by aggregating challenge results.
+- **`ChallengeResults`**: Stores each dice roll result for narrative challenges.
+- **`CombatState`**: For combat segments, tracks:
+  - `round`: Current combat round number
+  - `playerWounds`: List of wounds with type and healAt timestamps
+  - `opponentHealth`: Current opponent health
+- **`Outcome`**: Final result determined by challenge aggregation or combat resolution.
 
 ### Global Secondary Index: CompletionTimeIndex
 
@@ -437,6 +461,42 @@ end
 - Story completion tracking
 - Path choices made
 - Rewards earned
+
+---
+
+## Opponents Table
+
+| Field           | Type     | Description                                       |
+| --------------- | -------- | ------------------------------------------------- |
+| `OpponentID`    | `STRING` | UUID of the opponent (UUIDv4) - primary key.      |
+| `Name`          | `STRING` | Display name of the opponent.                     |
+| `Description`   | `STRING` | Narrative description of the opponent.            |
+| `CombatRating`  | `NUMBER` | Combined attack skill (Agility + Melee).          |
+| `DefenseRating` | `NUMBER` | Combined defense skill (Agility + Dodge).         |
+| `DamageRating`  | `NUMBER` | Combined damage potential (Strength + Weapon).    |
+| `Toughness`     | `NUMBER` | Base endurance for damage resistance.             |
+| `ArmorRating`   | `NUMBER` | Armor protection value.                           |
+| `Health`        | `NUMBER` | Maximum health levels.                            |
+| `WeaponType`    | `STRING` | Type of damage dealt (bashing/lethal/aggravated). |
+| `WeaponDamage`  | `NUMBER` | Bonus damage from weapon.                         |
+| `LootTable`     | `LIST`   | Items and drop chances upon defeat.               |
+| `Tags`          | `LIST`   | Categories for filtering and searching.           |
+| `CreatedAt`     | `STRING` | ISO timestamp of creation.                        |
+
+- **`OpponentID`**: Unique identifier allowing reuse across multiple stories.
+- **`Name`**: The opponent's display name shown in combat narratives.
+- **`Description`**: Detailed description for story context.
+- **`CombatRating`**: Pre-calculated attack value combining Agility and weapon skill.
+- **`DefenseRating`**: Pre-calculated defense value for hit avoidance.
+- **`DamageRating`**: Base damage potential before weapon bonus.
+- **`Toughness`**: Endurance value used to resist damage.
+- **`ArmorRating`**: Reduces incoming damage sigma values.
+- **`Health`**: Total health levels the opponent can sustain.
+- **`WeaponType`**: Determines wound type inflicted (uses MUD damage system).
+- **`WeaponDamage`**: Additional damage bonus from equipped weapon.
+- **`LootTable`**: List of objects with `itemId` and `chance` (0.0-1.0) for random drops.
+- **`Tags`**: Enables filtering opponents by type, difficulty, or story theme.
+- **`CreatedAt`**: Timestamp for version tracking and sorting.
 
 ---
 
