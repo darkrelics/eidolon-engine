@@ -188,6 +188,24 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: true
 
+  # History table for tracking story completions
+  HistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: history
+      AttributeDefinitions:
+        - AttributeName: CharacterID
+          AttributeType: S
+        - AttributeName: StoryID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: CharacterID
+          KeyType: HASH
+        - AttributeName: StoryID
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
   EidolonDynamoDBPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -220,6 +238,7 @@ Resources:
               - !GetAtt ActiveSegmentsTable.Arn
               - !Sub "${ActiveSegmentsTable.Arn}/index/CompletionTimeIndex"
               - !GetAtt OpponentsTable.Arn
+              - !GetAtt HistoryTable.Arn
 
 Outputs:
   PlayersTableName:
@@ -293,6 +312,12 @@ Outputs:
     Value: !Ref OpponentsTable
     Export:
       Name: !Sub "${AWS::StackName}-OpponentsTableName"
+
+  HistoryTableName:
+    Description: "DynamoDB table name for history"
+    Value: !Ref HistoryTable
+    Export:
+      Name: !Sub "${AWS::StackName}-HistoryTableName"
 
   DynamoDBAccessPolicyArn:
     Description: "ARN of the DynamoDB access policy"

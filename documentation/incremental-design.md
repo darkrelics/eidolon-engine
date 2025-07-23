@@ -256,6 +256,75 @@ GSI: CompletionTimeIndex
 }
 ```
 
+#### 3.1.6 History Table (New)
+
+```python
+# Tracks completed and abandoned story runs
+{
+    "CharacterID": "char-uuid-456",           # PK (HASH key)
+    "StoryID": "forest-adventure-uuid",       # SK (RANGE key)
+    "StoryTitle": "The Whispering Woods",     # Cached story title
+    "StartedAt": "2025-01-23T08:00:00Z",     # When story began
+    "FinishedAt": "2025-01-23T10:30:00Z",    # When story ended
+    "StoryType": "daily",                     # one-time|daily|repeatable
+    "SegmentHistory": [                       # Detailed segment outcomes
+        {
+            "SegmentID": "seg-uuid-001",
+            "SegmentType": "decision",
+            "Comment": "Chose the left path through the forest",
+            "Decision": "Take the left path",
+            "CompletedAt": "2025-01-23T08:00:00Z"
+        },
+        {
+            "SegmentID": "seg-uuid-002a",
+            "SegmentType": "narrative",
+            "Comment": "Navigated the moonlit path with mixed success",
+            "Outcome": "minimal",
+            "ResultText": "You make slow progress through brambles and thick undergrowth. Your survival skills help you find the way, though not without difficulty.",
+            "ChallengeResults": [
+                {"skill": "Perception", "success": true},
+                {"skill": "Perception", "success": false},
+                {"skill": "Survival", "success": true}
+            ],
+            "CompletedAt": "2025-01-23T08:10:00Z"
+        },
+        {
+            "SegmentID": "seg-uuid-combat-001",
+            "SegmentType": "combat",
+            "Comment": "Fought a goblin scout and emerged victorious",
+            "Outcome": "normal",
+            "ResultText": "Your combat training prevails. The goblin falls beneath your blade, leaving behind its meager possessions.",
+            "FinalCombatState": {
+                "rounds": 8,
+                "playerWoundsReceived": 2,
+                "opponentDefeated": true
+            },
+            "CompletedAt": "2025-01-23T08:12:00Z"
+        }
+    ],
+    "FinalOutcome": "normal",                 # Overall story outcome
+    "TotalDuration": 9000,                    # Seconds from start to finish
+    "Rewards": {                              # Aggregated rewards
+        "experience": 150,
+        "items": ["herb_bundle", "goblin_pouch", "rusty_blade"],
+        "gold": 50,
+        "roomChanges": [5, 7]
+    },
+    "AbandonedCount": 0                       # Prior abandonment attempts
+}
+```
+
+- **`CharacterID` + `StoryID`**: Composite key enables efficient queries by character
+- **`StoryTitle`**: Cached story title eliminates need for Story table lookup
+- **`StartedAt`/`FinishedAt`**: Track full story duration for analytics
+- **`SegmentHistory`**: Preserves complete path through story with:
+  - Comment describing what happened in each segment
+  - Decision text for player choices
+  - ResultText containing the narrative shown to player
+  - Full outcome details for analysis
+- **`No TTL`**: Data persists until character deletion
+- **Cleanup**: Character deletion Lambda removes all associated history
+
 ### 3.2 Data Access Patterns
 
 #### 3.2.1 Primary Access Patterns
@@ -940,6 +1009,7 @@ Add new tables to DynamoDB stack:
 # Add to table configurations:
 {"name": "story", "pk": "StoryID", "pk_type": "S"}
 {"name": "opponents", "pk": "OpponentID", "pk_type": "S"}
+{"name": "history", "pk": "CharacterID", "pk_type": "S", "sk": "StoryID", "sk_type": "S"}
 
 # Add GSI to active_segments table:
 {"name": "CompletionTimeIndex", "pk": "Status", "sk": "EndTime"}

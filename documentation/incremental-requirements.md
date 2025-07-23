@@ -321,6 +321,36 @@ _Note: Player story participation state is tracked in the ActiveSegments table, 
 }
 ```
 
+**History Table (New)**
+
+```
+{
+  CharacterID: String (PK - HASH key),
+  StoryID: String (SK - RANGE key),
+  StoryTitle: String,        // Title of the story for display
+  StartedAt: String,         // ISO timestamp when story began
+  FinishedAt: String,        // ISO timestamp when story ended
+  StoryType: String,         // one-time|daily|repeatable
+  SegmentHistory: List[      // Detailed record of each segment
+    {
+      SegmentID: String,
+      SegmentType: String,   // decision|narrative|combat
+      Comment: String,       // Brief description of what happened
+      Decision: String,      // For decision segments - player's choice text
+      Outcome: String,       // For narrative/combat segments
+      ResultText: String,    // Narrative text shown to player
+      ChallengeResults: List,// For narrative segments
+      FinalCombatState: Map, // For combat segments
+      CompletedAt: String
+    }
+  ],
+  FinalOutcome: String,      // death|failure|minimal|normal|exceptional
+  TotalDuration: Number,     // Seconds from start to finish
+  Rewards: Map,              // Aggregated rewards from story
+  AbandonedCount: Number     // Times story was abandoned before completion
+}
+```
+
 **Opponents Table (New)**
 
 ```

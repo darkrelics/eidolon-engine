@@ -448,19 +448,37 @@ end
 - **Projection**: ALL - includes all attributes for efficient polling.
 - **Purpose**: Enables the segment poller Lambda to efficiently query for segments ready to complete.
 
-## CharacterHistory Table
+## History Table
 
-| Field         | Type     | Description                           |
-| ------------- | -------- | ------------------------------------- |
-| `CharacterID` | `STRING` | UUID of the character.                |
-| `StoryID`     | `STRING` | UUID of the completed story.          |
-| `CompletedAt` | `STRING` | Timestamp of completion.              |
-| `Choices`     | `MAP`    | Path choices made during the story.   |
-| `Rewards`     | `MAP`    | Rewards earned from story completion. |
+| Field            | Type     | Description                                                          |
+| ---------------- | -------- | -------------------------------------------------------------------- |
+| `CharacterID`    | `STRING` | UUID of the character (partition key).                              |
+| `StoryID`        | `STRING` | UUID of the story (sort key).                                       |
+| `StoryTitle`     | `STRING` | Title of the story for display without additional lookup.           |
+| `StartedAt`      | `STRING` | ISO timestamp when the story began.                                 |
+| `FinishedAt`     | `STRING` | ISO timestamp when the story ended (completion or abandonment).     |
+| `StoryType`      | `STRING` | Type of story (one-time, daily, or repeatable).                     |
+| `SegmentHistory` | `LIST`   | Detailed record of each segment's progression and outcomes.         |
+| `FinalOutcome`   | `STRING` | Overall story result (death, failure, minimal, normal, exceptional).|
+| `TotalDuration`  | `NUMBER` | Total seconds from start to finish.                                 |
+| `Rewards`        | `MAP`    | Aggregated rewards earned (experience, items, gold, room changes).  |
+| `AbandonedCount` | `NUMBER` | Number of times this story was abandoned before completion.         |
 
-- Story completion tracking
-- Path choices made
-- Rewards earned
+- **`CharacterID` + `StoryID`**: Composite primary key enabling efficient queries by character and specific story lookups.
+- **`StoryTitle`**: Cached story title to avoid additional Story table lookup when displaying history.
+- **`StartedAt`/`FinishedAt`**: Timestamps for duration tracking and analytics. Both are always populated.
+- **`SegmentHistory`**: List containing detailed records for each segment:
+  - `SegmentID`: UUID of the segment
+  - `SegmentType`: decision, narrative, or combat
+  - `Comment`: Brief description of what happened in this segment (e.g., "Chose the left path through the forest")
+  - `Decision`: Player's choice text (for decision segments, e.g., "Take the left path")
+  - `Outcome`: Result (for narrative/combat segments)
+  - `ResultText`: Narrative text shown to player for this outcome (e.g., "You navigate successfully through the moonlit path...")
+  - `ChallengeResults`: List of skill check results (for narrative segments)
+  - `FinalCombatState`: Combat statistics (for combat segments)
+  - `CompletedAt`: When this segment finished
+- **`Data Lifecycle`**: Persists until character deletion process removes all associated history records.
+- **`Query Patterns`**: Primary access by CharacterID to get all story history or by composite key for specific story run.
 
 ---
 
