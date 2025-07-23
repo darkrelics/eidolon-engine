@@ -19,3 +19,8 @@ updates:
     directory: "/portal"
     schedule:
       interval: "weekly"
+
+  - package-ecosystem: "pub"
+    directory: "/incremental"
+    schedule:
+      interval: "weekly"

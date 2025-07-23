@@ -101,7 +101,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 	Logger.Info("Initializing Script Manager...")
 	if err := InitScriptManager(config); err != nil {
 		Logger.Error("Script manager initialization failed - continuing without scripting", "error", err)
-		Logger.Error("AWS credentials or configuration may be missing", "scriptsS3Bucket", config.Game.ScriptsS3Bucket, "awsRegion", config.AWS.Region)
+		Logger.Error("AWS credentials or configuration may be missing", "scriptsS3Bucket", config.S3.ScriptsBucket, "awsRegion", config.AWS.Region)
 	} else {
 		Logger.Info("Script manager initialized successfully")
 	}
@@ -165,7 +165,11 @@ func LoadNameFromFile(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			Logger.Error("LoadNameFromFile: Failed to close file", "error", err)
+		}
+	}()
 
 	var names []string
 	scanner := bufio.NewScanner(file)
@@ -276,11 +280,24 @@ func (g *Game) runInternal(errChan chan error) error {
 }
 
 func (g *Game) tick() error {
-	// Command processing handles global game actions
 	g.processGameCommands()
 
-	// Additional game logic placeholder for future features
+	if time.Now().Unix()%30 == 0 {
+		g.processCharacterHealing()
+	}
+
 	return nil
+}
+
+func (g *Game) processCharacterHealing() {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+
+	for _, character := range g.characters {
+		if character != nil && character.player != nil {
+			character.CalculateCurrentHealth()
+		}
+	}
 }
 
 func (g *Game) processGameCommands() {

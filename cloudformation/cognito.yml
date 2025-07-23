@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Cognito User Pool and Client for Eidolon Engine"
+Description: "Cognito User Pool, Client, and Identity Pool for Eidolon Engine with S3 story access"
 
 Parameters:
   UserPoolName:
@@ -16,6 +16,12 @@ Parameters:
     Type: String
     Description: Email address to send notifications from
     Default: contact@darkrelics.net
+
+  StoryBucketName:
+    Type: String
+    Description: Name of the S3 bucket containing story content
+    AllowedPattern: ^[a-z0-9][a-z0-9-]*[a-z0-9]$
+    ConstraintDescription: Must be a valid S3 bucket name
 
 Resources:
   CognitoUserPool:
@@ -68,6 +74,58 @@ Resources:
         IdToken: hours
         RefreshToken: days
 
+  CognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub "${UserPoolName}-identity-pool"
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref CognitoUserPoolClient
+          ProviderName: !GetAtt CognitoUserPool.ProviderName
+
+  CognitoIdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref CognitoIdentityPool
+      Roles:
+        authenticated: !GetAtt CognitoAuthenticatedRole.Arn
+
+  CognitoAuthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${UserPoolName}-authenticated-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref CognitoIdentityPool
+              ForAnyValue:StringLike:
+                cognito-identity.amazonaws.com:amr: authenticated
+      Policies:
+        - PolicyName: S3StoryReadAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${StoryBucketName}/stories/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${StoryBucketName}"
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - "stories/*"
+
 Outputs:
   UserPoolId:
     Description: ID of the Cognito User Pool
@@ -80,3 +138,15 @@ Outputs:
   UserPoolClientId:
     Value: !Ref CognitoUserPoolClient
     Description: ID of the Cognito App Client
+
+  IdentityPoolId:
+    Description: ID of the Cognito Identity Pool
+    Value: !Ref CognitoIdentityPool
+
+  AuthenticatedRoleArn:
+    Description: ARN of the authenticated IAM role
+    Value: !GetAtt CognitoAuthenticatedRole.Arn
+
+  StoryBucketName:
+    Description: Name of the S3 bucket for story content
+    Value: !Ref StoryBucketName

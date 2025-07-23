@@ -40,6 +40,20 @@ type Configuration struct {
 		UserPoolARN      string `yaml:"UserPoolArn"`
 	} `yaml:"Cognito"`
 
+	// DynamoDB database settings
+	DynamoDB struct {
+		Tables struct {
+			Players    string `yaml:"Players"`
+			Characters string `yaml:"Characters"`
+			Rooms      string `yaml:"Rooms"`
+			Exits      string `yaml:"Exits"`
+			Items      string `yaml:"Items"`
+			Prototypes string `yaml:"Prototypes"`
+			Archetypes string `yaml:"Archetypes"`
+			Motd       string `yaml:"Motd"`
+		} `yaml:"Tables"`
+	} `yaml:"DynamoDB"`
+
 	// Game mechanics settings
 	Game struct {
 		Balance                  float64 `yaml:"Balance"`
@@ -48,7 +62,6 @@ type Configuration struct {
 		AutoSave                 uint16  `yaml:"AutoSave"`
 		NamesPath                string  `yaml:"NamesPath"`
 		ObscenityPath            string  `yaml:"ObscenityPath"`
-		ScriptsS3Bucket          string  `yaml:"ScriptsS3Bucket"`          // S3 bucket for Lua scripts
 		ScriptsS3Prefix          string  `yaml:"ScriptsS3Prefix"`          // S3 prefix for Lua scripts (default: scripts)
 		TickIntervalSeconds      int     `yaml:"TickIntervalSeconds"`      // Game tick interval (default: 1)
 		RoomItemCleanupSeconds   int     `yaml:"RoomItemCleanupSeconds"`   // Room item cleanup interval (default: 600)
@@ -77,13 +90,6 @@ type Configuration struct {
 		ConnectionAcceptTimeoutSeconds int    `yaml:"ConnectionAcceptTimeoutSeconds"` // Connection accept timeout (default: 1)
 	} `yaml:"SSH"`
 
-	// Server settings
-	Server struct {
-		SessionCleanupIntervalSeconds int `yaml:"SessionCleanupIntervalSeconds"` // Stale session cleanup interval (default: 300)
-		SessionIdleTimeoutSeconds     int `yaml:"SessionIdleTimeoutSeconds"`     // Session idle timeout (default: 1800)
-		ConsoleIdleTimeoutSeconds     int `yaml:"ConsoleIdleTimeoutSeconds"`     // Console idle timeout (default: 30)
-	} `yaml:"Server"`
-
 	// CloudWatch settings
 	CloudWatch struct {
 		MetricsIntervalSeconds int `yaml:"MetricsIntervalSeconds"` // Metrics submission interval (default: 60)
@@ -91,6 +97,11 @@ type Configuration struct {
 		LogFlushTimeoutSeconds int `yaml:"LogFlushTimeoutSeconds"` // Log flush timeout (default: 3)
 		ShutdownDrainSeconds   int `yaml:"ShutdownDrainSeconds"`   // Error channel drain timeout during shutdown (default: 2)
 	} `yaml:"CloudWatch"`
+
+	// S3 bucket settings
+	S3 struct {
+		ScriptsBucket string `yaml:"ScriptsBucket"` // S3 bucket for game scripts
+	} `yaml:"S3"`
 }
 
 func LoadConfiguration(configurationFile string) (*Configuration, error) {
@@ -159,17 +170,6 @@ func setConfigDefaults(config *Configuration) {
 	}
 	if config.SSH.ConnectionAcceptTimeoutSeconds <= 0 {
 		config.SSH.ConnectionAcceptTimeoutSeconds = 1
-	}
-
-	// Server defaults
-	if config.Server.SessionCleanupIntervalSeconds <= 0 {
-		config.Server.SessionCleanupIntervalSeconds = 300 // 5 minutes
-	}
-	if config.Server.SessionIdleTimeoutSeconds <= 0 {
-		config.Server.SessionIdleTimeoutSeconds = 1800 // 30 minutes
-	}
-	if config.Server.ConsoleIdleTimeoutSeconds <= 0 {
-		config.Server.ConsoleIdleTimeoutSeconds = 30
 	}
 
 	// CloudWatch defaults

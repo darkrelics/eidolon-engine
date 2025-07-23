@@ -50,6 +50,7 @@ class AuthState extends ChangeNotifier {
   String get message => _message;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _isAuthenticated;
+  String? get userEmail => currentUser?.username;
 
   /// Updates message and notifies listeners
   void _updateMessage(String message) {

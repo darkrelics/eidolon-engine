@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-var CONFIGURATION_FILE string = "config.yml"
+var CONFIGURATION_FILE string = "../config.yml"
 
 func main() {
 
@@ -78,9 +78,26 @@ func main() {
 
 	Logger.Info("Main - Starting server components...")
 
-	go cloudWatch.Run(errorChannel)
-	go game.Run(errorChannel)
-	go server.Run(errorChannel)
+	go func() {
+		if err := cloudWatch.Run(errorChannel); err != nil {
+			Logger.Error("CloudWatch: Unexpected error", "error", err)
+			errorChannel <- err
+		}
+	}()
+
+	go func() {
+		if err := game.Run(errorChannel); err != nil {
+			Logger.Error("Game: Unexpected error", "error", err)
+			errorChannel <- err
+		}
+	}()
+
+	go func() {
+		if err := server.Run(errorChannel); err != nil {
+			Logger.Error("Server: Unexpected error", "error", err)
+			errorChannel <- err
+		}
+	}()
 
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)

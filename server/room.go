@@ -133,15 +133,21 @@ func (r *Room) IsIdle(duration time.Duration) bool {
 // HandleCharacterEntry handles character entering a room, resets idle counter and activates scripts
 func (r *Room) HandleCharacterEntry(character *Character) {
 	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	// Reset idle counter
 	r.idleCounter = 0
 
 	// For persistent rooms with scripts assigned, activate scripts
+	var activateLog bool
+	var roomID int64
 	if r.persistent && r.scriptID != "" && !r.scriptActive {
 		r.scriptActive = true
-		Logger.Info("Activating scripts for persistent room with character entry", "roomID", r.roomID)
+		activateLog = true
+		roomID = r.roomID
+	}
+	r.mutex.Unlock()
+
+	if activateLog {
+		Logger.Info("Activating scripts for persistent room with character entry", "roomID", roomID)
 	}
 
 	// Don't trigger script events here - let the room goroutine handle it
@@ -156,14 +162,19 @@ func (r *Room) GetScriptID() string {
 	return r.scriptID
 }
 
+// IsRunning returns whether the room goroutine is running
+func (r *Room) IsRunning() bool {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	return r.running
+}
+
 // SendRoomMessage sends a message to all characters in a room except one
 func SendRoomMessage(room *Room, message string, except ...*Character) {
 	if room == nil {
 		return
 	}
-
-	// Update room activity before acquiring lock to avoid concurrency issues
-	room.UpdateActivity()
 
 	// Create a map for faster exclusion checking
 	excludeMap := make(map[*Character]bool)
@@ -173,15 +184,17 @@ func SendRoomMessage(room *Room, message string, except ...*Character) {
 		}
 	}
 
-	// Collect recipients while holding the lock
-	room.mutex.RLock()
+	// Collect recipients and update activity while holding the lock
+	room.mutex.Lock()
+	room.lastActive = time.Now()
+	room.lastEdited = room.lastActive
 	recipients := make([]*Character, 0, len(room.characters))
 	for _, c := range room.characters {
 		if c != nil && !excludeMap[c] && c.player != nil {
 			recipients = append(recipients, c)
 		}
 	}
-	room.mutex.RUnlock()
+	room.mutex.Unlock()
 
 	// Send messages without holding the lock to prevent deadlock
 	for _, c := range recipients {
@@ -196,10 +209,17 @@ func (r *Room) WaitReady() {
 		r.mutex.RUnlock()
 		return
 	}
+	roomID := r.roomID
 	r.mutex.RUnlock()
 
-	// Wait for ready signal
-	<-r.ready
+	Logger.Debug("Waiting for room to be ready", "roomID", roomID)
+	// Wait for ready signal with timeout
+	select {
+	case <-r.ready:
+		Logger.Debug("Room is ready", "roomID", roomID)
+	case <-time.After(10 * time.Second):
+		Logger.Error("Room failed to become ready in time", "roomID", roomID)
+	}
 }
 
 // GetDescription returns a formatted string description of the room

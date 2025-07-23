@@ -5,6 +5,7 @@
       "Description": "A Wizard!",
       "Health": 8,
       "Essence": 5,
+      "Player": true,
       "Attributes": {
         "Strength": 1.0,
         "Agility": 1.0,
@@ -36,9 +37,9 @@
       "StartRoom": 8,
       "StartingItems": [
         {
-          "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
-          "Slot": "book",
-          "IsWorn": false
+          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Slot": "back",
+          "IsWorn": true
         },
         {
           "PrototypeID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
@@ -46,14 +47,14 @@
           "IsWorn": true
         },
         {
-          "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "Slot": "potion",
+          "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
+          "Slot": "",
           "IsWorn": false
         },
         {
-          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
-          "Slot": "back",
-          "IsWorn": true
+          "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Slot": "",
+          "IsWorn": false
         }
       ]
     },
@@ -62,6 +63,7 @@
       "Description": "A Rogue!",
       "Health": 10,
       "Essence": 3,
+      "Player": true,
       "Attributes": {
         "Strength": 2.0,
         "Agility": 2.0,
@@ -93,6 +95,11 @@
       "StartRoom": 10,
       "StartingItems": [
         {
+          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Slot": "back",
+          "IsWorn": true
+        },
+        {
           "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "Slot": "weapon",
           "IsWorn": true
@@ -104,13 +111,8 @@
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "Slot": "potion",
+          "Slot": "",
           "IsWorn": false
-        },
-        {
-          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
-          "Slot": "back",
-          "IsWorn": true
         }
       ]
     },
@@ -119,6 +121,7 @@
       "Description": "A Warrior!",
       "Health": 12,
       "Essence": 2,
+      "Player": true,
       "Attributes": {
         "Strength": 2.0,
         "Agility": 2.0,
@@ -150,6 +153,11 @@
       "StartRoom": 4,
       "StartingItems": [
         {
+          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Slot": "back",
+          "IsWorn": true
+        },
+        {
           "PrototypeID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "Slot": "weapon",
           "IsWorn": true
@@ -161,12 +169,50 @@
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "Slot": "potion",
+          "Slot": "",
           "IsWorn": false
-        },
+        }
+      ]
+    },
+    "goblin": {
+      "ArchetypeName": "Goblin",
+      "Description": "A mischievous goblin creature",
+      "Health": 6,
+      "Essence": 1,
+      "Player": false,
+      "Attributes": {
+        "Strength": 1.0,
+        "Agility": 3.0,
+        "Endurance": 1.0,
+        "Charisma": 1.0,
+        "Intrigue": 2.0,
+        "Presence": 1.0,
+        "Perception": 2.0,
+        "Intelligence": 1.0,
+        "Cunning": 3.0
+      },
+      "Skills": {
+        "Melee": 1.0,
+        "Archery": 0.0,
+        "Brawling": 1.0,
+        "Dodge": 2.0,
+        "Parry": 0.0,
+        "Stealth": 2.0,
+        "Investigation": 0.0,
+        "Tumbling": 1.0,
+        "Climbing": 1.0,
+        "Lockpicking": 1.0,
+        "Mythos": 0.0,
+        "Arcane": 0.0,
+        "FirstAid": 0.0,
+        "Foraging": 1.0,
+        "Appraise": 1.0
+      },
+      "StartRoom": 10,
+      "StartingItems": [
         {
-          "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
-          "Slot": "back",
+          "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
+          "Slot": "weapon",
           "IsWorn": true
         }
       ]

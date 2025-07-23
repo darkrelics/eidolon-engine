@@ -82,9 +82,13 @@ func (p *Player) HandleCharacterCreation() {
 	// Save the character to the player's character list
 	p.mutex.Lock()
 	if p.characterList == nil {
-		p.characterList = make(map[string]uuid.UUID)
+		p.characterList = make(map[string]*PlayerCharacterInfo)
 	}
-	p.characterList[name] = character.id
+	p.characterList[name] = &PlayerCharacterInfo{
+		UUID:     character.id.String(),
+		Dead:     false,
+		GameMode: "MUD",
+	}
 	p.mutex.Unlock()
 
 	// Save player data
@@ -246,8 +250,15 @@ func (p *Player) HandleCharacterSelection() {
 	// Get character ID from player's character list
 	characterName := options[num-1]
 	p.mutex.RLock()
-	characterID := p.characterList[characterName]
+	characterInfo := p.characterList[characterName]
 	p.mutex.RUnlock()
+
+	// Parse UUID
+	characterID, err := uuid.FromString(characterInfo.UUID)
+	if err != nil {
+		p.commandOut <- fmt.Sprintf("Failed to parse character ID: %s\n", err.Error())
+		return
+	}
 
 	// Load the character
 	character, err := LoadCharacter(p, characterID)
@@ -267,8 +278,11 @@ func (p *Player) buildCharacterOptions() []string {
 	defer p.mutex.RUnlock()
 
 	options := make([]string, 0, len(p.characterList))
-	for name := range p.characterList {
-		options = append(options, name)
+	for name, charInfo := range p.characterList {
+		// Only include MUD characters
+		if charInfo.GameMode == "MUD" || charInfo.GameMode == "" {
+			options = append(options, name)
+		}
 	}
 	sort.Strings(options)
 	return options
@@ -277,8 +291,17 @@ func (p *Player) buildCharacterOptions() []string {
 func (p *Player) displayCharacterOptions(options []string) {
 	p.commandOut <- "\nSelect a character:\n"
 	p.commandOut <- "0) Return to menu\n"
+
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
 	for i, name := range options {
-		p.commandOut <- fmt.Sprintf("%d) %s\n", i+1, name)
+		characterInfo := p.characterList[name]
+		if characterInfo.Dead {
+			p.commandOut <- fmt.Sprintf("%d) %s (DEAD)\n", i+1, name)
+		} else {
+			p.commandOut <- fmt.Sprintf("%d) %s\n", i+1, name)
+		}
 	}
 	p.commandOut <- "\nEnter your choice: "
 }
@@ -292,9 +315,18 @@ func (p *Player) HandleCharacterDeletion() {
 
 	p.commandOut <- "\nSelect a character to delete:\n"
 	p.commandOut <- "0) Cancel\n"
+
+	p.mutex.RLock()
 	for i, name := range options {
-		p.commandOut <- fmt.Sprintf("%d) %s\n", i+1, name)
+		characterInfo := p.characterList[name]
+		if characterInfo.Dead {
+			p.commandOut <- fmt.Sprintf("%d) %s (DEAD)\n", i+1, name)
+		} else {
+			p.commandOut <- fmt.Sprintf("%d) %s\n", i+1, name)
+		}
 	}
+	p.mutex.RUnlock()
+
 	p.commandOut <- "\nEnter your choice: "
 
 	choice, ok := <-p.commandIn
@@ -324,8 +356,15 @@ func (p *Player) HandleCharacterDeletion() {
 	// Get character info
 	characterName := options[num-1]
 	p.mutex.RLock()
-	characterID := p.characterList[characterName]
+	characterInfo := p.characterList[characterName]
 	p.mutex.RUnlock()
+
+	// Parse UUID
+	characterID, err := uuid.FromString(characterInfo.UUID)
+	if err != nil {
+		p.commandOut <- fmt.Sprintf("Failed to parse character ID: %s\n", err.Error())
+		return
+	}
 
 	// Confirm deletion
 	p.commandOut <- fmt.Sprintf("\nAre you sure you want to delete '%s'? This cannot be undone.\nType 'DELETE' to confirm: ", characterName)

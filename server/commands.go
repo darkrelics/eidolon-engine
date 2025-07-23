@@ -71,9 +71,12 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	}
 
 	// Check if the character is waiting for a command timeout
-	canExecute, reason := checkRoundTime(character, cmdInfo)
-	if !canExecute {
-		return false, fmt.Errorf("%s", reason)
+	// Special case: depart command can be used when dead
+	if verb != "depart" {
+		canExecute, reason := checkRoundTime(character, cmdInfo)
+		if !canExecute {
+			return false, fmt.Errorf("%s", reason)
+		}
 	}
 
 	// Special case handling for "quit" command - always process immediately
@@ -109,34 +112,18 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	}
 
 	// Ensure room is running
-	if !character.room.running {
+	if !character.room.IsRunning() {
 		character.room.Start(character.game)
 	}
 
-	// Try to send command to the room with a brief retry
-	retryTimer := time.NewTimer(50 * time.Millisecond)
-	defer retryTimer.Stop()
-
-	Logger.Debug("Sending command to room", "roomID", character.room.roomID, "verb", verb, "character", character.name)
-
+	// Send command to the room
 	select {
 	case character.room.commandIn <- cmdReq:
-		Logger.Debug("Command sent successfully to room", "roomID", character.room.roomID, "verb", verb)
-		// Command sent successfully to room
-	case <-retryTimer.C:
-		// Brief retry after 50ms
-		select {
-		case character.room.commandIn <- cmdReq:
-			Logger.Debug("Command sent successfully to room on retry", "roomID", character.room.roomID, "verb", verb)
-			// Command sent successfully on retry
-		default:
-			Logger.Warn("Room command buffer full after retry",
-				"roomID", character.room.roomID,
-				"characterName", character.name,
-				"verb", verb)
-			character.DisplayMessage("The room is processing too many commands. Please wait a moment and try again.")
-			return false, nil
-		}
+		// Command sent successfully
+	default:
+		// Channel buffer is full (50 commands)
+		character.DisplayMessage("The room is busy. Please try again in a moment.")
+		return false, nil
 	}
 
 	// Wait for response or timeout

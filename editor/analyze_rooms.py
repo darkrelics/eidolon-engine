@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
 """Analyze room and exit connections for consistency."""
 
 import json
-from collections import defaultdict
 
 
 def analyze_room_exits():
@@ -19,11 +17,12 @@ def analyze_room_exits():
     exits = {exit["ExitID"]: exit for exit in exits_data["exits"]}
 
     # Map of room connections (room_id -> {direction: target_room})
-    room_connections = defaultdict(dict)
+    room_connections = {}
 
     # Build connection map
     for room in rooms_data["rooms"]:
         room_id = room["RoomID"]
+        room_connections[room_id] = {}
         for exit_id in room["ExitID"]:
             if exit_id in exits:
                 exit_info = exits[exit_id]

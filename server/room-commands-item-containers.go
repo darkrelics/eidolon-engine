@@ -169,9 +169,10 @@ func handlePutCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Remove item from inventory or hand before unlocking
 	if targetMatch.isInHand {
-		if targetMatch.slot == "right_hand" {
+		switch targetMatch.slot {
+		case "right_hand":
 			character.rightHand = nil
-		} else if targetMatch.slot == "left_hand" {
+		case "left_hand":
 			character.leftHand = nil
 		}
 	} else {

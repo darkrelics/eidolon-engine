@@ -16,17 +16,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:amazon_cognito_identity_dart_2/cognito.dart';
-
 import '../services/auth_service.dart';
-import '../widgets/ui_components.dart';
-import '../utils/input_sanitizer.dart';
-import '../utils/form_state_provider.dart';
 
 class PasswordResetConfirmScreen extends StatefulWidget {
-  final String email;
-
-  const PasswordResetConfirmScreen({super.key, required this.email});
+  const PasswordResetConfirmScreen({super.key});
 
   @override
   State<PasswordResetConfirmScreen> createState() =>
@@ -39,9 +32,17 @@ class _PasswordResetConfirmScreenState
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+
+  bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
-  String _message = '';
-  bool _isError = false;
+  String? _email;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _email = ModalRoute.of(context)?.settings.arguments as String?;
+  }
 
   @override
   void dispose() {
@@ -51,50 +52,48 @@ class _PasswordResetConfirmScreenState
     super.dispose();
   }
 
-  Future<void> _confirmPasswordReset() async {
+  Future<void> _handlePasswordReset() async {
     if (!_formKey.currentState!.validate()) return;
-
-    if (_passwordController.text != _confirmPasswordController.text) {
-      setState(() {
-        _message = 'Passwords do not match';
-        _isError = true;
-      });
+    if (_email == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email not found. Please start over.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      Navigator.pushReplacementNamed(context, '/forgot-password');
       return;
     }
 
     setState(() {
       _isLoading = true;
-      _message = '';
-      _isError = false;
     });
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       await authService.confirmPassword(
-        widget.email,
+        _email!,
         _codeController.text.trim(),
         _passwordController.text,
       );
 
       if (mounted) {
-        setState(() {
-          _message = 'Password reset successfully';
-          _isError = false;
-        });
-
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil('/login', (route) => false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password reset successfully! Please sign in.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isError = true;
-          _message =
-              e is CognitoClientException && e.message != null
-                  ? e.message!
-                  : 'An unexpected error occurred. Please try again.';
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -106,31 +105,32 @@ class _PasswordResetConfirmScreenState
   }
 
   Future<void> _resendCode() async {
+    if (_email == null) return;
+
     setState(() {
       _isLoading = true;
-      _message = '';
-      _isError = false;
     });
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-      await authService.forgotPassword(widget.email);
+      await authService.forgotPassword(_email!);
 
       if (mounted) {
-        setState(() {
-          _message = 'New reset code sent to your email';
-          _isError = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('New reset code sent'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isError = true;
-          _message =
-              e is CognitoClientException && e.message != null
-                  ? e.message!
-                  : 'An unexpected error occurred. Please try again.';
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -141,90 +141,162 @@ class _PasswordResetConfirmScreenState
     }
   }
 
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter a password';
+    }
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    if (!RegExp(r'(?=.*[a-z])').hasMatch(value)) {
+      return 'Password must contain a lowercase letter';
+    }
+    if (!RegExp(r'(?=.*[A-Z])').hasMatch(value)) {
+      return 'Password must contain an uppercase letter';
+    }
+    if (!RegExp(r'(?=.*\d)').hasMatch(value)) {
+      return 'Password must contain a number';
+    }
+    if (!RegExp(r'(?=.*[@$!%*?&])').hasMatch(value)) {
+      return 'Password must contain a special character (@\$!%*?&)';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const AuthAppBar(title: 'Confirm Reset'),
-      body: SafeArea(
+      appBar: AppBar(title: const Text('Reset Password')),
+      body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: FormStateProvider(
-            formKey: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                const SizedBox(height: 24),
-                Text(
-                  'Enter the verification code sent to ${widget.email} and your new password.',
-                  style: const TextStyle(fontSize: 16),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                AppTextField(
-                  controller: _codeController,
-                  labelText: 'Verification Code',
-                  prefixIcon: Icons.verified_user_outlined,
-                  hintText: 'Enter verification code',
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter the verification code';
-                    }
-                    return null;
-                  },
-                  inputFormatters: [InputSanitizer.noXSSChars()],
-                ),
-                const SizedBox(height: 16),
-                AppTextField(
-                  controller: _passwordController,
-                  labelText: 'New Password',
-                  prefixIcon: Icons.lock_outline,
-                  hintText: 'Enter new password',
-                  obscureText: true,
-                  validator: FieldValidators.password,
-                  inputFormatters: [InputSanitizer.noXSSChars()],
-                ),
-                const SizedBox(height: 16),
-                AppTextField(
-                  controller: _confirmPasswordController,
-                  labelText: 'Confirm New Password',
-                  prefixIcon: Icons.lock_outline,
-                  hintText: 'Confirm new password',
-                  obscureText: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please confirm your password';
-                    }
-                    return null;
-                  },
-                  inputFormatters: [InputSanitizer.noXSSChars()],
-                ),
-                const SizedBox(height: 32),
-                LoadingButton(
-                  isLoading: _isLoading,
-                  onPressed: _confirmPasswordReset,
-                  text: 'RESET PASSWORD',
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: _isLoading ? null : _resendCode,
-                  child: const Text('Resend Code'),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(
-                      context,
-                    ).pushNamedAndRemoveUntil('/login', (route) => false);
-                  },
-                  child: const Text('Back to Sign In'),
-                ),
-                const SizedBox(height: 24),
-                StatusMessage(
-                  message: InputSanitizer.sanitizeDisplayText(_message),
-                  isError: _isError,
-                ),
-              ],
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Reset Your Password',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  if (_email != null)
+                    Text(
+                      'Enter the verification code sent to $_email and your new password.',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                  const SizedBox(height: 32),
+                  TextFormField(
+                    controller: _codeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Verification Code',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.pin),
+                    ),
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter the verification code';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    decoration: InputDecoration(
+                      labelText: 'New Password',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.lock),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _isPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _isPasswordVisible = !_isPasswordVisible;
+                          });
+                        },
+                      ),
+                    ),
+                    obscureText: !_isPasswordVisible,
+                    textInputAction: TextInputAction.next,
+                    validator: _validatePassword,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    decoration: InputDecoration(
+                      labelText: 'Confirm New Password',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.lock),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _isConfirmPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _isConfirmPasswordVisible =
+                                !_isConfirmPasswordVisible;
+                          });
+                        },
+                      ),
+                    ),
+                    obscureText: !_isConfirmPasswordVisible,
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _handlePasswordReset(),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please confirm your password';
+                      }
+                      if (value != _passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _isLoading ? null : _handlePasswordReset,
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Text('Reset Password'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _isLoading ? null : _resendCode,
+                    child: const Text('Resend Code'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed:
+                        _isLoading
+                            ? null
+                            : () {
+                              Navigator.pushNamedAndRemoveUntil(
+                                context,
+                                '/login',
+                                (route) => false,
+                              );
+                            },
+                    child: const Text('Back to Sign In'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

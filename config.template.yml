@@ -1,0 +1,117 @@
+# Eidolon Engine Configuration Template
+# This template is used by deployment/deploy.py to generate config.yml
+# Values will be populated during deployment
+
+# Game configuration
+Game:
+  Name: eidolon-engine
+  # Core game settings
+  AutoSave: 5
+  Balance: 0.25
+  StartingHealth: 10
+  StartingEssence: 3
+  NamesPath: ../data/names.txt
+  ObscenityPath: ../data/obscenity.txt
+  ScriptsS3Prefix: scripts
+  TickIntervalSeconds: 1
+  RoomItemCleanupSeconds: 600
+  RoomUnloadSeconds: 3600
+  CommandTimeoutSeconds: 5
+  PlayerIdleTimeoutSeconds: 900
+  SessionCleanupIntervalSeconds: 300 # Future
+  SessionIdleTimeoutSeconds: 900 # Future
+
+# Deployment mode: 'mud', 'incremental', or 'hybrid'
+# - mud: MUD mode with Portal frontend
+# - incremental: Incremental mode with Incremental frontend
+# - hybrid: Hybrid mode with Incremental frontend (supports both game types)
+Deployment:
+  Mode: hybrid
+
+# AWS configuration
+AWS:
+  Region: us-east-1
+  ContactEmail: contact@darkrelics.net
+  ServerExecutionRoleArn: ""
+
+# DynamoDB tables
+DynamoDB:
+  Tables:
+    Players: players
+    Characters: characters
+    Items: items
+    Archetypes: archetypes
+    Story: story
+    Rooms: rooms
+    Exits: exits
+    Prototypes: prototypes
+    Motd: motd
+  AccessPolicyArn: "" # deployment-generated
+
+# API configuration (required)
+API:
+  Domain: "" # REQUIRED - Your domain name
+  HostedZoneId: "" # REQUIRED - Route53 hosted zone ID
+  Subdomain: api # api.{domain}
+
+# Cognito configuration
+Cognito:
+  UserPoolId: "" # deployment-generated
+  UserPoolClientId: "" # deployment-generated
+  UserPoolDomain: "" # deployment-generated
+  UserPoolArn: "" # deployment-generated
+
+# CloudFront distribution
+CloudFront:
+  Subdomain: portal # portal.{domain} - subdomain for the CloudFront distribution
+  DistributionId: "" # deployment-generated
+  DomainName: "" # deployment-generated
+  PortalUrl: "" # deployment-generated
+
+# CloudWatch configuration
+CloudWatch:
+  MetricsIntervalSeconds: 60
+  MetricsTimeoutSeconds: 10
+  LogFlushTimeoutSeconds: 3
+  ShutdownDrainSeconds: 2
+  LogRetentionDays: 7 # How long to keep logs
+
+# Logging configuration
+Logging:
+  ApplicationName: eidolon-engine
+  LogLevel: 20
+  LogGroup: /eidolon/server
+  LogStream: system
+  MetricNamespace: eidolon/metrics
+
+# SSH configuration
+SSH:
+  Enabled: true
+  PrivateKeyPath: ./server.key
+  Port: 9050
+  AuthTimeoutSeconds: 30
+  AuthBanDurationSeconds: 900
+  AuthCleanupIntervalSeconds: 300
+  ConnectionAcceptTimeoutSeconds: 60
+
+# CodeBuild configuration
+CodeBuild:
+  PortalBuildspecPath: buildspec/portal.yml # Used for MUD mode
+  IncrementalBuildspecPath: buildspec/incremental.yml # Used for Incremental/Hybrid modes
+  ProjectName: "" # deployment-generated
+
+# S3 buckets (optional - will create new if not specified)
+S3:
+  PortalBucket: "" # deployment-generated - Frontend static files
+  ScriptsBucket: "" # deployment-generated - Game scripts
+  ArtifactsBucket: "" # deployment-generated - CodeBuild artifacts and Lambda packages
+
+# GitHub configuration
+GitHub:
+  Owner: robinje
+  Repo: eidolon-engine
+  Branch: develop
+
+# Contact configuration
+Contact:
+  Email: contact@darkrelics.net

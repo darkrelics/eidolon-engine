@@ -57,9 +57,8 @@ func (mp *mockPlayer) close() {
 
 func (mp *mockPlayer) captureOutput() {
 	defer func() {
-		if r := recover(); r != nil {
-			// Ignore panics from closed channels during test cleanup
-		}
+		// Ignore panics from closed channels during test cleanup
+		_ = recover()
 	}()
 	for msg := range mp.commandOut {
 		mp.mutex.Lock()
@@ -87,7 +86,6 @@ func setupTestCharacterConsole(_ *testing.T) (*Character, *Game, *mockPlayer, ch
 			AutoSave                 uint16  `yaml:"AutoSave"`
 			NamesPath                string  `yaml:"NamesPath"`
 			ObscenityPath            string  `yaml:"ObscenityPath"`
-			ScriptsS3Bucket          string  `yaml:"ScriptsS3Bucket"`
 			ScriptsS3Prefix          string  `yaml:"ScriptsS3Prefix"`
 			TickIntervalSeconds      int     `yaml:"TickIntervalSeconds"`
 			RoomItemCleanupSeconds   int     `yaml:"RoomItemCleanupSeconds"`
@@ -169,6 +167,7 @@ func setupTestCharacterConsole(_ *testing.T) (*Character, *Game, *mockPlayer, ch
 		prompt:           "> ",
 		mutex:            sync.RWMutex{},
 		health:           100,
+		maxHealth:        100,
 		essence:          50,
 		skills:           make(map[string]float64),
 		attributes:       make(map[string]float64),

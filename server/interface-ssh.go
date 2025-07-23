@@ -123,7 +123,11 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 }
 
 func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn, ctx context.Context) {
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			Logger.Error("SSH: Failed to close connection", "error", err)
+		}
+	}()
 
 	// Set authentication timeout
 	if err := conn.SetDeadline(time.Now().Add(authTimeout)); err != nil {
@@ -136,7 +140,11 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn, ctx context.
 		Logger.Error("SSH handshake failed", "remote_addr", conn.RemoteAddr(), "error", err)
 		return
 	}
-	defer sshConn.Close()
+	defer func() {
+		if err := sshConn.Close(); err != nil {
+			Logger.Error("SSH: Failed to close SSH connection", "error", err)
+		}
+	}()
 
 	// Deadline removal allows unlimited session duration
 	if err := conn.SetDeadline(time.Time{}); err != nil {
@@ -167,7 +175,9 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn, ctx context.
 
 	for newChannel := range chans {
 		if newChannel.ChannelType() != "session" {
-			newChannel.Reject(ssh.UnknownChannelType, "unknown channel type")
+			if err := newChannel.Reject(ssh.UnknownChannelType, "unknown channel type"); err != nil {
+				Logger.Error("SSH: Failed to reject channel", "error", err)
+			}
 			continue
 		}
 
@@ -180,7 +190,9 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn, ctx context.
 		player, err := NewPlayerSSH(ssh_interface.server, sshConn.User(), channel, ctx, userUUID)
 		if err != nil {
 			Logger.Error("Failed to create player", "error", err)
-			channel.Close()
+			if err := channel.Close(); err != nil {
+				Logger.Error("SSH: Failed to close channel", "error", err)
+			}
 			continue
 		}
 
@@ -199,7 +211,11 @@ func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
 		return
 	}
 
-	defer ssh_interface.listener.Close()
+	defer func() {
+		if err := ssh_interface.listener.Close(); err != nil {
+			Logger.Error("SSH: Failed to close listener", "error", err)
+		}
+	}()
 
 	// Create a done channel to signal the loop to exit
 	done := make(chan struct{})
@@ -213,7 +229,9 @@ func (ssh_interface *Interface_SSH) Run(errorChan chan error) {
 			return
 		default:
 			// Set a short timeout for Accept to ensure we can exit cleanly
-			ssh_interface.listener.(*net.TCPListener).SetDeadline(time.Now().Add(1 * time.Second))
+			if err := ssh_interface.listener.(*net.TCPListener).SetDeadline(time.Now().Add(1 * time.Second)); err != nil {
+				Logger.Error("SSH: Failed to set deadline on listener", "error", err)
+			}
 
 			conn, err := ssh_interface.listener.Accept()
 			if err != nil {
@@ -295,7 +313,9 @@ func (ssh_interface *Interface_SSH) handleSSHRequests(ctx context.Context, reqs 
 					return
 				}
 				if req.WantReply {
-					req.Reply(false, nil)
+					if err := req.Reply(false, nil); err != nil {
+						Logger.Error("SSH: Failed to reply to request", "error", err)
+					}
 				}
 			}
 		}
@@ -317,10 +337,14 @@ func (ssh_interface *Interface_SSH) listenForCancellation(done chan struct{}) {
 	RunWithPanicRecovery("ssh.listenForCancellation", func() {
 		select {
 		case <-ssh_interface.server.ctx.Done():
-			ssh_interface.listener.Close()
+			if err := ssh_interface.listener.Close(); err != nil {
+				Logger.Error("SSH: Failed to close listener during cancellation", "error", err)
+			}
 			close(done)
 		case <-ssh_interface.ctx.Done():
-			ssh_interface.listener.Close()
+			if err := ssh_interface.listener.Close(); err != nil {
+				Logger.Error("SSH: Failed to close listener during cancellation", "error", err)
+			}
 			close(done)
 		}
 	})

@@ -48,11 +48,20 @@ func (c *Character) CanExecuteCommand() (bool, string) {
 		return false, fmt.Sprintf("You must wait %.1f seconds before your next action.", waitTime)
 	}
 
-	// Check character state if needed
-	// Currently just check if there's a state set at all
 	if c.charState == "" {
-		// Default state is standing
-		c.charState = "standing"
+		c.charState = CharStateStanding
+	}
+
+	if c.charState == CharStateDead {
+		return false, "You cannot do that while dead."
+	}
+
+	if c.charState == CharStateUnconscious {
+		return false, "You cannot do that while unconscious."
+	}
+
+	if c.charState == CharStateGhost {
+		return false, "You cannot do that as a ghost."
 	}
 
 	return true, ""
@@ -115,11 +124,15 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		Skills:        c.skills,
 		Essence:       c.essence,
 		Health:        c.health,
+		MaxHealth:     c.maxHealth,
+		Wounds:        c.wounds,
 		RoomID:        c.room.roomID,
 		Inventory:     inventoryIDs,
 		LeftHandID:    leftHandID,
 		RightHandID:   rightHandID,
 		Hidden:        c.hidden,
+		CharState:     c.charState,
+		GameMode:      c.gameMode,
 	}
 
 	// Transactional save ensures data consistency
@@ -161,12 +174,14 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		attributes:       make(map[string]float64),
 		skills:           make(map[string]float64),
 		essence:          float64(p.server.game.startingEssence), // Default from config
-		health:           float64(p.server.game.startingHealth),  // Default from config
+		health:           int(p.server.game.startingHealth),      // Default from config
+		maxHealth:        int(p.server.game.startingHealth),      // Default from config
+		wounds:           []Wound{},                              // Start with no wounds
 		inventory:        make(map[string]*Item),
 		mutex:            sync.RWMutex{},
 		facing:           nil,
 		lastEdited:       time.Now(),
-		charState:        "standing", // Default character state
+		charState:        CharStateStanding,
 		waitUntil:        time.Now(), // No initial wait time
 		roomCommandOut:   make(chan *CommandRequest, 20),
 		roomCommandIn:    make(chan *CommandResponse, 20),
@@ -176,6 +191,7 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		playerCommandIn:  make(chan string, 20),
 		end:              make(chan bool, 1),
 		prompt:           "> ",
+		gameMode:         "MUD", // Characters created here are for the MUD
 	}
 
 	// Track if we need cleanup on error
@@ -209,7 +225,8 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 			// Use archetype's Health and Essence if specified, otherwise keep defaults
 			if archetypeObj.Health > 0 {
-				character.health = float64(archetypeObj.Health)
+				character.health = int(archetypeObj.Health)
+				character.maxHealth = int(archetypeObj.Health)
 			}
 			if archetypeObj.Essence > 0 {
 				character.essence = float64(archetypeObj.Essence)
@@ -261,15 +278,39 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 					// Items will be saved transactionally with character
 
-					// Worn state determines equipment vs inventory
-					if startingItem.IsWorn && item.wearable {
-						item.isWorn = true
+					// Only add wearable items to inventory slots
+					if item.wearable && startingItem.Slot != "" {
+						// Worn state determines if equipped
+						if startingItem.IsWorn {
+							item.isWorn = true
+						}
+						character.inventory[startingItem.Slot] = item
+						Logger.Debug("Added wearable item to character", "characterName", character.name, "itemName", item.name, "slot", startingItem.Slot)
+					} else {
+						// Non-wearable items need to go in a container
+						// Find a container (like backpack) in character's inventory
+						var container *Item
+						for _, invItem := range character.inventory {
+							if invItem != nil && invItem.container {
+								container = invItem
+								break
+							}
+						}
 
+						if container != nil {
+							// Add item to container
+							err := container.AddItemToContainer(item)
+							if err != nil {
+								Logger.Warn("Failed to add item to container", "itemName", item.name, "containerName", container.name, "error", err)
+								// If can't add to container, drop the item (will be handled elsewhere)
+							} else {
+								Logger.Debug("Added item to container", "characterName", character.name, "itemName", item.name, "containerName", container.name)
+							}
+						} else {
+							Logger.Warn("Non-wearable item has no container", "characterName", character.name, "itemName", item.name)
+							// Item will not be added to character (dropped)
+						}
 					}
-
-					// Inventory addition establishes ownership
-					character.inventory[startingItem.Slot] = item
-					Logger.Debug("Added starting item to character", "characterName", character.name, "itemName", item.name, "slot", startingItem.Slot)
 				}
 			}
 		} else {
@@ -442,9 +483,12 @@ func FormatCharacterDescription(target *Character, viewer *Character) string {
 	// Basic appearance info
 	desc.WriteString("You see a ")
 
-	// Future: equipment and attributes will enhance descriptions
-	// This is placeholder logic
-	if target.health < float64(target.game.startingHealth)/2 {
+	// State and health descriptions
+	if target.charState == CharStateUnconscious {
+		desc.WriteString("unconscious ")
+	} else if target.charState == CharStateDead {
+		desc.WriteString("dead ")
+	} else if target.health < target.maxHealth/2 {
 		desc.WriteString("wounded ")
 	}
 
@@ -465,4 +509,67 @@ func FormatCharacterDescription(target *Character, viewer *Character) string {
 	}
 
 	return desc.String()
+}
+
+// dropAllItems drops all inventory items to the room
+func (c *Character) dropAllItems() error {
+	if c.room == nil {
+		return fmt.Errorf("character not in a room")
+	}
+
+	c.mutex.Lock()
+	itemsToDrop := make(map[uuid.UUID]*Item)
+
+	// Collect all inventory items
+	for slot, item := range c.inventory {
+		if item != nil {
+			itemsToDrop[item.id] = item
+			delete(c.inventory, slot)
+		}
+	}
+	c.mutex.Unlock()
+
+	// Add items to room
+	if len(itemsToDrop) > 0 {
+		c.room.mutex.Lock()
+		for id, item := range itemsToDrop {
+			c.room.items[id] = item
+		}
+		c.room.mutex.Unlock()
+	}
+
+	return nil
+}
+
+// dropHeldItems drops items from both hands to the room
+func (c *Character) dropHeldItems() error {
+	if c.room == nil {
+		return fmt.Errorf("character not in a room")
+	}
+
+	c.mutex.Lock()
+	var leftItem, rightItem *Item
+
+	if c.leftHand != nil {
+		leftItem = c.leftHand
+		c.leftHand = nil
+	}
+
+	if c.rightHand != nil {
+		rightItem = c.rightHand
+		c.rightHand = nil
+	}
+	c.mutex.Unlock()
+
+	// Add items to room
+	c.room.mutex.Lock()
+	if leftItem != nil {
+		c.room.items[leftItem.id] = leftItem
+	}
+	if rightItem != nil {
+		c.room.items[rightItem.id] = rightItem
+	}
+	c.room.mutex.Unlock()
+
+	return nil
 }

@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Lambda function for serving player archetypes from cache"
+
+Parameters:
+  ArchetypesTableName:
+    Type: String
+    Description: Name of the DynamoDB archetypes table
+    Default: eidolon-archetypes
+
+Resources:
+  # IAM Role for Lambda
+  ArchetypesLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: eidolon-archetypes-lambda-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBReadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:GetItem
+                Resource:
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ArchetypesTableName}"
+
+  # Lambda Function
+  GetPlayerArchetypesFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: eidolon-get-player-archetypes
+      Runtime: python3.11
+      Handler: api_get_archetypes.lambda_handler
+      Code:
+        S3Bucket: !Sub "eidolon-lambda-${AWS::AccountId}"
+        S3Key: api-get-archetypes.zip
+      Role: !GetAtt ArchetypesLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          ARCHETYPES_TABLE: !Ref ArchetypesTableName
+      Description: "Returns player-available archetypes from cached data"
+
+  # CloudWatch Log Group
+  ArchetypesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${GetPlayerArchetypesFunction}"
+      RetentionInDays: 7
+
+  # Optional: API Gateway REST API
+  ArchetypesApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: eidolon-archetypes-api
+      Description: API for accessing player archetypes
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ArchetypesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ArchetypesApi
+      ParentId: !GetAtt ArchetypesApi.RootResourceId
+      PathPart: archetypes
+
+  ArchetypesMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ArchetypesApi
+      ResourceId: !Ref ArchetypesResource
+      HttpMethod: GET
+      AuthorizationType: NONE # Change to AWS_IAM or COGNITO_USER_POOLS as needed
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetPlayerArchetypesFunction.Arn}/invocations"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # Permission for API Gateway to invoke Lambda
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetPlayerArchetypesFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ArchetypesApi}/*/*"
+
+  # API Gateway Deployment
+  ArchetypesApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ArchetypesMethod
+    Properties:
+      RestApiId: !Ref ArchetypesApi
+      StageName: prod
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt GetPlayerArchetypesFunction.Arn
+
+  ApiGatewayUrl:
+    Description: API Gateway URL for accessing archetypes
+    Value: !Sub "https://${ArchetypesApi}.execute-api.${AWS::Region}.amazonaws.com/prod/archetypes"
+
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref GetPlayerArchetypesFunction

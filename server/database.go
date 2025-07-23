@@ -35,6 +35,7 @@ type KeyPair struct {
 	db          *dynamodb.Client
 	maxRetries  int
 	baseBackoff time.Duration
+	tableNames  map[string]string
 }
 
 func NewKeyPair(ctx context.Context, cfg *Configuration) (*KeyPair, error) {
@@ -50,10 +51,39 @@ func NewKeyPair(ctx context.Context, cfg *Configuration) (*KeyPair, error) {
 
 	client := dynamodb.NewFromConfig(awsConfig)
 
+	// Test AWS credentials by attempting to list tables
+	// This works with both IAM users and EC2 instance profiles
+	_, err = client.ListTables(ctx, &dynamodb.ListTablesInput{
+		Limit: aws.Int32(1),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("insufficient AWS credentials or permissions for DynamoDB: %w", err)
+	}
+
+	// Create table name mapping from configuration
+	tableNames := map[string]string{
+		"players":    cfg.DynamoDB.Tables.Players,
+		"characters": cfg.DynamoDB.Tables.Characters,
+		"rooms":      cfg.DynamoDB.Tables.Rooms,
+		"exits":      cfg.DynamoDB.Tables.Exits,
+		"items":      cfg.DynamoDB.Tables.Items,
+		"prototypes": cfg.DynamoDB.Tables.Prototypes,
+		"archetypes": cfg.DynamoDB.Tables.Archetypes,
+		"motd":       cfg.DynamoDB.Tables.Motd,
+	}
+
+	// Use defaults if not configured
+	for key, value := range tableNames {
+		if value == "" {
+			tableNames[key] = key // Use the key as the table name if not configured
+		}
+	}
+
 	return &KeyPair{
 		db:          client,
 		maxRetries:  3,
 		baseBackoff: time.Second,
+		tableNames:  tableNames,
 	}, nil
 }
 
@@ -135,7 +165,7 @@ func (k *KeyPair) BatchDeleteItems(ctx context.Context, itemIDs []string) error 
 		for _, itemID := range batch {
 			transactItems = append(transactItems, types.TransactWriteItem{
 				Delete: &types.Delete{
-					TableName: aws.String("items"),
+					TableName: aws.String(k.tableNames["items"]),
 					Key: map[string]types.AttributeValue{
 						"ItemID": &types.AttributeValueMemberS{Value: itemID},
 					},
@@ -215,7 +245,7 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 			// Transaction accumulation enables atomic writes
 			transactItems = append(transactItems, types.TransactWriteItem{
 				Put: &types.Put{
-					TableName: aws.String("items"),
+					TableName: aws.String(k.tableNames["items"]),
 					Item:      itemAV,
 				},
 			})
@@ -231,7 +261,7 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 	// Character inclusion completes atomic save operation
 	transactItems = append(transactItems, types.TransactWriteItem{
 		Put: &types.Put{
-			TableName: aws.String("characters"),
+			TableName: aws.String(k.tableNames["characters"]),
 			Item:      charAV,
 		},
 	})
@@ -422,14 +452,14 @@ func (k *KeyPair) LoadCharactersAndPlayers(ctx context.Context) ([]CharacterInfo
 
 	// Character scan populates bloom filter data
 	var characters []CharacterInfo
-	err := k.Scan(ctx, "characters", &characters)
+	err := k.Scan(ctx, k.tableNames["characters"], &characters)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error scanning characters: %w", err)
 	}
 
 	// Player scan enables account-character mapping
 	var players []PlayerInfo
-	err = k.Scan(ctx, "players", &players)
+	err = k.Scan(ctx, k.tableNames["players"], &players)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error scanning players: %w", err)
 	}
@@ -447,7 +477,7 @@ func (k *KeyPair) LoadCharacterNames(ctx context.Context) ([]string, error) {
 
 	// Only need to scan for character names
 	var characters []CharacterInfo
-	err := k.Scan(ctx, "characters", &characters)
+	err := k.Scan(ctx, k.tableNames["characters"], &characters)
 	if err != nil {
 		return nil, fmt.Errorf("error scanning characters: %w", err)
 	}
@@ -465,7 +495,7 @@ func (k *KeyPair) DeleteCharacter(ctx context.Context, characterID string) error
 	key := map[string]types.AttributeValue{
 		"CharacterID": &types.AttributeValueMemberS{Value: characterID},
 	}
-	return k.Delete(ctx, "characters", key)
+	return k.Delete(ctx, k.tableNames["characters"], key)
 }
 
 // RemoveCharacterFromPlayer removes a character from a player's character list
@@ -476,7 +506,7 @@ func (k *KeyPair) RemoveCharacterFromPlayer(ctx context.Context, playerID, chara
 		"PlayerID": &types.AttributeValueMemberS{Value: playerID},
 	}
 
-	err := k.Get(ctx, "players", key, &playerData)
+	err := k.Get(ctx, k.tableNames["players"], key, &playerData)
 	if err != nil {
 		return fmt.Errorf("failed to get player data: %w", err)
 	}
@@ -485,7 +515,7 @@ func (k *KeyPair) RemoveCharacterFromPlayer(ctx context.Context, playerID, chara
 	delete(playerData.CharacterList, characterName)
 
 	// Record update persists association changes
-	err = k.Put(ctx, "players", &playerData)
+	err = k.Put(ctx, k.tableNames["players"], &playerData)
 	if err != nil {
 		return fmt.Errorf("failed to update player data: %w", err)
 	}

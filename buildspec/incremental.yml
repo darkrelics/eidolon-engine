@@ -1,0 +1,39 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - apt-get update -y -q
+      - apt-get install -y clang cmake ninja-build libgtk-3-dev -q
+      - git clone https://github.com/flutter/flutter.git -b stable
+      - export PATH="$PATH:`pwd`/flutter/bin"
+      - flutter config --no-analytics
+      - flutter doctor
+      - flutter config --enable-web --no-enable-android --no-enable-ios
+
+  pre_build:
+    commands:
+      - cd incremental
+      - flutter pub get
+      - dart fix --apply
+
+  build:
+    commands:
+      - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
+
+  post_build:
+    commands:
+      - aws s3 sync build/web s3://$S3_BUCKET/ --delete --cache-control "max-age=86400"
+      - |
+        if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then 
+          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
+        else
+          echo "No CloudFront distribution ID provided, skipping cache invalidation"
+        fi
+
+artifacts:
+  base-directory: incremental/build/web
+  files:
+    - "**/*"

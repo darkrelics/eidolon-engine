@@ -28,11 +28,17 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
+type PlayerCharacterInfo struct {
+	UUID     string `json:"UUID" dynamodbav:"UUID"`
+	Dead     bool   `json:"Dead" dynamodbav:"Dead"`
+	GameMode string `json:"GameMode" dynamodbav:"GameMode"`
+}
+
 type PlayerData struct {
-	PlayerID      string            `json:"PlayerID" dynamodbav:"PlayerID"` // Store UUID as string in DynamoDB
-	Email         string            `json:"Email" dynamodbav:"Email"`       // Store email
-	CharacterList map[string]string `json:"CharacterList" dynamodbav:"CharacterList"`
-	SeenMotDs     []string          `json:"SeenMotD" dynamodbav:"SeenMotD"`
+	PlayerID      string                          `json:"PlayerID" dynamodbav:"PlayerID"` // Store UUID as string in DynamoDB
+	Email         string                          `json:"Email" dynamodbav:"Email"`       // Store email
+	CharacterList map[string]*PlayerCharacterInfo `json:"CharacterList" dynamodbav:"CharacterList"`
+	SeenMotDs     []string                        `json:"SeenMotD" dynamodbav:"SeenMotD"`
 }
 
 func (p *Player) Load(playerID uuid.UUID) error {
@@ -46,14 +52,17 @@ func (p *Player) Load(playerID uuid.UUID) error {
 
 	var playerData PlayerData
 
-	p.characterList = make(map[string]uuid.UUID)
+	p.characterList = make(map[string]*PlayerCharacterInfo)
 	p.seenMotD = make([]uuid.UUID, 0)
 
-	err := database.Get(p.server.ctx, "players", key, &playerData)
+	err := database.Get(p.server.ctx, database.tableNames["players"], key, &playerData)
 	if err != nil {
 		if strings.Contains(err.Error(), "item not found") {
 			Logger.Info("New player", "player_id", playerID.String(), "email", p.email)
-			p.Save()
+			if err := p.Save(); err != nil {
+				Logger.Error("Failed to save new player", "error", err)
+				return err
+			}
 			return nil
 		}
 		Logger.Error("Error loading player data", "error", err)
@@ -68,13 +77,12 @@ func (p *Player) Load(playerID uuid.UUID) error {
 	// Update email from database
 	p.email = playerData.Email
 
-	for characterName, characterID := range playerData.CharacterList {
-		parsedUUID, err := uuid.FromString(characterID)
-		if err != nil {
-			Logger.Error("Error parsing character ID", "character_id", characterID)
-			continue
+	for characterName, characterInfo := range playerData.CharacterList {
+		p.characterList[characterName] = &PlayerCharacterInfo{
+			UUID:     characterInfo.UUID,
+			Dead:     characterInfo.Dead,
+			GameMode: characterInfo.GameMode,
 		}
-		p.characterList[characterName] = parsedUUID
 	}
 
 	for _, motdID := range playerData.SeenMotDs {
@@ -106,13 +114,17 @@ func (p *Player) SaveWithContext(ctx context.Context) error {
 	playerData := PlayerData{
 		PlayerID:      p.id.String(),
 		Email:         p.email,
-		CharacterList: make(map[string]string),
+		CharacterList: make(map[string]*PlayerCharacterInfo),
 		SeenMotDs:     make([]string, len(p.seenMotD)),
 	}
 
-	// Convert character IDs to strings
-	for characterName, characterID := range p.characterList {
-		playerData.CharacterList[characterName] = characterID.String()
+	// Copy character data
+	for characterName, characterInfo := range p.characterList {
+		playerData.CharacterList[characterName] = &PlayerCharacterInfo{
+			UUID:     characterInfo.UUID,
+			Dead:     characterInfo.Dead,
+			GameMode: characterInfo.GameMode,
+		}
 	}
 
 	// Convert MOTD IDs to strings
@@ -120,7 +132,7 @@ func (p *Player) SaveWithContext(ctx context.Context) error {
 		playerData.SeenMotDs[i] = motdID.String()
 	}
 
-	err := database.Put(ctx, "players", playerData)
+	err := database.Put(ctx, database.tableNames["players"], playerData)
 	if err != nil {
 		Logger.Error("Error saving player data", "error", err)
 		SafeSendString(p.commandOut, "Error saving player data. Please contact an administrator.\n", p.id.String())

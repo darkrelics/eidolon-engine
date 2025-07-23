@@ -17,22 +17,26 @@ phases:
   pre_build:
     commands:
       - cd portal
+      - echo "Installing dependencies..."
       - flutter pub get
       - dart fix --apply
-      - dart analyze
 
   build:
     commands:
-      - echo Building web application...
-      - echo "Current directory:"
-      - pwd
-      - echo "Building with USER_POOL_ID=$USER_POOL_ID and CLIENT_ID=$CLIENT_ID"
-      - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID
+      - echo "Building web application with configured credentials..."
+      - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
 
   post_build:
     commands:
-      - echo Uploading to S3...
-      - aws s3 cp build/web s3://$S3_BUCKET_NAME/ --recursive --cache-control "max-age=86400"
+      - echo "Deploying to S3..."
+      - aws s3 sync build/web s3://$S3_BUCKET/ --delete --cache-control "max-age=86400"
+      - |
+        if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then 
+          echo "Invalidating CloudFront cache..."
+          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
+        else
+          echo "No CloudFront distribution ID provided, skipping cache invalidation"
+        fi
 
 artifacts:
   base-directory: portal/build/web

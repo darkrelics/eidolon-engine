@@ -73,3 +73,20 @@ CLAUDE.md
 **/claude_logs/
 .cache/
 **/claude_cache/
+
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.pdb
+
+
+# Apple Problems
+**/.DS_Store
+
+**/.ruff_cache
+**/.ruff_cache/**
+
+**/.deployment_state.json

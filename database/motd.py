@@ -19,11 +19,11 @@ This module adds a Message of the Day (MOTD) to the DynamoDB database.
 """
 
 import argparse
+import os
 import uuid
 from datetime import datetime
 
-import boto3
-from botocore.exceptions import ClientError
+from eidolon.dynamo import get_table, put_item
 
 
 def add_or_update_motd(message: str, active: bool = True) -> dict:
@@ -40,9 +40,6 @@ def add_or_update_motd(message: str, active: bool = True) -> dict:
     Raises:
         ClientError: If an error occurs during the DynamoDB operation.
     """
-    dynamodb = boto3.resource("dynamodb")
-    table = dynamodb.Table("motd")  # type: ignore
-
     motd_id: str = str(uuid.uuid4())
 
     # Prepare the item data to put into the table
@@ -53,18 +50,13 @@ def add_or_update_motd(message: str, active: bool = True) -> dict:
         "CreatedAt": datetime.utcnow().isoformat(),
     }
 
-    try:
-        # Put the item into the 'motd' table
-        _ = table.put_item(Item=motd_item)
+    motd_table = get_table(os.environ.get("MOTD_TABLE", "motd"))
+    if put_item(motd_table, motd_item):
         print("MOTD added successfully.")
         print(f"MOTD ID: {motd_id}")
         return motd_item
-    except ClientError as e:
-        error_message = e.response["Error"]["Message"]
-        print(f"Error adding/updating MOTD: {error_message}")
-        return {}
-    except Exception as e:
-        print(f"An unexpected error occurred: {str(e)}")
+    else:
+        print("Error adding/updating MOTD.")
         return {}
 
 

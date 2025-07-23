@@ -18,28 +18,23 @@ limitations under the License.
 This module adds an item based on a prototype to a room.
 """
 
+import os
 import uuid
 from decimal import Decimal
 
-import boto3
-from botocore.exceptions import ClientError
-
-REGION = "us-east-1"  # Replace with your AWS region
+from eidolon.dynamo import delete_item, get_item, get_table, put_item, update_item
 
 
-def display_rooms(dynamodb) -> list:
+def display_rooms() -> list:
     """
     Fetches and displays all rooms from the 'rooms' DynamoDB table.
-
-    Args:
-        dynamodb: The DynamoDB resource object.
 
     Returns:
         A list of room dictionaries.
     """
     try:
-        table = dynamodb.Table("rooms")
-        response = table.scan()
+        rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
+        response = rooms_table.scan()
         rooms = response.get("Items", [])
         if not rooms:
             print("No rooms found.")
@@ -51,12 +46,12 @@ def display_rooms(dynamodb) -> list:
             title = room.get("Title", "No Title")
             print(f"{room_id}: {title}")
         return rooms
-    except ClientError as e:
-        print(f"Error fetching rooms: {e.response['Error']['Message']}")
+    except Exception as err:
+        print(f"Error fetching rooms: {err}")
         return []
 
 
-def prompt_for_room() -> int:
+def prompt_for_room():
     """
     Prompts the user to enter a room ID.
 
@@ -64,22 +59,22 @@ def prompt_for_room() -> int:
         The room ID entered by the user, or None to quit.
     """
     while True:
-        room_input: str = input("Enter room ID (X to quit): ").strip().upper()
+        room_input = input("Enter room ID (X to quit): ").strip().upper()
         if room_input == "X":
-            return None  # type: ignore
+            return None
         try:
             return int(room_input)
         except ValueError:
             print("Please enter a valid number or 'X' to quit.")
 
 
-def display_prototypes(dynamodb) -> list:
+def display_prototypes() -> list:
     """
     Fetches and displays all item prototypes from the 'prototypes' DynamoDB table.
     """
     try:
-        table = dynamodb.Table("prototypes")
-        response = table.scan()
+        prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
+        response = prototypes_table.scan()
         prototypes = response.get("Items", [])
         if not prototypes:
             print("No prototypes found.")
@@ -91,8 +86,8 @@ def display_prototypes(dynamodb) -> list:
             name = prototype.get("prototype_name", "No Name")
             print(f"{prototype_id}: {name}")
         return prototypes
-    except ClientError as e:
-        print(f"Error fetching prototypes: {e.response['Error']['Message']}")
+    except Exception as err:
+        print(f"Error fetching prototypes: {err}")
         return []
 
 
@@ -140,50 +135,40 @@ def create_new_item_from_prototype(prototype: dict) -> dict:
     return new_item
 
 
-def add_item_to_table(dynamodb, new_item: dict) -> bool:
+def add_item_to_table(new_item: dict) -> bool:
     """
     Adds the new item to the 'items' table.
 
     Args:
-        dynamodb: The DynamoDB resource object.
         new_item: The item dictionary to add.
 
     Returns:
         True if the item was successfully added to the table, False otherwise.
     """
-    items_table = dynamodb.Table("items")
-    try:
-        items_table.put_item(Item=new_item)
+    items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
+    if put_item(items_table, new_item):
         print(f"Successfully added item '{new_item['item_name']}' to items table.")
         return True
-    except ClientError as e:
-        print(f"Error saving new item to items table: {e.response['Error']['Message']}")
+    else:
+        print("Error saving new item to items table.")
         return False
 
 
-def add_item_to_room(dynamodb, room: dict, new_item: dict) -> bool:
+def add_item_to_room(room: dict, new_item: dict) -> bool:
     """
     Adds the new item to the 'items' table and updates the room to include the item.
 
     Args:
-        dynamodb: The DynamoDB resource object.
         room: The room dictionary where the item will be added.
         new_item: The item dictionary to add.
 
     Returns:
         True if the item was successfully added to the room, False otherwise.
     """
-    rooms_table = dynamodb.Table("rooms")
     room_id = int(room.get("RoomID", 0))
 
-    try:
-        # Get the current state of the room
-        response = rooms_table.get_item(Key={"RoomID": room_id})
-    except ClientError as e:
-        print(f"Error getting room: {e.response['Error']['Message']}")
-        return False
-
-    current_room = response.get("Item", {})
+    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
+    current_room = get_item(rooms_table, {"RoomID": room_id})
 
     if not current_room:
         print(f"Room {room_id} not found.")
@@ -203,28 +188,18 @@ def add_item_to_room(dynamodb, room: dict, new_item: dict) -> bool:
 
     current_item_ids.append(item_id)
 
-    try:
-        # Update the room with the new ItemID list
-        response = rooms_table.update_item(
-            Key={"RoomID": room_id},
-            UpdateExpression="SET ItemID = :item_ids",
-            ExpressionAttributeValues={":item_ids": current_item_ids},
-            ReturnValues="UPDATED_NEW",
-        )
-        print(f"Successfully updated room {room_id}. New ItemID: {response['Attributes'].get('ItemID', [])}")
-    except ClientError as e:
-        print(f"Error updating room: {e.response['Error']['Message']}")
+    if update_item(rooms_table, {"RoomID": room_id}, "SET ItemID = :item_ids", {":item_ids": current_item_ids}):
+        print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
+        return True
+    else:
+        print("Error updating room.")
         # Attempt to roll back by deleting the item we just added
-        try:
-            items_table = dynamodb.Table("items")
-            items_table.delete_item(Key={"ItemID": new_item["ItemID"]})
+        items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
+        if delete_item(items_table, {"ItemID": new_item["ItemID"]}):
             print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
-        except ClientError as del_e:
-            print(f"Error rolling back item addition: {del_e.response['Error']['Message']}")
+        else:
+            print("Error rolling back item addition.")
         return False
-
-    print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
-    return True
 
 
 def main() -> None:
@@ -232,15 +207,13 @@ def main() -> None:
     Allows the user to select a room and a prototype, and then adds an item to the room.
     """
 
-    dynamodb = boto3.resource("dynamodb", region_name=REGION)
-
     while True:
-        rooms: list = display_rooms(dynamodb)
+        rooms: list = display_rooms()
         if not rooms:
             print("No rooms available. Exiting.")
             break
 
-        room_id: int = prompt_for_room()
+        room_id = prompt_for_room()
         if room_id is None:
             print("Exiting.")
             break
@@ -250,7 +223,7 @@ def main() -> None:
             print("Room not found.")
             continue
 
-        prototypes: list = display_prototypes(dynamodb)
+        prototypes: list = display_prototypes()
         if not prototypes:
             print("No item prototypes found. Please add some prototypes first.")
             continue
@@ -270,13 +243,13 @@ def main() -> None:
         new_item: dict = create_new_item_from_prototype(selected_prototype)
         print(f"New item created: {new_item}")
 
-        if add_item_to_table(dynamodb, new_item):
+        if add_item_to_table(new_item):
             print(f"Successfully added '{new_item['item_name']}' to items table.")
         else:
             print("Failed to add item to table.")
             continue
 
-        if add_item_to_room(dynamodb, room, new_item):
+        if add_item_to_room(room, new_item):
             print(f"Successfully added '{new_item['item_name']}' to room {room_id}.")
         else:
             print("Failed to add item to room.")

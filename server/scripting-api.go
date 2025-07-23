@@ -306,30 +306,23 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 	// Get the command verb
 	verb := strings.ToLower(cmd.Verb)
 
-	Logger.Info("ExecuteRoomCommand called", "roomID", room.roomID, "scriptID", room.scriptID, "verb", verb)
-
 	L, err := sm.GetRoomScript(room.roomID)
-	if err != nil {
-		Logger.Warn("Script not loaded for room", "roomID", room.roomID, "scriptID", room.scriptID, "error", err)
-		return false, nil // Script should have been loaded during room startup
+	if err != nil || L == nil {
+		return false, nil // Script not available
 	}
 
-	Logger.Info("Script retrieved successfully", "scriptID", room.scriptID, "luaState", L != nil)
+	// This function is already protected by CallByParam with Protect: true
+	// No need for additional panic recovery here
 
 	// Build function name from command verb (e.g., "pull" -> "onCommandPull")
 	caser := cases.Title(language.English)
 	functionName := "onCommand" + caser.String(verb)
 
-	Logger.Info("Looking for function in script", "scriptID", room.scriptID, "functionName", functionName)
-
 	// Check if handler exists
 	handler := L.GetGlobal(functionName)
 	if handler == lua.LNil {
-		Logger.Info("No handler found for command in script", "scriptID", room.scriptID, "functionName", functionName)
 		return false, nil // No handler for this command
 	}
-
-	Logger.Info("Found command handler in script", "scriptID", room.scriptID, "functionName", functionName)
 
 	// Create character table
 	charTable := L.NewTable()
@@ -350,6 +343,7 @@ func (sm *ScriptManager) ExecuteRoomCommand(room *Room, cmd *CommandRequest) (bo
 	}, charTable, argsTable)
 
 	if err != nil {
+		Logger.Error("Error executing command handler", "functionName", functionName, "error", err)
 		return false, fmt.Errorf("error executing command handler %s: %w", functionName, err)
 	}
 

@@ -27,6 +27,7 @@ import 'screens/registration_screen.dart';
 import 'screens/character_management_screen.dart';
 import 'screens/password_reset_screen.dart';
 import 'screens/password_reset_confirm_screen.dart';
+import 'screens/account_settings_screen.dart';
 import 'utils/security_config.dart';
 import 'utils/route_guard.dart';
 import 'utils/session_monitor.dart';
@@ -140,14 +141,16 @@ class MyApp extends StatelessWidget {
       case '/password-reset':
         return MaterialPageRoute(builder: (_) => const PasswordResetScreen());
       case '/password-reset-confirm':
-        final email = settings.arguments as String;
         return MaterialPageRoute(
-          builder: (_) => PasswordResetConfirmScreen(email: email),
+          builder: (_) => const PasswordResetConfirmScreen(),
+          settings: settings,
         );
       case '/character-management':
         return MaterialPageRoute(
           builder: (_) => const CharacterManagementScreen(),
         );
+      case '/account-settings':
+        return MaterialPageRoute(builder: (_) => const AccountSettingsScreen());
       default:
         return MaterialPageRoute(
           builder: (_) => const ErrorScreen(message: 'Route not found'),

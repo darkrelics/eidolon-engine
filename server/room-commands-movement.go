@@ -166,7 +166,7 @@ func handleMovementCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	}
 
 	// Ensure target room is running
-	if !targetRoom.running {
+	if !targetRoom.IsRunning() {
 		targetRoom.Start(game)
 		targetRoom.WaitReady()
 	}

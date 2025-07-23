@@ -55,18 +55,12 @@ const (
 // processRoomCommand handles commands at the room level
 func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	if cmd == nil {
-		Logger.Error("Received nil command in room", "roomID", r.roomID)
 		return &CommandResponse{
 			Success:   false,
 			Error:     fmt.Errorf("invalid command"),
 			Timestamp: time.Now(),
 		}
 	}
-
-	Logger.Debug("Processing room command",
-		"roomID", r.roomID,
-		"verb", cmd.Verb,
-		"character", cmd.Character.name)
 
 	// Create default response
 	response := &CommandResponse{
@@ -76,21 +70,15 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 	}
 
 	// Try script commands first if room has an active script
-	Logger.Info("Room script state check", "roomID", r.roomID, "scriptID", r.scriptID, "scriptActive", r.scriptActive, "scriptMgrNil", ScriptMgr == nil)
-
 	if r.scriptID != "" && r.scriptActive && ScriptMgr != nil {
-		Logger.Info("Attempting script command execution", "roomID", r.roomID, "scriptID", r.scriptID, "command", cmd.Verb)
 		handled, err := ScriptMgr.ExecuteRoomCommand(r, cmd)
 		if err != nil {
 			Logger.Error("Script command execution error", "error", err, "roomID", r.roomID, "command", cmd.Verb)
 		}
-		Logger.Info("Script command result", "roomID", r.roomID, "command", cmd.Verb, "handled", handled)
 		if handled {
 			response.Success = true
 			return response
 		}
-	} else {
-		Logger.Info("Script conditions not met for command", "roomID", r.roomID, "command", cmd.Verb)
 	}
 
 	// Try to handle common room commands
@@ -179,6 +167,17 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 
 	// Join all arguments after the command to form the message
 	message := strings.Join(cmd.Args[1:], " ")
+
+	// Check if character is dead or a ghost
+	if character.charState == CharStateDead || character.charState == CharStateGhost {
+		// Dead/ghost trying to speak
+		return &CommandResponse{
+			RequestID: cmd.ID,
+			Success:   true,
+			Message:   ApplyColor("cyan", "\n\rYour voice cannot cross the veil of death.\n\r"),
+			Timestamp: time.Now(),
+		}
+	}
 
 	// Message for the speaker
 	speakerMessage := fmt.Sprintf("\n\rYou say '%s'\n\r", message)
@@ -597,8 +596,6 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		}
 	}
 
-	character.mutex.Lock()
-
 	// If target specified, execute face command first
 	if targetName != "" {
 		// Find target in room
@@ -613,36 +610,37 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		r.mutex.RUnlock()
 
 		if target == nil {
-			character.mutex.Unlock()
 			return &CommandResponse{
 				RequestID: cmd.ID,
 				Success:   false,
-				Message:   fmt.Sprintf("\n\rYou don't see anyone here by that name.\n\r"),
+				Message:   "\n\rYou don't see anyone here by that name.\n\r",
 				Timestamp: time.Now(),
 			}
 		}
 
-		// Clear any existing facing targets that are no longer in the same room
+		// Update facing - only lock for the actual update
+		character.mutex.Lock()
 		if character.facing != nil && character.facing.room != character.room {
 			character.facing = nil
 		}
 		character.facing = target
-
-		// Initialize combat if needed
-		// Store target info before unlocking
 		targetName := target.name
 		character.mutex.Unlock()
+
+		// Initialize combat if needed
 		r.initiateCombat(character, target, combatRangeDefault)
 
 		// Send facing messages with advance context
 		character.DisplayMessage(fmt.Sprintf("\n\rYou advance on %s.\n\r", targetName))
 		target.DisplayMessage(fmt.Sprintf("\n\r%s advances on you!\n\r", character.name))
 		SendRoomMessage(r, fmt.Sprintf("\n\r%s advances on %s.\n\r", character.name, targetName), character, target)
-
-		character.mutex.Lock()
 	} else {
 		// No target specified - check if already facing someone or in combat
-		if character.facing == nil {
+		character.mutex.RLock()
+		currentFacing := character.facing
+		character.mutex.RUnlock()
+
+		if currentFacing == nil {
 			// Check if character is in combat ranges
 			r.mutex.RLock()
 			var potentialTarget *Character
@@ -654,10 +652,11 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 							c.mutex.RLock()
 							if c.facing == character {
 								potentialTarget = c
-								c.mutex.RUnlock()
-								break
 							}
 							c.mutex.RUnlock()
+							if potentialTarget != nil {
+								break
+							}
 						}
 					}
 					if potentialTarget != nil {
@@ -668,7 +667,6 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 			r.mutex.RUnlock()
 
 			if potentialTarget == nil {
-				character.mutex.Unlock()
 				return &CommandResponse{
 					RequestID: cmd.ID,
 					Success:   false,
@@ -677,27 +675,40 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 				}
 			}
 
+			// Update facing - only lock for the actual update
+			character.mutex.Lock()
 			character.facing = potentialTarget
+			character.mutex.Unlock()
 		}
 	}
 
-	// Set combat movement
-	if character.facing != nil {
+	// Check if we have a valid facing target
+	character.mutex.RLock()
+	facingTarget := character.facing
+	character.mutex.RUnlock()
+
+	if facingTarget != nil {
+		// Set combat movement - only lock for the actual update
+		character.mutex.Lock()
 		character.combatMovement = &CombatMovement{
 			mode:        "advance",
-			targetID:    character.facing.id,
+			targetID:    facingTarget.id,
 			targetRange: targetRange,
 		}
+		character.mutex.Unlock()
+
+		// Add to movement list
 		r.AddCharacterToMove(character)
 
-		rangeName := "close combat"
-		if rangeType == "melee" {
+		var rangeName string
+		switch targetRange {
+		case combatRangeMelee:
 			rangeName = "melee range"
-		} else if rangeType == "pole" {
+		case combatRangePole:
 			rangeName = "pole range"
+		default:
+			rangeName = "close combat"
 		}
-
-		character.mutex.Unlock()
 
 		return &CommandResponse{
 			RequestID: cmd.ID,
@@ -706,7 +717,6 @@ func handleAdvanceCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 			Timestamp: time.Now(),
 		}
 	} else {
-		character.mutex.Unlock()
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
@@ -739,7 +749,7 @@ func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 	}
 
 	// Parse range argument
-	var targetRange float64 = 45.0
+	var targetRange = 45.0
 
 	if len(cmd.Args) > 1 {
 		rangeType := strings.ToLower(cmd.Args[1])
@@ -760,18 +770,13 @@ func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		}
 	}
 
-	character.mutex.Lock()
-
 	// Check if in combat
-	inCombat := false
 	r.mutex.RLock()
-	if ranges, exists := r.combatRanges[character.id]; exists && len(ranges) > 0 {
-		inCombat = true
-	}
+	ranges, exists := r.combatRanges[character.id]
+	inCombat := exists && len(ranges) > 0
 	r.mutex.RUnlock()
 
 	if !inCombat {
-		character.mutex.Unlock()
 		return &CommandResponse{
 			RequestID: cmd.ID,
 			Success:   false,
@@ -780,14 +785,16 @@ func handleRetreatCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		}
 	}
 
-	// Set combat movement
+	// Set combat movement - only lock for the actual update
+	character.mutex.Lock()
 	character.combatMovement = &CombatMovement{
 		mode:        "retreat",
 		targetRange: targetRange,
 	}
-	r.AddCharacterToMove(character)
-
 	character.mutex.Unlock()
+
+	// Add to movement list
+	r.AddCharacterToMove(character)
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
@@ -837,14 +844,24 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		}
 	}
 
+	// Get current facing target
 	character.mutex.Lock()
+	oldFacing := character.facing
+	character.facing = nil
+	hadCombatMovement := character.combatMovement != nil
+	if hadCombatMovement {
+		character.combatMovement = nil
+	}
+	// Set flee state
+	character.fleeTarget = &FleeState{
+		exitDirection: exitDirection,
+		startTime:     time.Now(),
+		hasDirection:  exitDirection != "",
+	}
+	character.mutex.Unlock()
 
-	// Clear facing
-	if character.facing != nil {
-		oldFacing := character.facing
-		character.facing = nil
-
-		// Clear reciprocal facing
+	// Clear reciprocal facing if needed
+	if oldFacing != nil {
 		oldFacing.mutex.Lock()
 		if oldFacing.facing == character {
 			oldFacing.facing = nil
@@ -852,21 +869,11 @@ func handleFleeCommand(cmd *CommandRequest, r *Room) *CommandResponse {
 		oldFacing.mutex.Unlock()
 	}
 
-	// Set flee state
-	character.fleeTarget = &FleeState{
-		exitDirection: exitDirection,
-		startTime:     time.Now(),
-		hasDirection:  exitDirection != "",
-	}
+	// Update room lists
 	r.AddCharacterToFlee(character)
-
-	// Clear any combat movement
-	if character.combatMovement != nil {
+	if hadCombatMovement {
 		r.RemoveCharacterToMove(character)
-		character.combatMovement = nil
 	}
-
-	character.mutex.Unlock()
 
 	// Send messages
 	if exitDirection != "" {
