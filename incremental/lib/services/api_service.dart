@@ -240,7 +240,7 @@ class ApiService {
   Future<List<StoryMetadata>> getStories() async {
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/stories'),
+      Uri.parse('$baseUrl/story'),
       headers: headers,
     );
 

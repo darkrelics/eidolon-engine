@@ -133,19 +133,6 @@ Resources:
         AttributeName: TTL
         Enabled: true
 
-  # Story definitions table (new)
-  StoryDefinitionsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: story_definitions
-      AttributeDefinitions:
-        - AttributeName: StoryID
-          AttributeType: S
-      KeySchema:
-        - AttributeName: StoryID
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
 
   EidolonDynamoDBPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -175,7 +162,6 @@ Resources:
               - !GetAtt ArchetypesTable.Arn
               - !GetAtt MOTDTable.Arn
               - !GetAtt StoryTable.Arn
-              - !GetAtt StoryDefinitionsTable.Arn
 
 Outputs:
   PlayersTableName:
@@ -232,11 +218,6 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-StoryTableName"
 
-  StoryDefinitionsTableName:
-    Description: "DynamoDB table name for story definitions"
-    Value: !Ref StoryDefinitionsTable
-    Export:
-      Name: !Sub "${AWS::StackName}-StoryDefinitionsTableName"
 
   DynamoDBAccessPolicyArn:
     Description: "ARN of the DynamoDB access policy"

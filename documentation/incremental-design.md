@@ -36,7 +36,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 
 ### 3.1 DynamoDB Table Designs
 
-#### 3.1.1 Stories Table (New)
+#### 3.1.1 Story Table (New)
 
 ```python
 # Master story definitions
@@ -659,7 +659,7 @@ Add new Lambda functions to existing stack:
 # Add to existing Lambda definitions:
 
 self.story_functions = [
-    ("api-get-stories", "api_get_stories.lambda_handler"),
+    ("api-get-story", "api_get_story.lambda_handler"),
     ("api-start-story", "api_start_story.lambda_handler"),
     ("api-submit-decision", "api_submit_decision.lambda_handler"),
     ("api-get-segment-outcome", "api_get_segment_outcome.lambda_handler"),
@@ -683,9 +683,9 @@ Extend existing API:
 ```python
 # Add to API Gateway configuration
 story_routes = [
-    ("GET", "/stories", "api-get-stories"),
-    ("POST", "/stories/start", "api-start-story"),
-    ("GET", "/stories/current", "api-get-current-story"),
+    ("GET", "/story", "api-get-story"),
+    ("POST", "/story/start", "api-start-story"),
+    ("GET", "/story/current", "api-get-current-story"),
     ("POST", "/segments/decision", "api-submit-decision"),
     ("GET", "/segments/outcome", "api-get-segment-outcome"),
     ("POST", "/stories/abandon", "api-abandon-story"),

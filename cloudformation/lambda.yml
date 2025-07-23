@@ -168,12 +168,12 @@ Resources:
         Fn::Sub: "iam-${AWS::StackName}-LambdaExecutionRoleArn"
 
   # Story Lambda Functions (new)
-  GetStoriesFunction:
+  GetStoryFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub "${GameName}-api-get-stories"
+      FunctionName: !Sub "${GameName}-api-get-story"
       Runtime: python3.12
-      Handler: api_get_stories.lambda_handler
+      Handler: api_get_story.lambda_handler
       Code:
         S3Bucket: !Ref LambdaBucketName
         S3Key: !Ref LambdaZipKey
@@ -324,31 +324,31 @@ Resources:
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteCharacterFunction.Arn}/invocations"
 
   # Story API Resources (new)
-  StoriesResource:
+  StoryResource:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref ApiGateway
       ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: stories
+      PathPart: story
 
-  StoriesGetMethod:
+  StoryGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref ApiGateway
-      ResourceId: !Ref StoriesResource
+      ResourceId: !Ref StoryResource
       HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetStoriesFunction.Arn}/invocations"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetStoryFunction.Arn}/invocations"
 
   StartResource:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref ApiGateway
-      ParentId: !Ref StoriesResource
+      ParentId: !Ref StoryResource
       PathPart: start
 
   StartPostMethod:
@@ -373,7 +373,7 @@ Resources:
       - CharactersPostMethod
       - CharacterIdGetMethod
       - CharacterIdDeleteMethod
-      - StoriesGetMethod
+      - StoryGetMethod
       - StartPostMethod
     Properties:
       RestApiId: !Ref ApiGateway
@@ -427,10 +427,10 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
 
-  GetStoriesPermission:
+  GetStoryPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref GetStoriesFunction
+      FunctionName: !Ref GetStoryFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"

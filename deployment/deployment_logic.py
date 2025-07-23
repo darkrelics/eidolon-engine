@@ -200,6 +200,8 @@ def validate_resources(session, params: dict) -> dict:
                 "archetypes",
                 "motd",
                 "story",
+                "segments",
+                "active_segments",
             ]
 
         for table_name in table_names:

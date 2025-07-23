@@ -31,6 +31,8 @@ TABLE_NAMES = {
     "prototypes": os.environ.get("PROTOTYPES_TABLE", "prototypes"),
     "archetypes": os.environ.get("ARCHETYPES_TABLE", "archetypes"),
     "motd": os.environ.get("MOTD_TABLE", "motd"),
+    "story": os.environ.get("STORY_TABLE", "story"),
+    "segments": os.environ.get("SEGMENTS_TABLE", "segments"),
     "active_segments": os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments"),
     "character_history": os.environ.get("CHARACTER_HISTORY_TABLE", "character_history"),
 }

@@ -15,7 +15,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-Utility to add an item to a room in the DynamoDB database.
+Utility to load game data from JSON files and store it in DynamoDB tables.
+
+This script loads test data for rooms, exits, archetypes, item prototypes, and stories
+from JSON files and stores them in the corresponding DynamoDB tables. It also provides
+functionality to read the data back from DynamoDB and display it for verification.
 """
 
 import argparse
@@ -295,6 +299,127 @@ def load_item_prototypes():
         return {}
 
 
+def store_story(story_data):
+    """
+    Stores story and segments data into DynamoDB tables.
+
+    Args:
+        story_data (dict): The story data containing story definition and segments.
+    """
+    # Store the story definition
+    story_table = get_table(os.environ.get("STORY_TABLE", "story"))
+    segments_table = get_table(os.environ.get("SEGMENTS_TABLE", "segments"))
+    
+    try:
+        # Store the main story
+        story = story_data.get("story", {})
+        if story:
+            story_item = {
+                "StoryID": story["StoryID"],
+                "Title": story["Title"],
+                "Description": story["Description"],
+                "NarrativeText": story["NarrativeText"],
+                "StoryType": story["StoryType"],
+                "EstimatedDuration": story["EstimatedDuration"],
+                "Prerequisites": story.get("Prerequisites", {}),
+                "FirstSegmentID": story["FirstSegmentID"],
+                "CreatedAt": story["CreatedAt"],
+                "Version": story.get("Version", 1),
+            }
+            
+            # Build update expression
+            update_expression = "SET "
+            expression_attribute_values = {}
+            expression_parts = []
+            
+            for key, value in story_item.items():
+                if key != "StoryID":  # Skip the key
+                    expression_parts.append(f"{key} = :{key.lower()}")
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+            
+            update_expression += ", ".join(expression_parts)
+            
+            story_table.update_item(  # type: ignore
+                Key={"StoryID": story["StoryID"]},
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
+            print(f"Story '{story['Title']}' stored successfully")
+        
+        # Store all segments
+        segments = story_data.get("segments", [])
+        for segment in segments:
+            segment_item = {
+                "StoryID": segment["StoryID"],
+                "SegmentID": segment["SegmentID"],
+                "SegmentType": segment["SegmentType"],
+                "ShortStatus": segment["ShortStatus"],
+                "Duration": segment["Duration"],
+            }
+            
+            # Add optional fields based on segment type
+            if segment["SegmentType"] == "decision":
+                segment_item["DecisionText"] = segment.get("DecisionText", "")
+                segment_item["DecisionOptions"] = segment.get("DecisionOptions", {})
+                segment_item["DefaultDecision"] = segment.get("DefaultDecision", "")
+            else:  # narrative
+                segment_item["NextSegmentID"] = segment.get("NextSegmentID")
+                segment_item["Challenges"] = segment.get("Challenges", [])
+                segment_item["Results"] = segment.get("Results", {})
+            
+            # Build update expression
+            update_expression = "SET "
+            expression_attribute_values = {}
+            expression_parts = []
+            
+            for key, value in segment_item.items():
+                if key not in ["StoryID", "SegmentID"]:  # Skip the keys
+                    expression_parts.append(f"{key} = :{key.lower()}")
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+            
+            update_expression += ", ".join(expression_parts)
+            
+            segments_table.update_item(  # type: ignore
+                Key={
+                    "StoryID": segment["StoryID"],
+                    "SegmentID": segment["SegmentID"]
+                },
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
+        
+        print(f"Stored {len(segments)} segments successfully")
+        
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while storing story: {str(err)}")
+
+
+def load_story():
+    """
+    Loads story data from the 'story' and 'segments' DynamoDB tables.
+
+    Returns:
+        dict: A dictionary containing the story and segments data.
+    """
+    story_table = get_table(os.environ.get("STORY_TABLE", "story"))
+    segments_table = get_table(os.environ.get("SEGMENTS_TABLE", "segments"))
+    
+    try:
+        # Load all stories
+        story_response = story_table.scan()  # type: ignore
+        stories = story_response.get("Items", [])
+        
+        # Load all segments
+        segments_response = segments_table.scan()  # type: ignore
+        segments = segments_response.get("Items", [])
+        
+        print("Story data loaded from DynamoDB successfully")
+        return {"stories": stories, "segments": segments}
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while loading story: {str(err)}")
+        return {}
+
+
 def display_exits(exits):
     """
     Displays exit information.
@@ -374,7 +499,7 @@ def display_item_prototypes(prototypes):
     print("Item Prototypes:")
     for prototype in prototypes.get("itemPrototypes", []):
         print(f"ID: {prototype.get('PrototypeID', 'No ID')}")
-        print(f"  Name: {prototype.get('prototype_name', 'No Name')}")
+        print(f"  Name: {prototype.get('prototype_name', prototype.get('Name', 'No Name'))}")
         print(f"  Description: {prototype.get('Description', 'No description')}")
         print(f"  Mass: {prototype.get('Mass', 'Unknown')}")
         print(f"  Value: {prototype.get('Value', 'Unknown')}")
@@ -382,6 +507,57 @@ def display_item_prototypes(prototypes):
         if prototype.get("Wearable"):
             print(f"  Worn on: {', '.join(prototype.get('WornOn', []))}")
         print()
+
+
+def display_story(story_data):
+    """
+    Displays story and segments information.
+
+    Args:
+        story_data (dict): The story data to display.
+    """
+    # Display stories
+    print("Stories:")
+    for story in story_data.get("stories", []):
+        print(f"Story ID: {story.get('StoryID', 'No ID')}")
+        print(f"  Title: {story.get('Title', 'No Title')}")
+        print(f"  Description: {story.get('Description', 'No description')}")
+        print(f"  Type: {story.get('StoryType', 'Unknown')}")
+        print(f"  Duration: {story.get('EstimatedDuration', 0)} seconds")
+        print(f"  First Segment: {story.get('FirstSegmentID', 'None')}")
+        print(f"  Version: {story.get('Version', 1)}")
+        print()
+    
+    # Display segments grouped by story
+    print("Segments:")
+    segments_by_story = {}
+    for segment in story_data.get("segments", []):
+        story_id = segment.get("StoryID")
+        if story_id not in segments_by_story:
+            segments_by_story[story_id] = []
+        segments_by_story[story_id].append(segment)
+    
+    for story_id, segments in segments_by_story.items():
+        print(f"\nSegments for Story {story_id}:")
+        for segment in segments:
+            print(f"  Segment ID: {segment.get('SegmentID')}")
+            print(f"    Type: {segment.get('SegmentType')}")
+            print(f"    Status: {segment.get('ShortStatus')}")
+            print(f"    Duration: {segment.get('Duration')} seconds")
+            
+            if segment.get("SegmentType") == "decision":
+                print(f"    Decision Text: {segment.get('DecisionText', 'None')}")
+                options = segment.get("DecisionOptions", {})
+                if options:
+                    print("    Options:")
+                    for opt_key, opt_value in options.items():
+                        print(f"      {opt_key}: -> {opt_value}")
+            else:
+                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
+                challenges = segment.get("Challenges", [])
+                if challenges:
+                    print(f"    Challenges: {len(challenges)}")
+            print()
 
 
 def main():
@@ -398,6 +574,7 @@ def main():
     parser.add_argument("-e", "--exits", default="../data/test_exits.json", help="Path to the Exits JSON file.")
     parser.add_argument("-a", "--archetypes", default="../data/test_archetypes.json", help="Path to the Archetypes JSON file.")
     parser.add_argument("-p", "--prototypes", default="../data/test_prototypes.json", help="Path to the Prototypes JSON file.")
+    parser.add_argument("-s", "--story", default="../data/test_story.json", help="Path to the Story JSON file.")
     parser.add_argument("-region", default="us-east-1", help="AWS region for DynamoDB.")
     args = parser.parse_args()
 
@@ -420,6 +597,10 @@ def main():
         prototypes_data = load_json(args.prototypes)
         store_item_prototypes(prototypes_data)
 
+        # Load and store story
+        story_data = load_json(args.story)
+        store_story(story_data)
+
         # Load data from DynamoDB and display
         loaded_exits = load_exits()
         display_exits(loaded_exits)
@@ -432,6 +613,9 @@ def main():
 
         loaded_prototypes = load_item_prototypes()
         display_item_prototypes(loaded_prototypes)
+
+        loaded_story = load_story()
+        display_story(loaded_story)
 
     except Exception as err:
         logging.error(f"An unexpected error occurred: {str(err)}")
