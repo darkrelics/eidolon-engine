@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../utils/error_handler.dart';
+import '../constants/navigation_constants.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -78,7 +79,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         Navigator.pushReplacementNamed(
           context,
           '/login',
-          arguments: {'message': 'Your account has been deleted'},
+          arguments: {NavigationConstants.messageKey: 'Your account has been deleted'},
         );
       }
     } catch (e) {

@@ -113,5 +113,3 @@ def log_duration(func):
             raise
 
     return wrapper
-
-

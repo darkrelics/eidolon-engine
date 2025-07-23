@@ -6,6 +6,12 @@ Parameters:
     Type: String
     Default: "eidolon"
     Description: "Name of the game"
+  DynamoDBAccessPolicyArn:
+    Type: String
+    Description: "ARN of the DynamoDB access policy"
+  CloudWatchPolicyArn:
+    Type: String
+    Description: "ARN of the CloudWatch access policy"
 
 Resources:
   ServerExecutionRole:
@@ -23,6 +29,8 @@ Resources:
             Action: "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - !Ref DynamoDBAccessPolicyArn
+        - !Ref CloudWatchPolicyArn
       Path: /
 
   LambdaExecutionRole:
@@ -38,6 +46,7 @@ Resources:
             Action: "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - !Ref DynamoDBAccessPolicyArn
       Path: /
 
   ServerInstanceProfile:

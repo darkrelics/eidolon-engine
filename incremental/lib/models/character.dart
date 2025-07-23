@@ -37,15 +37,18 @@ class Character {
     required this.lastUpdated,
   });
 
+  /// Parse a map of dynamic values to doubles
+  static Map<String, double> parseMapToDouble(Map<String, dynamic> rawMap) {
+    return rawMap.map((key, value) => MapEntry(key, (value as num).toDouble()));
+  }
+
+  /// Parse a map of dynamic values to integers
+  static Map<String, int> parseMapToInt(Map<String, dynamic> rawMap) {
+    return rawMap.map((key, value) => MapEntry(key, (value as num).toInt()));
+  }
+
   /// Create character from server response
   factory Character.fromJson(Map<String, dynamic> json) {
-    Map<String, double> parseMapToDouble(Map<String, dynamic> rawMap) {
-      return rawMap.map((key, value) => MapEntry(key, (value as num).toDouble()));
-    }
-
-    Map<String, int> parseMapToInt(Map<String, dynamic> rawMap) {
-      return rawMap.map((key, value) => MapEntry(key, (value as num).toInt()));
-    }
     // Parse attributes and skills, converting numbers to doubles
     final Map<String, double> parsedAttributes = parseMapToDouble(json['Attributes'] ?? {});
     final Map<String, double> parsedSkills = parseMapToDouble(json['Skills'] ?? {});
