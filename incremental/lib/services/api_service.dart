@@ -169,24 +169,37 @@ class ApiService {
     return characterList;
   }
 
-  /// Start a story segment
-  Future<ActiveSegment> startSegment({
+  /// Start a story for a character
+  Future<Map<String, dynamic>> startStory({
+    required String characterId,
     required String storyId,
-    required String segmentId,
   }) async {
+    debugPrint('ApiService: Starting story - characterId: $characterId, storyId: $storyId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/segment/start'),
+      Uri.parse('$baseUrl/stories/start'),
       headers: headers,
-      body: jsonEncode({'storyId': storyId, 'segmentId': segmentId}),
+      body: jsonEncode({'characterId': characterId, 'storyId': storyId}),
     );
 
+    debugPrint('ApiService: Start story response status: ${response.statusCode}');
+    debugPrint('ApiService: Start story response body: ${response.body}');
+
+    if (response.statusCode == 403) {
+      throw Exception('Story not available');
+    }
+    
+    if (response.statusCode == 409) {
+      throw Exception('Character is already in a story or game mode');
+    }
+
     if (response.statusCode != 200) {
-      throw Exception('Failed to start segment: ${response.body}');
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to start story');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return ActiveSegment.fromJson(json['segment'] as Map<String, dynamic>);
+    return json['segment'] as Map<String, dynamic>;
   }
 
   /// Conclude a story segment

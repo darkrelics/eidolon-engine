@@ -167,6 +167,8 @@ class CodeBuildStack(Stack):
                         f"{self.lambda_bucket.bucket_arn}/api-get-character.zip",
                         f"{self.lambda_bucket.bucket_arn}/api-list-characters.zip",
                         f"{self.lambda_bucket.bucket_arn}/api-delete-character.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-get-stories.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-start-story.zip",
                     ],
                 )
             )

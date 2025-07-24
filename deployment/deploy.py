@@ -528,6 +528,8 @@ class IncrementalDeploymentOrchestrator:
             "api-get-archetypes.zip",
             "api-get-character.zip",
             "api-list-characters.zip",
+            "api-get-stories.zip",
+            "api-start-story.zip",
             "cognito-new-player.zip",
             "cognito-delete-player.zip",
         ]

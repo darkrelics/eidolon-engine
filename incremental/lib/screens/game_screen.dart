@@ -578,16 +578,38 @@ class _ActionPanelState extends State<ActionPanel> {
 
   Future<void> _startStory(StoryMetadata story) async {
     try {
-      // TODO: Implement story start via API
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Starting ${story.title}...'),
         ),
       );
-      
+
+      // Call API to start the story
+      final segment = await _apiService.startStory(
+        characterId: widget.character.id,
+        storyId: story.storyId,
+      );
+
+      // Update character's story state with the segment info
       setState(() {
+        widget.character.storyState = {
+          'storyId': story.storyId,
+          'storyName': story.title,
+          'segmentId': segment['segmentId'],
+          'segmentType': segment['type'],
+          'segmentName': segment['shortStatus'] ?? 'In progress',
+          'timeRemaining': segment['timeRemaining'],
+        };
         _showStoryList = false;
       });
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Started: ${story.title}'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -730,7 +752,7 @@ class _StoryTypeChip extends StatelessWidget {
         icon = Icons.refresh;
         break;
       default:
-        backgroundColor = theme.colorScheme.surfaceVariant;
+        backgroundColor = theme.colorScheme.surfaceContainerHighest;
         icon = Icons.help_outline;
     }
     

@@ -36,7 +36,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 
 ### 3.1 DynamoDB Table Designs
 
-#### 3.1.1 Story Table (New)
+#### 3.1.1 Story Table
 
 ```python
 # Master story definitions
@@ -58,7 +58,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 }
 ```
 
-#### 3.1.2 Segments Table (New)
+#### 3.1.2 Segments Table
 
 ```python
 # Decision segment example
@@ -68,12 +68,13 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "SegmentType": "decision",
     "ShortStatus": "Choosing your path",
     "SegmentDuration": 300,               # 5 minutes to decide
-    "DecisionText": "You stand at the forest edge. The path splits into two directions.",
-    "DecisionOptions": {
-        "take-left-path": "seg-uuid-002a",
-        "follow-markers": "seg-uuid-002b"
+    "Narrative": "You stand at the forest edge. The path splits into two directions.",
+    "Options": ["Take the left path", "Follow the trail markers"],
+    "NextSegments": {
+        "Take the left path": "seg-uuid-002a",
+        "Follow the trail markers": "seg-uuid-002b"
     },
-    "DefaultDecision": "take-left-path"
+    "DefaultDecision": "Take the left path"
 }
 
 # Narrative segment example
@@ -153,7 +154,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 }
 ```
 
-#### 3.1.3 ActiveSegments Table (New)
+#### 3.1.3 ActiveSegments Table
 
 ```python
 # Tracks runtime segment instances - Narrative example
@@ -207,7 +208,7 @@ GSI: CompletionTimeIndex
   - Projection: ALL
 ```
 
-#### 3.1.4 Opponents Table (New)
+#### 3.1.4 Opponents Table
 
 ```python
 # Reusable opponent definitions
@@ -256,7 +257,7 @@ GSI: CompletionTimeIndex
 }
 ```
 
-#### 3.1.6 History Table (New)
+#### 3.1.6 History Table
 
 ```python
 # Tracks completed and abandoned story runs
@@ -388,11 +389,14 @@ Request: {
 }
 Response: {
     "segment": {
-        "segmentId": "seg-001",
-        "type": "decision",
-        "content": "You stand at the forest edge...",
-        "options": [...],
-        "timeRemaining": 300
+        "segmentId": "active-seg-uuid",
+        "storyId": "forest-adventure",
+        "type": "decision|narrative|combat",
+        "timeRemaining": 300,
+        // Additional fields based on type:
+        // Decision: "content", "options"
+        // Narrative: "shortStatus", "narrative" 
+        // Combat: "shortStatus", "opponentId"
     }
 }
 Error Cases:
@@ -495,15 +499,23 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 ```python
 """Initialize story participation."""
 # Key Operations:
-- Verify character GameMode is "None"
-- Set GameMode to "Incremental" (atomic update)
-- Create first ActiveSegments record
-- Remove story from AvailableStories list
-- Enable polling rule if first active segment
-- Return first segment details
+- Verify character ownership and GameMode is "None"
+- Validate story is in character's AvailableStories list
+- Load story metadata and first segment from DynamoDB
+- Atomically update character:
+  - Set GameMode to "Incremental"
+  - Remove story from AvailableStories
+- Create ActiveSegments record with:
+  - Unique ActiveSegmentID
+  - Start/End times based on segment duration
+  - TTL for auto-cleanup (24 hours)
+- Create History table entry for tracking
+- Return formatted segment response based on type
 # Error Handling:
-- Use eidolon.responses.error_response for conflicts
-- Log with eidolon.logger
+- 401: Authentication failures
+- 403: Story not available to character
+- 409: Character already in game mode or state conflict
+- 400: Invalid request parameters
 ```
 
 #### 5.1.3 api_submit_decision

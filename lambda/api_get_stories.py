@@ -267,7 +267,7 @@ def lambda_handler(event, context):
                     "description": story.get("Description", ""),
                     "type": story_type,
                     "available": cooldown == 0,
-                    "cooldownRemaining": max(0, cooldown),
+                    "cooldownRemaining": max(0, cooldown) if cooldown is not None else 0,
                     "estimatedDuration": int(story.get("EstimatedDuration", 0))
                 }
                 
@@ -299,8 +299,11 @@ def lambda_handler(event, context):
             },
         )
 
-        response_data = decimal_to_float({"stories": stories})
-        return cors_handler.add_cors_headers(create_response(200, response_data), event)
+        response_dict = {"stories": stories}
+        # decimal_to_float preserves dict structure, just converts Decimal to float
+        response_data = decimal_to_float(response_dict)
+        # Type assertion - we know response_data is a dict because we passed a dict
+        return cors_handler.add_cors_headers(create_response(200, response_data), event)  # type: ignore
 
     except Exception as err:
         logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)

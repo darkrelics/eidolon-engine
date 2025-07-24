@@ -124,6 +124,8 @@ def validate_config(config: dict) -> None:
         "characters_table",
         "archetypes_table",
         "story_table",
+        "segments_table",
+        "active_segments_table",
         "history_table",
         "cognito_user_pool_arn",
         "dependencies_layer_arn",
@@ -171,6 +173,8 @@ class LambdaStack(cdk.Stack):
         self.archetypes_table = config.get("archetypes_table", "")
         self.items_table = config.get("items_table", "")
         self.story_table = config.get("story_table", "")
+        self.segments_table = config.get("segments_table", "")
+        self.active_segments_table = config.get("active_segments_table", "")
         self.history_table = config.get("history_table", "")
         self.cognito_user_pool_arn = config.get("cognito_user_pool_arn", "")
         self.dependencies_layer_arn = config.get("dependencies_layer_arn", "")
@@ -381,6 +385,22 @@ class LambdaStack(cdk.Stack):
             dependencies_layer,
         )
 
+        # Start Story Lambda
+        self.start_story_function = self.create_lambda_function(
+            "api-start-story",
+            "api_start_story.lambda_handler",
+            {
+                "CHARACTERS_TABLE": self.characters_table,
+                "STORY_TABLE": self.story_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "HISTORY_TABLE": self.history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Starts a story for a character",
+            dependencies_layer,
+        )
+
     def configure_api_routes(self) -> None:
         """Configure API Gateway routes and methods."""
         # Archetypes endpoint
@@ -441,6 +461,17 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
+        # Nested resources under /stories
+        start_resource = stories_resource.add_resource("start")
+        
+        # POST /stories/start - Start a story
+        start_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.start_story_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
     def create_log_groups(self) -> None:
         """Create CloudWatch log groups for all Lambda functions."""
         log_configs: list = [
@@ -452,6 +483,7 @@ class LambdaStack(cdk.Stack):
             ("cognito-new-player-logs", self.cognito_new_player_function),
             ("cognito-delete-player-logs", self.cognito_delete_player_function),
             ("get-stories-logs", self.get_stories_function),
+            ("start-story-logs", self.start_story_function),
         ]
 
         for log_id, function in log_configs:

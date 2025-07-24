@@ -14,7 +14,7 @@ class Character {
   final Map<String, int> resources;
   final Map<String, String> inventory; // MUD-compatible: slot -> itemId
   final Map<String, dynamic> progress; // Story progress flags
-  final Map<String, dynamic>? storyState; // Current story position
+  Map<String, dynamic>? storyState; // Current story position
   final String gameMode; // "MUD" or "Incremental"
   final DateTime lastUpdated;
   final List<String> availableStories;

@@ -259,7 +259,7 @@ New Lambda functions following existing patterns:
 
 #### 4.2.2 Database Schema (DynamoDB)
 
-**Story Table (New)**
+**Story Table**
 
 ```
 {
@@ -285,7 +285,7 @@ New Lambda functions following existing patterns:
 }
 ```
 
-**ActiveSegments Table (New)**
+**ActiveSegments Table**
 
 ```
 {
@@ -321,7 +321,7 @@ _Note: Player story participation state is tracked in the ActiveSegments table, 
 }
 ```
 
-**History Table (New)**
+**History Table**
 
 ```
 {
@@ -351,7 +351,7 @@ _Note: Player story participation state is tracked in the ActiveSegments table, 
 }
 ```
 
-**Opponents Table (New)**
+**Opponents Table**
 
 ```
 {
