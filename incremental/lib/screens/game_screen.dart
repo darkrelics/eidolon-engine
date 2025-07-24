@@ -397,58 +397,358 @@ class CharacterPanel extends StatelessWidget {
   }
 }
 
-class ActionPanel extends StatelessWidget {
+class ActionPanel extends StatefulWidget {
   final Character character;
 
   const ActionPanel({super.key, required this.character});
 
   @override
+  State<ActionPanel> createState() => _ActionPanelState();
+}
+
+class _ActionPanelState extends State<ActionPanel> {
+  late ApiService _apiService;
+  Future<List<StoryMetadata>>? _storiesFuture;
+  bool _showStoryList = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiService = ApiService(authService: AuthService.instance);
+  }
+
+  void _toggleStoryList() {
+    setState(() {
+      _showStoryList = !_showStoryList;
+      if (_showStoryList && _storiesFuture == null) {
+        _loadStories();
+      }
+    });
+  }
+
+  void _loadStories() {
+    setState(() {
+      _storiesFuture = _apiService.getStories(widget.character.id);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text('Current Action', style: theme.textTheme.headlineSmall),
+          Text('Adventures', style: theme.textTheme.headlineSmall),
           const SizedBox(height: 32),
 
           // Check if character has active story
-          if (character.storyState != null &&
-              character.storyState!['segmentId'] != null) ...[
-            LinearProgressIndicator(
-              value: 0.3, // This would be calculated from actual progress
-              minHeight: 20,
-              backgroundColor: Theme.of(
-                context,
-              ).colorScheme.surfaceContainerHighest,
-            ),
-            const SizedBox(height: 16),
-            Text('Story: ${character.storyState!['storyName'] ?? 'Unknown'}'),
-            Text(
-              'Segment: ${character.storyState!['segmentName'] ?? 'Unknown'}',
-            ),
+          if (widget.character.storyState != null &&
+              widget.character.storyState!['segmentId'] != null) ...[
+            _buildActiveStory(theme),
+          ] else if (_showStoryList) ...[
+            _buildStorySelection(theme),
           ] else ...[
-            Icon(
-              Icons.explore,
-              size: 64,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No active story',
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: () {
-                // TODO: Navigate to story selection
-              },
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Start Adventure'),
+            _buildNoActiveStory(theme),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveStory(ThemeData theme) {
+    return Column(
+      children: [
+        LinearProgressIndicator(
+          value: 0.3, // This would be calculated from actual progress
+          minHeight: 20,
+          backgroundColor: theme.colorScheme.surfaceContainerHighest,
+        ),
+        const SizedBox(height: 16),
+        Text('Story: ${widget.character.storyState!['storyName'] ?? 'Unknown'}'),
+        Text(
+          'Segment: ${widget.character.storyState!['segmentName'] ?? 'Unknown'}',
+        ),
+        const SizedBox(height: 24),
+        OutlinedButton.icon(
+          onPressed: () {
+            // TODO: Implement abandon story
+          },
+          icon: const Icon(Icons.exit_to_app),
+          label: const Text('Abandon Story'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNoActiveStory(ThemeData theme) {
+    return Column(
+      children: [
+        Icon(
+          Icons.explore,
+          size: 64,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'No active story',
+          style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 24),
+        FilledButton.icon(
+          onPressed: _toggleStoryList,
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('Choose Adventure'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStorySelection(ThemeData theme) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Available Stories', style: theme.textTheme.titleLarge),
+            IconButton(
+              onPressed: _toggleStoryList,
+              icon: const Icon(Icons.close),
             ),
           ],
+        ),
+        const SizedBox(height: 16),
+        if (_storiesFuture == null)
+          const CircularProgressIndicator()
+        else
+          FutureBuilder<List<StoryMetadata>>(
+            future: _storiesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const CircularProgressIndicator();
+              }
+
+              if (snapshot.hasError) {
+                return Column(
+                  children: [
+                    const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                    const SizedBox(height: 8),
+                    Text('Failed to load stories'),
+                    TextButton(
+                      onPressed: _loadStories,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                );
+              }
+
+              final stories = snapshot.data ?? [];
+              
+              if (stories.isEmpty) {
+                return Column(
+                  children: [
+                    Icon(
+                      Icons.book_outlined,
+                      size: 48,
+                      color: theme.colorScheme.outline,
+                    ),
+                    const SizedBox(height: 8),
+                    Text('No stories available'),
+                  ],
+                );
+              }
+
+              return Column(
+                children: stories.map((story) => 
+                  _StoryCard(
+                    story: story,
+                    onTap: story.available
+                        ? () => _startStory(story)
+                        : null,
+                  ),
+                ).toList(),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Future<void> _startStory(StoryMetadata story) async {
+    try {
+      // TODO: Implement story start via API
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Starting ${story.title}...'),
+        ),
+      );
+      
+      setState(() {
+        _showStoryList = false;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to start story: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
+
+class _StoryCard extends StatelessWidget {
+  final StoryMetadata story;
+  final VoidCallback? onTap;
+
+  const _StoryCard({
+    required this.story,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isAvailable = story.available;
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      story.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: isAvailable
+                            ? null
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  if (!isAvailable)
+                    Icon(
+                      Icons.lock_outline,
+                      size: 20,
+                      color: theme.colorScheme.outline,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                story.description,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _StoryTypeChip(type: story.type),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.timer_outlined,
+                    size: 14,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${story.estimatedDuration ~/ 60} min',
+                    style: theme.textTheme.labelSmall,
+                  ),
+                  if (!isAvailable && story.cooldownRemaining > 0) ...[
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.schedule,
+                      size: 14,
+                      color: theme.colorScheme.error,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatCooldown(story.cooldownRemaining),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatCooldown(int seconds) {
+    if (seconds < 60) {
+      return '$seconds sec';
+    } else if (seconds < 3600) {
+      return '${seconds ~/ 60} min';
+    } else if (seconds < 86400) {
+      return '${seconds ~/ 3600} hr';
+    } else {
+      return '${seconds ~/ 86400} days';
+    }
+  }
+}
+
+class _StoryTypeChip extends StatelessWidget {
+  final String type;
+
+  const _StoryTypeChip({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    Color backgroundColor;
+    IconData icon;
+    
+    switch (type.toLowerCase()) {
+      case 'one-time':
+        backgroundColor = theme.colorScheme.primaryContainer;
+        icon = Icons.stars;
+        break;
+      case 'daily':
+        backgroundColor = theme.colorScheme.secondaryContainer;
+        icon = Icons.today;
+        break;
+      case 'repeatable':
+        backgroundColor = theme.colorScheme.tertiaryContainer;
+        icon = Icons.refresh;
+        break;
+      default:
+        backgroundColor = theme.colorScheme.surfaceVariant;
+        icon = Icons.help_outline;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12),
+          const SizedBox(width: 2),
+          Text(
+            type,
+            style: theme.textTheme.labelSmall,
+          ),
         ],
       ),
     );

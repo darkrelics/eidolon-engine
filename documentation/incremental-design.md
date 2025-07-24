@@ -362,13 +362,19 @@ Response: {
         {
             "storyId": "forest-adventure",
             "title": "The Whispering Woods",
-            "type": "daily",
+            "description": "A mysterious forest beckons adventurers",
+            "type": "daily",  // one-time, daily, or repeatable
             "available": true,
-            "cooldownRemaining": 0,
-            "estimatedDuration": 3600
+            "cooldownRemaining": 0,  // seconds until available
+            "estimatedDuration": 3600  // seconds
         }
     ]
 }
+
+Notes:
+- Stories are filtered by character prerequisites
+- Cooldown logic enforces story type restrictions
+- One-time stories disappear after successful completion
 ```
 
 **POST /stories/start**
@@ -474,10 +480,14 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 """Get available stories for a character."""
 # Key Operations:
 - Fetch character record to get AvailableStories list
-- Load story definitions from cache or DynamoDB
-- Check participation history for cooldowns
-- Filter by prerequisites
-- Return formatted list using eidolon.responses
+- Load story definitions from Story table
+- Check History table for cooldowns based on story type:
+  - one-time: Check if completed successfully (permanent cooldown)
+  - daily: Calculate seconds until midnight UTC
+  - repeatable: Always available (cooldown = 0)
+- Filter by prerequisites (minSkills, requiredItems, requiredRooms)
+- Return formatted list with availability status
+- Uses eidolon.responses.create_response for consistent formatting
 ```
 
 #### 5.1.2 api_start_story

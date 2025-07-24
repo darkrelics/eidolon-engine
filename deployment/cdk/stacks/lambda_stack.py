@@ -123,6 +123,8 @@ def validate_config(config: dict) -> None:
         "players_table",
         "characters_table",
         "archetypes_table",
+        "story_table",
+        "history_table",
         "cognito_user_pool_arn",
         "dependencies_layer_arn",
         "domain_name",
@@ -168,6 +170,8 @@ class LambdaStack(cdk.Stack):
         self.characters_table = config.get("characters_table", "")
         self.archetypes_table = config.get("archetypes_table", "")
         self.items_table = config.get("items_table", "")
+        self.story_table = config.get("story_table", "")
+        self.history_table = config.get("history_table", "")
         self.cognito_user_pool_arn = config.get("cognito_user_pool_arn", "")
         self.dependencies_layer_arn = config.get("dependencies_layer_arn", "")
         self.domain_name = config.get("domain_name", "darkrelics.net")
@@ -208,6 +212,7 @@ class LambdaStack(cdk.Stack):
         # Create all Lambda functions
         self.create_character_management_functions(dependencies_layer)
         self.create_cognito_trigger_functions(dependencies_layer)
+        self.create_incremental_story_functions(dependencies_layer)
 
         # Configure API routes
         self.configure_api_routes()
@@ -356,6 +361,26 @@ class LambdaStack(cdk.Stack):
             dependencies_layer,
         )
 
+    def create_incremental_story_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
+        """Create Lambda functions for incremental story management.
+
+        Args:
+            dependencies_layer: Lambda layer
+        """
+        # Get Stories Lambda
+        self.get_stories_function = self.create_lambda_function(
+            "api-get-stories",
+            "api_get_stories.lambda_handler",
+            {
+                "CHARACTERS_TABLE": self.characters_table,
+                "STORY_TABLE": self.story_table,
+                "HISTORY_TABLE": self.history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Returns available stories for a character",
+            dependencies_layer,
+        )
+
     def configure_api_routes(self) -> None:
         """Configure API Gateway routes and methods."""
         # Archetypes endpoint
@@ -405,6 +430,17 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
+        # Stories endpoints
+        stories_resource = self.api.root.add_resource("stories")
+
+        # GET /stories?characterId=xxx - Get available stories for character
+        stories_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_stories_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
     def create_log_groups(self) -> None:
         """Create CloudWatch log groups for all Lambda functions."""
         log_configs: list = [
@@ -415,6 +451,7 @@ class LambdaStack(cdk.Stack):
             ("delete-character-logs", self.delete_character_function),
             ("cognito-new-player-logs", self.cognito_new_player_function),
             ("cognito-delete-player-logs", self.cognito_delete_player_function),
+            ("get-stories-logs", self.get_stories_function),
         ]
 
         for log_id, function in log_configs:
@@ -456,4 +493,11 @@ class LambdaStack(cdk.Stack):
             "CharactersEndpoint",
             value=self.api.url_for_path("/characters"),
             description="API endpoint for characters",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "StoriesEndpoint",
+            value=self.api.url_for_path("/stories"),
+            description="API endpoint for stories",
         )

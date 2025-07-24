@@ -197,10 +197,12 @@ Challenges in story segments use the MUD's XP mechanics:
 
 ### Lambda Functions
 
-- `POST /start-segment`: Begin a story segment
-- `POST /conclude-segment`: Complete segment and claim rewards
-- `POST /abandon`: Cancel current story run with penalty
-- `POST /rest`: Rest instead of continuing story
+- `GET /stories?characterId=xxx`: Get available stories for a character
+- `POST /stories/start`: Begin a story for the character
+- `GET /stories/current?characterId=xxx`: Get active story state
+- `POST /segments/decision`: Submit player decision for current segment
+- `GET /segments/outcome?segmentId=xxx`: Get segment outcome after completion
+- `POST /stories/abandon`: Cancel current story run with penalty
 
 ### Data Models
 
@@ -216,6 +218,9 @@ Data models follow the story.schema.json specification and DynamoDB table struct
 - API service for Lambda calls
 - DynamoDB table definitions
 - Authentication integration
+- GET /stories Lambda function implementation
+- Story selection UI integrated into game screen
+- API Gateway deployment configuration
 
 ### Next Steps
 

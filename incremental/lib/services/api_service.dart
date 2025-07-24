@@ -238,13 +238,17 @@ class ApiService {
     return Character.fromJson(json['character'] as Map<String, dynamic>);
   }
 
-  /// Get available stories
-  Future<List<StoryMetadata>> getStories() async {
+  /// Get available stories for a character
+  Future<List<StoryMetadata>> getStories(String characterId) async {
+    debugPrint('ApiService: Getting stories for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/story'),
+      Uri.parse('$baseUrl/stories?characterId=$characterId'),
       headers: headers,
     );
+
+    debugPrint('ApiService: Get stories response status: ${response.statusCode}');
+    debugPrint('ApiService: Get stories response body: ${response.body}');
 
     if (response.statusCode != 200) {
       throw Exception('Failed to get stories: ${response.body}');
@@ -316,33 +320,33 @@ class ArchetypeInfo {
 
 /// Story metadata for browsing
 class StoryMetadata {
-  final String id;
-  final String name;
+  final String storyId;
+  final String title;
   final String description;
-  final String author;
-  final List<String> tags;
+  final String type;
+  final bool available;
+  final int cooldownRemaining;
   final int estimatedDuration;
-  final int minLevel;
 
   StoryMetadata({
-    required this.id,
-    required this.name,
+    required this.storyId,
+    required this.title,
     required this.description,
-    required this.author,
-    required this.tags,
+    required this.type,
+    required this.available,
+    required this.cooldownRemaining,
     required this.estimatedDuration,
-    required this.minLevel,
   });
 
   factory StoryMetadata.fromJson(Map<String, dynamic> json) {
     return StoryMetadata(
-      id: json['id'] as String,
-      name: json['name'] as String,
+      storyId: json['storyId'] as String,
+      title: json['title'] as String,
       description: json['description'] as String,
-      author: json['author'] as String? ?? 'Unknown',
-      tags: List<String>.from(json['tags'] ?? []),
-      estimatedDuration: json['estimatedDuration'] as int? ?? 0,
-      minLevel: json['minLevel'] as int? ?? 0,
+      type: json['type'] as String,
+      available: json['available'] as bool,
+      cooldownRemaining: json['cooldownRemaining'] as int,
+      estimatedDuration: json['estimatedDuration'] as int,
     );
   }
 }

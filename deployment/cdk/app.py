@@ -640,6 +640,8 @@ class EidolonEngineApp:
                 "characters_table": unified_tables["Characters"],
                 "archetypes_table": unified_tables["Archetypes"],
                 "items_table": unified_tables.get("Items", ""),
+                "story_table": unified_tables.get("Story", ""),
+                "history_table": unified_tables.get("History", ""),
                 "cognito_user_pool_arn": (
                     self.cognito_stack.user_pool.user_pool_arn
                     if self.cognito_stack
@@ -699,6 +701,8 @@ class EidolonEngineApp:
             "Story": "story",
             "Segments": "segments",
             "ActiveSegments": "active_segments",
+            "Opponents": "opponents",
+            "History": "history",
         }
 
         configured_tables = params.get("dynamodb_tables", {})

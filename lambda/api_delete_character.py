@@ -26,7 +26,7 @@ from eidolon.cors import cors_handler
 from eidolon.dynamo import delete_item, get_item, get_table, update_item_with_condition
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, get_query_parameter
-from eidolon.responses import error_response, success_response
+from eidolon.responses import create_response, error_response
 
 # Configure logging
 logger = get_logger(__name__)
@@ -251,7 +251,7 @@ def lambda_handler(event, context) -> dict:
         # Return success response
         logger.info("Lambda response", extra={"status_code": 200})
         return cors_handler.add_cors_headers(
-            success_response({"message": "Character deleted successfully", "characterName": character_name}), event
+            create_response(200, {"message": "Character deleted successfully", "characterName": character_name}), event
         )
 
     except Exception as err:
