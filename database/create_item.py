@@ -19,8 +19,12 @@ This module adds an item based on a prototype to a room.
 """
 
 import os
+import sys
 import uuid
 from decimal import Decimal
+
+# Add parent directory to path to import eidolon modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from eidolon.dynamo import delete_item, get_item, get_table, put_item, update_item
 

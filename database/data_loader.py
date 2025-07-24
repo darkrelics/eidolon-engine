@@ -26,6 +26,10 @@ import argparse
 import json
 import logging
 import os
+import sys
+
+# Add parent directory to path to import eidolon modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from eidolon.dynamo import convert_to_decimal, get_table
 from eidolon.validation_utils import validate_character_name

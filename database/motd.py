@@ -20,8 +20,12 @@ This module adds a Message of the Day (MOTD) to the DynamoDB database.
 
 import argparse
 import os
+import sys
 import uuid
 from datetime import datetime
+
+# Add parent directory to path to import eidolon modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from eidolon.dynamo import get_table, put_item
 
