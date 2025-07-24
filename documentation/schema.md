@@ -384,7 +384,7 @@ end
 | `SegmentID`       | `STRING` | UUID of the segment (sort key).                             |
 | `SegmentType`     | `STRING` | Type: decision, narrative, or combat.                       |
 | `ShortStatus`     | `STRING` | Brief status text shown during segment.                     |
-| `Duration`        | `NUMBER` | Time in seconds for this segment.                           |
+| `SegmentDuration` | `NUMBER` | Time in seconds for this segment.                           |
 | `DecisionText`    | `STRING` | For decision segments: the choice presented.                |
 | `DecisionOptions` | `MAP`    | For decision segments: map of option ID to next segment ID. |
 | `NextSegmentID`   | `STRING` | For narrative/combat segments: UUID of the next segment.    |

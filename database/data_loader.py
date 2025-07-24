@@ -416,7 +416,7 @@ def store_story(story_data):
                 "SegmentID": segment["SegmentID"],
                 "SegmentType": segment["SegmentType"],
                 "ShortStatus": segment["ShortStatus"],
-                "Duration": segment["Duration"],
+                "SegmentDuration": segment["SegmentDuration"],
             }
 
             # Add optional fields based on segment type
@@ -664,7 +664,7 @@ def display_story(story_data):
             print(f"  Segment ID: {segment.get('SegmentID')}")
             print(f"    Type: {segment.get('SegmentType')}")
             print(f"    Status: {segment.get('ShortStatus')}")
-            print(f"    Duration: {segment.get('Duration')} seconds")
+            print(f"    Duration: {segment.get('SegmentDuration')} seconds")
 
             if segment.get("SegmentType") == "decision":
                 print(f"    Decision Text: {segment.get('DecisionText', 'None')}")

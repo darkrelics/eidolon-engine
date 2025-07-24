@@ -66,6 +66,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (mounted && authState.isAuthenticated) {
         _handleNavigation(context, widget.redirectRoute, widget.redirectArgs);
+      } else if (mounted && authState.message.isNotEmpty) {
+        // Show the specific error message from AuthState
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authState.message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } catch (e) {
       debugPrint('Login error: $e');

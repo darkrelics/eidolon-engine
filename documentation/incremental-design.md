@@ -67,7 +67,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "SegmentID": "seg-uuid-001",          # SK
     "SegmentType": "decision",
     "ShortStatus": "Choosing your path",
-    "Duration": 300,                      # 5 minutes to decide
+    "SegmentDuration": 300,               # 5 minutes to decide
     "DecisionText": "You stand at the forest edge. The path splits into two directions.",
     "DecisionOptions": {
         "take-left-path": "seg-uuid-002a",
@@ -82,7 +82,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "SegmentID": "seg-uuid-002a",         # SK
     "SegmentType": "narrative",
     "ShortStatus": "Navigating the moonlit path",
-    "Duration": 600,                      # 10 minutes
+    "SegmentDuration": 600,               # 10 minutes
     "NextSegmentID": "seg-uuid-003",     # Single linked list
     "Challenges": [
         {"attribute": "Agility", "skill": "Perception", "difficulty": 8, "attempts": 2},
@@ -118,7 +118,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "SegmentID": "seg-uuid-combat-001",   # SK
     "SegmentType": "combat",
     "ShortStatus": "Fighting the goblin scout",
-    "Duration": 120,                      # 2 minutes for combat
+    "SegmentDuration": 120,               # 2 minutes for combat
     "NextSegmentID": "seg-uuid-004",
     "Combat": {
         "opponentId": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",

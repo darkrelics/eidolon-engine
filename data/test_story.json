@@ -21,7 +21,7 @@
       "SegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
       "SegmentType": "narrative",
       "ShortStatus": "Entering the forest",
-      "Duration": 60,
+      "SegmentDuration": 60,
       "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
       "Challenges": [
         {
@@ -70,7 +70,7 @@
       "SegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
       "SegmentType": "decision",
       "ShortStatus": "Choosing your path",
-      "Duration": 60,
+      "SegmentDuration": 60,
       "DecisionText": "The forest path splits into two directions. To the left, you can hear the sound of running water - likely the babbling brook. To the right, the path seems to lead toward denser vegetation. Which way do you go?",
       "DecisionOptions": {
         "left": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
@@ -83,7 +83,7 @@
       "SegmentID": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
       "SegmentType": "narrative",
       "ShortStatus": "Following the brook",
-      "Duration": 60,
+      "SegmentDuration": 60,
       "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
       "Challenges": [
         {
@@ -131,7 +131,7 @@
       "SegmentID": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
       "SegmentType": "narrative",
       "ShortStatus": "Pushing through the thicket",
-      "Duration": 60,
+      "SegmentDuration": 60,
       "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
       "Challenges": [
         {
@@ -179,7 +179,7 @@
       "SegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
       "SegmentType": "combat",
       "ShortStatus": "Fighting the goblin scout",
-      "Duration": 90,
+      "SegmentDuration": 90,
       "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
       "Combat": {
         "opponentId": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
@@ -225,7 +225,7 @@
       "SegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
       "SegmentType": "decision",
       "ShortStatus": "Following the goblin's trail",
-      "Duration": 60,
+      "SegmentDuration": 60,
       "DecisionText": "After the encounter with the goblin, you notice tracks leading deeper into the forest. You could follow them to investigate further, or you could take a safer path around through the fern gully. What do you do?",
       "DecisionOptions": {
         "follow": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
@@ -238,7 +238,7 @@
       "SegmentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
       "SegmentType": "combat",
       "ShortStatus": "Fighting the goblin warrior in the dark",
-      "Duration": 120,
+      "SegmentDuration": 120,
       "NextSegmentID": null,
       "Combat": {
         "opponentId": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
@@ -293,7 +293,7 @@
       "SegmentID": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
       "SegmentType": "narrative",
       "ShortStatus": "Taking the long way around",
-      "Duration": 60,
+      "SegmentDuration": 60,
       "NextSegmentID": null,
       "Challenges": [
         {
