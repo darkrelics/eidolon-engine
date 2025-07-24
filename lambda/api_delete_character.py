@@ -231,7 +231,8 @@ def lambda_handler(event, context) -> dict:
         # Extract player ID from Cognito authorizer
         player_id, auth_error = extract_player_id(event)
         if auth_error:
-            return auth_error
+            logger.error("Authentication failed", extra={"error": auth_error})
+            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
 
         # Get character ID from query parameters
         character_id, error_msg = get_query_parameter(event, "characterId", required=True)
