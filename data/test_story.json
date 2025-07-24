@@ -1,0 +1,347 @@
+{
+  "story": {
+    "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+    "Title": "The Goblin's Ambush",
+    "Description": "A mysterious path through the Vedant Forest leads to an unexpected encounter.",
+    "NarrativeText": "You've heard rumors of strange happenings in the Vedant Forest. Local villagers speak of missing travelers and eerie sounds at night. Armed with courage and curiosity, you decide to investigate the old forest path that leads to an abandoned campsite deep in the woods.",
+    "StoryType": "repeatable",
+    "EstimatedDuration": 300,
+    "Prerequisites": {
+      "minSkills": {},
+      "requiredItems": [],
+      "requiredRooms": []
+    },
+    "FirstSegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+    "CreatedAt": "2024-01-20T10:00:00Z",
+    "Version": 1
+  },
+  "segments": [
+    {
+      "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+      "SegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "SegmentType": "narrative",
+      "ShortStatus": "Entering the forest",
+      "Duration": 60,
+      "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "Challenges": [
+        {
+          "attribute": "Perception",
+          "skill": "Investigation",
+          "difficulty": 7,
+          "attempts": 3
+        }
+      ],
+      "Results": {
+        "death": {
+          "narrative": "As you enter the forest, you fail to notice the pit trap covered by leaves. You fall to your death in the darkness below.",
+          "effects": {
+            "room": 1
+          }
+        },
+        "failure": {
+          "narrative": "You stumble into the forest, completely oblivious to your surroundings. You trip over roots and scratch yourself on thorns, but eventually find yourself on a forest path.",
+          "effects": {
+            "room": 2
+          }
+        },
+        "minimal": {
+          "narrative": "You cautiously enter the forest. While you don't notice anything particularly unusual, you manage to avoid the worst hazards and find yourself on a well-worn path.",
+          "effects": {
+            "room": 2
+          }
+        },
+        "normal": {
+          "narrative": "Your keen senses serve you well as you enter the forest. You spot and avoid several natural hazards, and notice fresh tracks on the path ahead. Someone - or something - has passed this way recently.",
+          "effects": {
+            "room": 2
+          }
+        },
+        "exceptional": {
+          "narrative": "Your exceptional awareness reveals much about the forest. You not only avoid all hazards but also discover a small cache hidden by previous travelers containing a healing potion. The tracks you spot are definitely goblinoid in nature.",
+          "effects": {
+            "room": 2,
+            "items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483"]
+          }
+        }
+      }
+    },
+    {
+      "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+      "SegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "SegmentType": "decision",
+      "ShortStatus": "Choosing your path",
+      "Duration": 60,
+      "DecisionText": "The forest path splits into two directions. To the left, you can hear the sound of running water - likely the babbling brook. To the right, the path seems to lead toward denser vegetation. Which way do you go?",
+      "DecisionOptions": {
+        "left": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+        "right": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a"
+      },
+      "DefaultDecision": "left"
+    },
+    {
+      "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+      "SegmentID": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+      "SegmentType": "narrative",
+      "ShortStatus": "Following the brook",
+      "Duration": 60,
+      "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+      "Challenges": [
+        {
+          "attribute": "Agility",
+          "skill": "Stealth",
+          "difficulty": 8,
+          "attempts": 2
+        }
+      ],
+      "Results": {
+        "death": {
+          "narrative": "You follow the sound of water but slip on the muddy bank. Your head strikes a rock as you fall into the brook, and darkness takes you.",
+          "effects": {
+            "room": 5
+          }
+        },
+        "failure": {
+          "narrative": "You crash through the underbrush like a charging bull, making enough noise to alert everything within a mile. As you reach the brook, you see a goblin scout who has clearly heard you coming.",
+          "effects": {
+            "room": 5
+          }
+        },
+        "minimal": {
+          "narrative": "You try to move quietly but step on several twigs. You reach the babbling brook and spot a goblin filling waterskins, who turns at the sound of your approach.",
+          "effects": {
+            "room": 5
+          }
+        },
+        "normal": {
+          "narrative": "Moving with reasonable stealth, you approach the brook. You spot a goblin scout before it notices you, giving you a moment to prepare for the encounter.",
+          "effects": {
+            "room": 5
+          }
+        },
+        "exceptional": {
+          "narrative": "Like a shadow, you glide through the forest. You not only spot the goblin at the brook but also notice its crude camp nearby. You have complete tactical advantage.",
+          "effects": {
+            "room": 5
+          }
+        }
+      }
+    },
+    {
+      "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+      "SegmentID": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
+      "SegmentType": "narrative",
+      "ShortStatus": "Pushing through the thicket",
+      "Duration": 60,
+      "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+      "Challenges": [
+        {
+          "attribute": "Strength",
+          "skill": "Climbing",
+          "difficulty": 6,
+          "attempts": 3
+        }
+      ],
+      "Results": {
+        "death": {
+          "narrative": "The tangled thicket proves too much. As you struggle through the thorns, you disturb a nest of venomous snakes. Multiple bites seal your fate.",
+          "effects": {
+            "room": 6
+          }
+        },
+        "failure": {
+          "narrative": "You struggle mightily against the dense vegetation, getting thoroughly scratched and exhausted. When you finally break through, you practically fall into a goblin's patrol route.",
+          "effects": {
+            "room": 6
+          }
+        },
+        "minimal": {
+          "narrative": "With great effort, you push through the thicket. You're tired and have a few scratches, but you emerge to find a goblin warrior examining tracks - possibly yours.",
+          "effects": {
+            "room": 6
+          }
+        },
+        "normal": {
+          "narrative": "Your strength serves you well as you push through the vegetation. You emerge relatively unscathed and spot a goblin before it spots you.",
+          "effects": {
+            "room": 6
+          }
+        },
+        "exceptional": {
+          "narrative": "You power through the thicket like it's nothing, even finding a game trail that makes passage easier. On the other side, you spot a goblin resting against a tree, completely unaware of your presence.",
+          "effects": {
+            "room": 6
+          }
+        }
+      }
+    },
+    {
+      "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+      "SegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+      "SegmentType": "combat",
+      "ShortStatus": "Fighting the goblin scout",
+      "Duration": 90,
+      "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
+      "Combat": {
+        "opponentId": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+        "maxRounds": 12,
+        "environment": {}
+      },
+      "Results": {
+        "death": {
+          "narrative": "The goblin proves too quick and cunning. Its rusty blade finds gaps in your defense repeatedly. As you fall to your knees, the goblin's cackling is the last sound you hear.",
+          "effects": {}
+        },
+        "failure": {
+          "narrative": "The battle drags on too long. Exhausted and wounded, you're forced to retreat as the goblin presses its advantage. You stumble away, leaving the creature victorious.",
+          "effects": {
+            "room": 7
+          }
+        },
+        "minimal": {
+          "narrative": "After a desperate struggle, you finally strike down the goblin. Your wounds are severe - deep gashes that will take time to heal. The creature's pouch contains some useful items.",
+          "effects": {
+            "room": 7,
+            "items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483"]
+          }
+        },
+        "normal": {
+          "narrative": "Your combat training prevails. The goblin falls with a gurgle, leaving you with painful but manageable wounds. Among its possessions, you find a healing potion and its crude bow.",
+          "effects": {
+            "room": 7,
+            "items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483", "d47ac10b-58cc-4372-a567-0e02b2c3d481"]
+          }
+        },
+        "exceptional": {
+          "narrative": "You dance around the goblin's clumsy attacks, striking with precision. The creature falls without landing a single blow on you. Its belongings are now yours for the taking.",
+          "effects": {
+            "room": 7,
+            "items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483", "d47ac10b-58cc-4372-a567-0e02b2c3d481"]
+          }
+        }
+      }
+    },
+    {
+      "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+      "SegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
+      "SegmentType": "decision",
+      "ShortStatus": "Following the goblin's trail",
+      "Duration": 60,
+      "DecisionText": "After the encounter with the goblin, you notice tracks leading deeper into the forest. You could follow them to investigate further, or you could take a safer path around through the fern gully. What do you do?",
+      "DecisionOptions": {
+        "follow": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+        "around": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e"
+      },
+      "DefaultDecision": "around"
+    },
+    {
+      "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+      "SegmentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+      "SegmentType": "combat",
+      "ShortStatus": "Fighting the goblin warrior in the dark",
+      "Duration": 120,
+      "NextSegmentID": null,
+      "Combat": {
+        "opponentId": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
+        "maxRounds": 15,
+        "environment": {
+          "lighting": "dim",
+          "terrain": "muddy"
+        }
+      },
+      "Results": {
+        "death": {
+          "narrative": "In the darkness and mud, the goblin warrior's superior armor and weapon prove decisive. Its blade pierces your heart as you slip in the muck. You die within sight of the abandoned campsite.",
+          "effects": {
+            "room": 10
+          }
+        },
+        "failure": {
+          "narrative": "The darkness and treacherous footing work against you. After many exhausting rounds, you're forced to abandon the fight. The goblin warrior's mocking laughter follows you into the abandoned campsite.",
+          "effects": {
+            "room": 10
+          }
+        },
+        "minimal": {
+          "narrative": "Despite the darkness and mud, you manage to defeat the goblin warrior. Your wounds are grievous - the warrior's blade found its mark several times. In its gear, you find quality equipment.",
+          "effects": {
+            "room": 10,
+            "items": ["c47ac10b-58cc-4372-a567-0e02b2c3d482"]
+          }
+        },
+        "normal": {
+          "narrative": "You adapt to the poor conditions and overcome the goblin warrior. Though wounded, you claim victory. The warrior's equipment includes fine armor and a healing potion.",
+          "effects": {
+            "room": 10,
+            "items": ["c47ac10b-58cc-4372-a567-0e02b2c3d482", "b47ac10b-58cc-4372-a567-0e02b2c3d483"]
+          }
+        },
+        "exceptional": {
+          "narrative": "Even in darkness and mud, your skill shines through. The goblin warrior falls without inflicting a single wound. You claim its excellent equipment and discover a hidden magical ring.",
+          "effects": {
+            "room": 10,
+            "items": [
+              "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+              "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+              "947ac10b-58cc-4372-a567-0e02b2c3d485"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+      "SegmentID": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
+      "SegmentType": "narrative",
+      "ShortStatus": "Taking the long way around",
+      "Duration": 60,
+      "NextSegmentID": null,
+      "Challenges": [
+        {
+          "attribute": "Endurance",
+          "skill": "Climbing",
+          "difficulty": 6,
+          "attempts": 3
+        },
+        {
+          "attribute": "Intelligence",
+          "skill": "Foraging",
+          "difficulty": 7,
+          "attempts": 2
+        }
+      ],
+      "Results": {
+        "death": {
+          "narrative": "The long route through the fern gully proves treacherous. Exhausted and lost, you stumble into a deep ravine hidden by the ferns. Your journey ends at the bottom of the gorge.",
+          "effects": {
+            "room": 9
+          }
+        },
+        "failure": {
+          "narrative": "The cautious route exhausts you completely. You get lost in the fern gully, and by the time you finally stumble into the abandoned campsite, you're dehydrated, hungry, and wounded from multiple falls.",
+          "effects": {
+            "room": 10
+          }
+        },
+        "minimal": {
+          "narrative": "Your roundabout route is tiring but safer. You navigate through the fern gully and eventually reach the abandoned campsite. You're tired but avoided any goblin patrols.",
+          "effects": {
+            "room": 10
+          }
+        },
+        "normal": {
+          "narrative": "The longer path proves wise. You not only avoid the goblins but also find edible berries and herbs along the way. You arrive at the abandoned campsite refreshed and ready for whatever comes next.",
+          "effects": {
+            "room": 10
+          }
+        },
+        "exceptional": {
+          "narrative": "Your cautious approach yields unexpected rewards. In the fern gully, you discover an old hunter's cache with healing potions and a sturdy backpack. You reach the abandoned campsite in better shape than when you started, having completely avoided the goblin patrols.",
+          "effects": {
+            "room": 10,
+            "items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483", "a47ac10b-58cc-4372-a567-0e02b2c3d484"]
+          }
+        }
+      }
+    }
+  ]
+}

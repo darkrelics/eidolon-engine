@@ -69,6 +69,9 @@ type Character struct {
 	prompt           string                // Character prompt
 	stopped          bool                  // Flag to ensure Stop is only executed once
 	gameMode         string                // Game mode: "MUD", "Incremental", etc.
+	availableStories []string              // Story IDs available to this character
+	abandonedStories []string              // Story IDs the character has abandoned
+	completedStories []string              // Story IDs the character has completed
 }
 
 // FleeState tracks an active flee attempt
@@ -80,22 +83,25 @@ type FleeState struct {
 
 // CharacterData for unmarshalling character.
 type CharacterData struct {
-	CharacterID   string             `json:"CharacterID" dynamodbav:"CharacterID"`
-	PlayerID      string             `json:"PlayerID" dynamodbav:"PlayerID"`
-	CharacterName string             `json:"Name" dynamodbav:"character_name"`
-	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
-	Skills        map[string]float64 `json:"Skills" dynamodbav:"Skills"`
-	Essence       float64            `json:"Essence" dynamodbav:"Essence"`
-	Health        int                `json:"Health" dynamodbav:"Health"`
-	MaxHealth     int                `json:"MaxHealth" dynamodbav:"MaxHealth"`
-	Wounds        []Wound            `json:"Wounds" dynamodbav:"Wounds"`
-	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
-	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
-	LeftHandID    string             `json:"LeftHandID,omitempty" dynamodbav:"LeftHandID,omitempty"`
-	RightHandID   string             `json:"RightHandID,omitempty" dynamodbav:"RightHandID,omitempty"`
-	Hidden        bool               `json:"Hidden" dynamodbav:"Hidden"`
-	CharState     string             `json:"CharState" dynamodbav:"CharState"`
-	GameMode      string             `json:"GameMode" dynamodbav:"GameMode"`
+	CharacterID      string             `json:"CharacterID" dynamodbav:"CharacterID"`
+	PlayerID         string             `json:"PlayerID" dynamodbav:"PlayerID"`
+	CharacterName    string             `json:"Name" dynamodbav:"character_name"`
+	Attributes       map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
+	Skills           map[string]float64 `json:"Skills" dynamodbav:"Skills"`
+	Essence          float64            `json:"Essence" dynamodbav:"Essence"`
+	Health           int                `json:"Health" dynamodbav:"Health"`
+	MaxHealth        int                `json:"MaxHealth" dynamodbav:"MaxHealth"`
+	Wounds           []Wound            `json:"Wounds" dynamodbav:"Wounds"`
+	RoomID           int64              `json:"RoomID" dynamodbav:"RoomID"`
+	Inventory        map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
+	LeftHandID       string             `json:"LeftHandID,omitempty" dynamodbav:"LeftHandID,omitempty"`
+	RightHandID      string             `json:"RightHandID,omitempty" dynamodbav:"RightHandID,omitempty"`
+	Hidden           bool               `json:"Hidden" dynamodbav:"Hidden"`
+	CharState        string             `json:"CharState" dynamodbav:"CharState"`
+	GameMode         string             `json:"GameMode" dynamodbav:"GameMode"`
+	AvailableStories []string           `json:"AvailableStories,omitempty" dynamodbav:"AvailableStories,omitempty"`
+	AbandonedStories []string           `json:"AbandonedStories,omitempty" dynamodbav:"AbandonedStories,omitempty"`
+	CompletedStories []string           `json:"CompletedStories,omitempty" dynamodbav:"CompletedStories,omitempty"`
 }
 
 func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
@@ -129,6 +135,9 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		playerCommandIn:  make(chan string, 20),
 		end:              make(chan bool, 5),
 		prompt:           "\n\r> ",
+		availableStories: []string{},
+		abandonedStories: []string{},
+		completedStories: []string{},
 	}
 
 	// Database loading restores persistent character state
@@ -171,6 +180,17 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		character.gameMode = cd.GameMode
 	} else {
 		character.gameMode = "MUD"
+	}
+
+	// Restore story tracking fields
+	if cd.AvailableStories != nil {
+		character.availableStories = cd.AvailableStories
+	}
+	if cd.AbandonedStories != nil {
+		character.abandonedStories = cd.AbandonedStories
+	}
+	if cd.CompletedStories != nil {
+		character.completedStories = cd.CompletedStories
 	}
 
 	character.CalculateCurrentHealth()

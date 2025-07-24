@@ -62,18 +62,19 @@ class ApiService {
     required String name,
     required String archetype,
   }) async {
-    debugPrint('ApiService: Adding character - name: $name, archetype: $archetype');
+    debugPrint(
+      'ApiService: Adding character - name: $name, archetype: $archetype',
+    );
     final headers = await _getHeaders();
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/characters'),
       headers: headers,
-      body: jsonEncode({
-        'characterName': name,
-        'archetype': archetype,
-      }),
+      body: jsonEncode({'characterName': name, 'archetype': archetype}),
     );
 
-    debugPrint('ApiService: Add character response status: ${response.statusCode}');
+    debugPrint(
+      'ApiService: Add character response status: ${response.statusCode}',
+    );
     debugPrint('ApiService: Add character response body: ${response.body}');
 
     if (response.statusCode != 200 && response.statusCode != 201) {
@@ -94,7 +95,9 @@ class ApiService {
       headers: headers,
     );
 
-    debugPrint('ApiService: Delete character response status: ${response.statusCode}');
+    debugPrint(
+      'ApiService: Delete character response status: ${response.statusCode}',
+    );
     debugPrint('ApiService: Delete character response body: ${response.body}');
 
     if (response.statusCode != 200) {
@@ -109,13 +112,12 @@ class ApiService {
     final headers = await _getHeaders();
     final uri = Uri.parse('$baseUrl/characters?characterId=$characterId');
     debugPrint('ApiService: Request URI: $uri');
-    
-    final response = await _httpClient.get(
-      uri,
-      headers: headers,
-    );
 
-    debugPrint('ApiService: Get character response status: ${response.statusCode}');
+    final response = await _httpClient.get(uri, headers: headers);
+
+    debugPrint(
+      'ApiService: Get character response status: ${response.statusCode}',
+    );
     debugPrint('ApiService: Get character response body: ${response.body}');
 
     if (response.statusCode == 404) {
@@ -240,7 +242,7 @@ class ApiService {
   Future<List<StoryMetadata>> getStories() async {
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/stories'),
+      Uri.parse('$baseUrl/story'),
       headers: headers,
     );
 
@@ -264,7 +266,9 @@ class ApiService {
       headers: headers,
     );
 
-    debugPrint('ApiService: Get archetypes response status: ${response.statusCode}');
+    debugPrint(
+      'ApiService: Get archetypes response status: ${response.statusCode}',
+    );
     debugPrint('ApiService: Get archetypes response body: ${response.body}');
 
     if (response.statusCode != 200) {

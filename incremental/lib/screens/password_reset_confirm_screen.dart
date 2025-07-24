@@ -91,7 +91,12 @@ class _PasswordResetConfirmScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'confirmPassword')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(
+                e,
+                context: 'confirmPassword',
+              ),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -128,7 +133,12 @@ class _PasswordResetConfirmScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'confirmPassword')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(
+                e,
+                context: 'confirmPassword',
+              ),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

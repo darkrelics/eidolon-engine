@@ -9,6 +9,7 @@ class Archetype {
   final Map<String, double> attributes;
   final Map<String, double> skills;
   final List<StartingItem> startingItems;
+  final List<String> availableStories;
 
   Archetype({
     required this.archetypeName,
@@ -19,6 +20,7 @@ class Archetype {
     required this.attributes,
     required this.skills,
     required this.startingItems,
+    this.availableStories = const [],
   });
 
   factory Archetype.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,9 @@ class Archetype {
       startingItems: (json['StartingItems'] as List? ?? [])
           .map((item) => StartingItem.fromJson(item as Map<String, dynamic>))
           .toList(),
+      availableStories: (json['AvailableStories'] as List? ?? [])
+          .map((storyId) => storyId as String)
+          .toList(),
     );
   }
 
@@ -54,6 +59,7 @@ class Archetype {
       'Attributes': attributes,
       'Skills': skills,
       'StartingItems': startingItems.map((item) => item.toJson()).toList(),
+      'AvailableStories': availableStories,
     };
   }
 }

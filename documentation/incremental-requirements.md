@@ -127,9 +127,9 @@ Present three action buttons:
 
 #### 3.3.2 Story Participation Tracking
 
-- **Story Table**: Tracks active/completed stories per character
-- **Current Segment**: Stored in story participation record
-- **Completion History**: Maintained in story table with timestamps
+- **ActiveSegments Table**: Tracks active story participation per character
+- **Current Segment**: Stored in ActiveSegments record
+- **Completion History**: Maintained in Character table (CompletedStories field)
 - **Daily Reset**: Clear daily story participation at server reset time
 - **Cooldown Management**: Enforce story-specific cooldown periods
 - **Available Stories**: Maintain list in character record
@@ -166,6 +166,7 @@ Present three action buttons:
 
 #### 3.5.2 Story Unlock Mechanisms
 
+- Stories provided by character archetype on creation
 - Stories unlocked through Incremental participation
 - Stories unlocked through MUD participation
 - Stories unlocked through external activity (TBD)
@@ -258,25 +259,7 @@ New Lambda functions following existing patterns:
 
 #### 4.2.2 Database Schema (DynamoDB)
 
-**Story Table (Existing, Extended)**
-
-```
-{
-  PlayerID: String (PK),
-  StoryID: String (SK),
-  Status: String (active|completed|abandoned),
-  CurrentSegment: String,
-  SegmentStartTime: Number,
-  NextCompletionTime: Number,
-  Decisions: Map,
-  Outcomes: List,
-  StartTime: Number,
-  CompletionTime: Number,
-  TTL: Number  // For automatic cleanup
-}
-```
-
-**Stories Definition Table (New)**
+**Story Table (New)**
 
 ```
 {
@@ -289,19 +272,42 @@ New Lambda functions following existing patterns:
   Segments: List[
     {
       SegmentID: String,
-      Type: String (decision|narrative),
+      Type: String (decision|narrative|combat),
       Content: String,
       ImageUrl: String (optional),
       Duration: Number,
       Options: List (for decisions),
       DefaultDecisionLogic: String,
-      Outcomes: Map (for narratives)
+      Outcomes: Map (for narratives),
+      Combat: Map (for combat segments)
     }
   ]
 }
 ```
 
-**Character Table (Existing fields utilized)**
+**ActiveSegments Table (New)**
+
+```
+{
+  ActiveSegmentID: String (PK),
+  CharacterID: String,
+  PlayerID: String,
+  StoryID: String,
+  SegmentID: String,
+  StartTime: Number,
+  EndTime: Number,
+  Status: String,
+  Decision: String,
+  ChallengeResults: List,
+  CombatState: Map,  // For combat segments
+  Outcome: String,
+  TTL: Number  // For automatic cleanup after 24 hours
+}
+```
+
+_Note: Player story participation state is tracked in the ActiveSegments table, not in the Story table. The Story table only contains story definitions._
+
+**Character Table (Existing, Extended)**
 
 ```
 {
@@ -309,7 +315,65 @@ New Lambda functions following existing patterns:
   PlayerID: String,  // Existing attribute
   GameMode: String,  // Existing field (MUD|Incremental|None)
   AvailableStories: List[String],  // New field
+  AbandonedStories: List[String],  // New field
+  CompletedStories: List[String],  // New field
   // All other existing MUD fields...
+}
+```
+
+**History Table (New)**
+
+```
+{
+  CharacterID: String (PK - HASH key),
+  StoryID: String (SK - RANGE key),
+  StoryTitle: String,        // Title of the story for display
+  StartedAt: String,         // ISO timestamp when story began
+  FinishedAt: String,        // ISO timestamp when story ended
+  StoryType: String,         // one-time|daily|repeatable
+  SegmentHistory: List[      // Detailed record of each segment
+    {
+      SegmentID: String,
+      SegmentType: String,   // decision|narrative|combat
+      Comment: String,       // Brief description of what happened
+      Decision: String,      // For decision segments - player's choice text
+      Outcome: String,       // For narrative/combat segments
+      ResultText: String,    // Narrative text shown to player
+      ChallengeResults: List,// For narrative segments
+      FinalCombatState: Map, // For combat segments
+      CompletedAt: String
+    }
+  ],
+  FinalOutcome: String,      // death|failure|minimal|normal|exceptional
+  TotalDuration: Number,     // Seconds from start to finish
+  Rewards: Map,              // Aggregated rewards from story
+  AbandonedCount: Number     // Times story was abandoned before completion
+}
+```
+
+**Opponents Table (New)**
+
+```
+{
+  OpponentID: String (PK),  // UUIDv4
+  Name: String,
+  Description: String,
+  CombatRating: Number,     // Combined attack skill
+  DefenseRating: Number,    // Combined defense skill
+  DamageRating: Number,     // Combined damage potential
+  Toughness: Number,        // Endurance for damage resistance
+  ArmorRating: Number,      // Armor protection value
+  Health: Number,           // Maximum health levels
+  WeaponType: String,       // bashing|lethal|aggravated
+  WeaponDamage: Number,     // Bonus damage from weapon
+  LootTable: List[          // Items dropped on defeat
+    {
+      itemId: String,
+      chance: Number
+    }
+  ],
+  Tags: List[String],       // For filtering and searching
+  CreatedAt: String         // ISO timestamp
 }
 ```
 
@@ -324,10 +388,23 @@ New Lambda functions following existing patterns:
 
 #### 4.3.2 Combat Resolution
 
-- Abstract MUD combat into narrative outcomes
-- Calculate damage/health changes over segment duration
-- Apply same formulas but in bulk processing
-- Maintain outcome log for review
+- Use full MUD combat mechanics including:
+  - Two-stage resolution (hit check + damage check)
+  - MUD wound system with time-based healing
+  - Weapon and armor effects
+  - Environmental modifiers
+- Track opponent health levels dynamically
+- Combat ends when:
+  - Character reaches 0 health (death)
+  - Opponent reaches 0 health (victory)
+  - Maximum rounds reached (failure)
+- Apply wounds that persist across segments
+- Determine outcomes based on:
+  - Death: Character reduced to 0 health
+  - Failure: Max rounds reached without defeating opponent
+  - Minimal: Victory with significant wounds
+  - Normal: Victory with minor wounds
+  - Exceptional: Victory without wounds
 
 #### 4.3.3 Experience and Progression
 
@@ -359,31 +436,67 @@ New Lambda functions following existing patterns:
 - **Batch Processing**: Group simultaneous completions
 - **Failure Handling**: Retry logic with exponential backoff
 
-### 4.5 Security Requirements
+### 4.5 Persistent Effects and Consequences
 
-#### 4.5.1 Authentication and Authorization
+#### 4.5.1 Cross-Mode Persistence
+
+All character modifications persist between game modes:
+
+- **Wounds and Healing**:
+  - Combat damage creates wounds using MUD damage system
+  - Wounds heal based on real-time (bashing: 15min, lethal: 6hr, aggravated: 7d)
+  - Character entering either mode retains all active wounds
+  - Death in either mode requires appropriate resurrection
+
+- **Inventory Persistence**:
+  - Items gained from story segments appear in MUD inventory
+  - Equipment worn affects combat calculations in both modes
+  - Item destruction or loss persists across modes
+  - Cursed items maintain their effects
+
+- **Location Updates**:
+  - Story effects can change character room location
+  - Character appears in new room when returning to MUD
+  - Death may transport to death realm (room 0 or configured)
+
+- **Character Development**:
+  - Experience gains apply to unified progression system
+  - Skill improvements permanent across modes
+  - Attribute modifications persist
+  - Status effects (if implemented) carry over
+
+#### 4.5.2 Implementation Requirements
+
+- All character updates use existing DynamoDB patterns
+- Wound application uses shared damage.go logic (when Lambda implementation exists)
+- Item management uses existing inventory system
+- Room changes update RoomID field directly
+
+### 4.6 Security Requirements
+
+#### 4.6.1 Authentication and Authorization
 
 - AWS Cognito integration (existing)
 - JWT token validation on all API calls
 - Character ownership verification via PlayerID
 
-#### 4.5.2 Anti-Cheat Measures
+#### 4.6.2 Anti-Cheat Measures
 
 - Server-side validation of all game actions
 - Timestamp verification for segment progression
 - Rate limiting on API endpoints (existing)
 - Outcome validation within defined parameters
 
-### 4.6 Monitoring and Analytics
+### 4.7 Monitoring and Analytics
 
-#### 4.6.1 Operational Metrics
+#### 4.7.1 Operational Metrics
 
 - Lambda execution duration and errors
 - API Gateway response times
 - DynamoDB consumed capacity
 - EventBridge rule execution
 
-#### 4.6.2 Game Analytics
+#### 4.7.2 Game Analytics
 
 - Story completion rates
 - Popular decision paths

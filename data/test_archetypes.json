@@ -35,6 +35,7 @@
         "Appraise": 1.0
       },
       "StartRoom": 8,
+      "AvailableStories": ["f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d"],
       "StartingItems": [
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
@@ -93,6 +94,7 @@
         "Appraise": 0.0
       },
       "StartRoom": 10,
+      "AvailableStories": ["f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d"],
       "StartingItems": [
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
@@ -151,6 +153,7 @@
         "Appraise": 0.0
       },
       "StartRoom": 4,
+      "AvailableStories": ["f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d"],
       "StartingItems": [
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
@@ -209,6 +212,7 @@
         "Appraise": 1.0
       },
       "StartRoom": 10,
+      "AvailableStories": [],
       "StartingItems": [
         {
           "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",

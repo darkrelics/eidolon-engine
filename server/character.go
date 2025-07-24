@@ -117,22 +117,25 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 
 	// Character data structure matches DynamoDB schema
 	characterData := &CharacterData{
-		CharacterID:   c.id.String(),
-		PlayerID:      c.player.id.String(),
-		CharacterName: c.name,
-		Attributes:    c.attributes,
-		Skills:        c.skills,
-		Essence:       c.essence,
-		Health:        c.health,
-		MaxHealth:     c.maxHealth,
-		Wounds:        c.wounds,
-		RoomID:        c.room.roomID,
-		Inventory:     inventoryIDs,
-		LeftHandID:    leftHandID,
-		RightHandID:   rightHandID,
-		Hidden:        c.hidden,
-		CharState:     c.charState,
-		GameMode:      c.gameMode,
+		CharacterID:      c.id.String(),
+		PlayerID:         c.player.id.String(),
+		CharacterName:    c.name,
+		Attributes:       c.attributes,
+		Skills:           c.skills,
+		Essence:          c.essence,
+		Health:           c.health,
+		MaxHealth:        c.maxHealth,
+		Wounds:           c.wounds,
+		RoomID:           c.room.roomID,
+		Inventory:        inventoryIDs,
+		LeftHandID:       leftHandID,
+		RightHandID:      rightHandID,
+		Hidden:           c.hidden,
+		CharState:        c.charState,
+		GameMode:         c.gameMode,
+		AvailableStories: c.availableStories,
+		AbandonedStories: c.abandonedStories,
+		CompletedStories: c.completedStories,
 	}
 
 	// Transactional save ensures data consistency
@@ -230,6 +233,12 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 			}
 			if archetypeObj.Essence > 0 {
 				character.essence = float64(archetypeObj.Essence)
+			}
+
+			// Copy available stories from archetype
+			if len(archetypeObj.AvailableStories) > 0 {
+				character.availableStories = make([]string, len(archetypeObj.AvailableStories))
+				copy(character.availableStories, archetypeObj.AvailableStories)
 			}
 
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {

@@ -35,7 +35,7 @@ The templates have been updated to support the incremental game mode:
   - All functions are dual-purpose, serving both Portal and Incremental UI
 
 - **API Gateway**:
-  - Extended with `/stories` endpoints
+  - Extended with `/story` endpoints
   - Maintains existing character management endpoints
   - Single API serves both game modes
 

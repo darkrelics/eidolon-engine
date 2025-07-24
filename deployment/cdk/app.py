@@ -697,6 +697,8 @@ class EidolonEngineApp:
             "Archetypes": "archetypes",
             "Motd": "motd",
             "Story": "story",
+            "Segments": "segments",
+            "ActiveSegments": "active_segments",
         }
 
         configured_tables = params.get("dynamodb_tables", {})

@@ -36,7 +36,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 
 ### 3.1 DynamoDB Table Designs
 
-#### 3.1.1 Stories Table (New)
+#### 3.1.1 Story Table (New)
 
 ```python
 # Master story definitions
@@ -53,7 +53,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
         "requiredRooms": ["town_square"]
     },
     "FirstSegmentID": "seg-uuid-001",
-    "Created": "2025-01-15T10:00:00Z",
+    "CreatedAt": "2025-01-15T10:00:00Z",
     "Version": 1
 }
 ```
@@ -91,15 +91,15 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "Results": {
         "death": {
             "narrative": "The forest claims another victim...",
-            "effects": {"health": 0, "room": "death_realm"}
+            "effects": {"room": "death_realm"}
         },
         "failure": {
             "narrative": "You stumble through brambles...",
-            "effects": {"health": -20, "experience": 10}
+            "effects": {"experience": 10}
         },
         "minimal": {
             "narrative": "You make slow progress...",
-            "effects": {"health": -5, "experience": 25}
+            "effects": {"experience": 25}
         },
         "normal": {
             "narrative": "You navigate successfully...",
@@ -111,15 +111,56 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
         }
     }
 }
+
+# Combat segment example
+{
+    "StoryID": "forest-adventure-uuid",   # PK
+    "SegmentID": "seg-uuid-combat-001",   # SK
+    "SegmentType": "combat",
+    "ShortStatus": "Fighting the goblin scout",
+    "Duration": 120,                      # 2 minutes for combat
+    "NextSegmentID": "seg-uuid-004",
+    "Combat": {
+        "opponentId": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+        "maxRounds": 15,              # Combat ends after this many rounds
+        "environment": {
+            "lighting": "dim",        # -1 to hit rolls
+            "terrain": "muddy"        # -1 to dodge
+        }
+    },
+    "Results": {
+        "death": {
+            "narrative": "The goblin's blade pierces your heart...",
+            "effects": {}
+        },
+        "failure": {
+            "narrative": "The battle drags on too long. Exhausted and wounded, you're forced to retreat...",
+            "effects": {"room": 5}
+        },
+        "minimal": {
+            "narrative": "You defeat the goblin but suffer grievous wounds...",
+            "effects": {"room": 7, "items": ["goblin_pouch"]}
+        },
+        "normal": {
+            "narrative": "Your combat training prevails. The goblin falls...",
+            "effects": {"room": 7, "items": ["goblin_pouch", "rusty_blade"]}
+        },
+        "exceptional": {
+            "narrative": "You dispatch the goblin without taking a scratch!",
+            "effects": {"room": 7, "items": ["goblin_pouch", "rusty_blade", "goblin_ear"]}
+        }
+    }
+}
 ```
 
 #### 3.1.3 ActiveSegments Table (New)
 
 ```python
-# Tracks runtime segment instances
+# Tracks runtime segment instances - Narrative example
 {
     "ActiveSegmentID": "active-seg-uuid-123",  # PK (unique instance)
     "CharacterID": "char-uuid-456",
+    "PlayerID": "player-uuid-789",
     "StoryID": "forest-adventure-uuid",
     "SegmentID": "seg-uuid-002a",
     "StartTime": 1737000300,
@@ -137,6 +178,28 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "TTL": 1737090300                  # Auto-cleanup after 24 hours
 }
 
+# Combat segment example
+{
+    "ActiveSegmentID": "active-seg-uuid-combat",  # PK
+    "CharacterID": "char-uuid-456",
+    "PlayerID": "player-uuid-789",
+    "StoryID": "forest-adventure-uuid",
+    "SegmentID": "seg-uuid-combat-001",
+    "StartTime": 1737000300,
+    "EndTime": 1737000420,              # 2 minutes for combat
+    "Status": "active",
+    "CombatState": {                    # For combat segments
+        "round": 3,
+        "playerWounds": [
+            {"type": "lethal", "healAt": "2025-01-23T10:30:00Z"},
+            {"type": "bashing", "healAt": "2025-01-23T08:15:00Z"}
+        ],
+        "opponentHealth": 4
+    },
+    "Outcome": null,                    # Set when combat completes
+    "TTL": 1737086700
+}
+
 # Global Secondary Index for polling
 GSI: CompletionTimeIndex
   - PK: Status (active)
@@ -144,7 +207,32 @@ GSI: CompletionTimeIndex
   - Projection: ALL
 ```
 
-#### 3.1.4 Character Table (Existing Fields Utilized)
+#### 3.1.4 Opponents Table (New)
+
+```python
+# Reusable opponent definitions
+{
+    "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",  # PK (UUIDv4)
+    "Name": "Goblin Scout",
+    "Description": "A scrawny goblin armed with a rusty blade and wearing tattered leather",
+    "CombatRating": 8,          # Agility + Melee skill
+    "DefenseRating": 7,         # Agility + Dodge skill
+    "DamageRating": 6,          # Strength + Weapon skill
+    "Toughness": 5,             # Endurance
+    "ArmorRating": 1,           # Leather scraps
+    "Health": 6,                # Max health levels
+    "WeaponType": "lethal",     # Damage type
+    "WeaponDamage": 2,          # Weapon bonus
+    "LootTable": [
+        {"itemId": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "chance": 0.5},  # Healing potion
+        {"itemId": "d47ac10b-58cc-4372-a567-0e02b2c3d481", "chance": 0.3}   # Rusty blade
+    ],
+    "Tags": ["goblinoid", "forest", "weak"],
+    "CreatedAt": "2025-01-23T10:00:00Z"
+}
+```
+
+#### 3.1.5 Character Table (Existing Fields Utilized)
 
 ```python
 # No schema changes needed, using existing fields
@@ -153,9 +241,9 @@ GSI: CompletionTimeIndex
     "PlayerID": "player-uuid-123",      # Existing attribute
     "GameMode": "Incremental",          # Existing field (MUD|Incremental|None)
     "AvailableStories": [               # Stories the character can start
-        "forest-adventure-uuid",
-        "daily-patrol-uuid",
-        "tutorial-uuid"
+        "forest-adventure-uuid",        # Initially populated from archetype
+        "daily-patrol-uuid",            # Additional stories can be unlocked
+        "tutorial-uuid"                 # through gameplay
     ],
     "AbandonedStories": [               # Stories started but not finished
         "hard-quest-uuid"
@@ -167,6 +255,75 @@ GSI: CompletionTimeIndex
     # All other existing MUD fields remain unchanged...
 }
 ```
+
+#### 3.1.6 History Table (New)
+
+```python
+# Tracks completed and abandoned story runs
+{
+    "CharacterID": "char-uuid-456",           # PK (HASH key)
+    "StoryID": "forest-adventure-uuid",       # SK (RANGE key)
+    "StoryTitle": "The Whispering Woods",     # Cached story title
+    "StartedAt": "2025-01-23T08:00:00Z",     # When story began
+    "FinishedAt": "2025-01-23T10:30:00Z",    # When story ended
+    "StoryType": "daily",                     # one-time|daily|repeatable
+    "SegmentHistory": [                       # Detailed segment outcomes
+        {
+            "SegmentID": "seg-uuid-001",
+            "SegmentType": "decision",
+            "Comment": "Chose the left path through the forest",
+            "Decision": "Take the left path",
+            "CompletedAt": "2025-01-23T08:00:00Z"
+        },
+        {
+            "SegmentID": "seg-uuid-002a",
+            "SegmentType": "narrative",
+            "Comment": "Navigated the moonlit path with mixed success",
+            "Outcome": "minimal",
+            "ResultText": "You make slow progress through brambles and thick undergrowth. Your survival skills help you find the way, though not without difficulty.",
+            "ChallengeResults": [
+                {"skill": "Perception", "success": true},
+                {"skill": "Perception", "success": false},
+                {"skill": "Survival", "success": true}
+            ],
+            "CompletedAt": "2025-01-23T08:10:00Z"
+        },
+        {
+            "SegmentID": "seg-uuid-combat-001",
+            "SegmentType": "combat",
+            "Comment": "Fought a goblin scout and emerged victorious",
+            "Outcome": "normal",
+            "ResultText": "Your combat training prevails. The goblin falls beneath your blade, leaving behind its meager possessions.",
+            "FinalCombatState": {
+                "rounds": 8,
+                "playerWoundsReceived": 2,
+                "opponentDefeated": true
+            },
+            "CompletedAt": "2025-01-23T08:12:00Z"
+        }
+    ],
+    "FinalOutcome": "normal",                 # Overall story outcome
+    "TotalDuration": 9000,                    # Seconds from start to finish
+    "Rewards": {                              # Aggregated rewards
+        "experience": 150,
+        "items": ["herb_bundle", "goblin_pouch", "rusty_blade"],
+        "gold": 50,
+        "roomChanges": [5, 7]
+    },
+    "AbandonedCount": 0                       # Prior abandonment attempts
+}
+```
+
+- **`CharacterID` + `StoryID`**: Composite key enables efficient queries by character
+- **`StoryTitle`**: Cached story title eliminates need for Story table lookup
+- **`StartedAt`/`FinishedAt`**: Track full story duration for analytics
+- **`SegmentHistory`**: Preserves complete path through story with:
+  - Comment describing what happened in each segment
+  - Decision text for player choices
+  - ResultText containing the narrative shown to player
+  - Full outcome details for analysis
+- **`No TTL`**: Data persists until character deletion
+- **Cleanup**: Character deletion Lambda removes all associated history
 
 ### 3.2 Data Access Patterns
 
@@ -480,7 +637,110 @@ def calculate_narrative_outcome(character, segment):
         return 'exceptional'
 ```
 
-### 5.4 Difficulty Guidelines
+### 5.4 Combat Resolution Logic
+
+Combat segments use the full MUD combat mechanics with wounds:
+
+```python
+def process_combat_segment(character, segment, active_segment):
+    """Process combat using full MUD mechanics."""
+    from eidolon.mechanics import ResolveOpposedCheck
+    from eidolon.damage import apply_damage
+
+    # Load opponent from Opponents table
+    opponent_id = segment['Combat']['opponentId']
+    opponent = load_opponent(opponent_id)
+
+    # Initialize or restore combat state
+    combat_state = active_segment.get('CombatState', {
+        'round': 0,
+        'playerWounds': [],
+        'opponentHealth': opponent['Health']
+    })
+
+    # Get character equipment
+    weapon = get_equipped_weapon(character)
+    armor = get_equipped_armor(character)
+
+    # Run combat rounds
+    while (combat_state['round'] < segment['Combat']['maxRounds'] and
+           character.health > 0 and
+           combat_state['opponentHealth'] > 0):
+
+        combat_state['round'] += 1
+
+        # Apply environment modifiers
+        env = segment['Combat'].get('environment', {})
+        hit_modifier = -1 if env.get('lighting') == 'dim' else 0
+        dodge_modifier = -1 if env.get('terrain') == 'muddy' else 0
+
+        # Player attacks
+        hit_check = ResolveOpposedCheck(
+            character.agility + character.melee + hit_modifier,
+            opponent['DefenseRating'] + dodge_modifier
+        )
+
+        if hit_check.Sigma >= 1.0:
+            # Damage resolution
+            damage_check = ResolveOpposedCheck(
+                character.strength + weapon.damage_rating,
+                opponent['Toughness'] + opponent['ArmorRating']
+            )
+
+            if damage_check.Sigma >= 1.0:
+                damage = math.floor(damage_check.Sigma)
+                combat_state['opponentHealth'] -= damage
+
+        # Opponent attacks if still alive
+        if combat_state['opponentHealth'] > 0:
+            hit_check = ResolveOpposedCheck(
+                opponent['CombatRating'],
+                character.agility + character.dodge + dodge_modifier
+            )
+
+            if hit_check.Sigma >= 1.0:
+                damage_check = ResolveOpposedCheck(
+                    opponent['DamageRating'] + opponent['WeaponDamage'],
+                    character.endurance + armor.protection_value
+                )
+
+                if damage_check.Sigma >= 1.0:
+                    damage = math.floor(damage_check.Sigma)
+                    # Apply damage using MUD wound system
+                    apply_damage(character, opponent['WeaponType'], damage)
+
+                    # Update wound tracking in combat state
+                    new_wounds = get_recent_wounds(character, damage)
+                    combat_state['playerWounds'].extend(new_wounds)
+
+    # Determine outcome
+    return determine_combat_outcome(character, combat_state)
+
+def determine_combat_outcome(character, combat_state):
+    """Determine combat outcome based on final state."""
+    # Death - character at 0 health
+    if character.health <= 0:
+        return 'death'
+
+    # Failure - max rounds reached without victory
+    if combat_state['opponentHealth'] > 0:
+        return 'failure'
+
+    # Victory outcomes based on wounds taken
+    wounds = character.GetWoundsByType()
+    total_wounds = sum(wounds.values())
+    serious_wounds = wounds.get('lethal', 0) + wounds.get('aggravated', 0)
+
+    # Opponent defeated - determine victory quality
+    if total_wounds == 0:
+        return 'exceptional'  # Flawless victory
+    elif serious_wounds == 0 and total_wounds <= 2:
+        return 'normal'      # Minor wounds only
+    else:
+        return 'minimal'     # Significant wounds
+```
+
+### 5.5 Difficulty Guidelines
 
 Following the MUD mechanics system, story challenges use these difficulty levels:
 
@@ -557,7 +817,56 @@ if (character.gameMode == 'None') {
 
 ## 7. Security and Validation
 
-### 7.1 Mode Exclusivity
+### 7.1 Bidirectional Consequences
+
+The Incremental and MUD modes share persistent character state, ensuring consequences carry between game modes:
+
+#### Shared Persistent State
+
+1. **Wounds and Health**:
+   - All wounds (bashing, lethal, aggravated) persist across modes
+   - Character entering Incremental mode with MUD wounds starts injured
+   - Combat wounds from Incremental stories affect MUD gameplay
+   - Death in either mode requires resurrection/respawn
+
+2. **Inventory and Items**:
+   - Items gained in Incremental stories appear in MUD inventory
+   - Equipment worn in MUD affects Incremental combat stats
+   - Item loss/destruction persists across modes
+
+3. **Character Location**:
+   - Room changes from story effects update MUD position
+   - Character returns to new room when switching to MUD mode
+   - Death effects may transport to death realm in both modes
+
+4. **Experience and Progression**:
+   - Experience gained in either mode contributes to character growth
+   - Skill improvements from either mode are permanent
+   - Attribute changes persist across modes
+
+#### Implementation Example
+
+```python
+def apply_story_consequences(character, outcome_effects):
+    """Apply story outcomes that persist to MUD mode."""
+    # Room changes
+    if 'room' in outcome_effects:
+        character['RoomID'] = outcome_effects['room']
+
+    # Item rewards
+    if 'items' in outcome_effects:
+        for item_id in outcome_effects['items']:
+            add_to_inventory(character['CharacterID'], item_id)
+
+    # Experience (if implemented)
+    if 'experience' in outcome_effects:
+        character['Experience'] = character.get('Experience', 0) + outcome_effects['experience']
+
+    # Wounds are applied during combat resolution using MUD damage system
+    # No separate wound application needed in outcome_effects
+```
+
+### 7.2 Mode Exclusivity
 
 Enforce through GameMode field:
 
@@ -658,7 +967,7 @@ Add new Lambda functions to existing stack:
 # Add to existing Lambda definitions:
 
 self.story_functions = [
-    ("api-get-stories", "api_get_stories.lambda_handler"),
+    ("api-get-story", "api_get_story.lambda_handler"),
     ("api-start-story", "api_start_story.lambda_handler"),
     ("api-submit-decision", "api_submit_decision.lambda_handler"),
     ("api-get-segment-outcome", "api_get_segment_outcome.lambda_handler"),
@@ -682,9 +991,9 @@ Extend existing API:
 ```python
 # Add to API Gateway configuration
 story_routes = [
-    ("GET", "/stories", "api-get-stories"),
-    ("POST", "/stories/start", "api-start-story"),
-    ("GET", "/stories/current", "api-get-current-story"),
+    ("GET", "/story", "api-get-story"),
+    ("POST", "/story/start", "api-start-story"),
+    ("GET", "/story/current", "api-get-current-story"),
     ("POST", "/segments/decision", "api-submit-decision"),
     ("GET", "/segments/outcome", "api-get-segment-outcome"),
     ("POST", "/stories/abandon", "api-abandon-story"),
@@ -693,15 +1002,17 @@ story_routes = [
 
 ### 9.3 Database Updates
 
-Add story definition table to DynamoDB stack:
+Add new tables to DynamoDB stack:
 
 ```python
 # deployment/cdk/stacks/dynamodb_stack.py
 # Add to table configurations:
-{"name": "story_definitions", "pk": "StoryID", "pk_type": "S"}
+{"name": "story", "pk": "StoryID", "pk_type": "S"}
+{"name": "opponents", "pk": "OpponentID", "pk_type": "S"}
+{"name": "history", "pk": "CharacterID", "pk_type": "S", "sk": "StoryID", "sk_type": "S"}
 
-# Add GSI to story table:
-{"name": "CompletionTimeIndex", "pk": "Status", "sk": "NextCompletionTime"}
+# Add GSI to active_segments table:
+{"name": "CompletionTimeIndex", "pk": "Status", "sk": "EndTime"}
 ```
 
 ## 10. Cost Analysis

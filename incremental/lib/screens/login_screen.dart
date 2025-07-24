@@ -38,8 +38,11 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      if (args != null && args[NavigationConstants.messageKey] != null && mounted) {
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null &&
+          args[NavigationConstants.messageKey] != null &&
+          mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(args[NavigationConstants.messageKey]),
@@ -74,7 +77,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signIn')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'signIn'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

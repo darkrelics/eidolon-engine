@@ -131,7 +131,9 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
     if (!mounted) return;
 
     final nameController = TextEditingController();
-    String? selectedArchetype = archetypes.isNotEmpty ? archetypes.first.name : null;
+    String? selectedArchetype = archetypes.isNotEmpty
+        ? archetypes.first.name
+        : null;
 
     await showDialog(
       context: context,
@@ -185,7 +187,9 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -199,9 +203,12 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                       Expanded(
                         child: Text(
                           'No archetypes available. Default stats will be used.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                         ),
                       ),
                     ],
@@ -211,48 +218,59 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
             ],
           ),
         ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                if (name.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a character name')),
-                  );
-                  return;
-                }
-                
-                Navigator.of(context).pop();
-                debugPrint('Creating character with name: $name, archetype: ${selectedArchetype ?? 'default'}');
-                await _createCharacter(name, selectedArchetype ?? 'default');
-              },
-              child: const Text('Create'),
-            ),
-          ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              if (name.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a character name'),
+                  ),
+                );
+                return;
+              }
+
+              Navigator.of(context).pop();
+              debugPrint(
+                'Creating character with name: $name, archetype: ${selectedArchetype ?? 'default'}',
+              );
+              await _createCharacter(name, selectedArchetype ?? 'default');
+            },
+            child: const Text('Create'),
+          ),
+        ],
       ),
     );
   }
 
   Future<void> _createCharacter(String name, String archetype) async {
     try {
-      debugPrint('CharacterSelectionScreen: _createCharacter called with name: $name, archetype: $archetype');
-      
+      debugPrint(
+        'CharacterSelectionScreen: _createCharacter called with name: $name, archetype: $archetype',
+      );
+
       setState(() {
         _isLoading = true;
       });
 
       debugPrint('CharacterSelectionScreen: Calling API to add character...');
-      final characterId = await _apiService.addCharacter(name: name, archetype: archetype);
-      debugPrint('CharacterSelectionScreen: Character created with ID: $characterId');
-      
+      final characterId = await _apiService.addCharacter(
+        name: name,
+        archetype: archetype,
+      );
+      debugPrint(
+        'CharacterSelectionScreen: Character created with ID: $characterId',
+      );
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Created character: $name')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Created character: $name')));
       }
 
       // Reload characters
@@ -267,7 +285,12 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'createCharacter')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(
+                e,
+                context: 'createCharacter',
+              ),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -280,7 +303,9 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Character'),
-        content: Text('Are you sure you want to delete "${character.name}"? This action cannot be undone.'),
+        content: Text(
+          'Are you sure you want to delete "${character.name}"? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -309,7 +334,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
       });
 
       await _apiService.deleteCharacter(character.id);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Deleted character: ${character.name}')),
@@ -326,7 +351,12 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'deleteCharacter')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(
+                e,
+                context: 'deleteCharacter',
+              ),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -428,17 +458,25 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                     onTap: character.dead
                         ? null
                         : () {
-                            debugPrint('CharacterSelectionScreen: Character tapped - ${character.name} (${character.id})');
-                            debugPrint('CharacterSelectionScreen: Navigating to /game with character data');
+                            debugPrint(
+                              'CharacterSelectionScreen: Character tapped - ${character.name} (${character.id})',
+                            );
+                            debugPrint(
+                              'CharacterSelectionScreen: Navigating to /game with character data',
+                            );
                             try {
                               Navigator.pushReplacementNamed(
                                 context,
                                 '/game',
                                 arguments: character,
                               );
-                              debugPrint('CharacterSelectionScreen: Navigation call completed');
+                              debugPrint(
+                                'CharacterSelectionScreen: Navigation call completed',
+                              );
                             } catch (e) {
-                              debugPrint('CharacterSelectionScreen: Navigation error: $e');
+                              debugPrint(
+                                'CharacterSelectionScreen: Navigation error: $e',
+                              );
                             }
                           },
                     child: ListTile(
@@ -470,7 +508,8 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.delete),
-                            onPressed: () => _showDeleteCharacterDialog(character),
+                            onPressed: () =>
+                                _showDeleteCharacterDialog(character),
                           ),
                           const Icon(Icons.arrow_forward_ios),
                         ],

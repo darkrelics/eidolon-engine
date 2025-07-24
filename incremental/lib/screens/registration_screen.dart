@@ -77,7 +77,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signUp')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'signUp'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -126,7 +128,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signUp')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'signUp'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -161,7 +165,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signUp')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'signUp'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

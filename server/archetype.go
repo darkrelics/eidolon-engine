@@ -42,15 +42,16 @@ type ArchetypeItem struct {
 }
 
 type Archetype struct {
-	ArchetypeName string             `json:"ArchetypeName" dynamodbav:"archetypeName"`
-	Description   string             `json:"Description" dynamodbav:"description"`
-	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"attributes"`
-	Skills        map[string]float64 `json:"Skills" dynamodbav:"skills"`
-	StartRoom     int64              `json:"StartRoom" dynamodbav:"startRoom"`
-	StartingItems []ArchetypeItem    `json:"StartingItems" dynamodbav:"startingItems"`
-	Health        uint16             `json:"Health,omitempty" dynamodbav:"health,omitempty"`
-	Essence       uint16             `json:"Essence,omitempty" dynamodbav:"essence,omitempty"`
-	Player        bool               `json:"Player" dynamodbav:"player"`
+	ArchetypeName    string             `json:"ArchetypeName" dynamodbav:"archetypeName"`
+	Description      string             `json:"Description" dynamodbav:"description"`
+	Attributes       map[string]float64 `json:"Attributes" dynamodbav:"attributes"`
+	Skills           map[string]float64 `json:"Skills" dynamodbav:"skills"`
+	StartRoom        int64              `json:"StartRoom" dynamodbav:"startRoom"`
+	StartingItems    []ArchetypeItem    `json:"StartingItems" dynamodbav:"startingItems"`
+	Health           uint16             `json:"Health,omitempty" dynamodbav:"health,omitempty"`
+	Essence          uint16             `json:"Essence,omitempty" dynamodbav:"essence,omitempty"`
+	Player           bool               `json:"Player" dynamodbav:"player"`
+	AvailableStories []string           `json:"AvailableStories,omitempty" dynamodbav:"availableStories,omitempty"`
 }
 
 // Display Archetypes for debugging purposes.

@@ -209,10 +209,6 @@ Outputs:
     Description: "Story table name"
     Value: !GetAtt DynamoDBStack.Outputs.StoryTableName
 
-  StoryDefinitionsTableName:
-    Description: "Story definitions table name"
-    Value: !GetAtt DynamoDBStack.Outputs.StoryDefinitionsTableName
-
   # IAM Roles
   ServerExecutionRoleArn:
     Description: "Server execution role ARN"
