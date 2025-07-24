@@ -386,10 +386,10 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # Single character resource
-        character_resource = characters_resource.add_resource("{characterId}")
+        # Single character resource (using query parameters)
+        character_resource = self.api.root.add_resource("character")
 
-        # GET /characters/{characterId} - Get specific character
+        # GET /character?characterId=xxx - Get specific character
         character_resource.add_method(
             "GET",
             apigateway.LambdaIntegration(self.get_character_function),  # type: ignore
@@ -397,7 +397,7 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # DELETE /characters/{characterId} - Delete specific character
+        # DELETE /character?characterId=xxx - Delete specific character
         character_resource.add_method(
             "DELETE",
             apigateway.LambdaIntegration(self.delete_character_function),  # type: ignore
