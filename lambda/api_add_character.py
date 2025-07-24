@@ -206,7 +206,7 @@ def lambda_handler(event, context):
 
         # Extract and validate required fields
         character_name = body.get("characterName", "").strip()
-        archetype_name = body.get("archetype", "").strip()
+        archetype_name = body.get("archetypeName", "").strip()
 
         logger.info(
             "Character creation request received",
