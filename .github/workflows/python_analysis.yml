@@ -74,7 +74,7 @@ jobs:
         continue-on-error: true
         id: pylint_evaluate
         run: |
-          pylint $(git ls-files '*.py') --max-line-length 132 --ignore-comments y --output-format=text -d C0103,W0718,W1203,R0801 -f text --fail-under 8.80
+          pylint $(git ls-files '*.py') --max-line-length 132 --ignore-comments y --output-format=text -d C0103,W0718,W1203,R0801 --fail-under 8.80
 
       - name: Check for critical failures
         if: always()
