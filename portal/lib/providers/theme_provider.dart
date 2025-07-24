@@ -109,7 +109,7 @@ class ThemeProvider extends ChangeNotifier {
         onSurface: Colors.white,
         error: Colors.red.shade400,
         onError: Colors.black,
-        outline: Colors.white.withOpacity(0.2),
+        outline: Colors.white.withValues(alpha: 0.2),
       ),
       scaffoldBackgroundColor: Colors.black,
       cardTheme: CardThemeData(
@@ -117,15 +117,15 @@ class ThemeProvider extends ChangeNotifier {
         color: Colors.grey[850],
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.white.withOpacity(0.1)),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
         floatingLabelStyle: const TextStyle(color: Colors.white),
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
         enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
         ),
         focusedBorder: const UnderlineInputBorder(
           borderSide: BorderSide(color: Colors.white),
@@ -137,7 +137,7 @@ class ThemeProvider extends ChangeNotifier {
           borderSide: BorderSide(color: Colors.red.shade400),
         ),
         filled: true,
-        fillColor: Colors.black.withOpacity(0.05),
+        fillColor: Colors.black.withValues(alpha: 0.05),
       ),
       textTheme: Typography.material2021().white.copyWith(
         bodyLarge: const TextStyle(color: Colors.white),
@@ -192,15 +192,15 @@ class ThemeProvider extends ChangeNotifier {
         behavior: SnackBarBehavior.floating,
       ),
       dividerTheme: DividerThemeData(
-        color: Colors.white.withOpacity(0.1),
+        color: Colors.white.withValues(alpha: 0.1),
         thickness: 1,
       ),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.white.withOpacity(0.5);
+            return Colors.white.withValues(alpha: 0.5);
           }
-          return Colors.white.withOpacity(0.2);
+          return Colors.white.withValues(alpha: 0.2);
         }),
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -227,7 +227,7 @@ class ThemeProvider extends ChangeNotifier {
         onSurface: Colors.black,
         error: Colors.red.shade400,
         onError: Colors.white,
-        outline: Colors.black.withOpacity(0.2),
+        outline: Colors.black.withValues(alpha: 0.2),
       ),
       scaffoldBackgroundColor: Colors.white,
       cardTheme: CardThemeData(
@@ -235,15 +235,15 @@ class ThemeProvider extends ChangeNotifier {
         color: Colors.grey[100],
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.black.withOpacity(0.1)),
+          side: BorderSide(color: Colors.black.withValues(alpha: 0.1)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        labelStyle: TextStyle(color: Colors.black.withOpacity(0.7)),
+        labelStyle: TextStyle(color: Colors.black.withValues(alpha: 0.7)),
         floatingLabelStyle: const TextStyle(color: Colors.black),
-        hintStyle: TextStyle(color: Colors.black.withOpacity(0.5)),
+        hintStyle: TextStyle(color: Colors.black.withValues(alpha: 0.5)),
         enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.black.withOpacity(0.3)),
+          borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.3)),
         ),
         focusedBorder: const UnderlineInputBorder(),
         errorBorder: UnderlineInputBorder(
@@ -253,7 +253,7 @@ class ThemeProvider extends ChangeNotifier {
           borderSide: BorderSide(color: Colors.red.shade400),
         ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
+        fillColor: Colors.white.withValues(alpha: 0.05),
       ),
       textTheme: Typography.material2021().black.copyWith(
         bodyLarge: const TextStyle(color: Colors.black),
@@ -307,15 +307,15 @@ class ThemeProvider extends ChangeNotifier {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       dividerTheme: DividerThemeData(
-        color: Colors.black.withOpacity(0.1),
+        color: Colors.black.withValues(alpha: 0.1),
         thickness: 1,
       ),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.black.withOpacity(0.5);
+            return Colors.black.withValues(alpha: 0.5);
           }
-          return Colors.black.withOpacity(0.2);
+          return Colors.black.withValues(alpha: 0.2);
         }),
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {

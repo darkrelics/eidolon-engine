@@ -321,7 +321,7 @@ class BackgroundContainer extends StatelessWidget {
           ),
           fit: BoxFit.cover,
           colorFilter: ColorFilter.mode(
-            Theme.of(context).colorScheme.surface.withOpacity(opacity),
+            Theme.of(context).colorScheme.surface.withValues(alpha: opacity),
             BlendMode.dstATop,
           ),
         ),

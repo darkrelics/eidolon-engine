@@ -255,7 +255,7 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                   const Center(child: CircularProgressIndicator())
                 else if (_error != null)
                   Card(
-                    color: colorScheme.error.withOpacity(0.1),
+                    color: colorScheme.error.withValues(alpha: 0.1),
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
@@ -268,7 +268,7 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                           Text(
                             _error!,
                             style: TextStyle(
-                              color: colorScheme.onSurface.withOpacity(0.7),
+                              color: colorScheme.onSurface.withValues(alpha: 0.7),
                               fontSize: 12,
                             ),
                           ),
@@ -283,12 +283,12 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                   )
                 else if (_characters == null || _characters!.isEmpty)
                   Card(
-                    color: colorScheme.surface.withOpacity(0.1),
+                    color: colorScheme.surface.withValues(alpha: 0.1),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                       side: BorderSide(
-                        color: colorScheme.outline.withOpacity(0.3),
+                        color: colorScheme.outline.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Padding(
@@ -305,7 +305,7 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                           Text(
                             'Create your first character in the game to begin your adventure.',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurface.withOpacity(0.7),
+                              color: colorScheme.onSurface.withValues(alpha: 0.7),
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -326,7 +326,7 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                       const SizedBox(height: 16),
                       ..._characters!.map(
                         (character) => Card(
-                          color: colorScheme.surface.withOpacity(0.1),
+                          color: colorScheme.surface.withValues(alpha: 0.1),
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ListTile(
                             leading: Icon(
@@ -394,7 +394,7 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                     'Stay tuned for updates!',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontStyle: FontStyle.italic,
-                      color: colorScheme.onSurface.withOpacity(0.6),
+                      color: colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
                 ),
