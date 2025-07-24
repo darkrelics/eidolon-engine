@@ -1,0 +1,104 @@
+name: Python Analysis
+
+on:
+  push:
+    branches: [develop, qa, prod]
+  pull_request:
+    branches: "**"
+
+permissions:
+  pull-requests: read
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Analysis Tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade wheel
+          pip install -r requirements/py-requirements.txt
+
+      # CRITICAL TESTS - Must pass for build to succeed
+      - name: Test with Ruff
+        continue-on-error: true
+        id: ruff_critical
+        run: |
+          ruff check . --select E9,F63,F7,F82,F401,F811,F821,F822,F823 --output-format=concise
+
+      - name: Test with Bandit
+        continue-on-error: true
+        id: bandit
+        run: |
+          bandit -q -ii -lll -r .
+
+      - name: Test with Vulture
+        continue-on-error: true
+        id: vulture
+        run: |
+          vulture . --min-confidence 65
+
+      - name: Test with Pip audit
+        continue-on-error: true
+        id: pip_audit
+        run: |
+          for req_file in $(git ls-files './requirements/*-requirements.txt'); do
+            echo "Processing $req_file"
+            pip-audit -r "$req_file"
+          done
+      - name: Evaluate with Ruff
+        continue-on-error: true
+        id: ruff_evaluate
+        run: |
+          ruff check . --output-format=concise --statistics --exit-zero
+
+      - name: Evaluate with Bandit
+        continue-on-error: true
+        id: bandit_evaluate
+        run: |
+          bandit -q -i -l --exit-zero -r .
+
+      - name: Evaluate with Pylint
+        continue-on-error: true
+        id: pylint_evaluate
+        run: |
+          pylint $(git ls-files '*.py') --max-line-length 132 --ignore-comments y --output-format=text -d C0103,W0718,W1203,R0801 -f text --fail-under 8.80
+
+      - name: Check for critical failures
+        if: always()
+        run: |
+          if [[ ${{ steps.ruff_critical.outcome }} != 'success' ]] || \
+             [[ ${{ steps.bandit.outcome }} != 'success' ]] || \
+             [[ ${{ steps.vulture.outcome }} != 'success' ]] || \
+             [[ ${{ steps.pip_audit.outcome }} != 'success' ]]; then
+            echo "One or more critical tests failed"
+            exit 1
+          else
+            echo "All critical tests passed"
+          fi
+
+      - name: Generate Analysis Summary
+        if: always()
+        run: |
+          echo "## Python Code Analysis Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### Critical Tests" >> $GITHUB_STEP_SUMMARY
+          echo "- Ruff Critical: ${{ steps.ruff_critical.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Bandit Security: ${{ steps.bandit.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Vulture Dead Code: ${{ steps.vulture.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Pip Audit: ${{ steps.pip_audit.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "### Comprehensive Evaluation" >> $GITHUB_STEP_SUMMARY
+          echo "- Ruff Full: ${{ steps.ruff_evaluate.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Bandit Full: ${{ steps.bandit_evaluate.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Pylint Deep: ${{ steps.pylint_evaluate.outcome }}" >> $GITHUB_STEP_SUMMARY
