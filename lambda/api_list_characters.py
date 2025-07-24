@@ -116,7 +116,7 @@ def lambda_handler(event, context):
                 "status_code": 200,
                 "player_id": player_id,
                 "character_count": len(characters),
-                "character_names": [c["name"] for c in characters],
+                "character_names": [c.get("CharacterName", "") for c in characters],
             },
         )
         return cors_handler.add_cors_headers(create_response(200, {"characters": characters}), event)
