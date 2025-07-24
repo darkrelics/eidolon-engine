@@ -72,7 +72,7 @@ class _SplashScreenState extends State<SplashScreen>
             image: const AssetImage('assets/images/background.jpg'),
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(
-              colorScheme.surface.withValues(alpha: 0.7),
+              colorScheme.surface.withOpacity(0.7),
               BlendMode.darken,
             ),
           ),
@@ -101,7 +101,7 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Text(
                       'Where Legends Are Born',
                       style: theme.textTheme.titleLarge?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.8),
+                        color: colorScheme.onSurface.withOpacity(0.8),
                         fontStyle: FontStyle.italic,
                       ),
                     ),
@@ -110,12 +110,12 @@ class _SplashScreenState extends State<SplashScreen>
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: Card(
-                      color: colorScheme.surface.withValues(alpha: 0.8),
+                      color: colorScheme.surface.withOpacity(0.8),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                         side: BorderSide(
-                          color: colorScheme.outline.withValues(alpha: 0.3),
+                          color: colorScheme.outline.withOpacity(0.3),
                         ),
                       ),
                       child: Padding(
@@ -160,9 +160,7 @@ class _SplashScreenState extends State<SplashScreen>
                             child: Text(
                               'New traveler? Register here',
                               style: TextStyle(
-                                color: colorScheme.onSurface.withValues(
-                                  alpha: 0.8,
-                                ),
+                                color: colorScheme.onSurface.withOpacity(0.8),
                               ),
                             ),
                           ),

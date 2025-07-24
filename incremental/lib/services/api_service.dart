@@ -15,9 +15,9 @@ class CharacterInfo {
 
   factory CharacterInfo.fromJson(Map<String, dynamic> json) {
     return CharacterInfo(
-      name: json['name'] as String,
-      id: json['id'] as String? ?? '',
-      dead: json['dead'] as bool? ?? false,
+      name: json['CharacterName'] as String,
+      id: json['CharacterID'] as String? ?? '',
+      dead: json['Dead'] as bool? ?? false,
     );
   }
 }
@@ -69,7 +69,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/characters'),
       headers: headers,
-      body: jsonEncode({'characterName': name, 'archetype': archetype}),
+      body: jsonEncode({'characterName': name, 'archetypeName': archetype}),
     );
 
     debugPrint(
@@ -91,7 +91,7 @@ class ApiService {
     debugPrint('ApiService: Deleting character - id: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.delete(
-      Uri.parse('$baseUrl/characters?characterId=$characterId'),
+      Uri.parse('$baseUrl/character?characterId=$characterId'),
       headers: headers,
     );
 
@@ -110,7 +110,7 @@ class ApiService {
   Future<Character?> getCharacterById(String characterId) async {
     debugPrint('ApiService: Getting character by ID: $characterId');
     final headers = await _getHeaders();
-    final uri = Uri.parse('$baseUrl/characters?characterId=$characterId');
+    final uri = Uri.parse('$baseUrl/character?characterId=$characterId');
     debugPrint('ApiService: Request URI: $uri');
 
     final response = await _httpClient.get(uri, headers: headers);
