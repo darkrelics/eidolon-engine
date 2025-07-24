@@ -92,18 +92,22 @@ def lambda_handler(event, context):
         character_list = player_data.get("CharacterList", {})
         logger.info("Player data retrieved", extra={"player_id": player_id, "character_count": len(character_list)})
 
-        # Build character list with name, id, and death status
+        # Build character list with DynamoDB field names
         characters: list = []
         for char_name, char_info in character_list.items():
-            char_data = {"name": char_name, "id": char_info.get("UUID", ""), "dead": char_info.get("Dead", False)}
+            char_data = {
+                "CharacterName": char_name, 
+                "CharacterID": char_info.get("UUID", ""), 
+                "Dead": char_info.get("Dead", False)
+            }
             characters.append(char_data)
             logger.debug(
                 "Processing character",
-                extra={"character_name": char_name, "character_id": char_data["id"], "is_dead": char_data["dead"]},
+                extra={"character_name": char_name, "character_id": char_data["CharacterID"], "is_dead": char_data["Dead"]},
             )
 
         # Sort by name for consistent ordering
-        characters.sort(key=lambda x: x["name"])
+        characters.sort(key=lambda x: x["CharacterName"])
 
         # Return success response
         logger.info(
