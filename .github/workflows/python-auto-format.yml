@@ -54,7 +54,7 @@ jobs:
       - name: Check for changes
         id: git-check
         run: |
-          git add . -v
+          git add . -vv
           if git diff-index --quiet HEAD; then
             echo "changes=false" >> $GITHUB_OUTPUT
           else
@@ -64,5 +64,5 @@ jobs:
       - name: Commit and push changes
         if: steps.git-check.outputs.changes == 'true'
         run: |
-          git commit -m "Apply Autoformatting"
-          git push -v
+          git commit -m "Apply Python Autoformatting"
+          git push -vv
