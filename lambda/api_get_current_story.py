@@ -19,8 +19,7 @@ limitations under the License.
 import time
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_table
-from eidolon.environment import ACTIVE_SEGMENTS_TABLE, SEGMENTS_TABLE, STORY_TABLE
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, get_query_parameter
 from eidolon.responses import create_response, error_response, not_found_response
@@ -78,11 +77,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
 
     try:
-        # Get active segment for character
-        active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-
-        # Query by CharacterID
-        response = active_segments_table.query(
+        # Get active segment for character using GSI query
+        items = dynamo.query(
+            TableName.ACTIVE_SEGMENTS,
             IndexName="CharacterID-index",
             KeyConditionExpression="CharacterID = :cid",
             FilterExpression="PlayerID = :pid AND #status = :status",
@@ -94,8 +91,6 @@ def lambda_handler(event: dict, context: object) -> dict:
             },
         )
 
-        items = response.get("Items", [])
-
         if not items:
             logger.info("No active story found", extra={"character_id": character_id})
             return cors_handler.add_cors_headers(not_found_response("No active story"), event)
@@ -106,19 +101,13 @@ def lambda_handler(event: dict, context: object) -> dict:
         segment_id = active_segment.get("SegmentID")
 
         # Get story metadata
-        story_table = get_table(STORY_TABLE)
-        story_response = story_table.get_item(Key={"StoryID": story_id})
-
-        story_item = story_response.get("Item")
+        story_item = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
         if not story_item:
             logger.error("Story not found", extra={"story_id": story_id})
             return cors_handler.add_cors_headers(error_response("Story data missing", status_code=500), event)
 
         # Get the current segment from Segments table
-        segments_table = get_table(SEGMENTS_TABLE)
-        segment_response = segments_table.get_item(Key={"StoryID": story_id, "SegmentID": segment_id})
-
-        current_segment = segment_response.get("Item")
+        current_segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id})
         if not current_segment:
             logger.error(
                 "Segment not found",
@@ -126,8 +115,6 @@ def lambda_handler(event: dict, context: object) -> dict:
             )
             return cors_handler.add_cors_headers(error_response("Segment data missing", status_code=500), event)
 
-        # Get all segments to calculate progress (optional - for total count)
-        # For now, we'll use TotalSegments from story if available
         total_segments = story_item.get("TotalSegments", 1)
         current_segment_index = current_segment.get("SegmentIndex", 0)
 

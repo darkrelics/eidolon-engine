@@ -21,8 +21,7 @@ Updates the active segment with the player's choice and returns the next segment
 """
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_item, get_table, update_item
-from eidolon.environment import ACTIVE_SEGMENTS_TABLE, SEGMENTS_TABLE
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, get_required_field, parse_json_body
 from eidolon.responses import create_response, error_response, not_found_response
@@ -43,10 +42,9 @@ def get_active_segment_for_character(character_id: str, player_id: str) -> dict:
     Returns:
         Active segment data or None if not found or not owned by player
     """
-    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-
     # Query by CharacterID to find active segment
-    response = active_segments_table.query(
+    items = dynamo.query(
+        TableName.ACTIVE_SEGMENTS,
         IndexName="CharacterID-index",
         KeyConditionExpression="CharacterID = :cid",
         FilterExpression="PlayerID = :pid AND #status = :status AND SegmentType = :type",
@@ -58,8 +56,6 @@ def get_active_segment_for_character(character_id: str, player_id: str) -> dict:
             ":type": "decision",
         },
     )
-
-    items = response.get("Items", [])
     if not items:
         logger.warning("No active decision segment found", extra={"character_id": character_id})
         return {}
@@ -132,19 +128,17 @@ def update_active_segment_decision(active_segment_id: str, decision_id: str) -> 
     Returns:
         Updated active segment data
     """
-    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-
     # Update the decision field
-    update_item(
-        active_segments_table,
-        {"ActiveSegmentID": active_segment_id},
-        "SET #decision = :decision, #status = :status",
-        {"#decision": "Decision", "#status": "Status"},
-        {":decision": decision_id, ":status": "completed"},
+    dynamo.update_item(
+        TableName.ACTIVE_SEGMENTS,
+        Key={"ActiveSegmentID": active_segment_id},
+        UpdateExpression="SET #decision = :decision, #status = :status",
+        ExpressionAttributeNames={"#decision": "Decision", "#status": "Status"},
+        ExpressionAttributeValues={":decision": decision_id, ":status": "completed"},
     )
 
     # Get updated item
-    return get_item(active_segments_table, {"ActiveSegmentID": active_segment_id})  # type: ignore
+    return dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id}) # type: ignore
 
 
 def get_next_segment_id(active_segment: dict, decision_id: str) -> str:
@@ -260,13 +254,12 @@ def lambda_handler(event: dict, context: object) -> dict:
         response_data = {
             "accepted": True,
             "nextSegmentTime": None,
-        }  # Will be set if there's a next segment
+        }
 
         if next_segment_id:
             # Calculate next segment completion time
             story_id = active_segment.get("StoryID")
-            segments_table = get_table(SEGMENTS_TABLE)
-            next_segment = get_item(segments_table, {"StoryID": story_id, "SegmentID": next_segment_id})
+            next_segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id})
 
             if next_segment:
                 # Next segment will start after processing completes

@@ -23,8 +23,7 @@ Returns stories the character can participate in, checking prerequisites and coo
 from datetime import datetime, timezone
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import decimal_to_float, get_item, get_table
-from eidolon.environment import CHARACTERS_TABLE, HISTORY_TABLE, STORY_TABLE
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, get_query_parameter
 from eidolon.responses import create_response, error_response, not_found_response
@@ -45,8 +44,7 @@ def get_character_and_verify_ownership(character_id: str, player_id: str) -> obj
     Returns:
         Character data or None if not found or not owned by player
     """
-    characters_table = get_table(CHARACTERS_TABLE)
-    character = get_item(characters_table, {"CharacterID": character_id})
+    character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
 
     if not character:
         logger.warning("Character not found", extra={"character_id": character_id})
@@ -79,10 +77,8 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
         return 0
 
     # Query history table for last completion
-    history_table = get_table(HISTORY_TABLE)
     try:
-        response = history_table.get_item(Key={"CharacterID": character_id, "StoryID": story_id})
-        history = response.get("Item")
+        history = dynamo.get_item(TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id})
 
         if not history:
             return 0  # Never played
@@ -148,8 +144,6 @@ def check_prerequisites(character: dict, prerequisites: dict) -> bool:
     # Check required rooms visited
     required_rooms = prerequisites.get("requiredRooms", [])
     if required_rooms:
-        # TODO: Implement room visit tracking
-        # For now, we'll skip this check
         pass
 
     return True
@@ -228,12 +222,11 @@ def lambda_handler(event: dict, context: object) -> dict:
             return cors_handler.add_cors_headers(create_response(200, {"stories": []}), event)
 
         # Load story details from Story table
-        story_table = get_table(STORY_TABLE)
         stories = []
 
         for story_id in available_story_ids:
             try:
-                story = get_item(story_table, {"StoryID": story_id})
+                story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
                 if not story:
                     logger.warning("Story not found", extra={"story_id": story_id})
                     continue
@@ -292,9 +285,8 @@ def lambda_handler(event: dict, context: object) -> dict:
             },
         )
 
-        # Convert any Decimal values to float for JSON serialization
-        stories_data = decimal_to_float(stories)
-        response_dict = {"stories": stories_data}
+        # No need to convert Decimal values - dynamo_v2 handles this automatically
+        response_dict = {"stories": stories}
         return cors_handler.add_cors_headers(create_response(200, response_dict), event)
 
     except Exception as err:

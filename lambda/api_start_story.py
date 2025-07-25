@@ -27,14 +27,7 @@ from datetime import datetime, timezone
 from botocore.exceptions import ClientError
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_item, get_table, put_item, update_item_with_condition
-from eidolon.environment import (
-    ACTIVE_SEGMENTS_TABLE,
-    CHARACTERS_TABLE,
-    HISTORY_TABLE,
-    SEGMENTS_TABLE,
-    STORY_TABLE,
-)
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, get_required_field, parse_json_body
 from eidolon.responses import create_response, error_response, not_found_response
@@ -55,8 +48,7 @@ def get_character_and_verify_ownership(character_id: str, player_id: str) -> dic
     Returns:
         Character data
     """
-    characters_table = get_table(CHARACTERS_TABLE)
-    character = get_item(characters_table, {"CharacterID": character_id})
+    character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
 
     if not character:
         logger.warning("Character not found", extra={"character_id": character_id})
@@ -99,8 +91,7 @@ def get_story_and_first_segment(story_id: str) -> tuple:
         Tuple of (story_data, first_segment) or (None, None) if not found
     """
     # Get story metadata
-    story_table = get_table(STORY_TABLE)
-    story = get_item(story_table, {"StoryID": story_id})
+    story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
 
     if not story:
         logger.warning("Story not found", extra={"story_id": story_id})
@@ -112,8 +103,7 @@ def get_story_and_first_segment(story_id: str) -> tuple:
         logger.error("Story has no first segment", extra={"story_id": story_id})
         return None, None
 
-    segments_table = get_table(SEGMENTS_TABLE)
-    segment = get_item(segments_table, {"StoryID": story_id, "SegmentID": first_segment_id})
+    segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": first_segment_id})
 
     if not segment:
         logger.error(
@@ -125,13 +115,15 @@ def get_story_and_first_segment(story_id: str) -> tuple:
     return story, segment
 
 
-def create_active_segment(character_id: str, story_id: str, segment: dict) -> dict:
+def create_active_segment(character_id: str, player_id: str, story_id: str, story_title: str, segment: dict) -> dict:
     """
     Create an active segment record for tracking progress.
 
     Args:
         character_id: Character UUID
+        player_id: Player UUID
         story_id: Story UUID
+        story_title: Story title
         segment: Segment data from Segments table
 
     Returns:
@@ -150,33 +142,34 @@ def create_active_segment(character_id: str, story_id: str, segment: dict) -> di
     active_segment: dict = {
         "ActiveSegmentID": active_segment_id,
         "CharacterID": character_id,
+        "PlayerID": player_id,
         "StoryID": story_id,
         "SegmentID": segment_id,
+        "SegmentType": segment_type,
+        "StoryTitle": story_title,
+        "Status": "active",
         "StartTime": current_time,
         "EndTime": end_time,
     }
 
     # Add type-specific fields based on segment type
     if segment_type == "decision":
-        active_segment["Decision"] = None  # Will be set when player decides
-        # Store the decision options for validation later
+        active_segment["Decision"] = None
         active_segment["DecisionOptions"] = segment.get("DecisionOptions", {})
     elif segment_type == "narrative":
-        # Initialize empty lists for challenge tracking
         active_segment["ChallengeResults"] = []
-        active_segment["Outcome"] = None  # Will be determined when segment completes
+        active_segment["Outcome"] = None
     elif segment_type == "combat":
         combat_config = segment.get("Combat", {})
         active_segment["CombatState"] = {
             "round": 0,
             "playerWounds": [],
-            "opponentHealth": None,  # Will be set when combat starts
+            "opponentHealth": None,
             "opponentId": combat_config.get("opponentId"),
         }
 
     # Store in DynamoDB
-    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-    put_item(active_segments_table, active_segment)
+    dynamo.put_item(TableName.ACTIVE_SEGMENTS, active_segment)
 
     return active_segment
 
@@ -214,9 +207,7 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         response["options"] = options
     elif segment_type == "narrative":
         response["shortStatus"] = segment.get("ShortStatus", "Progressing through the story...")
-        # Note: Narrative segments don't have a Narrative field in the schema
-        # The narrative comes from Results based on outcome
-        response["narrative"] = ""  # Will be populated after challenges are resolved
+        response["narrative"] = ""
     elif segment_type == "combat":
         response["shortStatus"] = segment.get("ShortStatus", "Engaged in combat!")
         response["opponentId"] = segment.get("Combat", {}).get("opponentId")
@@ -234,8 +225,6 @@ def create_history_entry(character_id: str, story_id: str, story_title: str, sto
         story_title: Story title
         story_type: Type of story (one-time, daily, repeatable)
     """
-    history_table = get_table(HISTORY_TABLE)
-
     history_entry = {
         "CharacterID": character_id,
         "StoryID": story_id,
@@ -247,7 +236,7 @@ def create_history_entry(character_id: str, story_id: str, story_title: str, sto
     }
 
     # Put item (will overwrite if exists - handles retries)
-    put_item(history_table, history_entry)
+    dynamo.put_item(TableName.HISTORY, history_entry)
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -343,36 +332,34 @@ def lambda_handler(event: dict, context: object) -> dict:
             return cors_handler.add_cors_headers(error_response("Story configuration error", status_code=500), event)
 
         # Create active segment first to get the segment ID
-        active_segment = create_active_segment(character_id, story_id, first_segment)  # type: ignore
+        story_title = story.get("Title", "Unknown Story")
+        active_segment = create_active_segment(character_id, player_id, story_id, story_title, first_segment)  # type: ignore
 
         # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID and remove from available list
         try:
-            characters_table = get_table(CHARACTERS_TABLE)
-
             # Build update expression to set GameMode and remove from AvailableStories
             update_expression = (
                 "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id "
                 "REMOVE AvailableStories[" + str(character["AvailableStories"].index(story_id)) + "]"
             )
 
-            update_item_with_condition(
-                characters_table,
-                {"CharacterID": character_id},
-                update_expression,
-                {
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues={
                     ":mode": "Incremental",
                     ":none": "None",
                     ":story_id": story_id,
                     ":segment_id": active_segment["ActiveSegmentID"],
                 },
-                "GameMode = :none",
+                ConditionExpression="GameMode = :none",
             )
 
         except ClientError as err:
             # Rollback: Delete the active segment we just created
             try:
-                active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-                active_segments_table.delete_item(Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]})
+                dynamo.delete_item(TableName.ACTIVE_SEGMENTS, Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]})
             except Exception as rollback_err:
                 logger.error(
                     "Failed to rollback active segment",
@@ -392,8 +379,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         except Exception as err:
             # Rollback: Delete the active segment we just created
             try:
-                active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-                active_segments_table.delete_item(Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]})
+                dynamo.delete_item(TableName.ACTIVE_SEGMENTS, Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]})
             except Exception as rollback_err:
                 logger.error(
                     "Failed to rollback active segment",
@@ -410,7 +396,6 @@ def lambda_handler(event: dict, context: object) -> dict:
             return cors_handler.add_cors_headers(error_response("Failed to start story", status_code=500), event)
 
         # Create history entry
-        story_title = story.get("Title", "Unknown Story")
         story_type = story.get("StoryType", "repeatable")
         create_history_entry(character_id, story_id, story_title, story_type)  # type: ignore
 

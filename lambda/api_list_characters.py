@@ -20,8 +20,7 @@ Lambda function to list character names for an authenticated player.
 Returns only character names and death status from the player table.
 """
 
-from eidolon.dynamo import get_item, get_table
-from eidolon.environment import PLAYERS_TABLE
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 from eidolon.utilities import (
     build_lambda_response,
@@ -48,8 +47,7 @@ def list_characters_business_logic(player_id: str) -> tuple:
         If failed: (None, error_message_string)
     """
     # Get player data from players table
-    players_table = get_table(PLAYERS_TABLE)
-    player_data = get_item(players_table, {"PlayerID": player_id})
+    player_data = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
 
     if not player_data:
         logger.warning("Player not found in database", extra={"player_id": player_id})

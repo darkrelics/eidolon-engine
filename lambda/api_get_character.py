@@ -21,10 +21,8 @@ Returns the full character data including active segments if any.
 """
 
 from eidolon.character import get_character_with_ownership
-from eidolon.dynamo import decimal_to_float
-from eidolon.environment import ACTIVE_SEGMENTS_TABLE
+from eidolon.dynamo import TableName, dynamo, decimal_to_float
 from eidolon.logger import get_logger
-from eidolon.queries import query_by_gsi
 from eidolon.requests import get_query_parameter
 from eidolon.responses import error_response, not_found_response
 from eidolon.utilities import (
@@ -67,25 +65,32 @@ def get_character_business_logic(character_id: str, player_id: str) -> tuple:
 
     # Check for active segments
     active_segment = None
-    active_segments, _ = query_by_gsi(
-        ACTIVE_SEGMENTS_TABLE,
-        "CharacterID-index",
-        {"CharacterID": character_id},
-        filter_expression="PlayerID = :pid AND #status = :status",
-        expression_values={":pid": player_id, ":status": "active"},
-        expression_names={"#status": "Status"},
-    )
-
-    if active_segments and len(active_segments) > 0:
-        active_segment = active_segments[0]
-        logger.info(
-            "Active segment found for character",
-            extra={
-                "character_id": character_id,
-                "segment_type": active_segment.get("SegmentType"),
-                "story_id": active_segment.get("StoryID"),
-            },
+    try:
+        active_segments = dynamo.query_by_gsi(
+            TableName.ACTIVE_SEGMENTS,
+            "CharacterID-index",
+            {"CharacterID": character_id},
+            FilterExpression="PlayerID = :pid AND #status = :status",
+            ExpressionAttributeValues={":pid": player_id, ":status": "active"},
+            ExpressionAttributeNames={"#status": "Status"},
         )
+
+        if active_segments:
+            active_segment = active_segments[0]
+            logger.info(
+                "Active segment found for character",
+                extra={
+                    "character_id": character_id,
+                    "segment_type": active_segment.get("SegmentType"),
+                    "story_id": active_segment.get("StoryID"),
+                },
+            )
+    except Exception as err:
+        logger.error(
+            "Error querying active segments",
+            extra={"error": str(err), "character_id": character_id},
+        )
+        # Continue without active segment data
 
     # Build response data
     response_data = {"character": decimal_to_float(character)}

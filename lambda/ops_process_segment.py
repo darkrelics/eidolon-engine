@@ -26,14 +26,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from eidolon.dynamo import get_item, get_table, put_item, update_item
-from eidolon.environment import (
-    ACTIVE_SEGMENTS_TABLE,
-    CHARACTERS_TABLE,
-    HISTORY_TABLE,
-    OPPONENTS_TABLE,
-    SEGMENTS_TABLE,
-)
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 
 # Configure logging
@@ -207,8 +200,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
     max_rounds = combat_config.get("maxRounds", 10)
 
     # Get opponent data
-    opponents_table = get_table(OPPONENTS_TABLE)
-    opponent = get_item(opponents_table, {"OpponentID": opponent_id})
+    opponent = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
 
     if not opponent:
         logger.error("Opponent not found", extra={"opponent_id": opponent_id})
@@ -326,7 +318,6 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             }
 
             # Check if player is defeated
-            # Simplified wound tracking - in full MUD system this would be more complex
             lethal_wounds = sum(1 for w in player_wounds if w["type"] == "lethal")
             total_wounds = len(player_wounds)
 
@@ -405,13 +396,12 @@ def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
         default_decision = segment_def.get("DefaultDecision")
         if default_decision:
             # Update active segment with default decision
-            active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-            update_item(
-                active_segments_table,
-                {"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
-                "SET #decision = :decision",
-                {"#decision": "Decision"},
-                {":decision": default_decision},
+            dynamo.update_item(
+                TableName.ACTIVE_SEGMENTS,
+                Key={"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
+                UpdateExpression="SET #decision = :decision",
+                ExpressionAttributeNames={"#decision": "Decision"},
+                ExpressionAttributeValues={":decision": default_decision},
             )
             return "normal"
         else:
@@ -427,8 +417,6 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         outcome: Outcome type
         results: Challenge or combat results
     """
-    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-
     update_expression = "SET #status = :status, #outcome = :outcome"
     expression_names = {"#status": "Status", "#outcome": "Outcome"}
     expression_values = {":status": "completed", ":outcome": outcome}
@@ -441,12 +429,12 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         update_expression += ", CombatState = :state"
         expression_values[":state"] = results["combatState"]
 
-    update_item(
-        active_segments_table,
-        {"ActiveSegmentID": active_segment_id},
-        update_expression,
-        expression_names,
-        expression_values,
+    dynamo.update_item(
+        TableName.ACTIVE_SEGMENTS,
+        Key={"ActiveSegmentID": active_segment_id},
+        UpdateExpression=update_expression,
+        ExpressionAttributeNames=expression_names,
+        ExpressionAttributeValues=expression_values,
     )
 
 
@@ -459,21 +447,18 @@ def update_history_segment(character_id: str, story_id: str, segment_data: dict)
         story_id: Story UUID
         segment_data: Data about completed segment
     """
-    history_table = get_table(HISTORY_TABLE)
-
     # Get existing history
-    history = get_item(history_table, {"CharacterID": character_id, "StoryID": story_id})
+    history = dynamo.get_item(TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id})
 
     if history:
         segment_history = history.get("SegmentHistory", [])
         segment_history.append(segment_data)
 
-        update_item(
-            history_table,
-            {"CharacterID": character_id, "StoryID": story_id},
-            "SET SegmentHistory = :history",
-            {},
-            {":history": segment_history},
+        dynamo.update_item(
+            TableName.HISTORY,
+            Key={"CharacterID": character_id, "StoryID": story_id},
+            UpdateExpression="SET SegmentHistory = :history",
+            ExpressionAttributeValues={":history": segment_history},
         )
 
 
@@ -515,8 +500,7 @@ def get_next_segment_and_create(
         return None
 
     # Get next segment definition
-    segments_table = get_table(SEGMENTS_TABLE)
-    next_segment = get_item(segments_table, {"StoryID": story_id, "SegmentID": next_segment_id})
+    next_segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id})
 
     if not next_segment:
         logger.error("Next segment not found", extra={"segment_id": next_segment_id})
@@ -590,8 +574,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         }
 
     # Store in DynamoDB
-    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-    put_item(active_segments_table, active_segment)
+    dynamo.put_item(TableName.ACTIVE_SEGMENTS, active_segment)
 
     return active_segment_id
 
@@ -606,23 +589,19 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
         outcome: Final outcome
     """
     # Update character GameMode back to None
-    characters_table = get_table(CHARACTERS_TABLE)
-    update_item(
-        characters_table,
-        {"CharacterID": character_id},
-        "SET GameMode = :none",
-        {},
-        {":none": "None"},
+    dynamo.update_item(
+        TableName.CHARACTERS,
+        Key={"CharacterID": character_id},
+        UpdateExpression="SET GameMode = :none",
+        ExpressionAttributeValues={":none": "None"},
     )
 
     # Update history with completion
-    history_table = get_table(HISTORY_TABLE)
-    update_item(
-        history_table,
-        {"CharacterID": character_id, "StoryID": story_id},
-        "SET FinishedAt = :finished, FinalOutcome = :outcome",
-        {},
-        {":finished": datetime.now(timezone.utc).isoformat(), ":outcome": outcome},
+    dynamo.update_item(
+        TableName.HISTORY,
+        Key={"CharacterID": character_id, "StoryID": story_id},
+        UpdateExpression="SET FinishedAt = :finished, FinalOutcome = :outcome",
+        ExpressionAttributeValues={":finished": datetime.now(timezone.utc).isoformat(), ":outcome": outcome},
     )
 
 
@@ -664,8 +643,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
 
         # Get active segment
-        active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-        active_segment = get_item(active_segments_table, {"ActiveSegmentID": active_segment_id})
+        active_segment = dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
 
         if not active_segment:
             logger.error(
@@ -675,16 +653,14 @@ def lambda_handler(event: dict, context: object) -> dict:
             return {"statusCode": 404, "body": "Active segment not found"}
 
         # Get segment definition
-        segments_table = get_table(SEGMENTS_TABLE)
-        segment_def = get_item(segments_table, {"StoryID": story_id, "SegmentID": segment_id})
+        segment_def = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id})
 
         if not segment_def:
             logger.error("Segment definition not found", extra={"segment_id": segment_id})
             return {"statusCode": 404, "body": "Segment not found"}
 
         # Get character data
-        characters_table = get_table(CHARACTERS_TABLE)
-        character = get_item(characters_table, {"CharacterID": character_id})
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
 
         if not character:
             logger.error("Character not found", extra={"character_id": character_id})

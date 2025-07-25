@@ -21,8 +21,7 @@ Returns the narrative text and any rewards/effects for the outcome.
 """
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_item, get_table
-from eidolon.environment import ACTIVE_SEGMENTS_TABLE, SEGMENTS_TABLE
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, get_query_parameter
 from eidolon.responses import create_response, error_response, not_found_response
@@ -44,10 +43,9 @@ def get_completed_segment_for_character(character_id: str, segment_id: str, play
     Returns:
         Active segment data or None if not found or not owned by player
     """
-    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-
     # Query by CharacterID to find the segment
-    response = active_segments_table.query(
+    items = dynamo.query(
+        TableName.ACTIVE_SEGMENTS,
         IndexName="CharacterID-index",
         KeyConditionExpression="CharacterID = :cid",
         FilterExpression="PlayerID = :pid AND SegmentID = :sid AND #status = :status",
@@ -59,8 +57,6 @@ def get_completed_segment_for_character(character_id: str, segment_id: str, play
             ":status": "completed",
         },
     )
-
-    items = response.get("Items", [])
     if not items:
         logger.warning(
             "Completed segment not found",
@@ -90,8 +86,7 @@ def get_segment_outcome(active_segment: dict) -> object:
     segment_id = active_segment.get("SegmentID")
 
     # Get segment definition from Segments table
-    segments_table = get_table(SEGMENTS_TABLE)
-    segment = get_item(segments_table, {"StoryID": story_id, "SegmentID": segment_id})
+    segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id})
 
     if not segment:
         logger.error("Segment not found", extra={"story_id": story_id, "segment_id": segment_id})

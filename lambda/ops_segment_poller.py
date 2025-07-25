@@ -25,8 +25,8 @@ import time
 
 import boto3
 
-from eidolon.dynamo import get_table
-from eidolon.environment import ACTIVE_SEGMENTS_TABLE, PROCESS_SEGMENT_FUNCTION
+from eidolon.dynamo import TableName, dynamo
+from eidolon.environment import PROCESS_SEGMENT_FUNCTION
 from eidolon.logger import get_logger
 
 # Configure logging
@@ -43,11 +43,11 @@ def get_completed_segments() -> list:
     Returns:
         List of segments ready for processing
     """
-    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
     current_time = int(time.time())
 
     # Query using the CompletionTimeIndex GSI
-    response = active_segments_table.query(
+    items = dynamo.query(
+        TableName.ACTIVE_SEGMENTS,
         IndexName="CompletionTimeIndex",
         KeyConditionExpression="#status = :status AND EndTime <= :current_time",
         ExpressionAttributeNames={"#status": "Status"},
@@ -55,7 +55,7 @@ def get_completed_segments() -> list:
         Limit=50,  # Process up to 50 segments per invocation
     )
 
-    return response.get("Items", [])
+    return items # type: ignore
 
 
 def invoke_process_segment(segment: dict) -> None:

@@ -26,7 +26,7 @@ from decimal import Decimal
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.dynamo import delete_item, get_item, get_table, put_item, update_item  # noqa: C0413
+from eidolon.dynamo import TableName, dynamo  # noqa: C0413
 
 
 def display_rooms() -> list:
@@ -37,9 +37,7 @@ def display_rooms() -> list:
         A list of room dictionaries.
     """
     try:
-        rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
-        response = rooms_table.scan()
-        rooms = response.get("Items", [])
+        rooms = dynamo.scan(TableName.ROOMS)
         if not rooms:
             print("No rooms found.")
             return []
@@ -77,9 +75,7 @@ def display_prototypes() -> list:
     Fetches and displays all item prototypes from the 'prototypes' DynamoDB table.
     """
     try:
-        prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
-        response = prototypes_table.scan()
-        prototypes = response.get("Items", [])
+        prototypes = dynamo.scan(TableName.PROTOTYPES)
         if not prototypes:
             print("No prototypes found.")
             return []
@@ -149,12 +145,13 @@ def add_item_to_table(new_item: dict) -> bool:
     Returns:
         True if the item was successfully added to the table, False otherwise.
     """
-    items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
-    if put_item(items_table, new_item):
+    try:
+        dynamo.put_item(TableName.ITEMS, new_item)
         print(f"Successfully added item '{new_item['item_name']}' to items table.")
         return True
-    print("Error saving new item to items table.")
-    return False
+    except Exception as err:
+        print(f"Error saving new item to items table: {err}")
+        return False
 
 
 def add_item_to_room(room: dict, new_item: dict) -> bool:
@@ -170,8 +167,11 @@ def add_item_to_room(room: dict, new_item: dict) -> bool:
     """
     room_id = int(room.get("RoomID", 0))
 
-    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
-    current_room = get_item(rooms_table, {"RoomID": room_id})
+    try:
+        current_room = dynamo.get_item(TableName.ROOMS, {"RoomID": room_id})
+    except Exception as err:
+        print(f"Error fetching room: {err}")
+        return False
 
     if not current_room:
         print(f"Room {room_id} not found.")
@@ -179,7 +179,6 @@ def add_item_to_room(room: dict, new_item: dict) -> bool:
 
     current_item_ids = current_room.get("ItemID", [])
 
-    # Ensure current_item_ids is a list
     if not isinstance(current_item_ids, list):
         current_item_ids = [current_item_ids] if current_item_ids else []
 
@@ -191,17 +190,24 @@ def add_item_to_room(room: dict, new_item: dict) -> bool:
 
     current_item_ids.append(item_id)
 
-    if update_item(rooms_table, {"RoomID": room_id}, "SET ItemID = :item_ids", {":item_ids": current_item_ids}):
+    try:
+        dynamo.update_item(
+            TableName.ROOMS,
+            Key={"RoomID": room_id},
+            UpdateExpression="SET ItemID = :item_ids",
+            ExpressionAttributeValues={":item_ids": current_item_ids}
+        )
         print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
         return True
-    print("Error updating room.")
-    # Attempt to roll back by deleting the item we just added
-    items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
-    if delete_item(items_table, {"ItemID": new_item["ItemID"]}):
-        print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
-    else:
-        print("Error rolling back item addition.")
-    return False
+    except Exception as err:
+        print(f"Error updating room: {err}")
+        # Attempt to roll back by deleting the item we just added
+        try:
+            dynamo.delete_item(TableName.ITEMS, Key={"ItemID": new_item["ItemID"]})
+            print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
+        except Exception as rollback_err:
+            print(f"Error rolling back item addition: {rollback_err}")
+        return False
 
 
 def main() -> None:

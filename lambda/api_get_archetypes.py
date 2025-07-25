@@ -22,8 +22,7 @@ Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 """
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_table, scan_all_items
-from eidolon.environment import ARCHETYPES_TABLE
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 from eidolon.responses import create_response, error_response
 
@@ -42,7 +41,7 @@ def load_player_archetypes() -> list:
     Returns:
         List of player archetypes with their data
     """
-    global player_archetypes_cache, cache_loaded  # kill the global variables
+    global player_archetypes_cache, cache_loaded
 
     if cache_loaded:
         logger.info("Returning cached player archetypes")
@@ -51,15 +50,21 @@ def load_player_archetypes() -> list:
     try:
         logger.info("Loading archetypes from DynamoDB")
 
-        # Scan the archetypes table with pagination
-        archetypes_table = get_table(ARCHETYPES_TABLE)
-        success, result = scan_all_items(archetypes_table)
+        # Scan the archetypes table
+        items = []
+        last_evaluated_key = None
 
-        if not success:
-            logger.error("Failed to load archetypes", extra={"error": result})
-            return []
+        while True:
+            scan_params = {}
+            if last_evaluated_key:
+                scan_params["ExclusiveStartKey"] = last_evaluated_key
 
-        items = result if isinstance(result, list) else []
+            scan_result: dict = dynamo.scan(TableName.ARCHETYPES, **scan_params) # type: ignore
+            items.extend(scan_result["items"])
+
+            last_evaluated_key = scan_result.get("last_evaluated_key")
+            if not last_evaluated_key:
+                break
 
         # Filter for player archetypes
         player_archetypes: list = []

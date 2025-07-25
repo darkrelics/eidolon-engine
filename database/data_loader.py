@@ -31,8 +31,7 @@ import sys
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.dynamo import convert_to_decimal  # noqa: C0413
-from eidolon.dynamo import get_table
+from eidolon.dynamo import TableName, dynamo  # noqa: C0413
 from eidolon.validation import validate_character_name  # noqa: C0413
 
 
@@ -57,7 +56,6 @@ def store_exits(exits_data):
     Args:
         exits_data (dict): The exits data to store.
     """
-    exits_table = get_table(os.environ.get("EXITS_TABLE", "exits"))
     try:
         for exit_data in exits_data.get("exits", []):
             exit_item = {
@@ -78,11 +76,12 @@ def store_exits(exits_data):
             for key, value in exit_item.items():
                 if key != "ExitID":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    expression_attribute_values[f":{key.lower()}"] = value
 
             update_expression += ", ".join(expression_parts)
 
-            exits_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.EXITS,
                 Key={"ExitID": exit_data["ExitID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -99,7 +98,6 @@ def store_rooms(rooms_data):
     Args:
         rooms_data (dict): The rooms data to store.
     """
-    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
     try:
         for room in rooms_data.get("rooms", []):
             room_item = {
@@ -120,11 +118,12 @@ def store_rooms(rooms_data):
             for key, value in room_item.items():
                 if key != "RoomID":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    expression_attribute_values[f":{key.lower()}"] = value
 
             update_expression += ", ".join(expression_parts)
 
-            rooms_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.ROOMS,
                 Key={"RoomID": room["RoomID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -141,7 +140,6 @@ def store_archetypes(archetypes_data):
     Args:
         archetypes_data (dict): The archetypes data to store.
     """
-    archetypes_table = get_table(os.environ.get("ARCHETYPES_TABLE", "archetypes"))
     try:
         for name, archetype in archetypes_data.get("archetypes", {}).items():
             is_valid, error_message = validate_character_name(name)
@@ -182,11 +180,12 @@ def store_archetypes(archetypes_data):
             for key, value in archetype_item.items():
                 if key != "ArchetypeName":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    expression_attribute_values[f":{key.lower()}"] = value
 
             update_expression += ", ".join(expression_parts)
 
-            archetypes_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.ARCHETYPES,
                 Key={"ArchetypeName": name},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -203,7 +202,6 @@ def store_item_prototypes(prototypes_data):
     Args:
         prototypes_data (dict): The item prototypes data to store.
     """
-    prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
     try:
         for prototype in prototypes_data.get("itemPrototypes", []):
             prototype_id = prototype["PrototypeID"]
@@ -221,11 +219,12 @@ def store_item_prototypes(prototypes_data):
                     attr_name_placeholder = f"#{key}"
                     expression_attribute_names[attr_name_placeholder] = key
                     expression_parts.append(f"{attr_name_placeholder} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    expression_attribute_values[f":{key.lower()}"] = value
 
             update_expression += ", ".join(expression_parts)
 
-            prototypes_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.PROTOTYPES,
                 Key={"PrototypeID": prototype_id},
                 UpdateExpression=update_expression,
                 ExpressionAttributeNames=expression_attribute_names,
@@ -243,10 +242,9 @@ def load_exits():
     Returns:
         dict: A dictionary of exit data.
     """
-    exits_table = get_table(os.environ.get("EXITS_TABLE", "exits"))
     try:
-        exits_response = exits_table.scan()  # type: ignore
-        exits = {item["ExitID"]: item for item in exits_response.get("Items", [])}
+        items = dynamo.scan(TableName.EXITS)
+        exits = {item["ExitID"]: item for item in items} # type: ignore
         print("Exit data loaded from DynamoDB successfully")
         return exits
     except Exception as err:
@@ -261,10 +259,9 @@ def load_rooms():
     Returns:
         dict: A dictionary of room data.
     """
-    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
     try:
-        rooms_response = rooms_table.scan()  # type: ignore
-        rooms = {item["RoomID"]: item for item in rooms_response.get("Items", [])}
+        items = dynamo.scan(TableName.ROOMS)
+        rooms = {item["RoomID"]: item for item in items} # type: ignore
         print("Room data loaded from DynamoDB successfully")
         return rooms
     except Exception as err:
@@ -279,10 +276,9 @@ def load_archetypes():
     Returns:
         dict: A dictionary containing the archetypes.
     """
-    archetypes_table = get_table(os.environ.get("ARCHETYPES_TABLE", "archetypes"))
     try:
-        response = archetypes_table.scan()  # type: ignore
-        archetypes = {"archetypes": {item["ArchetypeName"]: item for item in response.get("Items", [])}}
+        items = dynamo.scan(TableName.ARCHETYPES)
+        archetypes = {"archetypes": {item["ArchetypeName"]: item for item in items}} # type: ignore
         print("Archetype data loaded from DynamoDB successfully")
         return archetypes
     except Exception as err:
@@ -297,10 +293,9 @@ def load_item_prototypes():
     Returns:
         dict: A dictionary containing the item prototypes.
     """
-    prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
     try:
-        response = prototypes_table.scan()  # type: ignore
-        prototypes = {"itemPrototypes": response.get("Items", [])}
+        items = dynamo.scan(TableName.PROTOTYPES)
+        prototypes = {"itemPrototypes": items}
         print("Item prototype data loaded from DynamoDB successfully")
         return prototypes
     except Exception as err:
@@ -315,7 +310,6 @@ def store_opponents(opponents_data):
     Args:
         opponents_data (dict): The opponents data to store.
     """
-    opponents_table = get_table(os.environ.get("OPPONENTS_TABLE", "opponents"))
     try:
         for opponent in opponents_data.get("opponents", []):
             opponent_item = {
@@ -347,11 +341,12 @@ def store_opponents(opponents_data):
                     attr_name_placeholder = f"#{key}"
                     expression_attribute_names[attr_name_placeholder] = key
                     expression_parts.append(f"{attr_name_placeholder} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    expression_attribute_values[f":{key.lower()}"] = value
 
             update_expression += ", ".join(expression_parts)
 
-            opponents_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.OPPONENTS,
                 Key={"OpponentID": opponent["OpponentID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeNames=expression_attribute_names,
@@ -369,10 +364,6 @@ def store_story(story_data):
     Args:
         story_data (dict): The story data containing story definition and segments.
     """
-    # Store the story definition
-    story_table = get_table(os.environ.get("STORY_TABLE", "story"))
-    segments_table = get_table(os.environ.get("SEGMENTS_TABLE", "segments"))
-
     try:
         # Store the main story
         story = story_data.get("story", {})
@@ -398,11 +389,12 @@ def store_story(story_data):
             for key, value in story_item.items():
                 if key != "StoryID":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    expression_attribute_values[f":{key.lower()}"] = value
 
             update_expression += ", ".join(expression_parts)
 
-            story_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.STORY,
                 Key={"StoryID": story["StoryID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -442,11 +434,12 @@ def store_story(story_data):
             for key, value in segment_item.items():
                 if key not in ["StoryID", "SegmentID"]:  # Skip the keys
                     expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    expression_attribute_values[f":{key.lower()}"] = value
 
             update_expression += ", ".join(expression_parts)
 
-            segments_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.SEGMENTS,
                 Key={"StoryID": segment["StoryID"], "SegmentID": segment["SegmentID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
@@ -465,10 +458,9 @@ def load_opponents():
     Returns:
         dict: A dictionary containing the opponents.
     """
-    opponents_table = get_table(os.environ.get("OPPONENTS_TABLE", "opponents"))
     try:
-        response = opponents_table.scan()  # type: ignore
-        opponents = {"opponents": response.get("Items", [])}
+        items = dynamo.scan(TableName.OPPONENTS)
+        opponents = {"opponents": items}
         print("Opponent data loaded from DynamoDB successfully")
         return opponents
     except Exception as err:
@@ -483,17 +475,12 @@ def load_story():
     Returns:
         dict: A dictionary containing the story and segments data.
     """
-    story_table = get_table(os.environ.get("STORY_TABLE", "story"))
-    segments_table = get_table(os.environ.get("SEGMENTS_TABLE", "segments"))
-
     try:
         # Load all stories
-        story_response = story_table.scan()  # type: ignore
-        stories = story_response.get("Items", [])
+        stories = dynamo.scan(TableName.STORY)
 
         # Load all segments
-        segments_response = segments_table.scan()  # type: ignore
-        segments = segments_response.get("Items", [])
+        segments = dynamo.scan(TableName.SEGMENTS)
 
         print("Story data loaded from DynamoDB successfully")
         return {"stories": stories, "segments": segments}

@@ -21,8 +21,7 @@ Lambda function to create a new player record in DynamoDB after user registratio
 
 from datetime import datetime, timezone
 
-from eidolon.dynamo import get_item, get_table, put_item
-from eidolon.environment import PLAYERS_TABLE
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 
 # Configure logging
@@ -60,9 +59,8 @@ def lambda_handler(event: dict, context: object) -> dict:
             return event
 
         # Check if player already exists
-        players_table = get_table(PLAYERS_TABLE)
-        logger.debug("Checking for existing player", extra={"user_id": user_uuid, "table_name": PLAYERS_TABLE})
-        existing_player = get_item(players_table, {"PlayerID": user_uuid})
+        logger.debug("Checking for existing player", extra={"user_id": user_uuid})
+        existing_player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": user_uuid})
 
         if existing_player:
             logger.info("Player already exists", extra={"user_id": user_uuid})
@@ -81,10 +79,11 @@ def lambda_handler(event: dict, context: object) -> dict:
         }
 
         # Write to DynamoDB
-        if put_item(players_table, player_item):
+        try:
+            dynamo.put_item(TableName.PLAYERS, player_item)
             logger.info("Created new player record", extra={"email": email, "user_id": user_uuid})
-        else:
-            logger.error("Failed to create player record", extra={"email": email, "user_id": user_uuid})
+        except Exception as err:
+            logger.error("Failed to create player record", extra={"email": email, "user_id": user_uuid, "error": str(err)})
 
     except Exception as err:
         logger.error("Error processing user registration", extra={"error": str(err)}, exc_info=True)

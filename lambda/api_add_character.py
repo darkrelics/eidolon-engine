@@ -9,18 +9,13 @@ from botocore.exceptions import ClientError
 
 from eidolon.character import check_character_limit, generate_character_id, get_archetype
 from eidolon.cors import cors_handler
-from eidolon.dynamo import convert_to_decimal, get_table
 from eidolon.environment import (
-    CHARACTERS_TABLE,
     DEFAULT_ESSENCE,
     DEFAULT_HEALTH,
-    ITEMS_TABLE,
     MAX_CHARACTERS_PER_PLAYER,
-    PLAYERS_TABLE,
-    PROTOTYPES_TABLE,
 )
 from eidolon.logger import get_logger
-from eidolon.queries import query_by_gsi
+from eidolon.dynamo import TableName, dynamo
 from eidolon.responses import create_response, error_response
 from eidolon.validation import validate_character_name
 
@@ -53,14 +48,12 @@ def create_items_from_prototypes(prototype_ids: list, character_id: str) -> dict
         return {}
 
     try:
-        prototypes_table = get_table(PROTOTYPES_TABLE)
-        items_table = get_table(ITEMS_TABLE)
         inventory = {}
         slot_num = 0
 
         for prototype_id in prototype_ids:
             # Get prototype data
-            prototype = prototypes_table.get_item(Key={"PrototypeID": prototype_id}).get("Item")
+            prototype = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
 
             if not prototype:
                 logger.warning(
@@ -76,8 +69,8 @@ def create_items_from_prototypes(prototype_ids: list, character_id: str) -> dict
                 "PrototypeID": prototype_id,
                 "Name": prototype.get("Name", "Unknown Item"),
                 "Description": prototype.get("Description", ""),
-                "Mass": convert_to_decimal(prototype.get("Mass", 0)),
-                "Value": convert_to_decimal(prototype.get("Value", 0)),
+                "Mass": prototype.get("Mass", 0),
+                "Value": prototype.get("Value", 0),
                 "Stackable": prototype.get("Stackable", False),
                 "MaxStack": prototype.get("MaxStack", 1),
                 "Quantity": prototype.get("Quantity", 1),
@@ -94,7 +87,7 @@ def create_items_from_prototypes(prototype_ids: list, character_id: str) -> dict
             }
 
             # Put item in Items table
-            items_table.put_item(Item=item_data)
+            dynamo.put_item(TableName.ITEMS, item_data)
 
             # Add to inventory
             inventory[str(slot_num)] = item_id
@@ -158,12 +151,12 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         "PlayerID": player_id,
         "CharacterName": character_name,
         "Archetype": archetype_name,
-        "Attributes": convert_to_decimal(archetype_data.get("Attributes", {})),
-        "Skills": convert_to_decimal(archetype_data.get("Skills", {})),
+        "Attributes": archetype_data.get("Attributes", {}),
+        "Skills": archetype_data.get("Skills", {}),
         "Health": archetype_data.get("Health", DEFAULT_HEALTH),
         "MaxHealth": archetype_data.get("Health", DEFAULT_HEALTH),
-        "Essence": convert_to_decimal(archetype_data.get("Essence", DEFAULT_ESSENCE)),
-        "MaxEssence": convert_to_decimal(archetype_data.get("Essence", DEFAULT_ESSENCE)),
+        "Essence": archetype_data.get("Essence", DEFAULT_ESSENCE),
+        "MaxEssence": archetype_data.get("Essence", DEFAULT_ESSENCE),
         "Wounds": [],
         "RoomID": archetype_data.get("StartRoom", 0),  # Use archetype's StartRoom or default to 0
         "Inventory": {},  # Will be populated with starting items below
@@ -206,13 +199,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
             extra={"character_id": character_id, "inventory_slots": len(inventory)},
         )
 
-    # Get table resources first
-    players_table = None
-    characters_table = None
-
     try:
-        players_table = get_table(PLAYERS_TABLE)
-        characters_table = get_table(CHARACTERS_TABLE)
 
         # First, check if character name already exists using GSI
         logger.info(
@@ -221,23 +208,26 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         )
 
         # Use query_by_gsi to check for existing character name
-        existing_chars, error = query_by_gsi(
-            table_name=CHARACTERS_TABLE, index_name="CharacterNameIndex", key_conditions={"CharacterName": character_name}, limit=1
-        )
+        try:
+            existing_chars = dynamo.query_by_gsi(
+                TableName.CHARACTERS,
+                index_name="CharacterNameIndex",
+                key_conditions={"CharacterName": character_name},
+                Limit=1
+            )
 
-        if error:
+            if existing_chars:
+                logger.info(
+                    "Character name already taken",
+                    extra={"character_name": character_name, "player_id": player_id},
+                )
+                return None, "Character name is already taken"
+        except Exception as err:
             logger.error(
                 "Error checking character name availability",
-                extra={"error": error, "character_name": character_name},
+                extra={"error": str(err), "character_name": character_name},
             )
             return None, "Failed to check character name availability"
-
-        if existing_chars:
-            logger.info(
-                "Character name already taken",
-                extra={"character_name": character_name, "player_id": player_id},
-            )
-            return None, "Character name is already taken"
 
         # Character name is available, create the character record
         logger.info(
@@ -246,7 +236,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         )
 
         try:
-            characters_table.put_item(Item=character_item)
+            dynamo.put_item(TableName.CHARACTERS, character_item)
         except ClientError as err:
             logger.error(
                 "Failed to create character record",
@@ -275,7 +265,8 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
             },
         )
 
-        players_table.update_item(
+        dynamo.update_item(
+            TableName.PLAYERS,
             Key={"PlayerID": player_id},
             UpdateExpression="SET CharacterList.#name = :info, UpdatedAt = :timestamp",
             ExpressionAttributeNames={"#name": character_name},
@@ -306,14 +297,13 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
             },
         )
         # Attempt to rollback character creation if player update failed
-        if characters_table:
-            try:
-                characters_table.delete_item(Key={"CharacterID": character_id})
-            except ClientError as rollback_err:
-                logger.error(
-                    "Failed to rollback character creation",
-                    extra={"error": str(rollback_err), "character_id": character_id},
-                )
+        try:
+            dynamo.delete_item(TableName.CHARACTERS, Key={"CharacterID": character_id})
+        except ClientError as rollback_err:
+            logger.error(
+                "Failed to rollback character creation",
+                extra={"error": str(rollback_err), "character_id": character_id},
+            )
         return None, "Failed to create character"
 
 
