@@ -22,7 +22,7 @@ import sys
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.dynamo import get_table
+from eidolon.dynamo import get_table  # noqa: C0413
 
 # Define table names
 TABLE_NAMES = {
@@ -66,6 +66,7 @@ def view_table(table_name, actual_table_name):
 
 
 def main():
+    """View contents of all DynamoDB tables."""
     try:
         # List all tables
         print("Available tables:")

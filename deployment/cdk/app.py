@@ -644,6 +644,7 @@ class EidolonEngineApp:
                 "segments_table": unified_tables.get("Segments", ""),
                 "active_segments_table": unified_tables.get("ActiveSegments", ""),
                 "history_table": unified_tables.get("History", ""),
+                "opponents_table": unified_tables.get("Opponents", ""),
                 "cognito_user_pool_arn": (
                     self.cognito_stack.user_pool.user_pool_arn
                     if self.cognito_stack

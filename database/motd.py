@@ -27,7 +27,7 @@ from datetime import datetime
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.dynamo import get_table, put_item
+from eidolon.dynamo import get_table, put_item  # noqa: C0413
 
 
 def add_or_update_motd(message: str, active: bool = True) -> dict:
@@ -59,9 +59,8 @@ def add_or_update_motd(message: str, active: bool = True) -> dict:
         print("MOTD added successfully.")
         print(f"MOTD ID: {motd_id}")
         return motd_item
-    else:
-        print("Error adding/updating MOTD.")
-        return {}
+    print("Error adding/updating MOTD.")
+    return {}
 
 
 def main() -> None:

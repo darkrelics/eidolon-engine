@@ -23,10 +23,15 @@ Ensures the character belongs to the player before deletion.
 import os
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import delete_item, get_item, get_table, update_item_with_condition
+from eidolon.dynamo import delete_item
+from eidolon.dynamo import get_item
+from eidolon.dynamo import get_table
+from eidolon.dynamo import update_item_with_condition
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, get_query_parameter
-from eidolon.responses import create_response, error_response
+from eidolon.requests import extract_player_id
+from eidolon.requests import get_query_parameter
+from eidolon.responses import create_response
+from eidolon.responses import error_response
 
 # Configure logging
 logger = get_logger(__name__)
@@ -37,7 +42,7 @@ CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
 ITEMS_TABLE = os.environ.get("ITEMS_TABLE", "items")
 
 
-def get_character_name_by_id(player_id, character_id) -> str:
+def get_character_name_by_id(player_id: str, character_id: str) -> str:
     """
     Get character name by ID and verify ownership.
 
@@ -63,11 +68,14 @@ def get_character_name_by_id(player_id, character_id) -> str:
         if char_info.get("UUID") == character_id:
             return char_name
 
-    logger.warning("Character not found for player", extra={"character_id": character_id, "player_id": player_id})
+    logger.warning(
+        "Character not found for player",
+        extra={"character_id": character_id, "player_id": player_id},
+    )
     return ""
 
 
-def verify_character_ownership(player_id, character_name) -> tuple:
+def verify_character_ownership(player_id: str, character_name: str) -> tuple:
     """
     Verify that a character belongs to the specified player.
 
@@ -89,7 +97,10 @@ def verify_character_ownership(player_id, character_name) -> tuple:
 
     # Check if character exists in player's list
     if character_name not in character_list:
-        logger.warning("Character not found for player", extra={"character_name": character_name, "player_id": player_id})
+        logger.warning(
+            "Character not found for player",
+            extra={"character_name": character_name, "player_id": player_id},
+        )
         return False, None
 
     character_info = character_list[character_name]
@@ -100,13 +111,16 @@ def verify_character_ownership(player_id, character_name) -> tuple:
     character_data = get_item(characters_table, {"CharacterID": character_uuid})
 
     if character_data and character_data.get("PlayerID") != player_id:
-        logger.warning("Character does not belong to player", extra={"character_id": character_uuid, "player_id": player_id})
+        logger.warning(
+            "Character does not belong to player",
+            extra={"character_id": character_uuid, "player_id": player_id},
+        )
         return False, None
 
     return True, character_uuid
 
 
-def delete_character_items(character_id) -> int:
+def delete_character_items(character_id: str) -> int:
     """
     Delete all items belonging to a character.
 
@@ -129,7 +143,7 @@ def delete_character_items(character_id) -> int:
 
         # Delete each item
         items_table = get_table(ITEMS_TABLE)
-        for slot, item_id in inventory.items():
+        for _, item_id in inventory.items():
             if delete_item(items_table, {"ItemID": item_id}):
                 deleted_count += 1
 
@@ -152,7 +166,7 @@ def delete_character_items(character_id) -> int:
         return deleted_count
 
 
-def delete_character(player_id, character_name, character_id) -> bool:
+def delete_character(player_id: str, character_name: str, character_id: str) -> bool:
     """
     Delete a character from the database.
 
@@ -177,12 +191,18 @@ def delete_character(player_id, character_name, character_id) -> bool:
         )
 
         if not success:
-            logger.error("Failed to remove character from player list", extra={"error": error_msg})
+            logger.error(
+                "Failed to remove character from player list",
+                extra={"error": error_msg},
+            )
             return False
 
         # Delete character items
         items_deleted = delete_character_items(character_id)
-        logger.info("Deleted items for character", extra={"items_deleted": items_deleted, "character_id": character_id})
+        logger.info(
+            "Deleted items for character",
+            extra={"items_deleted": items_deleted, "character_id": character_id},
+        )
 
         # Finally delete character from characters table
         characters_table = get_table(CHARACTERS_TABLE)
@@ -191,7 +211,12 @@ def delete_character(player_id, character_name, character_id) -> bool:
             return False
 
         logger.info(
-            "Deleted character", extra={"character_name": character_name, "character_id": character_id, "player_id": player_id}
+            "Deleted character",
+            extra={
+                "character_name": character_name,
+                "character_id": character_id,
+                "player_id": player_id,
+            },
         )
         return True
 
@@ -200,7 +225,7 @@ def delete_character(player_id, character_name, character_id) -> bool:
         return False
 
 
-def lambda_handler(event, context) -> dict:
+def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler for character deletion API.
 
@@ -216,7 +241,7 @@ def lambda_handler(event, context) -> dict:
         logger.info(
             "Lambda invocation",
             extra={
-                "request_id": context.aws_request_id,
+                "request_id": context.aws_request_id,  # type: ignore
                 "function_name": getattr(context, "function_name", "unknown"),
                 "http_method": event.get("httpMethod"),
                 "path": event.get("path"),
@@ -232,29 +257,51 @@ def lambda_handler(event, context) -> dict:
         player_id, auth_error = extract_player_id(event)
         if auth_error:
             logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
+            return cors_handler.add_cors_headers(
+                error_response(auth_error, status_code=401), event
+            )
 
         # Get character ID from query parameters
-        character_id, error_msg = get_query_parameter(event, "characterId", required=True)
+        character_id, error_msg = get_query_parameter(
+            event, "characterId", required=True
+        )
         if error_msg:
             return cors_handler.add_cors_headers(error_response(error_msg), event)
 
         # Get character name and verify ownership
         character_name = get_character_name_by_id(player_id, character_id)
         if not character_name:
-            return cors_handler.add_cors_headers(error_response("Character not found or access denied", status_code=404), event)
+            return cors_handler.add_cors_headers(
+                error_response("Character not found or access denied", status_code=404),
+                event,
+            )
 
         # Delete the character
         if not delete_character(player_id, character_name, character_id):
-            return cors_handler.add_cors_headers(error_response("Failed to delete character", status_code=500), event)
+            return cors_handler.add_cors_headers(
+                error_response("Failed to delete character", status_code=500), event
+            )
 
         # Return success response
         logger.info("Lambda response", extra={"status_code": 200})
         return cors_handler.add_cors_headers(
-            create_response(200, {"message": "Character deleted successfully", "characterName": character_name}), event
+            create_response(
+                200,
+                {
+                    "message": "Character deleted successfully",
+                    "characterName": character_name,
+                },
+            ),
+            event,
         )
 
     except Exception as err:
-        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
+        logger.error(
+            "Unexpected error in lambda_handler",
+            extra={"error": str(err)},
+            exc_info=True,
+        )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return cors_handler.add_cors_headers(
+            error_response("Internal server error", status_code=500), event
+        )

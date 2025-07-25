@@ -1,0 +1,804 @@
+"""
+Eidolon Engine - Incremental Game
+
+Copyright 2024-2025 Jason Robinson
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+
+Lambda function to process a completed segment.
+Determines outcome, applies effects, and creates next segment if applicable.
+"""
+
+import math
+import os
+import random
+import time
+import uuid
+from datetime import datetime
+from datetime import timezone
+
+from eidolon.dynamo import get_item
+from eidolon.dynamo import get_table
+from eidolon.dynamo import put_item
+from eidolon.dynamo import update_item
+from eidolon.logger import get_logger
+
+# Configure logging
+logger = get_logger(__name__)
+
+# Get table names from environment
+CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
+SEGMENTS_TABLE = os.environ.get("SEGMENTS_TABLE", "segments")
+ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
+HISTORY_TABLE = os.environ.get("HISTORY_TABLE", "history")
+OPPONENTS_TABLE = os.environ.get("OPPONENTS_TABLE", "opponents")
+
+
+def resolve_opposed_check(aggressor: float, defender: float) -> dict:
+    """
+    Resolve an opposed check using MUD mechanics.
+
+    Args:
+        aggressor: Aggressor's rating
+        defender: Defender's rating
+
+    Returns:
+        Dictionary with success (bool) and sigma (float)
+    """
+    # Constants from MUD mechanics
+    k_shift = 0.20  # How much rating difference matters
+    k_var = 0.35  # Variance scaling
+    min_sig = 0.25  # Minimum variance
+
+    # Calculate difference
+    diff = aggressor - defender
+
+    # Calculate mean and variance
+    mean = k_shift * diff
+    variance = 1.0 + k_var * math.tanh(diff / 10.0)
+    variance = max(variance, min_sig)
+
+    # Generate outcome using normal distribution
+    sigma = random.gauss(mean, variance)
+    success = sigma >= 0
+
+    return {"success": success, "sigma": sigma}
+
+
+def process_narrative_segment(segment_def: dict, character: dict) -> tuple:
+    """
+    Process a narrative segment by running challenges and determining outcome.
+
+    Args:
+        segment_def: Segment definition from Segments table
+        character: Character data
+
+    Returns:
+        Tuple of (outcome, challenge_results)
+    """
+    challenges = segment_def.get("Challenges", [])
+    if not challenges:
+        # No challenges, default to normal outcome
+        return "normal", []
+
+    # Run each challenge using MUD-style mechanics
+    challenge_results = []
+    total_sigma = 0.0
+    total_attempts = 0
+    critical_failures = 0
+    successes = 0
+
+    for challenge in challenges:
+        attribute = challenge.get("attribute")
+        skill = challenge.get("skill")
+        difficulty = challenge.get("difficulty", 8)
+        attempts = challenge.get("attempts", 1)
+
+        # Get character's attribute and skill values
+        character_attributes = character.get("Attributes", {})
+        character_skills = character.get("Skills", {})
+
+        attribute_value = character_attributes.get(attribute, 0) if attribute else 0
+        skill_value = character_skills.get(skill, 0) if skill else 0
+
+        # Combined effective score
+        effective_score = attribute_value + skill_value
+
+        # Run multiple attempts for this challenge
+        challenge_attempts = []
+        best_sigma = -999
+
+        for _ in range(attempts):
+            # Simulate static check using normal distribution
+            # Based on MUD mechanics: difference affects mean, with some randomness
+            diff = effective_score - difficulty
+
+            # Constants from MUD mechanics
+            k_shift = 0.20  # How much rating difference matters
+            k_var = 0.35  # Variance scaling
+            min_sig = 0.25  # Minimum variance
+
+            # Calculate mean and variance
+            mean = k_shift * diff
+            variance = 1.0 + k_var * math.tanh(diff / 10.0)
+            variance = max(variance, min_sig)
+
+            # Generate outcome using normal distribution
+            sigma = random.gauss(mean, variance)
+            success = sigma >= 0
+
+            challenge_attempts.append(
+                {
+                    "effectiveScore": effective_score,
+                    "difficulty": difficulty,
+                    "sigma": round(sigma, 2),
+                    "success": success,
+                }
+            )
+
+            if sigma > best_sigma:
+                best_sigma = sigma
+
+            # Track critical failures
+            if sigma < -2.0:
+                critical_failures += 1
+
+            total_attempts += 1
+            total_sigma += sigma
+
+        # Determine if challenge was passed (best attempt succeeded)
+        passed = best_sigma >= 0
+        if passed:
+            successes += 1
+
+        challenge_results.append(
+            {
+                "attribute": attribute,
+                "skill": skill,
+                "difficulty": difficulty,
+                "attempts": challenge_attempts,
+                "bestSigma": round(best_sigma, 2),
+                "passed": passed,
+            }
+        )
+
+    # Determine overall outcome based on average sigma
+    if total_attempts == 0:
+        return "failure", []
+
+    avg_sigma = total_sigma / total_attempts
+
+    # Map sigma values to story outcomes
+    # Critical failures can lead to death
+    if critical_failures >= 2 or avg_sigma < -2.0:
+        outcome = "death"
+    elif avg_sigma < -1.0:
+        outcome = "failure"
+    elif avg_sigma < 0:
+        outcome = "minimal"
+    elif avg_sigma < 1.0:
+        outcome = "normal"
+    else:
+        outcome = "exceptional"
+
+    return outcome, challenge_results
+
+
+def process_combat_segment(
+    active_segment: dict, segment_def: dict, character: dict
+) -> tuple:
+    """
+    Process a combat segment using MUD mechanics for opposed checks.
+
+    Args:
+        active_segment: Active segment data
+        segment_def: Segment definition from Segments table
+        character: Character data
+
+    Returns:
+        Tuple of (outcome, combat_state)
+    """
+    combat_config = segment_def.get("Combat", {})
+    opponent_id = combat_config.get("opponentId")
+    max_rounds = combat_config.get("maxRounds", 10)
+
+    # Get opponent data
+    opponents_table = get_table(OPPONENTS_TABLE)
+    opponent = get_item(opponents_table, {"OpponentID": opponent_id})
+
+    if not opponent:
+        logger.error("Opponent not found", extra={"opponent_id": opponent_id})
+        return "failure", {}
+
+    # Initialize combat state from active segment or create new
+    combat_state = active_segment.get("CombatState", {})
+    player_wounds = combat_state.get("playerWounds", [])
+    opponent_wounds = combat_state.get("opponentWounds", [])
+    current_round = combat_state.get("round", 0)
+
+    # Get character combat stats
+    character_attributes = character.get("Attributes", {})
+    character_skills = character.get("Skills", {})
+    character_combat = character_attributes.get("combat", 0) + character_skills.get(
+        "fighting", 0
+    )
+    character_defense = character_attributes.get("dexterity", 0) + character_skills.get(
+        "dodge", 0
+    )
+
+    # Get opponent combat stats
+    opponent_attributes = opponent.get("Attributes", {})
+    opponent_skills = opponent.get("Skills", {})
+    opponent_combat = opponent_attributes.get("combat", 0) + opponent_skills.get(
+        "fighting", 0
+    )
+    opponent_defense = opponent_attributes.get("dexterity", 0) + opponent_skills.get(
+        "dodge", 0
+    )
+    opponent_health = opponent.get("Health", 5)
+
+    # Track combat results
+    combat_log = []
+
+    # Continue combat from current round
+    for round_num in range(current_round, min(current_round + 5, max_rounds)):
+        round_results = {
+            "round": round_num + 1,
+            "playerAttack": None,
+            "opponentAttack": None,
+        }
+
+        # Player attacks opponent using MUD mechanics
+        attack_outcome = resolve_opposed_check(character_combat, opponent_defense)
+
+        if attack_outcome["success"]:
+            # Determine damage based on sigma
+            sigma = attack_outcome["sigma"]
+            if sigma > 2.0:
+                damage = 3  # Critical hit
+                damage_type = "critical"
+            elif sigma > 1.0:
+                damage = 2  # Solid hit
+                damage_type = "solid"
+            else:
+                damage = 1  # Glancing blow
+                damage_type = "glancing"
+
+            # Apply damage as wounds to opponent
+            for _ in range(damage):
+                opponent_wounds.append(
+                    {
+                        "type": "lethal" if damage_type == "critical" else "bashing",
+                        "round": round_num + 1,
+                    }
+                )
+
+            round_results["playerAttack"] = {
+                "hit": True,
+                "sigma": round(sigma, 2),
+                "damage": damage,
+                "damageType": damage_type,
+            }
+
+            # Check if opponent is defeated
+            lethal_wounds = sum(1 for w in opponent_wounds if w["type"] == "lethal")
+            if (
+                lethal_wounds >= opponent_health
+                or len(opponent_wounds) >= opponent_health * 2
+            ):
+                combat_log.append(round_results)
+                return "normal", {
+                    "rounds": round_num + 1,
+                    "playerWounds": player_wounds,
+                    "opponentWounds": opponent_wounds,
+                    "combatLog": combat_log,
+                    "victor": "player",
+                }
+        else:
+            round_results["playerAttack"] = {
+                "hit": False,
+                "sigma": round(attack_outcome["sigma"], 2),
+            }
+
+        # Opponent attacks player using MUD mechanics
+        defense_outcome = resolve_opposed_check(opponent_combat, character_defense)
+
+        if defense_outcome["success"]:
+            # Determine damage based on sigma
+            sigma = defense_outcome["sigma"]
+            if sigma > 2.0:
+                damage = 3  # Critical hit
+                damage_type = "critical"
+            elif sigma > 1.0:
+                damage = 2  # Solid hit
+                damage_type = "solid"
+            else:
+                damage = 1  # Glancing blow
+                damage_type = "glancing"
+
+            # Apply damage as wounds to player
+            for _ in range(damage):
+                player_wounds.append(
+                    {
+                        "type": "lethal" if damage_type == "critical" else "bashing",
+                        "round": round_num + 1,
+                    }
+                )
+
+            round_results["opponentAttack"] = {
+                "hit": True,
+                "sigma": round(sigma, 2),
+                "damage": damage,
+                "damageType": damage_type,
+            }
+
+            # Check if player is defeated
+            # Simplified wound tracking - in full MUD system this would be more complex
+            lethal_wounds = sum(1 for w in player_wounds if w["type"] == "lethal")
+            total_wounds = len(player_wounds)
+
+            if lethal_wounds >= 5:  # 5+ lethal wounds = death
+                combat_log.append(round_results)
+                return "death", {
+                    "rounds": round_num + 1,
+                    "playerWounds": player_wounds,
+                    "opponentWounds": opponent_wounds,
+                    "combatLog": combat_log,
+                    "victor": "opponent",
+                }
+            elif total_wounds >= 10:  # 10+ total wounds = incapacitated
+                combat_log.append(round_results)
+                return "failure", {
+                    "rounds": round_num + 1,
+                    "playerWounds": player_wounds,
+                    "opponentWounds": opponent_wounds,
+                    "combatLog": combat_log,
+                    "victor": "opponent",
+                }
+        else:
+            round_results["opponentAttack"] = {
+                "hit": False,
+                "sigma": round(defense_outcome["sigma"], 2),
+            }
+
+        combat_log.append(round_results)
+
+    # Max rounds reached - determine outcome based on wounds
+    player_total_wounds = len(player_wounds)
+    opponent_total_wounds = len(opponent_wounds)
+
+    # Calculate final rounds (round_num might not be defined if no combat occurred)
+    final_rounds = len(combat_log)
+
+    if opponent_total_wounds > player_total_wounds * 2:
+        # Player dealt significantly more damage
+        outcome = "normal"
+        victor = "player"
+    elif player_total_wounds > opponent_total_wounds * 2:
+        # Opponent dealt significantly more damage
+        outcome = "failure"
+        victor = "opponent"
+    else:
+        # Close fight - minor success
+        outcome = "minimal"
+        victor = "draw"
+
+    return outcome, {
+        "rounds": final_rounds,
+        "playerWounds": player_wounds,
+        "opponentWounds": opponent_wounds,
+        "combatLog": combat_log,
+        "victor": victor,
+    }
+
+
+def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
+    """
+    Process a decision segment by checking if decision was made.
+
+    Args:
+        active_segment: Active segment data
+        segment_def: Segment definition from Segments table
+
+    Returns:
+        Outcome (always "normal" for decisions or "failure" if no decision)
+    """
+    decision = active_segment.get("Decision")
+
+    if decision:
+        return "normal"
+    else:
+        # No decision made before timeout - use default if available
+        default_decision = segment_def.get("DefaultDecision")
+        if default_decision:
+            # Update active segment with default decision
+            active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
+            update_item(
+                active_segments_table,
+                {"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
+                "SET #decision = :decision",
+                {"#decision": "Decision"},
+                {":decision": default_decision},
+            )
+            return "normal"
+        else:
+            return "failure"
+
+
+def update_active_segment_outcome(
+    active_segment_id: str, outcome: str, results: dict
+) -> None:
+    """
+    Update active segment with outcome and mark as completed.
+
+    Args:
+        active_segment_id: Active segment UUID
+        outcome: Outcome type
+        results: Challenge or combat results
+    """
+    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
+
+    update_expression = "SET #status = :status, #outcome = :outcome"
+    expression_names = {"#status": "Status", "#outcome": "Outcome"}
+    expression_values = {":status": "completed", ":outcome": outcome}
+
+    # Add results based on segment type
+    if "challengeResults" in results:
+        update_expression += ", ChallengeResults = :results"
+        expression_values[":results"] = results["challengeResults"]
+    elif "combatState" in results:
+        update_expression += ", CombatState = :state"
+        expression_values[":state"] = results["combatState"]
+
+    update_item(
+        active_segments_table,
+        {"ActiveSegmentID": active_segment_id},
+        update_expression,
+        expression_names,
+        expression_values,
+    )
+
+
+def update_history_segment(
+    character_id: str, story_id: str, segment_data: dict
+) -> None:
+    """
+    Add segment completion to history.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        segment_data: Data about completed segment
+    """
+    history_table = get_table(HISTORY_TABLE)
+
+    # Get existing history
+    history = get_item(
+        history_table, {"CharacterID": character_id, "StoryID": story_id}
+    )
+
+    if history:
+        segment_history = history.get("SegmentHistory", [])
+        segment_history.append(segment_data)
+
+        update_item(
+            history_table,
+            {"CharacterID": character_id, "StoryID": story_id},
+            "SET SegmentHistory = :history",
+            {},
+            {":history": segment_history},
+        )
+
+
+def get_next_segment_and_create(
+    character_id: str,
+    story_id: str,
+    current_segment: dict,
+    active_segment: dict,
+    outcome: str,
+) -> object:
+    """
+    Determine next segment and create active segment for it.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        current_segment: Current segment definition
+        active_segment: Current active segment
+        outcome: Outcome of current segment
+
+    Returns:
+        Next active segment ID or None
+    """
+    segment_type = current_segment.get("SegmentType")
+    next_segment_id = None
+
+    if segment_type == "decision":
+        # Get next segment based on decision
+        decision = active_segment.get("Decision")
+        decision_options = current_segment.get("DecisionOptions", {})
+        next_segment_id = decision_options.get(decision)
+
+    elif segment_type in ["narrative", "combat"]:
+        # Check if outcome is terminal
+        if outcome not in ["death", "failure"]:
+            next_segment_id = current_segment.get("NextSegmentID")
+
+    if not next_segment_id:
+        return None
+
+    # Get next segment definition
+    segments_table = get_table(SEGMENTS_TABLE)
+    next_segment = get_item(
+        segments_table, {"StoryID": story_id, "SegmentID": next_segment_id}
+    )
+
+    if not next_segment:
+        logger.error("Next segment not found", extra={"segment_id": next_segment_id})
+        return None
+
+    # Create active segment for next segment
+    return create_next_active_segment(
+        character_id,
+        active_segment.get("PlayerID"),  # type: ignore
+        story_id,
+        next_segment,
+        active_segment.get("StoryTitle"),  # type: ignore
+    )
+
+
+def create_next_active_segment(
+    character_id: str, player_id: str, story_id: str, segment: dict, story_title: str
+) -> str:
+    """
+    Create an active segment record for the next segment.
+
+    Args:
+        character_id: Character UUID
+        player_id: Player UUID
+        story_id: Story UUID
+        segment: Segment data from Segments table
+        story_title: Story title for display
+
+    Returns:
+        Active segment ID
+    """
+    segment_id = segment.get("SegmentID")
+    segment_type = segment.get("SegmentType", "narrative")
+    duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
+
+    current_time = int(time.time())
+    end_time = current_time + duration
+
+    # Generate unique ID for this active segment
+    active_segment_id = str(uuid.uuid4())
+
+    # Create TTL for auto-cleanup (24 hours after end time)
+    ttl = end_time + 86400
+
+    active_segment = {
+        "ActiveSegmentID": active_segment_id,
+        "CharacterID": character_id,
+        "PlayerID": player_id,
+        "StoryID": story_id,
+        "StoryTitle": story_title,
+        "SegmentID": segment_id,
+        "SegmentType": segment_type,
+        "StartTime": current_time,
+        "EndTime": end_time,
+        "Status": "active",
+        "TTL": ttl,
+    }
+
+    # Add type-specific fields
+    if segment_type == "decision":
+        active_segment["Decision"] = None
+        active_segment["DecisionOptions"] = segment.get("DecisionOptions", {})
+    elif segment_type == "narrative":
+        active_segment["ChallengeResults"] = []
+        active_segment["Outcome"] = None
+    elif segment_type == "combat":
+        combat_config = segment.get("Combat", {})
+        active_segment["CombatState"] = {
+            "round": 0,
+            "playerWounds": [],
+            "opponentHealth": None,
+            "opponentId": combat_config.get("opponentId"),
+        }
+
+    # Store in DynamoDB
+    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
+    put_item(active_segments_table, active_segment)
+
+    return active_segment_id
+
+
+def complete_story(character_id: str, story_id: str, outcome: str) -> None:
+    """
+    Complete the story and update character state.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        outcome: Final outcome
+    """
+    # Update character GameMode back to None
+    characters_table = get_table(CHARACTERS_TABLE)
+    update_item(
+        characters_table,
+        {"CharacterID": character_id},
+        "SET GameMode = :none",
+        {},
+        {":none": "None"},
+    )
+
+    # Update history with completion
+    history_table = get_table(HISTORY_TABLE)
+    update_item(
+        history_table,
+        {"CharacterID": character_id, "StoryID": story_id},
+        "SET FinishedAt = :finished, FinalOutcome = :outcome",
+        {},
+        {":finished": datetime.now(timezone.utc).isoformat(), ":outcome": outcome},
+    )
+
+
+def lambda_handler(event: dict, context: object) -> dict:
+    """
+    Lambda handler to process a completed segment.
+
+    Args:
+        event: Event containing segment information
+        context: Lambda context
+
+    Returns:
+        Processing result
+    """
+    # Log Lambda invocation
+    if hasattr(context, "aws_request_id"):
+        logger.info(
+            "Lambda invocation",
+            extra={
+                "request_id": context.aws_request_id,  # type: ignore
+                "function_name": getattr(context, "function_name", "unknown"),
+            },
+        )
+
+    try:
+        # Extract segment information from event
+        active_segment_id: str = event.get("activeSegmentId", "")
+        character_id = event.get("characterId")
+        story_id = event.get("storyId")
+        segment_id = event.get("segmentId")
+        segment_type = event.get("segmentType")
+
+        logger.info(
+            "Processing segment",
+            extra={
+                "active_segment_id": active_segment_id,
+                "segment_type": segment_type,
+            },
+        )
+
+        # Get active segment
+        active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
+        active_segment = get_item(
+            active_segments_table, {"ActiveSegmentID": active_segment_id}
+        )
+
+        if not active_segment:
+            logger.error(
+                "Active segment not found",
+                extra={"active_segment_id": active_segment_id},
+            )
+            return {"statusCode": 404, "body": "Active segment not found"}
+
+        # Get segment definition
+        segments_table = get_table(SEGMENTS_TABLE)
+        segment_def = get_item(
+            segments_table, {"StoryID": story_id, "SegmentID": segment_id}
+        )
+
+        if not segment_def:
+            logger.error(
+                "Segment definition not found", extra={"segment_id": segment_id}
+            )
+            return {"statusCode": 404, "body": "Segment not found"}
+
+        # Get character data
+        characters_table = get_table(CHARACTERS_TABLE)
+        character = get_item(characters_table, {"CharacterID": character_id})
+
+        if not character:
+            logger.error("Character not found", extra={"character_id": character_id})
+            return {"statusCode": 404, "body": "Character not found"}
+
+        # Process segment based on type
+        outcome = None
+        results = {}
+
+        if segment_type == "narrative":
+            outcome, challenge_results = process_narrative_segment(
+                segment_def, character
+            )
+            results["challengeResults"] = challenge_results
+
+        elif segment_type == "combat":
+            outcome, combat_state = process_combat_segment(
+                active_segment, segment_def, character
+            )
+            results["combatState"] = combat_state
+
+        elif segment_type == "decision":
+            outcome = process_decision_segment(active_segment, segment_def)
+
+        else:
+            logger.error("Unknown segment type", extra={"segment_type": segment_type})
+            outcome = "failure"
+
+        # Update active segment with outcome
+        update_active_segment_outcome(active_segment_id, outcome, results)
+
+        # Update history
+        segment_history_data = {
+            "SegmentID": segment_id,
+            "SegmentType": segment_type,
+            "Outcome": outcome,
+            "CompletedAt": datetime.now(timezone.utc).isoformat(),
+            **results,
+        }
+        update_history_segment(character_id, story_id, segment_history_data)  # type: ignore
+
+        # Determine next segment or complete story
+        next_active_segment_id = get_next_segment_and_create(
+            character_id, story_id, segment_def, active_segment, outcome  # type: ignore
+        )
+
+        if not next_active_segment_id:
+            # No next segment - story is complete
+            complete_story(character_id, story_id, outcome)  # type: ignore
+            logger.info(
+                "Story completed",
+                extra={
+                    "character_id": character_id,
+                    "story_id": story_id,
+                    "outcome": outcome,
+                },
+            )
+        else:
+            logger.info(
+                "Created next segment",
+                extra={"next_active_segment_id": next_active_segment_id},
+            )
+
+        logger.info("Lambda response", extra={"status_code": 200})
+        return {
+            "statusCode": 200,
+            "body": {
+                "message": "Segment processed successfully",
+                "outcome": outcome,
+                "nextSegment": next_active_segment_id,
+            },
+        }
+
+    except Exception as err:
+        logger.error(
+            "Unexpected error in lambda_handler",
+            extra={"error": str(err)},
+            exc_info=True,
+        )
+        return {
+            "statusCode": 500,
+            "body": {"error": "Internal server error", "message": str(err)},
+        }

@@ -26,7 +26,8 @@ from decimal import Decimal
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.dynamo import delete_item, get_item, get_table, put_item, update_item
+from eidolon.dynamo import (delete_item, get_item, get_table, put_item,  # noqa: C0413
+                            update_item)
 
 
 def display_rooms() -> list:
@@ -153,9 +154,8 @@ def add_item_to_table(new_item: dict) -> bool:
     if put_item(items_table, new_item):
         print(f"Successfully added item '{new_item['item_name']}' to items table.")
         return True
-    else:
-        print("Error saving new item to items table.")
-        return False
+    print("Error saving new item to items table.")
+    return False
 
 
 def add_item_to_room(room: dict, new_item: dict) -> bool:
@@ -195,15 +195,14 @@ def add_item_to_room(room: dict, new_item: dict) -> bool:
     if update_item(rooms_table, {"RoomID": room_id}, "SET ItemID = :item_ids", {":item_ids": current_item_ids}):
         print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
         return True
+    print("Error updating room.")
+    # Attempt to roll back by deleting the item we just added
+    items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
+    if delete_item(items_table, {"ItemID": new_item["ItemID"]}):
+        print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
     else:
-        print("Error updating room.")
-        # Attempt to roll back by deleting the item we just added
-        items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
-        if delete_item(items_table, {"ItemID": new_item["ItemID"]}):
-            print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
-        else:
-            print("Error rolling back item addition.")
-        return False
+        print("Error rolling back item addition.")
+    return False
 
 
 def main() -> None:

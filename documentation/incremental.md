@@ -1,4 +1,4 @@
-# Incremental Game Module
+# Incremental Game System
 
 ## Overview
 
@@ -18,40 +18,46 @@ The module follows a serverless architecture pattern:
 
 - **Backend**: AWS Lambda functions handle all game logic and state transitions
 - **Frontend**: Flutter web application provides the user interface
-- **Storage**: DynamoDB stores character state and story progress
-- **Content**: Story definitions stored in S3, loaded dynamically
+- **Storage**: DynamoDB stores all game data including character state, story definitions, and progress
 - **Authentication**: Shared AWS Cognito identity with the main MUD
 
 ## Key Components
 
 ### 1. Story System
-- JSON-based story definitions with Twine compatibility
+
+- Stories composed using Twine for visual narrative design
+- Story definitions stored in DynamoDB tables after conversion
 - Three story types: one-time, daily, and repeatable
 - Prerequisite checking for gated content
 - Branching narratives with player decisions
 
 ### 2. Segment Processing
+
 - Time-gated progression through story segments
 - Server-calculated outcomes based on character stats
 - Automatic reward distribution upon completion
 - EventBridge-driven polling for segment completion
 
 ### 3. Character Integration
+
 - Shared character records with the MUD system
 - GameMode field prevents concurrent MUD/Incremental play
 - Skills and attributes affect story outcomes
 - Items and resources earned transfer to MUD inventory
 
-### 4. Content Pipeline
-- Authors write stories in JSON format following defined schemas
-- GitHub Actions validate and publish to S3
-- Hot-reloading of story content without deployments
-- Version control for story iterations
+### 4. Content Management
+
+- Authors create stories using Twine's visual editor
+- Twine to Incremental conversion tool transforms stories for the game engine
+- Story content stored in DynamoDB tables (Story and Segments)
+- Administrative tools for managing published story content
+- Version field in Story table enables content updates
+- Direct database updates for immediate content availability
 
 ## Technology Stack
 
 - **Runtime**: Python 3.12 Lambda functions
-- **Database**: DynamoDB with single-table design patterns
+- **Database**: DynamoDB storing all game data and content
 - **Frontend**: Flutter targeting web (mobile planned)
 - **Infrastructure**: AWS CDK for deployment
 - **Monitoring**: CloudWatch metrics and logging

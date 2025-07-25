@@ -21,21 +21,26 @@ Validates character state, creates active segment, and returns first segment det
 """
 
 import os
-import uuid
 import time
-from datetime import datetime, timezone
-from eidolon.cors import cors_handler
-from eidolon.dynamo import (
-    get_item,
-    get_table,
-    put_item,
-    update_item_with_condition,
-)
+import uuid
+from datetime import datetime
+from datetime import timezone
+
 from botocore.exceptions import ClientError
+
+from eidolon.cors import cors_handler
+from eidolon.dynamo import get_item
+from eidolon.dynamo import get_table
+from eidolon.dynamo import put_item
+from eidolon.dynamo import update_item_with_condition
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, parse_json_body, get_required_field
-from eidolon.responses import create_response, error_response, not_found_response
-from eidolon.validation_utils import validate_uuid
+from eidolon.requests import extract_player_id
+from eidolon.requests import get_required_field
+from eidolon.requests import parse_json_body
+from eidolon.responses import create_response
+from eidolon.responses import error_response
+from eidolon.responses import not_found_response
+from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
@@ -48,7 +53,7 @@ ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments
 HISTORY_TABLE = os.environ.get("HISTORY_TABLE", "history")
 
 
-def get_character_and_verify_ownership(character_id, player_id):
+def get_character_and_verify_ownership(character_id: str, player_id: str) -> dict:
     """
     Get character by UUID and verify ownership.
 
@@ -57,14 +62,14 @@ def get_character_and_verify_ownership(character_id, player_id):
         player_id: Cognito user ID for ownership verification
 
     Returns:
-        Character data or None if not found or not owned by player
+        Character data
     """
     characters_table = get_table(CHARACTERS_TABLE)
     character = get_item(characters_table, {"CharacterID": character_id})
 
     if not character:
         logger.warning("Character not found", extra={"character_id": character_id})
-        return None
+        return {}
 
     # Verify ownership
     if character.get("PlayerID") != player_id:
@@ -72,12 +77,12 @@ def get_character_and_verify_ownership(character_id, player_id):
             "Character ownership mismatch",
             extra={"character_id": character_id, "player_id": player_id},
         )
-        return None
+        return {}
 
     return character
 
 
-def validate_story_available(character, story_id):
+def validate_story_available(character: dict, story_id: str) -> bool:
     """
     Validate that the story is available to the character.
 
@@ -92,7 +97,7 @@ def validate_story_available(character, story_id):
     return story_id in available_stories
 
 
-def get_story_and_first_segment(story_id):
+def get_story_and_first_segment(story_id: str) -> tuple:
     """
     Get story metadata and first segment details.
 
@@ -105,7 +110,7 @@ def get_story_and_first_segment(story_id):
     # Get story metadata
     story_table = get_table(STORY_TABLE)
     story = get_item(story_table, {"StoryID": story_id})
-    
+
     if not story:
         logger.warning("Story not found", extra={"story_id": story_id})
         return None, None
@@ -117,8 +122,10 @@ def get_story_and_first_segment(story_id):
         return None, None
 
     segments_table = get_table(SEGMENTS_TABLE)
-    segment = get_item(segments_table, {"StoryID": story_id, "SegmentID": first_segment_id})
-    
+    segment = get_item(
+        segments_table, {"StoryID": story_id, "SegmentID": first_segment_id}
+    )
+
     if not segment:
         logger.error(
             "First segment not found",
@@ -129,16 +136,14 @@ def get_story_and_first_segment(story_id):
     return story, segment
 
 
-def create_active_segment(character_id, player_id, story_id, segment, story_title):
+def create_active_segment(character_id: str, story_id: str, segment: dict) -> dict:
     """
     Create an active segment record for tracking progress.
 
     Args:
         character_id: Character UUID
-        player_id: Player UUID
         story_id: Story UUID
-        segment: Segment data
-        story_title: Story title for display
+        segment: Segment data from Segments table
 
     Returns:
         Active segment record
@@ -146,50 +151,48 @@ def create_active_segment(character_id, player_id, story_id, segment, story_titl
     segment_id = segment.get("SegmentID")
     segment_type = segment.get("SegmentType", "narrative")
     duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
-    
+
     current_time = int(time.time())
     end_time = current_time + duration
-    
+
     # Generate unique ID for this active segment
     active_segment_id = str(uuid.uuid4())
-    
-    # Create TTL for auto-cleanup (24 hours after end time)
-    ttl = end_time + 86400
-    
-    active_segment = {
+
+    active_segment: dict = {
         "ActiveSegmentID": active_segment_id,
         "CharacterID": character_id,
-        "PlayerID": player_id,
         "StoryID": story_id,
-        "StoryTitle": story_title,
         "SegmentID": segment_id,
-        "SegmentType": segment_type,
         "StartTime": current_time,
         "EndTime": end_time,
-        "Status": "active",
-        "TTL": ttl,
     }
-    
-    # Add type-specific fields
+
+    # Add type-specific fields based on segment type
     if segment_type == "decision":
         active_segment["Decision"] = None  # Will be set when player decides
-        active_segment["Options"] = segment.get("Options", [])
+        # Store the decision options for validation later
+        active_segment["DecisionOptions"] = segment.get("DecisionOptions", {})
+    elif segment_type == "narrative":
+        # Initialize empty lists for challenge tracking
+        active_segment["ChallengeResults"] = []
+        active_segment["Outcome"] = None  # Will be determined when segment completes
     elif segment_type == "combat":
         combat_config = segment.get("Combat", {})
         active_segment["CombatState"] = {
             "round": 0,
             "playerWounds": [],
             "opponentHealth": None,  # Will be set when combat starts
+            "opponentId": combat_config.get("opponentId"),
         }
-    
+
     # Store in DynamoDB
     active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
     put_item(active_segments_table, active_segment)
-    
+
     return active_segment
 
 
-def format_segment_response(segment, active_segment):
+def format_segment_response(segment: dict, active_segment: dict) -> dict:
     """
     Format segment data for API response.
 
@@ -202,29 +205,43 @@ def format_segment_response(segment, active_segment):
     """
     segment_type = segment.get("SegmentType", "narrative")
     time_remaining = max(0, active_segment["EndTime"] - int(time.time()))
-    
+
     response = {
         "segmentId": active_segment["ActiveSegmentID"],
         "storyId": active_segment["StoryID"],
         "type": segment_type,
         "timeRemaining": time_remaining,
     }
-    
-    # Add type-specific fields
+
+    # Add type-specific fields based on documented schema
     if segment_type == "decision":
-        response["content"] = segment.get("Narrative", "")
-        response["options"] = segment.get("Options", [])
+        # DecisionText contains the choice presented
+        response["content"] = segment.get("DecisionText", "")
+        # Format options from DecisionOptions map
+        decision_options = segment.get("DecisionOptions", {})
+        options = []
+        for option_id, _ in decision_options.items():
+            options.append(
+                {"id": option_id, "text": option_id.replace("-", " ").title()}
+            )  # Format option ID as display text
+        response["options"] = options
     elif segment_type == "narrative":
-        response["shortStatus"] = segment.get("ShortStatus", "Progressing through the story...")
-        response["narrative"] = segment.get("Narrative", "")
+        response["shortStatus"] = segment.get(
+            "ShortStatus", "Progressing through the story..."
+        )
+        # Note: Narrative segments don't have a Narrative field in the schema
+        # The narrative comes from Results based on outcome
+        response["narrative"] = ""  # Will be populated after challenges are resolved
     elif segment_type == "combat":
         response["shortStatus"] = segment.get("ShortStatus", "Engaged in combat!")
         response["opponentId"] = segment.get("Combat", {}).get("opponentId")
-    
+
     return response
 
 
-def create_history_entry(character_id, story_id, story_title, story_type):
+def create_history_entry(
+    character_id: str, story_id: str, story_title: str, story_type: str
+) -> None:
     """
     Create initial history entry for story tracking.
 
@@ -235,7 +252,7 @@ def create_history_entry(character_id, story_id, story_title, story_type):
         story_type: Type of story (one-time, daily, repeatable)
     """
     history_table = get_table(HISTORY_TABLE)
-    
+
     history_entry = {
         "CharacterID": character_id,
         "StoryID": story_id,
@@ -245,12 +262,12 @@ def create_history_entry(character_id, story_id, story_title, story_type):
         "SegmentHistory": [],
         "AbandonedCount": 0,
     }
-    
+
     # Put item (will overwrite if exists - handles retries)
     put_item(history_table, history_entry)
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to start a story for a character.
 
@@ -266,7 +283,7 @@ def lambda_handler(event, context):
         logger.info(
             "Lambda invocation",
             extra={
-                "request_id": context.aws_request_id,
+                "request_id": context.aws_request_id,  # type: ignore
                 "function_name": getattr(context, "function_name", "unknown"),
                 "http_method": event.get("httpMethod"),
                 "path": event.get("path"),
@@ -282,7 +299,9 @@ def lambda_handler(event, context):
         player_id, auth_error = extract_player_id(event)
         if auth_error:
             logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
+            return cors_handler.add_cors_headers(
+                error_response(auth_error, status_code=401), event
+            )
 
         logger.info("Player authenticated", extra={"player_id": player_id})
 
@@ -321,7 +340,7 @@ def lambda_handler(event, context):
         )
 
         # Get character and verify ownership
-        character = get_character_and_verify_ownership(character_id, player_id)
+        character = get_character_and_verify_ownership(character_id, player_id)  # type: ignore
         if not character:
             return cors_handler.add_cors_headers(not_found_response("Character"), event)
 
@@ -333,12 +352,14 @@ def lambda_handler(event, context):
                 extra={"character_id": character_id, "game_mode": game_mode},
             )
             return cors_handler.add_cors_headers(
-                error_response(f"Character is currently in {game_mode} mode", status_code=409),
+                error_response(
+                    f"Character is currently in {game_mode} mode", status_code=409
+                ),
                 event,
             )
 
         # Validate story is available
-        if not validate_story_available(character, story_id):
+        if not validate_story_available(character, story_id):  # type: ignore
             logger.warning(
                 "Story not available to character",
                 extra={"character_id": character_id, "story_id": story_id},
@@ -348,31 +369,59 @@ def lambda_handler(event, context):
             )
 
         # Get story and first segment
-        story, first_segment = get_story_and_first_segment(story_id)
+        story, first_segment = get_story_and_first_segment(story_id)  # type: ignore
         if not story or not first_segment:
             return cors_handler.add_cors_headers(
                 error_response("Story configuration error", status_code=500), event
             )
 
-        # Atomically update character to set GameMode and remove story from available list
+        # Create active segment first to get the segment ID
+        active_segment = create_active_segment(
+            character_id, story_id, first_segment  # type: ignore
+        )
+
+        # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID and remove from available list
         try:
             characters_table = get_table(CHARACTERS_TABLE)
-            
+
             # Build update expression to set GameMode and remove from AvailableStories
-            update_expression = "SET GameMode = :mode REMOVE AvailableStories[" + str(
-                character["AvailableStories"].index(story_id)
-            ) + "]"
-            
+            update_expression = (
+                "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id "
+                "REMOVE AvailableStories["
+                + str(character["AvailableStories"].index(story_id))
+                + "]"
+            )
+
             update_item_with_condition(
                 characters_table,
                 {"CharacterID": character_id},
                 update_expression,
-                {":mode": "Incremental", ":none": "None"},
+                {
+                    ":mode": "Incremental",
+                    ":none": "None",
+                    ":story_id": story_id,
+                    ":segment_id": active_segment["ActiveSegmentID"],
+                },
                 "GameMode = :none",
             )
-            
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+
+        except ClientError as err:
+            # Rollback: Delete the active segment we just created
+            try:
+                active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
+                active_segments_table.delete_item(
+                    Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]}
+                )
+            except Exception as rollback_err:
+                logger.error(
+                    "Failed to rollback active segment",
+                    extra={
+                        "active_segment_id": active_segment["ActiveSegmentID"],
+                        "error": str(rollback_err),
+                    },
+                )
+
+            if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
                 logger.warning(
                     "Character state changed during story start",
                     extra={"character_id": character_id},
@@ -380,9 +429,23 @@ def lambda_handler(event, context):
                 return cors_handler.add_cors_headers(
                     error_response("Character state conflict", status_code=409), event
                 )
-            else:
-                raise
+            raise
         except Exception as err:
+            # Rollback: Delete the active segment we just created
+            try:
+                active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
+                active_segments_table.delete_item(
+                    Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]}
+                )
+            except Exception as rollback_err:
+                logger.error(
+                    "Failed to rollback active segment",
+                    extra={
+                        "active_segment_id": active_segment["ActiveSegmentID"],
+                        "error": str(rollback_err),
+                    },
+                )
+
             logger.error(
                 "Failed to update character state",
                 extra={"character_id": character_id, "error": str(err)},
@@ -391,19 +454,14 @@ def lambda_handler(event, context):
                 error_response("Failed to start story", status_code=500), event
             )
 
-        # Create active segment
-        story_title = story.get("Title", "Unknown Story")
-        active_segment = create_active_segment(
-            character_id, player_id, story_id, first_segment, story_title
-        )
-
         # Create history entry
+        story_title = story.get("Title", "Unknown Story")
         story_type = story.get("StoryType", "repeatable")
-        create_history_entry(character_id, story_id, story_title, story_type)
+        create_history_entry(character_id, story_id, story_title, story_type)  # type: ignore
 
         # Format response
         segment_data = format_segment_response(first_segment, active_segment)
-        
+
         logger.info(
             "Story started successfully",
             extra={
@@ -420,7 +478,11 @@ def lambda_handler(event, context):
         )
 
     except Exception as err:
-        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
+        logger.error(
+            "Unexpected error in lambda_handler",
+            extra={"error": str(err)},
+            exc_info=True,
+        )
         logger.info("Lambda response", extra={"status_code": 500})
         return cors_handler.add_cors_headers(
             error_response("Internal server error", status_code=500), event

@@ -27,9 +27,9 @@ def convert_to_decimal(obj):
     """Convert float values to Decimal for DynamoDB."""
     if isinstance(obj, float):
         return Decimal(str(obj))
-    elif isinstance(obj, dict):
+    if isinstance(obj, dict):
         return {k: convert_to_decimal(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+    if isinstance(obj, list):
         return [convert_to_decimal(v) for v in obj]
     return obj
 
@@ -38,11 +38,11 @@ def decimal_to_float(obj):
     """Convert Decimal values to float for JSON serialization."""
     if isinstance(obj, Decimal):
         return float(obj)
-    elif isinstance(obj, dict):
+    if isinstance(obj, dict):
         return {k: decimal_to_float(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+    if isinstance(obj, list):
         return [decimal_to_float(v) for v in obj]
-    elif isinstance(obj, set):
+    if isinstance(obj, set):
         return [decimal_to_float(v) for v in obj]
     return obj
 
@@ -170,9 +170,8 @@ def update_item_with_condition(
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             logger.warning("Condition check failed", extra={"error": str(err), "table": table.name, "key": key})
             return False, "Condition not met"
-        else:
-            logger.error("Error updating item in DynamoDB", extra={"error": str(err), "table": table.name, "key": key})
-            return False, "Database error"
+        logger.error("Error updating item in DynamoDB", extra={"error": str(err), "table": table.name, "key": key})
+        return False, "Database error"
 
 
 def scan_all_items(table, filter_expression=None, expression_values=None, projection_expression=None, expression_names=None):
@@ -241,6 +240,5 @@ def put_item_if_not_exists(table, item: dict, condition_attribute: str):
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             logger.warning("Item already exists", extra={"error": str(err), "table": table.name})
             return False, "Item already exists"
-        else:
-            logger.error("Error putting item to DynamoDB", extra={"error": str(err), "table": table.name})
-            return False, "Database error"
+        logger.error("Error putting item to DynamoDB", extra={"error": str(err), "table": table.name})
+        return False, "Database error"

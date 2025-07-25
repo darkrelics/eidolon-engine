@@ -24,9 +24,11 @@ Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 import os
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_table, scan_all_items
+from eidolon.dynamo import get_table
+from eidolon.dynamo import scan_all_items
 from eidolon.logger import get_logger
-from eidolon.responses import create_response, error_response
+from eidolon.responses import create_response
+from eidolon.responses import error_response
 
 # Configure logging
 logger = get_logger(__name__)
@@ -72,7 +74,9 @@ def load_player_archetypes() -> list:
             if item.get("Player", False):
                 # Normalize attribute and skill keys to lowercase
                 if "Attributes" in item:
-                    item["Attributes"] = {k.lower(): v for k, v in item["Attributes"].items()}
+                    item["Attributes"] = {
+                        k.lower(): v for k, v in item["Attributes"].items()
+                    }
                 if "Skills" in item:
                     item["Skills"] = {k.lower(): v for k, v in item["Skills"].items()}
 
@@ -100,11 +104,13 @@ def load_player_archetypes() -> list:
         return player_archetypes
 
     except Exception as err:
-        logger.error("Error loading archetypes", extra={"error": str(err)}, exc_info=True)
+        logger.error(
+            "Error loading archetypes", extra={"error": str(err)}, exc_info=True
+        )
         raise
 
 
-def lambda_handler(event, context) -> dict:
+def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to return player-available archetypes.
 
@@ -120,7 +126,7 @@ def lambda_handler(event, context) -> dict:
         logger.info(
             "Lambda invocation",
             extra={
-                "request_id": context.aws_request_id,
+                "request_id": context.aws_request_id,  # type: ignore
                 "function_name": getattr(context, "function_name", "unknown"),
                 "http_method": event.get("httpMethod"),
                 "path": event.get("path"),
@@ -149,6 +155,10 @@ def lambda_handler(event, context) -> dict:
         )
 
     except Exception as err:
-        logger.error("Error in lambda_handler", extra={"error": str(err)}, exc_info=True)
+        logger.error(
+            "Error in lambda_handler", extra={"error": str(err)}, exc_info=True
+        )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return cors_handler.add_cors_headers(
+            error_response("Internal server error", status_code=500), event
+        )

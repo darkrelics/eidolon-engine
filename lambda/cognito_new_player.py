@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
 
 
-def lambda_handler(event, context) -> dict:
+def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda function triggered by Cognito Post Confirmation.
     Creates a new player record in DynamoDB using the Cognito user's UUID.

@@ -96,7 +96,7 @@ Present three action buttons:
 1. System validates prerequisites and availability
 2. Player selects story from available list
 3. Character state transitions to Incremental mode via GameMode field
-4. Story participation record created in story table
+4. Story participation record created in ActiveSegments table
 5. First segment (typically decision) is presented
 6. Player makes decision, timeout triggers default decision based on character/world state
 7. Narrative segment processes based on decision and character stats
@@ -122,7 +122,8 @@ Present three action buttons:
 - **Lock Mechanism**: GameMode field prevents simultaneous mode access
 - **MUD Block**: Characters with GameMode="Incremental" cannot login to MUD
 - **Incremental Block**: Characters with GameMode="MUD" cannot start incremental stories
-- **Transition Validation**: Verify character is not in combat or other locked states
+- **Incremental to MUD**: Character must not have active story segments
+- **MUD to Incremental**: Character must be logged out of MUD
 - **Timeout Protection**: Automatic mode release after extended inactivity
 
 #### 3.3.2 Story Participation Tracking
@@ -154,9 +155,25 @@ Present three action buttons:
 - May have diminishing rewards on repetition
 - Used for farming or practice scenarios
 
-### 3.5 Integration Requirements
+### 3.5 Content Creation
 
-#### 3.5.1 MUD Compatibility
+#### 3.5.1 Story Authoring
+
+- Stories authored using Twine's visual editor for branching narratives
+- Twine to Incremental conversion tool transforms Twine format to game format
+- Converted stories stored in DynamoDB Story and Segments tables
+- Administrative tools for managing and updating story content
+
+#### 3.5.2 Content Validation
+
+- Schema validation ensures story structure integrity
+- Prerequisite checking validates story requirements
+- Combat balance verification for opponent statistics
+- Reward rate validation to maintain progression balance
+
+### 3.6 Integration Requirements
+
+#### 3.6.1 MUD Compatibility
 
 - Character attributes remain consistent across modes
 - Equipment functions identically in both modes
@@ -164,7 +181,7 @@ Present three action buttons:
 - Skills and abilities apply using same mechanics
 - Shared DynamoDB tables for all character data
 
-#### 3.5.2 Story Unlock Mechanisms
+#### 3.6.2 Story Unlock Mechanisms
 
 - Stories provided by character archetype on creation
 - Stories unlocked through Incremental participation
@@ -239,11 +256,12 @@ New Lambda functions following existing patterns:
 - Schedule next segment processing
 - Return acknowledgment
 
-**api_get_segment**
+**api_get_current_story**
 
-- Retrieve current segment state
+- Retrieve current active story and segment state
 - Calculate time remaining
-- Return segment data
+- Return story metadata and segment data
+- Include segment-specific fields (options for decisions, results for narratives, combat state)
 
 **api_complete_segment**
 
@@ -263,25 +281,35 @@ New Lambda functions following existing patterns:
 
 ```
 {
-  StoryID: String (PK),
-  StoryType: String (one-time|daily|repeatable),
+  StoryID: String (HASH),
   Title: String,
   Description: String,
-  Prerequisites: Map,
+  NarrativeText: String,
+  StoryType: String,  // one-time|daily|repeatable
   EstimatedDuration: Number,
-  Segments: List[
-    {
-      SegmentID: String,
-      Type: String (decision|narrative|combat),
-      Content: String,
-      ImageUrl: String (optional),
-      Duration: Number,
-      Options: List (for decisions),
-      DefaultDecisionLogic: String,
-      Outcomes: Map (for narratives),
-      Combat: Map (for combat segments)
-    }
-  ]
+  Prerequisites: Map,
+  FirstSegmentID: String,
+  CreatedAt: String,
+  Version: Number
+}
+```
+
+**Segments Table**
+
+```
+{
+  StoryID: String (HASH),
+  SegmentID: String (RANGE),
+  SegmentType: String,  // decision|narrative|combat
+  ShortStatus: String,
+  SegmentDuration: Number,
+  DecisionText: String,  // For decision segments
+  DecisionOptions: Map,  // For decision segments
+  NextSegmentID: String,  // For narrative/combat segments
+  DefaultDecision: String,  // For decision segments
+  Challenges: List,  // For narrative segments
+  Combat: Map,  // For combat segments
+  Results: Map  // For narrative/combat segments
 }
 ```
 
@@ -289,44 +317,51 @@ New Lambda functions following existing patterns:
 
 ```
 {
-  ActiveSegmentID: String (PK),
+  ActiveSegmentID: String (HASH),
   CharacterID: String,
-  PlayerID: String,
   StoryID: String,
   SegmentID: String,
   StartTime: Number,
-  EndTime: Number,
-  Status: String,
-  Decision: String,
-  ChallengeResults: List,
+  EndTime: Number (GSI - EndTimeIndex),
+  Decision: String,  // For decision segments
+  ChallengeResults: List,  // For narrative segments
   CombatState: Map,  // For combat segments
-  Outcome: String,
-  TTL: Number  // For automatic cleanup after 24 hours
+  Outcome: String  // Final outcome
 }
 ```
 
-_Note: Player story participation state is tracked in the ActiveSegments table, not in the Story table. The Story table only contains story definitions._
+**Global Secondary Index:**
 
-**Character Table (Existing, Extended)**
+- **EndTimeIndex**: EndTime - For finding segments ready to process
+
+_Note: Segments are deleted after processing. All segments in this table are implicitly active._
+
+**Character Table (Extended Fields)**
 
 ```
 {
-  CharacterID: String (PK),
-  PlayerID: String,  // Existing attribute
-  GameMode: String,  // Existing field (MUD|Incremental|None)
-  AvailableStories: List[String],  // New field
-  AbandonedStories: List[String],  // New field
-  CompletedStories: List[String],  // New field
-  // All other existing MUD fields...
+  CharacterID: String (HASH),
+  CharacterName: String (GSI - CharacterNameIndex),
+  GameMode: String,  // MUD|Incremental|None
+  AvailableStories: List[String],
+  AbandonedStories: List[String],
+  CompletedStories: List[String],
+  ActiveStoryID: String,  // Current active story
+  ActiveSegmentID: String,  // Current active segment
+  // All other existing fields...
 }
 ```
+
+**Global Secondary Index:**
+
+- **CharacterNameIndex**: CharacterName - For ensuring unique character names
 
 **History Table**
 
 ```
 {
-  CharacterID: String (PK - HASH key),
-  StoryID: String (SK - RANGE key),
+  CharacterID: String (HASH),
+  StoryID: String (RANGE),
   StoryTitle: String,        // Title of the story for display
   StartedAt: String,         // ISO timestamp when story began
   FinishedAt: String,        // ISO timestamp when story ended
@@ -355,7 +390,7 @@ _Note: Player story participation state is tracked in the ActiveSegments table, 
 
 ```
 {
-  OpponentID: String (PK),  // UUIDv4
+  OpponentID: String (HASH),
   Name: String,
   Description: String,
   CombatRating: Number,     // Combined attack skill
@@ -427,13 +462,14 @@ _Note: Player story participation state is tracked in the ActiveSegments table, 
 
 - **Story Definitions**: Cache in Lambda memory
 - **Character State**: Brief caching during active segments
-- **Static Assets**: S3 with CloudFront distribution
+- **Story Content**: Stored in DynamoDB Story and Segments tables
 
 #### 4.4.3 Timing Service Architecture
 
-- **EventBridge Rules**: Schedule segment completions
-- **Lambda Processing**: Handle completions at 1-second resolution
-- **Batch Processing**: Group simultaneous completions
+- **EventBridge Rule**: Single rule triggers polling Lambda every 10 seconds
+- **Lambda Processing**: Query EndTimeIndex GSI for completed segments
+- **Batch Processing**: Process all ready segments in single invocation
+- **Dynamic Scaling**: Enable/disable polling based on active story count
 - **Failure Handling**: Retry logic with exponential backoff
 
 ### 4.5 Persistent Effects and Consequences
@@ -443,18 +479,21 @@ _Note: Player story participation state is tracked in the ActiveSegments table, 
 All character modifications persist between game modes:
 
 - **Wounds and Healing**:
+
   - Combat damage creates wounds using MUD damage system
   - Wounds heal based on real-time (bashing: 15min, lethal: 6hr, aggravated: 7d)
   - Character entering either mode retains all active wounds
   - Death in either mode requires appropriate resurrection
 
 - **Inventory Persistence**:
+
   - Items gained from story segments appear in MUD inventory
   - Equipment worn affects combat calculations in both modes
   - Item destruction or loss persists across modes
   - Cursed items maintain their effects
 
 - **Location Updates**:
+
   - Story effects can change character room location
   - Character appears in new room when returning to MUD
   - Death may transport to death realm (room 0 or configured)
@@ -541,10 +580,11 @@ All character modifications persist between game modes:
 
 ### 6.2 Timing Service Management
 
-- EventBridge rules created per active segment
-- Automatic cleanup of completed segments
-- Lambda functions handle rule execution
+- Single EventBridge rule for all segment polling
+- Automatic cleanup of completed segments (deletion from ActiveSegments)
+- Lambda functions query GSI for time-based processing
 - CloudWatch monitoring of timing accuracy
+- Dynamic enable/disable based on active story presence
 
 ## 7. Acceptance Criteria
 
@@ -573,21 +613,21 @@ All character modifications persist between game modes:
 
 ## 8. Implementation Priorities
 
-### 8.1 Phase 1: Core Story System (Weeks 1-3)
+### 8.1 Phase 1: Core Story System
 
 - Story definition table and Lambda functions
 - Basic story flow (start, decision, complete)
 - GameMode enforcement
 - Simple timer implementation
 
-### 8.2 Phase 2: Flutter Integration (Weeks 4-5)
+### 8.2 Phase 2: Flutter Integration
 
 - Story selection and display screens
 - API service extensions
 - Basic polling implementation
 - Error handling integration
 
-### 8.3 Phase 3: Advanced Features (Weeks 6-8)
+### 8.3 Phase 3: Advanced Features
 
 - Equipment management
 - Daily/repeatable stories
@@ -598,7 +638,6 @@ All character modifications persist between game modes:
 
 ### 9.1 Reduced Complexity
 
-- No Fargate container service needed
 - Reuse existing Lambda patterns
 - Shared tables eliminate data synchronization
 - Standard error handling via eidolon package

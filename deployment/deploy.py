@@ -14,7 +14,8 @@ from pathlib import Path
 from aws_client_factory import AWSClientFactory
 from botocore.exceptions import ClientError
 from build_executor import BuildExecutor
-from cdk_api_integration import CDKApiIntegration, CDKDeploymentError, CDKProgressReporter
+from cdk_api_integration import (CDKApiIntegration, CDKDeploymentError,
+                                 CDKProgressReporter)
 from config_updater import ConfigurationUpdater
 from config_validator import validate_deployment_config
 from deployment_logic import analyze_changes, prompt_missing_parameters
@@ -530,6 +531,12 @@ class IncrementalDeploymentOrchestrator:
             "api-list-characters.zip",
             "api-get-stories.zip",
             "api-start-story.zip",
+            "api-get-current-story.zip",
+            "api-submit-decision.zip",
+            "api-get-segment-outcome.zip",
+            "api-abandon-story.zip",
+            "segment-poller.zip",
+            "process-segment.zip",
             "cognito-new-player.zip",
             "cognito-delete-player.zip",
         ]
@@ -716,7 +723,9 @@ class IncrementalDeploymentOrchestrator:
                     if result.exists and result.valid:
                         print(f"  [OK] {bucket_type} Bucket: {bucket_name} - OK")
                     else:
-                        print(f"  [ERROR] {bucket_type} Bucket: {bucket_name} - {'Access denied' if result.exists else 'Does not exist'}")
+                        print(
+                            f"  [ERROR] {bucket_type} Bucket: {bucket_name} - {'Access denied' if result.exists else 'Does not exist'}"
+                        )
                         all_valid = False
                 else:
                     print(f"  - {bucket_type} Bucket: Not configured")
@@ -1502,25 +1511,19 @@ class IncrementalDeploymentOrchestrator:
                 return
 
             print(f"\nInvalidating CloudFront distribution {distribution_id}...")
-            
+
             cf_client = self.session.client("cloudfront", region_name="us-east-1")
-            
+
             # Create invalidation
             response = cf_client.create_invalidation(
                 DistributionId=distribution_id,
-                InvalidationBatch={
-                    'Paths': {
-                        'Quantity': 1,
-                        'Items': ['/*']
-                    },
-                    'CallerReference': f'deployment-{int(time.time())}'
-                }
+                InvalidationBatch={"Paths": {"Quantity": 1, "Items": ["/*"]}, "CallerReference": f"deployment-{int(time.time())}"},
             )
-            
-            invalidation_id = response['Invalidation']['Id']
+
+            invalidation_id = response["Invalidation"]["Id"]
             print(f"[OK] Created invalidation {invalidation_id}")
             print("     CloudFront cache will be refreshed in a few minutes")
-            
+
         except ClientError as err:
             error_code = err.response.get("Error", {}).get("Code", "")
             if error_code == "NoSuchDistribution":

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/character.dart';
 import '../services/api_service.dart';
@@ -410,11 +411,98 @@ class _ActionPanelState extends State<ActionPanel> {
   late ApiService _apiService;
   Future<List<StoryMetadata>>? _storiesFuture;
   bool _showStoryList = false;
+  bool _loadingCurrentStory = false;
+  Map<String, dynamic>? _currentStoryData;
+  Timer? _refreshTimer;
+  Timer? _countdownTimer;
+  int _timeRemaining = 0;
+  String? _selectedStoryType;
+  bool _showOnlyAvailable = false;
+  
+  // Configuration constants
+  static const int _autoRefreshIntervalSeconds = 60; // Auto-refresh every 60 seconds
+  static const int _countdownIntervalSeconds = 1;    // Update countdown every second
 
   @override
   void initState() {
     super.initState();
     _apiService = ApiService(authService: AuthService.instance);
+    _loadCurrentStory();
+    _startTimers();
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startTimers() {
+    // Refresh story data periodically
+    _refreshTimer = Timer.periodic(
+      Duration(seconds: _autoRefreshIntervalSeconds), 
+      (_) {
+        if (widget.character.storyState != null) {
+          _loadCurrentStory();
+        }
+      },
+    );
+
+    // Update countdown timer
+    _countdownTimer = Timer.periodic(
+      Duration(seconds: _countdownIntervalSeconds), 
+      (_) {
+        if (_timeRemaining > 0 && mounted) {
+          setState(() {
+            _timeRemaining--;
+          });
+        }
+      },
+    );
+  }
+
+  Future<void> _loadCurrentStory() async {
+    setState(() {
+      _loadingCurrentStory = true;
+    });
+
+    try {
+      final currentStory = await _apiService.getCurrentStory(
+        characterId: widget.character.id,
+      );
+
+      if (mounted) {
+        setState(() {
+          _loadingCurrentStory = false;
+          _currentStoryData = currentStory;
+          
+          // Update character's story state if we have current story
+          if (currentStory != null) {
+            _timeRemaining = currentStory['segment']['timeRemaining'] ?? 0;
+            widget.character.storyState = {
+              'storyId': currentStory['story']['storyId'],
+              'storyName': currentStory['story']['title'],
+              'segmentId': currentStory['segment']['segmentId'],
+              'segmentType': currentStory['segment']['type'],
+              'segmentName': currentStory['segment']['content']?.substring(0, 50) ?? 'In progress',
+              'timeRemaining': currentStory['segment']['timeRemaining'],
+              'totalSegments': currentStory['story']['totalSegments'],
+              'currentSegmentIndex': currentStory['story']['currentSegmentIndex'],
+            };
+          } else {
+            widget.character.storyState = null;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading current story: $e');
+      if (mounted) {
+        setState(() {
+          _loadingCurrentStory = false;
+        });
+      }
+    }
   }
 
   void _toggleStoryList() {
@@ -444,8 +532,10 @@ class _ActionPanelState extends State<ActionPanel> {
           Text('Adventures', style: theme.textTheme.headlineSmall),
           const SizedBox(height: 32),
 
-          // Check if character has active story
-          if (widget.character.storyState != null &&
+          // Show loading indicator while checking for current story
+          if (_loadingCurrentStory) ...[
+            const CircularProgressIndicator(),
+          ] else if (widget.character.storyState != null &&
               widget.character.storyState!['segmentId'] != null) ...[
             _buildActiveStory(theme),
           ] else if (_showStoryList) ...[
@@ -459,27 +549,342 @@ class _ActionPanelState extends State<ActionPanel> {
   }
 
   Widget _buildActiveStory(ThemeData theme) {
-    return Column(
+    final storyData = _currentStoryData;
+    final story = storyData?['story'] ?? {};
+    final segment = storyData?['segment'] ?? {};
+    final segmentType = segment['type'] ?? 'narrative';
+    
+    // Calculate progress
+    final currentIndex = story['currentSegmentIndex'] ?? 0;
+    final totalSegments = story['totalSegments'] ?? 1;
+    final progress = totalSegments > 0 ? (currentIndex + 1) / totalSegments : 0.0;
+    
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Story Header Card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          story['title'] ?? 'Unknown Story',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                      ),
+                      _buildStoryTypeChip(story['type'] ?? 'unknown', theme),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Progress Bar
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Progress',
+                            style: theme.textTheme.labelMedium,
+                          ),
+                          Text(
+                            '${currentIndex + 1} / $totalSegments',
+                            style: theme.textTheme.labelMedium,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 8,
+                        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                      ),
+                    ],
+                  ),
+                  if (_timeRemaining > 0) ...[
+                    const SizedBox(height: 12),
+                    _buildTimerDisplay(theme),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Segment Content Card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _getSegmentIcon(segmentType),
+                        size: 20,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _getSegmentTypeLabel(segmentType),
+                        style: theme.textTheme.titleMedium,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    segment['content'] ?? 'Loading segment content...',
+                    style: theme.textTheme.bodyLarge,
+                  ),
+                  if (segment['imageUrl'] != null) ...[
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        segment['imageUrl'],
+                        fit: BoxFit.cover,
+                        height: 200,
+                        width: double.infinity,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 200,
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: const Center(
+                              child: Icon(Icons.broken_image, size: 48),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // Decision Options (if decision segment)
+          if (segmentType == 'decision' && segment['options'] != null) ...[
+            const SizedBox(height: 16),
+            _buildDecisionOptions(segment['options'], theme),
+          ],
+
+          // Challenge Results (if narrative segment)
+          if (segmentType == 'narrative' && segment['challengeResults'] != null) ...[
+            const SizedBox(height: 16),
+            _buildChallengeResults(segment['challengeResults'], theme),
+          ],
+
+          // Action Buttons
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _loadCurrentStory,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh'),
+              ),
+              const SizedBox(width: 16),
+              FilledButton.icon(
+                onPressed: _timeRemaining == 0 ? () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Segment completion not yet implemented'),
+                    ),
+                  );
+                } : null,
+                icon: const Icon(Icons.arrow_forward),
+                label: Text(_timeRemaining == 0 ? 'Continue' : 'Processing...'),
+              ),
+              const SizedBox(width: 16),
+              OutlinedButton.icon(
+                onPressed: () => _abandonStory(),
+                icon: const Icon(Icons.exit_to_app),
+                label: const Text('Abandon'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildTimerDisplay(ThemeData theme) {
+    final minutes = _timeRemaining ~/ 60;
+    final seconds = _timeRemaining % 60;
+    final timerText = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    
+    return Row(
       children: [
-        LinearProgressIndicator(
-          value: 0.3, // This would be calculated from actual progress
-          minHeight: 20,
-          backgroundColor: theme.colorScheme.surfaceContainerHighest,
+        Icon(
+          Icons.timer,
+          size: 16,
+          color: _timeRemaining < 60 
+              ? theme.colorScheme.error 
+              : theme.colorScheme.onSurfaceVariant,
         ),
-        const SizedBox(height: 16),
-        Text('Story: ${widget.character.storyState!['storyName'] ?? 'Unknown'}'),
+        const SizedBox(width: 4),
         Text(
-          'Segment: ${widget.character.storyState!['segmentName'] ?? 'Unknown'}',
-        ),
-        const SizedBox(height: 24),
-        OutlinedButton.icon(
-          onPressed: () {
-            // TODO: Implement abandon story
-          },
-          icon: const Icon(Icons.exit_to_app),
-          label: const Text('Abandon Story'),
+          'Time remaining: $timerText',
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: _timeRemaining < 60 
+                ? theme.colorScheme.error 
+                : null,
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildStoryTypeChip(String type, ThemeData theme) {
+    Color backgroundColor;
+    IconData icon;
+    
+    switch (type.toLowerCase()) {
+      case 'one-time':
+        backgroundColor = theme.colorScheme.primaryContainer;
+        icon = Icons.stars;
+        break;
+      case 'daily':
+        backgroundColor = theme.colorScheme.secondaryContainer;
+        icon = Icons.today;
+        break;
+      case 'repeatable':
+        backgroundColor = theme.colorScheme.tertiaryContainer;
+        icon = Icons.refresh;
+        break;
+      default:
+        backgroundColor = theme.colorScheme.surfaceContainerHighest;
+        icon = Icons.help_outline;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            type,
+            style: theme.textTheme.labelMedium,
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getSegmentIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'decision':
+        return Icons.psychology;
+      case 'narrative':
+        return Icons.book;
+      case 'combat':
+        return Icons.sports_kabaddi;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  String _getSegmentTypeLabel(String type) {
+    switch (type.toLowerCase()) {
+      case 'decision':
+        return 'Decision Point';
+      case 'narrative':
+        return 'Story Segment';
+      case 'combat':
+        return 'Combat Encounter';
+      default:
+        return 'Unknown Segment';
+    }
+  }
+
+  Widget _buildDecisionOptions(List<dynamic> options, ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Available Choices',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Note: Decision submission coming soon',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...options.map((option) => Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: OutlinedButton(
+                onPressed: null, // Disabled until api_submit_decision is implemented
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+                child: Text(
+                  option.toString(),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChallengeResults(List<dynamic> results, ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Challenge Results',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 16),
+            ...results.map((result) => Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                children: [
+                  Icon(
+                    result['success'] == true ? Icons.check_circle : Icons.cancel,
+                    color: result['success'] == true 
+                        ? Colors.green 
+                        : Colors.red,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${result['skill'] ?? 'Unknown'}: ${result['roll'] ?? 0}/${result['difficulty'] ?? 0}',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+          ],
+        ),
+      ),
     );
   }
 
@@ -520,6 +925,78 @@ class _ActionPanelState extends State<ActionPanel> {
           ],
         ),
         const SizedBox(height: 16),
+        // Filter Controls
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              children: [
+                // Story Type Filter
+                Row(
+                  children: [
+                    const Text('Type: '),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: const Text('All'),
+                      selected: _selectedStoryType == null,
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedStoryType = selected ? null : _selectedStoryType;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: const Text('One-time'),
+                      selected: _selectedStoryType == 'one-time',
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedStoryType = selected ? 'one-time' : null;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: const Text('Daily'),
+                      selected: _selectedStoryType == 'daily',
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedStoryType = selected ? 'daily' : null;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: const Text('Repeatable'),
+                      selected: _selectedStoryType == 'repeatable',
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedStoryType = selected ? 'repeatable' : null;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Availability Filter
+                Row(
+                  children: [
+                    Checkbox(
+                      value: _showOnlyAvailable,
+                      onChanged: (value) {
+                        setState(() {
+                          _showOnlyAvailable = value ?? false;
+                        });
+                      },
+                    ),
+                    const Text('Show only available stories'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         if (_storiesFuture == null)
           const CircularProgressIndicator()
         else
@@ -544,9 +1021,30 @@ class _ActionPanelState extends State<ActionPanel> {
                 );
               }
 
-              final stories = snapshot.data ?? [];
+              final allStories = snapshot.data ?? [];
               
-              if (stories.isEmpty) {
+              // Apply filters
+              final filteredStories = allStories.where((story) {
+                // Type filter
+                if (_selectedStoryType != null && story.type.toLowerCase() != _selectedStoryType) {
+                  return false;
+                }
+                // Availability filter
+                if (_showOnlyAvailable && !story.available) {
+                  return false;
+                }
+                return true;
+              }).toList();
+              
+              // Sort by availability, then by type
+              filteredStories.sort((a, b) {
+                if (a.available != b.available) {
+                  return a.available ? -1 : 1; // Available stories first
+                }
+                return a.type.compareTo(b.type);
+              });
+              
+              if (filteredStories.isEmpty) {
                 return Column(
                   children: [
                     Icon(
@@ -555,13 +1053,15 @@ class _ActionPanelState extends State<ActionPanel> {
                       color: theme.colorScheme.outline,
                     ),
                     const SizedBox(height: 8),
-                    Text('No stories available'),
+                    Text(_showOnlyAvailable || _selectedStoryType != null 
+                        ? 'No stories match your filters' 
+                        : 'No stories available'),
                   ],
                 );
               }
 
               return Column(
-                children: stories.map((story) => 
+                children: filteredStories.map((story) => 
                   _StoryCard(
                     story: story,
                     onTap: story.available
@@ -574,6 +1074,58 @@ class _ActionPanelState extends State<ActionPanel> {
           ),
       ],
     );
+  }
+
+  Future<void> _abandonStory() async {
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Abandon Story?'),
+          content: const Text(
+            'Are you sure you want to abandon this story? Your progress will be lost.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Abandon'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    try {
+      // For now, just clear the story state locally
+      // TODO: Call abandon story API when implemented
+      setState(() {
+        widget.character.storyState = null;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Story abandoned'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to abandon story: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _startStory(StoryMetadata story) async {
@@ -590,6 +1142,9 @@ class _ActionPanelState extends State<ActionPanel> {
         storyId: story.storyId,
       );
 
+      // Check if widget is still mounted before using context
+      if (!mounted) return;
+
       // Update character's story state with the segment info
       setState(() {
         widget.character.storyState = {
@@ -604,19 +1159,23 @@ class _ActionPanelState extends State<ActionPanel> {
       });
 
       // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Started: ${story.title}'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Started: ${story.title}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to start story: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start story: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

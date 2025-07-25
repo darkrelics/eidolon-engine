@@ -44,6 +44,7 @@ SCRIPTS_PATH = "../scripts_lua"
 
 
 def load_config() -> dict:
+    """Load deployment configuration from YAML file."""
     if not os.path.exists(CONFIG_PATH):
         if not os.path.exists(CONFIG_TEMPLATE_PATH):
             raise FileNotFoundError(f"Neither {CONFIG_PATH} nor {CONFIG_TEMPLATE_PATH} exist")
@@ -58,6 +59,7 @@ def load_config() -> dict:
 
 
 def validate_s3_bucket(bucket_name, region="us-east-1") -> bool:
+    """Check if S3 bucket exists and is accessible."""
     s3_client = boto3.client("s3", region_name=region)
     try:
         s3_client.head_bucket(Bucket=bucket_name)
@@ -69,11 +71,13 @@ def validate_s3_bucket(bucket_name, region="us-east-1") -> bool:
 
 
 def load_template(template_path) -> str:
+    """Load CloudFormation template from file."""
     with open(template_path, "r", encoding="utf-8") as file:
         return file.read()
 
 
 def deploy_stack(client, stack_name, template_body, parameters) -> bool:
+    """Deploy or update CloudFormation stack."""
     cf_parameters: list = [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()]
     try:
         if stack_exists(client, stack_name):
@@ -109,6 +113,7 @@ def deploy_stack(client, stack_name, template_body, parameters) -> bool:
 
 
 def stack_exists(client, stack_name) -> bool:
+    """Check if CloudFormation stack exists."""
     try:
         client.describe_stacks(StackName=stack_name)
         return True
@@ -117,6 +122,7 @@ def stack_exists(client, stack_name) -> bool:
 
 
 def wait_for_stack_completion(client, stack_name) -> None:
+    """Wait for CloudFormation stack operation to complete."""
     print(f"Waiting for stack {stack_name} to complete...")
     waiter = client.get_waiter("stack_create_complete")
     waiter.wait(StackName=stack_name)
@@ -124,6 +130,7 @@ def wait_for_stack_completion(client, stack_name) -> None:
 
 
 def get_stack_outputs(client, stack_name) -> dict:
+    """Get outputs from CloudFormation stack."""
     try:
         stack = client.describe_stacks(StackName=stack_name)
         outputs = stack["Stacks"][0]["Outputs"]
@@ -134,6 +141,7 @@ def get_stack_outputs(client, stack_name) -> dict:
 
 
 def update_configuration_file(config_updates, user_pool_name=None) -> None:
+    """Update deployment configuration file with new values."""
     try:
         config: dict = load_config()
     except (IOError, yaml.YAMLError) as err:
@@ -264,6 +272,7 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
 
 
 def gather_all_parameters() -> dict:
+    """Gather deployment parameters from user input."""
     parameters: dict = {}
 
     # Cognito parameters
@@ -305,6 +314,7 @@ def gather_all_parameters() -> dict:
 
 
 def main() -> None:
+    """Main deployment function."""
     cloudformation_client = boto3.client("cloudformation")
     try:
         # Gather all parameters upfront

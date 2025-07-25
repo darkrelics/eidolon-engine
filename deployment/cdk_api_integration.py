@@ -71,7 +71,7 @@ class CDKApiIntegration:
                 ssm_client.get_parameter(Name="/cdk-bootstrap/hnb659fds/version")
                 print("CDK bootstrap detected")
                 return
-            except ssm_client.exceptions.ParameterNotFound:
+            except ssm_client.exceptions.ParameterNotFound as exc:
                 print("\n[CDK Bootstrap Required]")
                 print(f"The AWS CDK needs to be bootstrapped in account {account_id} for region {self.region}")
                 print("This is a one-time setup that creates resources needed by CDK.")
@@ -81,7 +81,7 @@ class CDKApiIntegration:
                     raise CDKDeploymentError(
                         f"CDK bootstrap required. Run: cdk bootstrap aws://{account_id}/{self.region}",
                         {"account": account_id, "region": self.region},
-                    )
+                    ) from exc
 
                 # Ask user if they want to bootstrap
                 response: str = input("\nDo you want to bootstrap CDK now? [Y/n]: ").strip().lower()
@@ -92,11 +92,11 @@ class CDKApiIntegration:
                     raise CDKDeploymentError(
                         f"CDK bootstrap required. Run manually: cdk bootstrap aws://{account_id}/{self.region}",
                         {"account": account_id, "region": self.region},
-                    )
+                    ) from exc
         except Exception as err:
             if isinstance(err, CDKDeploymentError):
                 raise
-            raise CDKDeploymentError(f"Error checking CDK bootstrap: {str(err)}", {})
+            raise CDKDeploymentError(f"Error checking CDK bootstrap: {str(err)}", {}) from err
 
     def _run_cdk_bootstrap(self, account_id: str) -> None:
         """Run CDK bootstrap command."""
@@ -108,6 +108,7 @@ class CDKApiIntegration:
                 env=os.environ.copy(),
                 capture_output=True,
                 text=True,
+                check=False,
             )
 
             if result.returncode != 0:
@@ -119,13 +120,12 @@ class CDKApiIntegration:
                     print("  1. Delete CloudFormation stack: CDKToolkit")
                     print(f"  2. Run: cdk bootstrap aws://{account_id}/{self.region}")
                     raise CDKDeploymentError("CDK bootstrap failed - manual cleanup required", {})
-                else:
-                    raise CDKDeploymentError(f"CDK bootstrap failed: {result.stderr}", {})
+                raise CDKDeploymentError(f"CDK bootstrap failed: {result.stderr}", {})
 
             print("[OK] CDK bootstrap completed successfully")
 
         except subprocess.CalledProcessError as err:
-            raise CDKDeploymentError(f"CDK bootstrap command failed: {str(err)}", {})
+            raise CDKDeploymentError(f"CDK bootstrap command failed: {str(err)}", {}) from err
 
     def _setup_environment(self) -> None:
         """Configure environment for CDK operations."""

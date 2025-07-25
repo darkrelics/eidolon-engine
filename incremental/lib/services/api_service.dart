@@ -274,6 +274,33 @@ class ApiService {
         .toList();
   }
 
+  /// Get current active story for a character
+  Future<Map<String, dynamic>?> getCurrentStory({
+    required String characterId,
+  }) async {
+    debugPrint('ApiService: Getting current story for character: $characterId');
+    final headers = await _getHeaders();
+    final response = await _httpClient.get(
+      Uri.parse('$baseUrl/stories/current?characterId=$characterId'),
+      headers: headers,
+    );
+
+    debugPrint('ApiService: Get current story response status: ${response.statusCode}');
+    debugPrint('ApiService: Get current story response body: ${response.body}');
+
+    if (response.statusCode == 404) {
+      // No active story
+      return null;
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to get current story: ${response.body}');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json;
+  }
+
   /// Get available archetypes
   Future<List<ArchetypeInfo>> getArchetypes() async {
     debugPrint('ApiService: Getting archetypes...');

@@ -22,11 +22,14 @@ Returns only character names and death status from the player table.
 
 import os
 
-from eidolon.cors import cors_handler
-from eidolon.dynamo import get_item, get_table
+from eidolon.dynamo import get_item
+from eidolon.dynamo import get_table
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
-from eidolon.responses import create_response, error_response, not_found_response
+from eidolon.utilities import build_lambda_response
+from eidolon.utilities import extract_and_validate_player_id
+from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import handle_preflight_if_options
+from eidolon.utilities import log_lambda_invocation
 
 # Configure logging
 logger = get_logger(__name__)
@@ -35,7 +38,67 @@ logger = get_logger(__name__)
 PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
 
 
-def lambda_handler(event, context):
+def list_characters_business_logic(player_id: str) -> tuple:
+    """
+    Business logic for listing player's characters.
+
+    Args:
+        player_id: Authenticated player ID
+
+    Returns:
+        Tuple of (response_data, error_message)
+        If successful: (data_dict, None)
+        If failed: (None, error_message_string)
+    """
+    # Get player data from players table
+    players_table = get_table(PLAYERS_TABLE)
+    player_data = get_item(players_table, {"PlayerID": player_id})
+
+    if not player_data:
+        logger.warning("Player not found in database", extra={"player_id": player_id})
+        return None, "Player not found"
+
+    character_list = player_data.get("CharacterList", {})
+    logger.info(
+        "Player data retrieved",
+        extra={"player_id": player_id, "character_count": len(character_list)},
+    )
+
+    # Build character list with proper field names
+    characters = []
+    for char_name, char_info in character_list.items():
+        char_data = {
+            "CharacterName": char_name,
+            "CharacterID": char_info.get("UUID", ""),
+            "Dead": char_info.get("Dead", False),
+        }
+        characters.append(char_data)
+
+        logger.debug(
+            "Processing character",
+            extra={
+                "character_name": char_name,
+                "character_id": char_data["CharacterID"],
+                "is_dead": char_data["Dead"],
+            },
+        )
+
+    # Sort by name for consistent ordering
+    characters.sort(key=lambda x: x["CharacterName"])
+
+    logger.info(
+        "Character list prepared successfully",
+        extra={
+            "player_id": player_id,
+            "character_count": len(characters),
+            "character_names": [c.get("CharacterName", "") for c in characters],
+        },
+    )
+
+    return {"characters": characters}, None
+
+
+def lambda_handler(event: dict, context: object):
     """
     Lambda handler for listing player characters.
 
@@ -46,82 +109,28 @@ def lambda_handler(event, context):
     Returns:
         API Gateway response
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    # Log auth details
-    headers = event.get("headers", {})
-    auth_header = headers.get("Authorization", headers.get("authorization", "NOT PROVIDED"))
-    logger.info(f"Authorization header present: {'Bearer' in auth_header}")
-
-    # Log request context authorizer
-    request_context = event.get("requestContext", {})
-    authorizer = request_context.get("authorizer", {})
-    logger.info(f"Authorizer claims: {authorizer.get('claims', 'NO CLAIMS')}")
-
-    # Handle preflight requests
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
     try:
-        # Extract player ID from Cognito authorizer
-        player_id, auth_error = extract_player_id(event)
+        # Extract and validate player ID
+        player_id, auth_error = extract_and_validate_player_id(event)
         if auth_error:
-            logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
+            return auth_error
 
-        logger.info("Player authenticated", extra={"player_id": player_id})
+        # Call business logic
+        response_data, error_message = list_characters_business_logic(player_id)
 
-        # Get player data from players table
-        players_table = get_table(PLAYERS_TABLE)
-        player_data = get_item(players_table, {"PlayerID": player_id})
-
-        if not player_data:
-            logger.warning("Player not found in database", extra={"player_id": player_id})
-            return cors_handler.add_cors_headers(not_found_response("Player"), event)
-
-        character_list = player_data.get("CharacterList", {})
-        logger.info("Player data retrieved", extra={"player_id": player_id, "character_count": len(character_list)})
-
-        # Build character list with DynamoDB field names
-        characters: list = []
-        for char_name, char_info in character_list.items():
-            char_data = {
-                "CharacterName": char_name, 
-                "CharacterID": char_info.get("UUID", ""), 
-                "Dead": char_info.get("Dead", False)
-            }
-            characters.append(char_data)
-            logger.debug(
-                "Processing character",
-                extra={"character_name": char_name, "character_id": char_data["CharacterID"], "is_dead": char_data["Dead"]},
-            )
-
-        # Sort by name for consistent ordering
-        characters.sort(key=lambda x: x["CharacterName"])
+        if error_message:
+            return build_lambda_response(404, {"error": error_message}, event)
 
         # Return success response
-        logger.info(
-            "Character list prepared successfully",
-            extra={
-                "status_code": 200,
-                "player_id": player_id,
-                "character_count": len(characters),
-                "character_names": [c.get("CharacterName", "") for c in characters],
-            },
-        )
-        return cors_handler.add_cors_headers(create_response(200, {"characters": characters}), event)
+        return build_lambda_response(200, response_data, event)
 
     except Exception as err:
-        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return handle_lambda_error(err, context, event)

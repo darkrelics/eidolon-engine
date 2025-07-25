@@ -7,6 +7,8 @@ import aws_cdk as cdk
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_events as events
+from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_logs as logs
@@ -105,7 +107,7 @@ def setup_custom_domain(
         f"{prefix}-api-record",
         zone=hosted_zone,
         record_name=api_subdomain,
-        target=route53.RecordTarget.from_alias(route53_targets.ApiGatewayDomain(custom_domain)), # type: ignore
+        target=route53.RecordTarget.from_alias(route53_targets.ApiGatewayDomain(custom_domain)),  # type: ignore
     )
 
 
@@ -127,6 +129,7 @@ def validate_config(config: dict) -> None:
         "segments_table",
         "active_segments_table",
         "history_table",
+        "opponents_table",
         "cognito_user_pool_arn",
         "dependencies_layer_arn",
         "domain_name",
@@ -176,6 +179,7 @@ class LambdaStack(cdk.Stack):
         self.segments_table = config.get("segments_table", "")
         self.active_segments_table = config.get("active_segments_table", "")
         self.history_table = config.get("history_table", "")
+        self.opponents_table = config.get("opponents_table", "")
         self.cognito_user_pool_arn = config.get("cognito_user_pool_arn", "")
         self.dependencies_layer_arn = config.get("dependencies_layer_arn", "")
         self.domain_name = config.get("domain_name", "darkrelics.net")
@@ -401,6 +405,108 @@ class LambdaStack(cdk.Stack):
             dependencies_layer,
         )
 
+        # Get Current Story Lambda
+        self.get_current_story_function = self.create_lambda_function(
+            "api-get-current-story",
+            "api_get_current_story.lambda_handler",
+            {
+                "SEGMENTS_TABLE": self.segments_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "STORY_TABLE": self.story_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Gets current active story and segment for a character",
+            dependencies_layer,
+        )
+
+        # Submit Decision Lambda
+        self.submit_decision_function = self.create_lambda_function(
+            "api-submit-decision",
+            "api_submit_decision.lambda_handler",
+            {
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Submits a player decision for a story segment",
+            dependencies_layer,
+        )
+
+        # Get Segment Outcome Lambda
+        self.get_segment_outcome_function = self.create_lambda_function(
+            "api-get-segment-outcome",
+            "api_get_segment_outcome.lambda_handler",
+            {
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "HISTORY_TABLE": self.history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Gets the outcome of a completed segment",
+            dependencies_layer,
+        )
+
+        # Abandon Story Lambda
+        self.abandon_story_function = self.create_lambda_function(
+            "api-abandon-story",
+            "api_abandon_story.lambda_handler",
+            {
+                "CHARACTERS_TABLE": self.characters_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "HISTORY_TABLE": self.history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Abandons an active story and updates character state",
+            dependencies_layer,
+        )
+
+        # Process Segment Lambda (backend)
+        self.process_segment_function = self.create_lambda_function(
+            "process-segment",
+            "process_segment.lambda_handler",
+            {
+                "CHARACTERS_TABLE": self.characters_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "HISTORY_TABLE": self.history_table,
+                "OPPONENTS_TABLE": self.opponents_table,
+            },
+            "Processes completed segments and determines outcomes",
+            dependencies_layer,
+        )
+
+        # Segment Poller Lambda (backend)
+        self.segment_poller_function = self.create_lambda_function(
+            "segment-poller",
+            "segment_poller.lambda_handler",
+            {
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "PROCESS_SEGMENT_FUNCTION": self.process_segment_function.function_name,
+            },
+            "Polls for completed segments and triggers processing",
+            dependencies_layer,
+        )
+
+        # Grant permissions for segment_poller to invoke process_segment
+        self.process_segment_function.grant_invoke(self.segment_poller_function)
+
+        # Create EventBridge rule to trigger segment poller every minute
+        self.segment_poller_rule = events.Rule(
+            self,
+            "segment-poller-rule",
+            rule_name="eidolon-segment-poller-rule",
+            description="Triggers segment poller Lambda every minute",
+            schedule=events.Schedule.rate(cdk.Duration.minutes(1)),
+        )
+
+        # Add Lambda target to the rule
+        # Type ignore: CDK typing issue with LambdaFunction target
+        self.segment_poller_rule.add_target(
+            targets.LambdaFunction(
+                self.segment_poller_function, retry_attempts=2  # type: ignore
+            )  # type: ignore
+        )
+
     def configure_api_routes(self) -> None:
         """Configure API Gateway routes and methods."""
         # Archetypes endpoint
@@ -463,11 +569,47 @@ class LambdaStack(cdk.Stack):
 
         # Nested resources under /stories
         start_resource = stories_resource.add_resource("start")
-        
+
         # POST /stories/start - Start a story
         start_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.start_story_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # GET /stories/current - Get current active story
+        current_resource = stories_resource.add_resource("current")
+        current_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_current_story_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # POST /stories/decision - Submit a decision
+        decision_resource = stories_resource.add_resource("decision")
+        decision_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.submit_decision_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # GET /stories/outcome - Get segment outcome
+        outcome_resource = stories_resource.add_resource("outcome")
+        outcome_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_segment_outcome_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # POST /stories/abandon - Abandon active story
+        abandon_resource = stories_resource.add_resource("abandon")
+        abandon_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.abandon_story_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
@@ -484,6 +626,12 @@ class LambdaStack(cdk.Stack):
             ("cognito-delete-player-logs", self.cognito_delete_player_function),
             ("get-stories-logs", self.get_stories_function),
             ("start-story-logs", self.start_story_function),
+            ("submit-decision-logs", self.submit_decision_function),
+            ("get-segment-outcome-logs", self.get_segment_outcome_function),
+            ("abandon-story-logs", self.abandon_story_function),
+            ("get-current-story-logs", self.get_current_story_function),
+            ("segment-poller-logs", self.segment_poller_function),
+            ("process-segment-logs", self.process_segment_function),
         ]
 
         for log_id, function in log_configs:
