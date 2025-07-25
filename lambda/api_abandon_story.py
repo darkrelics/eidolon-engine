@@ -25,7 +25,7 @@ from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id, get_required_field, parse_json_body
 from eidolon.responses import create_response, error_response
-from eidolon.story import get_active_story_segment, mark_segment_as_abandoned, record_story_abandonment
+from eidolon.story import get_active_story_segment, mark_segment_as_abandoned, record_story_abandonment, add_story_to_abandoned_list
 from eidolon.validation import validate_uuid
 
 # Configure logging
@@ -40,9 +40,10 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     1. Verify character ownership
     2. Check if character is in a story
     3. Get active story segment
-    4. Reset character state
+    4. Add story to abandoned list
     5. Mark segment as abandoned
     6. Record in history
+    7. Reset character state
 
     Args:
         character_id: Character UUID
@@ -95,14 +96,13 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     story_id = active_segment.get("StoryID")
     story_title = active_segment.get("StoryTitle", "Unknown Story")
 
-    # Step 4: Reset character game mode
-    reset_result = reset_character_game_mode(character_id)
-    if not reset_result["success"]:
-        return {
-            "success": False,
-            "error": reset_result["error"],
-            "statusCode": 500,
-        }
+    # Step 4: Add story to abandoned list
+    abandoned_list_result = add_story_to_abandoned_list(character_id, story_id)
+    if not abandoned_list_result["success"]:
+        logger.error(
+            "Failed to add story to abandoned list but continuing",
+            extra={"character_id": character_id, "story_id": story_id},
+        )
 
     # Step 5: Mark segment as abandoned
     abandon_result = mark_segment_as_abandoned(active_segment_id)
@@ -119,6 +119,15 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
             "Failed to update history but continuing",
             extra={"character_id": character_id, "story_id": story_id},
         )
+
+    # Step 7: Reset character game mode
+    reset_result = reset_character_game_mode(character_id)
+    if not reset_result["success"]:
+        return {
+            "success": False,
+            "error": reset_result["error"],
+            "statusCode": 500,
+        }
 
     # Build success response
     response_data = {

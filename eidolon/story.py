@@ -132,3 +132,38 @@ def record_story_abandonment(character_id: str, story_id: str) -> dict:
             extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
         )
         return {"success": False, "error": "Failed to update history"}
+
+
+def add_story_to_abandoned_list(character_id: str, story_id: str) -> dict:
+    """
+    Add a story to the character's AbandonedStories list.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID to add to abandoned list
+
+    Returns:
+        Dict with:
+            - success: bool
+            - error: Error message (if failed)
+    """
+    try:
+        # Add story to AbandonedStories list if not already present
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="ADD AbandonedStories :story",
+            ExpressionAttributeValues={":story": {story_id}},
+        )
+        logger.info(
+            "Added story to abandoned list",
+            extra={"character_id": character_id, "story_id": story_id},
+        )
+        return {"success": True}
+
+    except Exception as err:
+        logger.error(
+            "Failed to add story to abandoned list",
+            extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
+        )
+        return {"success": False, "error": "Failed to update character"}
