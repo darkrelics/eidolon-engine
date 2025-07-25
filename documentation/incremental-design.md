@@ -471,11 +471,43 @@ The Flutter portal implements smart polling:
 
 ## 5. Lambda Function Specifications
 
-### 5.1 Core Lambda Functions
+### 5.1 Lambda Function Architecture Pattern
+
+Each Lambda function in the Eidolon Engine follows a strict architectural pattern to maintain consistency, testability, and separation of concerns:
+
+#### Lambda Handler Structure
+Each Lambda function must have a Lambda handler which handles the event, calls a function with the business logic, then handles the response. The business logic function will call functions from the `./eidolon` library to perform their tasks. None of the database or I/O code should be present in the Lambda function beyond the event feed to the handler and the response back to the API.
+
+**Example Pattern:**
+```python
+def lambda_handler(event: dict, context: object) -> dict:
+    """Lambda entry point - handles AWS-specific concerns."""
+    # 1. Log invocation
+    # 2. Handle CORS preflight
+    # 3. Extract and validate authentication
+    # 4. Parse request body
+    # 5. Call business logic function
+    # 6. Format and return response with CORS headers
+    
+def business_logic_function(param1: str, param2: str) -> dict:
+    """Pure business logic - testable and AWS-agnostic."""
+    # 1. Validate business rules
+    # 2. Call eidolon library functions
+    # 3. Orchestrate operations
+    # 4. Return success/error dictionary
+```
+
+This pattern ensures:
+- Lambda handlers remain thin and focused on AWS integration
+- Business logic is testable without AWS dependencies
+- Database operations are centralized in the eidolon library
+- Error handling is consistent across all functions
+
+### 5.2 Core Lambda Functions
 
 All Lambda functions follow the existing pattern in the `lambda/` directory and use the `eidolon` package for standardized responses, logging, and error handling.
 
-#### 5.1.1 api_get_stories
+#### 5.2.1 api_get_stories
 
 ```python
 """Get available stories for a character."""
@@ -491,7 +523,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - Uses eidolon.responses.create_response for consistent formatting
 ```
 
-#### 5.1.2 api_start_story
+#### 5.2.2 api_start_story
 
 ```python
 """Initialize story participation."""
@@ -515,7 +547,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - 400: Invalid request parameters
 ```
 
-#### 5.1.3 api_submit_decision
+#### 5.2.3 api_submit_decision
 
 ```python
 """Record player decision and schedule next segment."""
@@ -526,7 +558,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - Return acknowledgment
 ```
 
-#### 5.1.4 api_process_segment
+#### 5.2.4 api_process_segment
 
 ```python
 """Process segment completion (triggered by EventBridge)."""
@@ -539,7 +571,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 # Note: Called by segment poller Lambda
 ```
 
-### 5.2 DynamoDB Polling Implementation
+### 5.3 DynamoDB Polling Implementation
 
 The segment completion system uses EventBridge to create a serverless polling mechanism that processes story segments when their timers expire. This approach eliminates the need for always-on infrastructure while maintaining precise timing control.
 
@@ -569,7 +601,7 @@ The system implements intelligent polling management to minimize costs:
 
 The combination of EventBridge scheduling, GSI-based queries, and dynamic rule management creates an efficient, scalable system for handling thousands of concurrent story progressions without requiring dedicated infrastructure.
 
-### 5.3 Outcome Calculation Logic
+### 5.4 Outcome Calculation Logic
 
 The narrative outcome system leverages the MUD mechanics to create consistent, fair results based on character abilities. This ensures that character progression in the incremental game directly impacts story success rates.
 
@@ -606,7 +638,7 @@ The system determines the final narrative outcome by aggregating the sigma value
 
 This approach directly leverages the MUD mechanics system's probability model. A character with higher skills will naturally achieve higher sigma values, leading to better narrative outcomes. The system preserves the significance of individual rolls while creating a smooth progression of outcomes based on overall performance.
 
-### 5.4 Combat Resolution Logic
+### 5.5 Combat Resolution Logic
 
 Combat segments implement the complete MUD combat system, ensuring that battles in the incremental game feel authentic and consequential. The system preserves all the tactical depth of MUD combat while automating the round-by-round resolution.
 
@@ -654,7 +686,7 @@ The final outcome depends on the combat's resolution:
 
 This nuanced outcome system rewards skilled character builds while maintaining the risk inherent in combat encounters.
 
-### 5.5 Difficulty Guidelines
+### 5.6 Difficulty Guidelines
 
 Following the MUD mechanics system, story challenges use these difficulty levels:
 

@@ -184,6 +184,38 @@ response = lambda_handler(event, {})
 3. Add the function to the appropriate CDK stack
 4. The build process will automatically package it
 
+## Lambda Function Architecture Pattern
+
+Each Lambda function must have a Lambda handler which handles the event, calls a function with the business logic, then handles the response. The business logic function will call functions from the `./eidolon` library to perform their tasks. None of the database or I/O code should be present in the Lambda function beyond the event feed to the handler and the response back to the API.
+
+### Required Structure
+
+```python
+def lambda_handler(event: dict, context: object) -> dict:
+    """Lambda entry point - handles AWS-specific concerns."""
+    # 1. Log invocation with request ID
+    # 2. Handle CORS preflight requests
+    # 3. Extract and validate authentication
+    # 4. Parse request body or query parameters
+    # 5. Call business logic function
+    # 6. Format and return response with CORS headers
+    
+def business_logic_function(param1: str, param2: str) -> dict:
+    """Pure business logic - testable and AWS-agnostic."""
+    # 1. Validate business rules
+    # 2. Call eidolon library functions for DB operations
+    # 3. Orchestrate multiple operations as needed
+    # 4. Return success/error dictionary with data
+```
+
+### Benefits of This Pattern
+
+- **Separation of Concerns**: AWS-specific code stays in the handler, business logic remains pure
+- **Testability**: Business logic can be unit tested without mocking AWS services
+- **Consistency**: All database operations go through the eidolon library
+- **Maintainability**: Clear boundaries between infrastructure and business code
+- **Reusability**: Business logic functions can be called from different contexts
+
 ## Best Practices
 
 1. **Error Handling**: Always catch and log exceptions appropriately
@@ -200,3 +232,4 @@ response = lambda_handler(event, {})
        "body": json.dumps({"key": "value"})
    }
    ```
+8. **Architecture Pattern**: Follow the handler/business logic separation pattern described above
