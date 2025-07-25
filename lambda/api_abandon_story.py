@@ -20,30 +20,18 @@ Lambda function to abandon an active story.
 Updates character state, marks active segments as abandoned, and updates history.
 """
 
-import os
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_item
-from eidolon.dynamo import get_table
-from eidolon.dynamo import update_item
+from eidolon.dynamo import get_item, get_table, update_item
+from eidolon.environment import ACTIVE_SEGMENTS_TABLE, CHARACTERS_TABLE, HISTORY_TABLE
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
-from eidolon.requests import get_required_field
-from eidolon.requests import parse_json_body
-from eidolon.responses import create_response
-from eidolon.responses import error_response
-from eidolon.responses import not_found_response
+from eidolon.requests import extract_player_id, get_required_field, parse_json_body
+from eidolon.responses import create_response, error_response, not_found_response
 from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
-
-# Get table names from environment
-CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
-ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
-HISTORY_TABLE = os.environ.get("HISTORY_TABLE", "history")
 
 
 def get_character_and_verify_ownership(character_id: str, player_id: str) -> object:
@@ -152,9 +140,7 @@ def update_history_abandoned(character_id: str, story_id: str) -> None:
     history_table = get_table(HISTORY_TABLE)
 
     # Get existing history entry
-    history = get_item(
-        history_table, {"CharacterID": character_id, "StoryID": story_id}
-    )
+    history = get_item(history_table, {"CharacterID": character_id, "StoryID": story_id})
 
     if history:
         # Increment abandoned count and set finished time
@@ -205,9 +191,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id, auth_error = extract_player_id(event)
         if auth_error:
             logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(
-                error_response(auth_error, status_code=401), event
-            )
+            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
 
         logger.info("Player authenticated", extra={"player_id": player_id})
 
@@ -219,15 +203,11 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Get required fields
         character_id, char_error = get_required_field(body, "characterId")
         if char_error:
-            return cors_handler.add_cors_headers(
-                error_response(char_error, status_code=400), event
-            )
+            return cors_handler.add_cors_headers(error_response(char_error, status_code=400), event)
 
         # Validate UUID
         if character_id and not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(
-                error_response("Invalid character ID format", status_code=400), event
-            )
+            return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
 
         logger.info(
             "Abandoning story",
@@ -246,9 +226,7 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "Character not in Incremental mode",
                 extra={"character_id": character_id, "game_mode": game_mode},
             )
-            return cors_handler.add_cors_headers(
-                error_response("Character not in a story", status_code=409), event
-            )
+            return cors_handler.add_cors_headers(error_response("Character not in a story", status_code=409), event)
 
         # Get active story segment
         active_segment: dict = get_active_story_for_character(character_id)  # type: ignore
@@ -257,9 +235,7 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "No active story found",
                 extra={"character_id": character_id},
             )
-            return cors_handler.add_cors_headers(
-                error_response("No active story to abandon", status_code=404), event
-            )
+            return cors_handler.add_cors_headers(error_response("No active story to abandon", status_code=404), event)
 
         active_segment_id: str = active_segment.get("ActiveSegmentID")  # type: ignore
         story_id = active_segment.get("StoryID")
@@ -302,6 +278,4 @@ def lambda_handler(event: dict, context: object) -> dict:
             exc_info=True,
         )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

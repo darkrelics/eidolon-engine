@@ -26,8 +26,7 @@ from decimal import Decimal
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.dynamo import (delete_item, get_item, get_table, put_item,  # noqa: C0413
-                            update_item)
+from eidolon.dynamo import delete_item, get_item, get_table, put_item, update_item  # noqa: C0413
 
 
 def display_rooms() -> list:

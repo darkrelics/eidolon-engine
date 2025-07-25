@@ -22,32 +22,26 @@ compliance by removing all traces of user data.
 """
 
 import json
-import os
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 
 import boto3
 
-from eidolon.dynamo import delete_item
-from eidolon.dynamo import get_table
-from eidolon.dynamo import scan_all_items
+from eidolon.dynamo import delete_item, get_table, scan_all_items
+from eidolon.environment import (
+    ACTIVE_SEGMENTS_TABLE,
+    CHARACTER_HISTORY_TABLE,
+    CHARACTERS_TABLE,
+    PLAYERS_TABLE,
+)
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
-from eidolon.requests import parse_json_body
-from eidolon.responses import create_response
-from eidolon.responses import error_response
+from eidolon.requests import extract_player_id, parse_json_body
+from eidolon.responses import create_response, error_response
 
 # Configure logging
 logger = get_logger(__name__)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
-
-# Get table names from environment
-PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
-CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
-ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
-CHARACTER_HISTORY_TABLE = os.environ.get("CHARACTER_HISTORY_TABLE", "character_history")
 
 
 def delete_player_record(player_id: str) -> bool:
@@ -111,9 +105,7 @@ def delete_all_characters(player_id: str) -> int:
         return deleted_count
 
     except Exception as err:
-        logger.error(
-            "Error in delete_all_characters", extra={"error": str(err)}, exc_info=True
-        )
+        logger.error("Error in delete_all_characters", extra={"error": str(err)}, exc_info=True)
         return deleted_count
 
 
@@ -159,9 +151,7 @@ def delete_character_history(player_id: str) -> int:
 
         # Delete each history record
         for item in response.get("Items", []):
-            if delete_item(
-                table, {"PlayerID": player_id, "Timestamp": item["Timestamp"]}
-            ):
+            if delete_item(table, {"PlayerID": player_id, "Timestamp": item["Timestamp"]}):
                 deleted_count += 1
 
         # Handle pagination
@@ -173,9 +163,7 @@ def delete_character_history(player_id: str) -> int:
             )
 
             for item in response.get("Items", []):
-                if delete_item(
-                    table, {"PlayerID": player_id, "Timestamp": item["Timestamp"]}
-                ):
+                if delete_item(table, {"PlayerID": player_id, "Timestamp": item["Timestamp"]}):
                     deleted_count += 1
 
         logger.info(
@@ -228,11 +216,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             player_id = event["detail"]["requestParameters"].get("username")
         elif "body" in event:
             # API Gateway or direct invocation
-            body, _ = (
-                parse_json_body(event)
-                if isinstance(event.get("body"), str)
-                else (event.get("body", {}), None)
-            )
+            body, _ = parse_json_body(event) if isinstance(event.get("body"), str) else (event.get("body", {}), None)
             player_id = body.get("player_id") if body else None
         elif "player_id" in event:
             # Direct invocation
@@ -297,9 +281,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             results["errors"].append(f"Active segments: {str(err)}")
 
         try:
-            results["deletions"]["character_history"] = delete_character_history(
-                player_id
-            )
+            results["deletions"]["character_history"] = delete_character_history(player_id)
         except Exception as err:
             logger.error(
                 "Unexpected error deleting character history",
@@ -309,9 +291,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             results["errors"].append(f"Character history: {str(err)}")
 
         # Log summary
-        logger.info(
-            "Deletion complete", extra={"player_id": player_id, "summary": results}
-        )
+        logger.info("Deletion complete", extra={"player_id": player_id, "summary": results})
 
         # Return appropriate response based on event source
         if "requestContext" in event:

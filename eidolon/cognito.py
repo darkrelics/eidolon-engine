@@ -93,6 +93,4 @@ def has_permission(event: dict, permission: str) -> bool:
     if not player_id:
         return False
 
-    # TODO: Implement actual permission checking
-    # For now, all authenticated users have all permissions
     return True

@@ -20,26 +20,15 @@ Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.
 """
 
-import os
-
 from eidolon.cors import cors_handler
-from eidolon.dynamo import delete_item
-from eidolon.dynamo import get_item
-from eidolon.dynamo import get_table
-from eidolon.dynamo import update_item_with_condition
+from eidolon.dynamo import delete_item, get_item, get_table, update_item_with_condition
+from eidolon.environment import CHARACTERS_TABLE, ITEMS_TABLE, PLAYERS_TABLE
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
-from eidolon.requests import get_query_parameter
-from eidolon.responses import create_response
-from eidolon.responses import error_response
+from eidolon.requests import extract_player_id, get_query_parameter
+from eidolon.responses import create_response, error_response
 
 # Configure logging
 logger = get_logger(__name__)
-
-# Get table names from environment
-PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
-CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
-ITEMS_TABLE = os.environ.get("ITEMS_TABLE", "items")
 
 
 def get_character_name_by_id(player_id: str, character_id: str) -> str:
@@ -257,14 +246,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id, auth_error = extract_player_id(event)
         if auth_error:
             logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(
-                error_response(auth_error, status_code=401), event
-            )
+            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
 
         # Get character ID from query parameters
-        character_id, error_msg = get_query_parameter(
-            event, "characterId", required=True
-        )
+        character_id, error_msg = get_query_parameter(event, "characterId", required=True)
         if error_msg:
             return cors_handler.add_cors_headers(error_response(error_msg), event)
 
@@ -278,9 +263,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         # Delete the character
         if not delete_character(player_id, character_name, character_id):
-            return cors_handler.add_cors_headers(
-                error_response("Failed to delete character", status_code=500), event
-            )
+            return cors_handler.add_cors_headers(error_response("Failed to delete character", status_code=500), event)
 
         # Return success response
         logger.info("Lambda response", extra={"status_code": 200})
@@ -302,6 +285,4 @@ def lambda_handler(event: dict, context: object) -> dict:
             exc_info=True,
         )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

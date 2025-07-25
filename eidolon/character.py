@@ -4,13 +4,12 @@ Character management utilities for Lambda functions.
 Provides common functions for character creation and management.
 """
 
-import os
 import uuid
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import get_item
-from eidolon.dynamo import get_table
+from eidolon.dynamo import get_item, get_table
+from eidolon.environment import ACTIVE_SEGMENTS_TABLE, ARCHETYPES_TABLE, CHARACTERS_TABLE, MAX_CHARACTERS_PER_PLAYER, PLAYERS_TABLE
 from eidolon.logger import get_logger
 from eidolon.validation import validate_uuid
 
@@ -27,24 +26,22 @@ def generate_character_id() -> str:
     return str(uuid.uuid4())
 
 
-def get_archetype(archetype_name: str, archetypes_table):
+def get_archetype(archetype_name: str):
     """
     Retrieve and validate an archetype from DynamoDB.
 
     Args:
         archetype_name: Name of the archetype.
-        archetypes_table: DynamoDB table resource for archetypes.
 
     Returns:
         Archetype data or None if not found/not player-available.
     """
     try:
+        archetypes_table = get_table(ARCHETYPES_TABLE)
         response = archetypes_table.get_item(Key={"ArchetypeName": archetype_name})
 
         if "Item" not in response:
-            logger.warning(
-                "Archetype not found", extra={"archetype_name": archetype_name}
-            )
+            logger.warning("Archetype not found", extra={"archetype_name": archetype_name})
             return None
 
         archetype = response["Item"]
@@ -67,21 +64,19 @@ def get_archetype(archetype_name: str, archetypes_table):
         return None
 
 
-def check_character_limit(player_id: str, players_table) -> tuple:
+def check_character_limit(player_id: str) -> tuple:
     """
     Check if player has reached character limit.
 
     Args:
         player_id: Cognito user ID.
-        players_table: DynamoDB table resource for players.
 
     Returns:
         Tuple of (can_create, current_count).
     """
-    max_characters = int(os.environ.get("MAX_CHARACTERS_PER_PLAYER", "10"))
-
     try:
         # Get player record
+        players_table = get_table(PLAYERS_TABLE)
         response = players_table.get_item(Key={"PlayerID": player_id})
 
         if "Item" not in response:
@@ -92,7 +87,7 @@ def check_character_limit(player_id: str, players_table) -> tuple:
         character_list = player.get("CharacterList", {})
         current_count = len(character_list)
 
-        return current_count < max_characters, current_count
+        return current_count < MAX_CHARACTERS_PER_PLAYER, current_count
 
     except ClientError as err:
         logger.error(
@@ -102,16 +97,13 @@ def check_character_limit(player_id: str, players_table) -> tuple:
         return False, 0
 
 
-def get_character_with_ownership(
-    character_id: str, player_id: str, table_name=None
-) -> tuple:
+def get_character_with_ownership(character_id: str, player_id: str) -> tuple:
     """
     Get character by ID and verify ownership.
 
     Args:
         character_id: Character UUID
         player_id: Player ID for ownership verification
-        table_name: Optional table name override
 
     Returns:
         Tuple of (character_dict, error_message)
@@ -120,15 +112,11 @@ def get_character_with_ownership(
     """
     # Validate character ID format
     if not validate_uuid(character_id):
-        logger.warning(
-            "Invalid character ID format", extra={"character_id": character_id}
-        )
+        logger.warning("Invalid character ID format", extra={"character_id": character_id})
         return None, "Invalid character ID format"
 
     # Get character from database
-    characters_table = get_table(
-        table_name or os.environ.get("CHARACTERS_TABLE", "characters")
-    )
+    characters_table = get_table(CHARACTERS_TABLE)
     character = get_item(characters_table, {"CharacterID": character_id})
 
     if not character:
@@ -160,9 +148,7 @@ def get_character_with_ownership(
     return character, None
 
 
-def get_active_segment_for_character(
-    character_id: str, player_id: str, segment_type=None
-) -> tuple:
+def get_active_segment_for_character(character_id: str, player_id: str, segment_type=None) -> tuple:
     """
     Get active segment for a character with ownership verification.
 
@@ -176,9 +162,7 @@ def get_active_segment_for_character(
         If successful: (active_segment, None)
         If failed: (None, error_message)
     """
-    active_segments_table = get_table(
-        os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
-    )
+    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
 
     # Query by CharacterID using GSI
     query_params = {
@@ -232,9 +216,7 @@ def get_active_segment_for_character(
         return None, "Failed to retrieve active segment"
 
 
-def verify_character_in_game_mode(
-    character: dict, expected_mode: str = "Incremental"
-) -> tuple:
+def verify_character_in_game_mode(character: dict, expected_mode: str = "Incremental") -> tuple:
     """
     Verify character is in the expected game mode.
 
@@ -263,16 +245,13 @@ def verify_character_in_game_mode(
     return True, None
 
 
-def get_character_by_name(
-    player_id: str, character_name: str, table_name=None
-) -> tuple:
+def get_character_by_name(player_id: str, character_name: str) -> tuple:
     """
     Get character by name for a specific player.
 
     Args:
         player_id: Player ID
         character_name: Character name
-        table_name: Optional table name override
 
     Returns:
         Tuple of (character_dict, error_message)
@@ -280,7 +259,7 @@ def get_character_by_name(
         If failed: (None, error_message)
     """
     # First get player record to find character UUID
-    players_table = get_table(os.environ.get("PLAYERS_TABLE", "players"))
+    players_table = get_table(PLAYERS_TABLE)
     player = get_item(players_table, {"PlayerID": player_id})
 
     if not player:
@@ -307,9 +286,7 @@ def get_character_by_name(
         return None, "Character data corrupted"
 
     # Get character details
-    characters_table = get_table(
-        table_name or os.environ.get("CHARACTERS_TABLE", "characters")
-    )
+    characters_table = get_table(CHARACTERS_TABLE)
     character = get_item(characters_table, {"CharacterID": character_id})
 
     if not character:

@@ -19,17 +19,14 @@ limitations under the License.
 Lambda function to create a new player record in DynamoDB after user registration.
 """
 
-import os
 from datetime import datetime, timezone
 
 from eidolon.dynamo import get_item, get_table, put_item
+from eidolon.environment import PLAYERS_TABLE
 from eidolon.logger import get_logger
 
 # Configure logging
 logger = get_logger(__name__)
-
-# Get table name from environment
-PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
 
 
 def lambda_handler(event: dict, context: object) -> dict:

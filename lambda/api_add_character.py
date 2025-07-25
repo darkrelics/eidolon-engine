@@ -1,39 +1,31 @@
 """Lambda function to add a new character for the incremental game."""
 
 import json
-import os
 import pickle
 import uuid
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
-from eidolon.character import check_character_limit
-from eidolon.character import generate_character_id
-from eidolon.character import get_archetype
+from eidolon.character import check_character_limit, generate_character_id, get_archetype
 from eidolon.cors import cors_handler
-from eidolon.dynamo import convert_to_decimal
-from eidolon.dynamo import get_table
+from eidolon.dynamo import convert_to_decimal, get_table
+from eidolon.environment import (
+    CHARACTERS_TABLE,
+    DEFAULT_ESSENCE,
+    DEFAULT_HEALTH,
+    ITEMS_TABLE,
+    MAX_CHARACTERS_PER_PLAYER,
+    PLAYERS_TABLE,
+    PROTOTYPES_TABLE,
+)
 from eidolon.logger import get_logger
 from eidolon.queries import query_by_gsi
-from eidolon.responses import create_response
-from eidolon.responses import error_response
+from eidolon.responses import create_response, error_response
 from eidolon.validation import validate_character_name
 
 # Configure logging
 logger = get_logger(__name__)
-
-# Get table names from environment
-PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
-CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
-ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
-ITEMS_TABLE = os.environ.get("ITEMS_TABLE", "items")
-PROTOTYPES_TABLE = os.environ.get("PROTOTYPES_TABLE", "prototypes")
-
-# Get default health and essence from environment
-DEFAULT_HEALTH = int(os.environ.get("DEFAULT_HEALTH", "10"))
-DEFAULT_ESSENCE = int(os.environ.get("DEFAULT_ESSENCE", "3"))
 
 # Load bloom filter for name validation
 bloom_filter = None
@@ -45,9 +37,7 @@ except Exception as err:
     logger.error("Failed to load bloom filter", extra={"error": str(err)})
 
 
-def create_items_from_prototypes(
-    prototype_ids: list, player_id: str, character_id: str
-) -> dict:
+def create_items_from_prototypes(prototype_ids: list, character_id: str) -> dict:
     """
     Create item instances from prototype IDs.
 
@@ -70,9 +60,7 @@ def create_items_from_prototypes(
 
         for prototype_id in prototype_ids:
             # Get prototype data
-            prototype = prototypes_table.get_item(
-                Key={"PrototypeID": prototype_id}
-            ).get("Item")
+            prototype = prototypes_table.get_item(Key={"PrototypeID": prototype_id}).get("Item")
 
             if not prototype:
                 logger.warning(
@@ -137,9 +125,7 @@ def create_items_from_prototypes(
         return {}
 
 
-def create_character(
-    player_id: str, character_name: str, archetype_name: str, archetype_data: dict
-) -> tuple:
+def create_character(player_id: str, character_name: str, archetype_name: str, archetype_data: dict) -> tuple:
     """Create a new incremental character in DynamoDB.
 
     Args:
@@ -177,13 +163,9 @@ def create_character(
         "Health": archetype_data.get("Health", DEFAULT_HEALTH),
         "MaxHealth": archetype_data.get("Health", DEFAULT_HEALTH),
         "Essence": convert_to_decimal(archetype_data.get("Essence", DEFAULT_ESSENCE)),
-        "MaxEssence": convert_to_decimal(
-            archetype_data.get("Essence", DEFAULT_ESSENCE)
-        ),
+        "MaxEssence": convert_to_decimal(archetype_data.get("Essence", DEFAULT_ESSENCE)),
         "Wounds": [],
-        "RoomID": archetype_data.get(
-            "StartRoom", 0
-        ),  # Use archetype's StartRoom or default to 0
+        "RoomID": archetype_data.get("StartRoom", 0),  # Use archetype's StartRoom or default to 0
         "Inventory": {},  # Will be populated with starting items below
         "Resources": {},
         "Progress": {},  # Track story progress flags and achievements
@@ -214,9 +196,7 @@ def create_character(
         )
 
         # Create items from prototypes and get inventory mapping
-        inventory = create_items_from_prototypes(
-            starting_items, player_id, character_id
-        )
+        inventory = create_items_from_prototypes(starting_items, player_id, character_id) # type: ignore
 
         # Update character item with the inventory
         character_item["Inventory"] = inventory
@@ -239,35 +219,32 @@ def create_character(
             "Checking if character name is available",
             extra={"character_name": character_name},
         )
-        
+
         # Use query_by_gsi to check for existing character name
         existing_chars, error = query_by_gsi(
-            table_name=CHARACTERS_TABLE,
-            index_name="CharacterNameIndex",
-            key_conditions={"CharacterName": character_name},
-            limit=1
+            table_name=CHARACTERS_TABLE, index_name="CharacterNameIndex", key_conditions={"CharacterName": character_name}, limit=1
         )
-        
+
         if error:
             logger.error(
                 "Error checking character name availability",
                 extra={"error": error, "character_name": character_name},
             )
             return None, "Failed to check character name availability"
-            
+
         if existing_chars:
             logger.info(
                 "Character name already taken",
                 extra={"character_name": character_name, "player_id": player_id},
             )
             return None, "Character name is already taken"
-        
+
         # Character name is available, create the character record
         logger.info(
             "Character name available, creating character record",
             extra={"character_id": character_id},
         )
-        
+
         try:
             characters_table.put_item(Item=character_item)
         except ClientError as err:
@@ -364,17 +341,13 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id = claims.get("sub")
 
         if not player_id:
-            return cors_handler.add_cors_headers(
-                error_response("Unauthorized", status_code=401), event
-            )
+            return cors_handler.add_cors_headers(error_response("Unauthorized", status_code=401), event)
 
         # Parse request body
         try:
             body = json.loads(event.get("body", "{}"))
         except json.JSONDecodeError:
-            return cors_handler.add_cors_headers(
-                error_response("Invalid JSON", status_code=400), event
-            )
+            return cors_handler.add_cors_headers(error_response("Invalid JSON", status_code=400), event)
 
         # Extract and validate required fields
         character_name = body.get("characterName", "").strip()
@@ -391,9 +364,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         if not character_name:
             return cors_handler.add_cors_headers(
-                error_response(
-                    "Missing required field: characterName", status_code=400
-                ),
+                error_response("Missing required field: characterName", status_code=400),
                 event,
             )
 
@@ -413,35 +384,29 @@ def lambda_handler(event: dict, context: object) -> dict:
             )
 
         # Check character limit
-        players_table = get_table(PLAYERS_TABLE)
-        can_create, current_count = check_character_limit(player_id, players_table)
+        can_create, current_count = check_character_limit(player_id)
         logger.info(
             "Character limit check",
             extra={
                 "player_id": player_id,
                 "current_count": current_count,
                 "can_create": can_create,
-                "max_allowed": os.environ.get("MAX_CHARACTERS_PER_PLAYER", "10"),
+                "max_allowed": MAX_CHARACTERS_PER_PLAYER,
             },
         )
         if not can_create:
             return cors_handler.add_cors_headers(
-                error_response(
-                    f"Character limit reached ({current_count})", status_code=400
-                ),
+                error_response(f"Character limit reached ({current_count})", status_code=400),
                 event,
             )
 
         # Validate archetype or use defaults
-        archetypes_table = get_table(ARCHETYPES_TABLE)
         archetype_data = {}
 
         if archetype_name:
             # Try to get the archetype data
-            logger.info(
-                "Looking up archetype", extra={"archetype_name": archetype_name}
-            )
-            archetype_data = get_archetype(archetype_name, archetypes_table)
+            logger.info("Looking up archetype", extra={"archetype_name": archetype_name})
+            archetype_data = get_archetype(archetype_name)
             if not archetype_data:
                 # Invalid archetype provided, use defaults
                 logger.info(
@@ -470,15 +435,11 @@ def lambda_handler(event: dict, context: object) -> dict:
             archetype_name = "default"
 
         # Create the character
-        character_id, error_msg = create_character(
-            player_id, character_name, archetype_name, archetype_data
-        )
+        character_id, error_msg = create_character(player_id, character_name, archetype_name, archetype_data)
         if not character_id:
             status_code = 409 if error_msg == "Character name is already taken" else 500
             return cors_handler.add_cors_headers(
-                error_response(
-                    error_msg or "Failed to create character", status_code=status_code
-                ),
+                error_response(error_msg or "Failed to create character", status_code=status_code),
                 event,
             )
 
@@ -504,6 +465,4 @@ def lambda_handler(event: dict, context: object) -> dict:
             exc_info=True,
         )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

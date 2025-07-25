@@ -78,9 +78,7 @@ def store_exits(exits_data):
             for key, value in exit_item.items():
                 if key != "ExitID":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(
-                        value
-                    )
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
 
             update_expression += ", ".join(expression_parts)
 
@@ -122,9 +120,7 @@ def store_rooms(rooms_data):
             for key, value in room_item.items():
                 if key != "RoomID":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(
-                        value
-                    )
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
 
             update_expression += ", ".join(expression_parts)
 
@@ -154,9 +150,7 @@ def store_archetypes(archetypes_data):
                 continue
 
             # Convert attributes to lowercase
-            attributes = {
-                k.lower(): v for k, v in archetype.get("Attributes", {}).items()
-            }
+            attributes = {k.lower(): v for k, v in archetype.get("Attributes", {}).items()}
             # Convert skills to lowercase
             skills = {k.lower(): v for k, v in archetype.get("Skills", {}).items()}
 
@@ -188,9 +182,7 @@ def store_archetypes(archetypes_data):
             for key, value in archetype_item.items():
                 if key != "ArchetypeName":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(
-                        value
-                    )
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
 
             update_expression += ", ".join(expression_parts)
 
@@ -201,9 +193,7 @@ def store_archetypes(archetypes_data):
             )
         print("Archetype data stored in DynamoDB successfully")
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while storing archetypes: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while storing archetypes: {str(err)}")
 
 
 def store_item_prototypes(prototypes_data):
@@ -231,9 +221,7 @@ def store_item_prototypes(prototypes_data):
                     attr_name_placeholder = f"#{key}"
                     expression_attribute_names[attr_name_placeholder] = key
                     expression_parts.append(f"{attr_name_placeholder} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(
-                        value
-                    )
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
 
             update_expression += ", ".join(expression_parts)
 
@@ -245,9 +233,7 @@ def store_item_prototypes(prototypes_data):
             )
         print("Item prototype data stored in DynamoDB successfully")
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while storing item prototypes: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while storing item prototypes: {str(err)}")
 
 
 def load_exits():
@@ -296,17 +282,11 @@ def load_archetypes():
     archetypes_table = get_table(os.environ.get("ARCHETYPES_TABLE", "archetypes"))
     try:
         response = archetypes_table.scan()  # type: ignore
-        archetypes = {
-            "archetypes": {
-                item["ArchetypeName"]: item for item in response.get("Items", [])
-            }
-        }
+        archetypes = {"archetypes": {item["ArchetypeName"]: item for item in response.get("Items", [])}}
         print("Archetype data loaded from DynamoDB successfully")
         return archetypes
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while loading archetypes: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while loading archetypes: {str(err)}")
         return {}
 
 
@@ -324,9 +304,7 @@ def load_item_prototypes():
         print("Item prototype data loaded from DynamoDB successfully")
         return prototypes
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while loading item prototypes: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while loading item prototypes: {str(err)}")
         return {}
 
 
@@ -369,9 +347,7 @@ def store_opponents(opponents_data):
                     attr_name_placeholder = f"#{key}"
                     expression_attribute_names[attr_name_placeholder] = key
                     expression_parts.append(f"{attr_name_placeholder} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(
-                        value
-                    )
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
 
             update_expression += ", ".join(expression_parts)
 
@@ -383,9 +359,7 @@ def store_opponents(opponents_data):
             )
         print("Opponent data stored in DynamoDB successfully")
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while storing opponents: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while storing opponents: {str(err)}")
 
 
 def store_story(story_data):
@@ -424,9 +398,7 @@ def store_story(story_data):
             for key, value in story_item.items():
                 if key != "StoryID":  # Skip the key
                     expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(
-                        value
-                    )
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
 
             update_expression += ", ".join(expression_parts)
 
@@ -470,9 +442,7 @@ def store_story(story_data):
             for key, value in segment_item.items():
                 if key not in ["StoryID", "SegmentID"]:  # Skip the keys
                     expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(
-                        value
-                    )
+                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
 
             update_expression += ", ".join(expression_parts)
 
@@ -502,9 +472,7 @@ def load_opponents():
         print("Opponent data loaded from DynamoDB successfully")
         return opponents
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while loading opponents: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while loading opponents: {str(err)}")
         return {}
 
 
@@ -620,9 +588,7 @@ def display_item_prototypes(prototypes):
     print("Item Prototypes:")
     for prototype in prototypes.get("itemPrototypes", []):
         print(f"ID: {prototype.get('PrototypeID', 'No ID')}")
-        print(
-            f"  Name: {prototype.get('prototype_name', prototype.get('Name', 'No Name'))}"
-        )
+        print(f"  Name: {prototype.get('prototype_name', prototype.get('Name', 'No Name'))}")
         print(f"  Description: {prototype.get('Description', 'No description')}")
         print(f"  Mass: {prototype.get('Mass', 'Unknown')}")
         print(f"  Value: {prototype.get('Value', 'Unknown')}")
@@ -657,9 +623,7 @@ def display_opponents(opponents_data):
         if loot_table:
             print("  Loot Table:")
             for loot in loot_table:
-                print(
-                    f"    Item: {loot.get('itemId', 'Unknown')} (chance: {loot.get('chance', 0)})"
-                )
+                print(f"    Item: {loot.get('itemId', 'Unknown')} (chance: {loot.get('chance', 0)})")
 
         tags = opponent.get("Tags", [])
         if tags:
@@ -733,9 +697,7 @@ def main():
     - Stores data into DynamoDB tables.
     - Loads data back from DynamoDB and displays it.
     """
-    parser = argparse.ArgumentParser(
-        description="Load and store game data in DynamoDB."
-    )
+    parser = argparse.ArgumentParser(description="Load and store game data in DynamoDB.")
     parser.add_argument(
         "-r",
         "--rooms",

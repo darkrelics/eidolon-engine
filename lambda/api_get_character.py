@@ -20,28 +20,24 @@ Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-import os
-
 from eidolon.character import get_character_with_ownership
 from eidolon.dynamo import decimal_to_float
+from eidolon.environment import ACTIVE_SEGMENTS_TABLE
 from eidolon.logger import get_logger
 from eidolon.queries import query_by_gsi
 from eidolon.requests import get_query_parameter
-from eidolon.responses import error_response
-from eidolon.responses import not_found_response
-from eidolon.utilities import build_lambda_response
-from eidolon.utilities import extract_and_validate_player_id
-from eidolon.utilities import handle_lambda_error
-from eidolon.utilities import handle_preflight_if_options
-from eidolon.utilities import log_lambda_invocation
+from eidolon.responses import error_response, not_found_response
+from eidolon.utilities import (
+    build_lambda_response,
+    extract_and_validate_player_id,
+    handle_lambda_error,
+    handle_preflight_if_options,
+    log_lambda_invocation,
+)
 from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
-
-# Get table names from environment
-CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
-ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
 
 
 def get_character_business_logic(character_id: str, player_id: str) -> tuple:
@@ -59,17 +55,13 @@ def get_character_business_logic(character_id: str, player_id: str) -> tuple:
     """
     # Validate character ID format
     if not character_id:
-        return None, error_response(
-            "Missing required parameter: characterId", status_code=400
-        )
+        return None, error_response("Missing required parameter: characterId", status_code=400)
 
     if not validate_uuid(character_id):
         return None, error_response("Invalid character ID format", status_code=400)
 
     # Get character with ownership check
-    character, error_msg = get_character_with_ownership(
-        character_id, player_id, CHARACTERS_TABLE
-    )
+    character, error_msg = get_character_with_ownership(character_id, player_id)
     if error_msg:
         return None, not_found_response("Character")
 
@@ -131,16 +123,12 @@ def lambda_handler(event: dict, context: object):
             return auth_error
 
         # Get character ID from query parameters
-        character_id, param_error = get_query_parameter(
-            event, "characterId", required=True
-        )
+        character_id, param_error = get_query_parameter(event, "characterId", required=True)
         if param_error:
             return build_lambda_response(400, {"error": param_error}, event)
 
         # Call business logic
-        response_data, error_response_obj = get_character_business_logic(
-            character_id, player_id
-        )
+        response_data, error_response_obj = get_character_business_logic(character_id, player_id)
 
         if error_response_obj:
             return build_lambda_response(

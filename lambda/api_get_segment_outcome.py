@@ -20,31 +20,19 @@ Lambda function to get the outcome of a completed segment.
 Returns the narrative text and any rewards/effects for the outcome.
 """
 
-import os
-
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_item
-from eidolon.dynamo import get_table
+from eidolon.dynamo import get_item, get_table
+from eidolon.environment import ACTIVE_SEGMENTS_TABLE, SEGMENTS_TABLE
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
-from eidolon.requests import get_query_parameter
-from eidolon.responses import create_response
-from eidolon.responses import error_response
-from eidolon.responses import not_found_response
+from eidolon.requests import extract_player_id, get_query_parameter
+from eidolon.responses import create_response, error_response, not_found_response
 from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
 
-# Get table names from environment
-ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
-SEGMENTS_TABLE = os.environ.get("SEGMENTS_TABLE", "segments")
-HISTORY_TABLE = os.environ.get("HISTORY_TABLE", "history")
 
-
-def get_completed_segment_for_character(
-    character_id: str, segment_id: str, player_id: str
-) -> object:
+def get_completed_segment_for_character(character_id: str, segment_id: str, player_id: str) -> object:
     """
     Get completed segment for a character and verify ownership.
 
@@ -106,9 +94,7 @@ def get_segment_outcome(active_segment: dict) -> object:
     segment = get_item(segments_table, {"StoryID": story_id, "SegmentID": segment_id})
 
     if not segment:
-        logger.error(
-            "Segment not found", extra={"story_id": story_id, "segment_id": segment_id}
-        )
+        logger.error("Segment not found", extra={"story_id": story_id, "segment_id": segment_id})
         return None
 
     outcome_data = {
@@ -122,9 +108,7 @@ def get_segment_outcome(active_segment: dict) -> object:
         decision_options = segment.get("DecisionOptions", {})
 
         outcome_data["decision"] = decision
-        outcome_data["nextSegmentId"] = (
-            decision_options.get(decision) if decision else None
-        )
+        outcome_data["nextSegmentId"] = decision_options.get(decision) if decision else None
 
     elif segment_type in ["narrative", "combat"]:
         # Get the outcome from the active segment
@@ -140,9 +124,7 @@ def get_segment_outcome(active_segment: dict) -> object:
 
         # Add challenge results for narrative segments
         if segment_type == "narrative":
-            outcome_data["challengeResults"] = active_segment.get(
-                "ChallengeResults", []
-            )
+            outcome_data["challengeResults"] = active_segment.get("ChallengeResults", [])
 
         # Add combat state for combat segments
         if segment_type == "combat":
@@ -187,37 +169,25 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id, auth_error = extract_player_id(event)
         if auth_error:
             logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(
-                error_response(auth_error, status_code=401), event
-            )
+            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
 
         logger.info("Player authenticated", extra={"player_id": player_id})
 
         # Get parameters from query
-        character_id, char_error = get_query_parameter(
-            event, "characterId", required=True
-        )
+        character_id, char_error = get_query_parameter(event, "characterId", required=True)
         if char_error:
-            return cors_handler.add_cors_headers(
-                error_response(char_error, status_code=400), event
-            )
+            return cors_handler.add_cors_headers(error_response(char_error, status_code=400), event)
 
         segment_id, seg_error = get_query_parameter(event, "segmentId", required=True)
         if seg_error:
-            return cors_handler.add_cors_headers(
-                error_response(seg_error, status_code=400), event
-            )
+            return cors_handler.add_cors_headers(error_response(seg_error, status_code=400), event)
 
         # Validate UUIDs
         if character_id and not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(
-                error_response("Invalid character ID format", status_code=400), event
-            )
+            return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
 
         if segment_id and not validate_uuid(segment_id):
-            return cors_handler.add_cors_headers(
-                error_response("Invalid segment ID format", status_code=400), event
-            )
+            return cors_handler.add_cors_headers(error_response("Invalid segment ID format", status_code=400), event)
 
         logger.info(
             "Getting segment outcome",
@@ -227,9 +197,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Get completed segment for character and verify ownership
         active_segment: dict = get_completed_segment_for_character(character_id, segment_id, player_id)  # type: ignore
         if not active_segment:
-            return cors_handler.add_cors_headers(
-                not_found_response("Completed segment"), event
-            )
+            return cors_handler.add_cors_headers(not_found_response("Completed segment"), event)
 
         active_segment_id = active_segment.get("ActiveSegmentID")
 
@@ -240,16 +208,12 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "Segment not completed",
                 extra={"active_segment_id": active_segment_id, "status": status},
             )
-            return cors_handler.add_cors_headers(
-                error_response("Segment not yet completed", status_code=409), event
-            )
+            return cors_handler.add_cors_headers(error_response("Segment not yet completed", status_code=409), event)
 
         # Get outcome details
         outcome_data: dict = get_segment_outcome(active_segment)  # type: ignore
         if not outcome_data:
-            return cors_handler.add_cors_headers(
-                error_response("Failed to get outcome data", status_code=500), event
-            )
+            return cors_handler.add_cors_headers(error_response("Failed to get outcome data", status_code=500), event)
 
         # Build response per documentation
         response_data = {
@@ -277,6 +241,4 @@ def lambda_handler(event: dict, context: object) -> dict:
             exc_info=True,
         )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

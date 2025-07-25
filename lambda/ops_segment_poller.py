@@ -21,20 +21,16 @@ Triggered by EventBridge to check active segments that have reached their end ti
 """
 
 import json
-import os
 import time
 
 import boto3
 
 from eidolon.dynamo import get_table
+from eidolon.environment import ACTIVE_SEGMENTS_TABLE, PROCESS_SEGMENT_FUNCTION
 from eidolon.logger import get_logger
 
 # Configure logging
 logger = get_logger(__name__)
-
-# Get table names from environment
-ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
-PROCESS_SEGMENT_FUNCTION = os.environ.get("PROCESS_SEGMENT_FUNCTION", "process-segment")
 
 # Lambda client for invoking process_segment
 lambda_client = boto3.client("lambda")
@@ -130,9 +126,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Get completed segments
         completed_segments = get_completed_segments()
 
-        logger.info(
-            "Found completed segments", extra={"count": len(completed_segments)}
-        )
+        logger.info("Found completed segments", extra={"count": len(completed_segments)})
 
         # Process each completed segment
         processed_count = 0

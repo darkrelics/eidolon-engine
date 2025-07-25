@@ -59,9 +59,7 @@ def query_by_gsi(
             # Combine multiple key conditions with AND
             query_params["KeyConditionExpression"] = key_expressions[0]
             for expr in key_expressions[1:]:
-                query_params["KeyConditionExpression"] = (
-                    query_params["KeyConditionExpression"] & expr
-                )
+                query_params["KeyConditionExpression"] = query_params["KeyConditionExpression"] & expr
 
         # Add optional parameters
         if filter_expression:
@@ -125,9 +123,7 @@ def batch_get_items(table_name: str, keys: list) -> tuple:
         for i in range(0, len(keys), 100):
             batch_keys = keys[i : i + 100]
 
-            response = table.meta.client.batch_get_item(
-                RequestItems={table_name: {"Keys": batch_keys}}
-            )
+            response = table.meta.client.batch_get_item(RequestItems={table_name: {"Keys": batch_keys}})
 
             # Process responses
             items = response.get("Responses", {}).get(table_name, [])
@@ -137,9 +133,7 @@ def batch_get_items(table_name: str, keys: list) -> tuple:
                 results[key_str] = item
 
             # Handle unprocessed keys
-            unprocessed = (
-                response.get("UnprocessedKeys", {}).get(table_name, {}).get("Keys", [])
-            )
+            unprocessed = response.get("UnprocessedKeys", {}).get(table_name, {}).get("Keys", [])
             if unprocessed:
                 logger.warning(
                     "Some items were not processed",
@@ -168,9 +162,7 @@ def batch_get_items(table_name: str, keys: list) -> tuple:
         return None, "Batch get failed"
 
 
-def update_item_fields(
-    table_name: str, key: dict, updates: dict, condition_expression=None
-) -> tuple:
+def update_item_fields(table_name: str, key: dict, updates: dict, condition_expression=None) -> tuple:
     """
     Update multiple fields in an item.
 
@@ -235,9 +227,7 @@ def update_item_fields(
 
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            logger.warning(
-                "Update condition not met", extra={"table": table_name, "key": key}
-            )
+            logger.warning("Update condition not met", extra={"table": table_name, "key": key})
             return False, "Update condition not met"
 
         logger.error(
@@ -316,9 +306,7 @@ def scan_with_filter(
         return items, None
 
     except ClientError as err:
-        logger.error(
-            "Table scan failed", extra={"table": table_name, "error": str(err)}
-        )
+        logger.error("Table scan failed", extra={"table": table_name, "error": str(err)})
         return None, f"Scan failed: {err.response['Error']['Message']}"
     except Exception as err:
         logger.error(

@@ -21,20 +21,14 @@ The function loads all archetypes on cold start and filters for Player=true.
 Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 """
 
-import os
-
 from eidolon.cors import cors_handler
-from eidolon.dynamo import get_table
-from eidolon.dynamo import scan_all_items
+from eidolon.dynamo import get_table, scan_all_items
+from eidolon.environment import ARCHETYPES_TABLE
 from eidolon.logger import get_logger
-from eidolon.responses import create_response
-from eidolon.responses import error_response
+from eidolon.responses import create_response, error_response
 
 # Configure logging
 logger = get_logger(__name__)
-
-# Get table name from environment
-ARCHETYPES_TABLE = os.environ.get("ARCHETYPES_TABLE", "archetypes")
 
 # Cache for player archetypes
 player_archetypes_cache: list = []
@@ -74,9 +68,7 @@ def load_player_archetypes() -> list:
             if item.get("Player", False):
                 # Normalize attribute and skill keys to lowercase
                 if "Attributes" in item:
-                    item["Attributes"] = {
-                        k.lower(): v for k, v in item["Attributes"].items()
-                    }
+                    item["Attributes"] = {k.lower(): v for k, v in item["Attributes"].items()}
                 if "Skills" in item:
                     item["Skills"] = {k.lower(): v for k, v in item["Skills"].items()}
 
@@ -104,9 +96,7 @@ def load_player_archetypes() -> list:
         return player_archetypes
 
     except Exception as err:
-        logger.error(
-            "Error loading archetypes", extra={"error": str(err)}, exc_info=True
-        )
+        logger.error("Error loading archetypes", extra={"error": str(err)}, exc_info=True)
         raise
 
 
@@ -155,10 +145,6 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
 
     except Exception as err:
-        logger.error(
-            "Error in lambda_handler", extra={"error": str(err)}, exc_info=True
-        )
+        logger.error("Error in lambda_handler", extra={"error": str(err)}, exc_info=True)
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

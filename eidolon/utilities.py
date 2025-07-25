@@ -8,8 +8,7 @@ while keeping the handler function visible in each Lambda file.
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id
-from eidolon.responses import error_response
-from eidolon.responses import unauthorized_response
+from eidolon.responses import error_response, unauthorized_response
 
 logger = get_logger(__name__)
 
@@ -64,9 +63,7 @@ def extract_and_validate_player_id(event: dict) -> tuple:
     player_id, auth_error = extract_player_id(event)
     if auth_error:
         logger.error("Authentication failed", extra={"error": auth_error})
-        return None, cors_handler.add_cors_headers(
-            unauthorized_response(auth_error), event
-        )
+        return None, cors_handler.add_cors_headers(unauthorized_response(auth_error), event)
 
     logger.info("Player authenticated", extra={"player_id": player_id})
     return player_id, None
@@ -86,9 +83,7 @@ def wrap_response_with_cors(response: dict, event: dict) -> dict:
     return cors_handler.add_cors_headers(response, event)
 
 
-def handle_lambda_error(
-    err: Exception, context: object, event: dict, custom_message=None
-) -> dict:
+def handle_lambda_error(err: Exception, context: object, event: dict, custom_message=None) -> dict:
     """
     Handle Lambda function errors with proper logging and CORS response.
 
@@ -108,9 +103,7 @@ def handle_lambda_error(
     )
     logger.info("Lambda response", extra={"status_code": 500})
 
-    return cors_handler.add_cors_headers(
-        error_response("Internal server error", status_code=500), event
-    )
+    return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
 
 
 def build_lambda_response(status_code: int, body: dict, event: dict) -> dict:
