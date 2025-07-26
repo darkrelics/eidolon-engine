@@ -46,7 +46,5 @@ CORS_ALLOWED_HEADERS = os.environ.get(
     "CORS_ALLOWED_HEADERS",
     "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token",
 )
-CORS_ALLOWED_METHODS = os.environ.get(
-    "CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS"
-)
+CORS_ALLOWED_METHODS = os.environ.get("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS")
 CORS_MAX_AGE = os.environ.get("CORS_MAX_AGE", "86400")  # 24 hours default

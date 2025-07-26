@@ -65,9 +65,9 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
             extra={
                 "error": str(err),
                 "character_id": character_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to query active segments: {str(err)}")
 
@@ -87,18 +87,12 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
             logger.error("Story not found", extra={"story_id": story_id})
             raise RuntimeError("Story data missing")
     except ClientError as err:
-        logger.error(
-            "Failed to get story",
-            extra={"error": str(err), "story_id": story_id},
-            exc_info=True
-        )
+        logger.error("Failed to get story", extra={"error": str(err), "story_id": story_id}, exc_info=True)
         raise RuntimeError(f"Failed to get story: {str(err)}")
 
     # Get the current segment from Segments table
     try:
-        current_segment = dynamo.get_item(
-            TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id}
-        )
+        current_segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id})
         if not current_segment:
             logger.error(
                 "Segment not found",
@@ -106,11 +100,7 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
             )
             raise RuntimeError("Segment data missing")
     except ClientError as err:
-        logger.error(
-            "Failed to get segment",
-            extra={"error": str(err), "segment_id": segment_id},
-            exc_info=True
-        )
+        logger.error("Failed to get segment", extra={"error": str(err), "segment_id": segment_id}, exc_info=True)
         raise RuntimeError(f"Failed to get segment: {str(err)}")
 
     total_segments = story_item.get("TotalSegments", 1)
@@ -134,11 +124,7 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
             "segmentId": segment_id,
             "segmentType": current_segment.get("SegmentType", ""),
             "shortStatus": current_segment.get("ShortStatus", ""),
-            "narrative": (
-                current_segment.get("Narrative", "")
-                if current_segment.get("SegmentType") != "decision"
-                else ""
-            ),
+            "narrative": (current_segment.get("Narrative", "") if current_segment.get("SegmentType") != "decision" else ""),
             "duration": current_segment.get("SegmentDuration", 0),
             "timeRemaining": time_remaining,
             "startTime": active_segment.get("StartTime", 0),
@@ -150,35 +136,25 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
 
     # Add decision options if this is a decision segment
     if current_segment.get("SegmentType") == "decision":
-        response_data["segment"]["decisionText"] = current_segment.get(
-            "DecisionText", ""
-        )
+        response_data["segment"]["decisionText"] = current_segment.get("DecisionText", "")
         # Format options from DecisionOptions map
         decision_options = current_segment.get("DecisionOptions", {})
         options = []
         for option_id, _ in decision_options.items():
-            options.append(
-                {"id": option_id, "text": option_id.replace("-", " ").title()}
-            )
+            options.append({"id": option_id, "text": option_id.replace("-", " ").title()})
         response_data["segment"]["options"] = options
         response_data["segment"]["decision"] = active_segment.get("Decision")
 
     # Add challenge info if this is a narrative segment
     if current_segment.get("SegmentType") == "narrative":
-        response_data["segment"]["challenges"] = current_segment.get(
-            "Challenges", []
-        )
-        response_data["segment"]["challengeResults"] = active_segment.get(
-            "ChallengeResults", []
-        )
+        response_data["segment"]["challenges"] = current_segment.get("Challenges", [])
+        response_data["segment"]["challengeResults"] = active_segment.get("ChallengeResults", [])
         response_data["segment"]["outcome"] = active_segment.get("Outcome")
 
     # Add combat info if this is a combat segment
     if current_segment.get("SegmentType") == "combat":
         response_data["segment"]["combat"] = current_segment.get("Combat", {})
-        response_data["segment"]["combatState"] = active_segment.get(
-            "CombatState", {}
-        )
+        response_data["segment"]["combatState"] = active_segment.get("CombatState", {})
 
     logger.info(
         "Current story retrieved successfully",
@@ -225,9 +201,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             return auth_error
 
         # Get character ID from query parameters
-        character_id, param_error = get_query_parameter(
-            event, "characterId", required=True
-        ) # type: ignore
+        character_id, param_error = get_query_parameter(event, "characterId", required=True)  # type: ignore
         if param_error:
             return build_lambda_response(400, {"error": param_error}, event)
 

@@ -85,9 +85,7 @@ class ExponentialBackoff:
     Default retry count of 8 maximizes total wait time to 0.42s
     """
 
-    def __init__(
-        self, expected_errors=None, expected_error_factory=None, retry_count=8
-    ):
+    def __init__(self, expected_errors=None, expected_error_factory=None, retry_count=8):
         self.retry_count = retry_count
         self.expected_errors = expected_errors if expected_errors else ()
         self.expected_error_factory = expected_error_factory or ExpectedDynamoErrors
@@ -146,9 +144,7 @@ class ExponentialBackoff:
                         )
                         raise
                 except TypeError as err:
-                    logger.error(
-                        "DynamoDB type error", extra={"error": str(err)}, exc_info=True
-                    )
+                    logger.error("DynamoDB type error", extra={"error": str(err)}, exc_info=True)
                     raise
                 except Exception as err:
                     logger.error(
@@ -207,19 +203,13 @@ class DynamoInterface:
             self._initialized = True
 
             # Log connection summary
-            connected = [
-                t.value for t, status in self._connection_status.items() if status
-            ]
-            failed = [
-                t.value for t, status in self._connection_status.items() if not status
-            ]
+            connected = [t.value for t, status in self._connection_status.items() if status]
+            failed = [t.value for t, status in self._connection_status.items() if not status]
 
             if connected:
                 logger.info("Connected to DynamoDB tables", extra={"tables": connected})
             if failed:
-                logger.error(
-                    "Failed to connect to DynamoDB tables", extra={"tables": failed}
-                )
+                logger.error("Failed to connect to DynamoDB tables", extra={"tables": failed})
 
     def _connect_table(self, table_enum: TableName) -> bool:
         """
@@ -297,9 +287,7 @@ class DynamoInterface:
             Item dict with Decimals converted to floats, empty dict if not found
         """
         table = self.get_table(table_enum)
-        logger.debug(
-            "DB Interface: Get Item", extra={"table": table_enum.value, "key": key}
-        )
+        logger.debug("DB Interface: Get Item", extra={"table": table_enum.value, "key": key})
 
         try:
             response = table.get_item(Key=key, **kwargs)
@@ -334,9 +322,7 @@ class DynamoInterface:
             ClientError: If DynamoDB operation fails
         """
         table = self.get_table(table_enum)
-        logger.debug(
-            "DB Interface: Put Item", extra={"table": table_enum.value, "item": item}
-        )
+        logger.debug("DB Interface: Put Item", extra={"table": table_enum.value, "item": item})
 
         # Clean values for DynamoDB
         cleaned_item = clean_value(item)
@@ -375,9 +361,7 @@ class DynamoInterface:
 
         # Clean expression attribute values if present
         if "ExpressionAttributeValues" in kwargs:
-            kwargs["ExpressionAttributeValues"] = clean_value(
-                kwargs["ExpressionAttributeValues"]
-            )
+            kwargs["ExpressionAttributeValues"] = clean_value(kwargs["ExpressionAttributeValues"])
 
         try:
             response = table.update_item(**kwargs)
@@ -402,9 +386,7 @@ class DynamoInterface:
             )
             raise
 
-        logger.debug(
-            "DB Interface: Update Item: Response", extra={"response": response}
-        )
+        logger.debug("DB Interface: Update Item: Response", extra={"response": response})
         return response
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
@@ -441,9 +423,7 @@ class DynamoInterface:
             )
             raise
 
-        logger.debug(
-            "DB Interface: Delete Item: Response", extra={"response": response}
-        )
+        logger.debug("DB Interface: Delete Item: Response", extra={"response": response})
         return response
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
@@ -520,9 +500,7 @@ class DynamoInterface:
             ClientError: If DynamoDB operation fails
         """
         table = self.get_table(table_enum)
-        logger.debug(
-            "DB Interface: Scan", extra={"table": table_enum.value, "arguments": kwargs}
-        )
+        logger.debug("DB Interface: Scan", extra={"table": table_enum.value, "arguments": kwargs})
 
         try:
             response = table.scan(**kwargs)
@@ -548,9 +526,7 @@ class DynamoInterface:
         }
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
-    def batch_get_items(
-        self, table_enum: TableName, keys: list, attributes_to_get=None
-    ) -> list:
+    def batch_get_items(self, table_enum: TableName, keys: list, attributes_to_get=None) -> list:
         """
         Perform a BatchGetItem operation on a single table.
 
@@ -592,9 +568,7 @@ class DynamoInterface:
 
         return result
 
-    def batch_write_with_retries(
-        self, table_enum: TableName, items: list, operation: str = "put"
-    ) -> list:
+    def batch_write_with_retries(self, table_enum: TableName, items: list, operation: str = "put") -> list:
         """
         Perform batch write operations with automatic retry for unprocessed items.
 
@@ -633,9 +607,7 @@ class DynamoInterface:
         return failed_items
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
-    def query_by_gsi(
-        self, table_enum: TableName, index_name: str, key_conditions: dict, **kwargs
-    ) -> list:
+    def query_by_gsi(self, table_enum: TableName, index_name: str, key_conditions: dict, **kwargs) -> list:
         """
         Query a table using a Global Secondary Index with Key conditions.
 
@@ -676,9 +648,7 @@ class DynamoInterface:
         # Use the existing query method
         return self.query(table_enum, **kwargs)  # type: ignore
 
-    def update_item_fields(
-        self, table_enum: TableName, key: dict, updates: dict, condition_expression=None
-    ) -> dict:
+    def update_item_fields(self, table_enum: TableName, key: dict, updates: dict, condition_expression=None) -> dict:
         """
         Update multiple fields in an item with automatic expression building.
 

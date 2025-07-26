@@ -7,9 +7,7 @@ Copyright 2024-2025 Jason E. Robinson
 
 
 def filter_single_word_entries(input_file: str, output_file: str) -> None:
-    with open(input_file, "r", encoding="utf-8") as infile, open(
-        output_file, "w", encoding="utf-8"
-    ) as outfile:
+    with open(input_file, "r", encoding="utf-8") as infile, open(output_file, "w", encoding="utf-8") as outfile:
         for line in infile:
             # Strip any leading/trailing whitespace and check if it's a single word
             word: str = line.strip()

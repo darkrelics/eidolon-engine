@@ -44,7 +44,7 @@ def view_table(table_name, table_enum):
         table_enum: TableName enum value
     """
     try:
-        result: dict = dynamo.scan(table_enum) # type: ignore
+        result: dict = dynamo.scan(table_enum)  # type: ignore
         items = result.get("items", [])
         actual_table_name = TABLE_ENV_MAP[table_enum]
 

@@ -154,10 +154,10 @@ def get_path_parameter(event: dict, param: str, required: bool = True):
     """
     params = event.get("pathParameters") or {}
     value = params.get(param)
-    
+
     if not value and required:
         raise ValueError(f"Missing required path parameter: {param}")
-    
+
     return value
 
 

@@ -45,9 +45,7 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
 
     # Query history table for last completion
     try:
-        history = dynamo.get_item(
-            TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id}
-        )
+        history = dynamo.get_item(TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id})
 
         if not history:
             return 0  # Never played
@@ -65,9 +63,7 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
 
         if story_type == "daily":
             # Calculate time until midnight UTC
-            finished_at = datetime.fromisoformat(
-                history["FinishedAt"].replace("Z", "+00:00")
-            )
+            finished_at = datetime.fromisoformat(history["FinishedAt"].replace("Z", "+00:00"))
             now = datetime.now(timezone.utc)
 
             # Check if completion was today
@@ -208,11 +204,7 @@ def get_available_stories_business_logic(character_id: str, player_id: str) -> d
         except ClientError as err:
             logger.error(
                 "Error loading story",
-                extra={
-                    "story_id": story_id,
-                    "error": str(err),
-                    "error_code": err.response.get("Error", {}).get("Code", "Unknown")
-                },
+                extra={"story_id": story_id, "error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             )
             continue
 
@@ -261,9 +253,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             return auth_error
 
         # Get character ID from query parameters
-        character_id, param_error = get_query_parameter(
-            event, "characterId", required=True
-        ) # type: ignore
+        character_id, param_error = get_query_parameter(event, "characterId", required=True)  # type: ignore
         if param_error:
             return build_lambda_response(400, {"error": param_error}, event)
 

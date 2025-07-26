@@ -25,9 +25,7 @@ from eidolon.validation import validate_uuid
 logger = get_logger(__name__)
 
 
-def get_segment_outcome_business_logic(
-    character_id: str, segment_id: str, player_id: str
-) -> dict:
+def get_segment_outcome_business_logic(character_id: str, segment_id: str, player_id: str) -> dict:
     """
     Business logic for getting the outcome of a completed segment.
 
@@ -75,9 +73,9 @@ def get_segment_outcome_business_logic(
                 "error": str(err),
                 "character_id": character_id,
                 "segment_id": segment_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to query segments: {str(err)}")
 
@@ -105,21 +103,12 @@ def get_segment_outcome_business_logic(
 
     # Get segment definition from Segments table
     try:
-        segment = dynamo.get_item(
-            TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id}
-        )
+        segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id})
         if not segment:
-            logger.error(
-                "Segment not found",
-                extra={"story_id": story_id, "segment_id": segment_id}
-            )
+            logger.error("Segment not found", extra={"story_id": story_id, "segment_id": segment_id})
             raise RuntimeError("Segment definition not found")
     except ClientError as err:
-        logger.error(
-            "Failed to get segment",
-            extra={"error": str(err), "segment_id": segment_id},
-            exc_info=True
-        )
+        logger.error("Failed to get segment", extra={"error": str(err), "segment_id": segment_id}, exc_info=True)
         raise RuntimeError(f"Failed to get segment: {str(err)}")
 
     # Build outcome data based on segment type
@@ -134,9 +123,7 @@ def get_segment_outcome_business_logic(
         decision_options = segment.get("DecisionOptions", {})
 
         outcome_data["decision"] = decision
-        outcome_data["nextSegmentId"] = (
-            decision_options.get(decision) if decision else None
-        )
+        outcome_data["nextSegmentId"] = decision_options.get(decision) if decision else None
         # Decision segments don't have narrative/effects in the response
         outcome_data["outcome"] = "normal"
         outcome_data["narrative"] = ""
@@ -156,9 +143,7 @@ def get_segment_outcome_business_logic(
 
         # Add challenge results for narrative segments
         if segment_type == "narrative":
-            outcome_data["challengeResults"] = active_segment.get(
-                "ChallengeResults", []
-            )
+            outcome_data["challengeResults"] = active_segment.get("ChallengeResults", [])
 
         # Add combat state for combat segments
         if segment_type == "combat":
@@ -211,21 +196,17 @@ def lambda_handler(event: dict, context: object) -> dict:
             return auth_error
 
         # Get parameters from query
-        character_id, char_error = get_query_parameter(
-            event, "characterId", required=True
-        ) # type: ignore
+        character_id, char_error = get_query_parameter(event, "characterId", required=True)  # type: ignore
         if char_error:
             return build_lambda_response(400, {"error": char_error}, event)
 
-        segment_id, seg_error = get_query_parameter(event, "segmentId", required=True) # type: ignore
+        segment_id, seg_error = get_query_parameter(event, "segmentId", required=True)  # type: ignore
         if seg_error:
             return build_lambda_response(400, {"error": seg_error}, event)
 
         # Call business logic
         try:
-            outcome_data = get_segment_outcome_business_logic(
-                character_id, segment_id, player_id
-            )
+            outcome_data = get_segment_outcome_business_logic(character_id, segment_id, player_id)
 
             # Build response per API documentation
             response_data = {

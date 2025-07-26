@@ -52,11 +52,8 @@ def get_completed_segments() -> list:
     except ClientError as err:
         logger.error(
             "Failed to query completed segments",
-            extra={
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
-            },
-            exc_info=True
+            extra={"error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to query completed segments: {str(err)}")
 
@@ -102,9 +99,9 @@ def invoke_process_segment(segment: dict) -> None:
             extra={
                 "active_segment_id": segment.get("ActiveSegmentID"),
                 "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to invoke process_segment Lambda: {str(err)}")
     except Exception as err:
@@ -114,7 +111,7 @@ def invoke_process_segment(segment: dict) -> None:
                 "active_segment_id": segment.get("ActiveSegmentID"),
                 "error": str(err),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to invoke process_segment Lambda: {str(err)}")
 
@@ -132,14 +129,12 @@ def poll_and_process_segments() -> dict:
     # Get completed segments
     completed_segments = get_completed_segments()
 
-    logger.info(
-        "Found completed segments", extra={"count": len(completed_segments)}
-    )
+    logger.info("Found completed segments", extra={"count": len(completed_segments)})
 
     # Process each completed segment
     processed_count = 0
     failed_count = 0
-    
+
     for segment in completed_segments:
         try:
             invoke_process_segment(segment)
@@ -148,10 +143,7 @@ def poll_and_process_segments() -> dict:
             # Log but continue processing other segments
             logger.error(
                 "Failed to process segment, continuing with others",
-                extra={
-                    "active_segment_id": segment.get("ActiveSegmentID"),
-                    "error": str(err)
-                }
+                extra={"active_segment_id": segment.get("ActiveSegmentID"), "error": str(err)},
             )
             failed_count += 1
 
@@ -184,7 +176,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     """
     # Log invocation
     log_lambda_invocation(context, event)
-    
+
     # Log event source for EventBridge events
     logger.info(
         "EventBridge trigger",
@@ -201,10 +193,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Build response
         response = {
             "statusCode": 200,
-            "body": {
-                "message": "Segment polling completed",
-                **result
-            },
+            "body": {"message": "Segment polling completed", **result},
         }
 
         logger.info("Lambda response", extra={"status_code": 200})

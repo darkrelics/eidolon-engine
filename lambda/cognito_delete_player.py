@@ -44,12 +44,8 @@ def delete_player_record(player_id: str) -> None:
     except ClientError as err:
         logger.error(
             "Failed to delete player record",
-            extra={
-                "error": str(err),
-                "player_id": player_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
-            },
-            exc_info=True
+            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to delete player record: {str(err)}")
 
@@ -92,16 +88,12 @@ def delete_all_characters(player_id: str) -> dict:
             if character_id:
                 try:
                     # No need to verify ownership here since we're getting characters from player's own list
-                    deletion_result = delete_character(
-                        character_id, remove_from_player_list=False
-                    )
+                    deletion_result = delete_character(character_id, remove_from_player_list=False)
 
                     if deletion_result["character_deleted"]:
                         results["characters_deleted"] += 1
                     results["items_deleted"] += deletion_result["items_deleted"]
-                    results["active_segments_deleted"] += deletion_result[
-                        "active_segments_deleted"
-                    ]
+                    results["active_segments_deleted"] += deletion_result["active_segments_deleted"]
                     results["history_deleted"] += deletion_result["history_deleted"]
 
                     if deletion_result["errors"]:
@@ -124,11 +116,9 @@ def delete_all_characters(player_id: str) -> dict:
                             "character_id": character_id,
                             "character_name": character_name,
                         },
-                        exc_info=True
+                        exc_info=True,
                     )
-                    results["errors"].append(
-                        f"Failed to delete character {character_name} ({character_id}): {str(err)}"
-                    )
+                    results["errors"].append(f"Failed to delete character {character_name} ({character_id}): {str(err)}")
 
         logger.info(
             "Completed deleting all characters",
@@ -139,19 +129,13 @@ def delete_all_characters(player_id: str) -> dict:
     except ClientError as err:
         logger.error(
             "Database error in delete_all_characters",
-            extra={
-                "error": str(err),
-                "player_id": player_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
-            },
-            exc_info=True
+            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
+            exc_info=True,
         )
         results["errors"].append(f"Database error: {str(err)}")
         return results
     except Exception as err:
-        logger.error(
-            "Error in delete_all_characters", extra={"error": str(err)}, exc_info=True
-        )
+        logger.error("Error in delete_all_characters", extra={"error": str(err)}, exc_info=True)
         results["errors"].append(f"General error: {str(err)}")
         return results
 
@@ -190,7 +174,7 @@ def delete_active_segments(player_id: str) -> int:
                     extra={
                         "error": str(err),
                         "segment_id": item["ActiveSegmentID"],
-                        "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                        "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
                     },
                 )
 
@@ -202,20 +186,12 @@ def delete_active_segments(player_id: str) -> int:
     except ClientError as err:
         logger.error(
             "Error querying active segments",
-            extra={
-                "error": str(err),
-                "player_id": player_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
-            },
-            exc_info=True
+            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
+            exc_info=True,
         )
         return deleted_count
     except Exception as err:
-        logger.error(
-            "Error deleting active segments",
-            extra={"error": str(err), "player_id": player_id},
-            exc_info=True
-        )
+        logger.error("Error deleting active segments", extra={"error": str(err), "player_id": player_id}, exc_info=True)
         return deleted_count
 
 
@@ -253,7 +229,7 @@ def delete_character_history(player_id: str) -> int:
                     extra={
                         "error": str(err),
                         "timestamp": item["Timestamp"],
-                        "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                        "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
                     },
                 )
 
@@ -266,11 +242,7 @@ def delete_character_history(player_id: str) -> int:
     except ClientError as err:
         logger.error(
             "Error querying character history",
-            extra={
-                "error": str(err),
-                "player_id": player_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
-            },
+            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             exc_info=True,
         )
         return deleted_count
@@ -310,11 +282,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             player_id = event["detail"]["requestParameters"].get("username")
         elif "body" in event:
             # API Gateway or direct invocation
-            body, _ = (
-                parse_json_body(event)
-                if isinstance(event.get("body"), str)
-                else (event.get("body", {}), None)
-            )
+            body, _ = parse_json_body(event) if isinstance(event.get("body"), str) else (event.get("body", {}), None)
             player_id = body.get("player_id") if body else None
         elif "player_id" in event:
             # Direct invocation
@@ -368,16 +336,10 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         try:
             char_deletion_results = delete_all_characters(player_id)
-            results["deletions"]["characters"] = char_deletion_results[
-                "characters_deleted"
-            ]
+            results["deletions"]["characters"] = char_deletion_results["characters_deleted"]
             results["deletions"]["items"] = char_deletion_results["items_deleted"]
-            results["deletions"]["active_segments"] += char_deletion_results[
-                "active_segments_deleted"
-            ]
-            results["deletions"]["story_history"] = char_deletion_results[
-                "history_deleted"
-            ]
+            results["deletions"]["active_segments"] += char_deletion_results["active_segments_deleted"]
+            results["deletions"]["story_history"] = char_deletion_results["history_deleted"]
             if char_deletion_results["errors"]:
                 results["errors"].extend(char_deletion_results["errors"])
         except Exception as err:
@@ -414,9 +376,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             results["errors"].append(f"Character history: {str(err)}")
 
         # Log summary
-        logger.info(
-            "Deletion complete", extra={"player_id": player_id, "summary": results}
-        )
+        logger.info("Deletion complete", extra={"player_id": player_id, "summary": results})
 
         # Return appropriate response based on event source
         if "requestContext" in event:

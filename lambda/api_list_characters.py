@@ -42,12 +42,8 @@ def list_characters_business_logic(player_id: str) -> dict:
     except ClientError as err:
         logger.error(
             "Failed to get player data",
-            extra={
-                "error": str(err),
-                "player_id": player_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
-            },
-            exc_info=True
+            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to retrieve player data: {str(err)}")
 

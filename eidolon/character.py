@@ -80,14 +80,10 @@ def get_archetype(archetype_name: str) -> dict:
         Archetype data dict. Empty dict if not found/not player-available.
     """
     try:
-        archetype = dynamo.get_item(
-            TableName.ARCHETYPES, {"ArchetypeName": archetype_name}
-        )
+        archetype = dynamo.get_item(TableName.ARCHETYPES, {"ArchetypeName": archetype_name})
 
         if not archetype:
-            logger.warning(
-                "Archetype not found", extra={"archetype_name": archetype_name}
-            )
+            logger.warning("Archetype not found", extra={"archetype_name": archetype_name})
             return {}
 
         if not archetype.get("Player", False):
@@ -162,9 +158,7 @@ def get_character_with_ownership(character_id: str, player_id: str) -> dict:
         RuntimeError: If database error occurs
     """
     if not validate_uuid(character_id):
-        logger.warning(
-            "Invalid character ID format", extra={"character_id": character_id}
-        )
+        logger.warning("Invalid character ID format", extra={"character_id": character_id})
         raise ValueError("Invalid character ID format")
 
     try:
@@ -231,23 +225,14 @@ def reset_character_game_mode(character_id: str) -> None:
             UpdateExpression="SET GameMode = :none REMOVE ActiveStoryID, ActiveSegmentID",
             ExpressionAttributeValues={":none": "None"},
         )
-        logger.info(
-            "Reset character game mode and cleared active story fields",
-            extra={"character_id": character_id}
-        )
+        logger.info("Reset character game mode and cleared active story fields", extra={"character_id": character_id})
 
     except ClientError as err:
-        logger.error(
-            "Failed to reset character state",
-            extra={"character_id": character_id, "error": str(err)},
-            exc_info=True
-        )
+        logger.error("Failed to reset character state", extra={"character_id": character_id, "error": str(err)}, exc_info=True)
         raise RuntimeError(f"Failed to reset character state: {str(err)}")
 
 
-def get_active_segment_for_character(
-    character_id: str, player_id: str, segment_type=None
-) -> dict:
+def get_active_segment_for_character(character_id: str, player_id: str, segment_type=None) -> dict:
     """
     Get active segment for a character with ownership verification.
 
@@ -312,9 +297,7 @@ def get_active_segment_for_character(
         raise RuntimeError(f"Failed to retrieve active segment: {str(err)}")
 
 
-def verify_character_in_game_mode(
-    character: dict, expected_mode: str = "Incremental"
-) -> dict:
+def verify_character_in_game_mode(character: dict, expected_mode: str = "Incremental") -> dict:
     """
     Verify character is in the expected game mode.
 
@@ -460,9 +443,7 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
                         "Failed to remove character from player list",
                         extra={"error": str(err), "character_name": character_name},
                     )
-                    results["errors"].append(
-                        f"Failed to remove character from player list: {str(err)}"
-                    )
+                    results["errors"].append(f"Failed to remove character from player list: {str(err)}")
 
             inventory = character.get("Inventory", {})
             for slot, item_id in inventory.items():
@@ -475,9 +456,7 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
                             "Failed to delete item",
                             extra={"item_id": item_id, "error": str(err)},
                         )
-                        results["errors"].append(
-                            f"Failed to delete item {item_id}: {str(err)}"
-                        )
+                        results["errors"].append(f"Failed to delete item {item_id}: {str(err)}")
 
             left_hand_id = character.get("LeftHandID")
             right_hand_id = character.get("RightHandID")
@@ -491,9 +470,7 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
                         "Failed to delete left hand item",
                         extra={"item_id": left_hand_id, "error": str(err)},
                     )
-                    results["errors"].append(
-                        f"Failed to delete left hand item: {str(err)}"
-                    )
+                    results["errors"].append(f"Failed to delete left hand item: {str(err)}")
 
             if right_hand_id:
                 try:
@@ -504,14 +481,10 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
                         "Failed to delete right hand item",
                         extra={"item_id": right_hand_id, "error": str(err)},
                     )
-                    results["errors"].append(
-                        f"Failed to delete right hand item: {str(err)}"
-                    )
+                    results["errors"].append(f"Failed to delete right hand item: {str(err)}")
 
             try:
-                dynamo.delete_item(
-                    TableName.CHARACTERS, Key={"CharacterID": character_id}
-                )
+                dynamo.delete_item(TableName.CHARACTERS, Key={"CharacterID": character_id})
                 results["character_deleted"] = True
                 logger.info(
                     "Deleted character",
@@ -552,9 +525,7 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
                             "segment_id": segment["ActiveSegmentID"],
                         },
                     )
-                    results["errors"].append(
-                        f"Failed to delete active segment {segment['ActiveSegmentID']}: {str(err)}"
-                    )
+                    results["errors"].append(f"Failed to delete active segment {segment['ActiveSegmentID']}: {str(err)}")
 
         except ClientError as err:
             logger.error(
@@ -582,9 +553,7 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
                         "Failed to delete history record",
                         extra={"error": str(err), "story_id": record["StoryID"]},
                     )
-                    results["errors"].append(
-                        f"Failed to delete history record for story {record['StoryID']}: {str(err)}"
-                    )
+                    results["errors"].append(f"Failed to delete history record for story {record['StoryID']}: {str(err)}")
 
         except ClientError as err:
             logger.error(

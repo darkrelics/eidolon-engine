@@ -83,7 +83,7 @@ def wrap_response_with_cors(response: dict, event: dict) -> dict:
     return cors_handler.add_cors_headers(response, event)
 
 
-def handle_lambda_error(err: Exception, context: object, event: dict, custom_message = None) -> dict:
+def handle_lambda_error(err: Exception, context: object, event: dict, custom_message=None) -> dict:
     """
     Handle Lambda function errors with proper logging and CORS response.
 

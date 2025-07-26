@@ -59,14 +59,8 @@ def get_character_business_logic(character_id: str, player_id: str) -> dict:
             IndexName="CharacterID-index",
             KeyConditionExpression="CharacterID = :cid",
             FilterExpression="PlayerID = :pid AND #status = :status",
-            ExpressionAttributeValues={
-                ":cid": character_id,
-                ":pid": player_id,
-                ":status": "active"
-            },
-            ExpressionAttributeNames={
-                "#status": "Status"
-            },
+            ExpressionAttributeValues={":cid": character_id, ":pid": player_id, ":status": "active"},
+            ExpressionAttributeNames={"#status": "Status"},
         )
 
         if active_segments:
@@ -85,7 +79,7 @@ def get_character_business_logic(character_id: str, player_id: str) -> dict:
             extra={
                 "error": str(err),
                 "character_id": character_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
         )
         # Continue without active segment data - not critical for response
@@ -126,9 +120,7 @@ def lambda_handler(event: dict, context: object):
             return auth_error
 
         # Get character ID from query parameters
-        character_id, param_error = get_query_parameter(
-            event, "characterId", required=True
-        ) # type: ignore
+        character_id, param_error = get_query_parameter(event, "characterId", required=True)  # type: ignore
         if param_error:
             return build_lambda_response(400, {"error": param_error}, event)
 

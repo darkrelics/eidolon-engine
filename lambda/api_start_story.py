@@ -31,8 +31,6 @@ from eidolon.validation import validate_uuid
 logger = get_logger(__name__)
 
 
-
-
 def validate_story_available(character: dict, story_id: str) -> None:
     """
     Validate that the story is available to the character.
@@ -77,9 +75,7 @@ def get_story_and_first_segment(story_id: str) -> tuple:
             logger.error("Story has no first segment", extra={"story_id": story_id})
             raise ValueError("Story configuration error")
 
-        segment = dynamo.get_item(
-            TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": first_segment_id}
-        )
+        segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": first_segment_id})
 
         if not segment:
             logger.error(
@@ -92,19 +88,13 @@ def get_story_and_first_segment(story_id: str) -> tuple:
     except ClientError as err:
         logger.error(
             "Failed to get story data",
-            extra={
-                "story_id": story_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
-            },
-            exc_info=True
+            extra={"story_id": story_id, "error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to get story data: {str(err)}")
 
 
-def create_active_segment(
-    character_id: str, player_id: str, story_id: str, story_title: str, segment: dict
-) -> dict:
+def create_active_segment(character_id: str, player_id: str, story_id: str, story_title: str, segment: dict) -> dict:
     """
     Create an active segment record for tracking progress.
 
@@ -169,9 +159,9 @@ def create_active_segment(
             extra={
                 "active_segment_id": active_segment_id,
                 "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to create active segment: {str(err)}")
 
@@ -207,14 +197,10 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         decision_options = segment.get("DecisionOptions", {})
         options = []
         for option_id, _ in decision_options.items():
-            options.append(
-                {"id": option_id, "text": option_id.replace("-", " ").title()}
-            )  # Format option ID as display text
+            options.append({"id": option_id, "text": option_id.replace("-", " ").title()})  # Format option ID as display text
         response["options"] = options
     elif segment_type == "narrative":
-        response["shortStatus"] = segment.get(
-            "ShortStatus", "Progressing through the story..."
-        )
+        response["shortStatus"] = segment.get("ShortStatus", "Progressing through the story...")
         response["narrative"] = ""
     elif segment_type == "combat":
         response["shortStatus"] = segment.get("ShortStatus", "Engaged in combat!")
@@ -223,9 +209,7 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
     return response
 
 
-def create_history_entry(
-    character_id: str, story_id: str, story_title: str, story_type: str
-) -> None:
+def create_history_entry(character_id: str, story_id: str, story_title: str, story_type: str) -> None:
     """
     Create initial history entry for story tracking.
 
@@ -258,9 +242,9 @@ def create_history_entry(
                 "character_id": character_id,
                 "story_id": story_id,
                 "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to create history entry: {str(err)}")
 
@@ -387,9 +371,7 @@ def start_story_business_logic(character_id: str, story_id: str, player_id: str)
         # Build update expression to set GameMode and remove from AvailableStories
         update_expression = (
             "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id "
-            "REMOVE AvailableStories["
-            + str(character["AvailableStories"].index(story_id))
-            + "]"
+            "REMOVE AvailableStories[" + str(character["AvailableStories"].index(story_id)) + "]"
         )
 
         dynamo.update_item(
@@ -432,9 +414,9 @@ def start_story_business_logic(character_id: str, story_id: str, player_id: str)
             extra={
                 "character_id": character_id,
                 "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to update character state: {str(err)}")
     except Exception as err:

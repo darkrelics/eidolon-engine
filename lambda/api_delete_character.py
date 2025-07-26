@@ -65,8 +65,6 @@ def delete_character_with_ownership_check(player_id: str, character_id: str) -> 
     return results
 
 
-
-
 def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler for character deletion API.
@@ -99,28 +97,20 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id, auth_error = extract_player_id(event)
         if auth_error:
             logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(
-                error_response(auth_error, status_code=401), event
-            )
+            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
 
         # Get character ID from query parameters
-        character_id, error_msg = get_query_parameter(
-            event, "characterId", required=True
-        ) # type: ignore
+        character_id, error_msg = get_query_parameter(event, "characterId", required=True)  # type: ignore
         if error_msg:
             return cors_handler.add_cors_headers(error_response(error_msg), event)
 
         # Validate character ID format
         if not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(
-                error_response("Invalid character ID format", status_code=400), event
-            )
+            return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
 
         # Delete the character with ownership verification
         try:
-            deletion_result = delete_character_with_ownership_check(
-                player_id, character_id
-            )
+            deletion_result = delete_character_with_ownership_check(player_id, character_id)
         except ValueError as err:
             logger.warning(
                 "Character not found or not owned",
@@ -145,9 +135,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             error_msg = "Failed to delete character"
             if deletion_result["errors"]:
                 error_msg = deletion_result["errors"][0]
-            return cors_handler.add_cors_headers(
-                error_response(error_msg, status_code=500), event
-            )
+            return cors_handler.add_cors_headers(error_response(error_msg, status_code=500), event)
 
         # Return success response with details
         logger.info("Lambda response", extra={"status_code": 200})
@@ -172,6 +160,4 @@ def lambda_handler(event: dict, context: object) -> dict:
             exc_info=True,
         )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

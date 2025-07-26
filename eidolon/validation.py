@@ -106,7 +106,7 @@ def validate_uuid(uuid_value: str) -> bool:
     return bool(pattern.match(uuid_value.lower()))
 
 
-def validate_positive_integer(value: int, min_value: int = 1, max_value = None) -> None:
+def validate_positive_integer(value: int, min_value: int = 1, max_value=None) -> None:
     """
     Validate positive integer within range.
 
@@ -148,7 +148,7 @@ def validate_enum(value: str, allowed_values: list, case_sensitive: bool = True)
         raise ValueError(f"Value must be one of: {', '.join(allowed_values)}")
 
 
-def sanitize_string(value: str, max_length = None) -> str:
+def sanitize_string(value: str, max_length=None) -> str:
     """
     Sanitize user input string.
 

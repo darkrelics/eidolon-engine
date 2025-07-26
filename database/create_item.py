@@ -116,9 +116,7 @@ def create_new_item_from_prototype(prototype: dict) -> dict:
         "WornOn": prototype.get("WornOn", []),
         "Verbs": prototype.get("Verbs", {}),
         "Overrides": prototype.get("Overrides", {}),
-        "TraitMods": {
-            k: Decimal(str(v)) for k, v in prototype.get("TraitMods", {}).items()
-        },
+        "TraitMods": {k: Decimal(str(v)) for k, v in prototype.get("TraitMods", {}).items()},
         "Container": prototype.get("Container", False),
         "Contents": prototype.get("Contents", []),
         "IsWorn": False,
@@ -188,16 +186,12 @@ def add_item_to_room(room: dict, new_item: dict) -> None:
             UpdateExpression="SET ItemID = :item_ids",
             ExpressionAttributeValues={":item_ids": current_item_ids},
         )
-        print(
-            f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}"
-        )
+        print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
     except ClientError as err:
         # Attempt to roll back by deleting the item we just added
         try:
             dynamo.delete_item(TableName.ITEMS, Key={"ItemID": new_item["ItemID"]})
-            print(
-                f"Rolled back: Deleted item '{new_item['item_name']}' from items table."
-            )
+            print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
         except ClientError as rollback_err:
             print(f"Error rolling back item addition: {rollback_err}")
         raise RuntimeError(f"Error updating room: {err}")
@@ -235,9 +229,7 @@ def main() -> None:
                 print("No prototype selected. Returning to room selection.")
                 continue
 
-            selected_prototype = next(
-                (p for p in prototypes if p.get("PrototypeID") == prototype_id), None
-            )
+            selected_prototype = next((p for p in prototypes if p.get("PrototypeID") == prototype_id), None)
             if not selected_prototype:
                 print("Prototype not found.")
                 continue

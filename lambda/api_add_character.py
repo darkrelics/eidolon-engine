@@ -203,7 +203,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
                 IndexName="CharacterNameIndex",
                 KeyConditionExpression="CharacterName = :name",
                 ExpressionAttributeValues={":name": character_name},
-                Limit=1
+                Limit=1,
             )
 
             if existing_chars:
@@ -331,7 +331,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         character_name, name_error = get_required_field(body, "characterName")
         if name_error:
             return cors_handler.add_cors_headers(error_response(name_error, status_code=400), event)
-        
+
         character_name = character_name.strip()
         archetype_name = body.get("archetypeName", "").strip()
 
@@ -365,7 +365,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             limit_result = check_character_limit(player_id)
             can_create = limit_result["can_create"]
             current_count = limit_result["current_count"]
-            
+
             logger.info(
                 "Character limit check",
                 extra={
@@ -375,7 +375,7 @@ def lambda_handler(event: dict, context: object) -> dict:
                     "max_allowed": MAX_CHARACTERS_PER_PLAYER,
                 },
             )
-            
+
             if not can_create:
                 return cors_handler.add_cors_headers(
                     error_response(f"Character limit reached ({current_count})", status_code=400),

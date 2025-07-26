@@ -48,12 +48,8 @@ def create_player_record(user_uuid: str, email: str) -> None:
     except ClientError as err:
         logger.error(
             "Failed to check for existing player",
-            extra={
-                "user_id": user_uuid,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
-            },
-            exc_info=True
+            extra={"user_id": user_uuid, "error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to check for existing player: {str(err)}")
 
@@ -83,9 +79,9 @@ def create_player_record(user_uuid: str, email: str) -> None:
                 "email": email,
                 "user_id": user_uuid,
                 "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to create player record: {str(err)}")
 
@@ -119,8 +115,8 @@ def lambda_handler(event: dict, context: object) -> dict:
         user_attributes: dict = event.get("request", {}).get("userAttributes", {})
 
         # Get the user's Cognito UUID (sub) and email
-        user_uuid:str = user_attributes.get("sub") # type: ignore
-        email:str = user_attributes.get("email") # type: ignore
+        user_uuid: str = user_attributes.get("sub")  # type: ignore
+        email: str = user_attributes.get("email")  # type: ignore
 
         # Create player record
         create_player_record(user_uuid, email)

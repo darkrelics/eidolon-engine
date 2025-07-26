@@ -55,7 +55,7 @@ def load_player_archetypes() -> list:
             if last_evaluated_key:
                 scan_params["ExclusiveStartKey"] = last_evaluated_key
 
-            scan_result: dict = dynamo.scan(TableName.ARCHETYPES, **scan_params) # type: ignore
+            scan_result: dict = dynamo.scan(TableName.ARCHETYPES, **scan_params)  # type: ignore
             items.extend(scan_result.get("items", []))
 
             last_evaluated_key = scan_result.get("last_evaluated_key")
@@ -65,11 +65,8 @@ def load_player_archetypes() -> list:
     except ClientError as err:
         logger.error(
             "Failed to scan archetypes table",
-            extra={
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
-            },
-            exc_info=True
+            extra={"error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to load archetypes: {str(err)}")
 
@@ -156,22 +153,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
 
     except RuntimeError as err:
-        logger.error(
-            "Failed to load archetypes",
-            extra={"error": str(err)},
-            exc_info=True
-        )
+        logger.error("Failed to load archetypes", extra={"error": str(err)}, exc_info=True)
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Failed to load archetypes", status_code=500), event
-        )
+        return cors_handler.add_cors_headers(error_response("Failed to load archetypes", status_code=500), event)
     except Exception as err:
-        logger.error(
-            "Unexpected error in lambda_handler",
-            extra={"error": str(err)},
-            exc_info=True
-        )
+        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
-        )
+        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

@@ -47,9 +47,9 @@ def get_active_story_segment(character_id: str) -> dict:
             extra={
                 "character_id": character_id,
                 "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to query active segments: {str(err)}")
 
@@ -87,16 +87,13 @@ def mark_segment_as_abandoned(active_segment_id: str) -> None:
             extra={
                 "active_segment_id": active_segment_id,
                 "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to mark segment as abandoned: {str(err)}")
 
-    logger.info(
-        "Marked segment as abandoned",
-        extra={"active_segment_id": active_segment_id}
-    )
+    logger.info("Marked segment as abandoned", extra={"active_segment_id": active_segment_id})
 
 
 def record_story_abandonment(character_id: str, story_id: str) -> None:
@@ -117,19 +114,12 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
         raise ValueError("Story ID cannot be empty")
 
     try:
-        history = dynamo.get_item(
-            TableName.HISTORY, 
-            {"CharacterID": character_id, "StoryID": story_id}
-        )
+        history = dynamo.get_item(TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id})
     except ClientError as err:
         logger.error(
             "Failed to get story history",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "error": str(err)
-            },
-            exc_info=True
+            extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to get story history: {str(err)}")
 
@@ -150,12 +140,8 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
         except ClientError as err:
             logger.error(
                 "Failed to update story history",
-                extra={
-                    "character_id": character_id,
-                    "story_id": story_id,
-                    "error": str(err)
-                },
-                exc_info=True
+                extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
+                exc_info=True,
             )
             raise RuntimeError(f"Failed to update story history: {str(err)}")
 
@@ -203,13 +189,10 @@ def add_story_to_abandoned_list(character_id: str, story_id: str) -> None:
                 "character_id": character_id,
                 "story_id": story_id,
                 "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to add story to abandoned list: {str(err)}")
 
-    logger.info(
-        "Added story to abandoned list",
-        extra={"character_id": character_id, "story_id": story_id}
-    )
+    logger.info("Added story to abandoned list", extra={"character_id": character_id, "story_id": story_id})

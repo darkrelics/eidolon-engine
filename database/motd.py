@@ -38,7 +38,7 @@ def add_or_update_motd(message: str, active: bool = True) -> dict:
     """
     if not message:
         raise ValueError("Message cannot be empty")
-        
+
     motd_id: str = str(uuid.uuid4())
 
     # Prepare the item data to put into the table
@@ -67,9 +67,7 @@ def main() -> None:
     Usage:
         python motd.py "Your message here" [--inactive]
     """
-    parser = argparse.ArgumentParser(
-        description="Add or update a Message of the Day (MOTD)"
-    )
+    parser = argparse.ArgumentParser(description="Add or update a Message of the Day (MOTD)")
     parser.add_argument("message", type=str, help="The MOTD message")
     parser.add_argument(
         "--inactive",

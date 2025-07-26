@@ -26,9 +26,7 @@ def load_config() -> dict:
     """Load configuration from config.yml or template."""
     if not os.path.exists(CONFIG_PATH):
         if not os.path.exists(CONFIG_TEMPLATE_PATH):
-            raise FileNotFoundError(
-                f"Neither {CONFIG_PATH} nor {CONFIG_TEMPLATE_PATH} exist"
-            )
+            raise FileNotFoundError(f"Neither {CONFIG_PATH} nor {CONFIG_TEMPLATE_PATH} exist")
         with open(CONFIG_TEMPLATE_PATH, "r", encoding="utf-8") as template_file:
             config = yaml.safe_load(template_file)
     else:
@@ -71,9 +69,7 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
             else:
                 print(f"Failed to upload {filename}")
 
-        print(
-            f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded"
-        )
+        print(f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded")
         return success_count == len(lua_files)
 
     except Exception as err:
@@ -160,9 +156,7 @@ def main():
     elif choice == "2":
         success = list_deployed_scripts(bucket_name, prefix)
     elif choice == "3":
-        script_name: str = input(
-            "Enter script name to delete (e.g., room_tavern.lua): "
-        ).strip()
+        script_name: str = input("Enter script name to delete (e.g., room_tavern.lua): ").strip()
         if not script_name:
             print("Error: Script name is required")
             sys.exit(1)

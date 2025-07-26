@@ -148,9 +148,7 @@ def store_archetypes(archetypes_data):
                 continue
 
             # Convert attributes to lowercase
-            attributes = {
-                k.lower(): v for k, v in archetype.get("Attributes", {}).items()
-            }
+            attributes = {k.lower(): v for k, v in archetype.get("Attributes", {}).items()}
             # Convert skills to lowercase
             skills = {k.lower(): v for k, v in archetype.get("Skills", {}).items()}
 
@@ -197,9 +195,7 @@ def store_archetypes(archetypes_data):
         logging.error(f"Failed to store archetypes in DynamoDB: {str(err)}")
         raise
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while storing archetypes: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while storing archetypes: {str(err)}")
         raise
 
 
@@ -243,9 +239,7 @@ def store_item_prototypes(prototypes_data):
         logging.error(f"Failed to store item prototypes in DynamoDB: {str(err)}")
         raise
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while storing item prototypes: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while storing item prototypes: {str(err)}")
         raise
 
 
@@ -257,7 +251,7 @@ def load_exits():
         dict: A dictionary of exit data.
     """
     try:
-        result: dict = dynamo.scan(TableName.EXITS) # type: ignore
+        result: dict = dynamo.scan(TableName.EXITS)  # type: ignore
         items = result.get("items", [])
         exits = {item["ExitID"]: item for item in items}
         print("Exit data loaded from DynamoDB successfully")
@@ -278,7 +272,7 @@ def load_rooms():
         dict: A dictionary of room data.
     """
     try:
-        result: dict = dynamo.scan(TableName.ROOMS) # type: ignore
+        result: dict = dynamo.scan(TableName.ROOMS)  # type: ignore
         items = result.get("items", [])
         rooms = {item["RoomID"]: item for item in items}  # type: ignore
         print("Room data loaded from DynamoDB successfully")
@@ -299,7 +293,7 @@ def load_archetypes():
         dict: A dictionary containing the archetypes.
     """
     try:
-        result: dict = dynamo.scan(TableName.ARCHETYPES) # type: ignore
+        result: dict = dynamo.scan(TableName.ARCHETYPES)  # type: ignore
         items = result.get("items", [])
         archetypes = {"archetypes": {item["ArchetypeName"]: item for item in items}}  # type: ignore
         print("Archetype data loaded from DynamoDB successfully")
@@ -308,9 +302,7 @@ def load_archetypes():
         logging.error(f"Failed to load archetypes from DynamoDB: {str(err)}")
         return {}
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while loading archetypes: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while loading archetypes: {str(err)}")
         return {}
 
 
@@ -322,7 +314,7 @@ def load_item_prototypes():
         dict: A dictionary containing the item prototypes.
     """
     try:
-        result: dict = dynamo.scan(TableName.PROTOTYPES) # type: ignore
+        result: dict = dynamo.scan(TableName.PROTOTYPES)  # type: ignore
         items = result.get("items", [])
         prototypes = {"itemPrototypes": items}
         print("Item prototype data loaded from DynamoDB successfully")
@@ -331,9 +323,7 @@ def load_item_prototypes():
         logging.error(f"Failed to load item prototypes from DynamoDB: {str(err)}")
         return {}
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while loading item prototypes: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while loading item prototypes: {str(err)}")
         return {}
 
 
@@ -391,9 +381,7 @@ def store_opponents(opponents_data):
         logging.error(f"Failed to store opponents in DynamoDB: {str(err)}")
         raise
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while storing opponents: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while storing opponents: {str(err)}")
         raise
 
 
@@ -503,7 +491,7 @@ def load_opponents():
         dict: A dictionary containing the opponents.
     """
     try:
-        result: dict = dynamo.scan(TableName.OPPONENTS) # type: ignore
+        result: dict = dynamo.scan(TableName.OPPONENTS)  # type: ignore
         items = result.get("items", [])
         opponents = {"opponents": items}
         print("Opponent data loaded from DynamoDB successfully")
@@ -512,9 +500,7 @@ def load_opponents():
         logging.error(f"Failed to load opponents from DynamoDB: {str(err)}")
         return {}
     except Exception as err:
-        logging.error(
-            f"An unexpected error occurred while loading opponents: {str(err)}"
-        )
+        logging.error(f"An unexpected error occurred while loading opponents: {str(err)}")
         return {}
 
 
@@ -527,11 +513,11 @@ def load_story():
     """
     try:
         # Load all stories
-        stories_result: dict = dynamo.scan(TableName.STORY) # type: ignore
+        stories_result: dict = dynamo.scan(TableName.STORY)  # type: ignore
         stories = stories_result.get("items", [])
 
         # Load all segments
-        segments_result: dict = dynamo.scan(TableName.SEGMENTS) # type: ignore
+        segments_result: dict = dynamo.scan(TableName.SEGMENTS)  # type: ignore
         segments = segments_result.get("items", [])
 
         print("Story data loaded from DynamoDB successfully")
@@ -630,9 +616,7 @@ def display_item_prototypes(prototypes):
     print("Item Prototypes:")
     for prototype in prototypes.get("itemPrototypes", []):
         print(f"ID: {prototype.get('PrototypeID', 'No ID')}")
-        print(
-            f"  Name: {prototype.get('prototype_name', prototype.get('Name', 'No Name'))}"
-        )
+        print(f"  Name: {prototype.get('prototype_name', prototype.get('Name', 'No Name'))}")
         print(f"  Description: {prototype.get('Description', 'No description')}")
         print(f"  Mass: {prototype.get('Mass', 'Unknown')}")
         print(f"  Value: {prototype.get('Value', 'Unknown')}")
@@ -667,9 +651,7 @@ def display_opponents(opponents_data):
         if loot_table:
             print("  Loot Table:")
             for loot in loot_table:
-                print(
-                    f"    Item: {loot.get('itemId', 'Unknown')} (chance: {loot.get('chance', 0)})"
-                )
+                print(f"    Item: {loot.get('itemId', 'Unknown')} (chance: {loot.get('chance', 0)})")
 
         tags = opponent.get("Tags", [])
         if tags:
@@ -743,9 +725,7 @@ def main():
     - Stores data into DynamoDB tables.
     - Loads data back from DynamoDB and displays it.
     """
-    parser = argparse.ArgumentParser(
-        description="Load and store game data in DynamoDB."
-    )
+    parser = argparse.ArgumentParser(description="Load and store game data in DynamoDB.")
     parser.add_argument(
         "-r",
         "--rooms",

@@ -64,16 +64,14 @@ def get_active_decision_segment(character_id: str, player_id: str) -> dict:
             extra={
                 "error": str(err),
                 "character_id": character_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to query active segments: {str(err)}")
 
     if not items:
-        logger.warning(
-            "No active decision segment found", extra={"character_id": character_id}
-        )
+        logger.warning("No active decision segment found", extra={"character_id": character_id})
         raise ValueError("No active decision segment found")
 
     active_segment = items[0]
@@ -162,9 +160,9 @@ def update_active_segment_decision(active_segment_id: str, decision_id: str) -> 
             extra={
                 "active_segment_id": active_segment_id,
                 "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
-            exc_info=True
+            exc_info=True,
         )
         raise RuntimeError(f"Failed to update active segment: {str(err)}")
 
@@ -245,9 +243,7 @@ def submit_decision_business_logic(character_id: str, decision_id: str, player_i
         try:
             # Calculate next segment completion time
             story_id = active_segment.get("StoryID")
-            next_segment = dynamo.get_item(
-                TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id}
-            )
+            next_segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id})
 
             if next_segment:
                 # Next segment will start after processing completes
@@ -258,7 +254,7 @@ def submit_decision_business_logic(character_id: str, decision_id: str, player_i
             logger.error(
                 "Failed to get next segment",
                 extra={
-                    "story_id": story_id, # type: ignore
+                    "story_id": story_id,  # type: ignore
                     "segment_id": next_segment_id,
                     "error": str(err),
                 },

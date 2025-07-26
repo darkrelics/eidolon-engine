@@ -110,7 +110,7 @@ class DeploymentState:
 
     def get_parameters(self) -> dict:
         """Get all stored deployment parameters.
-        
+
         Returns:
             Copy of parameters dictionary
         """
@@ -133,7 +133,7 @@ class DeploymentState:
 
     def get_deployed_stacks(self) -> set:
         """Get set of all deployed stack names.
-        
+
         Returns:
             Set of stack names
         """
@@ -141,7 +141,7 @@ class DeploymentState:
 
     def get_deployment_summary(self) -> dict:
         """Get summary of current deployment state.
-        
+
         Returns:
             Dict containing:
                 - last_deployment: ISO timestamp of last deployment
@@ -206,7 +206,7 @@ class ConfigurationManager:
 
     def exists(self) -> bool:
         """Check if configuration file exists.
-        
+
         Returns:
             True if config file exists, False otherwise
         """
@@ -214,7 +214,7 @@ class ConfigurationManager:
 
     def get_aws_config(self) -> dict:
         """Get AWS-specific configuration.
-        
+
         Returns:
             AWS configuration section, empty dict if not found
         """
@@ -236,7 +236,7 @@ class ConfigurationManager:
 
     def _deep_merge(self, base: dict, override: dict) -> None:
         """Deep merge override dict into base dict.
-        
+
         Recursively merges nested dictionaries, with values from override
         taking precedence. Non-dict values are replaced entirely.
 
