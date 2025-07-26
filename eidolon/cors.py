@@ -41,6 +41,73 @@ class CorsHandler:
         # Max age for preflight cache
         self.max_age = CORS_MAX_AGE
 
+    def extract_origin(self, event: dict) -> str:
+        """
+        Extract origin from request headers.
+
+        Args:
+            event: Lambda event containing request headers
+
+        Returns:
+            Origin string or empty string if not found
+        """
+        headers = event.get("headers", {})
+        return headers.get("origin") or headers.get("Origin", "")
+
+    def get_base_cors_headers(self) -> dict:
+        """
+        Get base CORS headers that are always included.
+
+        Returns:
+            Dictionary with base CORS headers
+        """
+        return {
+            "Access-Control-Allow-Headers": self.allowed_headers,
+            "Access-Control-Allow-Methods": self.allowed_methods,
+            "Access-Control-Max-Age": self.max_age,
+        }
+
+    def is_origin_allowed(self, origin: str) -> bool:
+        """
+        Check if an origin is in the allowed list.
+
+        Args:
+            origin: Origin to check
+
+        Returns:
+            True if origin is allowed, False otherwise
+        """
+        return bool(origin and origin in self.allowed_origins)
+
+    def get_allowed_origin_header(self, origin: str) -> tuple:
+        """
+        Determine the Access-Control-Allow-Origin header value.
+
+        Args:
+            origin: Request origin
+
+        Returns:
+            Tuple of (origin_header_value, should_allow_credentials)
+        """
+        # No origins configured - use wildcard without credentials
+        if not self.allowed_origins:
+            return "*", False
+        
+        # Origin is in allowed list
+        if self.is_origin_allowed(origin):
+            return origin, self.allow_credentials
+        
+        # Single origin configured - use as default
+        if len(self.allowed_origins) == 1:
+            return self.allowed_origins[0], self.allow_credentials
+        
+        # Multiple origins configured but request origin not allowed
+        logger.warning(
+            "Origin not in allowed list", 
+            extra={"origin": origin, "allowed_origins": self.allowed_origins}
+        )
+        return None, False
+
     def get_cors_headers(self, event: dict) -> dict:
         """
         Get CORS headers based on the request origin.
@@ -51,36 +118,19 @@ class CorsHandler:
         Returns:
             Dictionary of CORS headers
         """
-        # Extract origin from request headers
-        headers = event.get("headers", {})
-        origin = headers.get("origin") or headers.get("Origin", "")
-
-        cors_headers = {
-            "Access-Control-Allow-Headers": self.allowed_headers,
-            "Access-Control-Allow-Methods": self.allowed_methods,
-            "Access-Control-Max-Age": self.max_age,
-        }
-
-        # Validate origin
-        if not self.allowed_origins:
-            # No origins configured, use wildcard but don't allow credentials
-            cors_headers["Access-Control-Allow-Origin"] = "*"
-            # Don't set credentials header when using wildcard
-        elif origin and origin in self.allowed_origins:
-            cors_headers["Access-Control-Allow-Origin"] = origin
-            if self.allow_credentials:
+        # Start with base headers
+        cors_headers = self.get_base_cors_headers()
+        
+        # Extract and validate origin
+        origin = self.extract_origin(event)
+        allowed_origin, allow_credentials = self.get_allowed_origin_header(origin)
+        
+        # Set origin header if allowed
+        if allowed_origin:
+            cors_headers["Access-Control-Allow-Origin"] = allowed_origin
+            if allow_credentials:
                 cors_headers["Access-Control-Allow-Credentials"] = "true"
-        elif len(self.allowed_origins) == 1:
-            # If only one origin is allowed, use it as default
-            cors_headers["Access-Control-Allow-Origin"] = self.allowed_origins[0]
-            if self.allow_credentials:
-                cors_headers["Access-Control-Allow-Credentials"] = "true"
-        else:
-            # No valid origin found, reject the request
-            logger.warning("Origin not in allowed list", extra={"origin": origin, "allowed_origins": self.allowed_origins})
-            # Don't set Access-Control-Allow-Origin header for unauthorized origins
-            # This will cause the browser to block the request
-
+        
         return cors_headers
 
     def handle_preflight(self, event: dict) -> dict:

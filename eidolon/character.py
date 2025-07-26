@@ -430,6 +430,217 @@ def get_character_by_name(player_id: str, character_name: str) -> dict:
         raise RuntimeError(f"Failed to retrieve character: {str(err)}")
 
 
+def remove_character_from_player_list(player_id: str, character_name: str) -> dict:
+    """
+    Remove a character from the player's CharacterList.
+
+    Args:
+        player_id: Player UUID
+        character_name: Name of the character to remove
+
+    Returns:
+        Dict with:
+            - removed: bool - Whether the character was removed
+            - error: str - Error message if removal failed
+    """
+    result = {"removed": False, "error": None}
+    
+    if not player_id or not character_name:
+        return result
+        
+    try:
+        dynamo.update_item(
+            TableName.PLAYERS,
+            Key={"PlayerID": player_id},
+            UpdateExpression="REMOVE CharacterList.#name",
+            ConditionExpression="attribute_exists(CharacterList.#name)",
+            ExpressionAttributeNames={"#name": character_name},
+        )
+        result["removed"] = True
+        logger.info(
+            "Removed character from player list",
+            extra={
+                "character_name": character_name,
+                "player_id": player_id,
+            },
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            logger.error(
+                "Failed to remove character from player list",
+                extra={"error": str(err), "character_name": character_name},
+            )
+            result["error"] = f"Failed to remove character from player list: {str(err)}"
+            
+    return result
+
+
+def delete_character_items(character: dict) -> dict:
+    """
+    Delete all items belonging to a character.
+
+    Args:
+        character: Character dict containing inventory and equipped items
+
+    Returns:
+        Dict with:
+            - deleted_count: int - Number of items deleted
+            - errors: list - List of error messages
+    """
+    result = {"deleted_count": 0, "errors": []}
+    
+    # Collect all item IDs
+    item_ids = []
+    
+    # Inventory items
+    inventory = character.get("Inventory", {})
+    for slot, item_id in inventory.items():
+        if item_id:
+            item_ids.append(item_id)
+    
+    # Equipped items
+    if character.get("LeftHandID"):
+        item_ids.append(character["LeftHandID"])
+    if character.get("RightHandID"):
+        item_ids.append(character["RightHandID"])
+    
+    # Delete each item
+    for item_id in item_ids:
+        try:
+            dynamo.delete_item(TableName.ITEMS, Key={"ItemID": item_id})
+            result["deleted_count"] += 1
+        except ClientError as err:
+            logger.error(
+                "Failed to delete item",
+                extra={"item_id": item_id, "error": str(err)},
+            )
+            result["errors"].append(f"Failed to delete item {item_id}: {str(err)}")
+            
+    return result
+
+
+def delete_character_active_segments(character_id: str) -> dict:
+    """
+    Delete all active segments for a character.
+
+    Args:
+        character_id: Character UUID
+
+    Returns:
+        Dict with:
+            - deleted_count: int - Number of segments deleted
+            - errors: list - List of error messages
+    """
+    result = {"deleted_count": 0, "errors": []}
+    
+    try:
+        active_segments = dynamo.query(
+            TableName.ACTIVE_SEGMENTS,
+            IndexName="CharacterID-index",
+            KeyConditionExpression="CharacterID = :cid",
+            ExpressionAttributeValues={":cid": character_id},
+        )
+
+        for segment in active_segments:  # type: ignore
+            try:
+                dynamo.delete_item(
+                    TableName.ACTIVE_SEGMENTS,
+                    Key={"ActiveSegmentID": segment["ActiveSegmentID"]},
+                )
+                result["deleted_count"] += 1
+            except ClientError as err:
+                logger.error(
+                    "Failed to delete active segment",
+                    extra={
+                        "error": str(err),
+                        "segment_id": segment["ActiveSegmentID"],
+                    },
+                )
+                result["errors"].append(f"Failed to delete active segment {segment['ActiveSegmentID']}: {str(err)}")
+
+    except ClientError as err:
+        logger.error(
+            "Failed to query active segments",
+            extra={"error": str(err), "character_id": character_id},
+        )
+        result["errors"].append(f"Failed to query active segments: {str(err)}")
+        
+    return result
+
+
+def delete_character_history(character_id: str) -> dict:
+    """
+    Delete all history records for a character.
+
+    Args:
+        character_id: Character UUID
+
+    Returns:
+        Dict with:
+            - deleted_count: int - Number of history records deleted
+            - errors: list - List of error messages
+    """
+    result = {"deleted_count": 0, "errors": []}
+    
+    try:
+        history_records = dynamo.query(
+            TableName.HISTORY,
+            KeyConditionExpression="CharacterID = :cid",
+            ExpressionAttributeValues={":cid": character_id},
+        )
+
+        for record in history_records:  # type: ignore
+            try:
+                dynamo.delete_item(
+                    TableName.HISTORY,
+                    Key={"CharacterID": character_id, "StoryID": record["StoryID"]},
+                )
+                result["deleted_count"] += 1
+            except ClientError as err:
+                logger.error(
+                    "Failed to delete history record",
+                    extra={"error": str(err), "story_id": record["StoryID"]},
+                )
+                result["errors"].append(f"Failed to delete history record for story {record['StoryID']}: {str(err)}")
+
+    except ClientError as err:
+        logger.error(
+            "Failed to query history",
+            extra={"error": str(err), "character_id": character_id},
+        )
+        result["errors"].append(f"Failed to query history: {str(err)}")
+        
+    return result
+
+
+def delete_character_record(character_id: str) -> dict:
+    """
+    Delete the character record from the database.
+
+    Args:
+        character_id: Character UUID
+
+    Returns:
+        Dict with:
+            - deleted: bool - Whether the character was deleted
+            - error: str - Error message if deletion failed
+    """
+    result = {"deleted": False, "error": None}
+    
+    try:
+        dynamo.delete_item(TableName.CHARACTERS, Key={"CharacterID": character_id})
+        result["deleted"] = True
+        logger.info("Deleted character record", extra={"character_id": character_id})
+    except ClientError as err:
+        logger.error(
+            "Failed to delete character",
+            extra={"error": str(err), "character_id": character_id},
+        )
+        result["error"] = f"Failed to delete character: {str(err)}"
+        
+    return result
+
+
 def delete_character(character_id: str, remove_from_player_list: bool = True) -> dict:
     """
     Delete a character and all associated data.
@@ -452,177 +663,285 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
         "errors": [],
     }
 
+    # Retrieve character data
+    character = None
     try:
         character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+    except ClientError as err:
+        logger.error(
+            "Failed to retrieve character for deletion",
+            extra={"error": str(err), "character_id": character_id},
+        )
+        results["errors"].append(f"Failed to retrieve character: {str(err)}")
 
-        if character:
-            character_name = character.get("CharacterName")
+    if character:
+        # Remove from player list if requested
+        if remove_from_player_list:
             player_id = character.get("PlayerID")
+            character_name = character.get("CharacterName")
+            
+            if player_id and character_name:
+                player_result = remove_character_from_player_list(player_id, character_name)
+                results["character_removed_from_player"] = player_result["removed"]
+                if player_result["error"]:
+                    results["errors"].append(player_result["error"])
 
-            if remove_from_player_list and player_id and character_name:
-                try:
-                    dynamo.update_item(
-                        TableName.PLAYERS,
-                        Key={"PlayerID": player_id},
-                        UpdateExpression="REMOVE CharacterList.#name",
-                        ConditionExpression="attribute_exists(CharacterList.#name)",
-                        ExpressionAttributeNames={"#name": character_name},
-                    )
-                    results["character_removed_from_player"] = True
-                    logger.info(
-                        "Removed character from player list",
-                        extra={
-                            "character_name": character_name,
-                            "player_id": player_id,
-                        },
-                    )
-                except ClientError as err:
-                    logger.error(
-                        "Failed to remove character from player list",
-                        extra={"error": str(err), "character_name": character_name},
-                    )
-                    results["errors"].append(f"Failed to remove character from player list: {str(err)}")
+        # Delete all character items
+        items_result = delete_character_items(character)
+        results["items_deleted"] = items_result["deleted_count"]
+        results["errors"].extend(items_result["errors"])
 
-            inventory = character.get("Inventory", {})
-            for slot, item_id in inventory.items():
-                if item_id:
-                    try:
-                        dynamo.delete_item(TableName.ITEMS, Key={"ItemID": item_id})
-                        results["items_deleted"] += 1
-                    except ClientError as err:
-                        logger.error(
-                            "Failed to delete item",
-                            extra={"item_id": item_id, "error": str(err)},
-                        )
-                        results["errors"].append(f"Failed to delete item {item_id}: {str(err)}")
+        # Delete the character record
+        char_result = delete_character_record(character_id)
+        results["character_deleted"] = char_result["deleted"]
+        if char_result["error"]:
+            results["errors"].append(char_result["error"])
 
-            left_hand_id = character.get("LeftHandID")
-            right_hand_id = character.get("RightHandID")
-
-            if left_hand_id:
-                try:
-                    dynamo.delete_item(TableName.ITEMS, Key={"ItemID": left_hand_id})
-                    results["items_deleted"] += 1
-                except ClientError as err:
-                    logger.error(
-                        "Failed to delete left hand item",
-                        extra={"item_id": left_hand_id, "error": str(err)},
-                    )
-                    results["errors"].append(f"Failed to delete left hand item: {str(err)}")
-
-            if right_hand_id:
-                try:
-                    dynamo.delete_item(TableName.ITEMS, Key={"ItemID": right_hand_id})
-                    results["items_deleted"] += 1
-                except ClientError as err:
-                    logger.error(
-                        "Failed to delete right hand item",
-                        extra={"item_id": right_hand_id, "error": str(err)},
-                    )
-                    results["errors"].append(f"Failed to delete right hand item: {str(err)}")
-
-            try:
-                dynamo.delete_item(TableName.CHARACTERS, Key={"CharacterID": character_id})
-                results["character_deleted"] = True
-                logger.info(
-                    "Deleted character",
-                    extra={
-                        "character_id": character_id,
-                        "character_name": character.get("CharacterName", "Unknown"),
-                        "game_mode": character.get("GameMode", "Unknown"),
-                        "player_id": character.get("PlayerID"),
-                    },
-                )
-            except ClientError as err:
-                logger.error(
-                    "Failed to delete character",
-                    extra={"error": str(err), "character_id": character_id},
-                )
-                results["errors"].append(f"Failed to delete character: {str(err)}")
-
-        try:
-            active_segments = dynamo.query(
-                TableName.ACTIVE_SEGMENTS,
-                IndexName="CharacterID-index",
-                KeyConditionExpression="CharacterID = :cid",
-                ExpressionAttributeValues={":cid": character_id},
-            )
-
-            for segment in active_segments:  # type: ignore
-                try:
-                    dynamo.delete_item(
-                        TableName.ACTIVE_SEGMENTS,
-                        Key={"ActiveSegmentID": segment["ActiveSegmentID"]},
-                    )
-                    results["active_segments_deleted"] += 1
-                except ClientError as err:
-                    logger.error(
-                        "Failed to delete active segment",
-                        extra={
-                            "error": str(err),
-                            "segment_id": segment["ActiveSegmentID"],
-                        },
-                    )
-                    results["errors"].append(f"Failed to delete active segment {segment['ActiveSegmentID']}: {str(err)}")
-
-        except ClientError as err:
-            logger.error(
-                "Failed to query active segments",
-                extra={"error": str(err), "character_id": character_id},
-            )
-            results["errors"].append(f"Failed to query active segments: {str(err)}")
-
-        try:
-            history_records = dynamo.query(
-                TableName.HISTORY,
-                KeyConditionExpression="CharacterID = :cid",
-                ExpressionAttributeValues={":cid": character_id},
-            )
-
-            for record in history_records:  # type: ignore
-                try:
-                    dynamo.delete_item(
-                        TableName.HISTORY,
-                        Key={"CharacterID": character_id, "StoryID": record["StoryID"]},
-                    )
-                    results["history_deleted"] += 1
-                except ClientError as err:
-                    logger.error(
-                        "Failed to delete history record",
-                        extra={"error": str(err), "story_id": record["StoryID"]},
-                    )
-                    results["errors"].append(f"Failed to delete history record for story {record['StoryID']}: {str(err)}")
-
-        except ClientError as err:
-            logger.error(
-                "Failed to query history",
-                extra={"error": str(err), "character_id": character_id},
-            )
-            results["errors"].append(f"Failed to query history: {str(err)}")
-
-    except ValueError as err:
-        logger.error(
-            "Value error in delete_character",
-            extra={"error": str(err), "character_id": character_id},
-            exc_info=True,
+        # Log character deletion with details
+        logger.info(
+            "Character deletion processed",
+            extra={
+                "character_id": character_id,
+                "character_name": character.get("CharacterName", "Unknown"),
+                "game_mode": character.get("GameMode", "Unknown"),
+                "player_id": character.get("PlayerID"),
+                "deleted": results["character_deleted"],
+            },
         )
-        results["errors"].append(f"Value error: {str(err)}")
-    except KeyError as err:
-        logger.error(
-            "Key error in delete_character",
-            extra={"error": str(err), "character_id": character_id},
-            exc_info=True,
-        )
-        results["errors"].append(f"Key error: {str(err)}")
-    except AttributeError as err:
-        logger.error(
-            "Attribute error in delete_character",
-            extra={"error": str(err), "character_id": character_id},
-            exc_info=True,
-        )
-        results["errors"].append(f"Attribute error: {str(err)}")
+
+    # Delete active segments (can proceed even if character not found)
+    segments_result = delete_character_active_segments(character_id)
+    results["active_segments_deleted"] = segments_result["deleted_count"]
+    results["errors"].extend(segments_result["errors"])
+
+    # Delete history records
+    history_result = delete_character_history(character_id)
+    results["history_deleted"] = history_result["deleted_count"]
+    results["errors"].extend(history_result["errors"])
+
+    # Log deletion summary
+    logger.info(
+        "Character deletion completed",
+        extra={
+            "character_id": character_id,
+            "character_deleted": results["character_deleted"],
+            "items_deleted": results["items_deleted"],
+            "segments_deleted": results["active_segments_deleted"],
+            "history_deleted": results["history_deleted"],
+            "error_count": len(results["errors"]),
+        },
+    )
 
     return results
+
+
+def check_character_name_availability(character_name: str) -> bool:
+    """
+    Check if a character name is available.
+
+    Args:
+        character_name: Name to check
+
+    Returns:
+        True if name is available, False if taken
+
+    Raises:
+        RuntimeError: If database query fails
+    """
+    logger.info(
+        "Checking character name availability",
+        extra={"character_name": character_name},
+    )
+    
+    try:
+        existing_chars = dynamo.query(
+            TableName.CHARACTERS,
+            IndexName="CharacterNameIndex",
+            KeyConditionExpression="CharacterName = :name",
+            ExpressionAttributeValues={":name": character_name},
+            Limit=1,
+        )
+        
+        if existing_chars:
+            logger.info(
+                "Character name already taken",
+                extra={"character_name": character_name},
+            )
+            return False
+            
+        return True
+        
+    except ClientError as err:
+        logger.error(
+            "Error checking character name availability",
+            extra={"error": str(err), "character_name": character_name},
+        )
+        raise RuntimeError(f"Failed to check character name availability: {str(err)}")
+
+
+def build_character_record(
+    character_id: str,
+    player_id: str,
+    character_name: str,
+    archetype_name: str,
+    archetype_data: dict,
+    inventory: dict,
+    timestamp: str
+) -> dict:
+    """
+    Build a character record with all required fields.
+
+    Args:
+        character_id: Generated character UUID
+        player_id: Player UUID
+        character_name: Character name
+        archetype_name: Archetype name
+        archetype_data: Archetype data from database
+        inventory: Inventory items mapping
+        timestamp: ISO format timestamp
+
+    Returns:
+        Complete character record dict
+    """
+    return {
+        "CharacterID": character_id,
+        "PlayerID": player_id,
+        "CharacterName": character_name,
+        "Archetype": archetype_name,
+        "Attributes": archetype_data.get("Attributes", {}),
+        "Skills": archetype_data.get("Skills", {}),
+        "Health": archetype_data.get("Health", DEFAULT_HEALTH),
+        "MaxHealth": archetype_data.get("Health", DEFAULT_HEALTH),
+        "Essence": archetype_data.get("Essence", DEFAULT_ESSENCE),
+        "MaxEssence": archetype_data.get("Essence", DEFAULT_ESSENCE),
+        "Wounds": [],
+        "RoomID": archetype_data.get("StartRoom", 0),
+        "Inventory": inventory,
+        "Resources": {},
+        "Progress": {},
+        "AvailableStories": archetype_data.get("AvailableStories", []),
+        "AbandonedStories": [],
+        "CompletedStories": [],
+        "ActiveStoryID": None,
+        "ActiveSegmentID": None,
+        "Hidden": False,
+        "CharState": "Standing",
+        "GameMode": "Incremental",
+        "CreatedAt": timestamp,
+        "UpdatedAt": timestamp,
+        "LastPlayed": timestamp,
+    }
+
+
+def create_character_record(character_item: dict) -> bool:
+    """
+    Create character record in database.
+
+    Args:
+        character_item: Complete character record to create
+
+    Returns:
+        True if created successfully
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    try:
+        dynamo.put_item(TableName.CHARACTERS, character_item)
+        logger.info(
+            "Character record created successfully",
+            extra={"character_id": character_item["CharacterID"]},
+        )
+        return True
+    except ClientError as err:
+        logger.error(
+            "Failed to create character record",
+            extra={
+                "character_name": character_item["CharacterName"],
+                "error": str(err)
+            },
+        )
+        raise RuntimeError(f"Failed to create character record: {str(err)}")
+
+
+def add_character_to_player_list(
+    player_id: str,
+    character_name: str,
+    character_id: str,
+    timestamp: str
+) -> bool:
+    """
+    Add character to player's character list.
+
+    Args:
+        player_id: Player UUID
+        character_name: Character name
+        character_id: Character UUID
+        timestamp: ISO format timestamp
+
+    Returns:
+        True if added successfully
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    character_info = {
+        "UUID": character_id,
+        "Dead": False,
+        "GameMode": "Incremental",
+    }
+    
+    logger.info(
+        "Adding character to player list",
+        extra={
+            "player_id": player_id,
+            "character_name": character_name,
+            "character_info": character_info,
+        },
+    )
+    
+    try:
+        dynamo.update_item(
+            TableName.PLAYERS,
+            Key={"PlayerID": player_id},
+            UpdateExpression="SET CharacterList.#name = :info, UpdatedAt = :timestamp",
+            ExpressionAttributeNames={"#name": character_name},
+            ExpressionAttributeValues={
+                ":info": character_info,
+                ":timestamp": timestamp,
+            },
+        )
+        return True
+    except ClientError as err:
+        logger.error(
+            "Failed to add character to player list",
+            extra={
+                "error": str(err),
+                "character_name": character_name,
+                "player_id": player_id,
+            },
+        )
+        raise RuntimeError(f"Failed to add character to player list: {str(err)}")
+
+
+def rollback_character_creation(character_id: str) -> None:
+    """
+    Attempt to rollback a failed character creation.
+
+    Args:
+        character_id: Character UUID to delete
+    """
+    try:
+        dynamo.delete_item(TableName.CHARACTERS, Key={"CharacterID": character_id})
+        logger.info(
+            "Successfully rolled back character creation",
+            extra={"character_id": character_id}
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to rollback character creation",
+            extra={"error": str(err), "character_id": character_id},
+        )
 
 
 def create_character(player_id: str, character_name: str, archetype_name: str, archetype_data: dict) -> dict:
@@ -657,38 +976,12 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         },
     )
 
-    # Build character record
-    character_item = {
-        "CharacterID": character_id,
-        "PlayerID": player_id,
-        "CharacterName": character_name,
-        "Archetype": archetype_name,
-        "Attributes": archetype_data.get("Attributes", {}),
-        "Skills": archetype_data.get("Skills", {}),
-        "Health": archetype_data.get("Health", DEFAULT_HEALTH),
-        "MaxHealth": archetype_data.get("Health", DEFAULT_HEALTH),
-        "Essence": archetype_data.get("Essence", DEFAULT_ESSENCE),
-        "MaxEssence": archetype_data.get("Essence", DEFAULT_ESSENCE),
-        "Wounds": [],
-        "RoomID": archetype_data.get("StartRoom", 0),  # Use archetype's StartRoom or default to 0
-        "Inventory": {},  # Will be populated with starting items below
-        "Resources": {},
-        "Progress": {},  # Track story progress flags and achievements
-        # Incremental game story tracking fields
-        "AvailableStories": archetype_data.get("AvailableStories", []),  # Stories the character can start
-        "AbandonedStories": [],  # Stories started but not finished
-        "CompletedStories": [],  # Stories successfully completed
-        "ActiveStoryID": None,  # Currently active story
-        "ActiveSegmentID": None,  # Currently active segment
-        "Hidden": False,
-        "CharState": "Standing",
-        "GameMode": "Incremental",  # Mark as Incremental game character
-        "CreatedAt": timestamp,
-        "UpdatedAt": timestamp,
-        "LastPlayed": timestamp,
-    }
+    # Check name availability
+    if not check_character_name_availability(character_name):
+        raise ValueError("Character name is already taken")
 
-    # Process starting items from archetype
+    # Process starting items
+    inventory = {}
     starting_items = archetype_data.get("StartingItems", [])
     if starting_items:
         logger.info(
@@ -699,128 +992,55 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
                 "item_count": len(starting_items),
             },
         )
-
-        # Create items from prototypes and get inventory mapping
         inventory = create_items_from_prototypes(starting_items, character_id)
-
-        # Update character item with the inventory
-        character_item["Inventory"] = inventory
-
         logger.info(
             "Starting items created",
             extra={"character_id": character_id, "inventory_slots": len(inventory)},
         )
 
+    # Build character record
+    character_item = build_character_record(
+        character_id=character_id,
+        player_id=player_id,
+        character_name=character_name,
+        archetype_name=archetype_name,
+        archetype_data=archetype_data,
+        inventory=inventory,
+        timestamp=timestamp
+    )
+
+    # Create character record
     try:
-
-        # First, check if character name already exists using GSI
-        logger.info(
-            "Checking if character name is available",
-            extra={"character_name": character_name},
-        )
-
-        # Use query to check for existing character name
-        try:
-            existing_chars = dynamo.query(
-                TableName.CHARACTERS,
-                IndexName="CharacterNameIndex",
-                KeyConditionExpression="CharacterName = :name",
-                ExpressionAttributeValues={":name": character_name},
-                Limit=1,
-            )
-
-            if existing_chars:
-                logger.info(
-                    "Character name already taken",
-                    extra={"character_name": character_name, "player_id": player_id},
-                )
-                raise ValueError("Character name is already taken")
-        except ValueError:
-            # Re-raise ValueError for "already taken" message
-            raise
-        except Exception as err:
-            logger.error(
-                "Error checking character name availability",
-                extra={"error": str(err), "character_name": character_name},
-            )
-            raise RuntimeError(f"Failed to check character name availability: {str(err)}")
-
-        # Character name is available, create the character record
-        logger.info(
-            "Character name available, creating character record",
-            extra={"character_id": character_id},
-        )
-
-        try:
-            dynamo.put_item(TableName.CHARACTERS, character_item)
-        except ClientError as err:
-            logger.error(
-                "Failed to create character record",
-                extra={"character_name": character_name, "error": str(err)},
-            )
-            raise RuntimeError(f"Failed to create character record: {str(err)}")
-
-        logger.info(
-            "Character record created successfully",
-            extra={"character_id": character_id},
-        )
-
-        # Update player's character list
-        character_info = {
-            "UUID": character_id,
-            "Dead": False,
-            "GameMode": "Incremental",
-        }
-
-        logger.info(
-            "Updating player character list",
-            extra={
-                "player_id": player_id,
-                "character_name": character_name,
-                "character_info": character_info,
-            },
-        )
-
-        dynamo.update_item(
-            TableName.PLAYERS,
-            Key={"PlayerID": player_id},
-            UpdateExpression="SET CharacterList.#name = :info, UpdatedAt = :timestamp",
-            ExpressionAttributeNames={"#name": character_name},
-            ExpressionAttributeValues={
-                ":info": character_info,
-                ":timestamp": timestamp,
-            },
-        )
-
-        logger.info(
-            "Character creation completed successfully",
-            extra={
-                "character_name": character_name,
-                "character_id": character_id,
-                "player_id": player_id,
-                "archetype": archetype_name,
-            },
-        )
-        return {"character_id": character_id, "character_name": character_name, "archetype": archetype_name}
-
-    except ValueError:
-        # Re-raise ValueError for business logic errors
+        create_character_record(character_item)
+    except RuntimeError:
+        # Re-raise as character creation failed
         raise
-    except ClientError as err:
-        logger.error(
-            "Error creating character",
-            extra={
-                "error": str(err),
-                "character_name": character_name,
-                "player_id": player_id,
-            },
+
+    # Add to player's character list
+    try:
+        add_character_to_player_list(
+            player_id=player_id,
+            character_name=character_name,
+            character_id=character_id,
+            timestamp=timestamp
         )
-        # Attempt to rollback character creation if player update failed
-        try:
-            dynamo.delete_item(TableName.CHARACTERS, Key={"CharacterID": character_id})
-        except ClientError as rollback_err:
-            logger.error(
-                "Failed to rollback character creation",
-                extra={"error": str(rollback_err), "character_id": character_id},
-            )
+    except RuntimeError as err:
+        # Rollback character creation
+        rollback_character_creation(character_id)
         raise RuntimeError(f"Failed to create character: {str(err)}")
+
+    logger.info(
+        "Character creation completed successfully",
+        extra={
+            "character_name": character_name,
+            "character_id": character_id,
+            "player_id": player_id,
+            "archetype": archetype_name,
+        },
+    )
+    
+    return {
+        "character_id": character_id,
+        "character_name": character_name,
+        "archetype": archetype_name
+    }
