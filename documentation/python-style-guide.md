@@ -306,6 +306,40 @@ def calculate_damage(attacker: dict, defender: dict, weapon: dict) -> dict:
 
 ## Lambda Function Architecture
 
+### Lambda Handlers Must Never Raise Exceptions
+
+The `lambda_handler` function is the entry point for AWS Lambda and must **NEVER** raise exceptions. All exceptions must be caught and converted to proper HTTP responses. This ensures:
+
+1. **API Gateway Integration**: Unhandled exceptions result in generic 500 errors with no useful error messages
+2. **CloudWatch Logging**: Proper error logging with context before returning the response
+3. **Client Experience**: Consistent error response format that clients can parse
+4. **Monitoring**: Clear metrics on error types and frequencies
+
+```python
+# CRITICAL: lambda_handler must ALWAYS return a valid HTTP response
+def lambda_handler(event: dict, context: object) -> dict:
+    """
+    Lambda entry point - handles AWS-specific concerns only.
+    
+    IMPORTANT: This function must NEVER raise exceptions. All errors must be
+    caught and converted to HTTP responses.
+    """
+    try:
+        # All code that might raise exceptions goes here
+        player_id = extract_player_id(event)
+        body = parse_json_body(event)
+        result = business_logic_function(player_id, body)
+        return create_response(200, result)
+    except ValueError as err:
+        # Handle known business logic errors
+        logger.error("Validation error", extra={"error": str(err)})
+        return error_response(str(err), 400)
+    except Exception as err:
+        # Catch ALL other exceptions to prevent Lambda errors
+        logger.error("Unexpected error", extra={"error": str(err)}, exc_info=True)
+        return error_response("Internal server error", 500)
+```
+
 ### Separation of Concerns
 
 Lambda functions must follow this pattern:
@@ -313,27 +347,34 @@ Lambda functions must follow this pattern:
 ```python
 def lambda_handler(event: dict, context: object) -> dict:
     """Lambda entry point - handles AWS-specific concerns only."""
-    # 1. Log invocation
-    logger.info("Lambda invocation", extra={...})
-    
-    # 2. Handle CORS preflight
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
-    
-    # 3. Extract and validate authentication
-    player_id = extract_player_id(event)
-    
-    # 4. Parse request
-    body = parse_json_body(event)
-    
-    # 5. Call business logic
-    result = business_logic_function(player_id, body.get("param"))
-    
-    # 6. Return formatted response
-    if result["success"]:
-        return create_response(200, result["data"])
-    else:
-        return error_response(result["error"], result["status_code"])
+    try:
+        # 1. Log invocation
+        logger.info("Lambda invocation", extra={...})
+        
+        # 2. Handle CORS preflight
+        if event.get("httpMethod") == "OPTIONS":
+            return cors_handler.handle_preflight(event)
+        
+        # 3. Extract and validate authentication
+        player_id = extract_player_id(event)
+        
+        # 4. Parse request
+        body = parse_json_body(event)
+        
+        # 5. Call business logic
+        result = business_logic_function(player_id, body.get("param"))
+        
+        # 6. Return formatted response
+        if result["success"]:
+            return create_response(200, result["data"])
+        else:
+            return error_response(result["error"], result["status_code"])
+    except ValueError as err:
+        logger.error("Request validation failed", extra={"error": str(err)})
+        return error_response(str(err), 400)
+    except Exception as err:
+        logger.error("Lambda handler error", extra={"error": str(err)}, exc_info=True)
+        return error_response("Internal server error", 500)
 
 def business_logic_function(player_id: str, param: str) -> dict:
     """Pure business logic - no AWS dependencies."""

@@ -219,12 +219,13 @@ def business_logic_function(param1: str, param2: str) -> dict:
 ## Best Practices
 
 1. **Error Handling**: Always catch and log exceptions appropriately
-2. **Input Validation**: Validate all inputs from API Gateway
-3. **CORS**: Use the shared `apply_cors` function for consistent CORS handling
-4. **Logging**: Use the standard Python logger for CloudWatch integration
-5. **Environment Variables**: Use environment variables for configuration
-6. **IAM Permissions**: Follow least privilege principle
-7. **Response Format**: Return consistent API Gateway response format:
+2. **Lambda Handler Exception Rule**: The `lambda_handler` function must **NEVER** raise exceptions - all errors must be caught and converted to HTTP responses
+3. **Input Validation**: Validate all inputs from API Gateway
+4. **CORS**: Use the shared `apply_cors` function for consistent CORS handling
+5. **Logging**: Use the standard Python logger for CloudWatch integration
+6. **Environment Variables**: Use environment variables for configuration
+7. **IAM Permissions**: Follow least privilege principle
+8. **Response Format**: Return consistent API Gateway response format:
    ```python
    return {
        "statusCode": 200,
@@ -232,4 +233,46 @@ def business_logic_function(param1: str, param2: str) -> dict:
        "body": json.dumps({"key": "value"})
    }
    ```
-8. **Architecture Pattern**: Follow the handler/business logic separation pattern described above
+9. **Architecture Pattern**: Follow the handler/business logic separation pattern described above
+
+### Critical: Lambda Handler Exception Handling
+
+The `lambda_handler` function is the interface between AWS Lambda and your code. It must **ALWAYS** return a valid HTTP response and **NEVER** allow exceptions to escape. Here's why this is critical:
+
+```python
+def lambda_handler(event: dict, context: object) -> dict:
+    """
+    AWS Lambda entry point.
+    
+    CRITICAL: This function must NEVER raise exceptions. All exceptions must be
+    caught and converted to appropriate HTTP responses.
+    """
+    try:
+        # All Lambda logic goes inside this try block
+        logger.info("Lambda invoked", extra={
+            "request_id": context.request_id,
+            "function_name": context.function_name
+        })
+        
+        # Your code here...
+        
+        return create_response(200, {"success": True})
+        
+    except ValueError as err:
+        # Handle expected business logic errors
+        logger.error("Validation error", extra={"error": str(err)})
+        return error_response(str(err), 400)
+        
+    except Exception as err:
+        # CRITICAL: Catch ALL exceptions to prevent Lambda failures
+        logger.error("Unexpected error in Lambda handler", 
+                    extra={"error": str(err), "type": type(err).__name__},
+                    exc_info=True)
+        return error_response("Internal server error", 500)
+```
+
+**Why This Matters:**
+- **API Gateway**: Unhandled exceptions cause API Gateway to return generic 500 errors with no useful information
+- **Debugging**: Without proper error handling, debugging production issues becomes nearly impossible
+- **Monitoring**: CloudWatch alarms and metrics depend on proper error logging
+- **User Experience**: Clients need consistent, parseable error responses
