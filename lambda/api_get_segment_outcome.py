@@ -9,13 +9,15 @@ Returns the narrative text and any rewards/effects for the outcome.
 
 from botocore.exceptions import ClientError
 
-from eidolon.character import get_character_with_ownership
+from eidolon.character import get_character
+from eidolon.character import validate_character_ownership
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
 from eidolon.requests import get_query_parameter
 from eidolon.utilities import build_lambda_response
-from eidolon.utilities import extract_and_validate_player_id
+from eidolon.player import extract_player_id_from_event
+from eidolon.player import validate_player_exists
 from eidolon.utilities import handle_lambda_error
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
@@ -49,7 +51,8 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         raise ValueError("Invalid segment ID format")
 
     # Verify character ownership
-    get_character_with_ownership(character_id, player_id)
+    character = get_character(character_id)
+    validate_character_ownership(character, player_id)
 
     # Query for the completed segment
     try:
@@ -189,67 +192,81 @@ def lambda_handler(event: dict, context: object) -> dict:
     if preflight_response:
         return preflight_response
 
+    # Extract player ID from JWT
     try:
-        # Extract and validate player ID
-        player_id, auth_error = extract_and_validate_player_id(event)
-        if auth_error:
-            return auth_error
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+    
+    # Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
 
-        # Get parameters from query
-        character_id, char_error = get_query_parameter(event, "characterId", required=True)  # type: ignore
-        if char_error:
-            return build_lambda_response(400, {"error": char_error}, event)
+    # Get parameters from query
+    character_id, char_error = get_query_parameter(event, "characterId", required=True)  # type: ignore
+    if char_error:
+        return build_lambda_response(400, {"error": char_error}, event)
 
-        segment_id, seg_error = get_query_parameter(event, "segmentId", required=True)  # type: ignore
-        if seg_error:
-            return build_lambda_response(400, {"error": seg_error}, event)
+    segment_id, seg_error = get_query_parameter(event, "segmentId", required=True)  # type: ignore
+    if seg_error:
+        return build_lambda_response(400, {"error": seg_error}, event)
 
-        # Call business logic
-        try:
-            outcome_data = get_segment_outcome_business_logic(character_id, segment_id, player_id)
+    # Call business logic
+    try:
+        outcome_data = get_segment_outcome_business_logic(character_id, segment_id, player_id)
 
-            # Build response per API documentation
-            response_data = {
-                "outcome": outcome_data.get("outcome", "normal"),
-                "narrative": outcome_data.get("narrative", ""),
-                "effects": outcome_data.get("effects", {}),
-            }
+        # Build response per API documentation
+        response_data = {
+            "outcome": outcome_data.get("outcome", "normal"),
+            "narrative": outcome_data.get("narrative", ""),
+            "effects": outcome_data.get("effects", {}),
+        }
 
-            return build_lambda_response(200, response_data, event)
+        return build_lambda_response(200, response_data, event)
 
-        except ValueError as err:
-            logger.warning(
-                "Invalid request",
-                extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
-            )
-            error_msg = str(err)
-            if "not found" in error_msg.lower():
-                return build_lambda_response(
-                    404,
-                    {"error": error_msg},
-                    event,
-                )
-            elif "not yet completed" in error_msg.lower():
-                return build_lambda_response(
-                    409,
-                    {"error": error_msg},
-                    event,
-                )
+    except ValueError as err:
+        logger.warning(
+            "Invalid request",
+            extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
+        )
+        error_msg = str(err)
+        if "not found" in error_msg.lower():
             return build_lambda_response(
-                400,
+                404,
                 {"error": error_msg},
                 event,
             )
-        except RuntimeError as err:
-            logger.error(
-                "Failed to get segment outcome",
-                extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
-            )
+        elif "not yet completed" in error_msg.lower():
             return build_lambda_response(
-                500,
-                {"error": "Failed to retrieve outcome data"},
+                409,
+                {"error": error_msg},
                 event,
             )
+        return build_lambda_response(
+            400,
+            {"error": error_msg},
+            event,
+        )
+    except RuntimeError as err:
+        logger.error(
+            "Failed to get segment outcome",
+            extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
+        )
+        return build_lambda_response(
+            500,
+            {"error": "Failed to retrieve outcome data"},
+            event,
+        )
 
     except Exception as err:
         return handle_lambda_error(err, context, event)

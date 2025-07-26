@@ -8,13 +8,15 @@ import time
 
 from botocore.exceptions import ClientError
 
-from eidolon.character import get_character_with_ownership
+from eidolon.character import get_character
+from eidolon.character import validate_character_ownership
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
+from eidolon.player import extract_player_id_from_event
+from eidolon.player import validate_player_exists
 from eidolon.requests import get_query_parameter
 from eidolon.utilities import build_lambda_response
-from eidolon.utilities import extract_and_validate_player_id
 from eidolon.utilities import handle_lambda_error
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
@@ -43,7 +45,8 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
         raise ValueError("Invalid character ID format")
 
     # Verify character ownership
-    get_character_with_ownership(character_id, player_id)
+    character = get_character(character_id)
+    validate_character_ownership(character, player_id)
 
     try:
         # Get active segment for character using GSI query
@@ -195,52 +198,68 @@ def lambda_handler(event: dict, context: object) -> dict:
         return preflight_response
 
     try:
-        # Extract and validate player ID
-        player_id, auth_error = extract_and_validate_player_id(event)
-        if auth_error:
-            return auth_error
+        # Extract player ID from JWT
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+    
+    # Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
 
-        # Get character ID from query parameters
+    # Get character ID from query parameters
+    try:
         character_id, param_error = get_query_parameter(event, "characterId", required=True)  # type: ignore
         if param_error:
             return build_lambda_response(400, {"error": param_error}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
 
-        # Call business logic
-        try:
-            response_data = get_current_story_business_logic(character_id, player_id)
-            return build_lambda_response(200, response_data, event)
-        except ValueError as err:
-            logger.warning(
-                "Invalid request or not found",
-                extra={"character_id": character_id, "error": str(err)},
-            )
-            if "no active story" in str(err).lower():
-                return build_lambda_response(
-                    404,
-                    {"error": "No active story found"},
-                    event,
-                )
-            elif "not found" in str(err).lower():
-                return build_lambda_response(
-                    404,
-                    {"error": "Character not found"},
-                    event,
-                )
+    # Call business logic
+    try:
+        response_data = get_current_story_business_logic(character_id, player_id)
+        return build_lambda_response(200, response_data, event)
+    except ValueError as err:
+        logger.warning(
+            "Invalid request or not found",
+            extra={"character_id": character_id, "error": str(err)},
+        )
+        if "no active story" in str(err).lower():
             return build_lambda_response(
-                400,
-                {"error": str(err)},
+                404,
+                {"error": "No active story found"},
                 event,
             )
-        except RuntimeError as err:
-            logger.error(
-                "Failed to get current story",
-                extra={"character_id": character_id, "error": str(err)},
-            )
+        elif "not found" in str(err).lower():
             return build_lambda_response(
-                500,
-                {"error": "Failed to retrieve story data"},
+                404,
+                {"error": "Character not found"},
                 event,
             )
-
+        return build_lambda_response(
+            400,
+            {"error": str(err)},
+            event,
+        )
+    except RuntimeError as err:
+        logger.error(
+            "Failed to get current story",
+            extra={"character_id": character_id, "error": str(err)},
+        )
+        return build_lambda_response(
+            500,
+            {"error": "Failed to retrieve story data"},
+            event,
+        )
     except Exception as err:
         return handle_lambda_error(err, context, event)

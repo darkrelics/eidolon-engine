@@ -7,7 +7,9 @@ Lambda function to abandon an active story.
 Updates character state, marks active segments as abandoned, and updates history.
 """
 
-from eidolon.character import get_character_with_ownership, reset_character_game_mode
+from eidolon.character import get_character
+from eidolon.character import reset_character_game_mode
+from eidolon.character import validate_character_ownership
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event
@@ -33,7 +35,8 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
         ValueError: If character not found, not owned, or not in a story
         RuntimeError: If database operations fail
     """
-    character = get_character_with_ownership(character_id, player_id)
+    character = get_character(character_id)
+    validate_character_ownership(character, player_id)
 
     if character.get("GameMode", "None") != "Incremental":
         logger.warning(

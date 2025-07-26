@@ -8,7 +8,8 @@ Returns the full character data including active segments if any.
 """
 
 from eidolon.character import get_active_segment_for_character
-from eidolon.character import get_character_with_ownership
+from eidolon.character import get_character
+from eidolon.character import validate_character_ownership
 from eidolon.dynamo import decimal_to_float
 from eidolon.items import get_inventory_details
 from eidolon.logger import get_logger
@@ -47,9 +48,10 @@ def get_character_business_logic(character_id: str, player_id: str) -> dict:
     if not validate_uuid(character_id):
         return {"success": False, "error": "Invalid character ID format", "status_code": 400}
 
-    # Get character with ownership check
+    # Get character and validate ownership
     try:
-        character = get_character_with_ownership(character_id, player_id)
+        character = get_character(character_id)
+        validate_character_ownership(character, player_id)
     except ValueError as err:
         if "not found" in str(err).lower():
             return {"success": False, "error": "Character not found", "status_code": 404}

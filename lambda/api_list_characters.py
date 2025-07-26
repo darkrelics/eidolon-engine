@@ -13,7 +13,8 @@ from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
 from eidolon.utilities import build_lambda_response
-from eidolon.utilities import extract_and_validate_player_id
+from eidolon.player import extract_player_id_from_event
+from eidolon.player import validate_player_exists
 from eidolon.utilities import handle_lambda_error
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
@@ -114,36 +115,49 @@ def lambda_handler(event: dict, context: object) -> dict:
     if preflight_response:
         return preflight_response
 
+    # Extract player ID from JWT
     try:
-        # Extract and validate player ID
-        player_id, auth_error = extract_and_validate_player_id(event)
-        if auth_error:
-            return auth_error
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+    
+    # Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
 
-        # Call business logic
-        try:
-            response_data = list_characters_business_logic(player_id)
-            return build_lambda_response(200, response_data, event)
-        except ValueError as err:
-            logger.warning(
-                "Player not found",
-                extra={"player_id": player_id, "error": str(err)},
-            )
-            return build_lambda_response(
-                404,
-                {"error": "Player not found"},
-                event,
-            )
-        except RuntimeError as err:
-            logger.error(
-                "Failed to list characters",
-                extra={"player_id": player_id, "error": str(err)},
-            )
-            return build_lambda_response(
-                500,
-                {"error": "Failed to retrieve character list"},
-                event,
-            )
-
+    # Call business logic
+    try:
+        response_data = list_characters_business_logic(player_id)
+        return build_lambda_response(200, response_data, event)
+    except ValueError as err:
+        logger.warning(
+            "Player not found",
+            extra={"player_id": player_id, "error": str(err)},
+        )
+        return build_lambda_response(
+            404,
+            {"error": "Player not found"},
+            event,
+        )
+    except RuntimeError as err:
+        logger.error(
+            "Failed to list characters",
+            extra={"player_id": player_id, "error": str(err)},
+        )
+        return build_lambda_response(
+            500,
+            {"error": "Failed to retrieve character list"},
+            event,
+        )
     except Exception as err:
         return handle_lambda_error(err, context, event)

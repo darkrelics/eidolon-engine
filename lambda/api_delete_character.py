@@ -8,7 +8,8 @@ Ensures the character belongs to the player before deletion.
 """
 
 from eidolon.character import delete_character
-from eidolon.character import get_character_with_ownership
+from eidolon.character import get_character
+from eidolon.character import validate_character_ownership
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event
@@ -43,7 +44,8 @@ def handle_character_deletion(player_id: str, character_id: str) -> dict:
         RuntimeError: If database operations fail
     """
     # Verify ownership
-    character = get_character_with_ownership(character_id, player_id)
+    character = get_character(character_id)
+    validate_character_ownership(character, player_id)
     character_name = character.get("CharacterName", "Unknown")
 
     logger.info(

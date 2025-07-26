@@ -144,19 +144,18 @@ def check_character_limit(player_id: str) -> dict:
         raise RuntimeError(f"Database error checking character limit: {str(err)}")
 
 
-def get_character_with_ownership(character_id: str, player_id: str) -> dict:
+def get_character(character_id: str) -> dict:
     """
-    Get character by ID and verify ownership.
+    Get character by ID.
 
     Args:
         character_id: Character UUID
-        player_id: Player ID for ownership verification
 
     Returns:
         Character dict
 
     Raises:
-        ValueError: If character ID invalid, not found, or not owned by player
+        ValueError: If character ID invalid or not found
         RuntimeError: If database error occurs
     """
     if not validate_uuid(character_id):
@@ -177,18 +176,6 @@ def get_character_with_ownership(character_id: str, player_id: str) -> dict:
         )
         raise RuntimeError(f"Failed to retrieve character: {str(err)}")
 
-    character_owner = character.get("PlayerID")
-    if character_owner != player_id:
-        logger.warning(
-            "Character ownership mismatch",
-            extra={
-                "character_id": character_id,
-                "player_id": player_id,
-                "character_owner": character_owner,
-            },
-        )
-        raise ValueError("Character not found")
-
     logger.info(
         "Character retrieved successfully",
         extra={
@@ -198,6 +185,55 @@ def get_character_with_ownership(character_id: str, player_id: str) -> dict:
         },
     )
 
+    return character
+
+
+def validate_character_ownership(character: dict, player_id: str) -> None:
+    """
+    Validate that character is owned by player.
+
+    Args:
+        character: Character dict
+        player_id: Player ID for ownership verification
+
+    Raises:
+        ValueError: If character not owned by player
+    """
+    character_owner = character.get("PlayerID")
+    character_id = character.get("CharacterID")
+    
+    if character_owner != player_id:
+        logger.warning(
+            "Character ownership mismatch",
+            extra={
+                "character_id": character_id,
+                "player_id": player_id,
+                "character_owner": character_owner,
+            },
+        )
+        raise ValueError("Character not found")  # Generic message for security
+
+
+def get_character_with_ownership(character_id: str, player_id: str) -> dict:
+    """
+    Get character by ID and verify ownership.
+    
+    This function combines get_character and validate_character_ownership
+    for backward compatibility.
+
+    Args:
+        character_id: Character UUID
+        player_id: Player ID for ownership verification
+
+    Returns:
+        Character dict
+
+    Raises:
+        ValueError: If character ID invalid, not found, or not owned by player
+        RuntimeError: If database error occurs
+    """
+    character = get_character(character_id)
+    validate_character_ownership(character, player_id)
     return character
 
 
