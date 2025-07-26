@@ -1,7 +1,7 @@
 """
 Eidolon Engine Lua Script Deployment
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
 Deploy Lua scripts to S3 for use by Eidolon Engine server instances.
 """

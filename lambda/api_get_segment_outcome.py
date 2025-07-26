@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
 Lambda function to get the outcome of a completed segment.
 Returns the narrative text and any rewards/effects for the outcome.

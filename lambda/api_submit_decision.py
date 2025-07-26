@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
 Lambda function to submit a decision for a story segment.
 Updates the active segment with the player's choice and returns the next segment.

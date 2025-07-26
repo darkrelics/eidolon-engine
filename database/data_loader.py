@@ -1,7 +1,7 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
 Utility to load game data from JSON files and store it in DynamoDB tables.
 

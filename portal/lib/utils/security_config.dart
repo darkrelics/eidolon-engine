@@ -1,6 +1,6 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
+// Copyright 2024‑2025 Jason E. Robinson
 
 // This file contains security configurations for the web application
 import 'dart:convert';

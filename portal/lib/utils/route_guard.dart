@@ -1,6 +1,6 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
+// Copyright 2024‑2025 Jason E. Robinson
 
 /// Route guard utility for protecting sensitive routes
 class RouteGuard {

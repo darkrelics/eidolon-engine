@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Player Deletion Handler
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
 Lambda function to handle complete player deletion including all associated
 game data from both MUD and Incremental game tables. This ensures GDPR

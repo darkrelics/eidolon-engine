@@ -1,7 +1,7 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
 Lambda function to cache and serve player-available archetypes.
 The function loads all archetypes on cold start and filters for Player=true.

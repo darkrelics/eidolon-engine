@@ -1,7 +1,7 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
 Lambda function to list character names for an authenticated player.
 Returns only character names and death status from the player table.

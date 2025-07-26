@@ -1,7 +1,7 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
 Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.

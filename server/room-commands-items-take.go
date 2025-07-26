@@ -1,7 +1,7 @@
 /*
 Eidolon Engine - Take From Container Command
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
 */
 
