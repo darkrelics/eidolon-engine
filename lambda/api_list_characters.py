@@ -7,6 +7,8 @@ Lambda function to list character names for an authenticated player.
 Returns only character names and death status from the player table.
 """
 
+from botocore.exceptions import ClientError
+
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
@@ -20,7 +22,7 @@ from eidolon.utilities import log_lambda_invocation
 logger = get_logger(__name__)
 
 
-def list_characters_business_logic(player_id: str) -> tuple:
+def list_characters_business_logic(player_id: str) -> dict:
     """
     Business logic for listing player's characters.
 
@@ -28,16 +30,30 @@ def list_characters_business_logic(player_id: str) -> tuple:
         player_id: Authenticated player ID
 
     Returns:
-        Tuple of (response_data, error_message)
-        If successful: (data_dict, None)
-        If failed: (None, error_message_string)
+        Dict with characters list
+
+    Raises:
+        ValueError: If player not found
+        RuntimeError: If database operations fail
     """
     # Get player data from players table
-    player_data = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
+    try:
+        player_data = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
+    except ClientError as err:
+        logger.error(
+            "Failed to get player data",
+            extra={
+                "error": str(err),
+                "player_id": player_id,
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to retrieve player data: {str(err)}")
 
     if not player_data:
         logger.warning("Player not found in database", extra={"player_id": player_id})
-        return None, "Player not found"
+        raise ValueError("Player not found")
 
     character_list = player_data.get("CharacterList", {})
     logger.info(
@@ -76,10 +92,10 @@ def list_characters_business_logic(player_id: str) -> tuple:
         },
     )
 
-    return {"characters": characters}, None
+    return {"characters": characters}
 
 
-def lambda_handler(event: dict, context: object):
+def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler for listing player characters.
 
@@ -88,7 +104,11 @@ def lambda_handler(event: dict, context: object):
         context: Lambda context
 
     Returns:
-        API Gateway response
+        API Gateway response with:
+            200: List of characters
+            404: Player not found
+            401: Unauthorized
+            500: Internal error
     """
     # Log invocation
     log_lambda_invocation(context, event)
@@ -105,13 +125,29 @@ def lambda_handler(event: dict, context: object):
             return auth_error
 
         # Call business logic
-        response_data, error_message = list_characters_business_logic(player_id)
-
-        if error_message:
-            return build_lambda_response(404, {"error": error_message}, event)
-
-        # Return success response
-        return build_lambda_response(200, response_data, event)
+        try:
+            response_data = list_characters_business_logic(player_id)
+            return build_lambda_response(200, response_data, event)
+        except ValueError as err:
+            logger.warning(
+                "Player not found",
+                extra={"player_id": player_id, "error": str(err)},
+            )
+            return build_lambda_response(
+                404,
+                {"error": "Player not found"},
+                event,
+            )
+        except RuntimeError as err:
+            logger.error(
+                "Failed to list characters",
+                extra={"player_id": player_id, "error": str(err)},
+            )
+            return build_lambda_response(
+                500,
+                {"error": "Failed to retrieve character list"},
+                event,
+            )
 
     except Exception as err:
         return handle_lambda_error(err, context, event)

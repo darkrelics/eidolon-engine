@@ -81,41 +81,57 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
         }
 
     # Step 3: Get active story segment
-    segment_result = get_active_story_segment(character_id)
-    if not segment_result["success"]:
+    try:
+        active_segment = get_active_story_segment(character_id)
+        active_segment_id = active_segment.get("ActiveSegmentID")
+        story_id = active_segment.get("StoryID")
+        story_title = active_segment.get("StoryTitle", "Unknown Story")
+    except ValueError as err:
+        logger.warning(
+            "No active story found",
+            extra={"character_id": character_id, "error": str(err)},
+        )
         return {
             "success": False,
-            "error": segment_result["error"],
+            "error": "No active story found",
             "statusCode": 404,
         }
-
-    active_segment = segment_result["data"]
-    active_segment_id = active_segment.get("ActiveSegmentID")
-    story_id = active_segment.get("StoryID")
-    story_title = active_segment.get("StoryTitle", "Unknown Story")
+    except RuntimeError as err:
+        logger.error(
+            "Failed to get active story segment",
+            extra={"character_id": character_id, "error": str(err)},
+        )
+        return {
+            "success": False,
+            "error": "Failed to get active story segment",
+            "statusCode": 500,
+        }
 
     # Step 4: Add story to abandoned list
-    abandoned_list_result = add_story_to_abandoned_list(character_id, story_id)
-    if not abandoned_list_result["success"]:
+    try:
+        add_story_to_abandoned_list(character_id, story_id) # type: ignore
+    except (ValueError, RuntimeError) as err:
         logger.error(
             "Failed to add story to abandoned list but continuing",
-            extra={"character_id": character_id, "story_id": story_id},
+            extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
         )
 
     # Step 5: Mark segment as abandoned
-    abandon_result = mark_segment_as_abandoned(active_segment_id)
-    if not abandon_result["success"]:
+    try:
+        mark_segment_as_abandoned(active_segment_id) # type: ignore
+    except (ValueError, RuntimeError) as err:
         logger.error(
             "Failed to mark segment as abandoned but continuing",
-            extra={"active_segment_id": active_segment_id},
+            extra={"active_segment_id": active_segment_id, "error": str(err)},
         )
 
     # Step 6: Record in history
-    history_result = record_story_abandonment(character_id, story_id)
-    if not history_result["success"]:
+    try:
+        record_story_abandonment(character_id, story_id) # type: ignore
+    except (ValueError, RuntimeError) as err:
         logger.error(
             "Failed to update history but continuing",
-            extra={"character_id": character_id, "story_id": story_id},
+            extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
         )
 
     # Step 7: Reset character game mode

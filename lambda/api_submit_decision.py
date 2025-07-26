@@ -7,60 +7,78 @@ Lambda function to submit a decision for a story segment.
 Updates the active segment with the player's choice and returns the next segment.
 """
 
-from eidolon.cors import cors_handler
+import time
+
+from botocore.exceptions import ClientError
+
+from eidolon.character import get_character_with_ownership
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
 from eidolon.requests import get_required_field
 from eidolon.requests import parse_json_body
-from eidolon.responses import create_response
-from eidolon.responses import error_response
-from eidolon.responses import not_found_response
+from eidolon.utilities import build_lambda_response
+from eidolon.utilities import extract_and_validate_player_id
+from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import handle_preflight_if_options
+from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
 
 
-def get_active_segment_for_character(character_id: str, player_id: str) -> dict:
+def get_active_decision_segment(character_id: str, player_id: str) -> dict:
     """
-    Get active segment for a character and verify ownership.
+    Get active decision segment for a character and verify ownership.
 
     Args:
         character_id: Character UUID
         player_id: Cognito user ID for ownership verification
 
     Returns:
-        Active segment data or None if not found or not owned by player
+        Active segment data
+
+    Raises:
+        ValueError: If no active decision segment found or validation fails
+        RuntimeError: If database query fails
     """
-    # Query by CharacterID to find active segment
-    items = dynamo.query(
-        TableName.ACTIVE_SEGMENTS,
-        IndexName="CharacterID-index",
-        KeyConditionExpression="CharacterID = :cid",
-        FilterExpression="PlayerID = :pid AND #status = :status AND SegmentType = :type",
-        ExpressionAttributeNames={"#status": "Status"},
-        ExpressionAttributeValues={
-            ":cid": character_id,
-            ":pid": player_id,
-            ":status": "active",
-            ":type": "decision",
-        },
-    )
+    try:
+        # Query by CharacterID to find active segment
+        items = dynamo.query(
+            TableName.ACTIVE_SEGMENTS,
+            IndexName="CharacterID-index",
+            KeyConditionExpression="CharacterID = :cid",
+            FilterExpression="PlayerID = :pid AND #status = :status AND SegmentType = :type",
+            ExpressionAttributeNames={"#status": "Status"},
+            ExpressionAttributeValues={
+                ":cid": character_id,
+                ":pid": player_id,
+                ":status": "active",
+                ":type": "decision",
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to query active segments",
+            extra={
+                "error": str(err),
+                "character_id": character_id,
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to query active segments: {str(err)}")
+
     if not items:
         logger.warning(
             "No active decision segment found", extra={"character_id": character_id}
         )
-        return {}
+        raise ValueError("No active decision segment found")
 
     active_segment = items[0]
 
-    if not active_segment:
-        logger.warning("Active segment not found", extra={"character_id": character_id})
-        return {}
-
-    # Verify ownership
+    # Verify ownership (should already be verified by query)
     if active_segment.get("PlayerID") != player_id:
         logger.warning(
             "Active segment ownership mismatch",
@@ -69,9 +87,9 @@ def get_active_segment_for_character(character_id: str, player_id: str) -> dict:
                 "player_id": player_id,
             },
         )
-        return {}
+        raise ValueError("Active segment not found")
 
-    # Verify it's still active
+    # Verify it's still active (should already be verified by query)
     if active_segment.get("Status") != "active":
         logger.warning(
             "Segment not active",
@@ -80,9 +98,9 @@ def get_active_segment_for_character(character_id: str, player_id: str) -> dict:
                 "status": active_segment.get("Status"),
             },
         )
-        return {}
+        raise ValueError("Segment not active")
 
-    # Verify it's a decision segment
+    # Verify it's a decision segment (should already be verified by query)
     if active_segment.get("SegmentType") != "decision":
         logger.warning(
             "Not a decision segment",
@@ -91,12 +109,12 @@ def get_active_segment_for_character(character_id: str, player_id: str) -> dict:
                 "type": active_segment.get("SegmentType"),
             },
         )
-        return {}
+        raise ValueError("Not a decision segment")
 
     return active_segment
 
 
-def validate_decision(active_segment: dict, decision_id: str) -> bool:
+def validate_decision(active_segment: dict, decision_id: str) -> None:
     """
     Validate that the decision is valid for this segment.
 
@@ -104,11 +122,12 @@ def validate_decision(active_segment: dict, decision_id: str) -> bool:
         active_segment: Active segment data
         decision_id: Decision ID submitted by player
 
-    Returns:
-        True if valid, False otherwise
+    Raises:
+        ValueError: If decision is not valid for this segment
     """
     decision_options = active_segment.get("DecisionOptions", {})
-    return decision_id in decision_options
+    if decision_id not in decision_options:
+        raise ValueError("Invalid decision option")
 
 
 def update_active_segment_decision(active_segment_id: str, decision_id: str) -> dict:
@@ -121,18 +140,33 @@ def update_active_segment_decision(active_segment_id: str, decision_id: str) -> 
 
     Returns:
         Updated active segment data
-    """
-    # Update the decision field
-    dynamo.update_item(
-        TableName.ACTIVE_SEGMENTS,
-        Key={"ActiveSegmentID": active_segment_id},
-        UpdateExpression="SET #decision = :decision, #status = :status",
-        ExpressionAttributeNames={"#decision": "Decision", "#status": "Status"},
-        ExpressionAttributeValues={":decision": decision_id, ":status": "completed"},
-    )
 
-    # Get updated item
-    return dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})  # type: ignore
+    Raises:
+        RuntimeError: If database update fails
+    """
+    try:
+        # Update the decision field
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET #decision = :decision, #status = :status",
+            ExpressionAttributeNames={"#decision": "Decision", "#status": "Status"},
+            ExpressionAttributeValues={":decision": decision_id, ":status": "completed"},
+        )
+
+        # Get updated item
+        return dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})  # type: ignore
+    except ClientError as err:
+        logger.error(
+            "Failed to update active segment",
+            extra={
+                "active_segment_id": active_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to update active segment: {str(err)}")
 
 
 def get_next_segment_id(active_segment: dict, decision_id: str) -> str:
@@ -150,6 +184,99 @@ def get_next_segment_id(active_segment: dict, decision_id: str) -> str:
     return decision_options.get(decision_id)
 
 
+def submit_decision_business_logic(character_id: str, decision_id: str, player_id: str) -> dict:
+    """
+    Business logic for submitting a decision.
+
+    Args:
+        character_id: Character UUID
+        decision_id: Decision ID chosen by player
+        player_id: Authenticated player ID
+
+    Returns:
+        Response data with accepted status and optional next segment time
+
+    Raises:
+        ValueError: If validation fails
+        RuntimeError: If database operations fail
+    """
+    # Validate character ID format
+    if not validate_uuid(character_id):
+        raise ValueError("Invalid character ID format")
+
+    # Verify character ownership
+    get_character_with_ownership(character_id, player_id)
+
+    logger.info(
+        "Submitting decision",
+        extra={"character_id": character_id, "decision": decision_id},
+    )
+
+    # Get active segment for character and verify ownership
+    active_segment = get_active_decision_segment(character_id, player_id)
+    active_segment_id = active_segment.get("ActiveSegmentID")
+
+    # Check if decision was already made
+    if active_segment.get("Decision"):
+        logger.warning(
+            "Decision already submitted",
+            extra={
+                "active_segment_id": active_segment_id,
+                "existing_decision": active_segment.get("Decision"),
+            },
+        )
+        raise ValueError("Decision already submitted")
+
+    # Validate decision is valid for this segment
+    validate_decision(active_segment, decision_id)
+
+    # Update active segment with decision
+    update_active_segment_decision(active_segment_id, decision_id)  # type: ignore
+
+    # Get next segment ID based on decision
+    next_segment_id = get_next_segment_id(active_segment, decision_id)
+
+    # Build response per documentation
+    response_data: dict = {
+        "accepted": True,
+    }
+
+    if next_segment_id:
+        try:
+            # Calculate next segment completion time
+            story_id = active_segment.get("StoryID")
+            next_segment = dynamo.get_item(
+                TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id}
+            )
+
+            if next_segment:
+                # Next segment will start after processing completes
+                # Add segment duration to get completion time
+                duration = int(next_segment.get("SegmentDuration", 300))
+                response_data["nextSegmentTime"] = int(time.time()) + duration
+        except ClientError as err:
+            logger.error(
+                "Failed to get next segment",
+                extra={
+                    "story_id": story_id, # type: ignore
+                    "segment_id": next_segment_id,
+                    "error": str(err),
+                },
+            )
+            # Continue without next segment time
+
+    logger.info(
+        "Decision submitted successfully",
+        extra={
+            "active_segment_id": active_segment_id,
+            "decision_id": decision_id,
+            "next_segment_id": next_segment_id,
+        },
+    )
+
+    return response_data
+
+
 def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to submit a decision for a story segment.
@@ -161,147 +288,55 @@ def lambda_handler(event: dict, context: object) -> dict:
     Returns:
         API Gateway Lambda proxy response
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    # Handle preflight requests
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
     try:
-        # Extract player ID from authorizer
-        player_id, auth_error = extract_player_id(event)
+        # Extract and validate player ID
+        player_id, auth_error = extract_and_validate_player_id(event)
         if auth_error:
-            logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(
-                error_response(auth_error, status_code=401), event
-            )
-
-        logger.info("Player authenticated", extra={"player_id": player_id})
+            return auth_error
 
         # Parse request body
         body, parse_error = parse_json_body(event)
         if parse_error:
-            return cors_handler.add_cors_headers(parse_error, event)
+            return build_lambda_response(400, {"error": str(parse_error)}, event)
 
         # Get required fields
         character_id, char_error = get_required_field(body, "characterId")
         if char_error:
-            return cors_handler.add_cors_headers(
-                error_response(char_error, status_code=400), event
-            )
+            return build_lambda_response(400, {"error": char_error}, event)
 
         decision_id, decision_error = get_required_field(body, "decision")
         if decision_error:
-            return cors_handler.add_cors_headers(
-                error_response(decision_error, status_code=400), event
-            )
+            return build_lambda_response(400, {"error": decision_error}, event)
 
-        # Validate UUIDs
-        if character_id and not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(
-                error_response("Invalid character ID format", status_code=400), event
-            )
-
-        logger.info(
-            "Submitting decision",
-            extra={"character_id": character_id, "decision": decision_id},
-        )
-
-        # Get active segment for character and verify ownership
-        active_segment = get_active_segment_for_character(character_id, player_id)  # type: ignore
-        if not active_segment:
-            return cors_handler.add_cors_headers(
-                not_found_response("Active segment"), event
-            )
-
-        active_segment_id = active_segment.get("ActiveSegmentID")
-
-        # Check if decision was already made
-        if active_segment.get("Decision"):
+        # Call business logic
+        try:
+            response_data = submit_decision_business_logic(character_id, decision_id, player_id)
+            return build_lambda_response(200, response_data, event)
+        except ValueError as err:
             logger.warning(
-                "Decision already submitted",
-                extra={
-                    "active_segment_id": active_segment_id,
-                    "existing_decision": active_segment.get("Decision"),
-                },
+                "Invalid request",
+                extra={"character_id": character_id, "decision_id": decision_id, "error": str(err)},
             )
-            return cors_handler.add_cors_headers(
-                error_response("Decision already submitted", status_code=409), event
+            error_msg = str(err)
+            if "not found" in error_msg.lower():
+                return build_lambda_response(404, {"error": error_msg}, event)
+            elif "already submitted" in error_msg.lower():
+                return build_lambda_response(409, {"error": error_msg}, event)
+            return build_lambda_response(400, {"error": error_msg}, event)
+        except RuntimeError as err:
+            logger.error(
+                "Failed to submit decision",
+                extra={"character_id": character_id, "decision_id": decision_id, "error": str(err)},
             )
-
-        # Validate decision is valid for this segment
-        if not validate_decision(active_segment, decision_id):  # type: ignore
-            logger.warning(
-                "Invalid decision for segment",
-                extra={
-                    "active_segment_id": active_segment_id,
-                    "decision_id": decision_id,
-                },
-            )
-            return cors_handler.add_cors_headers(
-                error_response("Invalid decision option", status_code=400), event
-            )
-
-        # Update active segment with decision
-        update_active_segment_decision(active_segment_id, decision_id)  # type: ignore
-
-        # Get next segment ID based on decision
-        next_segment_id = get_next_segment_id(active_segment, decision_id)  # type: ignore
-
-        # Build response per documentation
-        response_data = {
-            "accepted": True,
-            "nextSegmentTime": None,
-        }
-
-        if next_segment_id:
-            # Calculate next segment completion time
-            story_id = active_segment.get("StoryID")
-            next_segment = dynamo.get_item(
-                TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id}
-            )
-
-            if next_segment:
-                # Next segment will start after processing completes
-                # Add segment duration to get completion time
-                duration = int(next_segment.get("SegmentDuration", 300))
-                import time
-
-                response_data["nextSegmentTime"] = int(time.time()) + duration
-
-        # Remove nextSegmentTime if not set
-        if response_data["nextSegmentTime"] is None:
-            del response_data["nextSegmentTime"]
-
-        logger.info(
-            "Decision submitted successfully",
-            extra={
-                "status_code": 200,
-                "active_segment_id": active_segment_id,
-                "decision_id": decision_id,
-                "next_segment_id": next_segment_id,
-            },
-        )
-
-        return cors_handler.add_cors_headers(create_response(200, response_data), event)
+            return build_lambda_response(500, {"error": "Failed to submit decision"}, event)
 
     except Exception as err:
-        logger.error(
-            "Unexpected error in lambda_handler",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
-        )
+        return handle_lambda_error(err, context, event)

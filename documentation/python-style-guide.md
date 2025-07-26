@@ -28,8 +28,9 @@ import logging
 ### Import Organization
 
 Organize imports in three groups, separated by blank lines:
+
 1. Standard library imports
-2. Third-party library imports  
+2. Third-party library imports
 3. Local application imports
 
 ```python
@@ -170,7 +171,7 @@ For functions in the eidolon library, raise exceptions rather than returning err
 def get_character(character_id: str) -> dict:
     """
     Get character by ID.
-    
+
     Raises:
         ValueError: If character not found
         RuntimeError: If database error occurs
@@ -219,14 +220,69 @@ try:
     character_id = event.get("characterId")
     if not character_id:
         return error_response("Missing characterId", 400)
-    
+
     character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
     if not character:
         return error_response("Character not found", 404)
-    
+
     # ... more code ...
 except Exception as err:
     return error_response("Error", 500)
+```
+
+### Exception Variable Naming
+
+All exceptions must use the variable name `err` and it should be explicitly used in error messages and logging:
+
+```python
+# Good - always use 'err' as the exception variable
+try:
+    result = dynamo.get_item(...)
+except ClientError as err:
+    logger.error("Database operation failed", extra={"error": str(err)})
+    raise RuntimeError(f"Failed to get item: {str(err)}")
+
+# Bad - using other variable names
+try:
+    result = dynamo.get_item(...)
+except ClientError as e:  # Don't use 'e'
+    raise RuntimeError(f"Failed: {e}")
+except Exception as ex:  # Don't use 'ex'
+    logger.error(f"Error: {ex}")
+```
+
+### Avoid Nested Try/Except Blocks
+
+Do not nest try/except blocks. Instead, use separate functions or sequential try blocks:
+
+```python
+# Bad - nested try/except
+try:
+    data = get_data()
+    try:
+        result = process_data(data)
+    except ValueError as err:
+        logger.error("Processing failed", extra={"error": str(err)})
+except ClientError as err:
+    logger.error("Database failed", extra={"error": str(err)})
+
+# Good - sequential try blocks
+try:
+    data = get_data()
+except ClientError as err:
+    logger.error("Database failed", extra={"error": str(err)})
+    raise RuntimeError(f"Failed to get data: {str(err)}")
+
+try:
+    result = process_data(data)
+except ValueError as err:
+    logger.error("Processing failed", extra={"error": str(err)})
+    raise RuntimeError(f"Failed to process: {str(err)}")
+
+# Good - separate functions
+def get_and_process_data() -> dict:
+    data = get_data_with_error_handling()
+    return process_data_with_error_handling(data)
 ```
 
 ### One Exception Type Per Except Block
@@ -268,6 +324,7 @@ except Exception as err:
 ```
 
 This approach ensures:
+
 - Each error type gets appropriate handling
 - Error messages are specific and helpful
 - Unexpected exceptions aren't silently caught
@@ -283,21 +340,21 @@ Use Google-style docstrings for all functions:
 def calculate_damage(attacker: dict, defender: dict, weapon: dict) -> dict:
     """
     Calculate combat damage between attacker and defender.
-    
+
     Uses the MUD combat system rules to determine damage dealt,
     considering attributes, skills, and weapon properties.
-    
+
     Args:
         attacker: Character dict with combat stats
         defender: Character dict with defense stats
         weapon: Weapon item dict with damage properties
-        
+
     Returns:
         Dict containing:
             - damage: int - Amount of damage dealt
             - damage_type: str - Type of damage (bashing/lethal/aggravated)
             - critical: bool - Whether this was a critical hit
-            
+
     Raises:
         ValueError: If required stats are missing
         RuntimeError: If calculation fails
@@ -320,7 +377,7 @@ The `lambda_handler` function is the entry point for AWS Lambda and must **NEVER
 def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda entry point - handles AWS-specific concerns only.
-    
+
     IMPORTANT: This function must NEVER raise exceptions. All errors must be
     caught and converted to HTTP responses.
     """
@@ -350,20 +407,20 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         # 1. Log invocation
         logger.info("Lambda invocation", extra={...})
-        
+
         # 2. Handle CORS preflight
         if event.get("httpMethod") == "OPTIONS":
             return cors_handler.handle_preflight(event)
-        
+
         # 3. Extract and validate authentication
         player_id = extract_player_id(event)
-        
+
         # 4. Parse request
         body = parse_json_body(event)
-        
+
         # 5. Call business logic
         result = business_logic_function(player_id, body.get("param"))
-        
+
         # 6. Return formatted response
         if result["success"]:
             return create_response(200, result["data"])
@@ -382,10 +439,10 @@ def business_logic_function(player_id: str, param: str) -> dict:
         # Validate inputs
         if not param:
             return {"success": False, "error": "Missing param", "status_code": 400}
-        
+
         # Call eidolon library functions
         data = some_eidolon_function(param)
-        
+
         return {"success": True, "data": data}
     except ValueError as err:
         return {"success": False, "error": str(err), "status_code": 400}
@@ -432,6 +489,49 @@ class CombatSystem:
 ```
 
 ## Code Organization
+
+### Module Length
+
+Modules should be kept concise and focused. Keep modules under 300 lines to maintain readability and encourage proper separation of concerns.
+
+### Private Methods and Functions
+
+Do not use private methods or functions (those starting with underscore) in Python. Python's privacy model is based on convention rather than enforcement, making private methods pointless. Instead, use clear documentation to indicate internal interfaces.
+
+```python
+# Bad - don't use private methods
+class Character:
+    def _calculate_damage(self):  # Don't do this
+        pass
+
+# Good - use regular methods with clear documentation
+class Character:
+    def calculate_damage(self):
+        """Internal method for damage calculation."""
+        pass
+```
+
+### Methods vs Functions
+
+Only create methods if they are tightly coupled to the class. If a function doesn't need access to instance state, make it a module-level function instead.
+
+```python
+# Good - function doesn't need instance state
+def calculate_combat_damage(attacker_stats: dict, defender_stats: dict) -> int:
+    """Calculate damage between two combatants."""
+    pass
+
+class Character:
+    def take_damage(self, amount: int) -> None:
+        """Apply damage to this character. Tightly coupled to instance."""
+        self.health -= amount
+
+# Bad - method that doesn't use instance state
+class Character:
+    def calculate_combat_damage(self, attacker_stats: dict, defender_stats: dict) -> int:
+        """This doesn't use self, should be a function."""
+        pass
+```
 
 ### One Class/Function Per Purpose
 
@@ -482,6 +582,37 @@ logger.error(
 
 # Bad
 logger.info(f"Character {character_id} created for player {player_id}")
+```
+
+## Dictionary Operations
+
+### Use .get() Instead of Direct Lookups
+
+Always use the `.get()` method for dictionary lookups instead of direct `[]` access. This prevents KeyError exceptions and makes the code more robust:
+
+```python
+# Good - using .get() with defaults
+character_name = character_data.get("Name", "Unknown")
+health = character_data.get("Health", 100)
+skills = character_data.get("Skills", {})
+
+# Good - checking if key exists
+character_id = event.get("characterId")
+if not character_id:
+    return error_response("Missing characterId", 400)
+
+# Good - chaining .get() for nested structures
+damage = combat_data.get("results", {}).get("damage", 0)
+
+# Bad - direct lookup can raise KeyError
+character_name = character_data["Name"]  # KeyError if "Name" missing
+health = character_data["Health"]
+
+# Bad - even in try blocks, prefer .get()
+try:
+    character_id = event["characterId"]
+except KeyError:
+    return error_response("Missing characterId", 400)
 ```
 
 ## Database Operations
@@ -538,6 +669,7 @@ Do not add TODO, FIXME, or similar comments. Use GitHub issues for tracking work
 ### Module Structure
 
 Each module should have:
+
 1. Docstring describing the module
 2. Imports (organized as specified above)
 3. Constants

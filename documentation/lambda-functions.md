@@ -96,9 +96,9 @@ Note: The `ACTIVE_SEGMENTS_TABLE` and `CHARACTER_HISTORY_TABLE` are referenced i
 
 ### Character Configuration
 
-- `DEFAULT_HEALTH` - Default health points for new characters (default: 100)
-- `DEFAULT_ESSENCE` - Default essence points for new characters (default: 100)
-- `MAX_CHARACTERS_PER_PLAYER` - Maximum characters allowed per player (default: 10)
+- `DEFAULT_HEALTH` - Default health points for new characters (default: 10)
+- `DEFAULT_ESSENCE` - Default essence points for new characters (default: 3)
+- `MAX_CHARACTERS_PER_PLAYER` - Maximum characters allowed per player (default: 1)
 
 ### CORS Configuration
 
@@ -199,7 +199,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     # 4. Parse request body or query parameters
     # 5. Call business logic function
     # 6. Format and return response with CORS headers
-    
+
 def business_logic_function(param1: str, param2: str) -> dict:
     """Pure business logic - testable and AWS-agnostic."""
     # 1. Validate business rules
@@ -243,7 +243,7 @@ The `lambda_handler` function is the interface between AWS Lambda and your code.
 def lambda_handler(event: dict, context: object) -> dict:
     """
     AWS Lambda entry point.
-    
+
     CRITICAL: This function must NEVER raise exceptions. All exceptions must be
     caught and converted to appropriate HTTP responses.
     """
@@ -253,25 +253,26 @@ def lambda_handler(event: dict, context: object) -> dict:
             "request_id": context.request_id,
             "function_name": context.function_name
         })
-        
+
         # Your code here...
-        
+
         return create_response(200, {"success": True})
-        
+
     except ValueError as err:
         # Handle expected business logic errors
         logger.error("Validation error", extra={"error": str(err)})
         return error_response(str(err), 400)
-        
+
     except Exception as err:
         # CRITICAL: Catch ALL exceptions to prevent Lambda failures
-        logger.error("Unexpected error in Lambda handler", 
+        logger.error("Unexpected error in Lambda handler",
                     extra={"error": str(err), "type": type(err).__name__},
                     exc_info=True)
         return error_response("Internal server error", 500)
 ```
 
 **Why This Matters:**
+
 - **API Gateway**: Unhandled exceptions cause API Gateway to return generic 500 errors with no useful information
 - **Debugging**: Without proper error handling, debugging production issues becomes nearly impossible
 - **Monitoring**: CloudWatch alarms and metrics depend on proper error logging

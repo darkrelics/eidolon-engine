@@ -7,95 +7,129 @@ Lambda function to get the outcome of a completed segment.
 Returns the narrative text and any rewards/effects for the outcome.
 """
 
-from eidolon.cors import cors_handler
+from botocore.exceptions import ClientError
+
+from eidolon.character import get_character_with_ownership
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
 from eidolon.requests import get_query_parameter
-from eidolon.responses import create_response
-from eidolon.responses import error_response
-from eidolon.responses import not_found_response
+from eidolon.utilities import build_lambda_response
+from eidolon.utilities import extract_and_validate_player_id
+from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import handle_preflight_if_options
+from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
 
 
-def get_completed_segment_for_character(
+def get_segment_outcome_business_logic(
     character_id: str, segment_id: str, player_id: str
-) -> object:
+) -> dict:
     """
-    Get completed segment for a character and verify ownership.
+    Business logic for getting the outcome of a completed segment.
 
     Args:
         character_id: Character UUID
         segment_id: Segment UUID
-        player_id: Cognito user ID for ownership verification
+        player_id: Authenticated player ID
 
     Returns:
-        Active segment data or None if not found or not owned by player
+        Outcome data dict with narrative and effects
+
+    Raises:
+        ValueError: If character not found, segment not found, or segment not completed
+        RuntimeError: If database operations fail
     """
-    # Query by CharacterID to find the segment
-    items = dynamo.query(
-        TableName.ACTIVE_SEGMENTS,
-        IndexName="CharacterID-index",
-        KeyConditionExpression="CharacterID = :cid",
-        FilterExpression="PlayerID = :pid AND SegmentID = :sid AND #status = :status",
-        ExpressionAttributeNames={"#status": "Status"},
-        ExpressionAttributeValues={
-            ":cid": character_id,
-            ":pid": player_id,
-            ":sid": segment_id,
-            ":status": "completed",
-        },
-    )
+    # Validate UUID formats
+    if not validate_uuid(character_id):
+        raise ValueError("Invalid character ID format")
+
+    if not validate_uuid(segment_id):
+        raise ValueError("Invalid segment ID format")
+
+    # Verify character ownership
+    get_character_with_ownership(character_id, player_id)
+
+    # Query for the completed segment
+    try:
+        items = dynamo.query(
+            TableName.ACTIVE_SEGMENTS,
+            IndexName="CharacterID-index",
+            KeyConditionExpression="CharacterID = :cid",
+            FilterExpression="PlayerID = :pid AND SegmentID = :sid AND #status = :status",
+            ExpressionAttributeNames={"#status": "Status"},
+            ExpressionAttributeValues={
+                ":cid": character_id,
+                ":pid": player_id,
+                ":sid": segment_id,
+                ":status": "completed",
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to query active segments",
+            extra={
+                "error": str(err),
+                "character_id": character_id,
+                "segment_id": segment_id,
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to query segments: {str(err)}")
+
     if not items:
         logger.warning(
             "Completed segment not found",
             extra={"character_id": character_id, "segment_id": segment_id},
         )
-        return None
+        raise ValueError("Completed segment not found")
 
     active_segment = items[0]
+    active_segment_id = active_segment.get("ActiveSegmentID")
 
-    # Ownership already verified in query
+    # Double-check segment is completed
+    status = active_segment.get("Status")
+    if status != "completed":
+        logger.warning(
+            "Segment not completed",
+            extra={"active_segment_id": active_segment_id, "status": status},
+        )
+        raise ValueError("Segment not yet completed")
 
-    return active_segment
-
-
-def get_segment_outcome(active_segment: dict) -> object:
-    """
-    Get the outcome details for a completed segment.
-
-    Args:
-        active_segment: Active segment data
-
-    Returns:
-        Outcome details including narrative and effects
-    """
     segment_type = active_segment.get("SegmentType")
     story_id = active_segment.get("StoryID")
-    segment_id = active_segment.get("SegmentID")
 
     # Get segment definition from Segments table
-    segment = dynamo.get_item(
-        TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id}
-    )
-
-    if not segment:
-        logger.error(
-            "Segment not found", extra={"story_id": story_id, "segment_id": segment_id}
+    try:
+        segment = dynamo.get_item(
+            TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id}
         )
-        return None
+        if not segment:
+            logger.error(
+                "Segment not found",
+                extra={"story_id": story_id, "segment_id": segment_id}
+            )
+            raise RuntimeError("Segment definition not found")
+    except ClientError as err:
+        logger.error(
+            "Failed to get segment",
+            extra={"error": str(err), "segment_id": segment_id},
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to get segment: {str(err)}")
 
+    # Build outcome data based on segment type
     outcome_data = {
         "segmentType": segment_type,
-        "status": active_segment.get("Status", ""),
+        "status": status,
     }
 
     if segment_type == "decision":
-        # For decision segments, return the decision made and next segment
+        # For decision segments, return the decision made
         decision = active_segment.get("Decision")
         decision_options = segment.get("DecisionOptions", {})
 
@@ -103,6 +137,10 @@ def get_segment_outcome(active_segment: dict) -> object:
         outcome_data["nextSegmentId"] = (
             decision_options.get(decision) if decision else None
         )
+        # Decision segments don't have narrative/effects in the response
+        outcome_data["outcome"] = "normal"
+        outcome_data["narrative"] = ""
+        outcome_data["effects"] = {}
 
     elif segment_type in ["narrative", "combat"]:
         # Get the outcome from the active segment
@@ -130,6 +168,15 @@ def get_segment_outcome(active_segment: dict) -> object:
         if outcome not in ["death", "failure"]:
             outcome_data["nextSegmentId"] = segment.get("NextSegmentID")
 
+    logger.info(
+        "Segment outcome retrieved successfully",
+        extra={
+            "active_segment_id": active_segment_id,
+            "segment_type": segment_type,
+            "outcome": outcome_data.get("outcome"),
+        },
+    )
+
     return outcome_data
 
 
@@ -137,124 +184,91 @@ def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to get the outcome of a completed segment.
 
-    Args:
-        event: API Gateway Lambda proxy event
-        context: Lambda context
+    Query Parameters:
+        characterId: Character UUID
+        segmentId: Segment UUID
 
     Returns:
-        API Gateway Lambda proxy response
+        200: Outcome data with narrative and effects
+        404: Character or segment not found
+        400: Invalid parameters
+        401: Unauthorized
+        409: Segment not yet completed
+        500: Internal error
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    # Handle preflight requests
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
     try:
-        # Extract player ID from authorizer
-        player_id, auth_error = extract_player_id(event)
+        # Extract and validate player ID
+        player_id, auth_error = extract_and_validate_player_id(event)
         if auth_error:
-            logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(
-                error_response(auth_error, status_code=401), event
-            )
-
-        logger.info("Player authenticated", extra={"player_id": player_id})
+            return auth_error
 
         # Get parameters from query
         character_id, char_error = get_query_parameter(
             event, "characterId", required=True
-        )
+        ) # type: ignore
         if char_error:
-            return cors_handler.add_cors_headers(
-                error_response(char_error, status_code=400), event
-            )
+            return build_lambda_response(400, {"error": char_error}, event)
 
-        segment_id, seg_error = get_query_parameter(event, "segmentId", required=True)
+        segment_id, seg_error = get_query_parameter(event, "segmentId", required=True) # type: ignore
         if seg_error:
-            return cors_handler.add_cors_headers(
-                error_response(seg_error, status_code=400), event
+            return build_lambda_response(400, {"error": seg_error}, event)
+
+        # Call business logic
+        try:
+            outcome_data = get_segment_outcome_business_logic(
+                character_id, segment_id, player_id
             )
 
-        # Validate UUIDs
-        if character_id and not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(
-                error_response("Invalid character ID format", status_code=400), event
-            )
+            # Build response per API documentation
+            response_data = {
+                "outcome": outcome_data.get("outcome", "normal"),
+                "narrative": outcome_data.get("narrative", ""),
+                "effects": outcome_data.get("effects", {}),
+            }
 
-        if segment_id and not validate_uuid(segment_id):
-            return cors_handler.add_cors_headers(
-                error_response("Invalid segment ID format", status_code=400), event
-            )
+            return build_lambda_response(200, response_data, event)
 
-        logger.info(
-            "Getting segment outcome",
-            extra={"character_id": character_id, "segment_id": segment_id},
-        )
-
-        # Get completed segment for character and verify ownership
-        active_segment: dict = get_completed_segment_for_character(character_id, segment_id, player_id)  # type: ignore
-        if not active_segment:
-            return cors_handler.add_cors_headers(
-                not_found_response("Completed segment"), event
-            )
-
-        active_segment_id = active_segment.get("ActiveSegmentID")
-
-        # Check if segment is completed
-        status = active_segment.get("Status")
-        if status != "completed":
+        except ValueError as err:
             logger.warning(
-                "Segment not completed",
-                extra={"active_segment_id": active_segment_id, "status": status},
+                "Invalid request",
+                extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
             )
-            return cors_handler.add_cors_headers(
-                error_response("Segment not yet completed", status_code=409), event
+            error_msg = str(err)
+            if "not found" in error_msg.lower():
+                return build_lambda_response(
+                    404,
+                    {"error": error_msg},
+                    event,
+                )
+            elif "not yet completed" in error_msg.lower():
+                return build_lambda_response(
+                    409,
+                    {"error": error_msg},
+                    event,
+                )
+            return build_lambda_response(
+                400,
+                {"error": error_msg},
+                event,
             )
-
-        # Get outcome details
-        outcome_data: dict = get_segment_outcome(active_segment)  # type: ignore
-        if not outcome_data:
-            return cors_handler.add_cors_headers(
-                error_response("Failed to get outcome data", status_code=500), event
+        except RuntimeError as err:
+            logger.error(
+                "Failed to get segment outcome",
+                extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
             )
-
-        # Build response per documentation
-        response_data = {
-            "outcome": outcome_data.get("outcome", "normal"),
-            "narrative": outcome_data.get("narrative", ""),
-            "effects": outcome_data.get("effects", {}),
-        }
-
-        logger.info(
-            "Segment outcome retrieved successfully",
-            extra={
-                "status_code": 200,
-                "active_segment_id": active_segment_id,
-                "segment_type": outcome_data.get("segmentType"),
-                "outcome": outcome_data.get("outcome"),
-            },
-        )
-
-        return cors_handler.add_cors_headers(create_response(200, response_data), event)
+            return build_lambda_response(
+                500,
+                {"error": "Failed to retrieve outcome data"},
+                event,
+            )
 
     except Exception as err:
-        logger.error(
-            "Unexpected error in lambda_handler",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
-        )
+        return handle_lambda_error(err, context, event)

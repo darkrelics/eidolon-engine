@@ -7,168 +7,64 @@ Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.
 """
 
-from eidolon.character import delete_character as delete_character_lib
+from eidolon.character import delete_character
+from eidolon.character import get_character_with_ownership
 from eidolon.cors import cors_handler
-from eidolon.dynamo import dynamo
-from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id
 from eidolon.requests import get_query_parameter
 from eidolon.responses import create_response
 from eidolon.responses import error_response
+from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
 
 
-def get_character_name_by_id(player_id: str, character_id: str) -> str:
+def delete_character_with_ownership_check(player_id: str, character_id: str) -> dict:
     """
-    Get character name by ID and verify ownership.
+    Delete a character after verifying ownership.
 
     Args:
         player_id: Cognito user ID
         character_id: Character UUID
 
     Returns:
-        Character name if owned by player, empty string otherwise
-    """
-    # Get player record
-    player_data = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
-
-    if not player_data:
-        logger.warning("Player not found", extra={"player_id": player_id})
-        return ""
-
-    character_list = player_data.get("CharacterList", {})
-
-    # Find character by UUID
-    for char_name, char_info in character_list.items():
-        if char_info.get("UUID") == character_id:
-            return char_name
-
-    logger.warning(
-        "Character not found for player",
-        extra={"character_id": character_id, "player_id": player_id},
-    )
-    return ""
-
-
-def verify_character_ownership(player_id: str, character_name: str) -> tuple:
-    """
-    Verify that a character belongs to the specified player.
-
-    Args:
-        player_id: Cognito user ID
-        character_name: Name of the character to verify
-
-    Returns:
-        tuple: (is_owner, character_uuid)
-    """
-    # Get player record
-    player_data = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
-
-    if not player_data:
-        logger.warning("Player not found", extra={"player_id": player_id})
-        return False, None
-    character_list = player_data.get("CharacterList", {})
-
-    # Check if character exists in player's list
-    if character_name not in character_list:
-        logger.warning(
-            "Character not found for player",
-            extra={"character_name": character_name, "player_id": player_id},
-        )
-        return False, None
-
-    character_info = character_list[character_name]
-    character_uuid = character_info.get("UUID")
-
-    # Double-check character record ownership
-    character_data = dynamo.get_item(
-        TableName.CHARACTERS, {"CharacterID": character_uuid}
-    )
-
-    if character_data and character_data.get("PlayerID") != player_id:
-        logger.warning(
-            "Character does not belong to player",
-            extra={"character_id": character_uuid, "player_id": player_id},
-        )
-        return False, None
-
-    return True, character_uuid
-
-
-def delete_character_handler(
-    player_id: str, character_name: str, character_id: str
-) -> dict:
-    """
-    Handle character deletion with ownership verification.
-
-    Args:
-        player_id: Cognito user ID
-        character_name: Name of the character
-        character_id: UUID of the character
-
-    Returns:
         dict: Results of the deletion operation
+
+    Raises:
+        ValueError: If character not found or not owned by player
+        RuntimeError: If database operations fail
     """
-    try:
-        # Verify ownership by checking the character record
-        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+    # Verify ownership and get character
+    character = get_character_with_ownership(character_id, player_id)
+    character_name = character.get("CharacterName", "Unknown")
 
-        if not character:
-            logger.error("Character not found", extra={"character_id": character_id})
-            return {
-                "character_deleted": False,
-                "character_removed_from_player": False,
-                "items_deleted": 0,
-                "active_segments_deleted": 0,
-                "history_deleted": 0,
-                "errors": ["Character not found"],
-            }
+    logger.info(
+        "Deleting character",
+        extra={
+            "character_id": character_id,
+            "character_name": character_name,
+            "player_id": player_id,
+        },
+    )
 
-        # Verify the character belongs to the player
-        if character.get("PlayerID") != player_id:
-            logger.error(
-                "Character does not belong to player",
-                extra={"character_id": character_id, "player_id": player_id},
-            )
-            return {
-                "character_deleted": False,
-                "character_removed_from_player": False,
-                "items_deleted": 0,
-                "active_segments_deleted": 0,
-                "history_deleted": 0,
-                "errors": ["Character does not belong to player"],
-            }
+    # Delete the character
+    results = delete_character(character_id, remove_from_player_list=True)
 
-        # Use the library function to delete the character
-        results = delete_character_lib(character_id, remove_from_player_list=True)
+    logger.info(
+        "Character deletion completed",
+        extra={
+            "character_name": character_name,
+            "character_id": character_id,
+            "player_id": player_id,
+            "results": results,
+        },
+    )
 
-        logger.info(
-            "Character deletion completed",
-            extra={
-                "character_name": character_name,
-                "character_id": character_id,
-                "player_id": player_id,
-                "results": results,
-            },
-        )
+    return results
 
-        return results
 
-    except Exception as err:
-        logger.error(
-            "Error deleting character", extra={"error": str(err)}, exc_info=True
-        )
-        return {
-            "character_deleted": False,
-            "character_removed_from_player": False,
-            "items_deleted": 0,
-            "active_segments_deleted": 0,
-            "history_deleted": 0,
-            "errors": [f"Unexpected error: {str(err)}"],
-        }
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -210,22 +106,39 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Get character ID from query parameters
         character_id, error_msg = get_query_parameter(
             event, "characterId", required=True
-        )
+        ) # type: ignore
         if error_msg:
             return cors_handler.add_cors_headers(error_response(error_msg), event)
 
-        # Get character name and verify ownership
-        character_name = get_character_name_by_id(player_id, character_id)
-        if not character_name:
+        # Validate character ID format
+        if not validate_uuid(character_id):
+            return cors_handler.add_cors_headers(
+                error_response("Invalid character ID format", status_code=400), event
+            )
+
+        # Delete the character with ownership verification
+        try:
+            deletion_result = delete_character_with_ownership_check(
+                player_id, character_id
+            )
+        except ValueError as err:
+            logger.warning(
+                "Character not found or not owned",
+                extra={"character_id": character_id, "player_id": player_id, "error": str(err)},
+            )
             return cors_handler.add_cors_headers(
                 error_response("Character not found or access denied", status_code=404),
                 event,
             )
-
-        # Delete the character
-        deletion_result = delete_character_handler(
-            player_id, character_name, character_id
-        )
+        except RuntimeError as err:
+            logger.error(
+                "Failed to delete character",
+                extra={"character_id": character_id, "error": str(err)},
+            )
+            return cors_handler.add_cors_headers(
+                error_response("Failed to delete character", status_code=500),
+                event,
+            )
 
         # Check if deletion was successful
         if not deletion_result["character_deleted"]:
@@ -243,7 +156,7 @@ def lambda_handler(event: dict, context: object) -> dict:
                 200,
                 {
                     "message": "Character deleted successfully",
-                    "characterName": character_name,
+                    "characterId": character_id,
                     "itemsDeleted": deletion_result["items_deleted"],
                     "activeSegmentsDeleted": deletion_result["active_segments_deleted"],
                     "historyDeleted": deletion_result["history_deleted"],

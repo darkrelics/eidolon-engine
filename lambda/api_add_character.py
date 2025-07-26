@@ -1,13 +1,11 @@
 """Lambda function to add a new character for the incremental game."""
 
-import json
-import pickle
 import uuid
 from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
-from eidolon.character import check_character_limit, generate_character_id, get_archetype
+from eidolon.character import character_name_filter, check_character_limit, generate_character_id, get_archetype
 from eidolon.cors import cors_handler
 from eidolon.environment import (
     DEFAULT_ESSENCE,
@@ -16,20 +14,12 @@ from eidolon.environment import (
 )
 from eidolon.logger import get_logger
 from eidolon.dynamo import TableName, dynamo
+from eidolon.requests import extract_player_id, get_required_field, parse_json_body
 from eidolon.responses import create_response, error_response
 from eidolon.validation import validate_character_name
 
 # Configure logging
 logger = get_logger(__name__)
-
-# Load bloom filter for name validation
-bloom_filter = None
-try:
-    with open("character_name_filter.pkl", "rb") as f:
-        bloom_filter = pickle.load(f)
-        logger.info("Loaded character name bloom filter")
-except Exception as err:
-    logger.error("Failed to load bloom filter", extra={"error": str(err)})
 
 
 def create_items_from_prototypes(prototype_ids: list, character_id: str) -> dict:
@@ -38,7 +28,6 @@ def create_items_from_prototypes(prototype_ids: list, character_id: str) -> dict
 
     Args:
         prototype_ids: List of prototype IDs to instantiate
-        player_id: Player ID for logging
         character_id: Character ID for logging
 
     Returns:
@@ -189,7 +178,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         )
 
         # Create items from prototypes and get inventory mapping
-        inventory = create_items_from_prototypes(starting_items, player_id, character_id) # type: ignore
+        inventory = create_items_from_prototypes(starting_items, character_id)
 
         # Update character item with the inventory
         character_item["Inventory"] = inventory
@@ -207,12 +196,13 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
             extra={"character_name": character_name},
         )
 
-        # Use query_by_gsi to check for existing character name
+        # Use query to check for existing character name
         try:
-            existing_chars = dynamo.query_by_gsi(
+            existing_chars = dynamo.query(
                 TableName.CHARACTERS,
-                index_name="CharacterNameIndex",
-                key_conditions={"CharacterName": character_name},
+                IndexName="CharacterNameIndex",
+                KeyConditionExpression="CharacterName = :name",
+                ExpressionAttributeValues={":name": character_name},
                 Limit=1
             )
 
@@ -327,20 +317,22 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     try:
         # Extract player ID from Cognito authorizer
-        claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-        player_id = claims.get("sub")
-
-        if not player_id:
-            return cors_handler.add_cors_headers(error_response("Unauthorized", status_code=401), event)
+        player_id, auth_error = extract_player_id(event)
+        if auth_error:
+            logger.error("Authentication failed", extra={"error": auth_error})
+            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
 
         # Parse request body
-        try:
-            body = json.loads(event.get("body", "{}"))
-        except json.JSONDecodeError:
-            return cors_handler.add_cors_headers(error_response("Invalid JSON", status_code=400), event)
+        body, parse_error = parse_json_body(event)
+        if parse_error:
+            return cors_handler.add_cors_headers(parse_error, event)
 
         # Extract and validate required fields
-        character_name = body.get("characterName", "").strip()
+        character_name, name_error = get_required_field(body, "characterName")
+        if name_error:
+            return cors_handler.add_cors_headers(error_response(name_error, status_code=400), event)
+        
+        character_name = character_name.strip()
         archetype_name = body.get("archetypeName", "").strip()
 
         logger.info(
@@ -352,41 +344,50 @@ def lambda_handler(event: dict, context: object) -> dict:
             },
         )
 
-        if not character_name:
-            return cors_handler.add_cors_headers(
-                error_response("Missing required field: characterName", status_code=400),
-                event,
-            )
-
         # Validate character name format
-        is_valid, error_msg = validate_character_name(character_name)
-        if not is_valid:
+        try:
+            validate_character_name(character_name)
+        except ValueError as err:
             return cors_handler.add_cors_headers(
-                error_response(f"Invalid character name: {error_msg}", status_code=400),
+                error_response(f"Invalid character name: {str(err)}", status_code=400),
                 event,
             )
 
         # Check bloom filter for restricted names
-        if bloom_filter and character_name.lower() in bloom_filter:
+        if character_name_filter.is_restricted(character_name):
             return cors_handler.add_cors_headers(
                 error_response("Character name is not available", status_code=400),
                 event,
             )
 
         # Check character limit
-        can_create, current_count = check_character_limit(player_id)
-        logger.info(
-            "Character limit check",
-            extra={
-                "player_id": player_id,
-                "current_count": current_count,
-                "can_create": can_create,
-                "max_allowed": MAX_CHARACTERS_PER_PLAYER,
-            },
-        )
-        if not can_create:
+        try:
+            limit_result = check_character_limit(player_id)
+            can_create = limit_result["can_create"]
+            current_count = limit_result["current_count"]
+            
+            logger.info(
+                "Character limit check",
+                extra={
+                    "player_id": player_id,
+                    "current_count": current_count,
+                    "can_create": can_create,
+                    "max_allowed": MAX_CHARACTERS_PER_PLAYER,
+                },
+            )
+            
+            if not can_create:
+                return cors_handler.add_cors_headers(
+                    error_response(f"Character limit reached ({current_count})", status_code=400),
+                    event,
+                )
+        except (ValueError, RuntimeError) as err:
+            logger.error(
+                "Failed to check character limit",
+                extra={"player_id": player_id, "error": str(err)},
+            )
             return cors_handler.add_cors_headers(
-                error_response(f"Character limit reached ({current_count})", status_code=400),
+                error_response("Failed to check character limit", status_code=500),
                 event,
             )
 

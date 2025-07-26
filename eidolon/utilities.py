@@ -8,7 +8,7 @@ while keeping the handler function visible in each Lambda file.
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id
-from eidolon.responses import error_response, unauthorized_response
+from eidolon.responses import create_response, error_response, unauthorized_response
 
 logger = get_logger(__name__)
 
@@ -33,7 +33,7 @@ def log_lambda_invocation(context: object, event: dict) -> None:
         )
 
 
-def handle_preflight_if_options(event: dict) -> object:
+def handle_preflight_if_options(event: dict) -> dict:
     """
     Handle CORS preflight request if HTTP method is OPTIONS.
 
@@ -41,11 +41,11 @@ def handle_preflight_if_options(event: dict) -> object:
         event: Lambda event dict
 
     Returns:
-        CORS preflight response if OPTIONS, None otherwise
+        CORS preflight response dict if OPTIONS, empty dict otherwise
     """
     if event.get("httpMethod") == "OPTIONS":
         return cors_handler.handle_preflight(event)
-    return None
+    return {}
 
 
 def extract_and_validate_player_id(event: dict) -> tuple:
@@ -83,7 +83,7 @@ def wrap_response_with_cors(response: dict, event: dict) -> dict:
     return cors_handler.add_cors_headers(response, event)
 
 
-def handle_lambda_error(err: Exception, context: object, event: dict, custom_message=None) -> dict:
+def handle_lambda_error(err: Exception, context: object, event: dict, custom_message = None) -> dict:
     """
     Handle Lambda function errors with proper logging and CORS response.
 
@@ -118,7 +118,5 @@ def build_lambda_response(status_code: int, body: dict, event: dict) -> dict:
     Returns:
         Formatted response with CORS headers
     """
-    from eidolon.responses import create_response
-
     logger.info("Lambda response", extra={"status_code": status_code})
     return cors_handler.add_cors_headers(create_response(status_code, body), event)

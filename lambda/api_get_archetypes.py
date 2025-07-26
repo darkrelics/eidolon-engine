@@ -8,9 +8,13 @@ The function loads all archetypes on cold start and filters for Player=true.
 Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 """
 
+from botocore.exceptions import ClientError
+
 from eidolon.cors import cors_handler
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
+from eidolon.environment import DEFAULT_ESSENCE
+from eidolon.environment import DEFAULT_HEALTH
 from eidolon.logger import get_logger
 from eidolon.responses import create_response
 from eidolon.responses import error_response
@@ -29,6 +33,9 @@ def load_player_archetypes() -> list:
 
     Returns:
         List of player archetypes with their data
+
+    Raises:
+        RuntimeError: If database scan fails
     """
     global player_archetypes_cache, cache_loaded
 
@@ -36,9 +43,9 @@ def load_player_archetypes() -> list:
         logger.info("Returning cached player archetypes")
         return player_archetypes_cache
 
-    try:
-        logger.info("Loading archetypes from DynamoDB")
+    logger.info("Loading archetypes from DynamoDB")
 
+    try:
         # Scan the archetypes table
         items = []
         last_evaluated_key = None
@@ -48,54 +55,60 @@ def load_player_archetypes() -> list:
             if last_evaluated_key:
                 scan_params["ExclusiveStartKey"] = last_evaluated_key
 
-            scan_result: dict = dynamo.scan(TableName.ARCHETYPES, **scan_params)  # type: ignore
-            items.extend(scan_result["items"])
+            scan_result: dict = dynamo.scan(TableName.ARCHETYPES, **scan_params) # type: ignore
+            items.extend(scan_result.get("items", []))
 
             last_evaluated_key = scan_result.get("last_evaluated_key")
             if not last_evaluated_key:
                 break
 
-        # Filter for player archetypes
-        player_archetypes: list = []
-        for item in items:
-            # Check if Player field exists and is True
-            if item.get("Player", False):
-                # Normalize attribute and skill keys to lowercase
-                if "Attributes" in item:
-                    item["Attributes"] = {
-                        k.lower(): v for k, v in item["Attributes"].items()
-                    }
-                if "Skills" in item:
-                    item["Skills"] = {k.lower(): v for k, v in item["Skills"].items()}
-
-                player_archetypes.append(
-                    {
-                        "ArchetypeName": item.get("ArchetypeName", ""),
-                        "Description": item.get("Description", ""),
-                        "Attributes": item.get("Attributes", {}),
-                        "Skills": item.get("Skills", {}),
-                        "StartRoom": item.get("StartRoom", 0),
-                        "StartingItems": item.get("StartingItems", []),
-                        "Health": item.get("Health", 0),
-                        "Essence": item.get("Essence", 0),
-                    }
-                )
-
-        # Sort by archetype name for consistent ordering
-        player_archetypes.sort(key=lambda x: x["ArchetypeName"])
-
-        # Cache the results
-        player_archetypes_cache = player_archetypes
-        cache_loaded = True
-
-        logger.info("Loaded player archetypes", extra={"count": len(player_archetypes)})
-        return player_archetypes
-
-    except Exception as err:
+    except ClientError as err:
         logger.error(
-            "Error loading archetypes", extra={"error": str(err)}, exc_info=True
+            "Failed to scan archetypes table",
+            extra={
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
         )
-        raise
+        raise RuntimeError(f"Failed to load archetypes: {str(err)}")
+
+    # Filter for player archetypes
+    player_archetypes = []
+    for item in items:
+        # Check if Player field exists and is True
+        if item.get("Player", False):
+            # Normalize attribute and skill keys to lowercase
+            attributes = item.get("Attributes", {})
+            if attributes:
+                attributes = {k.lower(): v for k, v in attributes.items()}
+
+            skills = item.get("Skills", {})
+            if skills:
+                skills = {k.lower(): v for k, v in skills.items()}
+
+            player_archetypes.append(
+                {
+                    "ArchetypeName": item.get("ArchetypeName", ""),
+                    "Description": item.get("Description", ""),
+                    "Attributes": attributes,
+                    "Skills": skills,
+                    "StartRoom": item.get("StartRoom", 0),
+                    "StartingItems": item.get("StartingItems", []),
+                    "Health": item.get("Health", DEFAULT_HEALTH),
+                    "Essence": item.get("Essence", DEFAULT_ESSENCE),
+                }
+            )
+
+    # Sort by archetype name for consistent ordering
+    player_archetypes.sort(key=lambda x: x["ArchetypeName"])
+
+    # Cache the results
+    player_archetypes_cache = player_archetypes
+    cache_loaded = True
+
+    logger.info("Loaded player archetypes", extra={"count": len(player_archetypes)})
+    return player_archetypes
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -127,7 +140,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     try:
         # Load player archetypes (from cache if available)
-        player_archetypes: list = load_player_archetypes()
+        player_archetypes = load_player_archetypes()
 
         # Return successful response
         logger.info("Lambda response", extra={"status_code": 200})
@@ -142,9 +155,21 @@ def lambda_handler(event: dict, context: object) -> dict:
             event,
         )
 
+    except RuntimeError as err:
+        logger.error(
+            "Failed to load archetypes",
+            extra={"error": str(err)},
+            exc_info=True
+        )
+        logger.info("Lambda response", extra={"status_code": 500})
+        return cors_handler.add_cors_headers(
+            error_response("Failed to load archetypes", status_code=500), event
+        )
     except Exception as err:
         logger.error(
-            "Error in lambda_handler", extra={"error": str(err)}, exc_info=True
+            "Unexpected error in lambda_handler",
+            extra={"error": str(err)},
+            exc_info=True
         )
         logger.info("Lambda response", extra={"status_code": 500})
         return cors_handler.add_cors_headers(

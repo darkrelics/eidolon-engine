@@ -14,51 +14,26 @@ from datetime import timezone
 
 from botocore.exceptions import ClientError
 
-from eidolon.cors import cors_handler
+from eidolon.character import get_character_with_ownership
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
 from eidolon.requests import get_required_field
 from eidolon.requests import parse_json_body
-from eidolon.responses import create_response
-from eidolon.responses import error_response
-from eidolon.responses import not_found_response
+from eidolon.utilities import build_lambda_response
+from eidolon.utilities import extract_and_validate_player_id
+from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import handle_preflight_if_options
+from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
 
 
-def get_character_and_verify_ownership(character_id: str, player_id: str) -> dict:
-    """
-    Get character by UUID and verify ownership.
-
-    Args:
-        character_id: Character UUID
-        player_id: Cognito user ID for ownership verification
-
-    Returns:
-        Character data
-    """
-    character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
-
-    if not character:
-        logger.warning("Character not found", extra={"character_id": character_id})
-        return {}
-
-    # Verify ownership
-    if character.get("PlayerID") != player_id:
-        logger.warning(
-            "Character ownership mismatch",
-            extra={"character_id": character_id, "player_id": player_id},
-        )
-        return {}
-
-    return character
 
 
-def validate_story_available(character: dict, story_id: str) -> bool:
+def validate_story_available(character: dict, story_id: str) -> None:
     """
     Validate that the story is available to the character.
 
@@ -66,11 +41,12 @@ def validate_story_available(character: dict, story_id: str) -> bool:
         character: Character data
         story_id: Story UUID to start
 
-    Returns:
-        True if available, False otherwise
+    Raises:
+        ValueError: If story not available to character
     """
     available_stories = character.get("AvailableStories", [])
-    return story_id in available_stories
+    if story_id not in available_stories:
+        raise ValueError("Story not available")
 
 
 def get_story_and_first_segment(story_id: str) -> tuple:
@@ -81,33 +57,49 @@ def get_story_and_first_segment(story_id: str) -> tuple:
         story_id: Story UUID
 
     Returns:
-        Tuple of (story_data, first_segment) or (None, None) if not found
+        Tuple of (story_data, first_segment)
+
+    Raises:
+        ValueError: If story or first segment not found
+        RuntimeError: If database operations fail
     """
-    # Get story metadata
-    story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
+    try:
+        # Get story metadata
+        story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
 
-    if not story:
-        logger.warning("Story not found", extra={"story_id": story_id})
-        return None, None
+        if not story:
+            logger.warning("Story not found", extra={"story_id": story_id})
+            raise ValueError("Story not found")
 
-    # Get first segment
-    first_segment_id = story.get("FirstSegmentID")
-    if not first_segment_id:
-        logger.error("Story has no first segment", extra={"story_id": story_id})
-        return None, None
+        # Get first segment
+        first_segment_id = story.get("FirstSegmentID")
+        if not first_segment_id:
+            logger.error("Story has no first segment", extra={"story_id": story_id})
+            raise ValueError("Story configuration error")
 
-    segment = dynamo.get_item(
-        TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": first_segment_id}
-    )
-
-    if not segment:
-        logger.error(
-            "First segment not found",
-            extra={"story_id": story_id, "segment_id": first_segment_id},
+        segment = dynamo.get_item(
+            TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": first_segment_id}
         )
-        return None, None
 
-    return story, segment
+        if not segment:
+            logger.error(
+                "First segment not found",
+                extra={"story_id": story_id, "segment_id": first_segment_id},
+            )
+            raise ValueError("Story configuration error")
+
+        return story, segment
+    except ClientError as err:
+        logger.error(
+            "Failed to get story data",
+            extra={
+                "story_id": story_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to get story data: {str(err)}")
 
 
 def create_active_segment(
@@ -125,6 +117,9 @@ def create_active_segment(
 
     Returns:
         Active segment record
+
+    Raises:
+        RuntimeError: If database operation fails
     """
     segment_id = segment.get("SegmentID")
     segment_type = segment.get("SegmentType", "narrative")
@@ -166,7 +161,19 @@ def create_active_segment(
         }
 
     # Store in DynamoDB
-    dynamo.put_item(TableName.ACTIVE_SEGMENTS, active_segment)
+    try:
+        dynamo.put_item(TableName.ACTIVE_SEGMENTS, active_segment)
+    except ClientError as err:
+        logger.error(
+            "Failed to create active segment",
+            extra={
+                "active_segment_id": active_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to create active segment: {str(err)}")
 
     return active_segment
 
@@ -227,19 +234,35 @@ def create_history_entry(
         story_id: Story UUID
         story_title: Story title
         story_type: Type of story (one-time, daily, repeatable)
-    """
-    history_entry = {
-        "CharacterID": character_id,
-        "StoryID": story_id,
-        "StoryTitle": story_title,
-        "StartedAt": datetime.now(timezone.utc).isoformat(),
-        "StoryType": story_type,
-        "SegmentHistory": [],
-        "AbandonedCount": 0,
-    }
 
-    # Put item (will overwrite if exists - handles retries)
-    dynamo.put_item(TableName.HISTORY, history_entry)
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    try:
+        history_entry = {
+            "CharacterID": character_id,
+            "StoryID": story_id,
+            "StoryTitle": story_title,
+            "StartedAt": datetime.now(timezone.utc).isoformat(),
+            "StoryType": story_type,
+            "SegmentHistory": [],
+            "AbandonedCount": 0,
+        }
+
+        # Put item (will overwrite if exists - handles retries)
+        dynamo.put_item(TableName.HISTORY, history_entry)
+    except ClientError as err:
+        logger.error(
+            "Failed to create history entry",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to create history entry: {str(err)}")
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -253,208 +276,204 @@ def lambda_handler(event: dict, context: object) -> dict:
     Returns:
         API Gateway Lambda proxy response
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    # Handle preflight requests
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
     try:
-        # Extract player ID from authorizer
-        player_id, auth_error = extract_player_id(event)
+        # Extract and validate player ID
+        player_id, auth_error = extract_and_validate_player_id(event)
         if auth_error:
-            logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(
-                error_response(auth_error, status_code=401), event
-            )
-
-        logger.info("Player authenticated", extra={"player_id": player_id})
+            return auth_error
 
         # Parse request body
         body, parse_error = parse_json_body(event)
         if parse_error:
-            return cors_handler.add_cors_headers(parse_error, event)
+            return build_lambda_response(400, {"error": str(parse_error)}, event)
 
         # Get required fields
         character_id, char_error = get_required_field(body, "characterId")
         if char_error:
-            return cors_handler.add_cors_headers(
-                error_response(char_error, status_code=400), event
-            )
+            return build_lambda_response(400, {"error": char_error}, event)
 
         story_id, story_error = get_required_field(body, "storyId")
         if story_error:
-            return cors_handler.add_cors_headers(
-                error_response(story_error, status_code=400), event
-            )
+            return build_lambda_response(400, {"error": story_error}, event)
 
         # Validate UUIDs
         if character_id and not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(
-                error_response("Invalid character ID format", status_code=400), event
-            )
+            return build_lambda_response(400, {"error": "Invalid character ID format"}, event)
 
         if story_id and not validate_uuid(story_id):
-            return cors_handler.add_cors_headers(
-                error_response("Invalid story ID format", status_code=400), event
-            )
+            return build_lambda_response(400, {"error": "Invalid story ID format"}, event)
 
         logger.info(
             "Starting story",
             extra={"character_id": character_id, "story_id": story_id},
         )
 
-        # Get character and verify ownership
-        character = get_character_and_verify_ownership(character_id, player_id)  # type: ignore
-        if not character:
-            return cors_handler.add_cors_headers(not_found_response("Character"), event)
-
-        # Check if character is already in a game mode
-        game_mode = character.get("GameMode", "None")
-        if game_mode != "None":
-            logger.warning(
-                "Character already in game mode",
-                extra={"character_id": character_id, "game_mode": game_mode},
-            )
-            return cors_handler.add_cors_headers(
-                error_response(
-                    f"Character is currently in {game_mode} mode", status_code=409
-                ),
-                event,
-            )
-
-        # Validate story is available
-        if not validate_story_available(character, story_id):  # type: ignore
-            logger.warning(
-                "Story not available to character",
-                extra={"character_id": character_id, "story_id": story_id},
-            )
-            return cors_handler.add_cors_headers(
-                error_response("Story not available", status_code=403), event
-            )
-
-        # Get story and first segment
-        story, first_segment = get_story_and_first_segment(story_id)  # type: ignore
-        if not story or not first_segment:
-            return cors_handler.add_cors_headers(
-                error_response("Story configuration error", status_code=500), event
-            )
-
-        # Create active segment first to get the segment ID
-        story_title = story.get("Title", "Unknown Story")
-        active_segment = create_active_segment(character_id, player_id, story_id, story_title, first_segment)  # type: ignore
-
-        # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID and remove from available list
+        # Call business logic
         try:
-            # Build update expression to set GameMode and remove from AvailableStories
-            update_expression = (
-                "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id "
-                "REMOVE AvailableStories["
-                + str(character["AvailableStories"].index(story_id))
-                + "]"
+            response_data = start_story_business_logic(character_id, story_id, player_id)
+            return build_lambda_response(200, response_data, event)
+        except ValueError as err:
+            logger.warning(
+                "Invalid request",
+                extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
             )
-
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeValues={
-                    ":mode": "Incremental",
-                    ":none": "None",
-                    ":story_id": story_id,
-                    ":segment_id": active_segment["ActiveSegmentID"],
-                },
-                ConditionExpression="GameMode = :none",
-            )
-
-        except ClientError as err:
-            # Rollback: Delete the active segment we just created
-            try:
-                dynamo.delete_item(
-                    TableName.ACTIVE_SEGMENTS,
-                    Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]},
-                )
-            except Exception as rollback_err:
-                logger.error(
-                    "Failed to rollback active segment",
-                    extra={
-                        "active_segment_id": active_segment["ActiveSegmentID"],
-                        "error": str(rollback_err),
-                    },
-                )
-
-            if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-                logger.warning(
-                    "Character state changed during story start",
-                    extra={"character_id": character_id},
-                )
-                return cors_handler.add_cors_headers(
-                    error_response("Character state conflict", status_code=409), event
-                )
-            raise
-        except Exception as err:
-            # Rollback: Delete the active segment we just created
-            try:
-                dynamo.delete_item(
-                    TableName.ACTIVE_SEGMENTS,
-                    Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]},
-                )
-            except Exception as rollback_err:
-                logger.error(
-                    "Failed to rollback active segment",
-                    extra={
-                        "active_segment_id": active_segment["ActiveSegmentID"],
-                        "error": str(rollback_err),
-                    },
-                )
-
+            error_msg = str(err)
+            if "not found" in error_msg.lower():
+                return build_lambda_response(404, {"error": error_msg}, event)
+            elif "already in" in error_msg.lower() and "mode" in error_msg.lower():
+                return build_lambda_response(409, {"error": error_msg}, event)
+            elif "not available" in error_msg.lower():
+                return build_lambda_response(403, {"error": error_msg}, event)
+            return build_lambda_response(400, {"error": error_msg}, event)
+        except RuntimeError as err:
             logger.error(
-                "Failed to update character state",
-                extra={"character_id": character_id, "error": str(err)},
+                "Failed to start story",
+                extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
             )
-            return cors_handler.add_cors_headers(
-                error_response("Failed to start story", status_code=500), event
-            )
-
-        # Create history entry
-        story_type = story.get("StoryType", "repeatable")
-        create_history_entry(character_id, story_id, story_title, story_type)  # type: ignore
-
-        # Format response
-        segment_data = format_segment_response(first_segment, active_segment)
-
-        logger.info(
-            "Story started successfully",
-            extra={
-                "status_code": 200,
-                "character_id": character_id,
-                "story_id": story_id,
-                "active_segment_id": active_segment["ActiveSegmentID"],
-                "segment_type": first_segment.get("SegmentType"),
-            },
-        )
-
-        return cors_handler.add_cors_headers(
-            create_response(200, {"segment": segment_data}), event
-        )
+            return build_lambda_response(500, {"error": "Failed to start story"}, event)
 
     except Exception as err:
+        return handle_lambda_error(err, context, event)
+
+
+def start_story_business_logic(character_id: str, story_id: str, player_id: str) -> dict:
+    """
+    Business logic for starting a story.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        player_id: Authenticated player ID
+
+    Returns:
+        Response data with segment information
+
+    Raises:
+        ValueError: If validation fails
+        RuntimeError: If database operations fail
+    """
+    # Get character and verify ownership
+    character = get_character_with_ownership(character_id, player_id)
+
+    # Check if character is already in a game mode
+    game_mode = character.get("GameMode", "None")
+    if game_mode != "None":
+        logger.warning(
+            "Character already in game mode",
+            extra={"character_id": character_id, "game_mode": game_mode},
+        )
+        raise ValueError(f"Character is currently in {game_mode} mode")
+
+    # Validate story is available
+    validate_story_available(character, story_id)
+
+    # Get story and first segment
+    story, first_segment = get_story_and_first_segment(story_id)
+
+    # Create active segment first to get the segment ID
+    story_title = story.get("Title", "Unknown Story")
+    active_segment = create_active_segment(character_id, player_id, story_id, story_title, first_segment)
+
+    # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID and remove from available list
+    try:
+        # Build update expression to set GameMode and remove from AvailableStories
+        update_expression = (
+            "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id "
+            "REMOVE AvailableStories["
+            + str(character["AvailableStories"].index(story_id))
+            + "]"
+        )
+
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeValues={
+                ":mode": "Incremental",
+                ":none": "None",
+                ":story_id": story_id,
+                ":segment_id": active_segment["ActiveSegmentID"],
+            },
+            ConditionExpression="GameMode = :none",
+        )
+
+    except ClientError as err:
+        # Rollback: Delete the active segment we just created
+        try:
+            dynamo.delete_item(
+                TableName.ACTIVE_SEGMENTS,
+                Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]},
+            )
+        except Exception as rollback_err:
+            logger.error(
+                "Failed to rollback active segment",
+                extra={
+                    "active_segment_id": active_segment["ActiveSegmentID"],
+                    "error": str(rollback_err),
+                },
+            )
+
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.warning(
+                "Character state changed during story start",
+                extra={"character_id": character_id},
+            )
+            raise ValueError("Character state conflict")
         logger.error(
-            "Unexpected error in lambda_handler",
-            extra={"error": str(err)},
-            exc_info=True,
+            "Failed to update character state",
+            extra={
+                "character_id": character_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
         )
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
+        raise RuntimeError(f"Failed to update character state: {str(err)}")
+    except Exception as err:
+        # Rollback: Delete the active segment we just created
+        try:
+            dynamo.delete_item(
+                TableName.ACTIVE_SEGMENTS,
+                Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]},
+            )
+        except Exception as rollback_err:
+            logger.error(
+                "Failed to rollback active segment",
+                extra={
+                    "active_segment_id": active_segment["ActiveSegmentID"],
+                    "error": str(rollback_err),
+                },
+            )
+
+        logger.error(
+            "Failed to update character state",
+            extra={"character_id": character_id, "error": str(err)},
         )
+        raise RuntimeError(f"Failed to update character state: {str(err)}")
+
+    # Create history entry
+    story_type = story.get("StoryType", "repeatable")
+    create_history_entry(character_id, story_id, story_title, story_type)
+
+    # Format response
+    segment_data = format_segment_response(first_segment, active_segment)
+
+    logger.info(
+        "Story started successfully",
+        extra={
+            "character_id": character_id,
+            "story_id": story_id,
+            "active_segment_id": active_segment["ActiveSegmentID"],
+            "segment_type": first_segment.get("SegmentType"),
+        },
+    )
+
+    return {"segment": segment_data}

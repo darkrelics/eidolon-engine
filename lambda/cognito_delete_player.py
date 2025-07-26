@@ -12,6 +12,8 @@ import json
 from datetime import datetime
 from datetime import timezone
 
+from botocore.exceptions import ClientError
+
 from eidolon.character import delete_character
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
@@ -20,31 +22,36 @@ from eidolon.requests import extract_player_id
 from eidolon.requests import parse_json_body
 from eidolon.responses import create_response
 from eidolon.responses import error_response
+from eidolon.utilities import log_lambda_invocation
 
 # Configure logging
 logger = get_logger(__name__)
 
 
-def delete_player_record(player_id: str) -> bool:
+def delete_player_record(player_id: str) -> None:
     """
     Delete player record from players table.
 
     Args:
         player_id: Cognito user ID
 
-    Returns:
-        bool: True if deleted or not found, False on error
+    Raises:
+        RuntimeError: If database operation fails
     """
     try:
         dynamo.delete_item(TableName.PLAYERS, Key={"PlayerID": player_id})
         logger.info("Deleted player record", extra={"player_id": player_id})
-        return True
-    except Exception as err:
+    except ClientError as err:
         logger.error(
             "Failed to delete player record",
-            extra={"error": str(err), "player_id": player_id},
+            extra={
+                "error": str(err),
+                "player_id": player_id,
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
         )
-        return False
+        raise RuntimeError(f"Failed to delete player record: {str(err)}")
 
 
 def delete_all_characters(player_id: str) -> dict:
@@ -56,6 +63,9 @@ def delete_all_characters(player_id: str) -> dict:
 
     Returns:
         dict: Summary of deletion results
+
+    Raises:
+        RuntimeError: If critical database operations fail
     """
     results = {
         "characters_deleted": 0,
@@ -114,6 +124,7 @@ def delete_all_characters(player_id: str) -> dict:
                             "character_id": character_id,
                             "character_name": character_name,
                         },
+                        exc_info=True
                     )
                     results["errors"].append(
                         f"Failed to delete character {character_name} ({character_id}): {str(err)}"
@@ -125,6 +136,18 @@ def delete_all_characters(player_id: str) -> dict:
         )
         return results
 
+    except ClientError as err:
+        logger.error(
+            "Database error in delete_all_characters",
+            extra={
+                "error": str(err),
+                "player_id": player_id,
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        results["errors"].append(f"Database error: {str(err)}")
+        return results
     except Exception as err:
         logger.error(
             "Error in delete_all_characters", extra={"error": str(err)}, exc_info=True
@@ -142,6 +165,9 @@ def delete_active_segments(player_id: str) -> int:
 
     Returns:
         int: Number of segments deleted
+
+    Raises:
+        RuntimeError: If query fails (but continues deletion attempts)
     """
     deleted_count = 0
     try:
@@ -158,10 +184,14 @@ def delete_active_segments(player_id: str) -> int:
                     Key={"ActiveSegmentID": item["ActiveSegmentID"]},
                 )
                 deleted_count += 1
-            except Exception as err:
+            except ClientError as err:
                 logger.error(
                     "Failed to delete active segment",
-                    extra={"error": str(err), "segment_id": item["ActiveSegmentID"]},
+                    extra={
+                        "error": str(err),
+                        "segment_id": item["ActiveSegmentID"],
+                        "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                    },
                 )
 
         logger.info(
@@ -169,10 +199,22 @@ def delete_active_segments(player_id: str) -> int:
             extra={"player_id": player_id, "count": deleted_count},
         )
         return deleted_count
+    except ClientError as err:
+        logger.error(
+            "Error querying active segments",
+            extra={
+                "error": str(err),
+                "player_id": player_id,
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        return deleted_count
     except Exception as err:
         logger.error(
             "Error deleting active segments",
             extra={"error": str(err), "player_id": player_id},
+            exc_info=True
         )
         return deleted_count
 
@@ -186,6 +228,9 @@ def delete_character_history(player_id: str) -> int:
 
     Returns:
         int: Number of history records deleted
+
+    Raises:
+        RuntimeError: If query fails (but continues deletion attempts)
     """
     deleted_count = 0
     try:
@@ -202,10 +247,14 @@ def delete_character_history(player_id: str) -> int:
                     Key={"PlayerID": player_id, "Timestamp": item["Timestamp"]},
                 )
                 deleted_count += 1
-            except Exception as err:
+            except ClientError as err:
                 logger.error(
                     "Failed to delete history record",
-                    extra={"error": str(err), "timestamp": item["Timestamp"]},
+                    extra={
+                        "error": str(err),
+                        "timestamp": item["Timestamp"],
+                        "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                    },
                 )
 
         logger.info(
@@ -214,6 +263,17 @@ def delete_character_history(player_id: str) -> int:
         )
         return deleted_count
 
+    except ClientError as err:
+        logger.error(
+            "Error querying character history",
+            extra={
+                "error": str(err),
+                "player_id": player_id,
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True,
+        )
+        return deleted_count
     except Exception as err:
         logger.error(
             "Error in delete_character_history",
@@ -239,15 +299,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     Returns:
         Response with deletion summary
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
     try:
         player_id = None
@@ -297,7 +350,14 @@ def lambda_handler(event: dict, context: object) -> dict:
         }
 
         try:
-            results["deletions"]["player_record"] = delete_player_record(player_id)
+            delete_player_record(player_id)
+            results["deletions"]["player_record"] = True
+        except RuntimeError as err:
+            logger.error(
+                "Failed to delete player record",
+                extra={"error": str(err), "player_id": player_id},
+            )
+            results["errors"].append(f"Player record: {str(err)}")
         except Exception as err:
             logger.error(
                 "Unexpected error deleting player record",
@@ -376,4 +436,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         if "requestContext" in event:
             return error_response("Internal server error", status_code=500)
-        raise
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "Internal server error"}),
+        }

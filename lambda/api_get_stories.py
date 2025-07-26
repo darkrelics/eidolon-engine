@@ -10,47 +10,22 @@ Returns stories the character can participate in, checking prerequisites and coo
 from datetime import datetime
 from datetime import timezone
 
-from eidolon.cors import cors_handler
+from botocore.exceptions import ClientError
+
+from eidolon.character import get_character_with_ownership
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
 from eidolon.requests import get_query_parameter
-from eidolon.responses import create_response
-from eidolon.responses import error_response
-from eidolon.responses import not_found_response
+from eidolon.utilities import build_lambda_response
+from eidolon.utilities import extract_and_validate_player_id
+from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import handle_preflight_if_options
+from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
-
-
-def get_character_and_verify_ownership(character_id: str, player_id: str) -> object:
-    """
-    Get character by UUID and verify ownership.
-
-    Args:
-        character_id: Character UUID
-        player_id: Cognito user ID for ownership verification
-
-    Returns:
-        Character data or None if not found or not owned by player
-    """
-    character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
-
-    if not character:
-        logger.warning("Character not found", extra={"character_id": character_id})
-        return None
-
-    # Verify ownership
-    if character.get("PlayerID") != player_id:
-        logger.warning(
-            "Character ownership mismatch",
-            extra={"character_id": character_id, "player_id": player_id},
-        )
-        return None
-
-    return character
 
 
 def get_story_cooldown(character_id: str, story_id: str, story_type: str):
@@ -145,167 +120,190 @@ def check_prerequisites(character: dict, prerequisites: dict) -> bool:
     return True
 
 
+def get_available_stories_business_logic(character_id: str, player_id: str) -> dict:
+    """
+    Business logic for getting available stories for a character.
+
+    Args:
+        character_id: Character UUID
+        player_id: Authenticated player ID
+
+    Returns:
+        Dict with stories list
+
+    Raises:
+        ValueError: If character not found or in invalid state
+        RuntimeError: If database operations fail
+    """
+    # Validate character ID format
+    if not validate_uuid(character_id):
+        raise ValueError("Invalid character ID format")
+
+    # Get character and verify ownership
+    character = get_character_with_ownership(character_id, player_id)
+
+    # Check if character is in a valid state for stories
+    game_mode = character.get("GameMode", "None")
+    if game_mode not in ["None", "Incremental"]:
+        raise ValueError(f"Character is currently in {game_mode} mode")
+
+    # Get available stories from character
+    available_story_ids = character.get("AvailableStories", [])
+    logger.info(
+        "Available stories for character",
+        extra={
+            "character_id": character_id,
+            "story_count": len(available_story_ids),
+            "story_ids": available_story_ids,
+        },
+    )
+
+    if not available_story_ids:
+        return {"stories": []}
+
+    # Load story details from Story table
+    stories = []
+
+    for story_id in available_story_ids:
+        try:
+            story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
+            if not story:
+                logger.warning("Story not found", extra={"story_id": story_id})
+                continue
+
+            # Check prerequisites
+            prerequisites = story.get("Prerequisites", {})
+            if not check_prerequisites(character, prerequisites):
+                continue
+
+            # Check cooldown
+            story_type = story.get("StoryType", "repeatable")
+            cooldown = get_story_cooldown(character_id, story_id, story_type)
+
+            if cooldown == -1:  # Permanently unavailable
+                continue
+
+            # Format story for response
+            story_data = {
+                "storyId": story_id,
+                "title": story.get("Title", "Unknown Story"),
+                "description": story.get("Description", ""),
+                "type": story_type,
+                "available": cooldown == 0,
+                "cooldownRemaining": max(0, cooldown) if cooldown is not None else 0,
+                "estimatedDuration": int(story.get("EstimatedDuration", 0)),
+            }
+
+            stories.append(story_data)
+            logger.debug(
+                "Story processed",
+                extra={
+                    "story_id": story_id,
+                    "story_type": story_type,
+                    "available": story_data["available"],
+                    "cooldown": cooldown,
+                },
+            )
+
+        except ClientError as err:
+            logger.error(
+                "Error loading story",
+                extra={
+                    "story_id": story_id,
+                    "error": str(err),
+                    "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                },
+            )
+            continue
+
+    # Sort stories by availability and title
+    stories.sort(key=lambda s: (not s["available"], s["title"]))
+
+    logger.info(
+        "Stories retrieved successfully",
+        extra={
+            "character_id": character_id,
+            "total_stories": len(stories),
+            "available_stories": sum(1 for s in stories if s["available"]),
+        },
+    )
+
+    return {"stories": stories}
+
+
 def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to get available stories for a character.
 
-    Args:
-        event: API Gateway Lambda proxy event
-        context: Lambda context
+    Query Parameters:
+        characterId: Character UUID
 
     Returns:
-        API Gateway Lambda proxy response
+        200: List of available stories
+        404: Character not found
+        400: Invalid parameters
+        401: Unauthorized
+        409: Character in invalid state
+        500: Internal error
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    # Handle preflight requests
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
     try:
-        # Extract player ID from authorizer
-        player_id, auth_error = extract_player_id(event)
+        # Extract and validate player ID
+        player_id, auth_error = extract_and_validate_player_id(event)
         if auth_error:
-            logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(
-                error_response(auth_error, status_code=401), event
-            )
-
-        logger.info("Player authenticated", extra={"player_id": player_id})
+            return auth_error
 
         # Get character ID from query parameters
         character_id, param_error = get_query_parameter(
             event, "characterId", required=True
-        )
+        ) # type: ignore
         if param_error:
-            return cors_handler.add_cors_headers(
-                error_response(param_error, status_code=400), event
+            return build_lambda_response(400, {"error": param_error}, event)
+
+        # Call business logic
+        try:
+            response_data = get_available_stories_business_logic(character_id, player_id)
+            return build_lambda_response(200, response_data, event)
+        except ValueError as err:
+            logger.warning(
+                "Invalid request",
+                extra={"character_id": character_id, "error": str(err)},
             )
-
-        # Validate character ID format
-        if not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(
-                error_response("Invalid character ID format", status_code=400), event
+            error_msg = str(err)
+            if "not found" in error_msg.lower():
+                return build_lambda_response(
+                    404,
+                    {"error": "Character not found"},
+                    event,
+                )
+            elif "mode" in error_msg.lower():
+                return build_lambda_response(
+                    409,
+                    {"error": error_msg},
+                    event,
+                )
+            return build_lambda_response(
+                400,
+                {"error": error_msg},
+                event,
             )
-
-        # Get character and verify ownership
-        character: dict = get_character_and_verify_ownership(character_id, player_id)  # type: ignore
-        if not character:
-            return cors_handler.add_cors_headers(not_found_response("Character"), event)
-
-        # Check if character is in a valid state for stories
-        game_mode = character.get("GameMode", "None")
-        if game_mode not in ["None", "Incremental"]:
-            return cors_handler.add_cors_headers(
-                error_response(
-                    f"Character is currently in {game_mode} mode", status_code=409
-                ),
+        except RuntimeError as err:
+            logger.error(
+                "Failed to get stories",
+                extra={"character_id": character_id, "error": str(err)},
+            )
+            return build_lambda_response(
+                500,
+                {"error": "Failed to retrieve stories"},
                 event,
             )
 
-        # Get available stories from character
-        available_story_ids = character.get("AvailableStories", [])
-        logger.info(
-            "Available stories for character",
-            extra={
-                "character_id": character_id,
-                "story_count": len(available_story_ids),
-                "story_ids": available_story_ids,
-            },
-        )
-
-        if not available_story_ids:
-            return cors_handler.add_cors_headers(
-                create_response(200, {"stories": []}), event
-            )
-
-        # Load story details from Story table
-        stories = []
-
-        for story_id in available_story_ids:
-            try:
-                story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
-                if not story:
-                    logger.warning("Story not found", extra={"story_id": story_id})
-                    continue
-
-                # Check prerequisites
-                prerequisites = story.get("Prerequisites", {})
-                if not check_prerequisites(character, prerequisites):
-                    continue
-
-                # Check cooldown
-                story_type = story.get("StoryType", "repeatable")
-                cooldown = get_story_cooldown(character_id, story_id, story_type)
-
-                if cooldown == -1:  # Permanently unavailable
-                    continue
-
-                # Format story for response
-                story_data = {
-                    "storyId": story_id,
-                    "title": story.get("Title", "Unknown Story"),
-                    "description": story.get("Description", ""),
-                    "type": story_type,
-                    "available": cooldown == 0,
-                    "cooldownRemaining": (
-                        max(0, cooldown) if cooldown is not None else 0
-                    ),
-                    "estimatedDuration": int(story.get("EstimatedDuration", 0)),
-                }
-
-                stories.append(story_data)
-                logger.debug(
-                    "Story processed",
-                    extra={
-                        "story_id": story_id,
-                        "story_type": story_type,
-                        "available": story_data["available"],
-                        "cooldown": cooldown,
-                    },
-                )
-
-            except Exception as err:
-                logger.error(
-                    "Error loading story",
-                    extra={"story_id": story_id, "error": str(err)},
-                )
-                continue
-
-        # Sort stories by availability and title
-        stories.sort(key=lambda s: (not s["available"], s["title"]))
-
-        logger.info(
-            "Stories retrieved successfully",
-            extra={
-                "status_code": 200,
-                "character_id": character_id,
-                "total_stories": len(stories),
-                "available_stories": sum(1 for s in stories if s["available"]),
-            },
-        )
-
-        # No need to convert Decimal values - dynamo_v2 handles this automatically
-        response_dict = {"stories": stories}
-        return cors_handler.add_cors_headers(create_response(200, response_dict), event)
-
     except Exception as err:
-        logger.error(
-            "Unexpected error in lambda_handler",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(
-            error_response("Internal server error", status_code=500), event
-        )
+        return handle_lambda_error(err, context, event)

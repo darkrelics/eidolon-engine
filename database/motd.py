@@ -15,7 +15,9 @@ from datetime import datetime
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.dynamo import dynamo  # noqa: C0413
+from botocore.exceptions import ClientError
+
+from eidolon.dynamo import dynamo  # noqa: E402
 from eidolon.dynamo import TableName
 
 
@@ -28,11 +30,15 @@ def add_or_update_motd(message: str, active: bool = True) -> dict:
         active (bool): Indicates whether the MOTD is active.
 
     Returns:
-        dict: The response from DynamoDB if the operation was successful.
+        dict: The MOTD item that was added.
 
     Raises:
-        ClientError: If an error occurs during the DynamoDB operation.
+        ValueError: If message is empty.
+        RuntimeError: If DynamoDB operation fails.
     """
+    if not message:
+        raise ValueError("Message cannot be empty")
+        
     motd_id: str = str(uuid.uuid4())
 
     # Prepare the item data to put into the table
@@ -48,9 +54,10 @@ def add_or_update_motd(message: str, active: bool = True) -> dict:
         print("MOTD added successfully.")
         print(f"MOTD ID: {motd_id}")
         return motd_item
+    except ClientError as err:
+        raise RuntimeError(f"Failed to add MOTD to DynamoDB: {err}")
     except Exception as err:
-        print(f"Error adding/updating MOTD: {err}")
-        return {}
+        raise RuntimeError(f"Unexpected error adding MOTD: {err}")
 
 
 def main() -> None:
@@ -76,7 +83,14 @@ def main() -> None:
     is_active = not args.inactive
 
     # Add or update the MOTD
-    add_or_update_motd(args.message, active=is_active)
+    try:
+        add_or_update_motd(args.message, active=is_active)
+    except ValueError as err:
+        print(f"Invalid input: {err}")
+        sys.exit(1)
+    except RuntimeError as err:
+        print(f"Error: {err}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

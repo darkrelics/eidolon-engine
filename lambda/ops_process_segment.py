@@ -14,9 +14,12 @@ import uuid
 from datetime import datetime
 from datetime import timezone
 
+from botocore.exceptions import ClientError
+
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
+from eidolon.utilities import log_lambda_invocation
 
 # Configure logging
 logger = get_logger(__name__)
@@ -191,11 +194,23 @@ def process_combat_segment(
     max_rounds = combat_config.get("maxRounds", 10)
 
     # Get opponent data
-    opponent = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
-
-    if not opponent:
-        logger.error("Opponent not found", extra={"opponent_id": opponent_id})
-        return "failure", {}
+    try:
+        opponent = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+        
+        if not opponent:
+            logger.error("Opponent not found", extra={"opponent_id": opponent_id})
+            raise ValueError(f"Opponent not found: {opponent_id}")
+    except ClientError as err:
+        logger.error(
+            "Failed to get opponent data",
+            extra={
+                "opponent_id": opponent_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to get opponent data: {str(err)}")
 
     # Initialize combat state from active segment or create new
     combat_state = active_segment.get("CombatState", {})
@@ -398,14 +413,26 @@ def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
         default_decision = segment_def.get("DefaultDecision")
         if default_decision:
             # Update active segment with default decision
-            dynamo.update_item(
-                TableName.ACTIVE_SEGMENTS,
-                Key={"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
-                UpdateExpression="SET #decision = :decision",
-                ExpressionAttributeNames={"#decision": "Decision"},
-                ExpressionAttributeValues={":decision": default_decision},
-            )
-            return "normal"
+            try:
+                dynamo.update_item(
+                    TableName.ACTIVE_SEGMENTS,
+                    Key={"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
+                    UpdateExpression="SET #decision = :decision",
+                    ExpressionAttributeNames={"#decision": "Decision"},
+                    ExpressionAttributeValues={":decision": default_decision},
+                )
+                return "normal"
+            except ClientError as err:
+                logger.error(
+                    "Failed to update decision",
+                    extra={
+                        "active_segment_id": active_segment.get("ActiveSegmentID"),
+                        "error": str(err),
+                        "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                    },
+                    exc_info=True
+                )
+                raise RuntimeError(f"Failed to update decision: {str(err)}")
         else:
             return "failure"
 
@@ -433,13 +460,25 @@ def update_active_segment_outcome(
         update_expression += ", CombatState = :state"
         expression_values[":state"] = results["combatState"]
 
-    dynamo.update_item(
-        TableName.ACTIVE_SEGMENTS,
-        Key={"ActiveSegmentID": active_segment_id},
-        UpdateExpression=update_expression,
-        ExpressionAttributeNames=expression_names,
-        ExpressionAttributeValues=expression_values,
-    )
+    try:
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_names,
+            ExpressionAttributeValues=expression_values,
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to update segment outcome",
+            extra={
+                "active_segment_id": active_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to update segment outcome: {str(err)}")
 
 
 def update_history_segment(
@@ -453,21 +492,34 @@ def update_history_segment(
         story_id: Story UUID
         segment_data: Data about completed segment
     """
-    # Get existing history
-    history = dynamo.get_item(
-        TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id}
-    )
-
-    if history:
-        segment_history = history.get("SegmentHistory", [])
-        segment_history.append(segment_data)
-
-        dynamo.update_item(
-            TableName.HISTORY,
-            Key={"CharacterID": character_id, "StoryID": story_id},
-            UpdateExpression="SET SegmentHistory = :history",
-            ExpressionAttributeValues={":history": segment_history},
+    try:
+        # Get existing history
+        history = dynamo.get_item(
+            TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id}
         )
+
+        if history:
+            segment_history = history.get("SegmentHistory", [])
+            segment_history.append(segment_data)
+
+            dynamo.update_item(
+                TableName.HISTORY,
+                Key={"CharacterID": character_id, "StoryID": story_id},
+                UpdateExpression="SET SegmentHistory = :history",
+                ExpressionAttributeValues={":history": segment_history},
+            )
+    except ClientError as err:
+        logger.error(
+            "Failed to update history",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to update history: {str(err)}")
 
 
 def get_next_segment_and_create(
@@ -489,6 +541,9 @@ def get_next_segment_and_create(
 
     Returns:
         Next active segment ID or None
+
+    Raises:
+        RuntimeError: If database operations fail
     """
     segment_type = current_segment.get("SegmentType")
     next_segment_id = None
@@ -508,13 +563,25 @@ def get_next_segment_and_create(
         return None
 
     # Get next segment definition
-    next_segment = dynamo.get_item(
-        TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id}
-    )
+    try:
+        next_segment = dynamo.get_item(
+            TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id}
+        )
 
-    if not next_segment:
-        logger.error("Next segment not found", extra={"segment_id": next_segment_id})
-        return None
+        if not next_segment:
+            logger.error("Next segment not found", extra={"segment_id": next_segment_id})
+            return None
+    except ClientError as err:
+        logger.error(
+            "Failed to get next segment",
+            extra={
+                "segment_id": next_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to get next segment: {str(err)}")
 
     # Create active segment for next segment
     return create_next_active_segment(
@@ -586,7 +653,19 @@ def create_next_active_segment(
         }
 
     # Store in DynamoDB
-    dynamo.put_item(TableName.ACTIVE_SEGMENTS, active_segment)
+    try:
+        dynamo.put_item(TableName.ACTIVE_SEGMENTS, active_segment)
+    except ClientError as err:
+        logger.error(
+            "Failed to create active segment",
+            extra={
+                "active_segment_id": active_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to create active segment: {str(err)}")
 
     return active_segment_id
 
@@ -600,24 +679,203 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
         story_id: Story UUID
         outcome: Final outcome
     """
-    # Update character GameMode back to None
-    dynamo.update_item(
-        TableName.CHARACTERS,
-        Key={"CharacterID": character_id},
-        UpdateExpression="SET GameMode = :none",
-        ExpressionAttributeValues={":none": "None"},
+    try:
+        # Update character GameMode back to None
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET GameMode = :none",
+            ExpressionAttributeValues={":none": "None"},
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to update character GameMode",
+            extra={
+                "character_id": character_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to update character GameMode: {str(err)}")
+
+    try:
+        # Update history with completion
+        dynamo.update_item(
+            TableName.HISTORY,
+            Key={"CharacterID": character_id, "StoryID": story_id},
+            UpdateExpression="SET FinishedAt = :finished, FinalOutcome = :outcome",
+            ExpressionAttributeValues={
+                ":finished": datetime.now(timezone.utc).isoformat(),
+                ":outcome": outcome,
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to update history completion",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to update history completion: {str(err)}")
+
+
+def process_segment_business_logic(
+    active_segment_id: str,
+    character_id: str,
+    story_id: str,
+    segment_id: str,
+    segment_type: str,
+) -> dict:
+    """
+    Business logic for processing a completed segment.
+
+    Args:
+        active_segment_id: Active segment UUID
+        character_id: Character UUID
+        story_id: Story UUID
+        segment_id: Segment UUID
+        segment_type: Type of segment
+
+    Returns:
+        Dict with outcome and next segment ID
+
+    Raises:
+        ValueError: If required data not found
+        RuntimeError: If database operations fail
+    """
+    # Get active segment
+    try:
+        active_segment = dynamo.get_item(
+            TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id}
+        )
+
+        if not active_segment:
+            logger.error(
+                "Active segment not found",
+                extra={"active_segment_id": active_segment_id},
+            )
+            raise ValueError("Active segment not found")
+    except ClientError as err:
+        logger.error(
+            "Failed to get active segment",
+            extra={
+                "active_segment_id": active_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to get active segment: {str(err)}")
+
+    # Get segment definition
+    try:
+        segment_def = dynamo.get_item(
+            TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id}
+        )
+
+        if not segment_def:
+            logger.error(
+                "Segment definition not found", extra={"segment_id": segment_id}
+            )
+            raise ValueError("Segment not found")
+    except ClientError as err:
+        logger.error(
+            "Failed to get segment definition",
+            extra={
+                "segment_id": segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to get segment definition: {str(err)}")
+
+    # Get character data
+    try:
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+
+        if not character:
+            logger.error("Character not found", extra={"character_id": character_id})
+            raise ValueError("Character not found")
+    except ClientError as err:
+        logger.error(
+            "Failed to get character",
+            extra={
+                "character_id": character_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to get character: {str(err)}")
+
+    # Process segment based on type
+    outcome = None
+    results = {}
+
+    if segment_type == "narrative":
+        outcome, challenge_results = process_narrative_segment(
+            segment_def, character
+        )
+        results["challengeResults"] = challenge_results
+
+    elif segment_type == "combat":
+        outcome, combat_state = process_combat_segment(
+            active_segment, segment_def, character
+        )
+        results["combatState"] = combat_state
+
+    elif segment_type == "decision":
+        outcome = process_decision_segment(active_segment, segment_def)
+
+    else:
+        logger.error("Unknown segment type", extra={"segment_type": segment_type})
+        outcome = "failure"
+
+    # Update active segment with outcome
+    update_active_segment_outcome(active_segment_id, outcome, results)
+
+    # Update history
+    segment_history_data = {
+        "SegmentID": segment_id,
+        "SegmentType": segment_type,
+        "Outcome": outcome,
+        "CompletedAt": datetime.now(timezone.utc).isoformat(),
+        **results,
+    }
+    update_history_segment(character_id, story_id, segment_history_data)  # type: ignore
+
+    # Determine next segment or complete story
+    next_active_segment_id = get_next_segment_and_create(
+        character_id, story_id, segment_def, active_segment, outcome  # type: ignore
     )
 
-    # Update history with completion
-    dynamo.update_item(
-        TableName.HISTORY,
-        Key={"CharacterID": character_id, "StoryID": story_id},
-        UpdateExpression="SET FinishedAt = :finished, FinalOutcome = :outcome",
-        ExpressionAttributeValues={
-            ":finished": datetime.now(timezone.utc).isoformat(),
-            ":outcome": outcome,
-        },
-    )
+    if not next_active_segment_id:
+        # No next segment - story is complete
+        complete_story(character_id, story_id, outcome)  # type: ignore
+        logger.info(
+            "Story completed",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "outcome": outcome,
+            },
+        )
+    else:
+        logger.info(
+            "Created next segment",
+            extra={"next_active_segment_id": next_active_segment_id},
+        )
+
+    return {
+        "outcome": outcome,
+        "nextSegment": next_active_segment_id,
+    }
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -631,15 +889,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     Returns:
         Processing result
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
     try:
         # Extract segment information from event
@@ -657,102 +908,38 @@ def lambda_handler(event: dict, context: object) -> dict:
             },
         )
 
-        # Get active segment
-        active_segment = dynamo.get_item(
-            TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id}
+        # Call business logic
+        result = process_segment_business_logic(
+            active_segment_id, character_id, story_id, segment_id, segment_type  # type: ignore
         )
-
-        if not active_segment:
-            logger.error(
-                "Active segment not found",
-                extra={"active_segment_id": active_segment_id},
-            )
-            return {"statusCode": 404, "body": "Active segment not found"}
-
-        # Get segment definition
-        segment_def = dynamo.get_item(
-            TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id}
-        )
-
-        if not segment_def:
-            logger.error(
-                "Segment definition not found", extra={"segment_id": segment_id}
-            )
-            return {"statusCode": 404, "body": "Segment not found"}
-
-        # Get character data
-        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
-
-        if not character:
-            logger.error("Character not found", extra={"character_id": character_id})
-            return {"statusCode": 404, "body": "Character not found"}
-
-        # Process segment based on type
-        outcome = None
-        results = {}
-
-        if segment_type == "narrative":
-            outcome, challenge_results = process_narrative_segment(
-                segment_def, character
-            )
-            results["challengeResults"] = challenge_results
-
-        elif segment_type == "combat":
-            outcome, combat_state = process_combat_segment(
-                active_segment, segment_def, character
-            )
-            results["combatState"] = combat_state
-
-        elif segment_type == "decision":
-            outcome = process_decision_segment(active_segment, segment_def)
-
-        else:
-            logger.error("Unknown segment type", extra={"segment_type": segment_type})
-            outcome = "failure"
-
-        # Update active segment with outcome
-        update_active_segment_outcome(active_segment_id, outcome, results)
-
-        # Update history
-        segment_history_data = {
-            "SegmentID": segment_id,
-            "SegmentType": segment_type,
-            "Outcome": outcome,
-            "CompletedAt": datetime.now(timezone.utc).isoformat(),
-            **results,
-        }
-        update_history_segment(character_id, story_id, segment_history_data)  # type: ignore
-
-        # Determine next segment or complete story
-        next_active_segment_id = get_next_segment_and_create(
-            character_id, story_id, segment_def, active_segment, outcome  # type: ignore
-        )
-
-        if not next_active_segment_id:
-            # No next segment - story is complete
-            complete_story(character_id, story_id, outcome)  # type: ignore
-            logger.info(
-                "Story completed",
-                extra={
-                    "character_id": character_id,
-                    "story_id": story_id,
-                    "outcome": outcome,
-                },
-            )
-        else:
-            logger.info(
-                "Created next segment",
-                extra={"next_active_segment_id": next_active_segment_id},
-            )
 
         logger.info("Lambda response", extra={"status_code": 200})
         return {
             "statusCode": 200,
             "body": {
                 "message": "Segment processed successfully",
-                "outcome": outcome,
-                "nextSegment": next_active_segment_id,
+                "outcome": result["outcome"],
+                "nextSegment": result["nextSegment"],
             },
+        }
+
+    except ValueError as err:
+        logger.error(
+            "Invalid request",
+            extra={"error": str(err)},
+        )
+        return {
+            "statusCode": 404,
+            "body": {"error": str(err)},
+        }
+    except RuntimeError as err:
+        logger.error(
+            "Failed to process segment",
+            extra={"error": str(err)},
+        )
+        return {
+            "statusCode": 500,
+            "body": {"error": "Failed to process segment"},
         }
 
     except Exception as err:

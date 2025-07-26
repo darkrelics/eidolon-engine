@@ -11,7 +11,9 @@ import sys
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.dynamo import dynamo  # noqa: C0413
+from botocore.exceptions import ClientError
+
+from eidolon.dynamo import dynamo  # noqa: E402
 from eidolon.dynamo import TABLE_ENV_MAP
 from eidolon.dynamo import TableName
 
@@ -42,18 +44,21 @@ def view_table(table_name, table_enum):
         table_enum: TableName enum value
     """
     try:
-        items = dynamo.scan(table_enum)
+        result: dict = dynamo.scan(table_enum) # type: ignore
+        items = result.get("items", [])
         actual_table_name = TABLE_ENV_MAP[table_enum]
 
         print(f"\nContents of table: {table_name} ({actual_table_name})")
         print("=" * 50)
-        for item in items:  # type: ignore
+        for item in items:
             print(item)
         print("=" * 50)
-        print(f"Total items: {len(items)}")  # type: ignore
+        print(f"Total items: {len(items)}")
         print()
-    except Exception as err:
+    except ClientError as err:
         print(f"Error scanning table {table_name}: {err}")
+    except Exception as err:
+        print(f"Unexpected error scanning table {table_name}: {err}")
 
 
 def main():
@@ -62,7 +67,7 @@ def main():
         # List all tables
         print("Available tables:")
         for logical_name, table_enum in TABLE_NAMES.items():
-            actual_name = TABLE_ENV_MAP[table_enum]
+            actual_name = TABLE_ENV_MAP.get(table_enum, "Not configured")
             print(f"  {logical_name}: {actual_name}")
         print("=" * 50)
 
@@ -70,6 +75,9 @@ def main():
         for logical_name, table_enum in TABLE_NAMES.items():
             view_table(logical_name, table_enum)
 
+    except KeyError as err:
+        print(f"Configuration error: {err}")
+        sys.exit(1)
     except Exception as err:
         print(f"Error connecting to DynamoDB: {err}")
         sys.exit(1)
