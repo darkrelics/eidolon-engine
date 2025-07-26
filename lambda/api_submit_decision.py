@@ -3,28 +3,20 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
 Lambda function to submit a decision for a story segment.
 Updates the active segment with the player's choice and returns the next segment.
 """
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import TableName, dynamo
+from eidolon.dynamo import dynamo
+from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, get_required_field, parse_json_body
-from eidolon.responses import create_response, error_response, not_found_response
+from eidolon.requests import extract_player_id
+from eidolon.requests import get_required_field
+from eidolon.requests import parse_json_body
+from eidolon.responses import create_response
+from eidolon.responses import error_response
+from eidolon.responses import not_found_response
 from eidolon.validation import validate_uuid
 
 # Configure logging
@@ -57,7 +49,9 @@ def get_active_segment_for_character(character_id: str, player_id: str) -> dict:
         },
     )
     if not items:
-        logger.warning("No active decision segment found", extra={"character_id": character_id})
+        logger.warning(
+            "No active decision segment found", extra={"character_id": character_id}
+        )
         return {}
 
     active_segment = items[0]
@@ -138,7 +132,7 @@ def update_active_segment_decision(active_segment_id: str, decision_id: str) -> 
     )
 
     # Get updated item
-    return dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id}) # type: ignore
+    return dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})  # type: ignore
 
 
 def get_next_segment_id(active_segment: dict, decision_id: str) -> str:
@@ -188,7 +182,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id, auth_error = extract_player_id(event)
         if auth_error:
             logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
+            return cors_handler.add_cors_headers(
+                error_response(auth_error, status_code=401), event
+            )
 
         logger.info("Player authenticated", extra={"player_id": player_id})
 
@@ -200,15 +196,21 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Get required fields
         character_id, char_error = get_required_field(body, "characterId")
         if char_error:
-            return cors_handler.add_cors_headers(error_response(char_error, status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response(char_error, status_code=400), event
+            )
 
         decision_id, decision_error = get_required_field(body, "decision")
         if decision_error:
-            return cors_handler.add_cors_headers(error_response(decision_error, status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response(decision_error, status_code=400), event
+            )
 
         # Validate UUIDs
         if character_id and not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response("Invalid character ID format", status_code=400), event
+            )
 
         logger.info(
             "Submitting decision",
@@ -218,7 +220,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Get active segment for character and verify ownership
         active_segment = get_active_segment_for_character(character_id, player_id)  # type: ignore
         if not active_segment:
-            return cors_handler.add_cors_headers(not_found_response("Active segment"), event)
+            return cors_handler.add_cors_headers(
+                not_found_response("Active segment"), event
+            )
 
         active_segment_id = active_segment.get("ActiveSegmentID")
 
@@ -231,7 +235,9 @@ def lambda_handler(event: dict, context: object) -> dict:
                     "existing_decision": active_segment.get("Decision"),
                 },
             )
-            return cors_handler.add_cors_headers(error_response("Decision already submitted", status_code=409), event)
+            return cors_handler.add_cors_headers(
+                error_response("Decision already submitted", status_code=409), event
+            )
 
         # Validate decision is valid for this segment
         if not validate_decision(active_segment, decision_id):  # type: ignore
@@ -242,7 +248,9 @@ def lambda_handler(event: dict, context: object) -> dict:
                     "decision_id": decision_id,
                 },
             )
-            return cors_handler.add_cors_headers(error_response("Invalid decision option", status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response("Invalid decision option", status_code=400), event
+            )
 
         # Update active segment with decision
         update_active_segment_decision(active_segment_id, decision_id)  # type: ignore
@@ -259,7 +267,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         if next_segment_id:
             # Calculate next segment completion time
             story_id = active_segment.get("StoryID")
-            next_segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id})
+            next_segment = dynamo.get_item(
+                TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id}
+            )
 
             if next_segment:
                 # Next segment will start after processing completes
@@ -292,4 +302,6 @@ def lambda_handler(event: dict, context: object) -> dict:
             exc_info=True,
         )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return cors_handler.add_cors_headers(
+            error_response("Internal server error", status_code=500), event
+        )

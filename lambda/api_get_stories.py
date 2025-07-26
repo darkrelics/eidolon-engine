@@ -3,30 +3,22 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
 Lambda function to get available stories for a character.
 Returns stories the character can participate in, checking prerequisites and cooldowns.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import TableName, dynamo
+from eidolon.dynamo import dynamo
+from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, get_query_parameter
-from eidolon.responses import create_response, error_response, not_found_response
+from eidolon.requests import extract_player_id
+from eidolon.requests import get_query_parameter
+from eidolon.responses import create_response
+from eidolon.responses import error_response
+from eidolon.responses import not_found_response
 from eidolon.validation import validate_uuid
 
 # Configure logging
@@ -78,7 +70,9 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
 
     # Query history table for last completion
     try:
-        history = dynamo.get_item(TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id})
+        history = dynamo.get_item(
+            TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id}
+        )
 
         if not history:
             return 0  # Never played
@@ -96,7 +90,9 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
 
         if story_type == "daily":
             # Calculate time until midnight UTC
-            finished_at = datetime.fromisoformat(history["FinishedAt"].replace("Z", "+00:00"))
+            finished_at = datetime.fromisoformat(
+                history["FinishedAt"].replace("Z", "+00:00")
+            )
             now = datetime.now(timezone.utc)
 
             # Check if completion was today
@@ -181,18 +177,26 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id, auth_error = extract_player_id(event)
         if auth_error:
             logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
+            return cors_handler.add_cors_headers(
+                error_response(auth_error, status_code=401), event
+            )
 
         logger.info("Player authenticated", extra={"player_id": player_id})
 
         # Get character ID from query parameters
-        character_id, param_error = get_query_parameter(event, "characterId", required=True)
+        character_id, param_error = get_query_parameter(
+            event, "characterId", required=True
+        )
         if param_error:
-            return cors_handler.add_cors_headers(error_response(param_error, status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response(param_error, status_code=400), event
+            )
 
         # Validate character ID format
         if not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response("Invalid character ID format", status_code=400), event
+            )
 
         # Get character and verify ownership
         character: dict = get_character_and_verify_ownership(character_id, player_id)  # type: ignore
@@ -203,7 +207,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         game_mode = character.get("GameMode", "None")
         if game_mode not in ["None", "Incremental"]:
             return cors_handler.add_cors_headers(
-                error_response(f"Character is currently in {game_mode} mode", status_code=409),
+                error_response(
+                    f"Character is currently in {game_mode} mode", status_code=409
+                ),
                 event,
             )
 
@@ -219,7 +225,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
 
         if not available_story_ids:
-            return cors_handler.add_cors_headers(create_response(200, {"stories": []}), event)
+            return cors_handler.add_cors_headers(
+                create_response(200, {"stories": []}), event
+            )
 
         # Load story details from Story table
         stories = []
@@ -250,7 +258,9 @@ def lambda_handler(event: dict, context: object) -> dict:
                     "description": story.get("Description", ""),
                     "type": story_type,
                     "available": cooldown == 0,
-                    "cooldownRemaining": (max(0, cooldown) if cooldown is not None else 0),
+                    "cooldownRemaining": (
+                        max(0, cooldown) if cooldown is not None else 0
+                    ),
                     "estimatedDuration": int(story.get("EstimatedDuration", 0)),
                 }
 
@@ -296,4 +306,6 @@ def lambda_handler(event: dict, context: object) -> dict:
             exc_info=True,
         )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return cors_handler.add_cors_headers(
+            error_response("Internal server error", status_code=500), event
+        )

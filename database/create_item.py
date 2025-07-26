@@ -3,18 +3,6 @@ Eidolon Engine
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
 This module adds an item based on a prototype to a room.
 """
 
@@ -26,7 +14,8 @@ from decimal import Decimal
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.dynamo import TableName, dynamo  # noqa: C0413
+from eidolon.dynamo import dynamo  # noqa: C0413
+from eidolon.dynamo import TableName
 
 
 def display_rooms() -> list:
@@ -125,7 +114,9 @@ def create_new_item_from_prototype(prototype: dict) -> dict:
         "WornOn": prototype.get("WornOn", []),
         "Verbs": prototype.get("Verbs", {}),
         "Overrides": prototype.get("Overrides", {}),
-        "TraitMods": {k: Decimal(str(v)) for k, v in prototype.get("TraitMods", {}).items()},
+        "TraitMods": {
+            k: Decimal(str(v)) for k, v in prototype.get("TraitMods", {}).items()
+        },
         "Container": prototype.get("Container", False),
         "Contents": prototype.get("Contents", []),
         "IsWorn": False,
@@ -195,16 +186,20 @@ def add_item_to_room(room: dict, new_item: dict) -> bool:
             TableName.ROOMS,
             Key={"RoomID": room_id},
             UpdateExpression="SET ItemID = :item_ids",
-            ExpressionAttributeValues={":item_ids": current_item_ids}
+            ExpressionAttributeValues={":item_ids": current_item_ids},
         )
-        print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
+        print(
+            f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}"
+        )
         return True
     except Exception as err:
         print(f"Error updating room: {err}")
         # Attempt to roll back by deleting the item we just added
         try:
             dynamo.delete_item(TableName.ITEMS, Key={"ItemID": new_item["ItemID"]})
-            print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
+            print(
+                f"Rolled back: Deleted item '{new_item['item_name']}' from items table."
+            )
         except Exception as rollback_err:
             print(f"Error rolling back item addition: {rollback_err}")
         return False
@@ -241,7 +236,9 @@ def main() -> None:
             print("No prototype selected. Returning to room selection.")
             continue
 
-        selected_prototype = next((p for p in prototypes if p.get("PrototypeID") == prototype_id), None)
+        selected_prototype = next(
+            (p for p in prototypes if p.get("PrototypeID") == prototype_id), None
+        )
         if not selected_prototype:
             print("Prototype not found.")
             continue

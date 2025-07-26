@@ -3,34 +3,27 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
 Lambda function to start a story for a character.
 Validates character state, creates active segment, and returns first segment details.
 """
 
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 
 from botocore.exceptions import ClientError
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import TableName, dynamo
+from eidolon.dynamo import dynamo
+from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, get_required_field, parse_json_body
-from eidolon.responses import create_response, error_response, not_found_response
+from eidolon.requests import extract_player_id
+from eidolon.requests import get_required_field
+from eidolon.requests import parse_json_body
+from eidolon.responses import create_response
+from eidolon.responses import error_response
+from eidolon.responses import not_found_response
 from eidolon.validation import validate_uuid
 
 # Configure logging
@@ -103,7 +96,9 @@ def get_story_and_first_segment(story_id: str) -> tuple:
         logger.error("Story has no first segment", extra={"story_id": story_id})
         return None, None
 
-    segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": first_segment_id})
+    segment = dynamo.get_item(
+        TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": first_segment_id}
+    )
 
     if not segment:
         logger.error(
@@ -115,7 +110,9 @@ def get_story_and_first_segment(story_id: str) -> tuple:
     return story, segment
 
 
-def create_active_segment(character_id: str, player_id: str, story_id: str, story_title: str, segment: dict) -> dict:
+def create_active_segment(
+    character_id: str, player_id: str, story_id: str, story_title: str, segment: dict
+) -> dict:
     """
     Create an active segment record for tracking progress.
 
@@ -203,10 +200,14 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         decision_options = segment.get("DecisionOptions", {})
         options = []
         for option_id, _ in decision_options.items():
-            options.append({"id": option_id, "text": option_id.replace("-", " ").title()})  # Format option ID as display text
+            options.append(
+                {"id": option_id, "text": option_id.replace("-", " ").title()}
+            )  # Format option ID as display text
         response["options"] = options
     elif segment_type == "narrative":
-        response["shortStatus"] = segment.get("ShortStatus", "Progressing through the story...")
+        response["shortStatus"] = segment.get(
+            "ShortStatus", "Progressing through the story..."
+        )
         response["narrative"] = ""
     elif segment_type == "combat":
         response["shortStatus"] = segment.get("ShortStatus", "Engaged in combat!")
@@ -215,7 +216,9 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
     return response
 
 
-def create_history_entry(character_id: str, story_id: str, story_title: str, story_type: str) -> None:
+def create_history_entry(
+    character_id: str, story_id: str, story_title: str, story_type: str
+) -> None:
     """
     Create initial history entry for story tracking.
 
@@ -271,7 +274,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id, auth_error = extract_player_id(event)
         if auth_error:
             logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
+            return cors_handler.add_cors_headers(
+                error_response(auth_error, status_code=401), event
+            )
 
         logger.info("Player authenticated", extra={"player_id": player_id})
 
@@ -283,18 +288,26 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Get required fields
         character_id, char_error = get_required_field(body, "characterId")
         if char_error:
-            return cors_handler.add_cors_headers(error_response(char_error, status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response(char_error, status_code=400), event
+            )
 
         story_id, story_error = get_required_field(body, "storyId")
         if story_error:
-            return cors_handler.add_cors_headers(error_response(story_error, status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response(story_error, status_code=400), event
+            )
 
         # Validate UUIDs
         if character_id and not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response("Invalid character ID format", status_code=400), event
+            )
 
         if story_id and not validate_uuid(story_id):
-            return cors_handler.add_cors_headers(error_response("Invalid story ID format", status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response("Invalid story ID format", status_code=400), event
+            )
 
         logger.info(
             "Starting story",
@@ -314,7 +327,9 @@ def lambda_handler(event: dict, context: object) -> dict:
                 extra={"character_id": character_id, "game_mode": game_mode},
             )
             return cors_handler.add_cors_headers(
-                error_response(f"Character is currently in {game_mode} mode", status_code=409),
+                error_response(
+                    f"Character is currently in {game_mode} mode", status_code=409
+                ),
                 event,
             )
 
@@ -324,12 +339,16 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "Story not available to character",
                 extra={"character_id": character_id, "story_id": story_id},
             )
-            return cors_handler.add_cors_headers(error_response("Story not available", status_code=403), event)
+            return cors_handler.add_cors_headers(
+                error_response("Story not available", status_code=403), event
+            )
 
         # Get story and first segment
         story, first_segment = get_story_and_first_segment(story_id)  # type: ignore
         if not story or not first_segment:
-            return cors_handler.add_cors_headers(error_response("Story configuration error", status_code=500), event)
+            return cors_handler.add_cors_headers(
+                error_response("Story configuration error", status_code=500), event
+            )
 
         # Create active segment first to get the segment ID
         story_title = story.get("Title", "Unknown Story")
@@ -340,7 +359,9 @@ def lambda_handler(event: dict, context: object) -> dict:
             # Build update expression to set GameMode and remove from AvailableStories
             update_expression = (
                 "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id "
-                "REMOVE AvailableStories[" + str(character["AvailableStories"].index(story_id)) + "]"
+                "REMOVE AvailableStories["
+                + str(character["AvailableStories"].index(story_id))
+                + "]"
             )
 
             dynamo.update_item(
@@ -359,7 +380,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         except ClientError as err:
             # Rollback: Delete the active segment we just created
             try:
-                dynamo.delete_item(TableName.ACTIVE_SEGMENTS, Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]})
+                dynamo.delete_item(
+                    TableName.ACTIVE_SEGMENTS,
+                    Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]},
+                )
             except Exception as rollback_err:
                 logger.error(
                     "Failed to rollback active segment",
@@ -374,12 +398,17 @@ def lambda_handler(event: dict, context: object) -> dict:
                     "Character state changed during story start",
                     extra={"character_id": character_id},
                 )
-                return cors_handler.add_cors_headers(error_response("Character state conflict", status_code=409), event)
+                return cors_handler.add_cors_headers(
+                    error_response("Character state conflict", status_code=409), event
+                )
             raise
         except Exception as err:
             # Rollback: Delete the active segment we just created
             try:
-                dynamo.delete_item(TableName.ACTIVE_SEGMENTS, Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]})
+                dynamo.delete_item(
+                    TableName.ACTIVE_SEGMENTS,
+                    Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]},
+                )
             except Exception as rollback_err:
                 logger.error(
                     "Failed to rollback active segment",
@@ -393,7 +422,9 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "Failed to update character state",
                 extra={"character_id": character_id, "error": str(err)},
             )
-            return cors_handler.add_cors_headers(error_response("Failed to start story", status_code=500), event)
+            return cors_handler.add_cors_headers(
+                error_response("Failed to start story", status_code=500), event
+            )
 
         # Create history entry
         story_type = story.get("StoryType", "repeatable")
@@ -413,7 +444,9 @@ def lambda_handler(event: dict, context: object) -> dict:
             },
         )
 
-        return cors_handler.add_cors_headers(create_response(200, {"segment": segment_data}), event)
+        return cors_handler.add_cors_headers(
+            create_response(200, {"segment": segment_data}), event
+        )
 
     except Exception as err:
         logger.error(
@@ -422,4 +455,6 @@ def lambda_handler(event: dict, context: object) -> dict:
             exc_info=True,
         )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return cors_handler.add_cors_headers(
+            error_response("Internal server error", status_code=500), event
+        )

@@ -4,10 +4,16 @@ CORS handler module for Lambda functions.
 Provides centralized CORS configuration and validation for API responses.
 """
 
-import logging
-import os
+from eidolon.environment import (
+    ALLOWED_ORIGINS,
+    CORS_ALLOW_CREDENTIALS,
+    CORS_ALLOWED_HEADERS,
+    CORS_ALLOWED_METHODS,
+    CORS_MAX_AGE,
+)
+from eidolon.logger import get_logger
 
-logger = logging.getLogger()
+logger = get_logger(__name__)
 
 
 class CorsHandler:
@@ -16,8 +22,7 @@ class CorsHandler:
     def __init__(self):
         """Initialize CORS handler with environment configuration."""
         # Get allowed origins from environment variable
-        origins_config = os.environ.get("ALLOWED_ORIGINS", "")
-        self.allowed_origins = [origin.strip() for origin in origins_config.split(",") if origin.strip()]
+        self.allowed_origins = [origin.strip() for origin in ALLOWED_ORIGINS.split(",") if origin.strip()]
 
         # Default to restrictive CORS if no origins specified
         if not self.allowed_origins:
@@ -25,18 +30,16 @@ class CorsHandler:
             self.allowed_origins = []
 
         # Whether to allow credentials
-        self.allow_credentials = os.environ.get("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
+        self.allow_credentials = CORS_ALLOW_CREDENTIALS.lower() == "true"
 
         # Allowed headers
-        self.allowed_headers = os.environ.get(
-            "CORS_ALLOWED_HEADERS", "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token"
-        )
+        self.allowed_headers = CORS_ALLOWED_HEADERS
 
         # Allowed methods
-        self.allowed_methods = os.environ.get("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS")
+        self.allowed_methods = CORS_ALLOWED_METHODS
 
         # Max age for preflight cache
-        self.max_age = os.environ.get("CORS_MAX_AGE", "86400")  # 24 hours default
+        self.max_age = CORS_MAX_AGE
 
     def get_cors_headers(self, event: dict) -> dict:
         """
@@ -74,7 +77,10 @@ class CorsHandler:
                 cors_headers["Access-Control-Allow-Credentials"] = "true"
         else:
             # No valid origin found, reject the request
-            logger.warning(f"Origin '{origin}' not in allowed list. Allowed origins: {self.allowed_origins}")
+            logger.warning(
+                "Origin not in allowed list",
+                extra={"origin": origin, "allowed_origins": self.allowed_origins}
+            )
             # Don't set Access-Control-Allow-Origin header for unauthorized origins
             # This will cause the browser to block the request
 

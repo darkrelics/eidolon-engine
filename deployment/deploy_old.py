@@ -3,18 +3,6 @@ Eidolon Engine
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
 Eidolon Engine Deployment Script
 """
 
@@ -47,7 +35,9 @@ def load_config() -> dict:
     """Load deployment configuration from YAML file."""
     if not os.path.exists(CONFIG_PATH):
         if not os.path.exists(CONFIG_TEMPLATE_PATH):
-            raise FileNotFoundError(f"Neither {CONFIG_PATH} nor {CONFIG_TEMPLATE_PATH} exist")
+            raise FileNotFoundError(
+                f"Neither {CONFIG_PATH} nor {CONFIG_TEMPLATE_PATH} exist"
+            )
         with open(CONFIG_TEMPLATE_PATH, "r", encoding="utf-8") as template_file:
             config = yaml.safe_load(template_file)
         with open(CONFIG_PATH, "w", encoding="utf-8") as config_file:
@@ -78,7 +68,9 @@ def load_template(template_path) -> str:
 
 def deploy_stack(client, stack_name, template_body, parameters) -> bool:
     """Deploy or update CloudFormation stack."""
-    cf_parameters: list = [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()]
+    cf_parameters: list = [
+        {"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()
+    ]
     try:
         if stack_exists(client, stack_name):
             print(f"Updating existing stack: {stack_name}")
@@ -177,9 +169,14 @@ def update_configuration_file(config_updates, user_pool_name=None) -> None:
     logging_updates = {
         "ApplicationName": logging_config.get("ApplicationName", "Eidolon Engine"),
         "LogLevel": logging_config.get("LogLevel", 20),
-        "LogGroup": cloudwatch_updates.get("LogGroupName", logging_config.get("LogGroup", "/eidolon/game-logs")),
+        "LogGroup": cloudwatch_updates.get(
+            "LogGroupName", logging_config.get("LogGroup", "/eidolon/game-logs")
+        ),
         "LogStream": logging_config.get("LogStream", "application"),
-        "MetricNamespace": cloudwatch_updates.get("MetricNamespace", logging_config.get("MetricNamespace", "eidolon/application")),
+        "MetricNamespace": cloudwatch_updates.get(
+            "MetricNamespace",
+            logging_config.get("MetricNamespace", "eidolon/application"),
+        ),
     }
     logging_config.update(logging_updates)
     config["Logging"] = logging_config
@@ -257,13 +254,20 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
 
             try:
                 with open(local_path, "rb") as file_data:
-                    s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=file_data, ContentType="text/x-lua")
+                    s3_client.put_object(
+                        Bucket=bucket_name,
+                        Key=s3_key,
+                        Body=file_data,
+                        ContentType="text/x-lua",
+                    )
                 print(f"Uploaded: {filename} -> s3://{bucket_name}/{s3_key}")
                 success_count += 1
             except ClientError as err:
                 print(f"Failed to upload {filename}: {err}")
 
-        print(f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded")
+        print(
+            f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded"
+        )
         return success_count == len(lua_files)
 
     except Exception as err:
@@ -277,9 +281,17 @@ def gather_all_parameters() -> dict:
 
     # Cognito parameters
     parameters["cognito"] = {
-        "UserPoolName": input("Enter the Name of the user pool [default: eidolon-user-pool]: ") or "eidolon-user-pool",
-        "AppClientName": input("Enter the Name of the app client [default: eidolon-app-client]: ") or "eidolon-app-client",
-        "ReplyEmailAddress": input("Enter the email address to send from [default: contact@darkrelics.net]: ")
+        "UserPoolName": input(
+            "Enter the Name of the user pool [default: eidolon-user-pool]: "
+        )
+        or "eidolon-user-pool",
+        "AppClientName": input(
+            "Enter the Name of the app client [default: eidolon-app-client]: "
+        )
+        or "eidolon-app-client",
+        "ReplyEmailAddress": input(
+            "Enter the email address to send from [default: contact@darkrelics.net]: "
+        )
         or "contact@darkrelics.net",
     }
 
@@ -288,9 +300,13 @@ def gather_all_parameters() -> dict:
 
     # CloudWatch parameters
     parameters["cloudwatch"] = {
-        "LogGroupName": input("Enter the name for the CloudWatch Log Group [default: /eidolon/game-logs]: ")
+        "LogGroupName": input(
+            "Enter the name for the CloudWatch Log Group [default: /eidolon/game-logs]: "
+        )
         or "/eidolon/game-logs",
-        "MetricNamespace": input("Enter the namespace for CloudWatch Metrics [default: eidolon/application]: ")
+        "MetricNamespace": input(
+            "Enter the namespace for CloudWatch Metrics [default: eidolon/application]: "
+        )
         or "eidolon/application",
     }
 
@@ -300,14 +316,20 @@ def gather_all_parameters() -> dict:
             "Enter the GitHub repository URL for the source code [default: https://github.com/robinje/eidolon-engine]: "
         )
         or "https://github.com/robinje/eidolon-engine",
-        "S3BucketName": input("Enter the name of the existing S3 bucket for build artifacts [default: mud-web-site]: ")
+        "S3BucketName": input(
+            "Enter the name of the existing S3 bucket for build artifacts [default: mud-web-site]: "
+        )
         or "mud-web-site",
     }
 
     # Scripts parameters
     parameters["scripts"] = {
-        "S3BucketName": input("Enter the S3 bucket name for Lua scripts [default: mud-scripts]: ") or "mud-scripts",
-        "S3Prefix": input("Enter the S3 prefix for Lua scripts [default: scripts]: ") or "scripts",
+        "S3BucketName": input(
+            "Enter the S3 bucket name for Lua scripts [default: mud-scripts]: "
+        )
+        or "mud-scripts",
+        "S3Prefix": input("Enter the S3 prefix for Lua scripts [default: scripts]: ")
+        or "scripts",
     }
 
     return parameters
@@ -328,19 +350,33 @@ def main() -> None:
 
         # Deploy Cognito stack
         cognito_template: str = load_template(COGNITO_TEMPLATE_PATH)
-        if not deploy_stack(cloudformation_client, COGNITO_STACK_NAME, cognito_template, all_parameters["cognito"]):
+        if not deploy_stack(
+            cloudformation_client,
+            COGNITO_STACK_NAME,
+            cognito_template,
+            all_parameters["cognito"],
+        ):
             print("Deployment failed at Cognito stack. Exiting...")
             return
 
-        cognito_outputs: dict = get_stack_outputs(cloudformation_client, COGNITO_STACK_NAME)
+        cognito_outputs: dict = get_stack_outputs(
+            cloudformation_client, COGNITO_STACK_NAME
+        )
 
         # Deploy DynamoDB stack
         dynamo_template: str = load_template(DYNAMO_TEMPLATE_PATH)
-        if not deploy_stack(cloudformation_client, DYNAMO_STACK_NAME, dynamo_template, all_parameters["dynamo"]):
+        if not deploy_stack(
+            cloudformation_client,
+            DYNAMO_STACK_NAME,
+            dynamo_template,
+            all_parameters["dynamo"],
+        ):
             print("Deployment failed at DynamoDB stack. Exiting...")
             return
 
-        dynamo_outputs: dict = get_stack_outputs(cloudformation_client, DYNAMO_STACK_NAME)
+        dynamo_outputs: dict = get_stack_outputs(
+            cloudformation_client, DYNAMO_STACK_NAME
+        )
 
         # Update CodeBuild parameters with Cognito outputs
         all_parameters["codebuild"].update(
@@ -352,28 +388,44 @@ def main() -> None:
 
         # Deploy CodeBuild stack
         codebuild_template: str = load_template(CODEBUILD_TEMPLATE_PATH)
-        if not deploy_stack(cloudformation_client, CODEBUILD_STACK_NAME, codebuild_template, all_parameters["codebuild"]):
+        if not deploy_stack(
+            cloudformation_client,
+            CODEBUILD_STACK_NAME,
+            codebuild_template,
+            all_parameters["codebuild"],
+        ):
             print("Deployment failed at CodeBuild stack. Exiting...")
             return
 
-        codebuild_outputs: dict = get_stack_outputs(cloudformation_client, CODEBUILD_STACK_NAME)
+        codebuild_outputs: dict = get_stack_outputs(
+            cloudformation_client, CODEBUILD_STACK_NAME
+        )
 
         # Start the 'PortalApplicationBuild' CodeBuild job
         codebuild_client = boto3.client("codebuild")
         try:
             print("Starting PortalApplicationBuild CodeBuild job...")
-            build_response = codebuild_client.start_build(projectName="PortalApplicationBuild")
+            build_response = codebuild_client.start_build(
+                projectName="PortalApplicationBuild"
+            )
             print(f"Build started successfully: {build_response['build']['id']}")
         except ClientError as build_err:
             print(f"Failed to start PortalApplicationBuild CodeBuild job: {build_err}")
 
         # Deploy CloudWatch stack
         cloudwatch_template: str = load_template(CLOUDWATCH_TEMPLATE_PATH)
-        if not deploy_stack(cloudformation_client, CLOUDWATCH_STACK_NAME, cloudwatch_template, all_parameters["cloudwatch"]):
+        if not deploy_stack(
+            cloudformation_client,
+            CLOUDWATCH_STACK_NAME,
+            cloudwatch_template,
+            all_parameters["cloudwatch"],
+        ):
             print("Deployment failed at CloudWatch stack. Exiting...")
             return
 
-        cloudwatch_outputs: dict = get_stack_outputs(cloudformation_client, CLOUDWATCH_STACK_NAME)
+        cloudwatch_outputs: dict = get_stack_outputs(
+            cloudformation_client, CLOUDWATCH_STACK_NAME
+        )
 
         # Deploy Lua scripts to S3
         scripts_bucket = all_parameters["scripts"]["S3BucketName"]
@@ -381,12 +433,16 @@ def main() -> None:
 
         # Validate scripts bucket exists
         if not validate_s3_bucket(scripts_bucket):
-            print(f"Invalid or inaccessible S3 bucket for scripts: {scripts_bucket}. Exiting...")
+            print(
+                f"Invalid or inaccessible S3 bucket for scripts: {scripts_bucket}. Exiting..."
+            )
             return
 
         # Deploy scripts
         if not deploy_scripts(scripts_bucket, scripts_prefix):
-            print("Warning: Some scripts failed to deploy, but continuing with deployment...")
+            print(
+                "Warning: Some scripts failed to deploy, but continuing with deployment..."
+            )
 
         # Update configuration file with outputs from all stacks and scripts configuration
         config_updates: dict = {
@@ -399,7 +455,9 @@ def main() -> None:
                 "ScriptsS3Prefix": scripts_prefix,
             },
         }
-        update_configuration_file(config_updates, all_parameters["cognito"]["UserPoolName"])
+        update_configuration_file(
+            config_updates, all_parameters["cognito"]["UserPoolName"]
+        )
 
         print("Deployment completed successfully.")
     except Exception as err:

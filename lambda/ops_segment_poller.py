@@ -3,19 +3,6 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
 Lambda function to poll for completed segments.
 Triggered by EventBridge to check active segments that have reached their end time.
 """
@@ -25,7 +12,8 @@ import time
 
 import boto3
 
-from eidolon.dynamo import TableName, dynamo
+from eidolon.dynamo import dynamo
+from eidolon.dynamo import TableName
 from eidolon.environment import PROCESS_SEGMENT_FUNCTION
 from eidolon.logger import get_logger
 
@@ -55,7 +43,7 @@ def get_completed_segments() -> list:
         Limit=50,  # Process up to 50 segments per invocation
     )
 
-    return items # type: ignore
+    return items  # type: ignore
 
 
 def invoke_process_segment(segment: dict) -> None:
@@ -126,7 +114,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Get completed segments
         completed_segments = get_completed_segments()
 
-        logger.info("Found completed segments", extra={"count": len(completed_segments)})
+        logger.info(
+            "Found completed segments", extra={"count": len(completed_segments)}
+        )
 
         # Process each completed segment
         processed_count = 0

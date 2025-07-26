@@ -1,21 +1,11 @@
 // Eidolon Engine
 //
 // Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import 'auth_state.dart';
 import 'navigation.dart';
 
@@ -154,9 +144,7 @@ class SessionMonitor {
     final inactiveDuration = now.difference(_lastActivityTime!);
 
     // Check if session is valid locally
-    final isLocallyValid =
-        absoluteDuration < _absoluteTimeout &&
-        inactiveDuration < _inactivityTimeout;
+    final isLocallyValid = absoluteDuration < _absoluteTimeout && inactiveDuration < _inactivityTimeout;
 
     // In a production app, also verify with the server
     if (isLocallyValid && _authState != null) {
@@ -173,9 +161,7 @@ class SessionMonitor {
   Future<void> _verifyTokenWithServer() async {
     // Don't verify too frequently to reduce server load
     if (_lastServerVerification != null) {
-      final timeSinceLastVerification = DateTime.now().difference(
-        _lastServerVerification!,
-      );
+      final timeSinceLastVerification = DateTime.now().difference(_lastServerVerification!);
       if (timeSinceLastVerification < const Duration(minutes: 5)) {
         return; // Skip verification if done recently
       }
@@ -214,11 +200,7 @@ class ActivityMonitor extends StatefulWidget {
   final Widget child;
   final SessionMonitor sessionMonitor;
 
-  const ActivityMonitor({
-    super.key,
-    required this.child,
-    required this.sessionMonitor,
-  });
+  const ActivityMonitor({super.key, required this.child, required this.sessionMonitor});
 
   @override
   State<ActivityMonitor> createState() => _ActivityMonitorState();

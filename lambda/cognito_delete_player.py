@@ -3,32 +3,23 @@ Eidolon Engine - Player Deletion Handler
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
 Lambda function to handle complete player deletion including all associated
 game data from both MUD and Incremental game tables. This ensures GDPR
 compliance by removing all traces of user data.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 
 from eidolon.character import delete_character
-from eidolon.dynamo import TableName, dynamo
+from eidolon.dynamo import dynamo
+from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, parse_json_body
-from eidolon.responses import create_response, error_response
+from eidolon.requests import extract_player_id
+from eidolon.requests import parse_json_body
+from eidolon.responses import create_response
+from eidolon.responses import error_response
 
 # Configure logging
 logger = get_logger(__name__)
@@ -49,7 +40,10 @@ def delete_player_record(player_id: str) -> bool:
         logger.info("Deleted player record", extra={"player_id": player_id})
         return True
     except Exception as err:
-        logger.error("Failed to delete player record", extra={"error": str(err), "player_id": player_id})
+        logger.error(
+            "Failed to delete player record",
+            extra={"error": str(err), "player_id": player_id},
+        )
         return False
 
 
@@ -68,61 +62,75 @@ def delete_all_characters(player_id: str) -> dict:
         "items_deleted": 0,
         "active_segments_deleted": 0,
         "history_deleted": 0,
-        "errors": []
+        "errors": [],
     }
-    
+
     try:
         player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
-        
+
         if not player:
-            logger.warning("Player not found for character deletion", extra={"player_id": player_id})
+            logger.warning(
+                "Player not found for character deletion",
+                extra={"player_id": player_id},
+            )
             return results
-        
+
         character_list = player.get("CharacterList", {})
-        
+
         for character_name, character_info in character_list.items():
             character_id = character_info.get("UUID")
             if character_id:
                 try:
                     # No need to verify ownership here since we're getting characters from player's own list
-                    deletion_result = delete_character(character_id, remove_from_player_list=False)
-                    
+                    deletion_result = delete_character(
+                        character_id, remove_from_player_list=False
+                    )
+
                     if deletion_result["character_deleted"]:
                         results["characters_deleted"] += 1
                     results["items_deleted"] += deletion_result["items_deleted"]
-                    results["active_segments_deleted"] += deletion_result["active_segments_deleted"]
+                    results["active_segments_deleted"] += deletion_result[
+                        "active_segments_deleted"
+                    ]
                     results["history_deleted"] += deletion_result["history_deleted"]
-                    
+
                     if deletion_result["errors"]:
                         results["errors"].extend(deletion_result["errors"])
-                        
+
                     logger.info(
                         "Processed character deletion",
                         extra={
                             "character_name": character_name,
                             "character_id": character_id,
                             "game_mode": character_info.get("GameMode", "Unknown"),
-                            "deletion_result": deletion_result
-                        }
+                            "deletion_result": deletion_result,
+                        },
                     )
                 except Exception as err:
                     logger.error(
-                        "Failed to delete character", 
-                        extra={"error": str(err), "character_id": character_id, "character_name": character_name}
+                        "Failed to delete character",
+                        extra={
+                            "error": str(err),
+                            "character_id": character_id,
+                            "character_name": character_name,
+                        },
                     )
-                    results["errors"].append(f"Failed to delete character {character_name} ({character_id}): {str(err)}")
-        
+                    results["errors"].append(
+                        f"Failed to delete character {character_name} ({character_id}): {str(err)}"
+                    )
+
         logger.info(
             "Completed deleting all characters",
-            extra={"player_id": player_id, "results": results}
+            extra={"player_id": player_id, "results": results},
         )
         return results
 
     except Exception as err:
-        logger.error("Error in delete_all_characters", extra={"error": str(err)}, exc_info=True)
+        logger.error(
+            "Error in delete_all_characters", extra={"error": str(err)}, exc_info=True
+        )
         results["errors"].append(f"General error: {str(err)}")
         return results
-
 
 
 def delete_active_segments(player_id: str) -> int:
@@ -140,20 +148,32 @@ def delete_active_segments(player_id: str) -> int:
         items = dynamo.query(
             TableName.ACTIVE_SEGMENTS,
             KeyConditionExpression="PlayerID = :pid",
-            ExpressionAttributeValues={":pid": player_id}
+            ExpressionAttributeValues={":pid": player_id},
         )
 
-        for item in items: # type: ignore
+        for item in items:  # type: ignore
             try:
-                dynamo.delete_item(TableName.ACTIVE_SEGMENTS, Key={"ActiveSegmentID": item["ActiveSegmentID"]})
+                dynamo.delete_item(
+                    TableName.ACTIVE_SEGMENTS,
+                    Key={"ActiveSegmentID": item["ActiveSegmentID"]},
+                )
                 deleted_count += 1
             except Exception as err:
-                logger.error("Failed to delete active segment", extra={"error": str(err), "segment_id": item["ActiveSegmentID"]})
+                logger.error(
+                    "Failed to delete active segment",
+                    extra={"error": str(err), "segment_id": item["ActiveSegmentID"]},
+                )
 
-        logger.info("Deleted active segments", extra={"player_id": player_id, "count": deleted_count})
+        logger.info(
+            "Deleted active segments",
+            extra={"player_id": player_id, "count": deleted_count},
+        )
         return deleted_count
     except Exception as err:
-        logger.error("Error deleting active segments", extra={"error": str(err), "player_id": player_id})
+        logger.error(
+            "Error deleting active segments",
+            extra={"error": str(err), "player_id": player_id},
+        )
         return deleted_count
 
 
@@ -172,18 +192,21 @@ def delete_character_history(player_id: str) -> int:
         items = dynamo.query(
             TableName.CHARACTER_HISTORY,
             KeyConditionExpression="PlayerID = :pid",
-            ExpressionAttributeValues={":pid": player_id}
+            ExpressionAttributeValues={":pid": player_id},
         )
 
-        for item in items: # type: ignore
+        for item in items:  # type: ignore
             try:
                 dynamo.delete_item(
                     TableName.CHARACTER_HISTORY,
-                    Key={"PlayerID": player_id, "Timestamp": item["Timestamp"]}
+                    Key={"PlayerID": player_id, "Timestamp": item["Timestamp"]},
                 )
                 deleted_count += 1
             except Exception as err:
-                logger.error("Failed to delete history record", extra={"error": str(err), "timestamp": item["Timestamp"]})
+                logger.error(
+                    "Failed to delete history record",
+                    extra={"error": str(err), "timestamp": item["Timestamp"]},
+                )
 
         logger.info(
             "Deleted history records",
@@ -234,7 +257,11 @@ def lambda_handler(event: dict, context: object) -> dict:
             player_id = event["detail"]["requestParameters"].get("username")
         elif "body" in event:
             # API Gateway or direct invocation
-            body, _ = parse_json_body(event) if isinstance(event.get("body"), str) else (event.get("body", {}), None)
+            body, _ = (
+                parse_json_body(event)
+                if isinstance(event.get("body"), str)
+                else (event.get("body", {}), None)
+            )
             player_id = body.get("player_id") if body else None
         elif "player_id" in event:
             # Direct invocation
@@ -281,10 +308,16 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         try:
             char_deletion_results = delete_all_characters(player_id)
-            results["deletions"]["characters"] = char_deletion_results["characters_deleted"]
+            results["deletions"]["characters"] = char_deletion_results[
+                "characters_deleted"
+            ]
             results["deletions"]["items"] = char_deletion_results["items_deleted"]
-            results["deletions"]["active_segments"] += char_deletion_results["active_segments_deleted"]
-            results["deletions"]["story_history"] = char_deletion_results["history_deleted"]
+            results["deletions"]["active_segments"] += char_deletion_results[
+                "active_segments_deleted"
+            ]
+            results["deletions"]["story_history"] = char_deletion_results[
+                "history_deleted"
+            ]
             if char_deletion_results["errors"]:
                 results["errors"].extend(char_deletion_results["errors"])
         except Exception as err:
@@ -321,7 +354,9 @@ def lambda_handler(event: dict, context: object) -> dict:
             results["errors"].append(f"Character history: {str(err)}")
 
         # Log summary
-        logger.info("Deletion complete", extra={"player_id": player_id, "summary": results})
+        logger.info(
+            "Deletion complete", extra={"player_id": player_id, "summary": results}
+        )
 
         # Return appropriate response based on event source
         if "requestContext" in event:

@@ -1,18 +1,6 @@
 // Eidolon Engine
 //
 // Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 import 'package:flutter/services.dart';
 
@@ -116,9 +104,7 @@ class InputSanitizer {
   static bool validateEmail(String email) {
     // More comprehensive email validation with proper anchors
     // This regex handles most common email formats while being reasonably restrictive
-    if (!RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-    ).hasMatch(email)) {
+    if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(email)) {
       return false;
     }
 
@@ -151,27 +137,15 @@ class InputSanitizer {
     String sanitized = sanitizeDisplayText(content);
 
     // Then strip any remaining potentially dangerous patterns
-    sanitized = sanitized.replaceAll(
-      RegExp(r'javascript:', caseSensitive: false),
-      '',
-    );
-    sanitized = sanitized.replaceAll(
-      RegExp(r'data:', caseSensitive: false),
-      '',
-    );
-    sanitized = sanitized.replaceAll(
-      RegExp(r'vbscript:', caseSensitive: false),
-      '',
-    );
+    sanitized = sanitized.replaceAll(RegExp(r'javascript:', caseSensitive: false), '');
+    sanitized = sanitized.replaceAll(RegExp(r'data:', caseSensitive: false), '');
+    sanitized = sanitized.replaceAll(RegExp(r'vbscript:', caseSensitive: false), '');
 
     return sanitized;
   }
 
   /// Escapes special characters for regular expressions
   static String escapeRegExp(String string) {
-    return string.replaceAllMapped(
-      RegExp(r'[.*+?^${}()|[\]\\]'),
-      (Match match) => '\\${match.group(0)}',
-    );
+    return string.replaceAllMapped(RegExp(r'[.*+?^${}()|[\]\\]'), (Match match) => '\\${match.group(0)}');
   }
 }

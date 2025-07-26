@@ -1,21 +1,10 @@
 // Eidolon Engine
 //
 // Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
-import 'package:flutter/material.dart';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
+import 'package:flutter/material.dart';
+
 import '../services/auth_service.dart';
 import 'input_sanitizer.dart';
 
@@ -41,8 +30,7 @@ class AuthState extends ChangeNotifier {
 
   // Getters
   TextEditingController get emailController => _emailController;
-  TextEditingController get verificationCodeController =>
-      _verificationCodeController;
+  TextEditingController get verificationCodeController => _verificationCodeController;
   TextEditingController get passwordController => _passwordController;
   CognitoUser? get currentUser => _authService.currentUser;
   bool get isVerificationMode => _isVerificationMode;
@@ -109,10 +97,7 @@ class AuthState extends ChangeNotifier {
 
     _setLoading(true);
     try {
-      final signUpResult = await _authService.signUp(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+      final signUpResult = await _authService.signUp(_emailController.text.trim(), _passwordController.text);
 
       if (signUpResult.userConfirmed ?? false) {
         _updateMessage('Registration successful. Please sign in.');
@@ -174,9 +159,7 @@ class AuthState extends ChangeNotifier {
           _updateMessage('Account verified and logged in successfully.');
           clearInputs(); // Clear sensitive data after successful login
         } catch (signInError) {
-          _updateMessage(
-            'Email verified successfully. Please sign in manually.',
-          );
+          _updateMessage('Email verified successfully. Please sign in manually.');
           // Don't clear email to make manual sign-in easier
           _emailController.text = tempEmail;
           _passwordController.text = '';
@@ -205,10 +188,7 @@ class AuthState extends ChangeNotifier {
 
     _setLoading(true);
     try {
-      await _authService.signIn(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+      await _authService.signIn(_emailController.text.trim(), _passwordController.text);
       _updateMessage('Sign in successful');
       _isSignUpMode = false;
       _isAuthenticated = true;
@@ -262,12 +242,8 @@ class AuthState extends ChangeNotifier {
     if (checkComplexity) {
       // Check for uppercase, lowercase, number, and special character
       // End anchor $ added to ensure the entire string is validated
-      if (!RegExp(
-        r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$',
-      ).hasMatch(password)) {
-        _updateMessage(
-          'Password must contain uppercase, lowercase, number, and special character',
-        );
+      if (!RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$').hasMatch(password)) {
+        _updateMessage('Password must contain uppercase, lowercase, number, and special character');
         return false;
       }
     }

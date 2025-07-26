@@ -3,18 +3,6 @@ Eidolon Engine Lua Script Deployment
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
 Deploy Lua scripts to S3 for use by Eidolon Engine server instances.
 """
 
@@ -23,7 +11,10 @@ import sys
 
 import yaml
 
-from eidolon.s3 import delete_file, list_files, upload_file, validate_s3_bucket
+from eidolon.s3 import delete_file
+from eidolon.s3 import list_files
+from eidolon.s3 import upload_file
+from eidolon.s3 import validate_s3_bucket
 
 # Configuration file paths
 CONFIG_PATH = "../config.yml"
@@ -35,7 +26,9 @@ def load_config() -> dict:
     """Load configuration from config.yml or template."""
     if not os.path.exists(CONFIG_PATH):
         if not os.path.exists(CONFIG_TEMPLATE_PATH):
-            raise FileNotFoundError(f"Neither {CONFIG_PATH} nor {CONFIG_TEMPLATE_PATH} exist")
+            raise FileNotFoundError(
+                f"Neither {CONFIG_PATH} nor {CONFIG_TEMPLATE_PATH} exist"
+            )
         with open(CONFIG_TEMPLATE_PATH, "r", encoding="utf-8") as template_file:
             config = yaml.safe_load(template_file)
     else:
@@ -78,7 +71,9 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
             else:
                 print(f"Failed to upload {filename}")
 
-        print(f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded")
+        print(
+            f"Script deployment complete: {success_count}/{len(lua_files)} scripts uploaded"
+        )
         return success_count == len(lua_files)
 
     except Exception as err:
@@ -165,7 +160,9 @@ def main():
     elif choice == "2":
         success = list_deployed_scripts(bucket_name, prefix)
     elif choice == "3":
-        script_name: str = input("Enter script name to delete (e.g., room_tavern.lua): ").strip()
+        script_name: str = input(
+            "Enter script name to delete (e.g., room_tavern.lua): "
+        ).strip()
         if not script_name:
             print("Error: Script name is required")
             sys.exit(1)

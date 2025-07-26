@@ -3,19 +3,6 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
 Environment variable configuration for Lambda functions.
 Centralizes all environment variable access with defaults.
 """
@@ -51,3 +38,15 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
 # AWS Environment Detection
 AWS_EXECUTION_ENV = os.environ.get("AWS_EXECUTION_ENV")
+
+# CORS Configuration
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "")
+CORS_ALLOW_CREDENTIALS = os.environ.get("CORS_ALLOW_CREDENTIALS", "true")
+CORS_ALLOWED_HEADERS = os.environ.get(
+    "CORS_ALLOWED_HEADERS",
+    "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token",
+)
+CORS_ALLOWED_METHODS = os.environ.get(
+    "CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS"
+)
+CORS_MAX_AGE = os.environ.get("CORS_MAX_AGE", "86400")  # 24 hours default

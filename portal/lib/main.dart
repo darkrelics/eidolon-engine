@@ -1,38 +1,26 @@
 // Eidolon Engine
 //
 // Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/theme_provider.dart';
+import 'screens/account_settings_screen.dart';
+import 'screens/character_management_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/password_reset_confirm_screen.dart';
+import 'screens/password_reset_screen.dart';
+import 'screens/registration_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/auth_service.dart';
 import 'utils/auth_state.dart';
-import 'screens/splash_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/registration_screen.dart';
-import 'screens/character_management_screen.dart';
-import 'screens/password_reset_screen.dart';
-import 'screens/password_reset_confirm_screen.dart';
-import 'screens/account_settings_screen.dart';
-import 'utils/security_config.dart';
-import 'utils/route_guard.dart';
-import 'utils/session_monitor.dart';
-import 'utils/navigation.dart';
 import 'utils/global_error_handler.dart';
+import 'utils/navigation.dart';
+import 'utils/route_guard.dart';
+import 'utils/security_config.dart';
+import 'utils/session_monitor.dart';
 
 void main() {
   // Enable proper error handling for the app
@@ -57,9 +45,7 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => AuthState(authService: authService),
-        ),
+        ChangeNotifierProvider(create: (_) => AuthState(authService: authService)),
         ChangeNotifierProvider(create: (_) => ThemeProvider.create()),
         Provider.value(value: sessionMonitor),
         Provider.value(value: authService),
@@ -76,10 +62,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
-        final sessionMonitor = Provider.of<SessionMonitor>(
-          context,
-          listen: false,
-        );
+        final sessionMonitor = Provider.of<SessionMonitor>(context, listen: false);
 
         return MaterialApp(
           title: 'Eidolon Engine',
@@ -90,31 +73,19 @@ class MyApp extends StatelessWidget {
           // Add a global key for navigation from anywhere
           navigatorKey: GlobalNavigationKey.navigatorKey,
           builder: (context, child) {
-            return ActivityMonitor(
-              sessionMonitor: sessionMonitor,
-              child: child ?? const SizedBox.shrink(),
-            );
+            return ActivityMonitor(sessionMonitor: sessionMonitor, child: child ?? const SizedBox.shrink());
           },
         );
       },
     );
   }
 
-  Route<dynamic>? _onGenerateRoute(
-    BuildContext context,
-    RouteSettings settings,
-  ) {
+  Route<dynamic>? _onGenerateRoute(BuildContext context, RouteSettings settings) {
     // Route guard for protected routes
     if (RouteGuard.isProtectedRoute(settings.name)) {
       final authState = Provider.of<AuthState>(context, listen: false);
       if (!authState.isAuthenticated) {
-        return MaterialPageRoute(
-          builder:
-              (_) => LoginScreen(
-                redirectRoute: settings.name,
-                redirectArgs: settings.arguments,
-              ),
-        );
+        return MaterialPageRoute(builder: (_) => LoginScreen(redirectRoute: settings.name, redirectArgs: settings.arguments));
       }
     }
 
@@ -129,32 +100,19 @@ class MyApp extends StatelessWidget {
           redirectRoute = args['redirectRoute'] as String?;
           redirectArgs = args['redirectArgs'];
         }
-        return MaterialPageRoute(
-          builder:
-              (_) => LoginScreen(
-                redirectRoute: redirectRoute,
-                redirectArgs: redirectArgs,
-              ),
-        );
+        return MaterialPageRoute(builder: (_) => LoginScreen(redirectRoute: redirectRoute, redirectArgs: redirectArgs));
       case '/register':
         return MaterialPageRoute(builder: (_) => const RegistrationScreen());
       case '/password-reset':
         return MaterialPageRoute(builder: (_) => const PasswordResetScreen());
       case '/password-reset-confirm':
-        return MaterialPageRoute(
-          builder: (_) => const PasswordResetConfirmScreen(),
-          settings: settings,
-        );
+        return MaterialPageRoute(builder: (_) => const PasswordResetConfirmScreen(), settings: settings);
       case '/character-management':
-        return MaterialPageRoute(
-          builder: (_) => const CharacterManagementScreen(),
-        );
+        return MaterialPageRoute(builder: (_) => const CharacterManagementScreen());
       case '/account-settings':
         return MaterialPageRoute(builder: (_) => const AccountSettingsScreen());
       default:
-        return MaterialPageRoute(
-          builder: (_) => const ErrorScreen(message: 'Route not found'),
-        );
+        return MaterialPageRoute(builder: (_) => const ErrorScreen(message: 'Route not found'));
     }
   }
 }
@@ -174,11 +132,7 @@ class ErrorScreen extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            Text(
-              message,
-              style: Theme.of(context).textTheme.headlineSmall,
-              textAlign: TextAlign.center,
-            ),
+            Text(message, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () {
@@ -227,8 +181,7 @@ class AppWithLifecycleObserver extends StatefulWidget {
   const AppWithLifecycleObserver({super.key, required this.child});
 
   @override
-  State<AppWithLifecycleObserver> createState() =>
-      _AppWithLifecycleObserverState();
+  State<AppWithLifecycleObserver> createState() => _AppWithLifecycleObserverState();
 }
 
 class _AppWithLifecycleObserverState extends State<AppWithLifecycleObserver> {

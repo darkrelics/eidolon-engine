@@ -3,25 +3,14 @@ Eidolon Engine
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
 Lambda function to create a new player record in DynamoDB after user registration.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 
-from eidolon.dynamo import TableName, dynamo
+from eidolon.dynamo import dynamo
+from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
 
 # Configure logging
@@ -43,7 +32,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Log Lambda invocation (without exposing sensitive event data)
     logger.info(
         "Cognito post-confirmation trigger",
-        extra={"trigger_source": event.get("triggerSource"), "user_pool_id": event.get("userPoolId")},
+        extra={
+            "trigger_source": event.get("triggerSource"),
+            "user_pool_id": event.get("userPoolId"),
+        },
     )
 
     try:
@@ -81,11 +73,21 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Write to DynamoDB
         try:
             dynamo.put_item(TableName.PLAYERS, player_item)
-            logger.info("Created new player record", extra={"email": email, "user_id": user_uuid})
+            logger.info(
+                "Created new player record",
+                extra={"email": email, "user_id": user_uuid},
+            )
         except Exception as err:
-            logger.error("Failed to create player record", extra={"email": email, "user_id": user_uuid, "error": str(err)})
+            logger.error(
+                "Failed to create player record",
+                extra={"email": email, "user_id": user_uuid, "error": str(err)},
+            )
 
     except Exception as err:
-        logger.error("Error processing user registration", extra={"error": str(err)}, exc_info=True)
+        logger.error(
+            "Error processing user registration",
+            extra={"error": str(err)},
+            exc_info=True,
+        )
 
     return event

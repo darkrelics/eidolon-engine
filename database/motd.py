@@ -3,18 +3,6 @@ Eidolon Engine
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
 This module adds a Message of the Day (MOTD) to the DynamoDB database.
 """
 
@@ -27,7 +15,8 @@ from datetime import datetime
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.dynamo import TableName, dynamo  # noqa: C0413
+from eidolon.dynamo import dynamo  # noqa: C0413
+from eidolon.dynamo import TableName
 
 
 def add_or_update_motd(message: str, active: bool = True) -> dict:
@@ -71,9 +60,15 @@ def main() -> None:
     Usage:
         python motd.py "Your message here" [--inactive]
     """
-    parser = argparse.ArgumentParser(description="Add or update a Message of the Day (MOTD)")
+    parser = argparse.ArgumentParser(
+        description="Add or update a Message of the Day (MOTD)"
+    )
     parser.add_argument("message", type=str, help="The MOTD message")
-    parser.add_argument("--inactive", action="store_true", help="Set this flag to make the MOTD inactive")
+    parser.add_argument(
+        "--inactive",
+        action="store_true",
+        help="Set this flag to make the MOTD inactive",
+    )
 
     args = parser.parse_args()
 

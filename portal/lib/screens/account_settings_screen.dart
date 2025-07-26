@@ -1,21 +1,10 @@
 // Eidolon Engine
 //
 // Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/auth_service.dart';
 import '../utils/auth_state.dart';
 import '../widgets/ui_components.dart';
@@ -31,11 +20,7 @@ class AccountSettingsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('Account Settings'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Account Settings'), backgroundColor: Colors.transparent, elevation: 0),
       body: BackgroundContainer(
         child: SafeArea(
           child: Center(
@@ -52,15 +37,9 @@ class AccountSettingsScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Account Information',
-                              style: theme.textTheme.headlineSmall,
-                            ),
+                            Text('Account Information', style: theme.textTheme.headlineSmall),
                             const SizedBox(height: 16),
-                            Text(
-                              'Email: ${authState.userEmail ?? 'Not available'}',
-                              style: theme.textTheme.bodyLarge,
-                            ),
+                            Text('Email: ${authState.userEmail ?? 'Not available'}', style: theme.textTheme.bodyLarge),
                           ],
                         ),
                       ),
@@ -72,12 +51,7 @@ class AccountSettingsScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Danger Zone',
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                color: theme.colorScheme.error,
-                              ),
-                            ),
+                            Text('Danger Zone', style: theme.textTheme.headlineSmall?.copyWith(color: theme.colorScheme.error)),
                             const SizedBox(height: 16),
                             Text(
                               'Deleting your account is permanent and cannot be undone. All your data will be permanently removed.',
@@ -117,15 +91,10 @@ class AccountSettingsScreen extends StatelessWidget {
             'Are you absolutely sure you want to delete your account? This action cannot be undone and all your data will be permanently removed.',
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.error,
-              ),
+              style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
               child: const Text('Delete Account'),
             ),
           ],
@@ -149,9 +118,7 @@ class AccountSettingsScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Please type your email address to confirm account deletion:',
-              ),
+              const Text('Please type your email address to confirm account deletion:'),
               const SizedBox(height: 16),
               AppTextField(
                 controller: emailController,
@@ -163,25 +130,16 @@ class AccountSettingsScreen extends StatelessWidget {
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
             TextButton(
               onPressed: () {
                 if (emailController.text.trim() == authState.userEmail) {
                   Navigator.of(context).pop(true);
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Email does not match your account'),
-                    ),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email does not match your account')));
                 }
               },
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.error,
-              ),
+              style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
               child: const Text('Delete My Account'),
             ),
           ],
@@ -212,9 +170,7 @@ class AccountSettingsScreen extends StatelessWidget {
       // Navigate to goodbye/splash screen
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Your account has been deleted')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Your account has been deleted')));
     } catch (e) {
       if (!context.mounted) return;
 
@@ -227,12 +183,7 @@ class AccountSettingsScreen extends StatelessWidget {
           return AlertDialog(
             title: const Text('Error'),
             content: Text(e.toString()),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
+            actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
           );
         },
       );

@@ -3,35 +3,23 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
 Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
 from eidolon.character import get_character_with_ownership
-from eidolon.dynamo import TableName, dynamo, decimal_to_float
+from eidolon.dynamo import decimal_to_float
+from eidolon.dynamo import dynamo
+from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
 from eidolon.requests import get_query_parameter
-from eidolon.responses import error_response, not_found_response
-from eidolon.utilities import (
-    build_lambda_response,
-    extract_and_validate_player_id,
-    handle_lambda_error,
-    handle_preflight_if_options,
-    log_lambda_invocation,
-)
+from eidolon.responses import error_response
+from eidolon.responses import not_found_response
+from eidolon.utilities import build_lambda_response
+from eidolon.utilities import extract_and_validate_player_id
+from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import handle_preflight_if_options
+from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_uuid
 
 # Configure logging
@@ -53,7 +41,9 @@ def get_character_business_logic(character_id: str, player_id: str) -> tuple:
     """
     # Validate character ID format
     if not character_id:
-        return None, error_response("Missing required parameter: characterId", status_code=400)
+        return None, error_response(
+            "Missing required parameter: characterId", status_code=400
+        )
 
     if not validate_uuid(character_id):
         return None, error_response("Invalid character ID format", status_code=400)
@@ -128,12 +118,16 @@ def lambda_handler(event: dict, context: object):
             return auth_error
 
         # Get character ID from query parameters
-        character_id, param_error = get_query_parameter(event, "characterId", required=True)
+        character_id, param_error = get_query_parameter(
+            event, "characterId", required=True
+        )
         if param_error:
             return build_lambda_response(400, {"error": param_error}, event)
 
         # Call business logic
-        response_data, error_response_obj = get_character_business_logic(character_id, player_id)
+        response_data, error_response_obj = get_character_business_logic(
+            character_id, player_id
+        )
 
         if error_response_obj:
             return build_lambda_response(

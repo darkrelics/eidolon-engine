@@ -1,21 +1,10 @@
 // Eidolon Engine
 //
 // Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../utils/auth_state.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -68,12 +57,9 @@ class _LoginScreenState extends State<LoginScreen> {
         _handleNavigation(context, widget.redirectRoute, widget.redirectArgs);
       } else if (mounted && authState.message.isNotEmpty) {
         // Show the specific error message from AuthState
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(authState.message),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(authState.message), backgroundColor: Theme.of(context).colorScheme.error));
       }
     } catch (e) {
       debugPrint('Login error: $e');
@@ -118,17 +104,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Eidolon Portal',
-                    style: Theme.of(context).textTheme.headlineLarge,
-                    textAlign: TextAlign.center,
-                  ),
+                  Text('Eidolon Portal', style: Theme.of(context).textTheme.headlineLarge, textAlign: TextAlign.center),
                   const SizedBox(height: 8),
-                  Text(
-                    'Sign in to continue',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                    textAlign: TextAlign.center,
-                  ),
+                  Text('Sign in to continue', style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
                   const SizedBox(height: 48),
                   TextFormField(
                     controller: _emailController,
@@ -144,9 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(
-                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                      ).hasMatch(value)) {
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -160,11 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
+                        icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
                         onPressed: () {
                           setState(() {
                             _isPasswordVisible = !_isPasswordVisible;
@@ -191,10 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           _isLoading
                               ? null
                               : () {
-                                Navigator.pushNamed(
-                                  context,
-                                  '/forgot-password',
-                                );
+                                Navigator.pushNamed(context, '/forgot-password');
                               },
                       child: const Text('Forgot Password?'),
                     ),
@@ -204,11 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _isLoading ? null : _handleSignIn,
                     child:
                         _isLoading
-                            ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                             : const Text('Sign In'),
                   ),
                   const SizedBox(height: 16),

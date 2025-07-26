@@ -3,29 +3,23 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
 Lambda function to abandon an active story.
 Updates character state, marks active segments as abandoned, and updates history.
 """
 
-from eidolon.character import get_character_with_ownership, reset_character_game_mode
+from eidolon.character import get_character_with_ownership
+from eidolon.character import reset_character_game_mode
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, get_required_field, parse_json_body
-from eidolon.responses import create_response, error_response
-from eidolon.story import get_active_story_segment, mark_segment_as_abandoned, record_story_abandonment, add_story_to_abandoned_list
+from eidolon.requests import extract_player_id
+from eidolon.requests import get_required_field
+from eidolon.requests import parse_json_body
+from eidolon.responses import create_response
+from eidolon.responses import error_response
+from eidolon.story import add_story_to_abandoned_list
+from eidolon.story import get_active_story_segment
+from eidolon.story import mark_segment_as_abandoned
+from eidolon.story import record_story_abandonment
 from eidolon.validation import validate_uuid
 
 # Configure logging
@@ -61,7 +55,11 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     if error_msg:
         logger.warning(
             "Character not found or not owned",
-            extra={"character_id": character_id, "player_id": player_id, "error": error_msg},
+            extra={
+                "character_id": character_id,
+                "player_id": player_id,
+                "error": error_msg,
+            },
         )
         return {
             "success": False,
@@ -185,7 +183,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id, auth_error = extract_player_id(event)
         if auth_error:
             logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
+            return cors_handler.add_cors_headers(
+                error_response(auth_error, status_code=401), event
+            )
 
         logger.info("Player authenticated", extra={"player_id": player_id})
 
@@ -195,26 +195,31 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         character_id, char_error = get_required_field(body, "characterId")
         if char_error:
-            return cors_handler.add_cors_headers(error_response(char_error, status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response(char_error, status_code=400), event
+            )
 
         if character_id and not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
+            return cors_handler.add_cors_headers(
+                error_response("Invalid character ID format", status_code=400), event
+            )
 
         logger.info(
             "Abandoning story",
             extra={"character_id": character_id},
         )
 
-        result = abandon_story_business_logic(character_id, player_id) # type: ignore
+        result = abandon_story_business_logic(character_id, player_id)  # type: ignore
 
         if not result["success"]:
             return cors_handler.add_cors_headers(
-                error_response(result["error"], status_code=result["statusCode"]),
-                event
+                error_response(result["error"], status_code=result["statusCode"]), event
             )
 
         logger.info("Lambda response", extra={"status_code": 200})
-        return cors_handler.add_cors_headers(create_response(200, result["data"]), event)
+        return cors_handler.add_cors_headers(
+            create_response(200, result["data"]), event
+        )
 
     except Exception as err:
         logger.error(
@@ -223,4 +228,6 @@ def lambda_handler(event: dict, context: object) -> dict:
             exc_info=True,
         )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return cors_handler.add_cors_headers(
+            error_response("Internal server error", status_code=500), event
+        )

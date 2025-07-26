@@ -3,28 +3,17 @@ Eidolon Engine
 
 Copyright 2024-2025 Jason Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
 Lambda function to cache and serve player-available archetypes.
 The function loads all archetypes on cold start and filters for Player=true.
 Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 """
 
 from eidolon.cors import cors_handler
-from eidolon.dynamo import TableName, dynamo
+from eidolon.dynamo import dynamo
+from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.responses import create_response, error_response
+from eidolon.responses import create_response
+from eidolon.responses import error_response
 
 # Configure logging
 logger = get_logger(__name__)
@@ -59,7 +48,7 @@ def load_player_archetypes() -> list:
             if last_evaluated_key:
                 scan_params["ExclusiveStartKey"] = last_evaluated_key
 
-            scan_result: dict = dynamo.scan(TableName.ARCHETYPES, **scan_params) # type: ignore
+            scan_result: dict = dynamo.scan(TableName.ARCHETYPES, **scan_params)  # type: ignore
             items.extend(scan_result["items"])
 
             last_evaluated_key = scan_result.get("last_evaluated_key")
@@ -73,7 +62,9 @@ def load_player_archetypes() -> list:
             if item.get("Player", False):
                 # Normalize attribute and skill keys to lowercase
                 if "Attributes" in item:
-                    item["Attributes"] = {k.lower(): v for k, v in item["Attributes"].items()}
+                    item["Attributes"] = {
+                        k.lower(): v for k, v in item["Attributes"].items()
+                    }
                 if "Skills" in item:
                     item["Skills"] = {k.lower(): v for k, v in item["Skills"].items()}
 
@@ -101,7 +92,9 @@ def load_player_archetypes() -> list:
         return player_archetypes
 
     except Exception as err:
-        logger.error("Error loading archetypes", extra={"error": str(err)}, exc_info=True)
+        logger.error(
+            "Error loading archetypes", extra={"error": str(err)}, exc_info=True
+        )
         raise
 
 
@@ -150,6 +143,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
 
     except Exception as err:
-        logger.error("Error in lambda_handler", extra={"error": str(err)}, exc_info=True)
+        logger.error(
+            "Error in lambda_handler", extra={"error": str(err)}, exc_info=True
+        )
         logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return cors_handler.add_cors_headers(
+            error_response("Internal server error", status_code=500), event
+        )
