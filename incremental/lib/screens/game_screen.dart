@@ -287,6 +287,12 @@ class CharacterPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    // Debug logging
+    debugPrint('CharacterPanel - attributes: ${character.attributes}');
+    debugPrint('CharacterPanel - skills: ${character.skills}');
+    debugPrint('CharacterPanel - health: ${character.health}/${character.maxHealth}');
+    debugPrint('CharacterPanel - essence: ${character.essence}/${character.maxEssence}');
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -1355,6 +1361,11 @@ class InventoryPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Debug logging
+    debugPrint('InventoryPanel - inventory: ${character.inventory}');
+    debugPrint('InventoryPanel - inventoryDetails: ${character.inventoryDetails}');
+    debugPrint('InventoryPanel - resources: ${character.resources}');
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -1382,39 +1393,89 @@ class InventoryPanel extends StatelessWidget {
             const SizedBox(height: 16),
           ],
 
-          // Equipment
-          if (character.inventory.isNotEmpty) ...[
+          // Equipment - Use enriched data if available
+          if (character.inventory.isNotEmpty || character.inventoryDetails.isNotEmpty) ...[
             Text('Equipment', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
-            ...character.inventory.entries.map(
-              (entry) => Padding(
-                padding: const EdgeInsets.only(bottom: 4.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(_formatSlotName(entry.key)),
-                    Expanded(
-                      child: Text(
-                        entry.value,
-                        textAlign: TextAlign.right,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ] else ...[
-            Text(
-              'No items equipped',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
+            ..._buildEquipmentList(),
           ],
         ],
       ),
     );
+  }
+
+  List<Widget> _buildEquipmentList() {
+    // Use enriched inventory details if available
+    if (character.inventoryDetails.isNotEmpty) {
+      return character.inventoryDetails.entries.map((entry) {
+        final slot = entry.key;
+        final itemData = entry.value as Map<String, dynamic>?;
+        
+        if (itemData == null) {
+          return const SizedBox.shrink();
+        }
+        
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 80,
+                child: Text(
+                  _formatSlotName(slot),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      itemData['name'] ?? 'Unknown Item',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    if (itemData['description'] != null && itemData['description'].toString().isNotEmpty)
+                      Text(
+                        itemData['description'],
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    if (itemData['quantity'] != null && itemData['quantity'] > 1)
+                      Text(
+                        'Quantity: ${itemData['quantity']}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList();
+    } else {
+      // Fallback to simple item IDs
+      return character.inventory.entries.map(
+        (entry) => Padding(
+          padding: const EdgeInsets.only(bottom: 4.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(_formatSlotName(entry.key)),
+              Expanded(
+                child: Text(
+                  entry.value,
+                  textAlign: TextAlign.right,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ).toList();
+    }
   }
 
   String _formatResourceName(String name) {

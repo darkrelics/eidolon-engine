@@ -7,16 +7,15 @@ Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-from botocore.exceptions import ClientError
-
+from eidolon.character import get_active_segment_for_character
 from eidolon.character import get_character_with_ownership
 from eidolon.dynamo import decimal_to_float
-from eidolon.dynamo import dynamo
-from eidolon.dynamo import TableName
+from eidolon.items import get_inventory_details
 from eidolon.logger import get_logger
+from eidolon.player import extract_player_id_from_event
+from eidolon.player import validate_player_exists
 from eidolon.requests import get_query_parameter
 from eidolon.utilities import build_lambda_response
-from eidolon.utilities import extract_and_validate_player_id
 from eidolon.utilities import handle_lambda_error
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
@@ -35,36 +34,35 @@ def get_character_business_logic(character_id: str, player_id: str) -> dict:
         player_id: Authenticated player ID
 
     Returns:
-        Response data dict
-
-    Raises:
-        ValueError: If character ID invalid or character not found
-        RuntimeError: If database operations fail
+        Dict containing:
+            - success: bool
+            - data: dict (if success)
+            - error: str (if failed)
+            - status_code: int (if failed)
     """
     # Validate character ID format
     if not character_id:
-        raise ValueError("Missing required parameter: characterId")
+        return {"success": False, "error": "Missing required parameter: characterId", "status_code": 400}
 
     if not validate_uuid(character_id):
-        raise ValueError("Invalid character ID format")
+        return {"success": False, "error": "Invalid character ID format", "status_code": 400}
 
-    # Get character with ownership check (raises exceptions if not found)
-    character = get_character_with_ownership(character_id, player_id)
-
-    # Check for active segments
-    active_segment = None
+    # Get character with ownership check
     try:
-        active_segments = dynamo.query(
-            TableName.ACTIVE_SEGMENTS,
-            IndexName="CharacterID-index",
-            KeyConditionExpression="CharacterID = :cid",
-            FilterExpression="PlayerID = :pid AND #status = :status",
-            ExpressionAttributeValues={":cid": character_id, ":pid": player_id, ":status": "active"},
-            ExpressionAttributeNames={"#status": "Status"},
-        )
+        character = get_character_with_ownership(character_id, player_id)
+    except ValueError as err:
+        if "not found" in str(err).lower():
+            return {"success": False, "error": "Character not found", "status_code": 404}
+        return {"success": False, "error": str(err), "status_code": 400}
+    except RuntimeError as err:
+        logger.error("Failed to get character", extra={"error": str(err), "character_id": character_id})
+        return {"success": False, "error": "Failed to retrieve character data", "status_code": 500}
 
-        if active_segments:
-            active_segment = active_segments[0]
+    # Check for active segments using eidolon library
+    active_segment = {}
+    try:
+        active_segment = get_active_segment_for_character(character_id, player_id)
+        if active_segment:
             logger.info(
                 "Active segment found for character",
                 extra={
@@ -73,16 +71,29 @@ def get_character_business_logic(character_id: str, player_id: str) -> dict:
                     "story_id": active_segment.get("StoryID"),
                 },
             )
-    except ClientError as err:
+    except RuntimeError as err:
         logger.error(
-            "Error querying active segments",
+            "Error retrieving active segments",
             extra={
                 "error": str(err),
                 "character_id": character_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
         )
         # Continue without active segment data - not critical for response
+
+    # Normalize attribute and skill keys to lowercase for consistency
+    attributes = character.get("Attributes")
+    if attributes:
+        character["Attributes"] = {k.lower(): v for k, v in attributes.items()}
+
+    skills = character.get("Skills")
+    if skills:
+        character["Skills"] = {k.lower(): v for k, v in skills.items()}
+
+    # Enrich inventory with item details
+    inventory = character.get("Inventory")
+    if inventory:
+        character["InventoryDetails"] = get_inventory_details(inventory)
 
     # Build response data
     response_data = {"character": decimal_to_float(character)}
@@ -91,10 +102,10 @@ def get_character_business_logic(character_id: str, player_id: str) -> dict:
     if active_segment:
         response_data["activeSegment"] = decimal_to_float(active_segment)
 
-    return response_data
+    return {"success": True, "data": response_data}
 
 
-def lambda_handler(event: dict, context: object):
+def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler for getting incremental character data.
 
@@ -113,48 +124,47 @@ def lambda_handler(event: dict, context: object):
     if preflight_response:
         return preflight_response
 
+    # Extract player ID from JWT
     try:
-        # Extract and validate player ID
-        player_id, auth_error = extract_and_validate_player_id(event)
-        if auth_error:
-            return auth_error
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
 
-        # Get character ID from query parameters
-        character_id, param_error = get_query_parameter(event, "characterId", required=True)  # type: ignore
-        if param_error:
-            return build_lambda_response(400, {"error": param_error}, event)
+    # Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
 
-        # Call business logic
-        try:
-            response_data = get_character_business_logic(character_id, player_id)
-            # Return success response
-            return build_lambda_response(200, response_data, event)
-        except ValueError as err:
-            logger.warning(
-                "Character not found or invalid request",
-                extra={"character_id": character_id, "error": str(err)},
-            )
-            if "not found" in str(err).lower():
-                return build_lambda_response(
-                    404,
-                    {"error": "Character not found"},
-                    event,
+    # Get character ID from query parameters
+    try:
+        character_id = get_query_parameter(event, "characterId", required=True)
+    except ValueError as err:
+        return build_lambda_response(400, {"error": str(err)}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+
+    # Call business logic
+    try:
+        result = get_character_business_logic(character_id, player_id)  # type: ignore
+
+        if result["success"]:
+            return build_lambda_response(200, result["data"], event)
+        else:
+            # Log the error if it's a server error
+            if result["status_code"] >= 500:
+                logger.error(
+                    "Business logic error",
+                    extra={"character_id": character_id, "error": result["error"]},
                 )
-            return build_lambda_response(
-                400,
-                {"error": str(err)},
-                event,
-            )
-        except RuntimeError as err:
-            logger.error(
-                "Failed to get character",
-                extra={"character_id": character_id, "error": str(err)},
-            )
-            return build_lambda_response(
-                500,
-                {"error": "Failed to retrieve character data"},
-                event,
-            )
-
+            return build_lambda_response(result["status_code"], {"error": result["error"]}, event)
     except Exception as err:
         return handle_lambda_error(err, context, event)

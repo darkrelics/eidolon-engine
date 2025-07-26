@@ -212,28 +212,6 @@ def validate_content_type(event: dict, expected: str = "application/json") -> bo
     return media_type == expected_type
 
 
-def extract_player_id(event: dict) -> str:
-    """
-    Extract player ID from Cognito authorizer claims.
-
-    Args:
-        event: API Gateway event with Cognito authorizer
-
-    Returns:
-        Player ID (sub claim)
-
-    Raises:
-        ValueError: If player ID is not found (unauthorized)
-    """
-    claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    player_id = claims.get("sub")
-
-    if not player_id:
-        raise ValueError("Unauthorized")
-
-    return player_id
-
-
 def validate_required_fields(body: dict, required_fields: list) -> None:
     """
     Validate that all required fields are present in request body.

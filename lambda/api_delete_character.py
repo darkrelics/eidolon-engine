@@ -11,7 +11,7 @@ from eidolon.character import delete_character
 from eidolon.character import get_character_with_ownership
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
+from eidolon.player import extract_player_id_from_event
 from eidolon.requests import get_query_parameter
 from eidolon.responses import create_response
 from eidolon.responses import error_response
@@ -24,20 +24,20 @@ logger = get_logger(__name__)
 def handle_character_deletion(player_id: str, character_id: str) -> dict:
     """
     Handle the business logic for character deletion.
-    
+
     This function orchestrates the character deletion process without
     performing any AWS-specific operations.
-    
+
     Args:
         player_id: Cognito user ID
         character_id: Character UUID
-        
+
     Returns:
         Dict containing:
             - success: bool - Whether deletion was successful
             - character_name: str - Name of deleted character
             - deletion_result: dict - Detailed deletion results
-            
+
     Raises:
         ValueError: If character not found, invalid ID, or not owned by player
         RuntimeError: If database operations fail
@@ -45,7 +45,7 @@ def handle_character_deletion(player_id: str, character_id: str) -> dict:
     # Verify ownership
     character = get_character_with_ownership(character_id, player_id)
     character_name = character.get("CharacterName", "Unknown")
-    
+
     logger.info(
         "Character ownership verified, proceeding with deletion",
         extra={
@@ -54,10 +54,10 @@ def handle_character_deletion(player_id: str, character_id: str) -> dict:
             "player_id": player_id,
         },
     )
-    
+
     # Delete the character
     deletion_result = delete_character(character_id, remove_from_player_list=True)
-    
+
     logger.info(
         "Character deletion completed",
         extra={
@@ -67,19 +67,15 @@ def handle_character_deletion(player_id: str, character_id: str) -> dict:
             "results": deletion_result,
         },
     )
-    
+
     # Check if deletion was successful
     if not deletion_result["character_deleted"]:
         error_msg = "Failed to delete character"
         if deletion_result["errors"]:
             error_msg = deletion_result["errors"][0]
         raise RuntimeError(error_msg)
-    
-    return {
-        "success": True,
-        "character_name": character_name,
-        "deletion_result": deletion_result
-    }
+
+    return {"success": True, "character_name": character_name, "deletion_result": deletion_result}
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -111,24 +107,26 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     try:
         # Extract player ID from Cognito authorizer
-        player_id, auth_error = extract_player_id(event)
-        if auth_error:
-            logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
+        try:
+            player_id = extract_player_id_from_event(event)
+        except ValueError as err:
+            logger.error("Authentication failed", extra={"error": str(err)})
+            return cors_handler.add_cors_headers(error_response("Unauthorized", status_code=401), event)
 
         # Get character ID from query parameters
-        character_id, error_msg = get_query_parameter(event, "characterId", required=True)  # type: ignore
-        if error_msg:
-            return cors_handler.add_cors_headers(error_response(error_msg), event)
+        try:
+            character_id = get_query_parameter(event, "characterId", required=True)
+        except ValueError as err:
+            return cors_handler.add_cors_headers(error_response(str(err), status_code=400), event)
 
         # Validate character ID format
-        if not validate_uuid(character_id):
+        if not validate_uuid(character_id):  # type: ignore
             return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
 
         # Handle character deletion through business logic function
         try:
-            result = handle_character_deletion(player_id, character_id)
-            
+            result = handle_character_deletion(player_id, character_id)  # type: ignore
+
             # Return success response with details
             logger.info("Lambda response", extra={"status_code": 200})
             return cors_handler.add_cors_headers(

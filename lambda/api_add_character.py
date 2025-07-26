@@ -4,7 +4,8 @@ from eidolon.character import character_name_filter, check_character_limit, get_
 from eidolon.cors import cors_handler
 from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, get_required_field, parse_json_body
+from eidolon.player import extract_player_id_from_event
+from eidolon.requests import get_required_field, parse_json_body
 from eidolon.responses import create_response, error_response
 from eidolon.validation import validate_character_name
 
@@ -94,11 +95,8 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
 
     # Create the character using the eidolon library function
     result = create_character(player_id, character_name, archetype_name, archetype_data)
-    
-    return {
-        "character_id": result["character_id"],
-        "archetype_name": result["archetype"]
-    }
+
+    return {"character_id": result["character_id"], "archetype_name": result["archetype"]}
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -121,20 +119,23 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     try:
         # Extract player ID from Cognito authorizer
-        player_id, auth_error = extract_player_id(event)
-        if auth_error:
-            logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(error_response(auth_error, status_code=401), event)
+        try:
+            player_id = extract_player_id_from_event(event)
+        except ValueError as err:
+            logger.error("Authentication failed", extra={"error": str(err)})
+            return cors_handler.add_cors_headers(error_response("Unauthorized", status_code=401), event)
 
         # Parse request body
-        body, parse_error = parse_json_body(event)
-        if parse_error:
-            return cors_handler.add_cors_headers(parse_error, event)
+        try:
+            body = parse_json_body(event)
+        except ValueError as err:
+            return cors_handler.add_cors_headers(error_response(str(err), status_code=400), event)
 
         # Extract and validate required fields
-        character_name, name_error = get_required_field(body, "characterName")
-        if name_error:
-            return cors_handler.add_cors_headers(error_response(name_error, status_code=400), event)
+        try:
+            character_name = get_required_field(body, "characterName")
+        except ValueError as err:
+            return cors_handler.add_cors_headers(error_response(str(err), status_code=400), event)
 
         character_name = character_name.strip()
         archetype_name = body.get("archetypeName", "").strip()

@@ -18,7 +18,7 @@ from eidolon.character import delete_character
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
+from eidolon.player import extract_player_id_from_event
 from eidolon.requests import parse_json_body
 from eidolon.responses import create_response
 from eidolon.responses import error_response
@@ -282,14 +282,20 @@ def lambda_handler(event: dict, context: object) -> dict:
             player_id = event["detail"]["requestParameters"].get("username")
         elif "body" in event:
             # API Gateway or direct invocation
-            body, _ = parse_json_body(event) if isinstance(event.get("body"), str) else (event.get("body", {}), None)
+            try:
+                body = parse_json_body(event) if isinstance(event.get("body"), str) else event.get("body", {})
+            except ValueError:
+                body = {}
             player_id = body.get("player_id") if body else None
         elif "player_id" in event:
             # Direct invocation
             player_id = event["player_id"]
         elif "requestContext" in event and "authorizer" in event["requestContext"]:
             # API Gateway with Cognito authorizer
-            player_id, _ = extract_player_id(event)
+            try:
+                player_id = extract_player_id_from_event(event)
+            except ValueError:
+                player_id = None
 
         if not player_id:
             logger.error("No player ID provided in request")

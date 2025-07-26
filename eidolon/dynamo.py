@@ -526,6 +526,42 @@ class DynamoInterface:
         }
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
+    def scan_all(self, table_enum: TableName, **kwargs) -> list:
+        """
+        Scan a table and return all items (no pagination needed for small tables).
+
+        Args:
+            table_enum: TableName enum value
+            **kwargs: Scan parameters
+
+        Returns:
+            List of all items with Decimals converted to floats
+
+        Raises:
+            ClientError: If DynamoDB operation fails
+        """
+        table = self.get_table(table_enum)
+        logger.debug("DB Interface: Scan All", extra={"table": table_enum.value, "arguments": kwargs})
+
+        try:
+            response = table.scan(**kwargs)
+        except ClientError as err:
+            logger.error(
+                "Error scanning DynamoDB",
+                extra={"error": str(err), "table": table_enum.value},
+            )
+            raise
+
+        items = response.get("Items", [])
+        count = response.get("Count", 0)
+
+        # Convert Decimal to float for JSON compatibility
+        results = [decimal_to_float(item) for item in items]
+
+        logger.info("DB Interface: Scan All: Records Collected", extra={"count": count})
+        return results
+
+    @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
     def batch_get_items(self, table_enum: TableName, keys: list, attributes_to_get=None) -> list:
         """
         Perform a BatchGetItem operation on a single table.

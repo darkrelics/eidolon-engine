@@ -765,11 +765,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
                 "archetype": archetype_name,
             },
         )
-        return {
-            "character_id": character_id,
-            "character_name": character_name,
-            "archetype": archetype_name
-        }
+        return {"character_id": character_id, "character_name": character_name, "archetype": archetype_name}
 
     except ValueError:
         # Re-raise ValueError for business logic errors

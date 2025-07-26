@@ -10,7 +10,8 @@ Updates character state, marks active segments as abandoned, and updates history
 from eidolon.character import get_character_with_ownership, reset_character_game_mode
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, get_query_parameter
+from eidolon.player import extract_player_id_from_event
+from eidolon.requests import get_query_parameter
 from eidolon.responses import create_response, error_response
 from eidolon.story import add_story_to_abandoned_list, get_active_story_segment, mark_segment_as_abandoned, record_story_abandonment
 from eidolon.validation import validate_uuid
@@ -108,7 +109,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         return cors_handler.handle_preflight(event)
 
     try:
-        player_id = extract_player_id(event)
+        player_id = extract_player_id_from_event(event)
         logger.info("Player authenticated", extra={"player_id": player_id})
 
         character_id = get_query_parameter(event, "characterId")

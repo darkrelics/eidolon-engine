@@ -1,6 +1,8 @@
 """Item management functions for the Eidolon Engine."""
 
 import uuid
+from botocore.exceptions import ClientError
+
 from eidolon.logger import get_logger
 from eidolon.dynamo import TableName, dynamo
 
@@ -90,3 +92,59 @@ def create_items_from_prototypes(prototype_ids: list[str], character_id: str) ->
             },
         )
         return {}
+
+
+def get_inventory_details(inventory: dict) -> dict:
+    """
+    Enrich inventory with item details for display.
+
+    Args:
+        inventory: Dict mapping slot to item ID
+
+    Returns:
+        Dict mapping slot to item details including name and description
+    """
+    if not inventory:
+        return {}
+
+    enriched_inventory = {}
+
+    for slot, item_id in inventory.items():
+        if not item_id:
+            enriched_inventory[slot] = None
+            continue
+
+        try:
+            # Get item details
+            item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
+
+            if item:
+                enriched_inventory[slot] = {
+                    "itemId": item_id,
+                    "name": item.get("Name", "Unknown Item"),
+                    "description": item.get("Description", ""),
+                    "quantity": item.get("Quantity", 1),
+                    "stackable": item.get("Stackable", False),
+                    "equipped": item.get("Equipped", False),
+                    "mass": item.get("Mass", 0),
+                    "value": item.get("Value", 0),
+                }
+            else:
+                logger.warning("Item not found in inventory", extra={"item_id": item_id, "slot": slot})
+                enriched_inventory[slot] = {
+                    "itemId": item_id,
+                    "name": "Missing Item",
+                    "description": "This item could not be loaded",
+                    "quantity": 0,
+                }
+
+        except ClientError as err:
+            logger.error("Failed to get item details", extra={"item_id": item_id, "slot": slot, "error": str(err)})
+            enriched_inventory[slot] = {
+                "itemId": item_id,
+                "name": "Error Loading Item",
+                "description": "Failed to load item details",
+                "quantity": 0,
+            }
+
+    return enriched_inventory

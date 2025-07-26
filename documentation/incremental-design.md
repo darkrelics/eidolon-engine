@@ -361,7 +361,124 @@ The simplified architecture avoids Global Secondary Indexes by:
 
 All endpoints follow existing Lambda patterns and extend the current API Gateway.
 
-#### 4.1.1 Story Management APIs
+#### 4.1.1 Character Management APIs
+
+**GET /archetypes**
+
+```python
+# Lambda: api_get_archetypes
+Purpose: Retrieve player-available archetypes for character creation
+Query Parameters: None (public endpoint, authentication required for access control)
+Response: {
+    "archetypes": [
+        {
+            "ArchetypeName": "Warrior",
+            "Description": "A strong fighter skilled in combat",
+            "Attributes": {"strength": 4, "agility": 2, ...},
+            "Skills": {"melee": 3, "dodge": 2, ...},
+            "StartRoom": 0,
+            "StartingItems": [
+                {"PrototypeID": "sword-uuid", "Slot": "RightHand", "IsWorn": false}
+            ],
+            "Health": 12,
+            "Essence": 2,
+            "AvailableStories": ["tutorial-uuid", "basic-quest-uuid"]
+        }
+    ],
+    "count": 5
+}
+
+Notes:
+- Archetypes are filtered to show only Player=true records
+- Attribute and skill keys are normalized to lowercase
+- AvailableStories determines initial story access for new characters
+- Results are cached at Lambda instance level for performance
+```
+
+**GET /character**
+
+```python
+# Lambda: api_get_character
+Purpose: Retrieve full character data including active segments
+Query Parameters: characterId (required)
+Response: {
+    "character": {
+        "CharacterID": "char-uuid-456",
+        "CharacterName": "Thorin",
+        "PlayerID": "player-uuid-123",
+        "GameMode": "Incremental",
+        "RoomID": 5,
+        "Inventory": {"RightHand": "sword-uuid", "LeftHand": "shield-uuid"},
+        "InventoryDetails": {
+            "RightHand": {
+                "itemId": "sword-uuid",
+                "name": "Iron Sword",
+                "description": "A well-crafted iron sword",
+                "mass": 2.5,
+                "value": 50,
+                "wearable": false,
+                "wornOn": null
+            },
+            "LeftHand": {
+                "itemId": "shield-uuid",
+                "name": "Wooden Shield",
+                "description": "A sturdy wooden shield",
+                "mass": 3.0,
+                "value": 30,
+                "wearable": false,
+                "wornOn": null
+            }
+        },
+        "Attributes": {"strength": 4, "agility": 2, "endurance": 3},  // Normalized to lowercase
+        "Skills": {"melee": 3, "dodge": 2, "perception": 1},          // Normalized to lowercase
+        "Essence": 3,
+        "Health": 10,
+        "MaxHealth": 12,
+        "MaxEssence": 5,
+        "Hidden": false,
+        "Wounds": [],
+        "CharState": "standing",
+        "AvailableStories": ["forest-adventure-uuid", "daily-patrol-uuid"],
+        "CompletedStories": ["intro-quest-uuid"],
+        "AbandonedStories": [],
+        "ActiveStoryID": "forest-adventure-uuid",
+        "ActiveSegmentID": "active-seg-uuid-123",
+        "Archetype": "Warrior",
+        "Resources": {"gold": 100},
+        "Progress": {},
+        "CreatedAt": "2025-01-15T10:00:00Z",
+        "UpdatedAt": "2025-01-23T08:00:00Z",
+        "LastPlayed": "2025-01-23T08:00:00Z"
+    },
+    "activeSegment": {  // Only included if character has an active segment
+        "ActiveSegmentID": "active-seg-uuid-123",
+        "StoryID": "forest-adventure-uuid",
+        "StoryTitle": "The Whispering Woods",
+        "SegmentID": "seg-uuid-002a",
+        "SegmentType": "narrative",
+        "Status": "active",
+        "StartTime": 1737000300,
+        "EndTime": 1737003900,
+        "ChallengeResults": [],
+        "Outcome": null
+    }
+}
+
+Error Cases:
+- 400: Invalid character ID format
+- 401: Not authenticated or player ID mismatch
+- 404: Character not found
+- 500: Database operation failed
+
+Notes:
+- Attributes and Skills keys are normalized to lowercase for Flutter compatibility
+- InventoryDetails enriches raw inventory UUIDs with full item information
+- activeSegment field only present when character has an active story segment
+- All numeric values converted from DynamoDB Decimal to standard floats
+- Requires ITEMS_TABLE and ACTIVE_SEGMENTS_TABLE environment variables
+```
+
+#### 4.1.2 Story Management APIs
 
 **GET /stories**
 
@@ -424,7 +541,7 @@ Query Parameters: characterId
 Response: Current story and segment details
 ```
 
-#### 4.1.2 Segment APIs
+#### 4.1.3 Segment APIs
 
 **POST /segments/decision**
 

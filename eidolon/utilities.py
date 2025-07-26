@@ -7,7 +7,8 @@ while keeping the handler function visible in each Lambda file.
 
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id
+from eidolon.player import extract_player_id_from_event
+from eidolon.player import validate_player_exists
 from eidolon.responses import create_response, error_response, unauthorized_response
 
 logger = get_logger(__name__)
@@ -50,7 +51,10 @@ def handle_preflight_if_options(event: dict) -> dict:
 
 def extract_and_validate_player_id(event: dict) -> tuple:
     """
-    Extract player ID from event and return with CORS-wrapped error if needed.
+    Extract player ID from event and validate it exists in database.
+
+    This function combines extraction and validation for backward compatibility.
+    For new code, prefer using extract_player_id_from_event and validate_player_exists separately.
 
     Args:
         event: Lambda event dict
@@ -60,12 +64,23 @@ def extract_and_validate_player_id(event: dict) -> tuple:
         If successful: (player_id, None)
         If failed: (None, error_response_dict)
     """
-    player_id, auth_error = extract_player_id(event)
-    if auth_error:
-        logger.error("Authentication failed", extra={"error": auth_error})
-        return None, cors_handler.add_cors_headers(unauthorized_response(auth_error), event)
+    # Extract player ID from JWT claims
+    try:
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return None, cors_handler.add_cors_headers(unauthorized_response("Unauthorized"), event)
 
-    logger.info("Player authenticated", extra={"player_id": player_id})
+    # Validate player exists in database
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return None, cors_handler.add_cors_headers(unauthorized_response("Unauthorized"), event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return None, cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+
+    logger.info("Player authenticated and validated", extra={"player_id": player_id})
     return player_id, None
 
 

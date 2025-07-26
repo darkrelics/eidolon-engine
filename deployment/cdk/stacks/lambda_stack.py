@@ -306,6 +306,8 @@ class LambdaStack(cdk.Stack):
             {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
+                "ITEMS_TABLE": self.items_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Gets a specific character",

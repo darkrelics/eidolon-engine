@@ -54,6 +54,25 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 - **CharacterNameIndex**: CharacterName - For ensuring unique character names across all players
 
+**API Response Transformations:**
+- **Attributes**: Keys are normalized to lowercase in API responses (e.g., "Strength" → "strength")
+- **Skills**: Keys are normalized to lowercase in API responses (e.g., "Melee" → "melee")
+- **InventoryDetails**: API responses include an enriched `InventoryDetails` field with item information:
+  ```json
+  {
+    "slot_name": {
+      "itemId": "uuid",
+      "name": "Item Name",
+      "description": "Item description",
+      "mass": 1.5,
+      "value": 100,
+      "wearable": true,
+      "wornOn": "head"
+    }
+  }
+  ```
+- **Decimal Values**: All numeric values are converted from DynamoDB Decimal to standard floats
+
 ---
 
 ## Rooms Table

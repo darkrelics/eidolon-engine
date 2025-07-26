@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// Character model for display purposes only.
 /// All progression and calculations happen server-side.
 class Character {
@@ -13,6 +15,7 @@ class Character {
   final Map<String, double> skills;
   final Map<String, int> resources;
   final Map<String, String> inventory; // MUD-compatible: slot -> itemId
+  final Map<String, dynamic> inventoryDetails; // Enriched inventory data with item details
   final Map<String, dynamic> progress; // Story progress flags
   Map<String, dynamic>? storyState; // Current story position
   final String gameMode; // "MUD" or "Incremental"
@@ -34,6 +37,7 @@ class Character {
     required this.skills,
     required this.resources,
     required this.inventory,
+    this.inventoryDetails = const {},
     required this.progress,
     this.storyState,
     required this.gameMode,
@@ -55,6 +59,13 @@ class Character {
 
   /// Create character from server response
   factory Character.fromJson(Map<String, dynamic> json) {
+    // Debug logging
+    debugPrint('Character.fromJson - Raw JSON keys: ${json.keys.toList()}');
+    debugPrint('Character.fromJson - Attributes: ${json['Attributes']}');
+    debugPrint('Character.fromJson - Skills: ${json['Skills']}');
+    debugPrint('Character.fromJson - Inventory: ${json['Inventory']}');
+    debugPrint('Character.fromJson - InventoryDetails: ${json['InventoryDetails']}');
+    
     // Parse attributes and skills, converting numbers to doubles
     final Map<String, double> parsedAttributes = parseMapToDouble(
       json['Attributes'] ?? {},
@@ -65,6 +76,10 @@ class Character {
     final Map<String, int> parsedResources = parseMapToInt(
       json['Resources'] ?? {},
     );
+
+    // Debug parsed data
+    debugPrint('Character.fromJson - Parsed attributes: $parsedAttributes');
+    debugPrint('Character.fromJson - Parsed skills: $parsedSkills');
 
     // The archetype from server is just a string name, not an object with ID
     final archetypeName = json['Archetype'] as String? ?? 'default';
@@ -82,6 +97,7 @@ class Character {
       skills: parsedSkills,
       resources: parsedResources,
       inventory: Map<String, String>.from(json['Inventory'] ?? {}),
+      inventoryDetails: Map<String, dynamic>.from(json['InventoryDetails'] ?? {}),
       progress: Map<String, dynamic>.from(json['Progress'] ?? {}),
       storyState: json['StoryState'] as Map<String, dynamic>?,
       gameMode: json['GameMode'] as String? ?? 'Incremental',
@@ -112,6 +128,7 @@ class Character {
       'Skills': skills,
       'Resources': resources,
       'Inventory': inventory,
+      'InventoryDetails': inventoryDetails,
       'Progress': progress,
       'StoryState': storyState,
       'GameMode': gameMode,
@@ -130,6 +147,7 @@ class Character {
     Map<String, double>? skills,
     Map<String, int>? resources,
     Map<String, String>? inventory,
+    Map<String, dynamic>? inventoryDetails,
     Map<String, dynamic>? progress,
     Map<String, dynamic>? storyState,
     DateTime? lastUpdated,
@@ -150,6 +168,7 @@ class Character {
       skills: skills ?? this.skills,
       resources: resources ?? this.resources,
       inventory: inventory ?? this.inventory,
+      inventoryDetails: inventoryDetails ?? this.inventoryDetails,
       progress: progress ?? this.progress,
       storyState: storyState ?? this.storyState,
       gameMode: gameMode,
