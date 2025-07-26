@@ -4,6 +4,7 @@ This document defines the Python coding standards for the Eidolon Engine project
 
 ## General Principles
 
+- **Single Responsibility**: Every function, class, and module must have exactly one responsibility and one reason to change
 - **Simplicity**: Simple, readable code is preferred over clever solutions
 - **Consistency**: Follow existing patterns in the codebase
 - **Explicit over Implicit**: Make intentions clear in the code
@@ -533,9 +534,9 @@ class Character:
         pass
 ```
 
-### One Class/Function Per Purpose
+### Single Responsibility Principle (SRP)
 
-Each function or class should have a single, clear purpose:
+The Single Responsibility Principle is **mandatory** for all code. Each function, class, or module must have exactly one responsibility and one reason to change. This is the most important design principle in our codebase.
 
 ```python
 # Good - each function has one job
@@ -551,11 +552,131 @@ def create_character_record(character_data: dict) -> str:
     """Create character in database."""
     pass
 
-# Bad - function does too much
+# Bad - function does too much (validates AND saves)
 def create_and_validate_character(name: str, player_id: str) -> dict:
     """Validates, checks availability, creates character, sends email..."""
     pass
 ```
+
+#### SRP Litmus Test
+
+If you need "and" to describe what a function does, it's doing too much:
+- ❌ "This function validates AND saves the character"
+- ❌ "This class manages authentication AND user profiles"
+- ❌ "This module handles database operations AND business logic"
+
+#### Common SRP Violations to Avoid
+
+1. **Mixed Concerns in Functions**:
+```python
+# Bad - mixes validation, database operation, and notification
+def process_character(character_data: dict) -> dict:
+    # Validates data
+    if not character_data.get("name"):
+        raise ValueError("Missing name")
+    
+    # Saves to database
+    dynamo.put_item(TableName.CHARACTERS, character_data)
+    
+    # Sends notification
+    send_email(character_data["email"], "Character created")
+    
+    return {"success": True}
+
+# Good - separate responsibilities
+def validate_character_data(character_data: dict) -> None:
+    """Validate character data. Raises ValueError if invalid."""
+    if not character_data.get("name"):
+        raise ValueError("Missing name")
+
+def save_character(character_data: dict) -> None:
+    """Save character to database."""
+    dynamo.put_item(TableName.CHARACTERS, character_data)
+
+def notify_character_creation(email: str) -> None:
+    """Send character creation notification."""
+    send_email(email, "Character created")
+```
+
+2. **Lambda Handlers with Business Logic**:
+```python
+# Bad - Lambda handler contains business logic
+def lambda_handler(event: dict, context: object) -> dict:
+    character_id = event["characterId"]
+    
+    # Business logic should not be in handler
+    character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+    if character["Level"] < 10:
+        character["Level"] += 1
+        dynamo.put_item(TableName.CHARACTERS, character)
+    
+    return create_response(200, character)
+
+# Good - Lambda handler only orchestrates
+def lambda_handler(event: dict, context: object) -> dict:
+    try:
+        character_id = event["characterId"]
+        character = level_up_character(character_id)
+        return create_response(200, character)
+    except ValueError as err:
+        return error_response(str(err), 400)
+
+def level_up_character(character_id: str) -> dict:
+    """Business logic in separate function."""
+    character = get_character(character_id)
+    if character["Level"] < 10:
+        character["Level"] += 1
+        save_character(character)
+    return character
+```
+
+3. **Classes with Multiple Responsibilities**:
+```python
+# Bad - class handles too many concerns
+class Character:
+    def __init__(self, character_id: str):
+        self.character_id = character_id
+        self.data = self.load_from_database()
+    
+    def load_from_database(self) -> dict:
+        # Database concern mixed with business logic
+        return dynamo.get_item(...)
+    
+    def validate_name(self) -> bool:
+        # Validation mixed with data access
+        pass
+    
+    def send_notification(self) -> None:
+        # Notification concern mixed with character logic
+        pass
+
+# Good - separate concerns into focused components
+class CharacterRepository:
+    """Handles character data persistence."""
+    def get_character(self, character_id: str) -> dict:
+        pass
+    
+    def save_character(self, character: dict) -> None:
+        pass
+
+class CharacterValidator:
+    """Handles character validation rules."""
+    def validate_name(self, name: str) -> bool:
+        pass
+
+class CharacterNotifier:
+    """Handles character-related notifications."""
+    def send_level_up_notification(self, character: dict) -> None:
+        pass
+```
+
+#### Benefits of SRP
+
+1. **Easier Testing**: Each component can be tested in isolation
+2. **Better Reusability**: Single-purpose functions can be reused in different contexts
+3. **Simpler Maintenance**: Changes to one responsibility don't affect others
+4. **Clearer Code**: Each component has a clear, understandable purpose
+5. **Reduced Bugs**: Changes are localized to specific responsibilities
 
 ## Logging
 
