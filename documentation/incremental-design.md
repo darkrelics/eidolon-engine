@@ -159,9 +159,13 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 # Tracks runtime segment instances - Narrative example
 {
     "ActiveSegmentID": "active-seg-uuid-123",  # HASH
-    "CharacterID": "char-uuid-456",
+    "CharacterID": "char-uuid-456",            # GSI - CharacterID-index
+    "PlayerID": "player-uuid-123",
     "StoryID": "forest-adventure-uuid",
+    "StoryTitle": "The Whispering Woods",
     "SegmentID": "seg-uuid-002a",
+    "SegmentType": "narrative",
+    "Status": "active",
     "StartTime": 1737000300,
     "EndTime": 1737003900,              # GSI - EndTimeIndex
     "Decision": null,                   # For decision segments
@@ -172,15 +176,20 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
         {"attribute": "Strength", "skill": "Survival", "effectiveScore": 10, "difficulty": 7, "sigma": 1.21, "success": true},
         {"attribute": "Strength", "skill": "Survival", "effectiveScore": 10, "difficulty": 7, "sigma": 0.94, "success": true}
     ],
-    "Outcome": "minimal"                # Calculated from challenges
+    "Outcome": "minimal",               # Calculated from challenges
+    "TTL": 1737007500                   # Expires 1 hour after EndTime
 }
 
 # Combat segment example
 {
     "ActiveSegmentID": "active-seg-uuid-combat",  # HASH
-    "CharacterID": "char-uuid-456",
+    "CharacterID": "char-uuid-456",               # GSI - CharacterID-index
+    "PlayerID": "player-uuid-123",
     "StoryID": "forest-adventure-uuid",
+    "StoryTitle": "The Whispering Woods",
     "SegmentID": "seg-uuid-combat-001",
+    "SegmentType": "combat",
+    "Status": "active",
     "StartTime": 1737000300,
     "EndTime": 1737000420,              # GSI - EndTimeIndex
     "CombatState": {                    # For combat segments
@@ -191,13 +200,20 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
         ],
         "opponentHealth": 4
     },
-    "Outcome": null                     # Set when combat completes
+    "Outcome": null,                    # Set when combat completes
+    "TTL": 1737004020                   # Expires 1 hour after EndTime
 }
 
-# Global Secondary Index for polling
+# Global Secondary Indexes
+GSI: CharacterID-index
+  - CharacterID field only
+  - Projection: ALL
+  - For querying active segments by character
+
 GSI: EndTimeIndex
   - EndTime field only
   - Projection: ALL
+  - For finding segments ready to process
 ```
 
 #### 3.1.4 Opponents Table
@@ -446,8 +462,15 @@ Response: {
 ```python
 # Lambda: api_abandon_story
 Purpose: Exit current story
-Request: { "characterId": "char-uuid-456" }
-Response: { "abandoned": true }
+Query Parameters: characterId=char-uuid-456
+Request Body: None (uses query parameter)
+Response: {
+    "abandoned": true,
+    "characterId": "char-uuid-456",
+    "storyId": "forest-adventure-uuid",
+    "storyTitle": "The Whispering Woods",
+    "message": "Story abandoned successfully"
+}
 ```
 
 ### 4.2 Client Communication Strategy

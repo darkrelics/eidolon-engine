@@ -1103,18 +1103,28 @@ class _ActionPanelState extends State<ActionPanel> {
     if (confirm != true) return;
 
     try {
-      // For now, just clear the story state locally
-      // TODO: Call abandon story API when implemented
-      setState(() {
-        widget.character.storyState = null;
-      });
+      // Call abandon story API
+      final result = await _apiService.abandonStory(_character!.id);
+      
+      // Check if abandonment was successful
+      if (result['abandoned'] == true) {
+        // Clear local story state
+        setState(() {
+          _character!.storyState = null;
+        });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Story abandoned'),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Story "${result['storyTitle']}" abandoned successfully'),
+            ),
+          );
+        }
+        
+        // Reload character to get fresh state from server
+        await _loadCharacter();
+      } else {
+        throw Exception('Server did not confirm story abandonment');
       }
     } catch (e) {
       if (mounted) {

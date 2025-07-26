@@ -12,8 +12,7 @@ from eidolon.character import reset_character_game_mode
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 from eidolon.requests import extract_player_id
-from eidolon.requests import get_required_field
-from eidolon.requests import parse_json_body
+from eidolon.requests import get_query_parameter
 from eidolon.responses import create_response
 from eidolon.responses import error_response
 from eidolon.story import add_story_to_abandoned_list
@@ -22,7 +21,6 @@ from eidolon.story import mark_segment_as_abandoned
 from eidolon.story import record_story_abandonment
 from eidolon.validation import validate_uuid
 
-# Configure logging
 logger = get_logger(__name__)
 
 
@@ -44,70 +42,27 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
         player_id: Player ID for ownership verification
 
     Returns:
-        Dict with:
-            - success: bool
-            - data: Response data (if success)
-            - error: Error message (if failed)
-            - statusCode: HTTP status code
-    """
-    # Step 1: Verify character ownership
-    character, error_msg = get_character_with_ownership(character_id, player_id)
-    if error_msg:
-        logger.warning(
-            "Character not found or not owned",
-            extra={
-                "character_id": character_id,
-                "player_id": player_id,
-                "error": error_msg,
-            },
-        )
-        return {
-            "success": False,
-            "error": "Character not found",
-            "statusCode": 404,
-        }
+        Dict with response data for successful abandonment
 
-    # Step 2: Check if character is in a story
+    Raises:
+        ValueError: If character not found, not owned, or not in a story
+        RuntimeError: If database operations fail
+    """
+    character = get_character_with_ownership(character_id, player_id)
+
     game_mode = character.get("GameMode", "None")
     if game_mode != "Incremental":
         logger.warning(
             "Character not in Incremental mode",
             extra={"character_id": character_id, "game_mode": game_mode},
         )
-        return {
-            "success": False,
-            "error": "Character not in a story",
-            "statusCode": 409,
-        }
+        raise ValueError("Character not in a story")
 
-    # Step 3: Get active story segment
-    try:
-        active_segment = get_active_story_segment(character_id)
-        active_segment_id = active_segment.get("ActiveSegmentID")
-        story_id = active_segment.get("StoryID")
-        story_title = active_segment.get("StoryTitle", "Unknown Story")
-    except ValueError as err:
-        logger.warning(
-            "No active story found",
-            extra={"character_id": character_id, "error": str(err)},
-        )
-        return {
-            "success": False,
-            "error": "No active story found",
-            "statusCode": 404,
-        }
-    except RuntimeError as err:
-        logger.error(
-            "Failed to get active story segment",
-            extra={"character_id": character_id, "error": str(err)},
-        )
-        return {
-            "success": False,
-            "error": "Failed to get active story segment",
-            "statusCode": 500,
-        }
+    active_segment = get_active_story_segment(character_id)
+    active_segment_id = active_segment.get("ActiveSegmentID")
+    story_id = active_segment.get("StoryID")
+    story_title = active_segment.get("StoryTitle", "Unknown Story")
 
-    # Step 4: Add story to abandoned list
     try:
         add_story_to_abandoned_list(character_id, story_id) # type: ignore
     except (ValueError, RuntimeError) as err:
@@ -116,7 +71,6 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
             extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
         )
 
-    # Step 5: Mark segment as abandoned
     try:
         mark_segment_as_abandoned(active_segment_id) # type: ignore
     except (ValueError, RuntimeError) as err:
@@ -125,7 +79,6 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
             extra={"active_segment_id": active_segment_id, "error": str(err)},
         )
 
-    # Step 6: Record in history
     try:
         record_story_abandonment(character_id, story_id) # type: ignore
     except (ValueError, RuntimeError) as err:
@@ -134,21 +87,12 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
             extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
         )
 
-    # Step 7: Reset character game mode
-    reset_result = reset_character_game_mode(character_id)
-    if not reset_result["success"]:
-        return {
-            "success": False,
-            "error": reset_result["error"],
-            "statusCode": 500,
-        }
-
-    # Build success response
+    reset_character_game_mode(character_id)
     response_data = {
         "characterId": character_id,
         "storyId": story_id,
         "storyTitle": story_title,
-        "status": "abandoned",
+        "abandoned": True,
         "message": "Story abandoned successfully",
     }
 
@@ -161,11 +105,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
         },
     )
 
-    return {
-        "success": True,
-        "data": response_data,
-        "statusCode": 200,
-    }
+    return response_data
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -179,7 +119,6 @@ def lambda_handler(event: dict, context: object) -> dict:
     Returns:
         API Gateway Lambda proxy response
     """
-    # Log Lambda invocation
     if hasattr(context, "aws_request_id"):
         logger.info(
             "Lambda invocation",
@@ -191,31 +130,20 @@ def lambda_handler(event: dict, context: object) -> dict:
             },
         )
 
-    # Handle preflight requests
     if event.get("httpMethod") == "OPTIONS":
         return cors_handler.handle_preflight(event)
 
     try:
-        player_id, auth_error = extract_player_id(event)
-        if auth_error:
-            logger.error("Authentication failed", extra={"error": auth_error})
-            return cors_handler.add_cors_headers(
-                error_response(auth_error, status_code=401), event
-            )
-
+        player_id = extract_player_id(event)
         logger.info("Player authenticated", extra={"player_id": player_id})
 
-        body, parse_error = parse_json_body(event)
-        if parse_error:
-            return cors_handler.add_cors_headers(parse_error, event)
-
-        character_id, char_error = get_required_field(body, "characterId")
-        if char_error:
+        character_id = get_query_parameter(event, "characterId")
+        if not character_id:
             return cors_handler.add_cors_headers(
-                error_response(char_error, status_code=400), event
+                error_response("Missing characterId parameter", status_code=400), event
             )
 
-        if character_id and not validate_uuid(character_id):
+        if not validate_uuid(character_id):
             return cors_handler.add_cors_headers(
                 error_response("Invalid character ID format", status_code=400), event
             )
@@ -225,16 +153,22 @@ def lambda_handler(event: dict, context: object) -> dict:
             extra={"character_id": character_id},
         )
 
-        result = abandon_story_business_logic(character_id, player_id)  # type: ignore
-
-        if not result["success"]:
-            return cors_handler.add_cors_headers(
-                error_response(result["error"], status_code=result["statusCode"]), event
-            )
+        result = abandon_story_business_logic(character_id, player_id)
 
         logger.info("Lambda response", extra={"status_code": 200})
         return cors_handler.add_cors_headers(
-            create_response(200, result["data"]), event
+            create_response(200, result), event
+        )
+
+    except ValueError as err:
+        logger.error("Business logic error", extra={"error": str(err)})
+        return cors_handler.add_cors_headers(
+            error_response(str(err), status_code=400), event
+        )
+    except RuntimeError as err:
+        logger.error("Database error", extra={"error": str(err)}, exc_info=True)
+        return cors_handler.add_cors_headers(
+            error_response("Internal server error", status_code=500), event
         )
 
     except Exception as err:

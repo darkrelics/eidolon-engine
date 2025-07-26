@@ -6,18 +6,13 @@ Provides common functions for character creation and management.
 
 import pickle
 import uuid
-from datetime import datetime
-from datetime import timezone
 
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
-from eidolon.environment import DEFAULT_ESSENCE
-from eidolon.environment import DEFAULT_HEALTH
 from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
 from eidolon.logger import get_logger
-from eidolon.validation import validate_character_name
 from eidolon.validation import validate_uuid
 
 logger = get_logger(__name__)
@@ -210,34 +205,44 @@ def get_character_with_ownership(character_id: str, player_id: str) -> dict:
     return character
 
 
-def reset_character_game_mode(character_id: str) -> dict:
+def reset_character_game_mode(character_id: str) -> None:
     """
-    Reset character's GameMode back to None.
+    Reset character's game mode and clear active story/segment fields.
+
+    This function resets the character state when abandoning a story:
+    - Sets GameMode back to "None"
+    - Clears ActiveStoryID
+    - Clears ActiveSegmentID
 
     Args:
         character_id: Character UUID
 
-    Returns:
-        Dict with:
-            - success: bool
-            - error: Error message (if failed)
+    Raises:
+        ValueError: If character_id is empty
+        RuntimeError: If database update fails
     """
+    if not character_id:
+        raise ValueError("Character ID cannot be empty")
+
     try:
         dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
-            UpdateExpression="SET GameMode = :none",
+            UpdateExpression="SET GameMode = :none REMOVE ActiveStoryID, ActiveSegmentID",
             ExpressionAttributeValues={":none": "None"},
         )
-        logger.info("Reset character game mode", extra={"character_id": character_id})
-        return {"success": True}
+        logger.info(
+            "Reset character game mode and cleared active story fields",
+            extra={"character_id": character_id}
+        )
 
     except ClientError as err:
         logger.error(
-            "Failed to reset character game mode",
+            "Failed to reset character state",
             extra={"character_id": character_id, "error": str(err)},
+            exc_info=True
         )
-        return {"success": False, "error": "Failed to update character"}
+        raise RuntimeError(f"Failed to reset character state: {str(err)}")
 
 
 def get_active_segment_for_character(

@@ -206,20 +206,26 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | Field              | Type     | Key      | Description                                               |
 | ------------------ | -------- | -------- | --------------------------------------------------------- |
 | `ActiveSegmentID`  | `STRING` | **HASH** | UUID for this active segment instance.                    |
-| `CharacterID`      | `STRING` |          | UUID of the character (for processing context).           |
+| `CharacterID`      | `STRING` | **GSI**  | UUID of the character (for processing context).           |
+| `PlayerID`         | `STRING` |          | UUID of the player who owns the character.                |
 | `StoryID`          | `STRING` |          | UUID of the story being played.                           |
+| `StoryTitle`       | `STRING` |          | Cached title of the story for quick access.              |
 | `SegmentID`        | `STRING` |          | UUID of the current segment definition.                   |
+| `SegmentType`      | `STRING` |          | Type of segment: decision, narrative, or combat.          |
+| `Status`           | `STRING` |          | Segment status: active, abandoned, or completed.          |
 | `StartTime`        | `NUMBER` |          | Unix timestamp when segment started.                      |
 | `EndTime`          | `NUMBER` | **GSI**  | Unix timestamp when segment will complete.                |
 | `Decision`         | `STRING` |          | For decision segments: choice made by player.             |
 | `ChallengeResults` | `LIST`   |          | For narrative segments: results of each challenge roll.   |
 | `CombatState`      | `MAP`    |          | For combat segments: tracks ongoing combat state.         |
 | `Outcome`          | `STRING` |          | Final outcome (death/failure/minimal/normal/exceptional). |
+| `TTL`              | `NUMBER` |          | Time-to-live for automatic cleanup of old segments.       |
 
 **Primary Key:** ActiveSegmentID (HASH)
 
-**Global Secondary Index:**
+**Global Secondary Indexes:**
 
+- **CharacterID-index**: CharacterID - For querying active segments by character
 - **EndTimeIndex**: EndTime - For finding segments ready to process and monitoring upcoming completions
 
 ## History Table

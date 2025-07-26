@@ -220,19 +220,24 @@ class ApiService {
   }
 
   /// Abandon current story run
-  Future<Character> abandonStory() async {
+  Future<Map<String, dynamic>> abandonStory(String characterId) async {
+    debugPrint('ApiService: Abandoning story for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/story/abandon'),
+      Uri.parse('$baseUrl/stories/abandon?characterId=$characterId'),
       headers: headers,
     );
 
+    debugPrint('ApiService: Abandon story response status: ${response.statusCode}');
+    debugPrint('ApiService: Abandon story response body: ${response.body}');
+
     if (response.statusCode != 200) {
-      throw Exception('Failed to abandon story: ${response.body}');
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to abandon story');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return Character.fromJson(json['character'] as Map<String, dynamic>);
+    return json;
   }
 
   /// Rest instead of continuing
