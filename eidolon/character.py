@@ -589,7 +589,7 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
     return results
 
 
-def create_character(player_id: str, character_name: str, archetype_name: str, archetype_data: dict) -> tuple[str, str]:
+def create_character(player_id: str, character_name: str, archetype_name: str, archetype_data: dict) -> dict:
     """Create a new incremental character in DynamoDB.
 
     Args:
@@ -599,9 +599,14 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         archetype_data: Archetype data from DynamoDB
 
     Returns:
-        Tuple of (character_id, error_message)
-        - If successful: (character_id, None)
-        - If failed: (None, error_message)
+        Dict containing:
+            - character_id: str - The created character's ID
+            - character_name: str - The character's name
+            - archetype: str - The archetype used
+
+    Raises:
+        ValueError: If character name is already taken
+        RuntimeError: If database operations fail
     """
     character_id = generate_character_id()
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -693,13 +698,16 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
                     "Character name already taken",
                     extra={"character_name": character_name, "player_id": player_id},
                 )
-                return None, "Character name is already taken"
+                raise ValueError("Character name is already taken")
+        except ValueError:
+            # Re-raise ValueError for "already taken" message
+            raise
         except Exception as err:
             logger.error(
                 "Error checking character name availability",
                 extra={"error": str(err), "character_name": character_name},
             )
-            return None, "Failed to check character name availability"
+            raise RuntimeError(f"Failed to check character name availability: {str(err)}")
 
         # Character name is available, create the character record
         logger.info(
@@ -714,7 +722,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
                 "Failed to create character record",
                 extra={"character_name": character_name, "error": str(err)},
             )
-            return None, "Failed to create character"
+            raise RuntimeError(f"Failed to create character record: {str(err)}")
 
         logger.info(
             "Character record created successfully",
@@ -757,8 +765,15 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
                 "archetype": archetype_name,
             },
         )
-        return character_id, None
+        return {
+            "character_id": character_id,
+            "character_name": character_name,
+            "archetype": archetype_name
+        }
 
+    except ValueError:
+        # Re-raise ValueError for business logic errors
+        raise
     except ClientError as err:
         logger.error(
             "Error creating character",
@@ -776,4 +791,4 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
                 "Failed to rollback character creation",
                 extra={"error": str(rollback_err), "character_id": character_id},
             )
-        return None, "Failed to create character"
+        raise RuntimeError(f"Failed to create character: {str(err)}")

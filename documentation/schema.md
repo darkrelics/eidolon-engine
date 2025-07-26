@@ -33,6 +33,8 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `Hidden`           | `BOOL`   |          | Whether the character is currently hidden.                     |
 | `Wounds`           | `LIST`   |          | List of wound objects affecting the character.                 |
 | `CharState`        | `STRING` |          | Current character state (e.g., "standing", "unconscious").     |
+| `LeftHandID`       | `STRING` |          | UUID of item equipped in left hand (if any).                   |
+| `RightHandID`      | `STRING` |          | UUID of item equipped in right hand (if any).                  |
 | `AvailableStories` | `LIST`   |          | List of story IDs available to this character.                 |
 | `AbandonedStories` | `LIST`   |          | List of story IDs the character has abandoned.                 |
 | `CompletedStories` | `LIST`   |          | List of story IDs the character has completed.                 |

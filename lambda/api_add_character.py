@@ -93,16 +93,12 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
         archetype_name = "default"
 
     # Create the character using the eidolon library function
-    character_id, error_msg = create_character(player_id, character_name, archetype_name, archetype_data)
-
-    if not character_id:
-        # Convert the error message to appropriate exception
-        if error_msg == "Character name is already taken":
-            raise ValueError(error_msg)
-        else:
-            raise RuntimeError(error_msg or "Failed to create character")
-
-    return {"character_id": character_id, "archetype_name": archetype_name}
+    result = create_character(player_id, character_name, archetype_name, archetype_data)
+    
+    return {
+        "character_id": result["character_id"],
+        "archetype_name": result["archetype"]
+    }
 
 
 def lambda_handler(event: dict, context: object) -> dict:

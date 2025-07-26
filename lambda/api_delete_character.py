@@ -21,48 +21,65 @@ from eidolon.validation import validate_uuid
 logger = get_logger(__name__)
 
 
-def delete_character_with_ownership_check(player_id: str, character_id: str) -> dict:
+def handle_character_deletion(player_id: str, character_id: str) -> dict:
     """
-    Delete a character after verifying ownership.
-
+    Handle the business logic for character deletion.
+    
+    This function orchestrates the character deletion process without
+    performing any AWS-specific operations.
+    
     Args:
         player_id: Cognito user ID
         character_id: Character UUID
-
+        
     Returns:
-        dict: Results of the deletion operation
-
+        Dict containing:
+            - success: bool - Whether deletion was successful
+            - character_name: str - Name of deleted character
+            - deletion_result: dict - Detailed deletion results
+            
     Raises:
-        ValueError: If character not found or not owned by player
+        ValueError: If character not found, invalid ID, or not owned by player
         RuntimeError: If database operations fail
     """
-    # Verify ownership and get character
+    # Verify ownership
     character = get_character_with_ownership(character_id, player_id)
     character_name = character.get("CharacterName", "Unknown")
-
+    
     logger.info(
-        "Deleting character",
+        "Character ownership verified, proceeding with deletion",
         extra={
             "character_id": character_id,
             "character_name": character_name,
             "player_id": player_id,
         },
     )
-
+    
     # Delete the character
-    results = delete_character(character_id, remove_from_player_list=True)
-
+    deletion_result = delete_character(character_id, remove_from_player_list=True)
+    
     logger.info(
         "Character deletion completed",
         extra={
             "character_name": character_name,
             "character_id": character_id,
             "player_id": player_id,
-            "results": results,
+            "results": deletion_result,
         },
     )
-
-    return results
+    
+    # Check if deletion was successful
+    if not deletion_result["character_deleted"]:
+        error_msg = "Failed to delete character"
+        if deletion_result["errors"]:
+            error_msg = deletion_result["errors"][0]
+        raise RuntimeError(error_msg)
+    
+    return {
+        "success": True,
+        "character_name": character_name,
+        "deletion_result": deletion_result
+    }
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -108,12 +125,30 @@ def lambda_handler(event: dict, context: object) -> dict:
         if not validate_uuid(character_id):
             return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
 
-        # Delete the character with ownership verification
+        # Handle character deletion through business logic function
         try:
-            deletion_result = delete_character_with_ownership_check(player_id, character_id)
+            result = handle_character_deletion(player_id, character_id)
+            
+            # Return success response with details
+            logger.info("Lambda response", extra={"status_code": 200})
+            return cors_handler.add_cors_headers(
+                create_response(
+                    200,
+                    {
+                        "message": "Character deleted successfully",
+                        "characterId": character_id,
+                        "characterName": result["character_name"],
+                        "itemsDeleted": result["deletion_result"]["items_deleted"],
+                        "activeSegmentsDeleted": result["deletion_result"]["active_segments_deleted"],
+                        "historyDeleted": result["deletion_result"]["history_deleted"],
+                    },
+                ),
+                event,
+            )
         except ValueError as err:
+            # Character not found or not owned by player
             logger.warning(
-                "Character not found or not owned",
+                "Character deletion validation failed",
                 extra={"character_id": character_id, "player_id": player_id, "error": str(err)},
             )
             return cors_handler.add_cors_headers(
@@ -121,37 +156,16 @@ def lambda_handler(event: dict, context: object) -> dict:
                 event,
             )
         except RuntimeError as err:
+            # Database or deletion failures
             logger.error(
-                "Failed to delete character",
+                "Character deletion system error",
                 extra={"character_id": character_id, "error": str(err)},
+                exc_info=True,
             )
             return cors_handler.add_cors_headers(
-                error_response("Failed to delete character", status_code=500),
+                error_response(str(err), status_code=500),
                 event,
             )
-
-        # Check if deletion was successful
-        if not deletion_result["character_deleted"]:
-            error_msg = "Failed to delete character"
-            if deletion_result["errors"]:
-                error_msg = deletion_result["errors"][0]
-            return cors_handler.add_cors_headers(error_response(error_msg, status_code=500), event)
-
-        # Return success response with details
-        logger.info("Lambda response", extra={"status_code": 200})
-        return cors_handler.add_cors_headers(
-            create_response(
-                200,
-                {
-                    "message": "Character deleted successfully",
-                    "characterId": character_id,
-                    "itemsDeleted": deletion_result["items_deleted"],
-                    "activeSegmentsDeleted": deletion_result["active_segments_deleted"],
-                    "historyDeleted": deletion_result["history_deleted"],
-                },
-            ),
-            event,
-        )
 
     except Exception as err:
         logger.error(
