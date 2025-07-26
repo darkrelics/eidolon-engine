@@ -6,14 +6,16 @@ Provides common functions for character creation and management.
 
 import pickle
 import uuid
+from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
-from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
+from eidolon.environment import MAX_CHARACTERS_PER_PLAYER, DEFAULT_HEALTH, DEFAULT_ESSENCE
 from eidolon.logger import get_logger
 from eidolon.validation import validate_uuid
+from eidolon.items import create_items_from_prototypes
 
 logger = get_logger(__name__)
 
@@ -585,3 +587,193 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
         results["errors"].append(f"Attribute error: {str(err)}")
 
     return results
+
+
+def create_character(player_id: str, character_name: str, archetype_name: str, archetype_data: dict) -> tuple[str, str]:
+    """Create a new incremental character in DynamoDB.
+
+    Args:
+        player_id: Cognito user ID
+        character_name: Name of the character
+        archetype_name: Name of the archetype
+        archetype_data: Archetype data from DynamoDB
+
+    Returns:
+        Tuple of (character_id, error_message)
+        - If successful: (character_id, None)
+        - If failed: (None, error_message)
+    """
+    character_id = generate_character_id()
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    logger.info(
+        "Creating new character",
+        extra={
+            "player_id": player_id,
+            "character_name": character_name,
+            "archetype_name": archetype_name,
+            "character_id": character_id,
+        },
+    )
+
+    # Build character record
+    character_item = {
+        "CharacterID": character_id,
+        "PlayerID": player_id,
+        "CharacterName": character_name,
+        "Archetype": archetype_name,
+        "Attributes": archetype_data.get("Attributes", {}),
+        "Skills": archetype_data.get("Skills", {}),
+        "Health": archetype_data.get("Health", DEFAULT_HEALTH),
+        "MaxHealth": archetype_data.get("Health", DEFAULT_HEALTH),
+        "Essence": archetype_data.get("Essence", DEFAULT_ESSENCE),
+        "MaxEssence": archetype_data.get("Essence", DEFAULT_ESSENCE),
+        "Wounds": [],
+        "RoomID": archetype_data.get("StartRoom", 0),  # Use archetype's StartRoom or default to 0
+        "Inventory": {},  # Will be populated with starting items below
+        "Resources": {},
+        "Progress": {},  # Track story progress flags and achievements
+        # Incremental game story tracking fields
+        "AvailableStories": archetype_data.get("AvailableStories", []),  # Stories the character can start
+        "AbandonedStories": [],  # Stories started but not finished
+        "CompletedStories": [],  # Stories successfully completed
+        "ActiveStoryID": None,  # Currently active story
+        "ActiveSegmentID": None,  # Currently active segment
+        "Hidden": False,
+        "CharState": "Standing",
+        "GameMode": "Incremental",  # Mark as Incremental game character
+        "CreatedAt": timestamp,
+        "UpdatedAt": timestamp,
+        "LastPlayed": timestamp,
+    }
+
+    # Process starting items from archetype
+    starting_items = archetype_data.get("StartingItems", [])
+    if starting_items:
+        logger.info(
+            "Processing starting items for character",
+            extra={
+                "character_id": character_id,
+                "archetype": archetype_name,
+                "item_count": len(starting_items),
+            },
+        )
+
+        # Create items from prototypes and get inventory mapping
+        inventory = create_items_from_prototypes(starting_items, character_id)
+
+        # Update character item with the inventory
+        character_item["Inventory"] = inventory
+
+        logger.info(
+            "Starting items created",
+            extra={"character_id": character_id, "inventory_slots": len(inventory)},
+        )
+
+    try:
+
+        # First, check if character name already exists using GSI
+        logger.info(
+            "Checking if character name is available",
+            extra={"character_name": character_name},
+        )
+
+        # Use query to check for existing character name
+        try:
+            existing_chars = dynamo.query(
+                TableName.CHARACTERS,
+                IndexName="CharacterNameIndex",
+                KeyConditionExpression="CharacterName = :name",
+                ExpressionAttributeValues={":name": character_name},
+                Limit=1,
+            )
+
+            if existing_chars:
+                logger.info(
+                    "Character name already taken",
+                    extra={"character_name": character_name, "player_id": player_id},
+                )
+                return None, "Character name is already taken"
+        except Exception as err:
+            logger.error(
+                "Error checking character name availability",
+                extra={"error": str(err), "character_name": character_name},
+            )
+            return None, "Failed to check character name availability"
+
+        # Character name is available, create the character record
+        logger.info(
+            "Character name available, creating character record",
+            extra={"character_id": character_id},
+        )
+
+        try:
+            dynamo.put_item(TableName.CHARACTERS, character_item)
+        except ClientError as err:
+            logger.error(
+                "Failed to create character record",
+                extra={"character_name": character_name, "error": str(err)},
+            )
+            return None, "Failed to create character"
+
+        logger.info(
+            "Character record created successfully",
+            extra={"character_id": character_id},
+        )
+
+        # Update player's character list
+        character_info = {
+            "UUID": character_id,
+            "Dead": False,
+            "GameMode": "Incremental",
+        }
+
+        logger.info(
+            "Updating player character list",
+            extra={
+                "player_id": player_id,
+                "character_name": character_name,
+                "character_info": character_info,
+            },
+        )
+
+        dynamo.update_item(
+            TableName.PLAYERS,
+            Key={"PlayerID": player_id},
+            UpdateExpression="SET CharacterList.#name = :info, UpdatedAt = :timestamp",
+            ExpressionAttributeNames={"#name": character_name},
+            ExpressionAttributeValues={
+                ":info": character_info,
+                ":timestamp": timestamp,
+            },
+        )
+
+        logger.info(
+            "Character creation completed successfully",
+            extra={
+                "character_name": character_name,
+                "character_id": character_id,
+                "player_id": player_id,
+                "archetype": archetype_name,
+            },
+        )
+        return character_id, None
+
+    except ClientError as err:
+        logger.error(
+            "Error creating character",
+            extra={
+                "error": str(err),
+                "character_name": character_name,
+                "player_id": player_id,
+            },
+        )
+        # Attempt to rollback character creation if player update failed
+        try:
+            dynamo.delete_item(TableName.CHARACTERS, Key={"CharacterID": character_id})
+        except ClientError as rollback_err:
+            logger.error(
+                "Failed to rollback character creation",
+                extra={"error": str(rollback_err), "character_id": character_id},
+            )
+        return None, "Failed to create character"

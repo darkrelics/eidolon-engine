@@ -38,6 +38,13 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `CompletedStories` | `LIST`   |          | List of story IDs the character has completed.                 |
 | `ActiveStoryID`    | `STRING` |          | UUID of the currently active story (if any).                   |
 | `ActiveSegmentID`  | `STRING` |          | UUID of the currently active segment (if any).                 |
+| `Archetype`        | `STRING` |          | Name of the character's archetype.                             |
+| `MaxEssence`       | `NUMBER` |          | The character's maximum essence points.                        |
+| `Resources`        | `MAP`    |          | Map of resource types to quantities (e.g., gold: 100).        |
+| `Progress`         | `MAP`    |          | Map tracking story progress flags and achievements.            |
+| `CreatedAt`        | `STRING` |          | ISO 8601 timestamp when character was created.                 |
+| `UpdatedAt`        | `STRING` |          | ISO 8601 timestamp of last character update.                   |
+| `LastPlayed`       | `STRING` |          | ISO 8601 timestamp when character was last active.            |
 
 **Primary Key:** CharacterID (HASH)
 
