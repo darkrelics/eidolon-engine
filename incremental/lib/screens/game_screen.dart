@@ -1104,13 +1104,13 @@ class _ActionPanelState extends State<ActionPanel> {
 
     try {
       // Call abandon story API
-      final result = await _apiService.abandonStory(_character!.id);
+      final result = await _apiService.abandonStory(widget.character.id);
       
       // Check if abandonment was successful
       if (result['abandoned'] == true) {
         // Clear local story state
         setState(() {
-          _character!.storyState = null;
+          widget.character.storyState = null;
         });
 
         if (mounted) {
@@ -1121,8 +1121,8 @@ class _ActionPanelState extends State<ActionPanel> {
           );
         }
         
-        // Reload character to get fresh state from server
-        await _loadCharacter();
+        // Reload story state
+        await _loadCurrentStory();
       } else {
         throw Exception('Server did not confirm story abandonment');
       }
