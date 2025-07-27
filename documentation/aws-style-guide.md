@@ -111,6 +111,14 @@ Examples:
 - **Staging**: Separate AWS account
 - **Production**: Separate AWS account
 
+#### Lambda Function Naming
+
+Lambda functions must use specific prefixes based on their purpose:
+
+- **`api_`** - Functions accessible via API Gateway (e.g., `api_get_character`, `api_start_story`)
+- **`cognito_`** - Functions triggered by Cognito events (e.g., `cognito_new_player`, `cognito_delete_player`)
+- **`ops_`** - Backend operational functions (e.g., `ops_segment_poller`, `ops_process_segment`)
+
 #### Tag Requirements
 
 All resources must include:
