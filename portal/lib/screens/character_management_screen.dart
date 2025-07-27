@@ -14,7 +14,8 @@ class CharacterManagementScreen extends StatefulWidget {
   const CharacterManagementScreen({super.key});
 
   @override
-  State<CharacterManagementScreen> createState() => _CharacterManagementScreenState();
+  State<CharacterManagementScreen> createState() =>
+      _CharacterManagementScreenState();
 }
 
 class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
@@ -74,36 +75,62 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      fullCharacter.dead ? 'Status: Deceased' : 'Status: Active',
+                      fullCharacter.dead
+                          ? 'Status: Deceased'
+                          : 'Status: Active',
                       style: TextStyle(
-                        color: fullCharacter.dead ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary,
+                        color:
+                            fullCharacter.dead
+                                ? Theme.of(context).colorScheme.error
+                                : Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 16),
-                    if (fullCharacter.health != null && fullCharacter.maxHealth != null)
-                      Text('Health: ${fullCharacter.health}/${fullCharacter.maxHealth}'),
+                    if (fullCharacter.health != null &&
+                        fullCharacter.maxHealth != null)
+                      Text(
+                        'Health: ${fullCharacter.health}/${fullCharacter.maxHealth}',
+                      ),
                     const SizedBox(height: 8),
                     if (fullCharacter.attributes != null) ...[
-                      const Text('Attributes:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ...fullCharacter.attributes!.entries.map((e) => Text('  ${e.key}: ${e.value}')),
+                      const Text(
+                        'Attributes:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      ...fullCharacter.attributes!.entries.map(
+                        (e) => Text('  ${e.key}: ${e.value}'),
+                      ),
                     ],
                     const SizedBox(height: 8),
                     if (fullCharacter.skills != null) ...[
-                      const Text('Skills:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ...fullCharacter.skills!.entries.map((e) => Text('  ${e.key}: ${e.value}')),
+                      const Text(
+                        'Skills:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      ...fullCharacter.skills!.entries.map(
+                        (e) => Text('  ${e.key}: ${e.value}'),
+                      ),
                     ],
                   ],
                 ),
               ),
-              actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('CLOSE'))],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('CLOSE'),
+                ),
+              ],
             ),
       );
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading character: ${e.toString()}'), backgroundColor: Theme.of(context).colorScheme.error),
+        SnackBar(
+          content: Text('Error loading character: ${e.toString()}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
       );
     }
   }
@@ -112,7 +139,8 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
     await CustomDialog.show(
       context,
       title: 'Delete Character',
-      content: 'Are you sure you want to delete ${character.name}? This action cannot be undone.',
+      content:
+          'Are you sure you want to delete ${character.name}? This action cannot be undone.',
       confirmText: 'DELETE',
       cancelText: 'CANCEL',
       onConfirm: () async {
@@ -124,7 +152,9 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
 
           if (!mounted) return;
 
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Character deleted successfully')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Character deleted successfully')),
+          );
         } catch (e) {
           if (!mounted) return;
 
@@ -142,7 +172,9 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
 
   void _playStory(Character character) {
     // TODO: Navigate to story gameplay screen
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Story gameplay coming soon!')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Story gameplay coming soon!')),
+    );
   }
 
   @override
@@ -202,7 +234,9 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
               children: [
                 Text(
                   'Welcome, Adventurer',
-                  style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
@@ -215,11 +249,25 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         children: [
-                          Text('Error loading characters', style: TextStyle(color: colorScheme.error)),
+                          Text(
+                            'Error loading characters',
+                            style: TextStyle(color: colorScheme.error),
+                          ),
                           const SizedBox(height: 8),
-                          Text(_error!, style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.7), fontSize: 12)),
+                          Text(
+                            _error!,
+                            style: TextStyle(
+                              color: colorScheme.onSurface.withValues(
+                                alpha: 0.7,
+                              ),
+                              fontSize: 12,
+                            ),
+                          ),
                           const SizedBox(height: 16),
-                          ElevatedButton(onPressed: _loadCharacters, child: const Text('Retry')),
+                          ElevatedButton(
+                            onPressed: _loadCharacters,
+                            child: const Text('Retry'),
+                          ),
                         ],
                       ),
                     ),
@@ -230,17 +278,28 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: colorScheme.outline.withValues(alpha: 0.3)),
+                      side: BorderSide(
+                        color: colorScheme.outline.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(24.0),
                       child: Column(
                         children: [
-                          Text('No Characters Found', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            'No Characters Found',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           const SizedBox(height: 16),
                           Text(
                             'Create your first character in the game to begin your adventure.',
-                            style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.7)),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurface.withValues(
+                                alpha: 0.7,
+                              ),
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -251,7 +310,12 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Your Characters', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                      Text(
+                        'Your Characters',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       ..._characters!.map(
                         (character) => Card(
@@ -260,16 +324,34 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                           child: ListTile(
                             leading: Icon(
                               character.dead ? Icons.person_off : Icons.person,
-                              color: character.dead ? colorScheme.error : colorScheme.primary,
+                              color:
+                                  character.dead
+                                      ? colorScheme.error
+                                      : colorScheme.primary,
                             ),
                             title: Text(
                               character.name,
-                              style: TextStyle(decoration: character.dead ? TextDecoration.lineThrough : null),
+                              style: TextStyle(
+                                decoration:
+                                    character.dead
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                              ),
                             ),
                             subtitle:
                                 character.dead
-                                    ? Text('Deceased', style: TextStyle(color: colorScheme.error))
-                                    : Text('Active', style: TextStyle(color: colorScheme.primary)),
+                                    ? Text(
+                                      'Deceased',
+                                      style: TextStyle(
+                                        color: colorScheme.error,
+                                      ),
+                                    )
+                                    : Text(
+                                      'Active',
+                                      style: TextStyle(
+                                        color: colorScheme.primary,
+                                      ),
+                                    ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -285,7 +367,10 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
                                     tooltip: 'Play Story',
                                   ),
                                 IconButton(
-                                  icon: Icon(Icons.delete, color: colorScheme.error),
+                                  icon: Icon(
+                                    Icons.delete,
+                                    color: colorScheme.error,
+                                  ),
                                   onPressed: () => _deleteCharacter(character),
                                   tooltip: 'Delete Character',
                                 ),

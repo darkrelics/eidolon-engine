@@ -21,7 +21,15 @@ class RouteGuard {
   };
 
   // List of public routes that don't require authentication
-  static const Set<String> _publicRoutes = {'/', '/login', '/register', '/forgot-password', '/terms', '/privacy', '/about'};
+  static const Set<String> _publicRoutes = {
+    '/',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/terms',
+    '/privacy',
+    '/about',
+  };
 
   /// Checks if a route is protected
   static bool isProtectedRoute(String? routeName) {

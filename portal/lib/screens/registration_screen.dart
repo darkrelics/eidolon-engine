@@ -63,15 +63,21 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           _showVerificationStep = true;
         });
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Verification code sent to your email'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Verification code sent to your email'),
+            backgroundColor: Colors.green,
+          ),
+        );
       } else if (mounted && authState.message.isNotEmpty) {
         // Show the specific message from AuthState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(authState.message),
-            backgroundColor: authState.isSignUpMode ? Colors.green : Theme.of(context).colorScheme.error,
+            backgroundColor:
+                authState.isSignUpMode
+                    ? Colors.green
+                    : Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -103,7 +109,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     try {
       final authState = context.read<AuthState>();
-      authState.verificationCodeController.text = _verificationCodeController.text.trim();
+      authState.verificationCodeController.text =
+          _verificationCodeController.text.trim();
 
       await authState.confirmRegistration();
 
@@ -112,7 +119,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         Navigator.pushReplacementNamed(context, '/character-management');
       } else if (mounted && authState.message.isNotEmpty) {
         // Show the specific message from AuthState
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(authState.message), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authState.message),
+            backgroundColor: Colors.green,
+          ),
+        );
         if (!authState.isVerificationMode) {
           // Verification succeeded but auto-login failed, go to login screen
           Navigator.pushReplacementNamed(context, '/login');
@@ -148,7 +160,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
       if (mounted && authState.message.isNotEmpty) {
         // Show the specific message from AuthState
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(authState.message), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authState.message),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       debugPrint('Resend code error: $e');
@@ -200,7 +217,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           padding: const EdgeInsets.all(24.0),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
-            child: _showVerificationStep ? _buildVerificationStep() : _buildRegistrationForm(),
+            child:
+                _showVerificationStep
+                    ? _buildVerificationStep()
+                    : _buildRegistrationForm(),
           ),
         ),
       ),
@@ -213,11 +233,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Create Your Account', style: Theme.of(context).textTheme.headlineMedium, textAlign: TextAlign.center),
+          Text(
+            'Create Your Account',
+            style: Theme.of(context).textTheme.headlineMedium,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 32),
           TextFormField(
             controller: _emailController,
-            decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email)),
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.email),
+            ),
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.email],
@@ -225,7 +253,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               if (value == null || value.isEmpty) {
                 return 'Please enter your email';
               }
-              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+              if (!RegExp(
+                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+              ).hasMatch(value)) {
                 return 'Please enter a valid email';
               }
               return null;
@@ -239,7 +269,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.lock),
               suffixIcon: IconButton(
-                icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                icon: Icon(
+                  _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                ),
                 onPressed: () {
                   setState(() {
                     _isPasswordVisible = !_isPasswordVisible;
@@ -260,7 +292,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.lock),
               suffixIcon: IconButton(
-                icon: Icon(_isConfirmPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                icon: Icon(
+                  _isConfirmPasswordVisible
+                      ? Icons.visibility_off
+                      : Icons.visibility,
+                ),
                 onPressed: () {
                   setState(() {
                     _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
@@ -286,7 +322,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             onPressed: _isLoading ? null : _handleCreateAccount,
             child:
                 _isLoading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                     : const Text('Create Account'),
           ),
           const SizedBox(height: 16),
@@ -316,7 +356,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Verify Your Email', style: Theme.of(context).textTheme.headlineMedium, textAlign: TextAlign.center),
+          Text(
+            'Verify Your Email',
+            style: Theme.of(context).textTheme.headlineMedium,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 16),
           Text(
             'We sent a verification code to ${_emailController.text}',
@@ -346,11 +390,18 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             onPressed: _isLoading ? null : _handleVerification,
             child:
                 _isLoading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                     : const Text('Verify'),
           ),
           const SizedBox(height: 16),
-          TextButton(onPressed: _isLoading ? null : _handleResendCode, child: const Text('Resend Code')),
+          TextButton(
+            onPressed: _isLoading ? null : _handleResendCode,
+            child: const Text('Resend Code'),
+          ),
           const SizedBox(height: 8),
           TextButton(
             onPressed:

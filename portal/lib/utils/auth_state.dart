@@ -30,7 +30,8 @@ class AuthState extends ChangeNotifier {
 
   // Getters
   TextEditingController get emailController => _emailController;
-  TextEditingController get verificationCodeController => _verificationCodeController;
+  TextEditingController get verificationCodeController =>
+      _verificationCodeController;
   TextEditingController get passwordController => _passwordController;
   CognitoUser? get currentUser => _authService.currentUser;
   bool get isVerificationMode => _isVerificationMode;
@@ -97,7 +98,10 @@ class AuthState extends ChangeNotifier {
 
     _setLoading(true);
     try {
-      final signUpResult = await _authService.signUp(_emailController.text.trim(), _passwordController.text);
+      final signUpResult = await _authService.signUp(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
 
       if (signUpResult.userConfirmed ?? false) {
         _updateMessage('Registration successful. Please sign in.');
@@ -159,7 +163,9 @@ class AuthState extends ChangeNotifier {
           _updateMessage('Account verified and logged in successfully.');
           clearInputs(); // Clear sensitive data after successful login
         } catch (signInError) {
-          _updateMessage('Email verified successfully. Please sign in manually.');
+          _updateMessage(
+            'Email verified successfully. Please sign in manually.',
+          );
           // Don't clear email to make manual sign-in easier
           _emailController.text = tempEmail;
           _passwordController.text = '';
@@ -188,7 +194,10 @@ class AuthState extends ChangeNotifier {
 
     _setLoading(true);
     try {
-      await _authService.signIn(_emailController.text.trim(), _passwordController.text);
+      await _authService.signIn(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
       _updateMessage('Sign in successful');
       _isSignUpMode = false;
       _isAuthenticated = true;
@@ -242,8 +251,12 @@ class AuthState extends ChangeNotifier {
     if (checkComplexity) {
       // Check for uppercase, lowercase, number, and special character
       // End anchor $ added to ensure the entire string is validated
-      if (!RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$').hasMatch(password)) {
-        _updateMessage('Password must contain uppercase, lowercase, number, and special character');
+      if (!RegExp(
+        r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$',
+      ).hasMatch(password)) {
+        _updateMessage(
+          'Password must contain uppercase, lowercase, number, and special character',
+        );
         return false;
       }
     }

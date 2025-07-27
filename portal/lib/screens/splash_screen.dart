@@ -160,7 +160,9 @@ class _SplashScreenState extends State<SplashScreen>
                             child: Text(
                               'New traveler? Register here',
                               style: TextStyle(
-                                color: colorScheme.onSurface.withValues(alpha: 0.8),
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.8,
+                                ),
                               ),
                             ),
                           ),

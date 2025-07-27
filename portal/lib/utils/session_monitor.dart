@@ -144,7 +144,9 @@ class SessionMonitor {
     final inactiveDuration = now.difference(_lastActivityTime!);
 
     // Check if session is valid locally
-    final isLocallyValid = absoluteDuration < _absoluteTimeout && inactiveDuration < _inactivityTimeout;
+    final isLocallyValid =
+        absoluteDuration < _absoluteTimeout &&
+        inactiveDuration < _inactivityTimeout;
 
     // In a production app, also verify with the server
     if (isLocallyValid && _authState != null) {
@@ -161,7 +163,9 @@ class SessionMonitor {
   Future<void> _verifyTokenWithServer() async {
     // Don't verify too frequently to reduce server load
     if (_lastServerVerification != null) {
-      final timeSinceLastVerification = DateTime.now().difference(_lastServerVerification!);
+      final timeSinceLastVerification = DateTime.now().difference(
+        _lastServerVerification!,
+      );
       if (timeSinceLastVerification < const Duration(minutes: 5)) {
         return; // Skip verification if done recently
       }
@@ -200,7 +204,11 @@ class ActivityMonitor extends StatefulWidget {
   final Widget child;
   final SessionMonitor sessionMonitor;
 
-  const ActivityMonitor({super.key, required this.child, required this.sessionMonitor});
+  const ActivityMonitor({
+    super.key,
+    required this.child,
+    required this.sessionMonitor,
+  });
 
   @override
   State<ActivityMonitor> createState() => _ActivityMonitorState();

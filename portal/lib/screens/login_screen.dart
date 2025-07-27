@@ -57,9 +57,12 @@ class _LoginScreenState extends State<LoginScreen> {
         _handleNavigation(context, widget.redirectRoute, widget.redirectArgs);
       } else if (mounted && authState.message.isNotEmpty) {
         // Show the specific error message from AuthState
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(authState.message), backgroundColor: Theme.of(context).colorScheme.error));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authState.message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } catch (e) {
       debugPrint('Login error: $e');
@@ -104,9 +107,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Eidolon Portal', style: Theme.of(context).textTheme.headlineLarge, textAlign: TextAlign.center),
+                  Text(
+                    'Eidolon Portal',
+                    style: Theme.of(context).textTheme.headlineLarge,
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 8),
-                  Text('Sign in to continue', style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
+                  Text(
+                    'Sign in to continue',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 48),
                   TextFormField(
                     controller: _emailController,
@@ -122,7 +133,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -136,7 +149,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
-                        icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          _isPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
                         onPressed: () {
                           setState(() {
                             _isPasswordVisible = !_isPasswordVisible;
@@ -163,7 +180,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           _isLoading
                               ? null
                               : () {
-                                Navigator.pushNamed(context, '/forgot-password');
+                                Navigator.pushNamed(
+                                  context,
+                                  '/forgot-password',
+                                );
                               },
                       child: const Text('Forgot Password?'),
                     ),
@@ -173,7 +193,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _isLoading ? null : _handleSignIn,
                     child:
                         _isLoading
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                             : const Text('Sign In'),
                   ),
                   const SizedBox(height: 16),

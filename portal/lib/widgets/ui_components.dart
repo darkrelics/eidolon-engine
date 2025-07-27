@@ -54,7 +54,10 @@ class AppTextField extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     // Combine default sanitizers with provided formatters
-    final formatters = <TextInputFormatter>[if (sanitizeInput) InputSanitizer.noXSSChars(), ...?inputFormatters];
+    final formatters = <TextInputFormatter>[
+      if (sanitizeInput) InputSanitizer.noXSSChars(),
+      ...?inputFormatters,
+    ];
 
     return TextFormField(
       controller: controller,
@@ -63,7 +66,10 @@ class AppTextField extends StatelessWidget {
         labelText: labelText,
         prefixIcon: Icon(prefixIcon, color: colorScheme.onSurfaceVariant),
         hintText: hintText,
-        helperText: helperText != null ? InputSanitizer.sanitizeDisplayText(helperText!) : null,
+        helperText:
+            helperText != null
+                ? InputSanitizer.sanitizeDisplayText(helperText!)
+                : null,
         helperMaxLines: helperMaxLines,
         border: const OutlineInputBorder(),
         errorMaxLines: 2,
@@ -107,13 +113,17 @@ class LoadingButton extends StatefulWidget {
   State<LoadingButton> createState() => _LoadingButtonState();
 }
 
-class _LoadingButtonState extends State<LoadingButton> with SingleTickerProviderStateMixin {
+class _LoadingButtonState extends State<LoadingButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
   }
 
   @override
@@ -149,15 +159,24 @@ class _LoadingButtonState extends State<LoadingButton> with SingleTickerProvider
                 width: 24,
                 child: RotationTransition(
                   turns: _animationController,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: widget.foregroundColor ?? colorScheme.onPrimary),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: widget.foregroundColor ?? colorScheme.onPrimary,
+                  ),
                 ),
               )
               : Row(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (widget.icon != null) ...[widget.icon!, const SizedBox(width: 8)],
-                  Text(widget.text, style: TextStyle(fontSize: widget.fontSize)),
+                  if (widget.icon != null) ...[
+                    widget.icon!,
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    widget.text,
+                    style: TextStyle(fontSize: widget.fontSize),
+                  ),
                 ],
               ),
     );
@@ -171,13 +190,25 @@ class AuthAppBar extends StatelessWidget implements PreferredSizeWidget {
   final List<Widget>? actions;
   final double elevation;
 
-  const AuthAppBar({super.key, required this.title, this.showBackButton = true, this.actions, this.elevation = 0});
+  const AuthAppBar({
+    super.key,
+    required this.title,
+    this.showBackButton = true,
+    this.actions,
+    this.elevation = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
     return AppBar(
       title: Text(InputSanitizer.sanitizeDisplayText(title)),
-      leading: showBackButton ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).pop()) : null,
+      leading:
+          showBackButton
+              ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+              : null,
       actions: actions,
       elevation: elevation,
     );
@@ -228,7 +259,11 @@ class StatusMessage extends StatelessWidget {
             offset: Offset(0, 10 * (1 - value)),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(InputSanitizer.sanitizeDisplayText(message), style: TextStyle(color: color), textAlign: TextAlign.center),
+              child: Text(
+                InputSanitizer.sanitizeDisplayText(message),
+                style: TextStyle(color: color),
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
         );
@@ -258,7 +293,9 @@ class BackgroundContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     // Validate and sanitize asset path
     final validatedAssetPath =
-        backgroundAsset != null ? InputSanitizer.validateAssetPath(backgroundAsset!) : 'assets/images/background.jpg';
+        backgroundAsset != null
+            ? InputSanitizer.validateAssetPath(backgroundAsset!)
+            : 'assets/images/background.jpg';
 
     if (validatedAssetPath == null) {
       // Fallback to safe default if path is invalid
@@ -269,14 +306,25 @@ class BackgroundContainer extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         image: DecorationImage(
-          image: AssetImage(validatedAssetPath ?? 'assets/images/background.jpg'),
+          image: AssetImage(
+            validatedAssetPath ?? 'assets/images/background.jpg',
+          ),
           fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(Theme.of(context).colorScheme.surface.withValues(alpha: opacity), BlendMode.dstATop),
+          colorFilter: ColorFilter.mode(
+            Theme.of(context).colorScheme.surface.withValues(alpha: opacity),
+            BlendMode.dstATop,
+          ),
         ),
       ),
       child:
           blurBackground
-              ? BackdropFilter(filter: ImageFilter.blur(sigmaX: blurStrength, sigmaY: blurStrength), child: child)
+              ? BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: blurStrength,
+                  sigmaY: blurStrength,
+                ),
+                child: child,
+              )
               : child,
     );
   }
@@ -295,9 +343,14 @@ class NavigationHelper {
     }
   }
 
-  static void navigateToRegister(BuildContext context, {bool clearStack = false}) {
+  static void navigateToRegister(
+    BuildContext context, {
+    bool clearStack = false,
+  }) {
     if (clearStack) {
-      Navigator.of(context).pushNamedAndRemoveUntil('/register', (route) => false);
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil('/register', (route) => false);
     } else {
       Navigator.of(context).pushReplacementNamed('/register');
     }
@@ -316,7 +369,11 @@ class NavigationHelper {
     });
   }
 
-  static void navigateToRoute(BuildContext context, String routeName, {Object? arguments}) {
+  static void navigateToRoute(
+    BuildContext context,
+    String routeName, {
+    Object? arguments,
+  }) {
     final routeGuard = RouteGuard.isProtectedRoute(routeName);
 
     if (routeGuard) {
@@ -327,7 +384,11 @@ class NavigationHelper {
     }
   }
 
-  static void showSnackBar(BuildContext context, String message, {bool isError = false}) {
+  static void showSnackBar(
+    BuildContext context,
+    String message, {
+    bool isError = false,
+  }) {
     // Sanitize message before showing in SnackBar
     final sanitizedMessage = InputSanitizer.sanitizeDisplayText(message);
 
@@ -448,13 +509,20 @@ class CustomDialog extends StatelessWidget {
       title: Text(InputSanitizer.sanitizeDisplayText(title)),
       content: Text(InputSanitizer.sanitizeDisplayText(content)),
       actions: [
-        if (cancelText != null) TextButton(onPressed: onCancel ?? () => Navigator.of(context).pop(), child: Text(cancelText!)),
+        if (cancelText != null)
+          TextButton(
+            onPressed: onCancel ?? () => Navigator.of(context).pop(),
+            child: Text(cancelText!),
+          ),
         if (confirmText != null)
           FilledButton(
             onPressed: onConfirm,
             style:
                 isDestructive
-                    ? FilledButton.styleFrom(backgroundColor: colorScheme.error, foregroundColor: colorScheme.onError)
+                    ? FilledButton.styleFrom(
+                      backgroundColor: colorScheme.error,
+                      foregroundColor: colorScheme.onError,
+                    )
                     : null,
             child: Text(confirmText!),
           ),
@@ -519,7 +587,12 @@ class ResponsiveBuilder extends StatelessWidget {
   final Widget Function(BuildContext, BoxConstraints)? tabletBuilder;
   final Widget Function(BuildContext, BoxConstraints)? desktopBuilder;
 
-  const ResponsiveBuilder({super.key, required this.mobileBuilder, this.tabletBuilder, this.desktopBuilder});
+  const ResponsiveBuilder({
+    super.key,
+    required this.mobileBuilder,
+    this.tabletBuilder,
+    this.desktopBuilder,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -545,6 +618,10 @@ class KeyboardDismisser extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(onTap: () => FocusScope.of(context).unfocus(), behavior: HitTestBehavior.opaque, child: child);
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: child,
+    );
   }
 }

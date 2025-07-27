@@ -18,7 +18,15 @@ class Character {
   final int? health;
   final int? maxHealth;
 
-  Character({required this.id, required this.name, required this.dead, this.attributes, this.skills, this.health, this.maxHealth});
+  Character({
+    required this.id,
+    required this.name,
+    required this.dead,
+    this.attributes,
+    this.skills,
+    this.health,
+    this.maxHealth,
+  });
 
   factory Character.fromJson(Map<String, dynamic> json) {
     return Character(
@@ -49,7 +57,10 @@ class Character {
 }
 
 class ApiService {
-  static const String _apiDomain = String.fromEnvironment('API_DOMAIN', defaultValue: 'api.darkrelics.net');
+  static const String _apiDomain = String.fromEnvironment(
+    'API_DOMAIN',
+    defaultValue: 'api.darkrelics.net',
+  );
   static const String _baseUrl = 'https://$_apiDomain';
 
   final AuthService _authService;
@@ -69,16 +80,18 @@ class ApiService {
 
     final response = await http.get(
       Uri.parse('$_baseUrl/characters'),
-      headers: {'Authorization': 'Bearer $idToken', 'Content-Type': 'application/json'},
+      headers: {
+        'Authorization': 'Bearer $idToken',
+        'Content-Type': 'application/json',
+      },
     );
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body) as Map<String, dynamic>;
-      final characterList = JsonUtils.getFlexibleList<dynamic>(
-        data,
-        'Characters',
-        'characters',
-      ).map((char) => Character.fromJson(char as Map<String, dynamic>)).toList();
+      final characterList =
+          JsonUtils.getFlexibleList<dynamic>(data, 'Characters', 'characters')
+              .map((char) => Character.fromJson(char as Map<String, dynamic>))
+              .toList();
       return characterList;
     } else if (response.statusCode == 401) {
       throw Exception('Unauthorized');
@@ -102,12 +115,19 @@ class ApiService {
 
     final response = await http.get(
       Uri.parse('$_baseUrl/character?CharacterID=$characterId'),
-      headers: {'Authorization': 'Bearer $idToken', 'Content-Type': 'application/json'},
+      headers: {
+        'Authorization': 'Bearer $idToken',
+        'Content-Type': 'application/json',
+      },
     );
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body) as Map<String, dynamic>;
-      final characterData = JsonUtils.getFlexibleMap(data, 'Character', 'character');
+      final characterData = JsonUtils.getFlexibleMap(
+        data,
+        'Character',
+        'character',
+      );
       return Character.fromJson(characterData);
     } else if (response.statusCode == 401) {
       throw Exception('Unauthorized');
@@ -131,7 +151,10 @@ class ApiService {
 
     final response = await http.delete(
       Uri.parse('$_baseUrl/character?CharacterID=$characterId'),
-      headers: {'Authorization': 'Bearer $idToken', 'Content-Type': 'application/json'},
+      headers: {
+        'Authorization': 'Bearer $idToken',
+        'Content-Type': 'application/json',
+      },
     );
 
     if (response.statusCode != 200) {

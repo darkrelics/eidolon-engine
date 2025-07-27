@@ -88,7 +88,9 @@ class SecurityConfig {
     // When using CloudFront, headers won't be in meta tags
     // They'll be set in HTTP response headers instead
     if (kDebugMode) {
-      debugPrint('CloudFront deployment: Security headers should be configured in CloudFront settings.');
+      debugPrint(
+        'CloudFront deployment: Security headers should be configured in CloudFront settings.',
+      );
     }
 
     // Since we're handling headers at CloudFront level,
@@ -130,7 +132,8 @@ class SecurityConfig {
 
   /// Validates if a password meets security requirements
   static bool validatePasswordSecurity(String password) {
-    if (password.length < passwordMinLength || password.length > passwordMaxLength) {
+    if (password.length < passwordMinLength ||
+        password.length > passwordMaxLength) {
       return false;
     }
 
@@ -138,7 +141,9 @@ class SecurityConfig {
     final hasUppercase = password.contains(RegExp(r'[A-Z]'));
     final hasLowercase = password.contains(RegExp(r'[a-z]'));
     final hasDigits = password.contains(RegExp(r'[0-9]'));
-    final hasSpecialCharacters = password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+    final hasSpecialCharacters = password.contains(
+      RegExp(r'[!@#$%^&*(),.?":{}|<>]'),
+    );
 
     return hasUppercase && hasLowercase && hasDigits && hasSpecialCharacters;
   }
@@ -146,7 +151,11 @@ class SecurityConfig {
   /// Sanitizes HTML to prevent XSS attacks
   static String sanitizeHtml(String html) {
     // Basic HTML sanitization (would need a more robust solution in production)
-    return html.replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    return html
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
   }
 
   /// Validates and sanitizes URLs to prevent injection attacks
@@ -204,12 +213,14 @@ class SecurityConfig {
   /// Gets the recommended security headers for CloudFront
   static Map<String, String> getRecommendedHeaders() {
     return {
-      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+      'Strict-Transport-Security':
+          'max-age=31536000; includeSubDomains; preload',
       'X-Frame-Options': 'DENY',
       'X-Content-Type-Options': 'nosniff',
       'X-XSS-Protection': '1; mode=block',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Content-Security-Policy': contentSecurityPolicy.replaceAll('\n', ' ').trim(),
+      'Content-Security-Policy':
+          contentSecurityPolicy.replaceAll('\n', ' ').trim(),
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     };
   }

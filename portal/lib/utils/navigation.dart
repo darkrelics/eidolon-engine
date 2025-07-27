@@ -6,5 +6,6 @@ import 'package:flutter/material.dart';
 
 /// Global navigation key for accessing navigation from anywhere
 class GlobalNavigationKey {
-  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
 }

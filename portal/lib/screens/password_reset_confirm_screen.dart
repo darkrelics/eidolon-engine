@@ -11,10 +11,12 @@ class PasswordResetConfirmScreen extends StatefulWidget {
   const PasswordResetConfirmScreen({super.key});
 
   @override
-  State<PasswordResetConfirmScreen> createState() => _PasswordResetConfirmScreenState();
+  State<PasswordResetConfirmScreen> createState() =>
+      _PasswordResetConfirmScreenState();
 }
 
-class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen> {
+class _PasswordResetConfirmScreenState
+    extends State<PasswordResetConfirmScreen> {
   final _formKey = GlobalKey<FormState>();
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -42,9 +44,12 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
   Future<void> _handlePasswordReset() async {
     if (!_formKey.currentState!.validate()) return;
     if (_email == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Email not found. Please start over.'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email not found. Please start over.'),
+          backgroundColor: Colors.red,
+        ),
+      );
       Navigator.pushReplacementNamed(context, '/forgot-password');
       return;
     }
@@ -55,19 +60,29 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-      await authService.confirmPassword(_email!, _codeController.text.trim(), _passwordController.text);
+      await authService.confirmPassword(
+        _email!,
+        _codeController.text.trim(),
+        _passwordController.text,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password reset successfully! Please sign in.'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Password reset successfully! Please sign in.'),
+            backgroundColor: Colors.green,
+          ),
         );
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -90,15 +105,21 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
       await authService.forgotPassword(_email!);
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('New reset code sent'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('New reset code sent'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -145,7 +166,11 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Reset Your Password', style: Theme.of(context).textTheme.headlineMedium, textAlign: TextAlign.center),
+                  Text(
+                    'Reset Your Password',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 16),
                   if (_email != null)
                     Text(
@@ -178,7 +203,11 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
-                        icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          _isPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
                         onPressed: () {
                           setState(() {
                             _isPasswordVisible = !_isPasswordVisible;
@@ -198,10 +227,15 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
-                        icon: Icon(_isConfirmPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          _isConfirmPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
                         onPressed: () {
                           setState(() {
-                            _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                            _isConfirmPasswordVisible =
+                                !_isConfirmPasswordVisible;
                           });
                         },
                       ),
@@ -224,18 +258,29 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
                     onPressed: _isLoading ? null : _handlePasswordReset,
                     child:
                         _isLoading
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                             : const Text('Reset Password'),
                   ),
                   const SizedBox(height: 16),
-                  TextButton(onPressed: _isLoading ? null : _resendCode, child: const Text('Resend Code')),
+                  TextButton(
+                    onPressed: _isLoading ? null : _resendCode,
+                    child: const Text('Resend Code'),
+                  ),
                   const SizedBox(height: 8),
                   TextButton(
                     onPressed:
                         _isLoading
                             ? null
                             : () {
-                              Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                              Navigator.pushNamedAndRemoveUntil(
+                                context,
+                                '/login',
+                                (route) => false,
+                              );
                             },
                     child: const Text('Back to Sign In'),
                   ),
