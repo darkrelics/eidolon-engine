@@ -125,7 +125,6 @@ All Lambda functions must follow these parameter standards:
   - Example: `/characters?characterId=123`
   - Use `get_query_parameter()` from `eidolon.requests`
 - **Request Body**: Use for data submission (POST, PUT, PATCH)
-
   - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
   - Use `parse_json_body()` from `eidolon.requests`
 
@@ -144,13 +143,11 @@ All Lambda functions must follow these parameter standards:
 Lambda functions are packaged and deployed through AWS CodeBuild:
 
 1. **Build Process** (`buildspec/lambda-functions.yml`):
-
    - Each function is packaged as a separate zip file
    - Shared `eidolon` modules are included if imported
    - Zip files are uploaded to S3
 
 2. **Dependencies** (`buildspec/lambda-layer.yml`):
-
    - Common dependencies are packaged as a Lambda layer
    - Requirements from `requirements/lambda-requirements.txt`
 
@@ -206,12 +203,12 @@ def lambda_handler(event: dict, context: object) -> dict:
     """Lambda entry point - handles AWS-specific concerns."""
     # 1. Log invocation
     log_lambda_invocation(context, event)
-    
+
     # 2. Handle CORS preflight
     preflight_response = handle_preflight_if_options(event)
     if preflight_response:
         return preflight_response
-    
+
     # 3. Extract and validate authentication
     try:
         player_id = extract_player_id_from_event(event)
@@ -220,7 +217,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         return build_lambda_response(401, {"error": "Unauthorized"}, event)
     except Exception as err:
         return handle_lambda_error(err, context, event)
-    
+
     # 4. Validate player exists
     try:
         if not validate_player_exists(player_id):
@@ -231,7 +228,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         return build_lambda_response(500, {"error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error(err, context, event)
-    
+
     # 5. Parse request parameters
     # 6. Call business logic function
     # 7. Return response
@@ -273,12 +270,14 @@ def business_logic_function(param1: str, param2: str) -> dict:
 6. **Environment Variables**: Use environment variables for configuration
 7. **IAM Permissions**: Follow least privilege principle
 8. **Response Format**: Use `build_lambda_response` for consistent responses:
+
    ```python
    # Preferred pattern using utilities
    return build_lambda_response(200, {"key": "value"}, event)
-   
+
    # This handles CORS headers and response formatting automatically
    ```
+
 9. **Architecture Pattern**: Follow the handler/business logic separation pattern described above
 10. **Utility Functions**: Prefer high-level utility functions from `eidolon.utilities`:
     - `log_lambda_invocation()` - For logging invocations
@@ -345,6 +344,7 @@ The `api_get_character.py` function applies several transformations for client c
 ### JSON Field Naming Convention
 
 All JSON responses use PascalCase for field names to maintain consistency with DynamoDB field names:
+
 - Database field: `CharacterName`
 - API response: `CharacterName` (not transformed)
 - This applies to all fields: `CharacterID`, `AvailableStories`, `Attributes`, etc.

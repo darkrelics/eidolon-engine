@@ -42,11 +42,11 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `ActiveSegmentID`  | `STRING` |          | UUID of the currently active segment (if any).                 |
 | `Archetype`        | `STRING` |          | Name of the character's archetype.                             |
 | `MaxEssence`       | `NUMBER` |          | The character's maximum essence points.                        |
-| `Resources`        | `MAP`    |          | Map of resource types to quantities (e.g., gold: 100).        |
+| `Resources`        | `MAP`    |          | Map of resource types to quantities (e.g., gold: 100).         |
 | `Progress`         | `MAP`    |          | Map tracking story progress flags and achievements.            |
 | `CreatedAt`        | `STRING` |          | ISO 8601 timestamp when character was created.                 |
 | `UpdatedAt`        | `STRING` |          | ISO 8601 timestamp of last character update.                   |
-| `LastPlayed`       | `STRING` |          | ISO 8601 timestamp when character was last active.            |
+| `LastPlayed`       | `STRING` |          | ISO 8601 timestamp when character was last active.             |
 
 **Primary Key:** CharacterID (HASH)
 
@@ -55,6 +55,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 - **CharacterNameIndex**: CharacterName - For ensuring unique character names across all players
 
 **API Response Transformations:**
+
 - **JSON Field Names**: All fields use PascalCase to match DynamoDB field names (e.g., CharacterID, CharacterName, AvailableStories)
 - **Acronyms**: Acronyms in field names are fully capitalized (e.g., StoryID not StoryId, ItemID not ItemId, PlayerID not PlayerId)
 - **InventoryDetails**: API responses include an enriched `InventoryDetails` field with item information:
@@ -237,7 +238,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `CharacterID`      | `STRING` | **GSI**  | UUID of the character (for processing context).           |
 | `PlayerID`         | `STRING` |          | UUID of the player who owns the character.                |
 | `StoryID`          | `STRING` |          | UUID of the story being played.                           |
-| `StoryTitle`       | `STRING` |          | Cached title of the story for quick access.              |
+| `StoryTitle`       | `STRING` |          | Cached title of the story for quick access.               |
 | `SegmentID`        | `STRING` |          | UUID of the current segment definition.                   |
 | `SegmentType`      | `STRING` |          | Type of segment: decision, narrative, or combat.          |
 | `Status`           | `STRING` |          | Segment status: active, abandoned, or completed.          |

@@ -479,21 +479,18 @@ _Note: Segments are deleted after processing. All segments in this table are imp
 All character modifications persist between game modes:
 
 - **Wounds and Healing**:
-
   - Combat damage creates wounds using MUD damage system
   - Wounds heal based on real-time (bashing: 15min, lethal: 6hr, aggravated: 7d)
   - Character entering either mode retains all active wounds
   - Death in either mode requires appropriate resurrection
 
 - **Inventory Persistence**:
-
   - Items gained from story segments appear in MUD inventory
   - Equipment worn affects combat calculations in both modes
   - Item destruction or loss persists across modes
   - Cursed items maintain their effects
 
 - **Location Updates**:
-
   - Story effects can change character room location
   - Character appears in new room when returning to MUD
   - Death may transport to death realm (room 0 or configured)

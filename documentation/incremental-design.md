@@ -362,6 +362,7 @@ The simplified architecture avoids Global Secondary Indexes by:
 All endpoints follow existing Lambda patterns and extend the current API Gateway.
 
 **Field Naming Conventions:**
+
 - All API request and response fields use PascalCase
 - Acronyms in field names are fully capitalized (e.g., StoryID not StoryId, ItemID not ItemId, PlayerID not PlayerId)
 - This maintains consistency with DynamoDB field names
@@ -647,13 +648,11 @@ Response: {
 The Flutter portal implements smart polling:
 
 1. **Active Story Polling**
-
    - Poll `/stories/current` based on segment duration
    - Start frequent polling 30 seconds before completion
    - Use exponential backoff: 30s → 15s → 5s → 1s
 
 2. **Decision Windows**
-
    - Check every 30 seconds during decision segments
    - Immediate update after decision submission
 
@@ -668,9 +667,11 @@ The Flutter portal implements smart polling:
 Each Lambda function in the Eidolon Engine follows a strict architectural pattern to maintain consistency, testability, and separation of concerns:
 
 #### Lambda Handler Structure
+
 Each Lambda function must have a Lambda handler which handles the event, calls a function with the business logic, then handles the response. The business logic function will call functions from the `./eidolon` library to perform their tasks. None of the database or I/O code should be present in the Lambda function beyond the event feed to the handler and the response back to the API.
 
 **Example Pattern:**
+
 ```python
 def lambda_handler(event: dict, context: object) -> dict:
     """Lambda entry point - handles AWS-specific concerns."""
@@ -680,7 +681,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     # 4. Parse request body
     # 5. Call business logic function
     # 6. Format and return response with CORS headers
-    
+
 def business_logic_function(param1: str, param2: str) -> dict:
     """Pure business logic - testable and AWS-agnostic."""
     # 1. Validate business rules
@@ -690,6 +691,7 @@ def business_logic_function(param1: str, param2: str) -> dict:
 ```
 
 This pattern ensures:
+
 - Lambda handlers remain thin and focused on AWS integration
 - Business logic is testable without AWS dependencies
 - Database operations are centralized in the eidolon library
@@ -851,7 +853,6 @@ The system determines the final narrative outcome by aggregating the sigma value
 - **Average Performance**: The total sigma is divided by the number of attempts to calculate an average performance level. This ensures that segments with different numbers of challenges remain balanced.
 
 - **Critical Override**: Extreme individual results can override the average:
-
   - Any sigma ≤ -3.0 represents a catastrophic failure that triggers immediate death
   - Multiple critical failures (sigma < -2.0) can downgrade the final outcome
   - Multiple critical successes (sigma > 2.0) can upgrade the final outcome
@@ -979,7 +980,6 @@ The incremental client follows a hierarchical screen structure that guides playe
 1. **Character Sheet**: Displays current attributes, skills, health, and active effects. This panel updates in real-time as story outcomes modify character state. Players can track their progression and understand how their abilities affect story outcomes.
 
 2. **Story Interface**: The central gameplay area with three modes:
-
    - **Story Selection**: Browse available stories filtered by prerequisites and cooldowns. Each story shows its type (one-time, daily, repeatable), estimated duration, and brief description.
    - **Active Progression**: During active segments, displays the current narrative, countdown timer, and appropriate interaction elements (decision buttons for choices, status text for combat/challenges).
    - **History View**: Access completed story outcomes, reviewing past narratives and rewards earned. This provides context for character development and story continuity.
@@ -997,20 +997,17 @@ The Incremental and MUD modes share persistent character state, ensuring consequ
 #### Shared Persistent State
 
 1. **Wounds and Health**:
-
    - All wounds (bashing, lethal, aggravated) persist across modes
    - Character entering Incremental mode with MUD wounds starts injured
    - Combat wounds from Incremental stories affect MUD gameplay
    - Death in either mode requires resurrection/respawn
 
 2. **Inventory and Items**:
-
    - Items gained in Incremental stories appear in MUD inventory
    - Equipment worn in MUD affects Incremental combat stats
    - Item loss/destruction persists across modes
 
 3. **Character Location**:
-
    - Room changes from story effects update MUD position
    - Character returns to new room when switching to MUD mode
    - Death effects may transport to death realm in both modes
@@ -1126,12 +1123,10 @@ With the DynamoDB polling approach:
 ### 10.2 Cost Optimization
 
 1. **Lambda Optimization**:
-
    - Use appropriate memory allocation (128MB typical)
    - Disable polling when no active stories
 
 2. **Polling Efficiency**:
-
    - 10-second intervals balance precision vs cost
    - Process multiple segments per poll cycle
    - Use GSI for efficient time-based queries

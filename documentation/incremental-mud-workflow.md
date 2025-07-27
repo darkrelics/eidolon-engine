@@ -63,7 +63,7 @@ Since all characters exist in the shared characters table, name uniqueness is en
 ### Name Validation Process
 
 1. **Creation Request**: Player submits character name via API
-2. **Format Validation**: 
+2. **Format Validation**:
    - Character name must meet length and character requirements
    - Validated using validate_character_name function
 3. **Bloom Filter Check**:
@@ -75,7 +75,7 @@ Since all characters exist in the shared characters table, name uniqueness is en
 5. **Character Creation**:
    - If all checks pass, character record created in characters table
    - No conditional expressions needed as uniqueness already verified
-6. **Error Handling**: 
+6. **Error Handling**:
    - Returns 400 for validation failures
    - Returns 409 for duplicate names
    - Clear error messages guide player to choose different name

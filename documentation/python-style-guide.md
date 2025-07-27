@@ -581,6 +581,7 @@ def create_and_validate_character(name: str, player_id: str) -> dict:
 #### SRP Litmus Test
 
 If you need "and" to describe what a function does, it's doing too much:
+
 - ❌ "This function validates AND saves the character"
 - ❌ "This class manages authentication AND user profiles"
 - ❌ "This module handles database operations AND business logic"
@@ -588,19 +589,20 @@ If you need "and" to describe what a function does, it's doing too much:
 #### Common SRP Violations to Avoid
 
 1. **Mixed Concerns in Functions**:
+
 ```python
 # Bad - mixes validation, database operation, and notification
 def process_character(character_data: dict) -> dict:
     # Validates data
     if not character_data.get("name"):
         raise ValueError("Missing name")
-    
+
     # Saves to database
     dynamo.put_item(TableName.CHARACTERS, character_data)
-    
+
     # Sends notification
     send_email(character_data["email"], "Character created")
-    
+
     return {"success": True}
 
 # Good - separate responsibilities
@@ -619,17 +621,18 @@ def notify_character_creation(email: str) -> None:
 ```
 
 2. **Lambda Handlers with Business Logic**:
+
 ```python
 # Bad - Lambda handler contains business logic
 def lambda_handler(event: dict, context: object) -> dict:
     character_id = event["characterId"]
-    
+
     # Business logic should not be in handler
     character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
     if character["Level"] < 10:
         character["Level"] += 1
         dynamo.put_item(TableName.CHARACTERS, character)
-    
+
     return create_response(200, character)
 
 # Good - Lambda handler only orchestrates
@@ -651,21 +654,22 @@ def level_up_character(character_id: str) -> dict:
 ```
 
 3. **Classes with Multiple Responsibilities**:
+
 ```python
 # Bad - class handles too many concerns
 class Character:
     def __init__(self, character_id: str):
         self.character_id = character_id
         self.data = self.load_from_database()
-    
+
     def load_from_database(self) -> dict:
         # Database concern mixed with business logic
         return dynamo.get_item(...)
-    
+
     def validate_name(self) -> bool:
         # Validation mixed with data access
         pass
-    
+
     def send_notification(self) -> None:
         # Notification concern mixed with character logic
         pass
@@ -675,7 +679,7 @@ class CharacterRepository:
     """Handles character data persistence."""
     def get_character(self, character_id: str) -> dict:
         pass
-    
+
     def save_character(self, character: dict) -> None:
         pass
 

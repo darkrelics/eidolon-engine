@@ -9,6 +9,7 @@ The deployment system leverages AWS CDK (Cloud Development Kit) to provide infra
 ## The Challenge
 
 Traditional deployment approaches often require complete infrastructure teardown and rebuild for significant changes, leading to:
+
 - Extended downtime during updates
 - Risk of data loss or corruption
 - Complex rollback procedures
@@ -16,6 +17,7 @@ Traditional deployment approaches often require complete infrastructure teardown
 - Manual configuration management prone to errors
 
 The Eidolon Engine needed a deployment system that could:
+
 - Support multiple game modes with different frontend requirements
 - Share backend infrastructure efficiently across all modes
 - Enable incremental updates without service disruption
@@ -109,13 +111,11 @@ All deployment modes (MUD, Incremental, Hybrid) share:
 ## Deployment Flow
 
 1. **Prerequisites Check**
-
    - Verify CDK is installed
    - Validate AWS credentials and access
    - Confirm AWS account and region
 
 2. **Parameter Loading**
-
    - Load saved parameters from state manager
    - Read existing `config.yml` if present
    - Determine deployment mode (mud/incremental/hybrid)
@@ -123,19 +123,16 @@ All deployment modes (MUD, Incremental, Hybrid) share:
    - Prompt user for any missing required parameters
 
 3. **Discovery & Analysis Phase**
-
    - Query existing CloudFormation stacks
    - Validate existing resources for drift detection
    - Generate drift report for any configuration mismatches
 
 4. **Planning Phase**
-
    - Identify stacks to create vs update
    - Build comprehensive deployment plan
    - Present plan to user for approval
 
 5. **Execution Phase**
-
    - Set up CDK environment variables and context
    - Pass deployment mode to CDK context
    - Execute `cdk deploy --all` with appropriate parameters
@@ -145,7 +142,6 @@ All deployment modes (MUD, Incremental, Hybrid) share:
    - On failure, stop and provide recovery guidance
 
 6. **Configuration Update**
-
    - Query deployed stack outputs
    - Update `config.yml` with:
      - Cognito user pool and client IDs
@@ -237,7 +233,9 @@ This approach:
 ## Real-World Usage Scenarios
 
 ### Scenario 1: Initial Deployment
+
 When deploying to a fresh AWS account, the system:
+
 1. Prompts for minimal configuration (game name, domain, deployment mode)
 2. Discovers that no existing infrastructure exists
 3. Creates all required resources in the correct order
@@ -245,7 +243,9 @@ When deploying to a fresh AWS account, the system:
 5. Deploys the selected frontend to CloudFront
 
 ### Scenario 2: Adding Incremental Game to Existing MUD
+
 For an existing MUD deployment, switching to hybrid mode:
+
 1. Reads existing `config.yml` and discovers deployed resources
 2. Validates that backend infrastructure supports both modes
 3. Updates only the CodeBuild and CloudFront configurations
@@ -253,7 +253,9 @@ For an existing MUD deployment, switching to hybrid mode:
 5. Preserves all existing game data and player accounts
 
 ### Scenario 3: Recovering from Failed Deployment
+
 When a deployment partially fails:
+
 1. The system preserves all successfully deployed stacks
 2. Provides clear error messages about what failed and why
 3. Allows operators to fix issues (e.g., IAM permissions, resource limits)
@@ -261,7 +263,9 @@ When a deployment partially fails:
 5. Updates configuration only after full success
 
 ### Scenario 4: Configuration Drift Detection
+
 During routine deployment checks:
+
 1. The system compares actual AWS resources against expected state
 2. Reports any manual changes or drift (e.g., modified IAM policies)
 3. Offers options to update infrastructure or update expectations
@@ -270,18 +274,21 @@ During routine deployment checks:
 ## Benefits and Outcomes
 
 ### Operational Benefits
+
 - **Reduced Deployment Time**: Incremental updates typically complete in 5-10 minutes vs 30-45 minutes for full deployments
 - **Zero Downtime**: Backend services remain available during frontend updates
 - **Lower Risk**: Partial failures don't affect running services
 - **Better Observability**: Clear visibility into what's deployed and what's pending
 
 ### Development Benefits
+
 - **Faster Iteration**: Developers can quickly test infrastructure changes
 - **Mode Flexibility**: Easy switching between MUD, Incremental, and Hybrid modes
 - **Simplified Testing**: Each component can be updated independently
 - **Clear Separation**: Frontend and backend concerns are properly isolated
 
 ### Business Benefits
+
 - **Cost Optimization**: Shared infrastructure reduces AWS costs by ~40%
 - **Scalability**: Unified backend scales efficiently for all game modes
 - **Maintainability**: Single codebase for infrastructure management

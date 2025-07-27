@@ -217,12 +217,10 @@ The continuous system makes it easy to track:
 The hide system demonstrates both static and opposed checks working together:
 
 1. **Initial Hide Attempt** - Static check (Stealth + Agility vs difficulty 4)
-
    - Success: Character becomes hidden, gains XP based on skill vs difficulty
    - Failure: Character remains visible, gains 50% XP
 
 2. **Detection Checks** - Opposed checks (Observer's Investigation + Perception vs Hidden's Stealth + Agility)
-
    - Each observer makes a check, both parties gain XP
    - Success: Observer detects the hidden character
    - Failure: Character remains hidden from that observer
