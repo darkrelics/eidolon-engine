@@ -1,10 +1,11 @@
 """Item management functions for the Eidolon Engine."""
 
 import uuid
+
 from botocore.exceptions import ClientError
 
-from eidolon.logger import get_logger
 from eidolon.dynamo import TableName, dynamo
+from eidolon.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -8,13 +8,13 @@ Returns only character names and death status from the player table.
 """
 
 from eidolon.logger import get_logger
-from eidolon.player import extract_player_id_from_event
-from eidolon.player import get_formatted_character_list
-from eidolon.player import validate_player_exists
-from eidolon.utilities import build_lambda_response_pascal
-from eidolon.utilities import handle_lambda_error_pascal
-from eidolon.utilities import handle_preflight_if_options
-from eidolon.utilities import log_lambda_invocation
+from eidolon.player import extract_player_id_from_event, get_formatted_character_list, validate_player_exists
+from eidolon.utilities import (
+    build_lambda_response_pascal,
+    handle_lambda_error_pascal,
+    handle_preflight_if_options,
+    log_lambda_invocation,
+)
 
 # Configure logging
 logger = get_logger(__name__)

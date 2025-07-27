@@ -9,13 +9,11 @@ import math
 import random
 import time
 import uuid
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import dynamo
-from eidolon.dynamo import TableName
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 
 logger = get_logger(__name__)

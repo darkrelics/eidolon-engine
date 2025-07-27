@@ -11,11 +11,9 @@ compliance by removing all traces of user data.
 import json
 
 from eidolon.logger import get_logger
-from eidolon.player import delete_player_data_completely
-from eidolon.player import extract_player_id_from_event
+from eidolon.player import delete_player_data_completely, extract_player_id_from_event
 from eidolon.requests import parse_json_body
-from eidolon.utilities import build_lambda_response_pascal
-from eidolon.utilities import log_lambda_invocation
+from eidolon.utilities import build_lambda_response_pascal, log_lambda_invocation
 
 # Configure logging
 logger = get_logger(__name__)

@@ -9,9 +9,7 @@ Determines outcome, applies effects, and creates next segment if applicable.
 
 from eidolon.logger import get_logger
 from eidolon.segment import process_segment_completely
-from eidolon.utilities import build_lambda_response_pascal
-from eidolon.utilities import handle_lambda_error_pascal
-from eidolon.utilities import log_lambda_invocation
+from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
 
 # Configure logging
 logger = get_logger(__name__)

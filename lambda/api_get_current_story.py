@@ -6,19 +6,17 @@ Copyright 2024-2025 Jason E. Robinson
 
 import time
 
-from eidolon.character import get_character
-from eidolon.character import validate_character_ownership
+from eidolon.character import get_character, validate_character_ownership
 from eidolon.logger import get_logger
-from eidolon.player import extract_player_id_from_event
-from eidolon.player import validate_player_exists
+from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
-from eidolon.story import get_active_story_segment_with_player_check
-from eidolon.story import get_story_metadata
-from eidolon.story import get_story_segment
-from eidolon.utilities import build_lambda_response_pascal
-from eidolon.utilities import handle_lambda_error_pascal
-from eidolon.utilities import handle_preflight_if_options
-from eidolon.utilities import log_lambda_invocation
+from eidolon.story import get_active_story_segment_with_player_check, get_story_metadata, get_story_segment
+from eidolon.utilities import (
+    build_lambda_response_pascal,
+    handle_lambda_error_pascal,
+    handle_preflight_if_options,
+    log_lambda_invocation,
+)
 from eidolon.validation import validate_uuid
 
 logger = get_logger(__name__)
@@ -27,21 +25,21 @@ logger = get_logger(__name__)
 def _validate_and_get_character(character_id: str, player_id: str) -> dict:
     """
     Validate character ID and ownership.
-    
+
     Args:
         character_id: Character UUID
         player_id: Authenticated player ID
-        
+
     Returns:
         Character data dict
-        
+
     Raises:
         ValueError: If character ID invalid or not owned by player
         RuntimeError: If database operations fail
     """
     if not validate_uuid(character_id):
         raise ValueError("Invalid character ID format")
-    
+
     character = get_character(character_id)
     validate_character_ownership(character, player_id)
     return character
@@ -50,14 +48,14 @@ def _validate_and_get_character(character_id: str, player_id: str) -> dict:
 def _get_story_data(character_id: str, player_id: str) -> tuple:
     """
     Retrieve active segment and story metadata.
-    
+
     Args:
         character_id: Character UUID
         player_id: Authenticated player ID
-        
+
     Returns:
         Tuple of (active_segment, story_item, current_segment)
-        
+
     Raises:
         ValueError: If no active story found
         RuntimeError: If database operations fail
@@ -65,20 +63,20 @@ def _get_story_data(character_id: str, player_id: str) -> tuple:
     active_segment = get_active_story_segment_with_player_check(character_id, player_id)
     story_id = active_segment.get("StoryID")
     segment_id = active_segment.get("SegmentID")
-    
+
     story_item = get_story_metadata(story_id)  # type: ignore
     current_segment = get_story_segment(story_id, segment_id)  # type: ignore
-    
+
     return active_segment, story_item, current_segment
 
 
 def _calculate_time_remaining(active_segment: dict) -> int:
     """
     Calculate time remaining for the current segment.
-    
+
     Args:
         active_segment: Active segment data
-        
+
     Returns:
         Time remaining in seconds (minimum 0)
     """
@@ -90,13 +88,13 @@ def _calculate_time_remaining(active_segment: dict) -> int:
 def _build_base_response(active_segment: dict, story_item: dict, current_segment: dict, time_remaining: int) -> dict:
     """
     Build the base response structure.
-    
+
     Args:
         active_segment: Active segment data
         story_item: Story metadata
         current_segment: Current segment data
         time_remaining: Calculated time remaining
-        
+
     Returns:
         Base response dict with story and segment info
     """
@@ -126,20 +124,20 @@ def _build_base_response(active_segment: dict, story_item: dict, current_segment
 def _add_decision_segment_data(response_data: dict, current_segment: dict, active_segment: dict) -> None:
     """
     Add decision-specific data to response.
-    
+
     Args:
         response_data: Response dict to modify
         current_segment: Current segment data
         active_segment: Active segment data
     """
     response_data["Segment"]["DecisionText"] = current_segment.get("DecisionText", "")
-    
+
     # Format options from DecisionOptions map
     decision_options = current_segment.get("DecisionOptions", {})
     options = []
     for option_id, _ in decision_options.items():
         options.append({"Id": option_id, "Text": option_id.replace("-", " ").title()})
-    
+
     response_data["Segment"]["Options"] = options
     response_data["Segment"]["Decision"] = active_segment.get("Decision")
 
@@ -147,7 +145,7 @@ def _add_decision_segment_data(response_data: dict, current_segment: dict, activ
 def _add_narrative_segment_data(response_data: dict, current_segment: dict, active_segment: dict) -> None:
     """
     Add narrative-specific data to response.
-    
+
     Args:
         response_data: Response dict to modify
         current_segment: Current segment data
@@ -162,7 +160,7 @@ def _add_narrative_segment_data(response_data: dict, current_segment: dict, acti
 def _add_combat_segment_data(response_data: dict, current_segment: dict, active_segment: dict) -> None:
     """
     Add combat-specific data to response.
-    
+
     Args:
         response_data: Response dict to modify
         current_segment: Current segment data
@@ -198,22 +196,22 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
     """
     # Validate character and ownership
     _validate_and_get_character(character_id, player_id)
-    
+
     # Get story data
     active_segment, story_item, current_segment = _get_story_data(character_id, player_id)
-    
+
     # Calculate time remaining
     time_remaining = _calculate_time_remaining(active_segment)
-    
+
     # Build base response
     response_data = _build_base_response(active_segment, story_item, current_segment, time_remaining)
-    
+
     # Add segment type specific data
     segment_type = current_segment.get("SegmentType", "")
     handler = SEGMENT_TYPE_HANDLERS.get(segment_type)
     if handler:
         handler(response_data, current_segment, active_segment)
-    
+
     # Log success
     logger.info(
         "Current story retrieved successfully",
@@ -224,7 +222,7 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
             "segment_id": active_segment.get("SegmentID"),
         },
     )
-    
+
     return response_data
 
 

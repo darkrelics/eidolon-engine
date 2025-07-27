@@ -7,17 +7,16 @@ Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.
 """
 
-from eidolon.character import delete_character
-from eidolon.character import get_character
-from eidolon.character import validate_character_ownership
+from eidolon.character import delete_character, get_character, validate_character_ownership
 from eidolon.logger import get_logger
-from eidolon.player import extract_player_id_from_event
-from eidolon.player import validate_player_exists
+from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
-from eidolon.utilities import build_lambda_response_pascal
-from eidolon.utilities import handle_lambda_error_pascal
-from eidolon.utilities import handle_preflight_if_options
-from eidolon.utilities import log_lambda_invocation
+from eidolon.utilities import (
+    build_lambda_response_pascal,
+    handle_lambda_error_pascal,
+    handle_preflight_if_options,
+    log_lambda_invocation,
+)
 from eidolon.validation import validate_uuid
 
 # Configure logging

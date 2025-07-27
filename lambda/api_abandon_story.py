@@ -7,18 +7,17 @@ Lambda function to abandon an active story.
 Updates character state, marks active segments as abandoned, and updates history.
 """
 
-from eidolon.character import get_character
-from eidolon.character import reset_character_game_mode
-from eidolon.character import validate_character_ownership
+from eidolon.character import get_character, reset_character_game_mode, validate_character_ownership
 from eidolon.logger import get_logger
-from eidolon.player import extract_player_id_from_event
-from eidolon.player import validate_player_exists
+from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.story import add_story_to_abandoned_list, get_active_story_segment, mark_segment_as_abandoned, record_story_abandonment
-from eidolon.utilities import build_lambda_response_pascal
-from eidolon.utilities import handle_lambda_error_pascal
-from eidolon.utilities import handle_preflight_if_options
-from eidolon.utilities import log_lambda_invocation
+from eidolon.utilities import (
+    build_lambda_response_pascal,
+    handle_lambda_error_pascal,
+    handle_preflight_if_options,
+    log_lambda_invocation,
+)
 from eidolon.validation import validate_uuid
 
 logger = get_logger(__name__)

@@ -7,17 +7,11 @@ Lambda function to poll for completed segments.
 Triggered by EventBridge to check active segments that have reached their end time.
 """
 
-from eidolon.environment import ENABLE_BATCH_PROCESSING
-from eidolon.environment import MAX_SEGMENTS_PER_POLL
-from eidolon.environment import PROCESS_SEGMENT_FUNCTION
-from eidolon.environment import SEGMENT_BATCH_SIZE
-from eidolon.lambda_utils import invoke_process_segment
-from eidolon.lambda_utils import invoke_process_segments_batch
+from eidolon.environment import ENABLE_BATCH_PROCESSING, MAX_SEGMENTS_PER_POLL, PROCESS_SEGMENT_FUNCTION, SEGMENT_BATCH_SIZE
+from eidolon.lambda_utils import invoke_process_segment, invoke_process_segments_batch
 from eidolon.logger import get_logger
 from eidolon.segment import get_completed_segments
-from eidolon.utilities import build_lambda_response_pascal
-from eidolon.utilities import handle_lambda_error_pascal
-from eidolon.utilities import log_lambda_invocation
+from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
 
 # Configure logging
 logger = get_logger(__name__)

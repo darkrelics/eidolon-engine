@@ -14,20 +14,22 @@ from boto3 import resource
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
-from eidolon.environment import ACTIVE_SEGMENTS_TABLE
-from eidolon.environment import ARCHETYPES_TABLE
-from eidolon.environment import CHARACTER_HISTORY_TABLE
-from eidolon.environment import CHARACTERS_TABLE
-from eidolon.environment import EXITS_TABLE
-from eidolon.environment import HISTORY_TABLE
-from eidolon.environment import ITEMS_TABLE
-from eidolon.environment import MOTD_TABLE
-from eidolon.environment import OPPONENTS_TABLE
-from eidolon.environment import PLAYERS_TABLE
-from eidolon.environment import PROTOTYPES_TABLE
-from eidolon.environment import ROOMS_TABLE
-from eidolon.environment import SEGMENTS_TABLE
-from eidolon.environment import STORY_TABLE
+from eidolon.environment import (
+    ACTIVE_SEGMENTS_TABLE,
+    ARCHETYPES_TABLE,
+    CHARACTER_HISTORY_TABLE,
+    CHARACTERS_TABLE,
+    EXITS_TABLE,
+    HISTORY_TABLE,
+    ITEMS_TABLE,
+    MOTD_TABLE,
+    OPPONENTS_TABLE,
+    PLAYERS_TABLE,
+    PROTOTYPES_TABLE,
+    ROOMS_TABLE,
+    SEGMENTS_TABLE,
+    STORY_TABLE,
+)
 from eidolon.logger import get_logger
 
 logger = get_logger(__name__)

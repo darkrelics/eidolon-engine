@@ -7,19 +7,18 @@ Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-from eidolon.character import get_active_segment_for_character
-from eidolon.character import get_character
-from eidolon.character import validate_character_ownership
+from eidolon.character import get_active_segment_for_character, get_character, validate_character_ownership
 from eidolon.dynamo import decimal_to_float
 from eidolon.items import get_inventory_details
 from eidolon.logger import get_logger
-from eidolon.player import extract_player_id_from_event
-from eidolon.player import validate_player_exists
+from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
-from eidolon.utilities import build_lambda_response_pascal
-from eidolon.utilities import handle_lambda_error_pascal
-from eidolon.utilities import handle_preflight_if_options
-from eidolon.utilities import log_lambda_invocation
+from eidolon.utilities import (
+    build_lambda_response_pascal,
+    handle_lambda_error_pascal,
+    handle_preflight_if_options,
+    log_lambda_invocation,
+)
 from eidolon.validation import validate_uuid
 
 # Configure logging

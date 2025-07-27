@@ -6,10 +6,8 @@ Provides functions for loading and filtering player-available archetypes.
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import dynamo
-from eidolon.dynamo import TableName
-from eidolon.environment import DEFAULT_ESSENCE
-from eidolon.environment import DEFAULT_HEALTH
+from eidolon.dynamo import TableName, dynamo
+from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH
 from eidolon.logger import get_logger
 
 logger = get_logger(__name__)

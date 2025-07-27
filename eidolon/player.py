@@ -6,8 +6,7 @@ Provides functions for player authentication and validation.
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import dynamo
-from eidolon.dynamo import TableName
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 
 logger = get_logger(__name__)
@@ -25,8 +24,7 @@ def create_player_record(user_uuid: str, email: str) -> None:
         ValueError: If user_uuid or email is missing
         RuntimeError: If database operations fail
     """
-    from datetime import datetime
-    from datetime import timezone
+    from datetime import datetime, timezone
 
     if not user_uuid or not email:
         raise ValueError("Missing required user attributes (sub or email)")
@@ -508,8 +506,7 @@ def delete_player_data_completely(player_id: str) -> dict:
     Raises:
         ValueError: If player_id is empty
     """
-    from datetime import datetime
-    from datetime import timezone
+    from datetime import datetime, timezone
 
     if not player_id:
         raise ValueError("Player ID cannot be empty")

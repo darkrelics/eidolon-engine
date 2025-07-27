@@ -1,15 +1,16 @@
 """Lambda function to add a new character for the incremental game."""
 
-from eidolon.character import character_name_filter, check_character_limit, get_archetype, create_character
+from eidolon.character import character_name_filter, check_character_limit, create_character, get_archetype
 from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
 from eidolon.logger import get_logger
-from eidolon.player import extract_player_id_from_event
-from eidolon.player import validate_player_exists
-from eidolon.requests import get_required_field_flexible, get_optional_field_flexible, parse_json_body
-from eidolon.utilities import build_lambda_response_pascal
-from eidolon.utilities import handle_lambda_error_pascal
-from eidolon.utilities import handle_preflight_if_options
-from eidolon.utilities import log_lambda_invocation
+from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.requests import get_optional_field_flexible, get_required_field_flexible, parse_json_body
+from eidolon.utilities import (
+    build_lambda_response_pascal,
+    handle_lambda_error_pascal,
+    handle_preflight_if_options,
+    log_lambda_invocation,
+)
 from eidolon.validation import validate_character_name
 
 # Configure logging

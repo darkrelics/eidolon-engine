@@ -7,18 +7,17 @@ Lambda function to get the outcome of a completed segment.
 Returns the narrative text and any rewards/effects for the outcome.
 """
 
-from eidolon.character import get_character
-from eidolon.character import validate_character_ownership
+from eidolon.character import get_character, validate_character_ownership
 from eidolon.logger import get_logger
-from eidolon.player import extract_player_id_from_event
-from eidolon.player import validate_player_exists
+from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
-from eidolon.story import get_completed_segment_for_character
-from eidolon.story import get_story_segment
-from eidolon.utilities import build_lambda_response_pascal
-from eidolon.utilities import handle_lambda_error_pascal
-from eidolon.utilities import handle_preflight_if_options
-from eidolon.utilities import log_lambda_invocation
+from eidolon.story import get_completed_segment_for_character, get_story_segment
+from eidolon.utilities import (
+    build_lambda_response_pascal,
+    handle_lambda_error_pascal,
+    handle_preflight_if_options,
+    log_lambda_invocation,
+)
 from eidolon.validation import validate_uuid
 
 # Configure logging
@@ -178,17 +177,17 @@ def lambda_handler(event: dict, context: object) -> dict:
             "Narrative": outcome_data.get("Narrative", ""),
             "Effects": outcome_data.get("Effects", {}),
         }
-        
+
         # Add optional fields based on what's available
         if "NextSegmentID" in outcome_data:
             response_data["NextSegmentID"] = outcome_data["NextSegmentID"]
-            
+
         if "Decision" in outcome_data:
             response_data["Decision"] = outcome_data["Decision"]
-            
+
         if "ChallengeResults" in outcome_data:
             response_data["ChallengeResults"] = outcome_data["ChallengeResults"]
-            
+
         if "CombatState" in outcome_data:
             response_data["CombatState"] = outcome_data["CombatState"]
 
