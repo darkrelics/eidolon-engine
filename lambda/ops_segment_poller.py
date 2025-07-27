@@ -15,8 +15,8 @@ from eidolon.lambda_utils import invoke_process_segment
 from eidolon.lambda_utils import invoke_process_segments_batch
 from eidolon.logger import get_logger
 from eidolon.segment import get_completed_segments
-from eidolon.utilities import build_lambda_response
-from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import build_lambda_response_pascal
+from eidolon.utilities import handle_lambda_error_pascal
 from eidolon.utilities import log_lambda_invocation
 
 # Configure logging
@@ -94,9 +94,9 @@ def poll_and_process_segments_business_logic() -> dict:
     )
 
     return {
-        "segmentsFound": len(completed_segments),
-        "segmentsProcessed": processed_count,
-        "segmentsFailed": failed_count,
+        "SegmentsFound": len(completed_segments),
+        "SegmentsProcessed": processed_count,
+        "SegmentsFailed": failed_count,
     }
 
 
@@ -128,16 +128,16 @@ def lambda_handler(event: dict, context: object) -> dict:
         result = poll_and_process_segments_business_logic()
 
         # Build response
-        response_data = {"message": "Segment polling completed", **result}
+        response_data = {"Message": "Segment polling completed", **result}
 
         logger.info("Lambda response", extra={"status_code": 200})
-        return build_lambda_response(200, response_data, event)
+        return build_lambda_response_pascal(200, response_data, event)
 
     except RuntimeError as err:
         logger.error(
             "Failed to poll segments",
             extra={"error": str(err)},
         )
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)

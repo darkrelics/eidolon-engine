@@ -84,7 +84,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Parse request body with flexible field names
     try:
         body = parse_json_body(event)
-        character_id = get_required_field_flexible(body, "CharacterId", "characterId")
+        character_id = get_required_field_flexible(body, "CharacterID", "characterID")
         decision_id = get_required_field_flexible(body, "Decision", "decision")
     except ValueError as err:
         return build_lambda_response_pascal(400, {"error": str(err)}, event)

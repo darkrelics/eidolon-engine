@@ -56,11 +56,12 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 **API Response Transformations:**
 - **JSON Field Names**: All fields use PascalCase to match DynamoDB field names (e.g., CharacterID, CharacterName, AvailableStories)
+- **Acronyms**: Acronyms in field names are fully capitalized (e.g., StoryID not StoryId, ItemID not ItemId, PlayerID not PlayerId)
 - **InventoryDetails**: API responses include an enriched `InventoryDetails` field with item information:
   ```json
   {
     "SlotName": {
-      "ItemId": "uuid",
+      "ItemID": "uuid",
       "Name": "Item Name",
       "Description": "Item description",
       "Mass": 1.5,

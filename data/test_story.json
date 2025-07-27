@@ -182,7 +182,7 @@
       "SegmentDuration": 90,
       "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
       "Combat": {
-        "opponentId": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+        "opponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
         "maxRounds": 12,
         "environment": {}
       },
@@ -241,7 +241,7 @@
       "SegmentDuration": 120,
       "NextSegmentID": null,
       "Combat": {
-        "opponentId": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
+        "opponentID": "b8c9d0e1-2f3a-4b5c-6d7e8f9a0b1c2d3e",
         "maxRounds": 15,
         "environment": {
           "lighting": "dim",

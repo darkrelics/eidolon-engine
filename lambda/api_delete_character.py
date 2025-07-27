@@ -137,7 +137,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             200,
             {
                 "Message": "Character deleted successfully",
-                "CharacterId": character_id,
+                "CharacterID": character_id,
                 "CharacterName": result["character_name"],
                 "ItemsDeleted": result["deletion_result"]["items_deleted"],
                 "ActiveSegmentsDeleted": result["deletion_result"]["active_segments_deleted"],

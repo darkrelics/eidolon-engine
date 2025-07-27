@@ -101,7 +101,7 @@ class ApiService {
     }
 
     final response = await http.get(
-      Uri.parse('$_baseUrl/character?CharacterId=$characterId'),
+      Uri.parse('$_baseUrl/character?CharacterID=$characterId'),
       headers: {'Authorization': 'Bearer $idToken', 'Content-Type': 'application/json'},
     );
 
@@ -130,7 +130,7 @@ class ApiService {
     }
 
     final response = await http.delete(
-      Uri.parse('$_baseUrl/character?CharacterId=$characterId'),
+      Uri.parse('$_baseUrl/character?CharacterID=$characterId'),
       headers: {'Authorization': 'Bearer $idToken', 'Content-Type': 'application/json'},
     );
 

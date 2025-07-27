@@ -24,6 +24,31 @@ from eidolon.validation import validate_uuid
 logger = get_logger(__name__)
 
 
+def start_story_business_logic(character_id: str, story_id: str, player_id: str) -> dict:
+    """
+    Business logic for starting a story.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        player_id: Authenticated player ID
+
+    Returns:
+        Response data with segment information
+
+    Raises:
+        ValueError: If validation fails
+        RuntimeError: If database operations fail
+    """
+    # Start the story using the eidolon library
+    result = start_story_for_character(character_id, story_id, player_id)
+
+    # Format response
+    segment_data = format_segment_response(result["segment"], result["active_segment"])
+
+    return {"Segment": segment_data}
+
+
 def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to start a story for a character.
@@ -66,8 +91,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Parse request body with flexible field names
     try:
         body = parse_json_body(event)
-        character_id = get_required_field_flexible(body, "CharacterId", "characterId")
-        story_id = get_required_field_flexible(body, "StoryId", "storyId")
+        character_id = get_required_field_flexible(body, "CharacterID", "characterID")
+        story_id = get_required_field_flexible(body, "StoryID", "storyID")
     except ValueError as err:
         return build_lambda_response_pascal(400, {"error": str(err)}, event)
     except Exception as err:
@@ -110,28 +135,3 @@ def lambda_handler(event: dict, context: object) -> dict:
         return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
-
-
-def start_story_business_logic(character_id: str, story_id: str, player_id: str) -> dict:
-    """
-    Business logic for starting a story.
-
-    Args:
-        character_id: Character UUID
-        story_id: Story UUID
-        player_id: Authenticated player ID
-
-    Returns:
-        Response data with segment information
-
-    Raises:
-        ValueError: If validation fails
-        RuntimeError: If database operations fail
-    """
-    # Start the story using the eidolon library
-    result = start_story_for_character(character_id, story_id, player_id)
-
-    # Format response
-    segment_data = format_segment_response(result["segment"], result["active_segment"])
-
-    return {"Segment": segment_data}

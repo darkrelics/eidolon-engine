@@ -121,7 +121,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "SegmentDuration": 120,               # 2 minutes for combat
     "NextSegmentID": "seg-uuid-004",
     "Combat": {
-        "opponentId": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+        "opponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
         "maxRounds": 15,              # Combat ends after this many rounds
         "environment": {
             "lighting": "dim",        # -1 to hit rolls
@@ -233,8 +233,8 @@ GSI: EndTimeIndex
     "WeaponType": "lethal",     # Damage type
     "WeaponDamage": 2,          # Weapon bonus
     "LootTable": [
-        {"itemId": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "chance": 0.5},  # Healing potion
-        {"itemId": "d47ac10b-58cc-4372-a567-0e02b2c3d481", "chance": 0.3}   # Rusty blade
+        {"itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "chance": 0.5},  # Healing potion
+        {"itemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481", "chance": 0.3}   # Rusty blade
     ],
     "Tags": ["goblinoid", "forest", "weak"],
     "CreatedAt": "2025-01-23T10:00:00Z"
@@ -361,6 +361,11 @@ The simplified architecture avoids Global Secondary Indexes by:
 
 All endpoints follow existing Lambda patterns and extend the current API Gateway.
 
+**Field Naming Conventions:**
+- All API request and response fields use PascalCase
+- Acronyms in field names are fully capitalized (e.g., StoryID not StoryId, ItemID not ItemId, PlayerID not PlayerId)
+- This maintains consistency with DynamoDB field names
+
 #### 4.1.1 Character Management APIs
 
 **GET /archetypes**
@@ -370,7 +375,7 @@ All endpoints follow existing Lambda patterns and extend the current API Gateway
 Purpose: Retrieve player-available archetypes for character creation
 Query Parameters: None (public endpoint, authentication required for access control)
 Response: {
-    "archetypes": [
+    "Archetypes": [
         {
             "ArchetypeName": "Warrior",
             "Description": "A strong fighter skilled in combat",
@@ -385,7 +390,7 @@ Response: {
             "AvailableStories": ["tutorial-uuid", "basic-quest-uuid"]
         }
     ],
-    "count": 5
+    "Count": 5
 }
 
 Notes:
@@ -395,6 +400,34 @@ Notes:
 - Results are cached at Lambda instance level for performance
 ```
 
+**GET /characters**
+
+```python
+# Lambda: api_list_characters
+Purpose: List all characters for the authenticated player
+Query Parameters: None (uses authenticated player ID from JWT)
+Response: {
+    "Characters": [
+        {
+            "CharacterID": "char-uuid-456",
+            "CharacterName": "Thorin",
+            "Dead": false
+        },
+        {
+            "CharacterID": "char-uuid-789",
+            "CharacterName": "Gandalf",
+            "Dead": true
+        }
+    ]
+}
+
+Notes:
+- Returns minimal character information for selection screens
+- Character data comes from Player table's CharacterList field
+- Dead status indicates if character needs resurrection
+- Used by Flutter client for character selection flow
+```
+
 **GET /character**
 
 ```python
@@ -402,7 +435,7 @@ Notes:
 Purpose: Retrieve full character data including active segments
 Query Parameters: characterId (required)
 Response: {
-    "character": {
+    "Character": {
         "CharacterID": "char-uuid-456",
         "CharacterName": "Thorin",
         "PlayerID": "player-uuid-123",
@@ -411,7 +444,7 @@ Response: {
         "Inventory": {"RightHand": "sword-uuid", "LeftHand": "shield-uuid"},
         "InventoryDetails": {
             "RightHand": {
-                "itemId": "sword-uuid",
+                "ItemID": "sword-uuid",
                 "name": "Iron Sword",
                 "description": "A well-crafted iron sword",
                 "mass": 2.5,
@@ -420,7 +453,7 @@ Response: {
                 "wornOn": null
             },
             "LeftHand": {
-                "itemId": "shield-uuid",
+                "ItemID": "shield-uuid",
                 "name": "Wooden Shield",
                 "description": "A sturdy wooden shield",
                 "mass": 3.0,
@@ -450,7 +483,7 @@ Response: {
         "UpdatedAt": "2025-01-23T08:00:00Z",
         "LastPlayed": "2025-01-23T08:00:00Z"
     },
-    "activeSegment": {  // Only included if character has an active segment
+    "ActiveSegment": {  // Only included if character has an active segment
         "ActiveSegmentID": "active-seg-uuid-123",
         "StoryID": "forest-adventure-uuid",
         "StoryTitle": "The Whispering Woods",
@@ -473,7 +506,7 @@ Error Cases:
 Notes:
 - Attributes and Skills keys are normalized to lowercase for Flutter compatibility
 - InventoryDetails enriches raw inventory UUIDs with full item information
-- activeSegment field only present when character has an active story segment
+- ActiveSegment field only present when character has an active story segment
 - All numeric values converted from DynamoDB Decimal to standard floats
 - Requires ITEMS_TABLE and ACTIVE_SEGMENTS_TABLE environment variables
 ```
@@ -487,15 +520,15 @@ Notes:
 Purpose: Retrieve available stories for character
 Query Parameters: characterId
 Response: {
-    "stories": [
+    "Stories": [
         {
-            "storyId": "forest-adventure",
-            "title": "The Whispering Woods",
-            "description": "A mysterious forest beckons adventurers",
-            "type": "daily",  // one-time, daily, or repeatable
-            "available": true,
-            "cooldownRemaining": 0,  // seconds until available
-            "estimatedDuration": 3600  // seconds
+            "StoryID": "forest-adventure",
+            "Title": "The Whispering Woods",
+            "Description": "A mysterious forest beckons adventurers",
+            "Type": "daily",  // one-time, daily, or repeatable
+            "Available": true,
+            "CooldownRemaining": 0,  // seconds until available
+            "EstimatedDuration": 3600  // seconds
         }
     ]
 }
@@ -512,19 +545,19 @@ Notes:
 # Lambda: api_start_story
 Purpose: Begin a new story
 Request: {
-    "characterId": "char-uuid-456",
-    "storyId": "forest-adventure"
+    "CharacterID": "char-uuid-456",
+    "StoryID": "forest-adventure"
 }
 Response: {
-    "segment": {
-        "segmentId": "active-seg-uuid",
-        "storyId": "forest-adventure",
-        "type": "decision|narrative|combat",
-        "timeRemaining": 300,
+    "Segment": {
+        "SegmentID": "active-seg-uuid",
+        "StoryID": "forest-adventure",
+        "Type": "decision|narrative|combat",
+        "TimeRemaining": 300,
         // Additional fields based on type:
-        // Decision: "content", "options"
-        // Narrative: "shortStatus", "narrative"
-        // Combat: "shortStatus", "opponentId"
+        // Decision: "Content", "Options"
+        // Narrative: "ShortStatus", "Narrative"
+        // Combat: "ShortStatus", "OpponentID"
     }
 }
 Error Cases:
@@ -549,12 +582,12 @@ Response: Current story and segment details
 # Lambda: api_submit_decision
 Purpose: Submit player decision
 Request: {
-    "characterId": "char-uuid-456",
-    "decision": "take-left-path"
+    "CharacterID": "char-uuid-456",
+    "Decision": "take-left-path"
 }
 Response: {
-    "accepted": true,
-    "nextSegmentTime": 1737003600
+    "Accepted": true,
+    "NextSegmentTime": 1737003600
 }
 ```
 
@@ -565,13 +598,31 @@ Response: {
 Purpose: Retrieve completed segment results
 Query Parameters: characterId, segmentId
 Response: {
-    "outcome": "normal",
-    "narrative": "You navigate successfully...",
-    "effects": {
-        "experience": 50,
-        "items": ["herb_bundle"]
+    "Outcome": "normal",  # death/failure/minimal/normal/exceptional
+    "Narrative": "You navigate successfully...",
+    "Effects": {
+        "Experience": 50,
+        "Items": ["herb_bundle"]
+    },
+    # Additional fields based on segment type:
+    "NextSegmentID": "seg-uuid-003",  # For non-terminal outcomes
+    "Decision": "take-left-path",  # For decision segments: choice made
+    "ChallengeResults": [  # For narrative segments: skill check results
+        {"skill": "Perception", "success": true},
+        {"skill": "Survival", "success": false}
+    ],
+    "CombatState": {  # For combat segments: final combat state
+        "rounds": 8,
+        "playerWoundsReceived": 2,
+        "opponentDefeated": true
     }
 }
+
+Notes:
+- Outcome types: death, failure, minimal, normal, exceptional
+- NextSegmentID only included for non-terminal outcomes (not death/failure)
+- Type-specific fields are only included for their respective segment types
+- This endpoint is called after a segment timer expires to get results
 ```
 
 **POST /stories/abandon**
@@ -582,11 +633,11 @@ Purpose: Exit current story
 Query Parameters: characterId=char-uuid-456
 Request Body: None (uses query parameter)
 Response: {
-    "abandoned": true,
-    "characterId": "char-uuid-456",
-    "storyId": "forest-adventure-uuid",
-    "storyTitle": "The Whispering Woods",
-    "message": "Story abandoned successfully"
+    "Abandoned": true,
+    "CharacterID": "char-uuid-456",
+    "StoryID": "forest-adventure-uuid",
+    "StoryTitle": "The Whispering Woods",
+    "Message": "Story abandoned successfully"
 }
 ```
 
@@ -709,6 +760,41 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - Update story progression with new NextCompletionTime
 - If story complete, check if polling should be disabled
 # Note: Called by segment poller Lambda
+```
+
+#### 5.2.5 cognito_new_player
+
+```python
+"""Create player record after Cognito registration."""
+# Trigger: Cognito Post Confirmation
+# Key Operations:
+- Extract user UUID (sub) and email from Cognito event
+- Create Player table record with initial empty state
+- Record serves both MUD and Incremental games
+# Error Handling:
+- Logs errors but returns event to continue Cognito flow
+- Prevents registration failures if player record creation fails
+# Note: System-level function for player lifecycle
+```
+
+#### 5.2.6 cognito_delete_player
+
+```python
+"""Complete player data deletion for GDPR compliance."""
+# Triggers:
+- CloudWatch Events from Cognito user deletion
+- API Gateway with authenticated request
+- Direct invocation with player_id
+# Key Operations:
+- Delete from Player table and all associated data
+- Remove all characters and their incremental data
+- Clear from ActiveSegments, History tables
+- Remove from all game-related tables
+# Response:
+- Returns deletion summary with counts
+- Status 207 if partial deletion (some errors)
+- Supports multiple trigger sources with appropriate response formats
+# Note: Critical for GDPR compliance and data cleanup
 ```
 
 ### 5.3 DynamoDB Polling Implementation
@@ -991,17 +1077,21 @@ The error handling strategy leverages existing Eidolon patterns to ensure consis
 
 The incremental module seamlessly integrates into the existing AWS CDK infrastructure, adding new Lambda functions to the established deployment patterns. This approach ensures consistency across the entire Eidolon Engine ecosystem.
 
-The deployment adds seven new Lambda functions to support story operations:
+The deployment adds nine Lambda functions to support story and player lifecycle operations:
 
 **API Functions**: Five functions handle client-facing operations including story retrieval, story initiation, decision submission, outcome retrieval, and story abandonment. Each function follows the established naming convention and handler patterns.
 
 **Processing Functions**: Two backend functions manage the story engine. The segment poller runs on a scheduled basis to check for completed segments, while the process segment function handles the actual outcome calculations and state updates.
 
+**Cognito Integration Functions**: Two functions handle player lifecycle management. The new player function creates initial player records upon registration, while the delete player function ensures complete data removal for GDPR compliance. These system-level functions support both MUD and Incremental game modes.
+
 **EventBridge Integration**: A new EventBridge rule triggers the segment poller every 10 seconds. This rule can be dynamically enabled or disabled based on whether any stories are active, optimizing costs during idle periods.
 
 ### 9.2 API Gateway Routes
 
-The incremental APIs extend the existing API Gateway configuration with six new routes, maintaining consistency with established URL patterns and authentication requirements.
+The incremental APIs extend the existing API Gateway configuration with seven new routes, maintaining consistency with established URL patterns and authentication requirements.
+
+**Character Management Routes**: GET endpoint for listing player characters and retrieving individual character details. These support the character selection flow essential for game entry.
 
 **Story Management Routes**: GET endpoints allow retrieving available stories and current story state. POST endpoints handle story initiation and abandonment. These routes follow RESTful conventions while accommodating the unique requirements of time-based gameplay.
 

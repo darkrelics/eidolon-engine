@@ -9,8 +9,8 @@ Determines outcome, applies effects, and creates next segment if applicable.
 
 from eidolon.logger import get_logger
 from eidolon.segment import process_segment_completely
-from eidolon.utilities import build_lambda_response
-from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import build_lambda_response_pascal
+from eidolon.utilities import handle_lambda_error_pascal
 from eidolon.utilities import log_lambda_invocation
 
 # Configure logging
@@ -63,11 +63,11 @@ def process_segments_batch(segments: list) -> dict:
 
     for segment_data in segments:
         try:
-            active_segment_id = segment_data.get("activeSegmentId")
-            character_id = segment_data.get("characterId")
-            story_id = segment_data.get("storyId")
-            segment_id = segment_data.get("segmentId")
-            segment_type = segment_data.get("segmentType")
+            active_segment_id = segment_data.get("ActiveSegmentID")
+            character_id = segment_data.get("CharacterID")
+            story_id = segment_data.get("StoryID")
+            segment_id = segment_data.get("SegmentID")
+            segment_type = segment_data.get("SegmentType")
 
             logger.info(
                 "Processing segment in batch",
@@ -83,10 +83,10 @@ def process_segments_batch(segments: list) -> dict:
 
             results.append(
                 {
-                    "segmentId": active_segment_id,
-                    "success": True,
-                    "outcome": result["outcome"],
-                    "nextSegment": result["nextSegment"],
+                    "SegmentID": active_segment_id,
+                    "Success": True,
+                    "Outcome": result["outcome"],
+                    "NextSegment": result["nextSegment"],
                 }
             )
             success_count += 1
@@ -95,16 +95,16 @@ def process_segments_batch(segments: list) -> dict:
             logger.error(
                 "Failed to process segment in batch",
                 extra={
-                    "active_segment_id": segment_data.get("activeSegmentId"),
+                    "active_segment_id": segment_data.get("ActiveSegmentID"),
                     "error": str(err),
                 },
                 exc_info=True,
             )
             results.append(
                 {
-                    "segmentId": segment_data.get("activeSegmentId"),
-                    "success": False,
-                    "error": str(err),
+                    "SegmentID": segment_data.get("ActiveSegmentID"),
+                    "Success": False,
+                    "Error": str(err),
                 }
             )
             failure_count += 1
@@ -119,11 +119,11 @@ def process_segments_batch(segments: list) -> dict:
     )
 
     return {
-        "message": "Batch processing completed",
-        "batchSize": len(segments),
-        "successCount": success_count,
-        "failureCount": failure_count,
-        "results": results,
+        "Message": "Batch processing completed",
+        "BatchSize": len(segments),
+        "SuccessCount": success_count,
+        "FailureCount": failure_count,
+        "Results": results,
     }
 
 
@@ -146,29 +146,29 @@ def lambda_handler(event: dict, context: object) -> dict:
     if "segments" in event:
         try:
             batch_result = process_segments_batch(event["segments"])
-            return build_lambda_response(200, batch_result, event)
+            return build_lambda_response_pascal(200, batch_result, event)
         except Exception as err:
-            return handle_lambda_error(err, context, event)
+            return handle_lambda_error_pascal(err, context, event)
 
     # Single segment processing (original behavior)
     try:
         # Extract segment information from event
-        active_segment_id: str = event.get("activeSegmentId", "")
-        character_id = event.get("characterId")
-        story_id = event.get("storyId")
-        segment_id = event.get("segmentId")
-        segment_type = event.get("segmentType")
+        active_segment_id: str = event.get("ActiveSegmentID", "")
+        character_id = event.get("CharacterID")
+        story_id = event.get("StoryID")
+        segment_id = event.get("SegmentID")
+        segment_type = event.get("SegmentType")
 
         if not active_segment_id:
-            raise ValueError("activeSegmentId is required")
+            raise ValueError("ActiveSegmentID is required")
         if not character_id:
-            raise ValueError("characterId is required")
+            raise ValueError("CharacterID is required")
         if not story_id:
-            raise ValueError("storyId is required")
+            raise ValueError("StoryID is required")
         if not segment_id:
-            raise ValueError("segmentId is required")
+            raise ValueError("SegmentID is required")
         if not segment_type:
-            raise ValueError("segmentType is required")
+            raise ValueError("SegmentType is required")
 
         logger.info(
             "Processing single segment",
@@ -182,25 +182,25 @@ def lambda_handler(event: dict, context: object) -> dict:
         result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)  # type: ignore
 
         response_data = {
-            "message": "Segment processed successfully",
-            "outcome": result["outcome"],
-            "nextSegment": result["nextSegment"],
+            "Message": "Segment processed successfully",
+            "Outcome": result["outcome"],
+            "NextSegment": result["nextSegment"],
         }
 
         logger.info("Lambda response", extra={"status_code": 200})
-        return build_lambda_response(200, response_data, event)
+        return build_lambda_response_pascal(200, response_data, event)
 
     except ValueError as err:
         logger.error(
             "Invalid request",
             extra={"error": str(err)},
         )
-        return build_lambda_response(400, {"error": str(err)}, event)
+        return build_lambda_response_pascal(400, {"error": str(err)}, event)
     except RuntimeError as err:
         logger.error(
             "Failed to process segment",
             extra={"error": str(err)},
         )
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)

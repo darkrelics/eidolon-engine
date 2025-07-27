@@ -14,7 +14,7 @@ from eidolon.logger import get_logger
 from eidolon.player import delete_player_data_completely
 from eidolon.player import extract_player_id_from_event
 from eidolon.requests import parse_json_body
-from eidolon.utilities import build_lambda_response
+from eidolon.utilities import build_lambda_response_pascal
 from eidolon.utilities import log_lambda_invocation
 
 # Configure logging
@@ -85,7 +85,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         if not player_id:
             logger.error("No player ID provided in request")
             if "requestContext" in event:
-                return build_lambda_response(400, {"error": "Player ID required"}, event)
+                return build_lambda_response_pascal(400, {"error": "Player ID required"}, event)
             return {
                 "statusCode": 400,
                 "body": json.dumps({"error": "Player ID required"}),
@@ -101,13 +101,13 @@ def lambda_handler(event: dict, context: object) -> dict:
             # API Gateway response format
             status_code = 200 if not results.get("errors", []) else 207
             logger.info("Lambda response", extra={"status_code": status_code})
-            return build_lambda_response(status_code, results, event)
+            return build_lambda_response_pascal(status_code, results, event)
         return results
 
     except ValueError as err:
         logger.error("Invalid request", extra={"error": str(err)})
         if "requestContext" in event:
-            return build_lambda_response(400, {"error": str(err)}, event)
+            return build_lambda_response_pascal(400, {"error": str(err)}, event)
         return {
             "statusCode": 400,
             "body": json.dumps({"error": str(err)}),
@@ -115,7 +115,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     except RuntimeError as err:
         logger.error("Deletion operation failed", extra={"error": str(err)}, exc_info=True)
         if "requestContext" in event:
-            return build_lambda_response(500, {"error": "Internal server error"}, event)
+            return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
         return {
             "statusCode": 500,
             "body": json.dumps({"error": "Internal server error"}),
@@ -129,7 +129,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.info("Lambda response", extra={"status_code": 500})
 
         if "requestContext" in event:
-            return build_lambda_response(500, {"error": "Internal server error"}, event)
+            return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
         return {
             "statusCode": 500,
             "body": json.dumps({"error": "Internal server error"}),

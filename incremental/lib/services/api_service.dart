@@ -86,7 +86,7 @@ class ApiService {
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return JsonUtils.getFlexibleRequired<String>(
       json,
-      'CharacterId',
+      'CharacterID',
       'characterId',
       defaultValue: '',
     );
@@ -97,7 +97,7 @@ class ApiService {
     debugPrint('ApiService: Deleting character - id: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.delete(
-      Uri.parse('$baseUrl/character?CharacterId=$characterId'),
+      Uri.parse('$baseUrl/character?CharacterID=$characterId'),
       headers: headers,
     );
 
@@ -116,7 +116,7 @@ class ApiService {
   Future<Character?> getCharacterById(String characterId) async {
     debugPrint('ApiService: Getting character by ID: $characterId');
     final headers = await _getHeaders();
-    final uri = Uri.parse('$baseUrl/character?CharacterId=$characterId');
+    final uri = Uri.parse('$baseUrl/character?CharacterID=$characterId');
     debugPrint('ApiService: Request URI: $uri');
 
     final response = await _httpClient.get(uri, headers: headers);
@@ -190,7 +190,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/stories/start'),
       headers: headers,
-      body: jsonEncode({'CharacterId': characterId, 'StoryId': storyId}),
+      body: jsonEncode({'CharacterID': characterId, 'StoryID': storyId}),
     );
 
     debugPrint('ApiService: Start story response status: ${response.statusCode}');
@@ -219,7 +219,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/segment/conclude'),
       headers: headers,
-      body: jsonEncode({'SegmentId': segmentId}),
+      body: jsonEncode({'SegmentID': segmentId}),
     );
 
     if (response.statusCode != 200) {
@@ -236,7 +236,7 @@ class ApiService {
     debugPrint('ApiService: Abandoning story for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/stories/abandon?CharacterId=$characterId'),
+      Uri.parse('$baseUrl/stories/abandon?CharacterID=$characterId'),
       headers: headers,
     );
 
@@ -274,7 +274,7 @@ class ApiService {
     debugPrint('ApiService: Getting stories for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/stories?CharacterId=$characterId'),
+      Uri.parse('$baseUrl/stories?CharacterID=$characterId'),
       headers: headers,
     );
 
@@ -303,7 +303,7 @@ class ApiService {
     debugPrint('ApiService: Getting current story for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/stories/current?CharacterId=$characterId'),
+      Uri.parse('$baseUrl/stories/current?CharacterID=$characterId'),
       headers: headers,
     );
 
@@ -408,7 +408,7 @@ class StoryMetadata {
     return StoryMetadata(
       storyId: JsonUtils.getFlexibleRequired<String>(
         json,
-        'StoryId',
+        'StoryID',
         'storyId',
         defaultValue: '',
       ),

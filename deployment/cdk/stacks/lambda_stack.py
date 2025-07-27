@@ -467,7 +467,7 @@ class LambdaStack(cdk.Stack):
         # Process Segment Lambda (backend)
         self.process_segment_function = self.create_lambda_function(
             "process-segment",
-            "process_segment.lambda_handler",
+            "ops_process_segment.lambda_handler",
             {
                 "CHARACTERS_TABLE": self.characters_table,
                 "SEGMENTS_TABLE": self.segments_table,
@@ -482,10 +482,13 @@ class LambdaStack(cdk.Stack):
         # Segment Poller Lambda (backend)
         self.segment_poller_function = self.create_lambda_function(
             "segment-poller",
-            "segment_poller.lambda_handler",
+            "ops_segment_poller.lambda_handler",
             {
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "PROCESS_SEGMENT_FUNCTION": self.process_segment_function.function_name,
+                "ENABLE_BATCH_PROCESSING": "true",
+                "MAX_SEGMENTS_PER_POLL": "100",
+                "SEGMENT_BATCH_SIZE": "10",
             },
             "Polls for completed segments and triggers processing",
             dependencies_layer,
@@ -499,8 +502,8 @@ class LambdaStack(cdk.Stack):
             self,
             "segment-poller-rule",
             rule_name="eidolon-segment-poller-rule",
-            description="Triggers segment poller Lambda every minute",
-            schedule=events.Schedule.rate(cdk.Duration.minutes(1)),
+            description="Triggers segment poller Lambda every 10 seconds",
+            schedule=events.Schedule.rate(cdk.Duration.seconds(10)),
         )
 
         # Add Lambda target to the rule
@@ -591,8 +594,11 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # POST /stories/decision - Submit a decision
-        decision_resource = stories_resource.add_resource("decision")
+        # Segments endpoints
+        segments_resource = self.api.root.add_resource("segments")
+
+        # POST /segments/decision - Submit a decision
+        decision_resource = segments_resource.add_resource("decision")
         decision_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.submit_decision_function),  # type: ignore
@@ -600,8 +606,8 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # GET /stories/outcome - Get segment outcome
-        outcome_resource = stories_resource.add_resource("outcome")
+        # GET /segments/outcome - Get segment outcome
+        outcome_resource = segments_resource.add_resource("outcome")
         outcome_resource.add_method(
             "GET",
             apigateway.LambdaIntegration(self.get_segment_outcome_function),  # type: ignore

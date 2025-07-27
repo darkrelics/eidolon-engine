@@ -63,8 +63,8 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
 
     # Build outcome data based on segment type
     outcome_data = {
-        "segmentType": segment_type,
-        "status": "completed",  # We already verified it's completed
+        "SegmentType": segment_type,
+        "Status": "completed",  # We already verified it's completed
     }
 
     if segment_type == "decision":
@@ -72,12 +72,12 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         decision = active_segment.get("Decision")
         decision_options = segment.get("DecisionOptions", {})
 
-        outcome_data["decision"] = decision
-        outcome_data["nextSegmentId"] = decision_options.get(decision) if decision else None
+        outcome_data["Decision"] = decision
+        outcome_data["NextSegmentID"] = decision_options.get(decision) if decision else None
         # Decision segments don't have narrative/effects in the response
-        outcome_data["outcome"] = "normal"
-        outcome_data["narrative"] = ""
-        outcome_data["effects"] = {}
+        outcome_data["Outcome"] = "normal"
+        outcome_data["Narrative"] = ""
+        outcome_data["Effects"] = {}
 
     elif segment_type in ["narrative", "combat"]:
         # Get the outcome from the active segment
@@ -87,28 +87,28 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         results = segment.get("Results", {})
         outcome_result = results.get(outcome, {})
 
-        outcome_data["outcome"] = outcome
-        outcome_data["narrative"] = outcome_result.get("narrative", "")
-        outcome_data["effects"] = outcome_result.get("effects", {})
+        outcome_data["Outcome"] = outcome
+        outcome_data["Narrative"] = outcome_result.get("narrative", "")
+        outcome_data["Effects"] = outcome_result.get("effects", {})
 
         # Add challenge results for narrative segments
         if segment_type == "narrative":
-            outcome_data["challengeResults"] = active_segment.get("ChallengeResults", [])
+            outcome_data["ChallengeResults"] = active_segment.get("ChallengeResults", [])
 
         # Add combat state for combat segments
         if segment_type == "combat":
-            outcome_data["combatState"] = active_segment.get("CombatState", {})
+            outcome_data["CombatState"] = active_segment.get("CombatState", {})
 
         # Get next segment for non-terminal outcomes
         if outcome not in ["death", "failure"]:
-            outcome_data["nextSegmentId"] = segment.get("NextSegmentID")
+            outcome_data["NextSegmentID"] = segment.get("NextSegmentID")
 
     logger.info(
         "Segment outcome retrieved successfully",
         extra={
             "active_segment_id": active_segment_id,
             "segment_type": segment_type,
-            "outcome": outcome_data.get("outcome"),
+            "outcome": outcome_data.get("Outcome"),
         },
     )
 
@@ -174,10 +174,23 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         # Build response per API documentation with PascalCase
         response_data = {
-            "Outcome": outcome_data.get("outcome", "normal"),
-            "Narrative": outcome_data.get("narrative", ""),
-            "Effects": outcome_data.get("effects", {}),
+            "Outcome": outcome_data.get("Outcome", "normal"),
+            "Narrative": outcome_data.get("Narrative", ""),
+            "Effects": outcome_data.get("Effects", {}),
         }
+        
+        # Add optional fields based on what's available
+        if "NextSegmentID" in outcome_data:
+            response_data["NextSegmentID"] = outcome_data["NextSegmentID"]
+            
+        if "Decision" in outcome_data:
+            response_data["Decision"] = outcome_data["Decision"]
+            
+        if "ChallengeResults" in outcome_data:
+            response_data["ChallengeResults"] = outcome_data["ChallengeResults"]
+            
+        if "CombatState" in outcome_data:
+            response_data["CombatState"] = outcome_data["CombatState"]
 
         return build_lambda_response_pascal(200, response_data, event)
 

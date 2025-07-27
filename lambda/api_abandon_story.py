@@ -82,8 +82,8 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     )
 
     return {
-        "CharacterId": character_id,
-        "StoryId": story_id,
+        "CharacterID": character_id,
+        "StoryID": story_id,
         "StoryTitle": story_title,
         "Abandoned": True,
         "Message": "Story abandoned successfully",

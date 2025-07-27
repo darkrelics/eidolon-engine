@@ -69,14 +69,14 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
     # Build response with PascalCase
     response_data = {
         "Story": {
-            "StoryId": story_id,
+            "StoryID": story_id,
             "Title": story_item.get("Title", ""),
             "Type": story_item.get("StoryType", ""),
             "TotalSegments": total_segments,
             "CurrentSegmentIndex": current_segment_index,
         },
         "Segment": {
-            "SegmentId": segment_id,
+            "SegmentID": segment_id,
             "SegmentType": current_segment.get("SegmentType", ""),
             "ShortStatus": current_segment.get("ShortStatus", ""),
             "Narrative": (current_segment.get("Narrative", "") if current_segment.get("SegmentType") != "decision" else ""),
@@ -85,7 +85,7 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
             "StartTime": active_segment.get("StartTime", 0),
             "EndTime": end_time,
         },
-        "ActiveSegmentId": active_segment.get("ActiveSegmentID", ""),
+        "ActiveSegmentID": active_segment.get("ActiveSegmentID", ""),
         "Status": active_segment.get("Status", ""),
     }
 

@@ -530,7 +530,7 @@ def get_stories_for_character(character_id: str, available_story_ids: list) -> l
 
             # Format story for response with PascalCase
             formatted_story = {
-                "StoryId": story_id,
+                "StoryID": story_id,
                 "Title": story_data.get("Title", "Unknown Story"),
                 "Description": story_data.get("Description", ""),
                 "Type": story_type,
@@ -859,8 +859,8 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
     time_remaining = max(0, active_segment["EndTime"] - int(time.time()))
 
     response = {
-        "SegmentId": active_segment["ActiveSegmentID"],
-        "StoryId": active_segment["StoryID"],
+        "SegmentID": active_segment["ActiveSegmentID"],
+        "StoryID": active_segment["StoryID"],
         "Type": segment_type,
         "TimeRemaining": time_remaining,
     }
@@ -880,7 +880,7 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         response["Narrative"] = ""
     elif segment_type == "combat":
         response["ShortStatus"] = segment.get("ShortStatus", "Engaged in combat!")
-        response["OpponentId"] = segment.get("Combat", {}).get("opponentId")
+        response["OpponentID"] = segment.get("Combat", {}).get("opponentID")
 
     return response
 

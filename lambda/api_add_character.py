@@ -163,7 +163,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         return build_lambda_response_pascal(
             201,
             {
-                "CharacterId": result["character_id"],
+                "CharacterID": result["character_id"],
                 "CharacterName": character_name,
                 "Archetype": result["archetype_name"],
                 "Message": "Character created successfully",
