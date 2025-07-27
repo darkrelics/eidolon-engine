@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/character.dart';
+import '../models/story.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../utils/error_handler.dart';
@@ -1211,7 +1212,7 @@ class _ActionPanelState extends State<ActionPanel> {
       // Call API to start the story
       final segment = await _apiService.startStory(
         characterId: widget.character.id,
-        storyId: story.storyId,
+        storyId: story.storyID,
       );
 
       // Check if widget is still mounted before using context
@@ -1220,7 +1221,7 @@ class _ActionPanelState extends State<ActionPanel> {
       // Update character's story state with the segment info
       setState(() {
         widget.character.storyState = {
-          'storyId': story.storyId,
+          'storyId': story.storyID,
           'storyName': story.title,
           'segmentId': JsonUtils.getFlexible<String>(segment, 'SegmentId', 'segmentId'),
           'segmentType': JsonUtils.getFlexible<String>(segment, 'Type', 'type'),

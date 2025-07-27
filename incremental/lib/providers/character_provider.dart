@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/character.dart';
+import '../models/active_segment.dart';
 import '../models/segment_outcome.dart';
 
 /// Provider for character state management

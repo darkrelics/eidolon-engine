@@ -6,7 +6,7 @@ import 'screens/registration_screen.dart';
 import 'screens/password_reset_screen.dart';
 import 'screens/password_reset_confirm_screen.dart';
 import 'screens/account_settings_screen.dart';
-import 'screens/character_selection_screen.dart';
+import 'screens/home_screen.dart';
 import 'screens/game_screen.dart';
 
 void main() {
@@ -41,7 +41,7 @@ class EidolonIncrementalApp extends StatelessWidget {
         '/password-reset-confirm': (context) =>
             const PasswordResetConfirmScreen(),
         '/account-settings': (context) => const AccountSettingsScreen(),
-        '/character-selection': (context) => const CharacterSelectionScreen(),
+        '/character-selection': (context) => const HomeScreen(),
         '/game': (context) => const GameScreen(),
       },
     );
@@ -67,8 +67,8 @@ class AuthWrapper extends StatelessWidget {
             debugPrint('AuthWrapper: Showing LoginScreen');
             return const LoginScreen();
           case AuthStatus.authenticated:
-            debugPrint('AuthWrapper: Showing CharacterSelectionScreen');
-            return const CharacterSelectionScreen();
+            debugPrint('AuthWrapper: Showing HomeScreen');
+            return const HomeScreen();
           case AuthStatus.loading:
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),

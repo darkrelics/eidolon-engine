@@ -103,7 +103,7 @@ class OutcomeDisplay extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceVariant,
+                  color: theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -151,7 +151,7 @@ class OutcomeDisplay extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                 ),
                 child: Text(
-                  outcome.nextSegmentId != null ? 'Continue Story' : 'Return to Stories',
+                  outcome.nextSegmentID != null ? 'Continue Story' : 'Return to Stories',
                   style: theme.textTheme.bodyLarge,
                 ),
               ),

@@ -10,14 +10,14 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../utils/error_handler.dart';
 
-class CharacterSelectionScreen extends StatefulWidget {
-  const CharacterSelectionScreen({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<CharacterSelectionScreen> createState() => _CharacterSelectionScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
+class _HomeScreenState extends State<HomeScreen> {
   late ApiService _apiService;
   List<CharacterInfo>? _characters;
   bool _isLoading = true;
@@ -26,7 +26,7 @@ class _CharacterSelectionScreenState extends State<CharacterSelectionScreen> {
   @override
   void initState() {
     super.initState();
-    debugPrint('CharacterSelectionScreen: initState called');
+    debugPrint('HomeScreen: initState called');
     _initializeApiService();
     _loadCharacters();
   }

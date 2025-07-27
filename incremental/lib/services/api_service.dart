@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/character.dart';
 import '../models/segment_outcome.dart';
+import '../models/story.dart';
 import '../utils/json_utils.dart';
 import 'auth_service.dart';
 
@@ -384,70 +385,3 @@ class ArchetypeInfo {
   }
 }
 
-/// Story metadata for browsing
-class StoryMetadata {
-  final String storyId;
-  final String title;
-  final String description;
-  final String type;
-  final bool available;
-  final int cooldownRemaining;
-  final int estimatedDuration;
-
-  StoryMetadata({
-    required this.storyId,
-    required this.title,
-    required this.description,
-    required this.type,
-    required this.available,
-    required this.cooldownRemaining,
-    required this.estimatedDuration,
-  });
-
-  factory StoryMetadata.fromJson(Map<String, dynamic> json) {
-    return StoryMetadata(
-      storyId: JsonUtils.getFlexibleRequired<String>(
-        json,
-        'StoryID',
-        'storyId',
-        defaultValue: '',
-      ),
-      title: JsonUtils.getFlexibleRequired<String>(
-        json,
-        'Title',
-        'title',
-        defaultValue: '',
-      ),
-      description: JsonUtils.getFlexibleRequired<String>(
-        json,
-        'Description',
-        'description',
-        defaultValue: '',
-      ),
-      type: JsonUtils.getFlexibleRequired<String>(
-        json,
-        'Type',
-        'type',
-        defaultValue: '',
-      ),
-      available: JsonUtils.getFlexibleRequired<bool>(
-        json,
-        'Available',
-        'available',
-        defaultValue: false,
-      ),
-      cooldownRemaining: JsonUtils.getFlexibleRequired<int>(
-        json,
-        'CooldownRemaining',
-        'cooldownRemaining',
-        defaultValue: 0,
-      ),
-      estimatedDuration: JsonUtils.getFlexibleRequired<int>(
-        json,
-        'EstimatedDuration',
-        'estimatedDuration',
-        defaultValue: 0,
-      ),
-    );
-  }
-}
