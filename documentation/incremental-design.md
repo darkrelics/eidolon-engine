@@ -373,7 +373,8 @@ All endpoints follow existing Lambda patterns and extend the current API Gateway
 ```python
 # Lambda: api_get_archetypes
 Purpose: Retrieve player-available archetypes for character creation
-Query Parameters: None (public endpoint, authentication required for access control)
+Authentication: Required (Cognito JWT)
+Query Parameters: None
 Response: {
     "Archetypes": [
         {

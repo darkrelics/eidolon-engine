@@ -72,7 +72,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to return player-available archetypes.
 
-    This endpoint does not require authentication as archetype data is public.
+    This endpoint requires authentication via Cognito authorizer.
 
     Args:
         event: API Gateway event or direct invocation event
@@ -89,7 +89,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     if preflight_response:
         return preflight_response
 
-    # Note: No authentication required for this public endpoint
+    # Note: Authentication is handled by API Gateway Cognito authorizer
 
     # Call business logic
     try:

@@ -160,13 +160,13 @@ def lambda_handler(event: dict, context: object) -> dict:
         return handle_lambda_error_pascal(err, context, event)
 
     # Get parameters from query (flexible: PascalCase or camelCase)
-    character_id = get_query_parameter_flexible(event, "CharacterId", "characterId")
+    character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
     if not character_id:
-        return build_lambda_response_pascal(400, {"error": "Missing CharacterId parameter"}, event)
+        return build_lambda_response_pascal(400, {"error": "Missing CharacterID parameter"}, event)
 
-    segment_id = get_query_parameter_flexible(event, "SegmentId", "segmentId")
+    segment_id = get_query_parameter_flexible(event, "SegmentID", "segmentId")
     if not segment_id:
-        return build_lambda_response_pascal(400, {"error": "Missing SegmentId parameter"}, event)
+        return build_lambda_response_pascal(400, {"error": "Missing SegmentID parameter"}, event)
 
     # Call business logic
     try:

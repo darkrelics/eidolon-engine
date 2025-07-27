@@ -214,6 +214,71 @@ class ApiService {
     return JsonUtils.getFlexibleMap(json, 'Segment', 'segment');
   }
 
+  /// Submit a decision for a story segment
+  Future<Map<String, dynamic>> submitDecision({
+    required String characterId,
+    required String decision,
+  }) async {
+    debugPrint('ApiService: Submitting decision - characterId: $characterId, decision: $decision');
+    final headers = await _getHeaders();
+    final response = await _httpClient.post(
+      Uri.parse('$baseUrl/segments/decision'),
+      headers: headers,
+      body: jsonEncode({'CharacterID': characterId, 'Decision': decision}),
+    );
+
+    debugPrint('ApiService: Submit decision response status: ${response.statusCode}');
+    debugPrint('ApiService: Submit decision response body: ${response.body}');
+
+    if (response.statusCode == 404) {
+      throw Exception('Segment not found');
+    }
+
+    if (response.statusCode == 409) {
+      throw Exception('Decision already submitted');
+    }
+
+    if (response.statusCode != 200) {
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to submit decision');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json;
+  }
+
+  /// Get segment outcome for a completed segment
+  Future<Map<String, dynamic>> getSegmentOutcome({
+    required String characterId,
+    required String segmentId,
+  }) async {
+    debugPrint('ApiService: Getting segment outcome - characterId: $characterId, segmentId: $segmentId');
+    final headers = await _getHeaders();
+    final response = await _httpClient.get(
+      Uri.parse('$baseUrl/segments/outcome?CharacterID=$characterId&SegmentID=$segmentId'),
+      headers: headers,
+    );
+
+    debugPrint('ApiService: Get segment outcome response status: ${response.statusCode}');
+    debugPrint('ApiService: Get segment outcome response body: ${response.body}');
+
+    if (response.statusCode == 404) {
+      throw Exception('Segment not found');
+    }
+
+    if (response.statusCode == 409) {
+      throw Exception('Segment not yet completed');
+    }
+
+    if (response.statusCode != 200) {
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to get segment outcome');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json;
+  }
+
   /// Conclude a story segment
   Future<SegmentOutcome> concludeSegment({required String segmentId}) async {
     final headers = await _getHeaders();

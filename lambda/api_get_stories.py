@@ -124,10 +124,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
-    # Get character ID from query parameters (flexible: CharacterId or characterId)
-    character_id = get_query_parameter_flexible(event, "CharacterId", "characterId")
+    # Get character ID from query parameters (flexible: CharacterID or characterId)
+    character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
     if not character_id:
-        return build_lambda_response_pascal(400, {"error": "Missing CharacterId parameter"}, event)
+        return build_lambda_response_pascal(400, {"error": "Missing CharacterID parameter"}, event)
 
     # Call business logic
     try:

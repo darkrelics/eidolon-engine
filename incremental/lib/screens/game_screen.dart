@@ -496,14 +496,16 @@ class _ActionPanelState extends State<ActionPanel> {
               defaultValue: 0,
             );
             
-            final content = JsonUtils.getFlexible<String>(segmentData, 'Content', 'content') ?? 'In progress';
-            final segmentName = content.length > 50 ? content.substring(0, 50) : content;
+            final narrative = JsonUtils.getFlexible<String>(segmentData, 'Narrative', 'narrative') ?? '';
+            final shortStatus = JsonUtils.getFlexible<String>(segmentData, 'ShortStatus', 'shortStatus') ?? 'In progress';
+            final segmentName = narrative.isNotEmpty ? 
+              (narrative.length > 50 ? narrative.substring(0, 50) : narrative) : shortStatus;
             
             widget.character.storyState = {
-              'storyId': JsonUtils.getFlexible<String>(storyData, 'StoryId', 'storyId'),
+              'storyId': JsonUtils.getFlexible<String>(storyData, 'StoryID', 'storyId'),
               'storyName': JsonUtils.getFlexible<String>(storyData, 'Title', 'title'),
-              'segmentId': JsonUtils.getFlexible<String>(segmentData, 'SegmentId', 'segmentId'),
-              'segmentType': JsonUtils.getFlexible<String>(segmentData, 'Type', 'type'),
+              'segmentId': JsonUtils.getFlexible<String>(segmentData, 'SegmentID', 'segmentId'),
+              'segmentType': JsonUtils.getFlexible<String>(segmentData, 'SegmentType', 'segmentType'),
               'segmentName': segmentName,
               'timeRemaining': JsonUtils.getFlexible<int>(segmentData, 'TimeRemaining', 'timeRemaining'),
               'totalSegments': JsonUtils.getFlexible<int>(storyData, 'TotalSegments', 'totalSegments'),
@@ -1170,7 +1172,7 @@ class _ActionPanelState extends State<ActionPanel> {
       final result = await _apiService.abandonStory(widget.character.id);
       
       // Check if abandonment was successful
-      if (result['abandoned'] == true) {
+      if (result['Abandoned'] == true) {
         // Clear local story state
         setState(() {
           widget.character.storyState = null;
