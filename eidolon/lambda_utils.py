@@ -132,6 +132,6 @@ def invoke_process_segments_batch(function_name: str, segments: list) -> dict:
 
     invoke_lambda_async(function_name, payload)
 
-    # Since async invocation doesn't return results immediately, 
+    # Since async invocation doesn't return results immediately,
     # we assume success if no exception was raised
     return {"processed": len(segments), "failed": 0}

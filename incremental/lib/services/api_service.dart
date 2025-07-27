@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/character.dart';
 import '../models/segment_outcome.dart';
+import '../utils/json_utils.dart';
 import 'auth_service.dart';
 
 /// Character info for listing
@@ -69,7 +70,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/characters'),
       headers: headers,
-      body: jsonEncode({'characterName': name, 'archetypeName': archetype}),
+      body: jsonEncode({'CharacterName': name, 'ArchetypeName': archetype}),
     );
 
     debugPrint(
@@ -83,7 +84,12 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return json['characterId'] as String;
+    return JsonUtils.getFlexibleRequired<String>(
+      json,
+      'CharacterId',
+      'characterId',
+      defaultValue: '',
+    );
   }
 
   /// Delete a character
@@ -91,7 +97,7 @@ class ApiService {
     debugPrint('ApiService: Deleting character - id: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.delete(
-      Uri.parse('$baseUrl/character?characterId=$characterId'),
+      Uri.parse('$baseUrl/character?CharacterId=$characterId'),
       headers: headers,
     );
 
@@ -110,7 +116,7 @@ class ApiService {
   Future<Character?> getCharacterById(String characterId) async {
     debugPrint('ApiService: Getting character by ID: $characterId');
     final headers = await _getHeaders();
-    final uri = Uri.parse('$baseUrl/character?characterId=$characterId');
+    final uri = Uri.parse('$baseUrl/character?CharacterId=$characterId');
     debugPrint('ApiService: Request URI: $uri');
 
     final response = await _httpClient.get(uri, headers: headers);
@@ -129,7 +135,8 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return Character.fromJson(json['character'] as Map<String, dynamic>);
+    final characterData = JsonUtils.getFlexibleMap(json, 'Character', 'character');
+    return Character.fromJson(characterData);
   }
 
   /// List all characters for the player
@@ -159,7 +166,11 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final characterList = (json['characters'] as List)
+    final characterList = JsonUtils.getFlexibleList<dynamic>(
+      json,
+      'Characters',
+      'characters',
+    )
         .map((char) => CharacterInfo.fromJson(char as Map<String, dynamic>))
         .toList();
 
@@ -179,7 +190,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/stories/start'),
       headers: headers,
-      body: jsonEncode({'characterId': characterId, 'storyId': storyId}),
+      body: jsonEncode({'CharacterId': characterId, 'StoryId': storyId}),
     );
 
     debugPrint('ApiService: Start story response status: ${response.statusCode}');
@@ -199,7 +210,7 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return json['segment'] as Map<String, dynamic>;
+    return JsonUtils.getFlexibleMap(json, 'Segment', 'segment');
   }
 
   /// Conclude a story segment
@@ -208,7 +219,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/segment/conclude'),
       headers: headers,
-      body: jsonEncode({'segmentId': segmentId}),
+      body: jsonEncode({'SegmentId': segmentId}),
     );
 
     if (response.statusCode != 200) {
@@ -216,7 +227,8 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return SegmentOutcome.fromJson(json['outcome'] as Map<String, dynamic>);
+    final outcomeData = JsonUtils.getFlexibleMap(json, 'Outcome', 'outcome');
+    return SegmentOutcome.fromJson(outcomeData);
   }
 
   /// Abandon current story run
@@ -224,7 +236,7 @@ class ApiService {
     debugPrint('ApiService: Abandoning story for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/stories/abandon?characterId=$characterId'),
+      Uri.parse('$baseUrl/stories/abandon?CharacterId=$characterId'),
       headers: headers,
     );
 
@@ -253,7 +265,8 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return Character.fromJson(json['character'] as Map<String, dynamic>);
+    final characterData = JsonUtils.getFlexibleMap(json, 'Character', 'character');
+    return Character.fromJson(characterData);
   }
 
   /// Get available stories for a character
@@ -261,7 +274,7 @@ class ApiService {
     debugPrint('ApiService: Getting stories for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/stories?characterId=$characterId'),
+      Uri.parse('$baseUrl/stories?CharacterId=$characterId'),
       headers: headers,
     );
 
@@ -273,7 +286,11 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final stories = json['stories'] as List<dynamic>;
+    final stories = JsonUtils.getFlexibleList<dynamic>(
+      json,
+      'Stories',
+      'stories',
+    );
     return stories
         .map((s) => StoryMetadata.fromJson(s as Map<String, dynamic>))
         .toList();
@@ -286,7 +303,7 @@ class ApiService {
     debugPrint('ApiService: Getting current story for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/stories/current?characterId=$characterId'),
+      Uri.parse('$baseUrl/stories/current?CharacterId=$characterId'),
       headers: headers,
     );
 
@@ -325,7 +342,11 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final archetypes = (json['archetypes'] as List)
+    final archetypes = JsonUtils.getFlexibleList<dynamic>(
+      json,
+      'Archetypes',
+      'archetypes',
+    )
         .map((a) => ArchetypeInfo.fromJson(a as Map<String, dynamic>))
         .toList();
 
@@ -385,13 +406,48 @@ class StoryMetadata {
 
   factory StoryMetadata.fromJson(Map<String, dynamic> json) {
     return StoryMetadata(
-      storyId: json['storyId'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String,
-      type: json['type'] as String,
-      available: json['available'] as bool,
-      cooldownRemaining: json['cooldownRemaining'] as int,
-      estimatedDuration: json['estimatedDuration'] as int,
+      storyId: JsonUtils.getFlexibleRequired<String>(
+        json,
+        'StoryId',
+        'storyId',
+        defaultValue: '',
+      ),
+      title: JsonUtils.getFlexibleRequired<String>(
+        json,
+        'Title',
+        'title',
+        defaultValue: '',
+      ),
+      description: JsonUtils.getFlexibleRequired<String>(
+        json,
+        'Description',
+        'description',
+        defaultValue: '',
+      ),
+      type: JsonUtils.getFlexibleRequired<String>(
+        json,
+        'Type',
+        'type',
+        defaultValue: '',
+      ),
+      available: JsonUtils.getFlexibleRequired<bool>(
+        json,
+        'Available',
+        'available',
+        defaultValue: false,
+      ),
+      cooldownRemaining: JsonUtils.getFlexibleRequired<int>(
+        json,
+        'CooldownRemaining',
+        'cooldownRemaining',
+        defaultValue: 0,
+      ),
+      estimatedDuration: JsonUtils.getFlexibleRequired<int>(
+        json,
+        'EstimatedDuration',
+        'estimatedDuration',
+        defaultValue: 0,
+      ),
     );
   }
 }

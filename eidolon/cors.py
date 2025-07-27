@@ -92,20 +92,17 @@ class CorsHandler:
         # No origins configured - use wildcard without credentials
         if not self.allowed_origins:
             return "*", False
-        
+
         # Origin is in allowed list
         if self.is_origin_allowed(origin):
             return origin, self.allow_credentials
-        
+
         # Single origin configured - use as default
         if len(self.allowed_origins) == 1:
             return self.allowed_origins[0], self.allow_credentials
-        
+
         # Multiple origins configured but request origin not allowed
-        logger.warning(
-            "Origin not in allowed list", 
-            extra={"origin": origin, "allowed_origins": self.allowed_origins}
-        )
+        logger.warning("Origin not in allowed list", extra={"origin": origin, "allowed_origins": self.allowed_origins})
         return None, False
 
     def get_cors_headers(self, event: dict) -> dict:
@@ -120,17 +117,17 @@ class CorsHandler:
         """
         # Start with base headers
         cors_headers = self.get_base_cors_headers()
-        
+
         # Extract and validate origin
         origin = self.extract_origin(event)
         allowed_origin, allow_credentials = self.get_allowed_origin_header(origin)
-        
+
         # Set origin header if allowed
         if allowed_origin:
             cors_headers["Access-Control-Allow-Origin"] = allowed_origin
             if allow_credentials:
                 cors_headers["Access-Control-Allow-Credentials"] = "true"
-        
+
         return cors_headers
 
     def handle_preflight(self, event: dict) -> dict:

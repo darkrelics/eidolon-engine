@@ -201,7 +201,7 @@ def validate_character_ownership(character: dict, player_id: str) -> None:
     """
     character_owner = character.get("PlayerID")
     character_id = character.get("CharacterID")
-    
+
     if character_owner != player_id:
         logger.warning(
             "Character ownership mismatch",
@@ -217,7 +217,7 @@ def validate_character_ownership(character: dict, player_id: str) -> None:
 def get_character_with_ownership(character_id: str, player_id: str) -> dict:
     """
     Get character by ID and verify ownership.
-    
+
     This function combines get_character and validate_character_ownership
     for backward compatibility.
 
@@ -444,10 +444,10 @@ def remove_character_from_player_list(player_id: str, character_name: str) -> di
             - error: str - Error message if removal failed
     """
     result = {"removed": False, "error": None}
-    
+
     if not player_id or not character_name:
         return result
-        
+
     try:
         dynamo.update_item(
             TableName.PLAYERS,
@@ -471,7 +471,7 @@ def remove_character_from_player_list(player_id: str, character_name: str) -> di
                 extra={"error": str(err), "character_name": character_name},
             )
             result["error"] = f"Failed to remove character from player list: {str(err)}"
-            
+
     return result
 
 
@@ -488,22 +488,22 @@ def delete_character_items(character: dict) -> dict:
             - errors: list - List of error messages
     """
     result = {"deleted_count": 0, "errors": []}
-    
+
     # Collect all item IDs
     item_ids = []
-    
+
     # Inventory items
     inventory = character.get("Inventory", {})
     for slot, item_id in inventory.items():
         if item_id:
             item_ids.append(item_id)
-    
+
     # Equipped items
     if character.get("LeftHandID"):
         item_ids.append(character["LeftHandID"])
     if character.get("RightHandID"):
         item_ids.append(character["RightHandID"])
-    
+
     # Delete each item
     for item_id in item_ids:
         try:
@@ -515,7 +515,7 @@ def delete_character_items(character: dict) -> dict:
                 extra={"item_id": item_id, "error": str(err)},
             )
             result["errors"].append(f"Failed to delete item {item_id}: {str(err)}")
-            
+
     return result
 
 
@@ -532,7 +532,7 @@ def delete_character_active_segments(character_id: str) -> dict:
             - errors: list - List of error messages
     """
     result = {"deleted_count": 0, "errors": []}
-    
+
     try:
         active_segments = dynamo.query(
             TableName.ACTIVE_SEGMENTS,
@@ -564,7 +564,7 @@ def delete_character_active_segments(character_id: str) -> dict:
             extra={"error": str(err), "character_id": character_id},
         )
         result["errors"].append(f"Failed to query active segments: {str(err)}")
-        
+
     return result
 
 
@@ -581,7 +581,7 @@ def delete_character_history(character_id: str) -> dict:
             - errors: list - List of error messages
     """
     result = {"deleted_count": 0, "errors": []}
-    
+
     try:
         history_records = dynamo.query(
             TableName.HISTORY,
@@ -609,7 +609,7 @@ def delete_character_history(character_id: str) -> dict:
             extra={"error": str(err), "character_id": character_id},
         )
         result["errors"].append(f"Failed to query history: {str(err)}")
-        
+
     return result
 
 
@@ -626,7 +626,7 @@ def delete_character_record(character_id: str) -> dict:
             - error: str - Error message if deletion failed
     """
     result = {"deleted": False, "error": None}
-    
+
     try:
         dynamo.delete_item(TableName.CHARACTERS, Key={"CharacterID": character_id})
         result["deleted"] = True
@@ -637,7 +637,7 @@ def delete_character_record(character_id: str) -> dict:
             extra={"error": str(err), "character_id": character_id},
         )
         result["error"] = f"Failed to delete character: {str(err)}"
-        
+
     return result
 
 
@@ -679,7 +679,7 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
         if remove_from_player_list:
             player_id = character.get("PlayerID")
             character_name = character.get("CharacterName")
-            
+
             if player_id and character_name:
                 player_result = remove_character_from_player_list(player_id, character_name)
                 results["character_removed_from_player"] = player_result["removed"]
@@ -752,7 +752,7 @@ def check_character_name_availability(character_name: str) -> bool:
         "Checking character name availability",
         extra={"character_name": character_name},
     )
-    
+
     try:
         existing_chars = dynamo.query(
             TableName.CHARACTERS,
@@ -761,16 +761,16 @@ def check_character_name_availability(character_name: str) -> bool:
             ExpressionAttributeValues={":name": character_name},
             Limit=1,
         )
-        
+
         if existing_chars:
             logger.info(
                 "Character name already taken",
                 extra={"character_name": character_name},
             )
             return False
-            
+
         return True
-        
+
     except ClientError as err:
         logger.error(
             "Error checking character name availability",
@@ -786,7 +786,7 @@ def build_character_record(
     archetype_name: str,
     archetype_data: dict,
     inventory: dict,
-    timestamp: str
+    timestamp: str,
 ) -> dict:
     """
     Build a character record with all required fields.
@@ -856,20 +856,12 @@ def create_character_record(character_item: dict) -> bool:
     except ClientError as err:
         logger.error(
             "Failed to create character record",
-            extra={
-                "character_name": character_item["CharacterName"],
-                "error": str(err)
-            },
+            extra={"character_name": character_item["CharacterName"], "error": str(err)},
         )
         raise RuntimeError(f"Failed to create character record: {str(err)}")
 
 
-def add_character_to_player_list(
-    player_id: str,
-    character_name: str,
-    character_id: str,
-    timestamp: str
-) -> bool:
+def add_character_to_player_list(player_id: str, character_name: str, character_id: str, timestamp: str) -> bool:
     """
     Add character to player's character list.
 
@@ -890,7 +882,7 @@ def add_character_to_player_list(
         "Dead": False,
         "GameMode": "Incremental",
     }
-    
+
     logger.info(
         "Adding character to player list",
         extra={
@@ -899,7 +891,7 @@ def add_character_to_player_list(
             "character_info": character_info,
         },
     )
-    
+
     try:
         dynamo.update_item(
             TableName.PLAYERS,
@@ -933,10 +925,7 @@ def rollback_character_creation(character_id: str) -> None:
     """
     try:
         dynamo.delete_item(TableName.CHARACTERS, Key={"CharacterID": character_id})
-        logger.info(
-            "Successfully rolled back character creation",
-            extra={"character_id": character_id}
-        )
+        logger.info("Successfully rolled back character creation", extra={"character_id": character_id})
     except ClientError as err:
         logger.error(
             "Failed to rollback character creation",
@@ -1006,7 +995,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         archetype_name=archetype_name,
         archetype_data=archetype_data,
         inventory=inventory,
-        timestamp=timestamp
+        timestamp=timestamp,
     )
 
     # Create character record
@@ -1019,10 +1008,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     # Add to player's character list
     try:
         add_character_to_player_list(
-            player_id=player_id,
-            character_name=character_name,
-            character_id=character_id,
-            timestamp=timestamp
+            player_id=player_id, character_name=character_name, character_id=character_id, timestamp=timestamp
         )
     except RuntimeError as err:
         # Rollback character creation
@@ -1038,9 +1024,5 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
             "archetype": archetype_name,
         },
     )
-    
-    return {
-        "character_id": character_id,
-        "character_name": character_name,
-        "archetype": archetype_name
-    }
+
+    return {"character_id": character_id, "character_name": character_name, "archetype": archetype_name}

@@ -121,6 +121,31 @@ def handle_lambda_error(err: Exception, context: object, event: dict, custom_mes
     return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
 
 
+def handle_lambda_error_pascal(err: Exception, context: object, event: dict, custom_message=None) -> dict:
+    """
+    Handle Lambda function errors with proper logging and CORS response using PascalCase.
+
+    Args:
+        err: Exception that occurred
+        context: Lambda context
+        event: Lambda event dict
+        custom_message: Optional custom error message
+
+    Returns:
+        Error response with CORS headers and PascalCase fields
+    """
+    logger.error(
+        custom_message or "Unexpected error in lambda_handler",
+        extra={"error": str(err)},
+        exc_info=True,
+    )
+    logger.info("Lambda response", extra={"status_code": 500})
+
+    from eidolon.responses import error_response_pascal
+
+    return cors_handler.add_cors_headers(error_response_pascal("Internal server error", status_code=500), event)
+
+
 def build_lambda_response(status_code: int, body: dict, event: dict) -> dict:
     """
     Build Lambda response with proper formatting and CORS headers.
@@ -134,4 +159,33 @@ def build_lambda_response(status_code: int, body: dict, event: dict) -> dict:
         Formatted response with CORS headers
     """
     logger.info("Lambda response", extra={"status_code": status_code})
+    return cors_handler.add_cors_headers(create_response(status_code, body), event)
+
+
+def build_lambda_response_pascal(status_code: int, body: dict, event: dict) -> dict:
+    """
+    Build Lambda response with PascalCase field names and CORS headers.
+
+    This function automatically converts error responses to use PascalCase.
+
+    Args:
+        status_code: HTTP status code
+        body: Response body dict
+        event: Lambda event dict
+
+    Returns:
+        Formatted response with CORS headers and PascalCase field names
+    """
+    logger.info("Lambda response", extra={"status_code": status_code})
+
+    # If it's an error response with lowercase "error" key, convert to PascalCase
+    if "error" in body and status_code >= 400:
+        from eidolon.responses import error_response_pascal
+
+        error_msg = body["error"]
+        # Remove the error key and treat rest as details
+        details = {k: v for k, v in body.items() if k != "error"}
+        response = error_response_pascal(error_msg, status_code, details if details else None)
+        return cors_handler.add_cors_headers(response, event)
+
     return cors_handler.add_cors_headers(create_response(status_code, body), event)

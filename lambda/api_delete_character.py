@@ -13,9 +13,9 @@ from eidolon.character import validate_character_ownership
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event
 from eidolon.player import validate_player_exists
-from eidolon.requests import get_query_parameter
-from eidolon.utilities import build_lambda_response
-from eidolon.utilities import handle_lambda_error
+from eidolon.requests import get_query_parameter_flexible
+from eidolon.utilities import build_lambda_response_pascal
+from eidolon.utilities import handle_lambda_error_pascal
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_uuid
@@ -106,43 +106,42 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id = extract_player_id_from_event(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)})
-        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+        return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
-    
+        return handle_lambda_error_pascal(err, context, event)
+
     # Validate player exists
     try:
         if not validate_player_exists(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+            return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
     except RuntimeError as err:
         logger.error("Failed to validate player", extra={"error": str(err)})
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)
 
-    # Get character ID from query parameters
-    try:
-        character_id = get_query_parameter(event, "characterId", required=True)
-    except ValueError as err:
-        return build_lambda_response(400, {"error": str(err)}, event)
+    # Get character ID from query parameters (flexible: CharacterId or characterId)
+    character_id = get_query_parameter_flexible(event, "CharacterId", "characterId")
+    if not character_id:
+        return build_lambda_response_pascal(400, {"error": "Missing CharacterId parameter"}, event)
 
     # Validate character ID format
     if not validate_uuid(character_id):  # type: ignore
-        return build_lambda_response(400, {"error": "Invalid character ID format"}, event)
+        return build_lambda_response_pascal(400, {"error": "Invalid character ID format"}, event)
 
     # Call business logic
     try:
         result = handle_character_deletion(player_id, character_id)  # type: ignore
-        return build_lambda_response(
+        return build_lambda_response_pascal(
             200,
             {
-                "message": "Character deleted successfully",
-                "characterId": character_id,
-                "characterName": result["character_name"],
-                "itemsDeleted": result["deletion_result"]["items_deleted"],
-                "activeSegmentsDeleted": result["deletion_result"]["active_segments_deleted"],
-                "historyDeleted": result["deletion_result"]["history_deleted"],
+                "Message": "Character deleted successfully",
+                "CharacterId": character_id,
+                "CharacterName": result["character_name"],
+                "ItemsDeleted": result["deletion_result"]["items_deleted"],
+                "ActiveSegmentsDeleted": result["deletion_result"]["active_segments_deleted"],
+                "HistoryDeleted": result["deletion_result"]["history_deleted"],
             },
             event,
         )
@@ -152,7 +151,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             "Character deletion validation failed",
             extra={"character_id": character_id, "player_id": player_id, "error": str(err)},
         )
-        return build_lambda_response(404, {"error": "Character not found or access denied"}, event)
+        return build_lambda_response_pascal(404, {"error": "Character not found or access denied"}, event)
     except RuntimeError as err:
         # Database or deletion failures
         logger.error(
@@ -160,6 +159,6 @@ def lambda_handler(event: dict, context: object) -> dict:
             extra={"character_id": character_id, "error": str(err)},
             exc_info=True,
         )
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)

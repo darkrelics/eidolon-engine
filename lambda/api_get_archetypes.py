@@ -10,8 +10,8 @@ Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 
 from eidolon.archetypes import get_all_player_archetypes
 from eidolon.logger import get_logger
-from eidolon.utilities import build_lambda_response
-from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import build_lambda_response_pascal
+from eidolon.utilities import handle_lambda_error_pascal
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
 
@@ -23,16 +23,9 @@ try:
     logger.info("Loading player archetypes cache at module initialization")
     player_archetypes_cache = get_all_player_archetypes()
     cache_loaded = True
-    logger.info(
-        "Player archetypes cache loaded successfully",
-        extra={"count": len(player_archetypes_cache)}
-    )
+    logger.info("Player archetypes cache loaded successfully", extra={"count": len(player_archetypes_cache)})
 except Exception as err:
-    logger.error(
-        "Failed to load archetypes cache at module initialization",
-        extra={"error": str(err)},
-        exc_info=True
-    )
+    logger.error("Failed to load archetypes cache at module initialization", extra={"error": str(err)}, exc_info=True)
     player_archetypes_cache = []
     cache_loaded = False
 
@@ -97,21 +90,21 @@ def lambda_handler(event: dict, context: object) -> dict:
         return preflight_response
 
     # Note: No authentication required for this public endpoint
-    
+
     # Call business logic
     try:
         result = handle_get_archetypes()
-        return build_lambda_response(
+        return build_lambda_response_pascal(
             200,
             {
-                "archetypes": result["archetypes"],
-                "count": result["count"],
+                "Archetypes": result["archetypes"],
+                "Count": result["count"],
             },
             event,
         )
     except RuntimeError as err:
         # Database or system failures
         logger.error("Failed to load archetypes", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response(500, {"error": "Failed to load archetypes"}, event)
+        return build_lambda_response_pascal(500, {"error": "Failed to load archetypes"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)

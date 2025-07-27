@@ -36,7 +36,7 @@ These functions handle character operations for both Portal and Incremental inte
 
 - `api_list_characters.py` - List all characters for a player
 - `api_add_character.py` - Create new character with bloom filter name validation
-- `api_get_character.py` - Get character details including active story segments (enriches inventory with item details, normalizes attribute/skill keys to lowercase)
+- `api_get_character.py` - Get character details including active story segments (enriches inventory with item details)
 - `api_delete_character.py` - Delete a character by ID
 - `api_get_archetypes.py` - Get available character archetypes
 
@@ -335,15 +335,18 @@ Some Lambda functions apply transformations to data before returning responses:
 
 The `api_get_character.py` function applies several transformations for client compatibility:
 
-1. **Attribute/Skill Key Normalization**: All attribute and skill keys are converted to lowercase
-   - Database: `{"Strength": 4, "Agility": 2}`
-   - Response: `{"strength": 4, "agility": 2}`
-
-2. **Inventory Enrichment**: Raw inventory UUIDs are enriched with item details
+1. **Inventory Enrichment**: Raw inventory UUIDs are enriched with item details
    - Database: `{"RightHand": "sword-uuid"}`
    - Response adds: `{"InventoryDetails": {"RightHand": {"itemId": "sword-uuid", "name": "Iron Sword", ...}}}`
 
-3. **Decimal to Float Conversion**: DynamoDB Decimal types are converted to standard floats
+2. **Decimal to Float Conversion**: DynamoDB Decimal types are converted to standard floats
    - Applied to all numeric fields in the response
+
+### JSON Field Naming Convention
+
+All JSON responses use PascalCase for field names to maintain consistency with DynamoDB field names:
+- Database field: `CharacterName`
+- API response: `CharacterName` (not transformed)
+- This applies to all fields: `CharacterID`, `AvailableStories`, `Attributes`, etc.
 
 These transformations ensure Flutter clients receive data in a consistent, usable format while maintaining the original database structure.

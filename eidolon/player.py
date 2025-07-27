@@ -27,7 +27,7 @@ def create_player_record(user_uuid: str, email: str) -> None:
     """
     from datetime import datetime
     from datetime import timezone
-    
+
     if not user_uuid or not email:
         raise ValueError("Missing required user attributes (sub or email)")
 
@@ -224,12 +224,12 @@ def get_formatted_character_list(player_id: str) -> list:
     """
     player_data = get_player_data(player_id)
     character_list = player_data.get("CharacterList", {})
-    
+
     logger.info(
         "Player data retrieved",
         extra={"player_id": player_id, "character_count": len(character_list)},
     )
-    
+
     # Build character list with proper field names
     characters = []
     for char_name, char_info in character_list.items():
@@ -239,7 +239,7 @@ def get_formatted_character_list(player_id: str) -> list:
             "Dead": char_info.get("Dead", False),
         }
         characters.append(char_data)
-        
+
         logger.debug(
             "Processing character",
             extra={
@@ -248,10 +248,10 @@ def get_formatted_character_list(player_id: str) -> list:
                 "is_dead": char_data["Dead"],
             },
         )
-    
+
     # Sort by name for consistent ordering
     characters.sort(key=lambda x: x["CharacterName"])
-    
+
     logger.info(
         "Character list prepared successfully",
         extra={
@@ -260,7 +260,7 @@ def get_formatted_character_list(player_id: str) -> list:
             "character_names": [c.get("CharacterName", "") for c in characters],
         },
     )
-    
+
     return characters
 
 
@@ -300,7 +300,7 @@ def delete_all_characters_for_player(player_id: str) -> dict:
         RuntimeError: If critical database operations fail
     """
     from eidolon.character import delete_character
-    
+
     results = {
         "characters_deleted": 0,
         "items_deleted": 0,

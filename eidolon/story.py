@@ -360,12 +360,12 @@ def get_completed_segment_for_character(character_id: str, player_id: str, segme
         raise ValueError("Completed segment not found")
 
     active_segment = items[0]
-    
+
     # Double-check segment is completed
     status = active_segment.get("Status")
     if status != "completed":
         raise ValueError("Segment not yet completed")
-    
+
     return active_segment
 
 
@@ -417,7 +417,7 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
 
     try:
         history = get_story_history(character_id, story_id)
-        
+
         if not history:
             return 0  # Never played
 
@@ -509,6 +509,7 @@ def get_stories_for_character(character_id: str, available_story_ids: list) -> l
 
     # Need character data for prerequisite checking
     from eidolon.character import get_character
+
     character = get_character(character_id)
 
     for story_id in available_story_ids:
@@ -527,15 +528,15 @@ def get_stories_for_character(character_id: str, available_story_ids: list) -> l
             if cooldown == -1:  # Permanently unavailable
                 continue
 
-            # Format story for response
+            # Format story for response with PascalCase
             formatted_story = {
-                "storyId": story_id,
-                "title": story_data.get("Title", "Unknown Story"),
-                "description": story_data.get("Description", ""),
-                "type": story_type,
-                "available": cooldown == 0,
-                "cooldownRemaining": max(0, cooldown) if cooldown is not None else 0,
-                "estimatedDuration": int(story_data.get("EstimatedDuration", 0)),
+                "StoryId": story_id,
+                "Title": story_data.get("Title", "Unknown Story"),
+                "Description": story_data.get("Description", ""),
+                "Type": story_type,
+                "Available": cooldown == 0,
+                "CooldownRemaining": max(0, cooldown) if cooldown is not None else 0,
+                "EstimatedDuration": int(story_data.get("EstimatedDuration", 0)),
             }
 
             stories.append(formatted_story)
@@ -544,7 +545,7 @@ def get_stories_for_character(character_id: str, available_story_ids: list) -> l
                 extra={
                     "story_id": story_id,
                     "story_type": story_type,
-                    "available": formatted_story["available"],
+                    "available": formatted_story["Available"],
                     "cooldown": cooldown,
                 },
             )
@@ -594,13 +595,13 @@ def get_story_and_first_segment(story_id: str) -> tuple:
     """
     # Get story metadata
     story = get_story_metadata(story_id)
-    
+
     # Get first segment
     first_segment_id = story.get("FirstSegmentID")
     if not first_segment_id:
         logger.error("Story has no first segment", extra={"story_id": story_id})
         raise ValueError("Story configuration error")
-    
+
     first_segment = get_story_segment(story_id, first_segment_id)
     return story, first_segment
 
@@ -624,7 +625,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
     """
     import time
     import uuid
-    
+
     segment_id = segment.get("SegmentID")
     segment_type = segment.get("SegmentType", "narrative")
     duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
@@ -739,7 +740,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         RuntimeError: If database operations fail
     """
     from eidolon.character import get_character, validate_character_ownership
-    
+
     # Get character and verify ownership
     character = get_character(character_id)
     validate_character_ownership(character, player_id)
@@ -775,9 +776,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
             )
         else:
             # Story not in list anymore (race condition), just update the mode
-            update_expression = (
-                "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
-            )
+            update_expression = "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
 
         dynamo.update_item(
             TableName.CHARACTERS,
@@ -814,7 +813,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
                 extra={"character_id": character_id},
             )
             raise ValueError("Character state conflict")
-        
+
         logger.error(
             "Failed to update character state",
             extra={
@@ -840,11 +839,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         },
     )
 
-    return {
-        "active_segment": active_segment,
-        "segment": first_segment,
-        "story": story
-    }
+    return {"active_segment": active_segment, "segment": first_segment, "story": story}
 
 
 def format_segment_response(segment: dict, active_segment: dict) -> dict:
@@ -859,33 +854,33 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         Formatted response data
     """
     import time
-    
+
     segment_type = segment.get("SegmentType", "narrative")
     time_remaining = max(0, active_segment["EndTime"] - int(time.time()))
 
     response = {
-        "segmentId": active_segment["ActiveSegmentID"],
-        "storyId": active_segment["StoryID"],
-        "type": segment_type,
-        "timeRemaining": time_remaining,
+        "SegmentId": active_segment["ActiveSegmentID"],
+        "StoryId": active_segment["StoryID"],
+        "Type": segment_type,
+        "TimeRemaining": time_remaining,
     }
 
     # Add type-specific fields based on documented schema
     if segment_type == "decision":
         # DecisionText contains the choice presented
-        response["content"] = segment.get("DecisionText", "")
+        response["Content"] = segment.get("DecisionText", "")
         # Format options from DecisionOptions map
         decision_options = segment.get("DecisionOptions", {})
         options = []
         for option_id, _ in decision_options.items():
-            options.append({"id": option_id, "text": option_id.replace("-", " ").title()})  # Format option ID as display text
-        response["options"] = options
+            options.append({"Id": option_id, "Text": option_id.replace("-", " ").title()})  # Format option ID as display text
+        response["Options"] = options
     elif segment_type == "narrative":
-        response["shortStatus"] = segment.get("ShortStatus", "Progressing through the story...")
-        response["narrative"] = ""
+        response["ShortStatus"] = segment.get("ShortStatus", "Progressing through the story...")
+        response["Narrative"] = ""
     elif segment_type == "combat":
-        response["shortStatus"] = segment.get("ShortStatus", "Engaged in combat!")
-        response["opponentId"] = segment.get("Combat", {}).get("opponentId")
+        response["ShortStatus"] = segment.get("ShortStatus", "Engaged in combat!")
+        response["OpponentId"] = segment.get("Combat", {}).get("opponentId")
 
     return response
 
@@ -966,7 +961,7 @@ def validate_decision_option(active_segment: dict, decision_id: str) -> None:
     decision_options = active_segment.get("DecisionOptions", {})
     if decision_id not in decision_options:
         raise ValueError("Invalid decision option")
-    
+
     # Check if decision was already made
     if active_segment.get("Decision"):
         logger.warning(
@@ -1007,7 +1002,7 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
         updated_segment = dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
         if not updated_segment:
             raise RuntimeError("Failed to retrieve updated segment")
-        
+
         return updated_segment
     except ClientError as err:
         logger.error(
@@ -1034,25 +1029,25 @@ def get_next_segment_time(active_segment: dict, decision_id: str) -> int:
         Next segment completion time (0 if no next segment)
     """
     import time
-    
+
     decision_options = active_segment.get("DecisionOptions", {})
     next_segment_id = decision_options.get(decision_id)
-    
+
     if not next_segment_id:
         return 0
-    
+
     try:
         # Get next segment to calculate completion time
         story_id = active_segment.get("StoryID")
         if not story_id:
             return 0
         next_segment = get_story_segment(story_id, next_segment_id)
-        
+
         # Next segment will start after processing completes
         # Add segment duration to get completion time
         duration = int(next_segment.get("SegmentDuration", 300))
         return int(time.time()) + duration
-        
+
     except (ValueError, RuntimeError) as err:
         logger.error(
             "Failed to get next segment",
@@ -1084,7 +1079,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     """
     from eidolon.character import get_character, validate_character_ownership
     from eidolon.validation import validate_uuid
-    
+
     # Validate character ID format
     if not validate_uuid(character_id):
         raise ValueError("Invalid character ID format")
@@ -1113,13 +1108,13 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     # Calculate next segment time if applicable
     next_segment_time = get_next_segment_time(active_segment, decision_id)
 
-    # Build response per documentation
+    # Build response per documentation with PascalCase
     response_data: dict = {
-        "accepted": True,
+        "Accepted": True,
     }
-    
+
     if next_segment_time > 0:
-        response_data["nextSegmentTime"] = next_segment_time
+        response_data["NextSegmentTime"] = next_segment_time
 
     logger.info(
         "Decision submitted successfully",

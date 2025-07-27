@@ -12,18 +12,16 @@ from eidolon.character import validate_character_ownership
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event
 from eidolon.player import validate_player_exists
-from eidolon.requests import get_query_parameter
+from eidolon.requests import get_query_parameter_flexible
 from eidolon.story import get_stories_for_character
-from eidolon.utilities import build_lambda_response
-from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import build_lambda_response_pascal
+from eidolon.utilities import handle_lambda_error_pascal
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
-
-
 
 
 def get_available_stories_business_logic(character_id: str, player_id: str) -> dict:
@@ -69,18 +67,18 @@ def get_available_stories_business_logic(character_id: str, player_id: str) -> d
     stories = get_stories_for_character(character_id, available_story_ids)
 
     # Sort stories by availability and title
-    stories.sort(key=lambda s: (not s["available"], s["title"]))
+    stories.sort(key=lambda s: (not s["Available"], s["Title"]))
 
     logger.info(
         "Stories retrieved successfully",
         extra={
             "character_id": character_id,
             "total_stories": len(stories),
-            "available_stories": sum(1 for s in stories if s["available"]),
+            "available_stories": sum(1 for s in stories if s["Available"]),
         },
     )
 
-    return {"stories": stories}
+    return {"Stories": stories}
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -111,33 +109,30 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id = extract_player_id_from_event(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)})
-        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+        return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
-    
+        return handle_lambda_error_pascal(err, context, event)
+
     # Validate player exists
     try:
         if not validate_player_exists(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+            return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
     except RuntimeError as err:
         logger.error("Failed to validate player", extra={"error": str(err)})
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)
 
-    # Get character ID from query parameters
-    try:
-        character_id = get_query_parameter(event, "characterId", required=True)
-    except ValueError as err:
-        return build_lambda_response(400, {"error": str(err)}, event)
-    except Exception as err:
-        return handle_lambda_error(err, context, event)
+    # Get character ID from query parameters (flexible: CharacterId or characterId)
+    character_id = get_query_parameter_flexible(event, "CharacterId", "characterId")
+    if not character_id:
+        return build_lambda_response_pascal(400, {"error": "Missing CharacterId parameter"}, event)
 
     # Call business logic
     try:
         response_data = get_available_stories_business_logic(character_id, player_id)  # type: ignore
-        return build_lambda_response(200, response_data, event)
+        return build_lambda_response_pascal(200, response_data, event)
     except ValueError as err:
         logger.warning(
             "Invalid request",
@@ -145,18 +140,18 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         error_msg = str(err)
         if "not found" in error_msg.lower():
-            return build_lambda_response(
+            return build_lambda_response_pascal(
                 404,
                 {"error": "Character not found"},
                 event,
             )
         elif "mode" in error_msg.lower():
-            return build_lambda_response(
+            return build_lambda_response_pascal(
                 409,
                 {"error": error_msg},
                 event,
             )
-        return build_lambda_response(
+        return build_lambda_response_pascal(
             400,
             {"error": error_msg},
             event,
@@ -166,10 +161,10 @@ def lambda_handler(event: dict, context: object) -> dict:
             "Failed to get stories",
             extra={"character_id": character_id, "error": str(err)},
         )
-        return build_lambda_response(
+        return build_lambda_response_pascal(
             500,
             {"error": "Internal server error"},
             event,
         )
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)

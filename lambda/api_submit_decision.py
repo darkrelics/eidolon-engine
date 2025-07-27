@@ -10,18 +10,16 @@ Updates the active segment with the player's choice and returns the next segment
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event
 from eidolon.player import validate_player_exists
-from eidolon.requests import get_required_field
+from eidolon.requests import get_required_field_flexible
 from eidolon.requests import parse_json_body
 from eidolon.story import submit_decision_for_character
-from eidolon.utilities import build_lambda_response
-from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import build_lambda_response_pascal
+from eidolon.utilities import handle_lambda_error_pascal
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
 
 # Configure logging
 logger = get_logger(__name__)
-
-
 
 
 def submit_decision_business_logic(character_id: str, decision_id: str, player_id: str) -> dict:
@@ -68,35 +66,35 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id = extract_player_id_from_event(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)})
-        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+        return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
-    
+        return handle_lambda_error_pascal(err, context, event)
+
     # Validate player exists
     try:
         if not validate_player_exists(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+            return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
     except RuntimeError as err:
         logger.error("Failed to validate player", extra={"error": str(err)})
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)
 
-    # Parse request body
+    # Parse request body with flexible field names
     try:
         body = parse_json_body(event)
-        character_id = get_required_field(body, "characterId")
-        decision_id = get_required_field(body, "decision")
+        character_id = get_required_field_flexible(body, "CharacterId", "characterId")
+        decision_id = get_required_field_flexible(body, "Decision", "decision")
     except ValueError as err:
-        return build_lambda_response(400, {"error": str(err)}, event)
+        return build_lambda_response_pascal(400, {"error": str(err)}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)
 
     # Call business logic
     try:
         response_data = submit_decision_business_logic(character_id, decision_id, player_id)  # type: ignore
-        return build_lambda_response(200, response_data, event)
+        return build_lambda_response_pascal(200, response_data, event)
     except ValueError as err:
         logger.warning(
             "Invalid request",
@@ -104,15 +102,15 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         error_msg = str(err)
         if "not found" in error_msg.lower():
-            return build_lambda_response(404, {"error": error_msg}, event)
+            return build_lambda_response_pascal(404, {"error": error_msg}, event)
         elif "already submitted" in error_msg.lower():
-            return build_lambda_response(409, {"error": error_msg}, event)
-        return build_lambda_response(400, {"error": error_msg}, event)
+            return build_lambda_response_pascal(409, {"error": error_msg}, event)
+        return build_lambda_response_pascal(400, {"error": error_msg}, event)
     except RuntimeError as err:
         logger.error(
             "Failed to submit decision",
             extra={"character_id": character_id, "decision_id": decision_id, "error": str(err)},
         )
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)

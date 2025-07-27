@@ -45,8 +45,8 @@ def poll_and_process_segments_business_logic() -> dict:
     if ENABLE_BATCH_PROCESSING and len(completed_segments) > 0:
         # Process segments in batches
         for i in range(0, len(completed_segments), SEGMENT_BATCH_SIZE):
-            batch = completed_segments[i:i + SEGMENT_BATCH_SIZE]
-            
+            batch = completed_segments[i : i + SEGMENT_BATCH_SIZE]
+
             try:
                 result = invoke_process_segments_batch(PROCESS_SEGMENT_FUNCTION, batch)
                 processed_count += result["processed"]
@@ -57,7 +57,7 @@ def poll_and_process_segments_business_logic() -> dict:
                     "Batch processing failed, falling back to individual processing",
                     extra={"batch_size": len(batch), "error": str(err)},
                 )
-                
+
                 for segment in batch:
                     try:
                         invoke_process_segment(PROCESS_SEGMENT_FUNCTION, segment)
@@ -128,10 +128,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         result = poll_and_process_segments_business_logic()
 
         # Build response
-        response_data = {
-            "message": "Segment polling completed",
-            **result
-        }
+        response_data = {"message": "Segment polling completed", **result}
 
         logger.info("Lambda response", extra={"status_code": 200})
         return build_lambda_response(200, response_data, event)

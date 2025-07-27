@@ -4,6 +4,7 @@ import '../models/character.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../utils/error_handler.dart';
+import '../utils/json_utils.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -485,16 +486,27 @@ class _ActionPanelState extends State<ActionPanel> {
           
           // Update character's story state if we have current story
           if (currentStory != null) {
-            _timeRemaining = currentStory['segment']['timeRemaining'] ?? 0;
+            final storyData = JsonUtils.getFlexibleMap(currentStory, 'Story', 'story');
+            final segmentData = JsonUtils.getFlexibleMap(currentStory, 'Segment', 'segment');
+            _timeRemaining = JsonUtils.getFlexibleRequired<int>(
+              segmentData,
+              'TimeRemaining',
+              'timeRemaining',
+              defaultValue: 0,
+            );
+            
+            final content = JsonUtils.getFlexible<String>(segmentData, 'Content', 'content') ?? 'In progress';
+            final segmentName = content.length > 50 ? content.substring(0, 50) : content;
+            
             widget.character.storyState = {
-              'storyId': currentStory['story']['storyId'],
-              'storyName': currentStory['story']['title'],
-              'segmentId': currentStory['segment']['segmentId'],
-              'segmentType': currentStory['segment']['type'],
-              'segmentName': currentStory['segment']['content']?.substring(0, 50) ?? 'In progress',
-              'timeRemaining': currentStory['segment']['timeRemaining'],
-              'totalSegments': currentStory['story']['totalSegments'],
-              'currentSegmentIndex': currentStory['story']['currentSegmentIndex'],
+              'storyId': JsonUtils.getFlexible<String>(storyData, 'StoryId', 'storyId'),
+              'storyName': JsonUtils.getFlexible<String>(storyData, 'Title', 'title'),
+              'segmentId': JsonUtils.getFlexible<String>(segmentData, 'SegmentId', 'segmentId'),
+              'segmentType': JsonUtils.getFlexible<String>(segmentData, 'Type', 'type'),
+              'segmentName': segmentName,
+              'timeRemaining': JsonUtils.getFlexible<int>(segmentData, 'TimeRemaining', 'timeRemaining'),
+              'totalSegments': JsonUtils.getFlexible<int>(storyData, 'TotalSegments', 'totalSegments'),
+              'currentSegmentIndex': JsonUtils.getFlexible<int>(storyData, 'CurrentSegmentIndex', 'currentSegmentIndex'),
             };
           } else {
             widget.character.storyState = null;
@@ -556,13 +568,32 @@ class _ActionPanelState extends State<ActionPanel> {
 
   Widget _buildActiveStory(ThemeData theme) {
     final storyData = _currentStoryData;
-    final story = storyData?['story'] ?? {};
-    final segment = storyData?['segment'] ?? {};
-    final segmentType = segment['type'] ?? 'narrative';
+    final Map<String, dynamic> story = storyData != null 
+        ? JsonUtils.getFlexibleMap(storyData, 'Story', 'story') 
+        : <String, dynamic>{};
+    final Map<String, dynamic> segment = storyData != null 
+        ? JsonUtils.getFlexibleMap(storyData, 'Segment', 'segment') 
+        : <String, dynamic>{};
+    final segmentType = JsonUtils.getFlexibleRequired<String>(
+      segment,
+      'Type',
+      'type',
+      defaultValue: 'narrative',
+    );
     
     // Calculate progress
-    final currentIndex = story['currentSegmentIndex'] ?? 0;
-    final totalSegments = story['totalSegments'] ?? 1;
+    final currentIndex = JsonUtils.getFlexibleRequired<int>(
+      story,
+      'CurrentSegmentIndex',
+      'currentSegmentIndex',
+      defaultValue: 0,
+    );
+    final totalSegments = JsonUtils.getFlexibleRequired<int>(
+      story,
+      'TotalSegments',
+      'totalSegments',
+      defaultValue: 1,
+    );
     final progress = totalSegments > 0 ? (currentIndex + 1) / totalSegments : 0.0;
     
     return SingleChildScrollView(
@@ -580,11 +611,24 @@ class _ActionPanelState extends State<ActionPanel> {
                     children: [
                       Expanded(
                         child: Text(
-                          story['title'] ?? 'Unknown Story',
+                          JsonUtils.getFlexibleRequired<String>(
+                            story,
+                            'Title',
+                            'title',
+                            defaultValue: 'Unknown Story',
+                          ),
                           style: theme.textTheme.titleLarge,
                         ),
                       ),
-                      _buildStoryTypeChip(story['type'] ?? 'unknown', theme),
+                      _buildStoryTypeChip(
+                        JsonUtils.getFlexibleRequired<String>(
+                          story,
+                          'Type',
+                          'type',
+                          defaultValue: 'unknown',
+                        ),
+                        theme,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -646,15 +690,20 @@ class _ActionPanelState extends State<ActionPanel> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    segment['content'] ?? 'Loading segment content...',
+                    JsonUtils.getFlexibleRequired<String>(
+                      segment,
+                      'Content',
+                      'content',
+                      defaultValue: 'Loading segment content...',
+                    ),
                     style: theme.textTheme.bodyLarge,
                   ),
-                  if (segment['imageUrl'] != null) ...[
+                  if (JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl') != null) ...[
                     const SizedBox(height: 16),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: Image.network(
-                        segment['imageUrl'],
+                        JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl')!,
                         fit: BoxFit.cover,
                         height: 200,
                         width: double.infinity,
@@ -676,15 +725,15 @@ class _ActionPanelState extends State<ActionPanel> {
           ),
 
           // Decision Options (if decision segment)
-          if (segmentType == 'decision' && segment['options'] != null) ...[
+          if (segmentType == 'decision' && JsonUtils.getFlexible(segment, 'Options', 'options') != null) ...[
             const SizedBox(height: 16),
-            _buildDecisionOptions(segment['options'], theme),
+            _buildDecisionOptions(JsonUtils.getFlexible(segment, 'Options', 'options'), theme),
           ],
 
           // Challenge Results (if narrative segment)
-          if (segmentType == 'narrative' && segment['challengeResults'] != null) ...[
+          if (segmentType == 'narrative' && JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults') != null) ...[
             const SizedBox(height: 16),
-            _buildChallengeResults(segment['challengeResults'], theme),
+            _buildChallengeResults(JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults'), theme),
           ],
 
           // Action Buttons
@@ -844,7 +893,14 @@ class _ActionPanelState extends State<ActionPanel> {
                   minimumSize: const Size(double.infinity, 48),
                 ),
                 child: Text(
-                  option.toString(),
+                  option is Map<String, dynamic> 
+                    ? JsonUtils.getFlexibleRequired<String>(
+                        option,
+                        'Text',
+                        'text',
+                        defaultValue: option.toString(),
+                      )
+                    : option.toString(),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -1166,10 +1222,10 @@ class _ActionPanelState extends State<ActionPanel> {
         widget.character.storyState = {
           'storyId': story.storyId,
           'storyName': story.title,
-          'segmentId': segment['segmentId'],
-          'segmentType': segment['type'],
-          'segmentName': segment['shortStatus'] ?? 'In progress',
-          'timeRemaining': segment['timeRemaining'],
+          'segmentId': JsonUtils.getFlexible<String>(segment, 'SegmentId', 'segmentId'),
+          'segmentType': JsonUtils.getFlexible<String>(segment, 'Type', 'type'),
+          'segmentName': JsonUtils.getFlexible<String>(segment, 'ShortStatus', 'shortStatus') ?? 'In progress',
+          'timeRemaining': JsonUtils.getFlexible<int>(segment, 'TimeRemaining', 'timeRemaining'),
         };
         _showStoryList = false;
       });

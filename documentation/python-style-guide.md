@@ -489,6 +489,26 @@ class CombatSystem:
     pass
 ```
 
+### JSON Field Names
+
+Use PascalCase for all JSON field names to maintain consistency with DynamoDB field names:
+
+```python
+# Good - PascalCase for JSON fields
+response = {
+    "CharacterID": character_id,
+    "CharacterName": character_name,
+    "AvailableStories": story_list,
+    "Attributes": {"Strength": 4, "Agility": 2}
+}
+
+# Bad - don't use camelCase or snake_case
+response = {
+    "characterId": character_id,  # Wrong
+    "character_name": character_name,  # Wrong
+}
+```
+
 ## Code Organization
 
 ### Module Length

@@ -5,9 +5,9 @@ from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event
 from eidolon.player import validate_player_exists
-from eidolon.requests import get_required_field, parse_json_body
-from eidolon.utilities import build_lambda_response
-from eidolon.utilities import handle_lambda_error
+from eidolon.requests import get_required_field_flexible, get_optional_field_flexible, parse_json_body
+from eidolon.utilities import build_lambda_response_pascal
+from eidolon.utilities import handle_lambda_error_pascal
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_character_name
@@ -117,37 +117,36 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id = extract_player_id_from_event(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)})
-        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+        return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
-    
+        return handle_lambda_error_pascal(err, context, event)
+
     # Validate player exists
     try:
         if not validate_player_exists(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+            return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
     except RuntimeError as err:
         logger.error("Failed to validate player", extra={"error": str(err)})
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)
 
     # Parse request body
     try:
         body = parse_json_body(event)
     except ValueError as err:
-        return build_lambda_response(400, {"error": str(err)}, event)
+        return build_lambda_response_pascal(400, {"error": str(err)}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)
 
-    # Extract and validate required fields
+    # Extract and validate required fields with flexible casing
     try:
-        character_name = get_required_field(body, "characterName")
+        character_name = get_required_field_flexible(body, "CharacterName", "characterName")
     except ValueError as err:
-        return build_lambda_response(400, {"error": str(err)}, event)
+        return build_lambda_response_pascal(400, {"error": str(err)}, event)
 
-    character_name = character_name.strip()
-    archetype_name = body.get("archetypeName", "").strip()
+    archetype_name = get_optional_field_flexible(body, "ArchetypeName", "archetypeName", default="")
 
     logger.info(
         "Character creation request received",
@@ -160,14 +159,14 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Call business logic
     try:
-        result = handle_character_creation(player_id, character_name, archetype_name)
-        return build_lambda_response(
+        result = handle_character_creation(player_id, character_name, archetype_name)  # type: ignore
+        return build_lambda_response_pascal(
             201,
             {
-                "characterId": result["character_id"],
-                "characterName": character_name,
-                "archetype": result["archetype_name"],
-                "message": "Character created successfully",
+                "CharacterId": result["character_id"],
+                "CharacterName": character_name,
+                "Archetype": result["archetype_name"],
+                "Message": "Character created successfully",
             },
             event,
         )
@@ -175,10 +174,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Business logic errors (invalid name, limit reached, name taken)
         logger.warning("Character creation validation failed", extra={"error": str(err)})
         status_code = 409 if str(err) == "Character name is already taken" else 400
-        return build_lambda_response(status_code, {"error": str(err)}, event)
+        return build_lambda_response_pascal(status_code, {"error": str(err)}, event)
     except RuntimeError as err:
         # System errors (database failures, etc.)
         logger.error("Character creation system error", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return handle_lambda_error_pascal(err, context, event)
