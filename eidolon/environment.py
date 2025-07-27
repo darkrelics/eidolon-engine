@@ -48,3 +48,8 @@ CORS_ALLOWED_HEADERS = os.environ.get(
 )
 CORS_ALLOWED_METHODS = os.environ.get("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS")
 CORS_MAX_AGE = os.environ.get("CORS_MAX_AGE", "86400")  # 24 hours default
+
+# Segment Processing Configuration
+SEGMENT_BATCH_SIZE = int(os.environ.get("SEGMENT_BATCH_SIZE", "10"))
+ENABLE_BATCH_PROCESSING = os.environ.get("ENABLE_BATCH_PROCESSING", "true").lower() == "true"
+MAX_SEGMENTS_PER_POLL = int(os.environ.get("MAX_SEGMENTS_PER_POLL", "50"))

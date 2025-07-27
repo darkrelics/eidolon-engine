@@ -7,14 +7,11 @@ Lambda function to list character names for an authenticated player.
 Returns only character names and death status from the player table.
 """
 
-from botocore.exceptions import ClientError
-
-from eidolon.dynamo import dynamo
-from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.utilities import build_lambda_response
 from eidolon.player import extract_player_id_from_event
+from eidolon.player import get_formatted_character_list
 from eidolon.player import validate_player_exists
+from eidolon.utilities import build_lambda_response
 from eidolon.utilities import handle_lambda_error
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
@@ -37,58 +34,8 @@ def list_characters_business_logic(player_id: str) -> dict:
         ValueError: If player not found
         RuntimeError: If database operations fail
     """
-    # Get player data from players table
-    try:
-        player_data = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
-    except ClientError as err:
-        logger.error(
-            "Failed to get player data",
-            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to retrieve player data: {str(err)}")
-
-    if not player_data:
-        logger.warning("Player not found in database", extra={"player_id": player_id})
-        raise ValueError("Player not found")
-
-    character_list = player_data.get("CharacterList", {})
-    logger.info(
-        "Player data retrieved",
-        extra={"player_id": player_id, "character_count": len(character_list)},
-    )
-
-    # Build character list with proper field names
-    characters = []
-    for char_name, char_info in character_list.items():
-        char_data = {
-            "CharacterName": char_name,
-            "CharacterID": char_info.get("UUID", ""),
-            "Dead": char_info.get("Dead", False),
-        }
-        characters.append(char_data)
-
-        logger.debug(
-            "Processing character",
-            extra={
-                "character_name": char_name,
-                "character_id": char_data["CharacterID"],
-                "is_dead": char_data["Dead"],
-            },
-        )
-
-    # Sort by name for consistent ordering
-    characters.sort(key=lambda x: x["CharacterName"])
-
-    logger.info(
-        "Character list prepared successfully",
-        extra={
-            "player_id": player_id,
-            "character_count": len(characters),
-            "character_names": [c.get("CharacterName", "") for c in characters],
-        },
-    )
-
+    # Get formatted character list from eidolon library
+    characters = get_formatted_character_list(player_id)
     return {"characters": characters}
 
 
@@ -156,7 +103,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         return build_lambda_response(
             500,
-            {"error": "Failed to retrieve character list"},
+            {"error": "Internal server error"},
             event,
         )
     except Exception as err:

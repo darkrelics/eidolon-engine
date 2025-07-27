@@ -10,12 +10,14 @@ Ensures the character belongs to the player before deletion.
 from eidolon.character import delete_character
 from eidolon.character import get_character
 from eidolon.character import validate_character_ownership
-from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event
+from eidolon.player import validate_player_exists
 from eidolon.requests import get_query_parameter
-from eidolon.responses import create_response
-from eidolon.responses import error_response
+from eidolon.utilities import build_lambda_response
+from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import handle_preflight_if_options
+from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_uuid
 
 # Configure logging
@@ -91,87 +93,73 @@ def lambda_handler(event: dict, context: object) -> dict:
     Returns:
         API Gateway response
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    # Handle preflight requests
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
+    # Extract player ID from JWT
     try:
-        # Extract player ID from Cognito authorizer
-        try:
-            player_id = extract_player_id_from_event(event)
-        except ValueError as err:
-            logger.error("Authentication failed", extra={"error": str(err)})
-            return cors_handler.add_cors_headers(error_response("Unauthorized", status_code=401), event)
-
-        # Get character ID from query parameters
-        try:
-            character_id = get_query_parameter(event, "characterId", required=True)
-        except ValueError as err:
-            return cors_handler.add_cors_headers(error_response(str(err), status_code=400), event)
-
-        # Validate character ID format
-        if not validate_uuid(character_id):  # type: ignore
-            return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
-
-        # Handle character deletion through business logic function
-        try:
-            result = handle_character_deletion(player_id, character_id)  # type: ignore
-
-            # Return success response with details
-            logger.info("Lambda response", extra={"status_code": 200})
-            return cors_handler.add_cors_headers(
-                create_response(
-                    200,
-                    {
-                        "message": "Character deleted successfully",
-                        "characterId": character_id,
-                        "characterName": result["character_name"],
-                        "itemsDeleted": result["deletion_result"]["items_deleted"],
-                        "activeSegmentsDeleted": result["deletion_result"]["active_segments_deleted"],
-                        "historyDeleted": result["deletion_result"]["history_deleted"],
-                    },
-                ),
-                event,
-            )
-        except ValueError as err:
-            # Character not found or not owned by player
-            logger.warning(
-                "Character deletion validation failed",
-                extra={"character_id": character_id, "player_id": player_id, "error": str(err)},
-            )
-            return cors_handler.add_cors_headers(
-                error_response("Character not found or access denied", status_code=404),
-                event,
-            )
-        except RuntimeError as err:
-            # Database or deletion failures
-            logger.error(
-                "Character deletion system error",
-                extra={"character_id": character_id, "error": str(err)},
-                exc_info=True,
-            )
-            return cors_handler.add_cors_headers(
-                error_response(str(err), status_code=500),
-                event,
-            )
-
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response(401, {"error": "Unauthorized"}, event)
     except Exception as err:
+        return handle_lambda_error(err, context, event)
+    
+    # Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+
+    # Get character ID from query parameters
+    try:
+        character_id = get_query_parameter(event, "characterId", required=True)
+    except ValueError as err:
+        return build_lambda_response(400, {"error": str(err)}, event)
+
+    # Validate character ID format
+    if not validate_uuid(character_id):  # type: ignore
+        return build_lambda_response(400, {"error": "Invalid character ID format"}, event)
+
+    # Call business logic
+    try:
+        result = handle_character_deletion(player_id, character_id)  # type: ignore
+        return build_lambda_response(
+            200,
+            {
+                "message": "Character deleted successfully",
+                "characterId": character_id,
+                "characterName": result["character_name"],
+                "itemsDeleted": result["deletion_result"]["items_deleted"],
+                "activeSegmentsDeleted": result["deletion_result"]["active_segments_deleted"],
+                "historyDeleted": result["deletion_result"]["history_deleted"],
+            },
+            event,
+        )
+    except ValueError as err:
+        # Character not found or not owned by player
+        logger.warning(
+            "Character deletion validation failed",
+            extra={"character_id": character_id, "player_id": player_id, "error": str(err)},
+        )
+        return build_lambda_response(404, {"error": "Character not found or access denied"}, event)
+    except RuntimeError as err:
+        # Database or deletion failures
         logger.error(
-            "Unexpected error in lambda_handler",
-            extra={"error": str(err)},
+            "Character deletion system error",
+            extra={"character_id": character_id, "error": str(err)},
             exc_info=True,
         )
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)

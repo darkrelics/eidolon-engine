@@ -6,16 +6,15 @@ Copyright 2024-2025 Jason E. Robinson
 
 import time
 
-from botocore.exceptions import ClientError
-
 from eidolon.character import get_character
 from eidolon.character import validate_character_ownership
-from eidolon.dynamo import dynamo
-from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event
 from eidolon.player import validate_player_exists
 from eidolon.requests import get_query_parameter
+from eidolon.story import get_active_story_segment_with_player_check
+from eidolon.story import get_story_metadata
+from eidolon.story import get_story_segment
 from eidolon.utilities import build_lambda_response
 from eidolon.utilities import handle_lambda_error
 from eidolon.utilities import handle_preflight_if_options
@@ -48,63 +47,16 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
     character = get_character(character_id)
     validate_character_ownership(character, player_id)
 
-    try:
-        # Get active segment for character using GSI query
-        items = dynamo.query(
-            TableName.ACTIVE_SEGMENTS,
-            IndexName="CharacterID-index",
-            KeyConditionExpression="CharacterID = :cid",
-            FilterExpression="PlayerID = :pid AND #status = :status",
-            ExpressionAttributeNames={"#status": "Status"},
-            ExpressionAttributeValues={
-                ":cid": character_id,
-                ":pid": player_id,
-                ":status": "active",
-            },
-        )
-    except ClientError as err:
-        logger.error(
-            "Failed to query active segments",
-            extra={
-                "error": str(err),
-                "character_id": character_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to query active segments: {str(err)}")
-
-    if not items:
-        logger.info("No active story found", extra={"character_id": character_id})
-        raise ValueError("No active story found")
-
-    # Get the active segment (should only be one)
-    active_segment = items[0]
+    # Get active segment for character with player check
+    active_segment = get_active_story_segment_with_player_check(character_id, player_id)
     story_id = active_segment.get("StoryID")
     segment_id = active_segment.get("SegmentID")
 
     # Get story metadata
-    try:
-        story_item = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
-        if not story_item:
-            logger.error("Story not found", extra={"story_id": story_id})
-            raise RuntimeError("Story data missing")
-    except ClientError as err:
-        logger.error("Failed to get story", extra={"error": str(err), "story_id": story_id}, exc_info=True)
-        raise RuntimeError(f"Failed to get story: {str(err)}")
+    story_item = get_story_metadata(story_id) # type: ignore
 
     # Get the current segment from Segments table
-    try:
-        current_segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id})
-        if not current_segment:
-            logger.error(
-                "Segment not found",
-                extra={"segment_id": segment_id, "story_id": story_id},
-            )
-            raise RuntimeError("Segment data missing")
-    except ClientError as err:
-        logger.error("Failed to get segment", extra={"error": str(err), "segment_id": segment_id}, exc_info=True)
-        raise RuntimeError(f"Failed to get segment: {str(err)}")
+    current_segment = get_story_segment(story_id, segment_id) # type: ignore
 
     total_segments = story_item.get("TotalSegments", 1)
     current_segment_index = current_segment.get("SegmentIndex", 0)
@@ -219,15 +171,15 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Get character ID from query parameters
     try:
-        character_id, param_error = get_query_parameter(event, "characterId", required=True)  # type: ignore
-        if param_error:
-            return build_lambda_response(400, {"error": param_error}, event)
+        character_id = get_query_parameter(event, "characterId", required=True)
+    except ValueError as err:
+        return build_lambda_response(400, {"error": str(err)}, event)
     except Exception as err:
         return handle_lambda_error(err, context, event)
 
     # Call business logic
     try:
-        response_data = get_current_story_business_logic(character_id, player_id)
+        response_data = get_current_story_business_logic(character_id, player_id)  # type: ignore
         return build_lambda_response(200, response_data, event)
     except ValueError as err:
         logger.warning(
@@ -258,7 +210,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         return build_lambda_response(
             500,
-            {"error": "Failed to retrieve story data"},
+            {"error": "Internal server error"},
             event,
         )
     except Exception as err:

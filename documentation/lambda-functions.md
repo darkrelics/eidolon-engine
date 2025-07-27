@@ -60,12 +60,23 @@ Additional Lambda functions will be added for Incremental-specific features:
 Lambda functions import shared modules from the `eidolon/` directory:
 
 ```python
-from eidolon.cors import apply_cors
-from eidolon.dynamo import DynamoOperations
+from eidolon.cors import cors_handler
+from eidolon.dynamo import dynamo
 from eidolon.logger import get_logger
-from eidolon.requests import get_query_parameter, parse_json_body
-from eidolon.responses import success_response, error_response
+from eidolon.requests import get_query_parameter, parse_json_body, get_required_field
+from eidolon.responses import create_response, error_response
+from eidolon.utilities import build_lambda_response, log_lambda_invocation, handle_preflight_if_options, handle_lambda_error
+from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.validation import validate_uuid
 ```
+
+### Key Modules:
+
+- **eidolon.utilities**: Provides high-level convenience functions that wrap common patterns
+- **eidolon.cors**: Provides the `cors_handler` object for CORS management
+- **eidolon.responses**: Low-level response building functions
+- **eidolon.player**: Player authentication and validation functions
+- **eidolon.dynamo**: Database operations wrapper
 
 These modules are automatically included in the deployment package during the build process.
 
@@ -160,7 +171,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Now you can import Lambda functions and shared modules
 from lambda.api_list_characters import lambda_handler
-from eidolon.cors import apply_cors
+from eidolon.utilities import build_lambda_response
 
 # Create test event
 event = {
@@ -193,12 +204,48 @@ Each Lambda function must have a Lambda handler which handles the event, calls a
 ```python
 def lambda_handler(event: dict, context: object) -> dict:
     """Lambda entry point - handles AWS-specific concerns."""
-    # 1. Log invocation with request ID
-    # 2. Handle CORS preflight requests
+    # 1. Log invocation
+    log_lambda_invocation(context, event)
+    
+    # 2. Handle CORS preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
+    
     # 3. Extract and validate authentication
-    # 4. Parse request body or query parameters
-    # 5. Call business logic function
-    # 6. Format and return response with CORS headers
+    try:
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+    
+    # 4. Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+    
+    # 5. Parse request parameters
+    # 6. Call business logic function
+    # 7. Return response
+    try:
+        result = business_logic_function(param1, param2)
+        return build_lambda_response(200, result, event)
+    except ValueError as err:
+        logger.warning("Business logic error", extra={"error": str(err)})
+        return build_lambda_response(400, {"error": str(err)}, event)
+    except RuntimeError as err:
+        logger.error("Database error", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
 
 def business_logic_function(param1: str, param2: str) -> dict:
     """Pure business logic - testable and AWS-agnostic."""
@@ -221,19 +268,23 @@ def business_logic_function(param1: str, param2: str) -> dict:
 1. **Error Handling**: Always catch and log exceptions appropriately
 2. **Lambda Handler Exception Rule**: The `lambda_handler` function must **NEVER** raise exceptions - all errors must be caught and converted to HTTP responses
 3. **Input Validation**: Validate all inputs from API Gateway
-4. **CORS**: Use the shared `apply_cors` function for consistent CORS handling
-5. **Logging**: Use the standard Python logger for CloudWatch integration
+4. **CORS**: Use the `cors_handler` object from `eidolon.cors` for consistent CORS handling
+5. **Logging**: Use the `log_lambda_invocation` utility for consistent logging
 6. **Environment Variables**: Use environment variables for configuration
 7. **IAM Permissions**: Follow least privilege principle
-8. **Response Format**: Return consistent API Gateway response format:
+8. **Response Format**: Use `build_lambda_response` for consistent responses:
    ```python
-   return {
-       "statusCode": 200,
-       "headers": {"Content-Type": "application/json"},
-       "body": json.dumps({"key": "value"})
-   }
+   # Preferred pattern using utilities
+   return build_lambda_response(200, {"key": "value"}, event)
+   
+   # This handles CORS headers and response formatting automatically
    ```
 9. **Architecture Pattern**: Follow the handler/business logic separation pattern described above
+10. **Utility Functions**: Prefer high-level utility functions from `eidolon.utilities`:
+    - `log_lambda_invocation()` - For logging invocations
+    - `handle_preflight_if_options()` - For CORS preflight handling
+    - `build_lambda_response()` - For building responses with CORS
+    - `handle_lambda_error()` - For consistent error handling
 
 ### Critical: Lambda Handler Exception Handling
 
@@ -256,19 +307,17 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         # Your code here...
 
-        return create_response(200, {"success": True})
+        return build_lambda_response(200, {"success": True}, event)
 
     except ValueError as err:
         # Handle expected business logic errors
         logger.error("Validation error", extra={"error": str(err)})
-        return error_response(str(err), 400)
+        return build_lambda_response(400, {"error": str(err)}, event)
 
     except Exception as err:
         # CRITICAL: Catch ALL exceptions to prevent Lambda failures
-        logger.error("Unexpected error in Lambda handler",
-                    extra={"error": str(err), "type": type(err).__name__},
-                    exc_info=True)
-        return error_response("Internal server error", 500)
+        # Use handle_lambda_error for consistent error handling
+        return handle_lambda_error(err, context, event)
 ```
 
 **Why This Matters:**

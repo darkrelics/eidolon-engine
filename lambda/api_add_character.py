@@ -1,12 +1,15 @@
 """Lambda function to add a new character for the incremental game."""
 
 from eidolon.character import character_name_filter, check_character_limit, get_archetype, create_character
-from eidolon.cors import cors_handler
 from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event
+from eidolon.player import validate_player_exists
 from eidolon.requests import get_required_field, parse_json_body
-from eidolon.responses import create_response, error_response
+from eidolon.utilities import build_lambda_response
+from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import handle_preflight_if_options
+from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_character_name
 
 # Configure logging
@@ -101,93 +104,81 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
 
 def lambda_handler(event: dict, context: object) -> dict:
     """Lambda handler for incremental character creation API."""
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    # Handle preflight requests
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
+    # Extract player ID from JWT
     try:
-        # Extract player ID from Cognito authorizer
-        try:
-            player_id = extract_player_id_from_event(event)
-        except ValueError as err:
-            logger.error("Authentication failed", extra={"error": str(err)})
-            return cors_handler.add_cors_headers(error_response("Unauthorized", status_code=401), event)
-
-        # Parse request body
-        try:
-            body = parse_json_body(event)
-        except ValueError as err:
-            return cors_handler.add_cors_headers(error_response(str(err), status_code=400), event)
-
-        # Extract and validate required fields
-        try:
-            character_name = get_required_field(body, "characterName")
-        except ValueError as err:
-            return cors_handler.add_cors_headers(error_response(str(err), status_code=400), event)
-
-        character_name = character_name.strip()
-        archetype_name = body.get("archetypeName", "").strip()
-
-        logger.info(
-            "Character creation request received",
-            extra={
-                "player_id": player_id,
-                "character_name": character_name,
-                "archetype_name": archetype_name or "default",
-            },
-        )
-
-        # Handle character creation through business logic function
-        try:
-            result = handle_character_creation(player_id, character_name, archetype_name)
-
-            # Return success response
-            logger.info("Lambda response", extra={"status_code": 201})
-            return cors_handler.add_cors_headers(
-                create_response(
-                    201,
-                    {
-                        "characterId": result["character_id"],
-                        "characterName": character_name,
-                        "archetype": result["archetype_name"],
-                        "message": "Character created successfully",
-                    },
-                ),
-                event,
-            )
-        except ValueError as err:
-            # Business logic errors (invalid name, limit reached, name taken)
-            logger.error("Character creation validation failed", extra={"error": str(err)})
-            status_code = 409 if str(err) == "Character name is already taken" else 400
-            return cors_handler.add_cors_headers(
-                error_response(str(err), status_code=status_code),
-                event,
-            )
-        except RuntimeError as err:
-            # System errors (database failures, etc.)
-            logger.error("Character creation system error", extra={"error": str(err)}, exc_info=True)
-            return cors_handler.add_cors_headers(
-                error_response(str(err), status_code=500),
-                event,
-            )
-
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response(401, {"error": "Unauthorized"}, event)
     except Exception as err:
-        logger.error(
-            "Unexpected error in lambda_handler",
-            extra={"error": str(err)},
-            exc_info=True,
+        return handle_lambda_error(err, context, event)
+    
+    # Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+
+    # Parse request body
+    try:
+        body = parse_json_body(event)
+    except ValueError as err:
+        return build_lambda_response(400, {"error": str(err)}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+
+    # Extract and validate required fields
+    try:
+        character_name = get_required_field(body, "characterName")
+    except ValueError as err:
+        return build_lambda_response(400, {"error": str(err)}, event)
+
+    character_name = character_name.strip()
+    archetype_name = body.get("archetypeName", "").strip()
+
+    logger.info(
+        "Character creation request received",
+        extra={
+            "player_id": player_id,
+            "character_name": character_name,
+            "archetype_name": archetype_name or "default",
+        },
+    )
+
+    # Call business logic
+    try:
+        result = handle_character_creation(player_id, character_name, archetype_name)
+        return build_lambda_response(
+            201,
+            {
+                "characterId": result["character_id"],
+                "characterName": character_name,
+                "archetype": result["archetype_name"],
+                "message": "Character created successfully",
+            },
+            event,
         )
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+    except ValueError as err:
+        # Business logic errors (invalid name, limit reached, name taken)
+        logger.warning("Character creation validation failed", extra={"error": str(err)})
+        status_code = 409 if str(err) == "Character name is already taken" else 400
+        return build_lambda_response(status_code, {"error": str(err)}, event)
+    except RuntimeError as err:
+        # System errors (database failures, etc.)
+        logger.error("Character creation system error", extra={"error": str(err)}, exc_info=True)
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)

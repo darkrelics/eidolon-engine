@@ -9,25 +9,40 @@ Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 """
 
 from eidolon.archetypes import get_all_player_archetypes
-from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
-from eidolon.responses import create_response
-from eidolon.responses import error_response
+from eidolon.utilities import build_lambda_response
+from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import handle_preflight_if_options
+from eidolon.utilities import log_lambda_invocation
 
 # Configure logging
 logger = get_logger(__name__)
 
-# Cache for player archetypes
-player_archetypes_cache: list = []
-cache_loaded: bool = False
+# Cache for player archetypes - populated at module load
+try:
+    logger.info("Loading player archetypes cache at module initialization")
+    player_archetypes_cache = get_all_player_archetypes()
+    cache_loaded = True
+    logger.info(
+        "Player archetypes cache loaded successfully",
+        extra={"count": len(player_archetypes_cache)}
+    )
+except Exception as err:
+    logger.error(
+        "Failed to load archetypes cache at module initialization",
+        extra={"error": str(err)},
+        exc_info=True
+    )
+    player_archetypes_cache = []
+    cache_loaded = False
 
 
 def handle_get_archetypes() -> dict:
     """
     Handle the business logic for retrieving player archetypes.
 
-    This function manages caching and orchestrates the archetype retrieval
-    without performing any AWS-specific operations.
+    Returns the cached archetypes that were loaded at module initialization.
+    If the cache failed to load, attempts to load it now.
 
     Returns:
         Dict containing:
@@ -36,15 +51,16 @@ def handle_get_archetypes() -> dict:
             - count: int - Number of archetypes
 
     Raises:
-        RuntimeError: If database operations fail
+        RuntimeError: If database operations fail and cache is empty
     """
     global player_archetypes_cache, cache_loaded
 
     if cache_loaded:
-        logger.info("Returning cached player archetypes")
+        logger.info("Returning pre-loaded player archetypes cache")
         return {"success": True, "archetypes": player_archetypes_cache, "count": len(player_archetypes_cache)}
 
-    # Load archetypes from database using eidolon library
+    # Cache failed to load at module init, try again
+    logger.warning("Cache not loaded at module init, attempting to load now")
     try:
         player_archetypes = get_all_player_archetypes()
 
@@ -52,9 +68,10 @@ def handle_get_archetypes() -> dict:
         player_archetypes_cache = player_archetypes
         cache_loaded = True
 
+        logger.info("Successfully loaded archetypes cache on demand")
         return {"success": True, "archetypes": player_archetypes, "count": len(player_archetypes)}
     except RuntimeError as err:
-        logger.error("Failed to load archetypes", extra={"error": str(err)})
+        logger.error("Failed to load archetypes on demand", extra={"error": str(err)})
         raise
 
 
@@ -71,48 +88,30 @@ def lambda_handler(event: dict, context: object) -> dict:
     Returns:
         API Gateway response with player archetypes
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    # Handle preflight requests
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
+    # Note: No authentication required for this public endpoint
+    
+    # Call business logic
     try:
-        # Note: No authentication required for this public endpoint
-
-        # Handle archetype retrieval through business logic function
         result = handle_get_archetypes()
-
-        # Return successful response
-        logger.info("Lambda response", extra={"status_code": 200})
-        return cors_handler.add_cors_headers(
-            create_response(
-                200,
-                {
-                    "archetypes": result["archetypes"],
-                    "count": result["count"],
-                },
-            ),
+        return build_lambda_response(
+            200,
+            {
+                "archetypes": result["archetypes"],
+                "count": result["count"],
+            },
             event,
         )
-
     except RuntimeError as err:
         # Database or system failures
         logger.error("Failed to load archetypes", extra={"error": str(err)}, exc_info=True)
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Failed to load archetypes", status_code=500), event)
+        return build_lambda_response(500, {"error": "Failed to load archetypes"}, event)
     except Exception as err:
-        # Catch ALL exceptions to prevent Lambda failures
-        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return handle_lambda_error(err, context, event)

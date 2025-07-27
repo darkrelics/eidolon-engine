@@ -10,12 +10,15 @@ Updates character state, marks active segments as abandoned, and updates history
 from eidolon.character import get_character
 from eidolon.character import reset_character_game_mode
 from eidolon.character import validate_character_ownership
-from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event
+from eidolon.player import validate_player_exists
 from eidolon.requests import get_query_parameter
-from eidolon.responses import create_response, error_response
 from eidolon.story import add_story_to_abandoned_list, get_active_story_segment, mark_segment_as_abandoned, record_story_abandonment
+from eidolon.utilities import build_lambda_response
+from eidolon.utilities import handle_lambda_error
+from eidolon.utilities import handle_preflight_if_options
+from eidolon.utilities import log_lambda_invocation
 from eidolon.validation import validate_uuid
 
 logger = get_logger(__name__)
@@ -97,44 +100,52 @@ def lambda_handler(event: dict, context: object) -> dict:
     Returns:
         API Gateway Lambda proxy response
     """
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
+    # Extract player ID from JWT
     try:
         player_id = extract_player_id_from_event(event)
-        logger.info("Player authenticated", extra={"player_id": player_id})
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+    
+    # Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
 
-        character_id = get_query_parameter(event, "characterId")
-        if not character_id:
-            return cors_handler.add_cors_headers(error_response("Missing characterId parameter", status_code=400), event)
+    # Get character ID from query parameters
+    character_id = get_query_parameter(event, "characterId")
+    if not character_id:
+        return build_lambda_response(400, {"error": "Missing characterId parameter"}, event)
 
-        if not validate_uuid(character_id):
-            return cors_handler.add_cors_headers(error_response("Invalid character ID format", status_code=400), event)
+    if not validate_uuid(character_id):
+        return build_lambda_response(400, {"error": "Invalid character ID format"}, event)
 
+    # Call business logic
+    try:
         logger.info("Abandoning story", extra={"character_id": character_id})
         result = abandon_story_business_logic(character_id, player_id)
-
-        logger.info("Lambda response", extra={"status_code": 200})
-        return cors_handler.add_cors_headers(create_response(200, result), event)
-
+        return build_lambda_response(200, result, event)
     except ValueError as err:
-        logger.error("Business logic error", extra={"error": str(err)})
-        return cors_handler.add_cors_headers(error_response(str(err), status_code=400), event)
+        logger.warning("Business logic error", extra={"error": str(err)})
+        return build_lambda_response(400, {"error": str(err)}, event)
     except RuntimeError as err:
         logger.error("Database error", extra={"error": str(err)}, exc_info=True)
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return handle_lambda_error(err, context, event)

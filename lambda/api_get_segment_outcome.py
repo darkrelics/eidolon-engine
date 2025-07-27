@@ -7,17 +7,15 @@ Lambda function to get the outcome of a completed segment.
 Returns the narrative text and any rewards/effects for the outcome.
 """
 
-from botocore.exceptions import ClientError
-
 from eidolon.character import get_character
 from eidolon.character import validate_character_ownership
-from eidolon.dynamo import dynamo
-from eidolon.dynamo import TableName
 from eidolon.logger import get_logger
-from eidolon.requests import get_query_parameter
-from eidolon.utilities import build_lambda_response
 from eidolon.player import extract_player_id_from_event
 from eidolon.player import validate_player_exists
+from eidolon.requests import get_query_parameter
+from eidolon.story import get_completed_segment_for_character
+from eidolon.story import get_story_segment
+from eidolon.utilities import build_lambda_response
 from eidolon.utilities import handle_lambda_error
 from eidolon.utilities import handle_preflight_if_options
 from eidolon.utilities import log_lambda_invocation
@@ -54,70 +52,19 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
     character = get_character(character_id)
     validate_character_ownership(character, player_id)
 
-    # Query for the completed segment
-    try:
-        items = dynamo.query(
-            TableName.ACTIVE_SEGMENTS,
-            IndexName="CharacterID-index",
-            KeyConditionExpression="CharacterID = :cid",
-            FilterExpression="PlayerID = :pid AND SegmentID = :sid AND #status = :status",
-            ExpressionAttributeNames={"#status": "Status"},
-            ExpressionAttributeValues={
-                ":cid": character_id,
-                ":pid": player_id,
-                ":sid": segment_id,
-                ":status": "completed",
-            },
-        )
-    except ClientError as err:
-        logger.error(
-            "Failed to query active segments",
-            extra={
-                "error": str(err),
-                "character_id": character_id,
-                "segment_id": segment_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to query segments: {str(err)}")
-
-    if not items:
-        logger.warning(
-            "Completed segment not found",
-            extra={"character_id": character_id, "segment_id": segment_id},
-        )
-        raise ValueError("Completed segment not found")
-
-    active_segment = items[0]
+    # Get the completed segment
+    active_segment = get_completed_segment_for_character(character_id, player_id, segment_id)
     active_segment_id = active_segment.get("ActiveSegmentID")
-
-    # Double-check segment is completed
-    status = active_segment.get("Status")
-    if status != "completed":
-        logger.warning(
-            "Segment not completed",
-            extra={"active_segment_id": active_segment_id, "status": status},
-        )
-        raise ValueError("Segment not yet completed")
-
     segment_type = active_segment.get("SegmentType")
     story_id = active_segment.get("StoryID")
 
     # Get segment definition from Segments table
-    try:
-        segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id})
-        if not segment:
-            logger.error("Segment not found", extra={"story_id": story_id, "segment_id": segment_id})
-            raise RuntimeError("Segment definition not found")
-    except ClientError as err:
-        logger.error("Failed to get segment", extra={"error": str(err), "segment_id": segment_id}, exc_info=True)
-        raise RuntimeError(f"Failed to get segment: {str(err)}")
+    segment = get_story_segment(story_id, segment_id)  # type: ignore
 
     # Build outcome data based on segment type
     outcome_data = {
         "segmentType": segment_type,
-        "status": status,
+        "status": "completed",  # We already verified it's completed
     }
 
     if segment_type == "decision":
@@ -213,17 +160,17 @@ def lambda_handler(event: dict, context: object) -> dict:
         return handle_lambda_error(err, context, event)
 
     # Get parameters from query
-    character_id, char_error = get_query_parameter(event, "characterId", required=True)  # type: ignore
-    if char_error:
-        return build_lambda_response(400, {"error": char_error}, event)
-
-    segment_id, seg_error = get_query_parameter(event, "segmentId", required=True)  # type: ignore
-    if seg_error:
-        return build_lambda_response(400, {"error": seg_error}, event)
+    try:
+        character_id = get_query_parameter(event, "characterId", required=True)
+        segment_id = get_query_parameter(event, "segmentId", required=True)
+    except ValueError as err:
+        return build_lambda_response(400, {"error": str(err)}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
 
     # Call business logic
     try:
-        outcome_data = get_segment_outcome_business_logic(character_id, segment_id, player_id)
+        outcome_data = get_segment_outcome_business_logic(character_id, segment_id, player_id)  # type: ignore
 
         # Build response per API documentation
         response_data = {
@@ -264,7 +211,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         return build_lambda_response(
             500,
-            {"error": "Failed to retrieve outcome data"},
+            {"error": "Internal server error"},
             event,
         )
 
