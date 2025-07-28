@@ -11,10 +11,12 @@ from aws_cdk import aws_events as events
 from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_lambda_event_sources as lambda_event_sources
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as route53_targets
 from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_sqs as sqs
 from constructs import Construct
 
 # Note: Using route53_targets.ApiGatewayDomain directly now
@@ -185,9 +187,14 @@ class LambdaStack(cdk.Stack):
         self.domain_name = config.get("domain_name", "darkrelics.net")
         self.hosted_zone_id = config.get("hosted_zone_id", "")
         self.lambda_execution_role_arn = config.get("lambda_execution_role_arn", "")
+        self.lambda_ssm_sqs_execution_role_arn = config.get("lambda_ssm_sqs_execution_role_arn", "")
+        self.segment_queue_arn = config.get("segment_queue_arn", "")
+        self.segment_queue_url = config.get("segment_queue_url", "")
+        self.ssm_poller_state_parameter_name = config.get("ssm_poller_state_parameter_name", "")
 
-        # Import the shared Lambda execution role
+        # Import the shared Lambda execution roles
         self.lambda_execution_role = iam.Role.from_role_arn(self, "imported-lambda-execution-role", self.lambda_execution_role_arn)
+        self.lambda_ssm_sqs_execution_role = iam.Role.from_role_arn(self, "imported-lambda-ssm-sqs-execution-role", self.lambda_ssm_sqs_execution_role_arn)
 
         # Extract API configuration
         self.api_subdomain = config.get("api_subdomain", "api")
@@ -464,38 +471,69 @@ class LambdaStack(cdk.Stack):
             dependencies_layer,
         )
 
-        # Process Segment Lambda (backend)
-        self.process_segment_function = self.create_lambda_function(
-            "process-segment",
-            "ops_process_segment.lambda_handler",
-            {
+        # Process Segment Lambda (backend) - Now processes from SQS
+        self.process_segment_function = lambda_.Function(
+            self,
+            "ops-process-segment",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="ops_process_segment.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-process-segment.zip"),
+            layers=[dependencies_layer],
+            role=self.lambda_ssm_sqs_execution_role,
+            timeout=cdk.Duration.seconds(60),
+            memory_size=256,
+            environment={
                 "CHARACTERS_TABLE": self.characters_table,
+                "STORY_TABLE": self.story_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "OPPONENTS_TABLE": self.opponents_table,
+                "HISTORY_TABLE": self.history_table,
+                "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
+            },
+            description="Processes completed segments and determines outcomes",
+            function_name="ops-process-segment",
+            reserved_concurrent_executions=5,
+        )
+
+        # Add SQS event source to Process Segment function
+        if self.segment_queue_arn:
+            segment_queue = sqs.Queue.from_queue_arn(
+                self,
+                "imported-segment-queue",
+                self.segment_queue_arn,
+            )
+            self.process_segment_function.add_event_source(
+                lambda_event_sources.SqsEventSource(
+                    segment_queue,
+                    batch_size=10,
+                    max_batching_window=cdk.Duration.seconds(5),
+                    report_batch_item_failures=True,
+                )
+            )
+
+        # Segment Poller Lambda (backend) - Now sends to SQS
+        self.segment_poller_function = lambda_.Function(
+            self,
+            "ops-segment-poller",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="ops_segment_poller.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-segment-poller.zip"),
+            layers=[dependencies_layer],
+            role=self.lambda_ssm_sqs_execution_role,
+            timeout=cdk.Duration.seconds(60),
+            memory_size=256,
+            environment={
                 "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "HISTORY_TABLE": self.history_table,
-                "OPPONENTS_TABLE": self.opponents_table,
+                "MAX_SEGMENTS_PER_POLL": "50",
+                "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
+                "SEGMENT_QUEUE_URL": self.segment_queue_url,
             },
-            "Processes completed segments and determines outcomes",
-            dependencies_layer,
+            description="Polls for completed segments and sends to SQS for processing",
+            function_name="ops-segment-poller",
         )
-
-        # Segment Poller Lambda (backend)
-        self.segment_poller_function = self.create_lambda_function(
-            "segment-poller",
-            "ops_segment_poller.lambda_handler",
-            {
-                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "PROCESS_SEGMENT_FUNCTION": self.process_segment_function.function_name,
-                "ENABLE_BATCH_PROCESSING": "true",
-                "MAX_SEGMENTS_PER_POLL": "100",
-                "SEGMENT_BATCH_SIZE": "10",
-            },
-            "Polls for completed segments and triggers processing",
-            dependencies_layer,
-        )
-
-        # Grant permissions for segment_poller to invoke process_segment
-        self.process_segment_function.grant_invoke(self.segment_poller_function)
 
         # Create EventBridge rule to trigger segment poller every minute
         self.segment_poller_rule = events.Rule(
@@ -640,8 +678,8 @@ class LambdaStack(cdk.Stack):
             ("get-segment-outcome-logs", self.get_segment_outcome_function),
             ("abandon-story-logs", self.abandon_story_function),
             ("get-current-story-logs", self.get_current_story_function),
-            ("segment-poller-logs", self.segment_poller_function),
-            ("process-segment-logs", self.process_segment_function),
+            ("ops-segment-poller-logs", self.segment_poller_function),
+            ("ops-process-segment-logs", self.process_segment_function),
         ]
 
         for log_id, function in log_configs:

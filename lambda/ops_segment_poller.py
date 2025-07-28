@@ -7,10 +7,11 @@ Lambda function to poll for completed segments.
 Triggered by EventBridge to check active segments that have reached their end time.
 """
 
-from eidolon.environment import ENABLE_BATCH_PROCESSING, MAX_SEGMENTS_PER_POLL, PROCESS_SEGMENT_FUNCTION, SEGMENT_BATCH_SIZE
-from eidolon.lambda_utils import invoke_process_segment, invoke_process_segments_batch
+from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, SSM_POLLER_STATE_PARAMETER
 from eidolon.logger import get_logger
-from eidolon.segment import get_completed_segments
+from eidolon.segment import check_active_segments_exist, get_completed_segments
+from eidolon.sqs import send_message_batch
+from eidolon.ssm import get_parameter, put_parameter
 from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
 
 # Configure logging
@@ -25,72 +26,84 @@ def poll_and_process_segments_business_logic() -> dict:
         Dict with processing statistics
 
     Raises:
-        RuntimeError: If database or Lambda operations fail
+        RuntimeError: If database or SQS operations fail
     """
+    # First check SSM parameter state
+    try:
+        poller_state = get_parameter(SSM_POLLER_STATE_PARAMETER)
+    except ValueError:
+        # Parameter doesn't exist, create it
+        put_parameter(SSM_POLLER_STATE_PARAMETER, "run")
+        poller_state = "run"
+    
     # Get completed segments from eidolon library
     completed_segments = get_completed_segments(MAX_SEGMENTS_PER_POLL)
 
-    logger.info("Found completed segments", extra={"count": len(completed_segments)})
+    logger.info(
+        "Segment polling check",
+        extra={
+            "poller_state": poller_state,
+            "segments_found": len(completed_segments),
+        },
+    )
 
-    # Process segments based on configuration
+    # Send to SQS if segments found
     processed_count = 0
     failed_count = 0
-
-    if ENABLE_BATCH_PROCESSING and len(completed_segments) > 0:
-        # Process segments in batches
-        for i in range(0, len(completed_segments), SEGMENT_BATCH_SIZE):
-            batch = completed_segments[i : i + SEGMENT_BATCH_SIZE]
-
-            try:
-                result = invoke_process_segments_batch(PROCESS_SEGMENT_FUNCTION, batch)
-                processed_count += result["processed"]
-                failed_count += result["failed"]
-            except RuntimeError as err:
-                # If batch fails, fall back to individual processing
-                logger.warning(
-                    "Batch processing failed, falling back to individual processing",
-                    extra={"batch_size": len(batch), "error": str(err)},
-                )
-
-                for segment in batch:
-                    try:
-                        invoke_process_segment(PROCESS_SEGMENT_FUNCTION, segment)
-                        processed_count += 1
-                    except RuntimeError as err:
-                        logger.error(
-                            "Failed to process segment individually",
-                            extra={"active_segment_id": segment.get("ActiveSegmentID"), "error": str(err)},
-                        )
-                        failed_count += 1
-    else:
-        # Process segments individually (original behavior)
+    
+    if completed_segments:
+        # Prepare messages for SQS
+        messages = []
         for segment in completed_segments:
-            try:
-                invoke_process_segment(PROCESS_SEGMENT_FUNCTION, segment)
-                processed_count += 1
-            except RuntimeError as err:
-                # Log but continue processing other segments
-                logger.error(
-                    "Failed to process segment, continuing with others",
-                    extra={"active_segment_id": segment.get("ActiveSegmentID"), "error": str(err)},
-                )
-                failed_count += 1
+            messages.append({
+                "body": {
+                    "ActiveSegmentID": segment.get("ActiveSegmentID"),
+                    "CharacterID": segment.get("CharacterID"),
+                    "StoryID": segment.get("StoryID"),
+                    "SegmentID": segment.get("SegmentID"),
+                    "SegmentType": segment.get("SegmentType"),
+                }
+            })
+        
+        # Send to SQS
+        if not SEGMENT_QUEUE_URL:
+            raise RuntimeError("SEGMENT_QUEUE_URL environment variable not set")
+            
+        result = send_message_batch(SEGMENT_QUEUE_URL, messages)
+        processed_count = result["successful"]
+        failed_count = result["failed"]
+
+    # Update SSM parameter based on state
+    if poller_state == "stop":
+        if completed_segments:
+            # Found segments while stopped, switch to run
+            put_parameter(SSM_POLLER_STATE_PARAMETER, "run")
+            logger.info("Poller state changed from stop to run due to found segments")
+    else:  # poller_state == "run"
+        if not completed_segments:
+            # No segments found, check if table is empty
+            has_active_segments = check_active_segments_exist()
+            
+            if not has_active_segments:
+                # No active segments at all, switch to stop
+                put_parameter(SSM_POLLER_STATE_PARAMETER, "stop")
+                logger.info("Poller state changed from run to stop - no active segments")
 
     logger.info(
         "Segment polling completed",
         extra={
             "segments_found": len(completed_segments),
-            "segments_processed": processed_count,
-            "segments_failed": failed_count,
-            "batch_processing_enabled": ENABLE_BATCH_PROCESSING,
-            "batch_size": SEGMENT_BATCH_SIZE if ENABLE_BATCH_PROCESSING else "N/A",
+            "messages_sent": processed_count,
+            "messages_failed": failed_count,
+            "current_state": poller_state,
         },
     )
 
     return {
         "SegmentsFound": len(completed_segments),
-        "SegmentsProcessed": processed_count,
-        "SegmentsFailed": failed_count,
+        "MessagesQueued": processed_count,
+        "MessagesFailed": failed_count,
+        "PollerState": poller_state,
     }
 
 

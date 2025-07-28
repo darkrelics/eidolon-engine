@@ -62,15 +62,42 @@ Resources:
         - Key: Component
           Value: DynamoDB
 
+  # SSM Parameter Store
+  SSMStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://s3.amazonaws.com/${LambdaBucketName}/cloudformation/ssm.yml"
+      Parameters:
+        GameName: !Ref GameName
+      Tags:
+        - Key: Component
+          Value: SSM
+
+  # SQS Queues
+  SQSStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://s3.amazonaws.com/${LambdaBucketName}/cloudformation/sqs.yml"
+      Parameters:
+        GameName: !Ref GameName
+      Tags:
+        - Key: Component
+          Value: SQS
+
   # IAM roles with attached policies
   IAMStack:
     Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - SSMStack
+      - SQSStack
     Properties:
       TemplateURL: !Sub "https://s3.amazonaws.com/${LambdaBucketName}/cloudformation/iam.yml"
       Parameters:
         GameName: !Ref GameName
         DynamoDBAccessPolicyArn: !GetAtt DynamoDBStack.Outputs.DynamoDBAccessPolicyArn
         CloudWatchPolicyArn: !GetAtt CloudWatchStack.Outputs.CloudWatchPolicyArn
+        SSMParameterArn: !GetAtt SSMStack.Outputs.SegmentPollerStateParameterArn
+        SQSQueueArn: !GetAtt SQSStack.Outputs.SegmentQueueArn
       Tags:
         - Key: Component
           Value: IAM
@@ -109,6 +136,8 @@ Resources:
     DependsOn:
       - IAMStack
       - DynamoDBStack
+      - SSMStack
+      - SQSStack
     Properties:
       TemplateURL: !Sub "https://s3.amazonaws.com/${LambdaBucketName}/cloudformation/lambda.yml"
       Parameters:
@@ -217,6 +246,24 @@ Outputs:
   LambdaExecutionRoleArn:
     Description: "Lambda execution role ARN"
     Value: !GetAtt IAMStack.Outputs.LambdaExecutionRoleArn
+
+  LambdaSSMSQSExecutionRoleArn:
+    Description: "Lambda SSM/SQS execution role ARN"
+    Value: !GetAtt IAMStack.Outputs.LambdaSSMSQSExecutionRoleArn
+
+  # SSM Parameters
+  SegmentPollerStateParameterArn:
+    Description: "SSM Parameter ARN for segment poller state"
+    Value: !GetAtt SSMStack.Outputs.SegmentPollerStateParameterArn
+
+  # SQS Queues
+  SegmentQueueUrl:
+    Description: "SQS Queue URL for segment processing"
+    Value: !GetAtt SQSStack.Outputs.SegmentQueueUrl
+
+  SegmentQueueArn:
+    Description: "SQS Queue ARN for segment processing"
+    Value: !GetAtt SQSStack.Outputs.SegmentQueueArn
 
   # CloudWatch
   LogGroupName:

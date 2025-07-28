@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "SQS queues for Eidolon Engine"
+
+Parameters:
+  GameName:
+    Type: String
+    Default: "eidolon"
+    Description: "Name of the game"
+
+Resources:
+  SegmentProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${GameName}-segments"
+      VisibilityTimeout: 180  # 3x Lambda timeout (60s)
+      MessageRetentionPeriod: 345600  # 4 days
+      ReceiveMessageWaitTimeSeconds: 20  # Long polling
+      Tags:
+        - Key: Project
+          Value: !Ref GameName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  SegmentProcessingQueueUrl:
+    Description: "URL of the segment processing queue"
+    Value: !Ref SegmentProcessingQueue
+    Export:
+      Name: !Sub "${AWS::StackName}-SegmentProcessingQueueUrl"
+  
+  SegmentProcessingQueueArn:
+    Description: "ARN of the segment processing queue"
+    Value: !GetAtt SegmentProcessingQueue.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-SegmentProcessingQueueArn"
+
+  SegmentProcessingQueueName:
+    Description: "Name of the segment processing queue"
+    Value: !GetAtt SegmentProcessingQueue.QueueName
+    Export:
+      Name: !Sub "${AWS::StackName}-SegmentProcessingQueueName"

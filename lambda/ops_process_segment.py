@@ -7,8 +7,12 @@ Lambda function to process a completed segment.
 Determines outcome, applies effects, and creates next segment if applicable.
 """
 
+import json
+
+from eidolon.environment import SSM_POLLER_STATE_PARAMETER
 from eidolon.logger import get_logger
-from eidolon.segment import process_segment_completely
+from eidolon.segment import check_active_segments_exist, process_segment_completely
+from eidolon.ssm import put_parameter
 from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
 
 # Configure logging
@@ -128,10 +132,10 @@ def process_segments_batch(segments: list) -> dict:
 def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to process completed segments.
-    Supports both single segment and batch processing.
+    Now handles SQS events instead of direct invocation.
 
     Args:
-        event: Event containing segment information or batch of segments
+        event: SQS event or direct invocation event
         context: Lambda context
 
     Returns:
@@ -139,66 +143,145 @@ def lambda_handler(event: dict, context: object) -> dict:
     """
     # Log invocation
     log_lambda_invocation(context, event)
-
-    # Check if this is a batch request
-    if "segments" in event:
-        try:
-            batch_result = process_segments_batch(event["segments"])
-            return build_lambda_response_pascal(200, batch_result, event)
-        except Exception as err:
-            return handle_lambda_error_pascal(err, context, event)
-
-    # Single segment processing (original behavior)
-    try:
-        # Extract segment information from event
-        active_segment_id: str = event.get("ActiveSegmentID", "")
-        character_id = event.get("CharacterID")
-        story_id = event.get("StoryID")
-        segment_id = event.get("SegmentID")
-        segment_type = event.get("SegmentType")
-
-        if not active_segment_id:
-            raise ValueError("ActiveSegmentID is required")
-        if not character_id:
-            raise ValueError("CharacterID is required")
-        if not story_id:
-            raise ValueError("StoryID is required")
-        if not segment_id:
-            raise ValueError("SegmentID is required")
-        if not segment_type:
-            raise ValueError("SegmentType is required")
-
+    
+    # Check if this is an SQS event
+    if "Records" in event:
+        # SQS batch event
+        success_count = 0
+        failure_count = 0
+        batch_item_failures = []
+        
+        for record in event["Records"]:
+            try:
+                # Parse message body
+                message_body = json.loads(record["body"])
+                
+                # Extract segment data
+                active_segment_id = message_body.get("ActiveSegmentID", "")
+                character_id = message_body.get("CharacterID")
+                story_id = message_body.get("StoryID")
+                segment_id = message_body.get("SegmentID")
+                segment_type = message_body.get("SegmentType")
+                
+                if not all([active_segment_id, character_id, story_id, segment_id, segment_type]):
+                    raise ValueError("Missing required segment data")
+                
+                logger.info(
+                    "Processing SQS message",
+                    extra={
+                        "message_id": record.get("messageId"),
+                        "active_segment_id": active_segment_id,
+                        "segment_type": segment_type,
+                    },
+                )
+                
+                # Process the segment
+                result = process_segment_business_logic(
+                    active_segment_id=active_segment_id,
+                    character_id=character_id,
+                    story_id=story_id,
+                    segment_id=segment_id,
+                    segment_type=segment_type,
+                )
+                
+                success_count += 1
+                
+                # If no next segment (story complete), check if we should update SSM
+                if not result.get("nextSegment"):
+                    # Check if any active segments remain
+                    has_active_segments = check_active_segments_exist()
+                    
+                    if not has_active_segments:
+                        # No more active segments, update SSM to stop polling
+                        try:
+                            put_parameter(SSM_POLLER_STATE_PARAMETER, "stop")
+                            logger.info("Updated SSM poller state to stop - no active segments")
+                        except Exception as ssm_err:
+                            logger.warning(
+                                "Failed to update SSM parameter",
+                                extra={"error": str(ssm_err)},
+                            )
+                
+            except Exception as err:
+                logger.error(
+                    "Failed to process SQS message",
+                    extra={
+                        "message_id": record.get("messageId"),
+                        "error": str(err),
+                    },
+                    exc_info=True,
+                )
+                failure_count += 1
+                # Add to batch item failures for SQS retry
+                batch_item_failures.append({
+                    "itemIdentifier": record["messageId"]
+                })
+        
+        # Return response for SQS batch processing
         logger.info(
-            "Processing single segment",
+            "SQS batch processing completed",
             extra={
-                "active_segment_id": active_segment_id,
-                "segment_type": segment_type,
+                "success_count": success_count,
+                "failure_count": failure_count,
             },
         )
-
-        # Call business logic
-        result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)  # type: ignore
-
-        response_data = {
-            "Message": "Segment processed successfully",
-            "Outcome": result["outcome"],
-            "NextSegment": result["nextSegment"],
+        
+        return {
+            "batchItemFailures": batch_item_failures
         }
+    
+    # Legacy direct invocation support (for testing)
+    else:
+        try:
+            # Extract segment information from event
+            active_segment_id: str = event.get("ActiveSegmentID", "")
+            character_id = event.get("CharacterID")
+            story_id = event.get("StoryID")
+            segment_id = event.get("SegmentID")
+            segment_type = event.get("SegmentType")
 
-        logger.info("Lambda response", extra={"status_code": 200})
-        return build_lambda_response_pascal(200, response_data, event)
+            if not active_segment_id:
+                raise ValueError("ActiveSegmentID is required")
+            if not character_id:
+                raise ValueError("CharacterID is required")
+            if not story_id:
+                raise ValueError("StoryID is required")
+            if not segment_id:
+                raise ValueError("SegmentID is required")
+            if not segment_type:
+                raise ValueError("SegmentType is required")
 
-    except ValueError as err:
-        logger.error(
-            "Invalid request",
-            extra={"error": str(err)},
-        )
-        return build_lambda_response_pascal(400, {"error": str(err)}, event)
-    except RuntimeError as err:
-        logger.error(
-            "Failed to process segment",
-            extra={"error": str(err)},
-        )
-        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
-    except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+            logger.info(
+                "Processing single segment (direct invocation)",
+                extra={
+                    "active_segment_id": active_segment_id,
+                    "segment_type": segment_type,
+                },
+            )
+
+            # Call business logic
+            result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)  # type: ignore
+
+            response_data = {
+                "Message": "Segment processed successfully",
+                "Outcome": result["outcome"],
+                "NextSegment": result["nextSegment"],
+            }
+
+            logger.info("Lambda response", extra={"status_code": 200})
+            return build_lambda_response_pascal(200, response_data, event)
+
+        except ValueError as err:
+            logger.error(
+                "Invalid request",
+                extra={"error": str(err)},
+            )
+            return build_lambda_response_pascal(400, {"error": str(err)}, event)
+        except RuntimeError as err:
+            logger.error(
+                "Failed to process segment",
+                extra={"error": str(err)},
+            )
+            return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
+        except Exception as err:
+            return handle_lambda_error_pascal(err, context, event)

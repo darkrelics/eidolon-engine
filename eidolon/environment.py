@@ -53,3 +53,9 @@ CORS_MAX_AGE = os.environ.get("CORS_MAX_AGE", "86400")  # 24 hours default
 SEGMENT_BATCH_SIZE = int(os.environ.get("SEGMENT_BATCH_SIZE", "10"))
 ENABLE_BATCH_PROCESSING = os.environ.get("ENABLE_BATCH_PROCESSING", "true").lower() == "true"
 MAX_SEGMENTS_PER_POLL = int(os.environ.get("MAX_SEGMENTS_PER_POLL", "50"))
+
+# SSM Parameters
+SSM_POLLER_STATE_PARAMETER = os.environ.get("SSM_POLLER_STATE_PARAMETER", "/eidolon/segment-poller-state")
+
+# SQS Configuration
+SEGMENT_QUEUE_URL = os.environ.get("SEGMENT_QUEUE_URL", "")

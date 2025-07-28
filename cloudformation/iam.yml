@@ -14,6 +14,32 @@ Parameters:
     Description: "ARN of the CloudWatch access policy"
 
 Resources:
+  # SSM and SQS access policy for Lambda functions
+  LambdaSSMSQSAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${GameName}-lambda-ssm-sqs-access"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - "ssm:GetParameter"
+              - "ssm:PutParameter"
+            Resource:
+              - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${GameName}/*"
+          - Effect: Allow
+            Action:
+              - "sqs:SendMessage"
+              - "sqs:SendMessageBatch"
+              - "sqs:ReceiveMessage"
+              - "sqs:DeleteMessage"
+              - "sqs:DeleteMessageBatch"
+              - "sqs:GetQueueAttributes"
+              - "sqs:GetQueueUrl"
+            Resource:
+              - !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${GameName}-segments"
+
   ServerExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -46,7 +72,9 @@ Resources:
             Action: "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
         - !Ref DynamoDBAccessPolicyArn
+        - !Ref LambdaSSMSQSAccessPolicy
       Path: /
 
   ServerInstanceProfile:

@@ -870,3 +870,32 @@ def get_completed_segments(max_segments: int) -> list:
             exc_info=True,
         )
         raise RuntimeError(f"Failed to query completed segments: {str(err)}")
+
+
+def check_active_segments_exist() -> bool:
+    """
+    Check if any active segments exist in the table.
+
+    Returns:
+        True if active segments exist, False otherwise
+
+    Raises:
+        RuntimeError: If database scan fails
+    """
+    try:
+        # Perform minimal scan to check if any active segments exist
+        result = dynamo.scan(
+            TableName.ACTIVE_SEGMENTS,
+            FilterExpression="#status = :status",
+            ExpressionAttributeNames={"#status": "Status"},
+            ExpressionAttributeValues={":status": "active"},
+            Limit=1,
+        )
+        return result is not None and len(result) > 0
+    except ClientError as err:
+        logger.error(
+            "Failed to scan active segments",
+            extra={"error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to scan active segments: {str(err)}")
