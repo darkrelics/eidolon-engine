@@ -389,6 +389,11 @@ func (c *Character) Stop() {
 		c.room.mutex.Unlock()
 	}
 
+	// Clear GameMode when character logs out
+	c.mutex.Lock()
+	c.gameMode = "None"
+	c.mutex.Unlock()
+
 	// State persistence preserves player progress
 	// Use a fresh context for shutdown saves to ensure they complete
 	saveCtx := context.Background()

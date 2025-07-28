@@ -229,7 +229,7 @@ class IAMStack(Stack):
                     ),
                 ]
             ),
-            description=f"Policy for Lambda access to SSM parameters and SQS queues",
+            description="Policy for Lambda access to SSM parameters and SQS queues",
         )
 
         # Attach SSM/SQS policy to Lambda role

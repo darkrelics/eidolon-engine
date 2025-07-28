@@ -825,7 +825,7 @@ def build_character_record(
         "ActiveSegmentID": None,
         "Hidden": False,
         "CharState": "Standing",
-        "GameMode": "Incremental",
+        "GameMode": "None",
         "CreatedAt": timestamp,
         "UpdatedAt": timestamp,
         "LastPlayed": timestamp,
@@ -879,7 +879,7 @@ def add_character_to_player_list(player_id: str, character_name: str, character_
     character_info = {
         "UUID": character_id,
         "Dead": False,
-        "GameMode": "Incremental",
+        "GameMode": "None",
     }
 
     logger.info(
