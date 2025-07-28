@@ -35,7 +35,7 @@ pycodestyle==2.13.0
 pygments==2.19.1
 pyparsing==3.2.0
 requests==2.32.4
-rich==14.0.0
+rich==14.1.0
 six==1.17.0
 sortedcontainers==2.4.0
 tokenize-rt==6.1.0
