@@ -1,206 +1,87 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+Copyright 2024-2025 Jason E. Robinson
 
 Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.
 """
 
-import os
-
-from eidolon.cors import cors_handler
-from eidolon.dynamo import delete_item, get_item, get_table, update_item_with_condition
+from eidolon.character import delete_character, get_character, validate_character_ownership
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, get_query_parameter
-from eidolon.responses import error_response, success_response
+from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.requests import get_query_parameter_flexible
+from eidolon.utilities import (
+    build_lambda_response_pascal,
+    handle_lambda_error_pascal,
+    handle_preflight_if_options,
+    log_lambda_invocation,
+)
+from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
 
-# Get table names from environment
-PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
-CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
-ITEMS_TABLE = os.environ.get("ITEMS_TABLE", "items")
 
-
-def get_character_name_by_id(player_id, character_id) -> str:
+def handle_character_deletion(player_id: str, character_id: str) -> dict:
     """
-    Get character name by ID and verify ownership.
+    Handle the business logic for character deletion.
+
+    This function orchestrates the character deletion process without
+    performing any AWS-specific operations.
 
     Args:
         player_id: Cognito user ID
         character_id: Character UUID
 
     Returns:
-        Character name if owned by player, empty string otherwise
+        Dict containing:
+            - success: bool - Whether deletion was successful
+            - character_name: str - Name of deleted character
+            - deletion_result: dict - Detailed deletion results
+
+    Raises:
+        ValueError: If character not found, invalid ID, or not owned by player
+        RuntimeError: If database operations fail
     """
-    # Get player record
-    players_table = get_table(PLAYERS_TABLE)
-    player_data = get_item(players_table, {"PlayerID": player_id})
+    # Verify ownership
+    character = get_character(character_id)
+    validate_character_ownership(character, player_id)
+    character_name = character.get("CharacterName", "Unknown")
 
-    if not player_data:
-        logger.warning("Player not found", extra={"player_id": player_id})
-        return ""
+    logger.info(
+        "Character ownership verified, proceeding with deletion",
+        extra={
+            "character_id": character_id,
+            "character_name": character_name,
+            "player_id": player_id,
+        },
+    )
 
-    character_list = player_data.get("CharacterList", {})
+    # Delete the character
+    deletion_result = delete_character(character_id, remove_from_player_list=True)
 
-    # Find character by UUID
-    for char_name, char_info in character_list.items():
-        if char_info.get("UUID") == character_id:
-            return char_name
+    logger.info(
+        "Character deletion completed",
+        extra={
+            "character_name": character_name,
+            "character_id": character_id,
+            "player_id": player_id,
+            "results": deletion_result,
+        },
+    )
 
-    logger.warning("Character not found for player", extra={"character_id": character_id, "player_id": player_id})
-    return ""
+    # Check if deletion was successful
+    if not deletion_result["character_deleted"]:
+        error_msg = "Failed to delete character"
+        if deletion_result["errors"]:
+            error_msg = deletion_result["errors"][0]
+        raise RuntimeError(error_msg)
 
-
-def verify_character_ownership(player_id, character_name) -> tuple:
-    """
-    Verify that a character belongs to the specified player.
-
-    Args:
-        player_id: Cognito user ID
-        character_name: Name of the character to verify
-
-    Returns:
-        tuple: (is_owner, character_uuid)
-    """
-    # Get player record
-    players_table = get_table(PLAYERS_TABLE)
-    player_data = get_item(players_table, {"PlayerID": player_id})
-
-    if not player_data:
-        logger.warning("Player not found", extra={"player_id": player_id})
-        return False, None
-    character_list = player_data.get("CharacterList", {})
-
-    # Check if character exists in player's list
-    if character_name not in character_list:
-        logger.warning("Character not found for player", extra={"character_name": character_name, "player_id": player_id})
-        return False, None
-
-    character_info = character_list[character_name]
-    character_uuid = character_info.get("UUID")
-
-    # Double-check character record ownership
-    characters_table = get_table(CHARACTERS_TABLE)
-    character_data = get_item(characters_table, {"CharacterID": character_uuid})
-
-    if character_data and character_data.get("PlayerID") != player_id:
-        logger.warning("Character does not belong to player", extra={"character_id": character_uuid, "player_id": player_id})
-        return False, None
-
-    return True, character_uuid
+    return {"success": True, "character_name": character_name, "deletion_result": deletion_result}
 
 
-def delete_character_items(character_id) -> int:
-    """
-    Delete all items belonging to a character.
-
-    Args:
-        character_id: Character UUID
-
-    Returns:
-        int: Number of items deleted
-    """
-    deleted_count = 0
-
-    try:
-        # Get character record to find inventory
-        characters_table = get_table(CHARACTERS_TABLE)
-        character_data = get_item(characters_table, {"CharacterID": character_id})
-
-        if not character_data:
-            return 0
-        inventory = character_data.get("Inventory", {})
-
-        # Delete each item
-        items_table = get_table(ITEMS_TABLE)
-        for slot, item_id in inventory.items():
-            if delete_item(items_table, {"ItemID": item_id}):
-                deleted_count += 1
-
-        # Also check for hand items
-        left_hand_id = character_data.get("LeftHandID")
-        right_hand_id = character_data.get("RightHandID")
-
-        if left_hand_id:
-            if delete_item(items_table, {"ItemID": left_hand_id}):
-                deleted_count += 1
-
-        if right_hand_id:
-            if delete_item(items_table, {"ItemID": right_hand_id}):
-                deleted_count += 1
-
-        return deleted_count
-
-    except Exception as err:
-        logger.error("Error processing character items", extra={"error": str(err)})
-        return deleted_count
-
-
-def delete_character(player_id, character_name, character_id) -> bool:
-    """
-    Delete a character from the database.
-
-    Args:
-        player_id: Cognito user ID
-        character_name: Name of the character
-        character_id: UUID of the character
-
-    Returns:
-        bool: True if successful
-    """
-    try:
-        # First remove character from player's character list
-        players_table = get_table(PLAYERS_TABLE)
-        success, error_msg = update_item_with_condition(
-            players_table,
-            {"PlayerID": player_id},
-            "REMOVE CharacterList.#name",
-            {},  # REMOVE operations don't need expression values
-            "attribute_exists(CharacterList.#name)",
-            {"#name": character_name},
-        )
-
-        if not success:
-            logger.error("Failed to remove character from player list", extra={"error": error_msg})
-            return False
-
-        # Delete character items
-        items_deleted = delete_character_items(character_id)
-        logger.info("Deleted items for character", extra={"items_deleted": items_deleted, "character_id": character_id})
-
-        # Finally delete character from characters table
-        characters_table = get_table(CHARACTERS_TABLE)
-        if not delete_item(characters_table, {"CharacterID": character_id}):
-            logger.error("Failed to delete character record")
-            return False
-
-        logger.info(
-            "Deleted character", extra={"character_name": character_name, "character_id": character_id, "player_id": player_id}
-        )
-        return True
-
-    except Exception as err:
-        logger.error("Error deleting character", extra={"error": str(err)})
-        return False
-
-
-def lambda_handler(event, context) -> dict:
+def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler for character deletion API.
 
@@ -211,49 +92,72 @@ def lambda_handler(event, context) -> dict:
     Returns:
         API Gateway response
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    # Handle preflight requests
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
+    # Extract player ID from JWT
     try:
-        # Extract player ID from Cognito authorizer
-        player_id, auth_error = extract_player_id(event)
-        if auth_error:
-            return auth_error
-
-        # Get character ID from query parameters
-        character_id, error_msg = get_query_parameter(event, "characterId", required=True)
-        if error_msg:
-            return cors_handler.add_cors_headers(error_response(error_msg), event)
-
-        # Get character name and verify ownership
-        character_name = get_character_name_by_id(player_id, character_id)
-        if not character_name:
-            return cors_handler.add_cors_headers(error_response("Character not found or access denied", status_code=404), event)
-
-        # Delete the character
-        if not delete_character(player_id, character_name, character_id):
-            return cors_handler.add_cors_headers(error_response("Failed to delete character", status_code=500), event)
-
-        # Return success response
-        logger.info("Lambda response", extra={"status_code": 200})
-        return cors_handler.add_cors_headers(
-            success_response({"message": "Character deleted successfully", "characterName": character_name}), event
-        )
-
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
     except Exception as err:
-        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return handle_lambda_error_pascal(err, context, event)
+
+    # Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error_pascal(err, context, event)
+
+    # Get character ID from query parameters (flexible: CharacterID or characterId)
+    character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
+    if not character_id:
+        return build_lambda_response_pascal(400, {"error": "Missing CharacterID parameter"}, event)
+
+    # Validate character ID format
+    if not validate_uuid(character_id):  # type: ignore
+        return build_lambda_response_pascal(400, {"error": "Invalid character ID format"}, event)
+
+    # Call business logic
+    try:
+        result = handle_character_deletion(player_id, character_id)  # type: ignore
+        return build_lambda_response_pascal(
+            200,
+            {
+                "Message": "Character deleted successfully",
+                "CharacterID": character_id,
+                "CharacterName": result["character_name"],
+                "ItemsDeleted": result["deletion_result"]["items_deleted"],
+                "ActiveSegmentsDeleted": result["deletion_result"]["active_segments_deleted"],
+                "HistoryDeleted": result["deletion_result"]["history_deleted"],
+            },
+            event,
+        )
+    except ValueError as err:
+        # Character not found or not owned by player
+        logger.warning(
+            "Character deletion validation failed",
+            extra={"character_id": character_id, "player_id": player_id, "error": str(err)},
+        )
+        return build_lambda_response_pascal(404, {"error": "Character not found or access denied"}, event)
+    except RuntimeError as err:
+        # Database or deletion failures
+        logger.error(
+            "Character deletion system error",
+            extra={"character_id": character_id, "error": str(err)},
+            exc_info=True,
+        )
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error_pascal(err, context, event)

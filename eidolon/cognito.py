@@ -5,10 +5,12 @@ Provides common authentication and authorization helpers for API Gateway
 Lambda functions using Cognito user pools.
 """
 
-import json
+from eidolon.logger import get_logger
+
+logger = get_logger(__name__)
 
 
-def extract_player_id(event: dict):
+def extract_player_id(event: dict) -> str:
     """
     Extract player ID from Cognito authorizer claims.
 
@@ -16,38 +18,38 @@ def extract_player_id(event: dict):
         event: API Gateway Lambda event
 
     Returns:
-        Player ID (Cognito sub) or None if not found
+        Player ID (Cognito sub)
+
+    Raises:
+        ValueError: If no player ID found in claims
     """
     claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    return claims.get("sub")
+    player_id = claims.get("sub")
+
+    if not player_id:
+        logger.warning("No player ID found in authorization claims")
+        raise ValueError("No player ID found in authorization claims")
+
+    return player_id
 
 
-def require_auth(event: dict) -> tuple:
+def require_auth(event: dict) -> str:
     """
-    Validate authentication and return player_id or error response.
+    Validate authentication and return player_id.
 
     Args:
         event: API Gateway Lambda event
 
     Returns:
-        Tuple of (player_id, error_response)
-        - If authenticated: (player_id, None)
-        - If not authenticated: (None, error_response_dict)
+        Player ID string
+
+    Raises:
+        ValueError: If not authenticated
     """
-    player_id = extract_player_id(event)
-
-    if not player_id:
-        error_response = {
-            "statusCode": 401,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Unauthorized"}),
-        }
-        return None, error_response
-
-    return player_id, None
+    return extract_player_id(event)
 
 
-def extract_user_email(event: dict):
+def extract_user_email(event: dict) -> str:
     """
     Extract user email from Cognito authorizer claims.
 
@@ -55,13 +57,22 @@ def extract_user_email(event: dict):
         event: API Gateway Lambda event
 
     Returns:
-        User email or None if not found
+        User email address
+
+    Raises:
+        ValueError: If no email found in claims
     """
     claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    return claims.get("email")
+    email = claims.get("email")
+
+    if not email:
+        logger.warning("No email found in authorization claims")
+        raise ValueError("No email found in authorization claims")
+
+    return email
 
 
-def extract_username(event: dict):
+def extract_username(event: dict) -> str:
     """
     Extract username from Cognito authorizer claims.
 
@@ -69,10 +80,19 @@ def extract_username(event: dict):
         event: API Gateway Lambda event
 
     Returns:
-        Username (cognito:username) or None if not found
+        Username (cognito:username)
+
+    Raises:
+        ValueError: If no username found in claims
     """
     claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    return claims.get("cognito:username")
+    username = claims.get("cognito:username")
+
+    if not username:
+        logger.warning("No username found in authorization claims")
+        raise ValueError("No username found in authorization claims")
+
+    return username
 
 
 def has_permission(event: dict, permission: str) -> bool:
@@ -88,11 +108,27 @@ def has_permission(event: dict, permission: str) -> bool:
 
     Returns:
         True if user has permission, False otherwise
-    """
-    player_id = extract_player_id(event)
-    if not player_id:
-        return False
 
-    # TODO: Implement actual permission checking
-    # For now, all authenticated users have all permissions
+    Raises:
+        ValueError: If user is not authenticated
+    """
+    # This will raise ValueError if not authenticated
+    player_id = extract_player_id(event)
+
+    # Placeholder implementation - always returns True for authenticated users
+    logger.debug("Permission check (placeholder always returns True)", extra={"player_id": player_id, "permission": permission})
+
     return True
+
+
+def get_authorization_claims(event: dict) -> dict:
+    """
+    Extract all authorization claims from the event.
+
+    Args:
+        event: API Gateway Lambda event
+
+    Returns:
+        Dict containing all claims. Empty dict if no claims found.
+    """
+    return event.get("requestContext", {}).get("authorizer", {}).get("claims", {})

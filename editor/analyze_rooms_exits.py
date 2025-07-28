@@ -91,7 +91,7 @@ def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:
         for room_id, exit_id in missing_exits:
             print(f"   - Room {room_id} references non-existent exit {exit_id}")
     else:
-        print("   ✓ All exit references are valid")
+        print("   [OK] All exit references are valid")
 
     # 2. Check that all exit destinations exist as rooms
     print("\n2. Checking exit destinations...")
@@ -106,7 +106,7 @@ def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:
         for exit_id, target_room in missing_destinations:
             print(f"   - Exit {exit_id} points to non-existent room {target_room}")
     else:
-        print("   ✓ All exit destinations exist")
+        print("   [OK] All exit destinations exist")
 
     # 3. Build connection map
     print("\n3. Building connection map...")
@@ -156,7 +156,7 @@ def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:
             target_name = rooms[target]["Title"] if target in rooms else f"Unknown({target})"
             print(f"   - Room {source} '{source_name}' -> Room {target} '{target_name}' ({direction})")
     else:
-        print("   ✓ No problematic one-way exits found")
+        print("   [OK] No problematic one-way exits found")
 
     # 5. Check for orphaned rooms
     print("\n5. Checking for orphaned rooms...")
@@ -173,7 +173,7 @@ def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:
             room_name = rooms[room_id]["Title"]
             print(f"   - Room {room_id}: '{room_name}'")
     else:
-        print("   ✓ All rooms are accessible")
+        print("   [OK] All rooms are accessible")
 
     # 6. Check for rooms with no exits (dead ends are OK, just informational)
     print("\n6. Checking for dead-end rooms...")
@@ -184,7 +184,7 @@ def analyze_room_exit_structure(rooms_data: dict, exits_data: dict) -> None:
             room_name = rooms[room_id]["Title"]
             print(f"   - Room {room_id}: '{room_name}'")
     else:
-        print("   ✓ No dead-end rooms found")
+        print("   [OK] No dead-end rooms found")
 
     # 7. Summary of connections
     print("\n7. Connection Summary:")

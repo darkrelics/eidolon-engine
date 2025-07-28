@@ -1,24 +1,13 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2024‑2025 Jason E. Robinson
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../constants/navigation_constants.dart';
 import '../providers/auth_provider.dart';
 import '../utils/error_handler.dart';
-import '../constants/navigation_constants.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,17 +27,11 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args =
-          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      if (args != null &&
-          args[NavigationConstants.messageKey] != null &&
-          mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(args[NavigationConstants.messageKey]),
-            backgroundColor: Colors.green,
-          ),
-        );
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null && args[NavigationConstants.messageKey] != null && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(args[NavigationConstants.messageKey]), backgroundColor: Colors.green));
       }
     });
   }
@@ -69,17 +52,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final authProvider = context.read<AuthProvider>();
-      await authProvider.signIn(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+      await authProvider.signIn(_emailController.text.trim(), _passwordController.text);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              ErrorHandler.getUserFriendlyMessage(e, context: 'signIn'),
-            ),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signIn')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -107,17 +85,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Eidolon Incremental',
-                    style: Theme.of(context).textTheme.headlineLarge,
-                    textAlign: TextAlign.center,
-                  ),
+                  Text('Eidolon Incremental', style: Theme.of(context).textTheme.headlineLarge, textAlign: TextAlign.center),
                   const SizedBox(height: 8),
-                  Text(
-                    'Sign in to continue',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                    textAlign: TextAlign.center,
-                  ),
+                  Text('Sign in to continue', style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
                   const SizedBox(height: 48),
                   TextFormField(
                     controller: _emailController,
@@ -132,9 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(
-                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                      ).hasMatch(value)) {
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -148,11 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
+                        icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
                         onPressed: () {
                           setState(() {
                             _isPasswordVisible = !_isPasswordVisible;
@@ -186,11 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   FilledButton(
                     onPressed: _isLoading ? null : _handleSignIn,
                     child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Sign In'),
                   ),
                   const SizedBox(height: 16),

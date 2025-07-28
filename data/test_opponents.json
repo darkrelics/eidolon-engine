@@ -14,11 +14,11 @@
       "WeaponDamage": 2,
       "LootTable": [
         {
-          "itemId": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "chance": 0.5
         },
         {
-          "itemId": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
+          "itemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "chance": 0.3
         }
       ],
@@ -39,15 +39,15 @@
       "WeaponDamage": 3,
       "LootTable": [
         {
-          "itemId": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "itemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "chance": 0.4
         },
         {
-          "itemId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "itemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "chance": 0.3
         },
         {
-          "itemId": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "chance": 0.7
         }
       ],
@@ -68,15 +68,15 @@
       "WeaponDamage": 2,
       "LootTable": [
         {
-          "itemId": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
+          "itemID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
           "chance": 0.3
         },
         {
-          "itemId": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "itemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
           "chance": 0.2
         },
         {
-          "itemId": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "chance": 0.8
         }
       ],
@@ -97,15 +97,15 @@
       "WeaponDamage": 3,
       "LootTable": [
         {
-          "itemId": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
+          "itemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "chance": 0.5
         },
         {
-          "itemId": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "itemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "chance": 0.3
         },
         {
-          "itemId": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "itemID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
           "chance": 0.2
         }
       ],
@@ -158,7 +158,7 @@
       "WeaponDamage": 2,
       "LootTable": [
         {
-          "itemId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "itemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "chance": 0.2
         }
       ],
@@ -195,11 +195,11 @@
       "WeaponDamage": 3,
       "LootTable": [
         {
-          "itemId": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "itemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
           "chance": 0.3
         },
         {
-          "itemId": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "chance": 0.6
         }
       ],
@@ -220,11 +220,11 @@
       "WeaponDamage": 5,
       "LootTable": [
         {
-          "itemId": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "chance": 0.8
         },
         {
-          "itemId": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "itemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "chance": 0.4
         }
       ],
@@ -261,15 +261,15 @@
       "WeaponDamage": 4,
       "LootTable": [
         {
-          "itemId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "itemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "chance": 0.4
         },
         {
-          "itemId": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "itemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "chance": 0.5
         },
         {
-          "itemId": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "chance": 0.7
         }
       ],
@@ -290,11 +290,11 @@
       "WeaponDamage": 3,
       "LootTable": [
         {
-          "itemId": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
+          "itemID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
           "chance": 0.5
         },
         {
-          "itemId": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "itemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
           "chance": 0.3
         }
       ],
@@ -315,7 +315,7 @@
       "WeaponDamage": 4,
       "LootTable": [
         {
-          "itemId": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "itemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
           "chance": 0.4
         }
       ],

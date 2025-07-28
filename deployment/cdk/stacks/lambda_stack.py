@@ -7,6 +7,8 @@ import aws_cdk as cdk
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_events as events
+from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_logs as logs
@@ -15,29 +17,8 @@ from aws_cdk import aws_route53_targets as route53_targets
 from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
-
-class ApiGatewayDomainTarget(route53.IAliasRecordTarget):
-    """Wrapper for ApiGatewayDomain to fix parameter naming issue.
-
-    The `ApiGatewayDomain` class from the AWS CDK library has a known issue where
-    certain parameters passed to its `bind` method are incorrectly named or mapped.
-    This wrapper class resolves the issue by delegating calls to an instance of
-    `ApiGatewayDomain` while ensuring the correct parameter names are used.
-
-    Use this class when creating alias records for API Gateway custom domains
-    in Route 53. It ensures compatibility and prevents errors related to parameter
-    naming mismatches.
-
-    Args:
-        domain_name: The domain name associated with the API Gateway custom domain.
-    """
-
-    def __init__(self, domain_name):
-        self._target = route53_targets.ApiGatewayDomain(domain_name)
-
-    def bind(self, record: route53.IRecordSet, zone=None) -> route53.AliasRecordTargetConfig:
-        """Bind the target to a record set with correct parameter names."""
-        return self._target.bind(record, zone)
+# Note: Using route53_targets.ApiGatewayDomain directly now
+# The wrapper class was causing JSII serialization issues
 
 
 def create_api_gateway(
@@ -126,7 +107,7 @@ def setup_custom_domain(
         f"{prefix}-api-record",
         zone=hosted_zone,
         record_name=api_subdomain,
-        target=route53.RecordTarget.from_alias(ApiGatewayDomainTarget(custom_domain)),
+        target=route53.RecordTarget.from_alias(route53_targets.ApiGatewayDomain(custom_domain)),  # type: ignore
     )
 
 
@@ -144,6 +125,11 @@ def validate_config(config: dict) -> None:
         "players_table",
         "characters_table",
         "archetypes_table",
+        "story_table",
+        "segments_table",
+        "active_segments_table",
+        "history_table",
+        "opponents_table",
         "cognito_user_pool_arn",
         "dependencies_layer_arn",
         "domain_name",
@@ -189,6 +175,11 @@ class LambdaStack(cdk.Stack):
         self.characters_table = config.get("characters_table", "")
         self.archetypes_table = config.get("archetypes_table", "")
         self.items_table = config.get("items_table", "")
+        self.story_table = config.get("story_table", "")
+        self.segments_table = config.get("segments_table", "")
+        self.active_segments_table = config.get("active_segments_table", "")
+        self.history_table = config.get("history_table", "")
+        self.opponents_table = config.get("opponents_table", "")
         self.cognito_user_pool_arn = config.get("cognito_user_pool_arn", "")
         self.dependencies_layer_arn = config.get("dependencies_layer_arn", "")
         self.domain_name = config.get("domain_name", "darkrelics.net")
@@ -229,6 +220,7 @@ class LambdaStack(cdk.Stack):
         # Create all Lambda functions
         self.create_character_management_functions(dependencies_layer)
         self.create_cognito_trigger_functions(dependencies_layer)
+        self.create_incremental_story_functions(dependencies_layer)
 
         # Configure API routes
         self.configure_api_routes()
@@ -314,6 +306,8 @@ class LambdaStack(cdk.Stack):
             {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
+                "ITEMS_TABLE": self.items_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Gets a specific character",
@@ -341,6 +335,8 @@ class LambdaStack(cdk.Stack):
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ITEMS_TABLE": self.items_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "HISTORY_TABLE": self.history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Deletes a character for players",
@@ -377,6 +373,147 @@ class LambdaStack(cdk.Stack):
             dependencies_layer,
         )
 
+    def create_incremental_story_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
+        """Create Lambda functions for incremental story management.
+
+        Args:
+            dependencies_layer: Lambda layer
+        """
+        # Get Stories Lambda
+        self.get_stories_function = self.create_lambda_function(
+            "api-get-stories",
+            "api_get_stories.lambda_handler",
+            {
+                "CHARACTERS_TABLE": self.characters_table,
+                "STORY_TABLE": self.story_table,
+                "HISTORY_TABLE": self.history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Returns available stories for a character",
+            dependencies_layer,
+        )
+
+        # Start Story Lambda
+        self.start_story_function = self.create_lambda_function(
+            "api-start-story",
+            "api_start_story.lambda_handler",
+            {
+                "CHARACTERS_TABLE": self.characters_table,
+                "STORY_TABLE": self.story_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "HISTORY_TABLE": self.history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Starts a story for a character",
+            dependencies_layer,
+        )
+
+        # Get Current Story Lambda
+        self.get_current_story_function = self.create_lambda_function(
+            "api-get-current-story",
+            "api_get_current_story.lambda_handler",
+            {
+                "SEGMENTS_TABLE": self.segments_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "STORY_TABLE": self.story_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Gets current active story and segment for a character",
+            dependencies_layer,
+        )
+
+        # Submit Decision Lambda
+        self.submit_decision_function = self.create_lambda_function(
+            "api-submit-decision",
+            "api_submit_decision.lambda_handler",
+            {
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Submits a player decision for a story segment",
+            dependencies_layer,
+        )
+
+        # Get Segment Outcome Lambda
+        self.get_segment_outcome_function = self.create_lambda_function(
+            "api-get-segment-outcome",
+            "api_get_segment_outcome.lambda_handler",
+            {
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "HISTORY_TABLE": self.history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Gets the outcome of a completed segment",
+            dependencies_layer,
+        )
+
+        # Abandon Story Lambda
+        self.abandon_story_function = self.create_lambda_function(
+            "api-abandon-story",
+            "api_abandon_story.lambda_handler",
+            {
+                "CHARACTERS_TABLE": self.characters_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "HISTORY_TABLE": self.history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Abandons an active story and updates character state",
+            dependencies_layer,
+        )
+
+        # Process Segment Lambda (backend)
+        self.process_segment_function = self.create_lambda_function(
+            "process-segment",
+            "ops_process_segment.lambda_handler",
+            {
+                "CHARACTERS_TABLE": self.characters_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "HISTORY_TABLE": self.history_table,
+                "OPPONENTS_TABLE": self.opponents_table,
+            },
+            "Processes completed segments and determines outcomes",
+            dependencies_layer,
+        )
+
+        # Segment Poller Lambda (backend)
+        self.segment_poller_function = self.create_lambda_function(
+            "segment-poller",
+            "ops_segment_poller.lambda_handler",
+            {
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "PROCESS_SEGMENT_FUNCTION": self.process_segment_function.function_name,
+                "ENABLE_BATCH_PROCESSING": "true",
+                "MAX_SEGMENTS_PER_POLL": "100",
+                "SEGMENT_BATCH_SIZE": "10",
+            },
+            "Polls for completed segments and triggers processing",
+            dependencies_layer,
+        )
+
+        # Grant permissions for segment_poller to invoke process_segment
+        self.process_segment_function.grant_invoke(self.segment_poller_function)
+
+        # Create EventBridge rule to trigger segment poller every minute
+        self.segment_poller_rule = events.Rule(
+            self,
+            "segment-poller-rule",
+            rule_name="eidolon-segment-poller-rule",
+            description="Triggers segment poller Lambda every 10 seconds",
+            schedule=events.Schedule.rate(cdk.Duration.seconds(10)),
+        )
+
+        # Add Lambda target to the rule
+        # Type ignore: CDK typing issue with LambdaFunction target
+        self.segment_poller_rule.add_target(
+            targets.LambdaFunction(
+                self.segment_poller_function, retry_attempts=2  # type: ignore
+            )  # type: ignore
+        )
+
     def configure_api_routes(self) -> None:
         """Configure API Gateway routes and methods."""
         # Archetypes endpoint
@@ -407,10 +544,10 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # Single character resource
-        character_resource = characters_resource.add_resource("{characterId}")
+        # Single character resource (using query parameters)
+        character_resource = self.api.root.add_resource("character")
 
-        # GET /characters/{characterId} - Get specific character
+        # GET /character?characterId=xxx - Get specific character
         character_resource.add_method(
             "GET",
             apigateway.LambdaIntegration(self.get_character_function),  # type: ignore
@@ -418,10 +555,71 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # DELETE /characters/{characterId} - Delete specific character
+        # DELETE /character?characterId=xxx - Delete specific character
         character_resource.add_method(
             "DELETE",
             apigateway.LambdaIntegration(self.delete_character_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # Stories endpoints
+        stories_resource = self.api.root.add_resource("stories")
+
+        # GET /stories?characterId=xxx - Get available stories for character
+        stories_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_stories_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # Nested resources under /stories
+        start_resource = stories_resource.add_resource("start")
+
+        # POST /stories/start - Start a story
+        start_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.start_story_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # GET /stories/current - Get current active story
+        current_resource = stories_resource.add_resource("current")
+        current_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_current_story_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # Segments endpoints
+        segments_resource = self.api.root.add_resource("segments")
+
+        # POST /segments/decision - Submit a decision
+        decision_resource = segments_resource.add_resource("decision")
+        decision_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.submit_decision_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # GET /segments/outcome - Get segment outcome
+        outcome_resource = segments_resource.add_resource("outcome")
+        outcome_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_segment_outcome_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # POST /stories/abandon - Abandon active story
+        abandon_resource = stories_resource.add_resource("abandon")
+        abandon_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.abandon_story_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
@@ -436,6 +634,14 @@ class LambdaStack(cdk.Stack):
             ("delete-character-logs", self.delete_character_function),
             ("cognito-new-player-logs", self.cognito_new_player_function),
             ("cognito-delete-player-logs", self.cognito_delete_player_function),
+            ("get-stories-logs", self.get_stories_function),
+            ("start-story-logs", self.start_story_function),
+            ("submit-decision-logs", self.submit_decision_function),
+            ("get-segment-outcome-logs", self.get_segment_outcome_function),
+            ("abandon-story-logs", self.abandon_story_function),
+            ("get-current-story-logs", self.get_current_story_function),
+            ("segment-poller-logs", self.segment_poller_function),
+            ("process-segment-logs", self.process_segment_function),
         ]
 
         for log_id, function in log_configs:
@@ -477,4 +683,11 @@ class LambdaStack(cdk.Stack):
             "CharactersEndpoint",
             value=self.api.url_for_path("/characters"),
             description="API endpoint for characters",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "StoriesEndpoint",
+            value=self.api.url_for_path("/stories"),
+            description="API endpoint for stories",
         )

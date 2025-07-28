@@ -106,10 +106,27 @@ class DynamoDBStack(Stack):
             {"name": "archetypes", "pk": "ArchetypeName", "pk_type": "S", "sk": ""},
             {"name": "motd", "pk": "MotdID", "pk_type": "S", "sk": ""},
             {"name": "story", "pk": "StoryID", "pk_type": "S", "sk": ""},
-            {"name": "segments", "pk": "StoryID", "pk_type": "S", "sk": "SegmentID", "sk_type": "S"},
-            {"name": "active_segments", "pk": "ActiveSegmentID", "pk_type": "S", "sk": ""},
+            {
+                "name": "segments",
+                "pk": "StoryID",
+                "pk_type": "S",
+                "sk": "SegmentID",
+                "sk_type": "S",
+            },
+            {
+                "name": "active_segments",
+                "pk": "ActiveSegmentID",
+                "pk_type": "S",
+                "sk": "",
+            },
             {"name": "opponents", "pk": "OpponentID", "pk_type": "S", "sk": ""},
-            {"name": "history", "pk": "CharacterID", "pk_type": "S", "sk": "StoryID", "sk_type": "S"},
+            {
+                "name": "history",
+                "pk": "CharacterID",
+                "pk_type": "S",
+                "sk": "StoryID",
+                "sk_type": "S",
+            },
         ]
 
     def _get_table_name(self, config_name: str) -> str:
@@ -152,10 +169,22 @@ class DynamoDBStack(Stack):
                 table = dynamodb.Table.from_table_name(self, f"{config_name}-imported", existing_table_name)
                 self.tables[config_name] = table
             elif self._table_exists(table_name):
-                # Import existing table found in AWS
-                print(f"Found existing DynamoDB table: {table_name}, importing...")
-                table = dynamodb.Table.from_table_name(self, f"{config_name}-imported", table_name)
-                self.tables[config_name] = table
+                # Check if existing table has correct schema
+                if self._validate_table_schema(table_name, config):
+                    # Import existing table found in AWS
+                    print(f"Found existing DynamoDB table: {table_name}, importing...")
+                    table = dynamodb.Table.from_table_name(self, f"{config_name}-imported", table_name)
+                    self.tables[config_name] = table
+                else:
+                    # Schema mismatch - cannot import
+                    print(f"ERROR: Table {table_name} exists but has incorrect schema!")
+                    print(f"Expected partition key: {config.get('pk', '')}")
+                    if config.get("sk", ""):
+                        print(f"Expected sort key: {config.get('sk', '')}")
+                    else:
+                        print("Expected no sort key")
+                    print("Please manually delete or migrate the table before deploying.")
+                    raise ValueError(f"Table {table_name} has incorrect schema")
             else:
                 # Create new table
                 print(f"Creating new DynamoDB table: {table_name}")
@@ -208,21 +237,19 @@ class DynamoDBStack(Stack):
         if cfn_table:
             cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN  # type: ignore
 
-        # Add Global Secondary Index and TTL for active_segments table
+        # Add Global Secondary Indexes
         if logical_id == "active_segments":
             table.add_global_secondary_index(
-                index_name="CompletionTimeIndex",
-                partition_key=dynamodb.Attribute(name="Status", type=dynamodb.AttributeType.STRING),
-                sort_key=dynamodb.Attribute(name="EndTime", type=dynamodb.AttributeType.NUMBER),
+                index_name="EndTimeIndex",
+                partition_key=dynamodb.Attribute(name="EndTime", type=dynamodb.AttributeType.NUMBER),
                 projection_type=dynamodb.ProjectionType.ALL,
             )
-
-            # Configure TTL on active_segments table
-            # Cast to CfnTable to access L1 properties
-            if isinstance(cfn_table, dynamodb.CfnTable):
-                cfn_table.time_to_live_specification = dynamodb.CfnTable.TimeToLiveSpecificationProperty(
-                    attribute_name="TTL", enabled=True
-                )
+        elif logical_id == "characters":
+            table.add_global_secondary_index(
+                index_name="CharacterNameIndex",
+                partition_key=dynamodb.Attribute(name="CharacterName", type=dynamodb.AttributeType.STRING),
+                projection_type=dynamodb.ProjectionType.KEYS_ONLY,
+            )
 
         return table
 
@@ -236,9 +263,11 @@ class DynamoDBStack(Stack):
         resources = []
         for table_name, table in self.tables.items():
             resources.append(table.table_arn)
-            # Add GSI ARN for active_segments table
+            # Add GSI ARNs for tables with indexes
             if table_name == "active_segments":
-                resources.append(f"{table.table_arn}/index/CompletionTimeIndex")
+                resources.append(f"{table.table_arn}/index/EndTimeIndex")
+            elif table_name == "characters":
+                resources.append(f"{table.table_arn}/index/CharacterNameIndex")
 
         self.table_access_policy = iam.PolicyDocument(
             statements=[
@@ -308,11 +337,55 @@ class DynamoDBStack(Stack):
             error_code = err.response.get("Error", {}).get("Code", "")
             if error_code == "ResourceNotFoundException":
                 return False
-            else:
-                # Log error but assume table doesn't exist
-                print(f"Error checking table existence for {table_name}: {err}")
+        return False
+
+    def _validate_table_schema(self, table_name: str, config: dict) -> bool:
+        """Validate that an existing table matches the expected schema.
+
+        Args:
+            table_name: Name of the table to validate
+            config: Expected table configuration
+
+        Returns:
+            True if schema matches, False otherwise
+        """
+        try:
+            dynamodb_client = boto3.client("dynamodb", region_name=self.region)
+            response = dynamodb_client.describe_table(TableName=table_name)
+            key_schema = response["Table"]["KeySchema"]
+
+            # Check partition key
+            pk_name = config.get("pk", "")
+            pk_found = False
+            for key in key_schema:
+                if key["KeyType"] == "HASH" and key["AttributeName"] == pk_name:
+                    pk_found = True
+                    break
+
+            if not pk_found:
+                print(f"WARNING: Table {table_name} has incorrect partition key. Expected: {pk_name}")
                 return False
+
+            # Check sort key
+            sk_name = config.get("sk", "")
+            if sk_name:
+                # Table should have a sort key
+                sk_found = False
+                for key in key_schema:
+                    if key["KeyType"] == "RANGE" and key["AttributeName"] == sk_name:
+                        sk_found = True
+                        break
+                if not sk_found:
+                    print(f"WARNING: Table {table_name} has incorrect sort key. Expected: {sk_name}")
+                    return False
+            else:
+                # Table should NOT have a sort key
+                for key in key_schema:
+                    if key["KeyType"] == "RANGE":
+                        print(f"WARNING: Table {table_name} has unexpected sort key: {key['AttributeName']}")
+                        return False
+
+            return True
         except Exception as err:
-            # Handle any other exceptions
-            print(f"Unexpected error checking table {table_name}: {err}")
+            print(f"Error validating table schema: {err}")
             return False

@@ -201,3 +201,41 @@ def create_response(status_code: int, body: dict) -> dict:
         "headers": {"Content-Type": "application/json"},
         "body": json.dumps(decimal_to_json_serializable(body)),
     }
+
+
+def error_response_pascal(error: str, status_code: int = 400, details=None, headers=None) -> dict:
+    """
+    Create standardized error response with PascalCase fields for API Gateway.
+
+    Args:
+        error: Error message
+        status_code: HTTP status code (default 400)
+        details: Additional error details
+        headers: Additional headers to include
+
+    Returns:
+        API Gateway response dict with PascalCase error field
+    """
+    response_headers = {
+        "Content-Type": "application/json",
+    }
+
+    if headers:
+        response_headers.update(headers)
+
+    error_body = {"Error": error}
+
+    if details:
+        # Convert detail keys to PascalCase
+        pascal_details = {}
+        for key, value in details.items():
+            # Simple conversion: capitalize first letter of each word
+            pascal_key = "".join(word.capitalize() for word in key.split("_"))
+            pascal_details[pascal_key] = value
+        error_body.update(pascal_details)
+
+    return {
+        "statusCode": status_code,
+        "headers": response_headers,
+        "body": json.dumps(error_body),
+    }

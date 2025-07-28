@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/character.dart';
 import '../models/segment_outcome.dart';
+import '../models/story.dart';
+import '../utils/json_utils.dart';
 import 'auth_service.dart';
 
 /// Character info for listing
@@ -15,9 +17,9 @@ class CharacterInfo {
 
   factory CharacterInfo.fromJson(Map<String, dynamic> json) {
     return CharacterInfo(
-      name: json['name'] as String,
-      id: json['id'] as String? ?? '',
-      dead: json['dead'] as bool? ?? false,
+      name: json['CharacterName'] as String,
+      id: json['CharacterID'] as String? ?? '',
+      dead: json['Dead'] as bool? ?? false,
     );
   }
 }
@@ -69,7 +71,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/characters'),
       headers: headers,
-      body: jsonEncode({'characterName': name, 'archetype': archetype}),
+      body: jsonEncode({'CharacterName': name, 'ArchetypeName': archetype}),
     );
 
     debugPrint(
@@ -83,7 +85,12 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return json['characterId'] as String;
+    return JsonUtils.getFlexibleRequired<String>(
+      json,
+      'CharacterID',
+      'characterId',
+      defaultValue: '',
+    );
   }
 
   /// Delete a character
@@ -91,7 +98,7 @@ class ApiService {
     debugPrint('ApiService: Deleting character - id: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.delete(
-      Uri.parse('$baseUrl/characters?characterId=$characterId'),
+      Uri.parse('$baseUrl/character?CharacterID=$characterId'),
       headers: headers,
     );
 
@@ -110,7 +117,7 @@ class ApiService {
   Future<Character?> getCharacterById(String characterId) async {
     debugPrint('ApiService: Getting character by ID: $characterId');
     final headers = await _getHeaders();
-    final uri = Uri.parse('$baseUrl/characters?characterId=$characterId');
+    final uri = Uri.parse('$baseUrl/character?CharacterID=$characterId');
     debugPrint('ApiService: Request URI: $uri');
 
     final response = await _httpClient.get(uri, headers: headers);
@@ -129,7 +136,8 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return Character.fromJson(json['character'] as Map<String, dynamic>);
+    final characterData = JsonUtils.getFlexibleMap(json, 'Character', 'character');
+    return Character.fromJson(characterData);
   }
 
   /// List all characters for the player
@@ -159,7 +167,11 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final characterList = (json['characters'] as List)
+    final characterList = JsonUtils.getFlexibleList<dynamic>(
+      json,
+      'Characters',
+      'characters',
+    )
         .map((char) => CharacterInfo.fromJson(char as Map<String, dynamic>))
         .toList();
 
@@ -169,24 +181,102 @@ class ApiService {
     return characterList;
   }
 
-  /// Start a story segment
-  Future<ActiveSegment> startSegment({
+  /// Start a story for a character
+  Future<Map<String, dynamic>> startStory({
+    required String characterId,
     required String storyId,
-    required String segmentId,
   }) async {
+    debugPrint('ApiService: Starting story - characterId: $characterId, storyId: $storyId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/segment/start'),
+      Uri.parse('$baseUrl/stories/start'),
       headers: headers,
-      body: jsonEncode({'storyId': storyId, 'segmentId': segmentId}),
+      body: jsonEncode({'CharacterID': characterId, 'StoryID': storyId}),
     );
 
+    debugPrint('ApiService: Start story response status: ${response.statusCode}');
+    debugPrint('ApiService: Start story response body: ${response.body}');
+
+    if (response.statusCode == 403) {
+      throw Exception('Story not available');
+    }
+    
+    if (response.statusCode == 409) {
+      throw Exception('Character is already in a story or game mode');
+    }
+
     if (response.statusCode != 200) {
-      throw Exception('Failed to start segment: ${response.body}');
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to start story');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return ActiveSegment.fromJson(json['segment'] as Map<String, dynamic>);
+    return JsonUtils.getFlexibleMap(json, 'Segment', 'segment');
+  }
+
+  /// Submit a decision for a story segment
+  Future<Map<String, dynamic>> submitDecision({
+    required String characterId,
+    required String decision,
+  }) async {
+    debugPrint('ApiService: Submitting decision - characterId: $characterId, decision: $decision');
+    final headers = await _getHeaders();
+    final response = await _httpClient.post(
+      Uri.parse('$baseUrl/segments/decision'),
+      headers: headers,
+      body: jsonEncode({'CharacterID': characterId, 'Decision': decision}),
+    );
+
+    debugPrint('ApiService: Submit decision response status: ${response.statusCode}');
+    debugPrint('ApiService: Submit decision response body: ${response.body}');
+
+    if (response.statusCode == 404) {
+      throw Exception('Segment not found');
+    }
+
+    if (response.statusCode == 409) {
+      throw Exception('Decision already submitted');
+    }
+
+    if (response.statusCode != 200) {
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to submit decision');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json;
+  }
+
+  /// Get segment outcome for a completed segment
+  Future<Map<String, dynamic>> getSegmentOutcome({
+    required String characterId,
+    required String segmentId,
+  }) async {
+    debugPrint('ApiService: Getting segment outcome - characterId: $characterId, segmentId: $segmentId');
+    final headers = await _getHeaders();
+    final response = await _httpClient.get(
+      Uri.parse('$baseUrl/segments/outcome?CharacterID=$characterId&SegmentID=$segmentId'),
+      headers: headers,
+    );
+
+    debugPrint('ApiService: Get segment outcome response status: ${response.statusCode}');
+    debugPrint('ApiService: Get segment outcome response body: ${response.body}');
+
+    if (response.statusCode == 404) {
+      throw Exception('Segment not found');
+    }
+
+    if (response.statusCode == 409) {
+      throw Exception('Segment not yet completed');
+    }
+
+    if (response.statusCode != 200) {
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to get segment outcome');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json;
   }
 
   /// Conclude a story segment
@@ -195,7 +285,7 @@ class ApiService {
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/segment/conclude'),
       headers: headers,
-      body: jsonEncode({'segmentId': segmentId}),
+      body: jsonEncode({'SegmentID': segmentId}),
     );
 
     if (response.statusCode != 200) {
@@ -203,23 +293,29 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return SegmentOutcome.fromJson(json['outcome'] as Map<String, dynamic>);
+    final outcomeData = JsonUtils.getFlexibleMap(json, 'Outcome', 'outcome');
+    return SegmentOutcome.fromJson(outcomeData);
   }
 
   /// Abandon current story run
-  Future<Character> abandonStory() async {
+  Future<Map<String, dynamic>> abandonStory(String characterId) async {
+    debugPrint('ApiService: Abandoning story for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/story/abandon'),
+      Uri.parse('$baseUrl/stories/abandon?CharacterID=$characterId'),
       headers: headers,
     );
 
+    debugPrint('ApiService: Abandon story response status: ${response.statusCode}');
+    debugPrint('ApiService: Abandon story response body: ${response.body}');
+
     if (response.statusCode != 200) {
-      throw Exception('Failed to abandon story: ${response.body}');
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to abandon story');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return Character.fromJson(json['character'] as Map<String, dynamic>);
+    return json;
   }
 
   /// Rest instead of continuing
@@ -235,26 +331,62 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return Character.fromJson(json['character'] as Map<String, dynamic>);
+    final characterData = JsonUtils.getFlexibleMap(json, 'Character', 'character');
+    return Character.fromJson(characterData);
   }
 
-  /// Get available stories
-  Future<List<StoryMetadata>> getStories() async {
+  /// Get available stories for a character
+  Future<List<StoryMetadata>> getStories(String characterId) async {
+    debugPrint('ApiService: Getting stories for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/story'),
+      Uri.parse('$baseUrl/stories?CharacterID=$characterId'),
       headers: headers,
     );
+
+    debugPrint('ApiService: Get stories response status: ${response.statusCode}');
+    debugPrint('ApiService: Get stories response body: ${response.body}');
 
     if (response.statusCode != 200) {
       throw Exception('Failed to get stories: ${response.body}');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final stories = json['stories'] as List<dynamic>;
+    final stories = JsonUtils.getFlexibleList<dynamic>(
+      json,
+      'Stories',
+      'stories',
+    );
     return stories
         .map((s) => StoryMetadata.fromJson(s as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Get current active story for a character
+  Future<Map<String, dynamic>?> getCurrentStory({
+    required String characterId,
+  }) async {
+    debugPrint('ApiService: Getting current story for character: $characterId');
+    final headers = await _getHeaders();
+    final response = await _httpClient.get(
+      Uri.parse('$baseUrl/stories/current?CharacterID=$characterId'),
+      headers: headers,
+    );
+
+    debugPrint('ApiService: Get current story response status: ${response.statusCode}');
+    debugPrint('ApiService: Get current story response body: ${response.body}');
+
+    if (response.statusCode == 404) {
+      // No active story
+      return null;
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to get current story: ${response.body}');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json;
   }
 
   /// Get available archetypes
@@ -276,7 +408,11 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final archetypes = (json['archetypes'] as List)
+    final archetypes = JsonUtils.getFlexibleList<dynamic>(
+      json,
+      'Archetypes',
+      'archetypes',
+    )
         .map((a) => ArchetypeInfo.fromJson(a as Map<String, dynamic>))
         .toList();
 
@@ -314,35 +450,3 @@ class ArchetypeInfo {
   }
 }
 
-/// Story metadata for browsing
-class StoryMetadata {
-  final String id;
-  final String name;
-  final String description;
-  final String author;
-  final List<String> tags;
-  final int estimatedDuration;
-  final int minLevel;
-
-  StoryMetadata({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.author,
-    required this.tags,
-    required this.estimatedDuration,
-    required this.minLevel,
-  });
-
-  factory StoryMetadata.fromJson(Map<String, dynamic> json) {
-    return StoryMetadata(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String,
-      author: json['author'] as String? ?? 'Unknown',
-      tags: List<String>.from(json['tags'] ?? []),
-      estimatedDuration: json['estimatedDuration'] as int? ?? 0,
-      minLevel: json['minLevel'] as int? ?? 0,
-    );
-  }
-}

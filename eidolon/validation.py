@@ -4,15 +4,15 @@ Validation utilities for Lambda functions.
 Provides common validation functions for user input.
 """
 
-import re
+from re import compile, search
 
 # Character name validation constants
-NAME_PATTERN = re.compile(r"^[a-zA-Z'-]+$")
+NAME_PATTERN = compile(r"^[a-zA-Z'-]+$")
 MIN_NAME_LENGTH = 4
 MAX_NAME_LENGTH = 20
 
 
-def validate_character_name(name: str) -> tuple:
+def validate_character_name(name: str) -> None:
     """
     Validate character name according to game rules.
 
@@ -27,59 +27,55 @@ def validate_character_name(name: str) -> tuple:
     Args:
         name: Character name to validate
 
-    Returns:
-        Tuple of (is_valid, error_message)
-        - If valid: (True, None)
-        - If invalid: (False, error_message)
+    Raises:
+        ValueError: If name violates any validation rules
     """
     if not name:
-        return False, "Name cannot be empty"
+        raise ValueError("Name cannot be empty")
 
     if len(name) < MIN_NAME_LENGTH:
-        return False, f"Name must be at least {MIN_NAME_LENGTH} characters"
+        raise ValueError(f"Name must be at least {MIN_NAME_LENGTH} characters")
 
     if len(name) > MAX_NAME_LENGTH:
-        return False, f"Name must be {MAX_NAME_LENGTH} characters or fewer"
+        raise ValueError(f"Name must be {MAX_NAME_LENGTH} characters or fewer")
 
     if not NAME_PATTERN.match(name):
-        return False, "Name must contain only letters, hyphens, and apostrophes"
+        raise ValueError("Name must contain only letters, hyphens, and apostrophes")
 
     # Check for special characters at start/end
     if name[0] in "-'" or name[-1] in "-'":
-        return False, "Name cannot start or end with special characters"
+        raise ValueError("Name cannot start or end with special characters")
 
     # Check for consecutive special characters
     for i in range(len(name) - 1):
         if name[i] in "-'" and name[i + 1] in "-'":
-            return False, "Name cannot have consecutive special characters"
+            raise ValueError("Name cannot have consecutive special characters")
 
     # Check for excessive repetition
     for i in range(len(name) - 2):
         if name[i] == name[i + 1] == name[i + 2]:
-            return False, "Name cannot have more than 2 consecutive identical characters"
+            raise ValueError("Name cannot have more than 2 consecutive identical characters")
 
     # Check letter ratio for short names with special chars
     if len(name) <= 3 and any(c in "-'" for c in name):
-        return False, "Short names cannot contain special characters"
+        raise ValueError("Short names cannot contain special characters")
 
     # Ensure reasonable letter-to-special-character ratio
     letter_count = sum(1 for c in name if c.isalpha())
     if letter_count / len(name) < 0.5:
-        return False, "Name must be primarily letters"
+        raise ValueError("Name must be primarily letters")
 
     # Check reserved prefixes
     name_lower = name.lower()
     reserved_prefixes = ["gm_", "admin_", "mod_", "system_", "server_", "npc_"]
     for prefix in reserved_prefixes:
         if name_lower.startswith(prefix):
-            return False, "Name uses reserved prefix"
+            raise ValueError("Name uses reserved prefix")
 
     # Check reserved exact names
     reserved_names = ["admin", "administrator", "moderator", "gamemaster", "system"]
     if name_lower in reserved_names:
-        return False, "Name is reserved"
-
-    return True, None
+        raise ValueError("Name is reserved")
 
 
 def validate_email(email: str) -> bool:
@@ -92,7 +88,7 @@ def validate_email(email: str) -> bool:
     Returns:
         True if valid email format, False otherwise
     """
-    pattern = re.compile(r"^[\w\.-]+@([\w-]+\.)+[\w-]{2,63}$")
+    pattern = compile(r"^[\w\.-]+@([\w-]+\.)+[\w-]{2,63}$")
     return bool(pattern.match(email))
 
 
@@ -106,11 +102,11 @@ def validate_uuid(uuid_value: str) -> bool:
     Returns:
         True if valid UUID format, False otherwise
     """
-    pattern = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
-    return bool(pattern.match(uuid_value))
+    pattern = compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+    return bool(pattern.match(uuid_value.lower()))
 
 
-def validate_positive_integer(value, min_value: int = 1, max_value=None) -> tuple:
+def validate_positive_integer(value: int, min_value: int = 1, max_value=None) -> None:
     """
     Validate positive integer within range.
 
@@ -119,22 +115,20 @@ def validate_positive_integer(value, min_value: int = 1, max_value=None) -> tupl
         min_value: Minimum allowed value (default: 1)
         max_value: Maximum allowed value (optional)
 
-    Returns:
-        Tuple of (is_valid, error_message)
+    Raises:
+        ValueError: If value is not a valid positive integer within range
     """
     if not isinstance(value, int):
-        return False, "Value must be an integer"
+        raise ValueError("Value must be an integer")
 
     if value < min_value:
-        return False, f"Value must be at least {min_value}"
+        raise ValueError(f"Value must be at least {min_value}")
 
     if max_value is not None and value > max_value:
-        return False, f"Value must be at most {max_value}"
-
-    return True, None
+        raise ValueError(f"Value must be at most {max_value}")
 
 
-def validate_enum(value: str, allowed_values: list, case_sensitive: bool = True) -> tuple:
+def validate_enum(value: str, allowed_values: list, case_sensitive: bool = True) -> None:
     """
     Validate value is in allowed list.
 
@@ -143,17 +137,15 @@ def validate_enum(value: str, allowed_values: list, case_sensitive: bool = True)
         allowed_values: List of allowed values
         case_sensitive: Whether comparison is case-sensitive
 
-    Returns:
-        Tuple of (is_valid, error_message)
+    Raises:
+        ValueError: If value is not in allowed list
     """
     if not case_sensitive:
         value = value.lower()
         allowed_values = [v.lower() for v in allowed_values]
 
     if value not in allowed_values:
-        return False, f"Value must be one of: {', '.join(allowed_values)}"
-
-    return True, None
+        raise ValueError(f"Value must be one of: {', '.join(allowed_values)}")
 
 
 def sanitize_string(value: str, max_length=None) -> str:
@@ -180,7 +172,7 @@ def sanitize_string(value: str, max_length=None) -> str:
     return value
 
 
-def validate_password_strength(password: str) -> tuple:
+def validate_password_strength(password: str) -> None:
     """
     Validate password meets security requirements.
 
@@ -194,22 +186,20 @@ def validate_password_strength(password: str) -> tuple:
     Args:
         password: Password to validate
 
-    Returns:
-        Tuple of (is_valid, error_message)
+    Raises:
+        ValueError: If password does not meet security requirements
     """
     if len(password) < 8:
-        return False, "Password must be at least 8 characters long"
+        raise ValueError("Password must be at least 8 characters long")
 
-    if not re.search(r"[A-Z]", password):
-        return False, "Password must contain at least one uppercase letter"
+    if not search(r"[A-Z]", password):
+        raise ValueError("Password must contain at least one uppercase letter")
 
-    if not re.search(r"[a-z]", password):
-        return False, "Password must contain at least one lowercase letter"
+    if not search(r"[a-z]", password):
+        raise ValueError("Password must contain at least one lowercase letter")
 
-    if not re.search(r"\d", password):
-        return False, "Password must contain at least one number"
+    if not search(r"\d", password):
+        raise ValueError("Password must contain at least one number")
 
-    if not re.search(r"[@$!%*?&]", password):
-        return False, "Password must contain at least one special character (@$!%*?&)"
-
-    return True, None
+    if not search(r"[@$!%*?&]", password):
+        raise ValueError("Password must contain at least one special character (@$!%*?&)")

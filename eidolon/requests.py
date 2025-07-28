@@ -12,7 +12,7 @@ from eidolon.logger import get_logger
 logger = get_logger(__name__)
 
 
-def parse_json_body(event: dict) -> tuple:
+def parse_json_body(event: dict) -> dict:
     """
     Parse JSON body from API Gateway event.
 
@@ -20,33 +20,24 @@ def parse_json_body(event: dict) -> tuple:
         event: API Gateway Lambda event
 
     Returns:
-        Tuple of (body, error_response)
-        - If successful: (parsed_body, None)
-        - If error: (None, error_response_dict)
+        Parsed JSON body as dict. Empty dict if body is empty.
+
+    Raises:
+        ValueError: If body contains invalid JSON or is not a JSON object
     """
     body_content = event.get("body", "")
 
     # Handle empty body
     if not body_content:
-        return {}, None
+        return {}
 
     try:
         body = json.loads(body_content)
         if not isinstance(body, dict):
-            error_response = {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Request body must be a JSON object"}),
-            }
-            return None, error_response
-        return body, None
-    except json.JSONDecodeError:
-        error_response = {
-            "statusCode": 400,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Invalid JSON in request body"}),
-        }
-        return None, error_response
+            raise ValueError("Request body must be a JSON object")
+        return body
+    except json.JSONDecodeError as err:
+        raise ValueError(f"Invalid JSON in request body: {str(err)}")
 
 
 def get_required_field(body: dict, field: str, field_type: type = str):
@@ -59,30 +50,31 @@ def get_required_field(body: dict, field: str, field_type: type = str):
         field_type: Expected type of the field (default: str)
 
     Returns:
-        Tuple of (value, error_message)
-        - If successful: (value, None)
-        - If error: (None, error_message)
+        Field value of the expected type
+
+    Raises:
+        ValueError: If field is missing, wrong type, or empty string
     """
     if field not in body:
-        return None, f"Missing required field: {field}"
+        raise ValueError(f"Missing required field: {field}")
 
     value = body[field]
 
     # Special handling for strings - strip whitespace
     if field_type is str:
         if not isinstance(value, str):
-            return None, f"Field '{field}' must be a string"
+            raise ValueError(f"Field '{field}' must be a string")
         value = value.strip()
         if not value:
-            return None, f"Field '{field}' cannot be empty"
-        return value, None
+            raise ValueError(f"Field '{field}' cannot be empty")
+        return value
 
     # Type validation for other types
     if not isinstance(value, field_type):
         type_name = field_type.__name__
-        return None, f"Field '{field}' must be a {type_name}"
+        raise ValueError(f"Field '{field}' must be a {type_name}")
 
-    return value, None
+    return value
 
 
 def get_optional_field(body: dict, field: str, field_type: type = str, default=None):
@@ -97,6 +89,9 @@ def get_optional_field(body: dict, field: str, field_type: type = str, default=N
 
     Returns:
         Field value or default
+
+    Raises:
+        ValueError: If field exists but has wrong type
     """
     if field not in body:
         return default
@@ -104,18 +99,21 @@ def get_optional_field(body: dict, field: str, field_type: type = str, default=N
     value = body[field]
 
     # Special handling for strings
-    if field_type is str and isinstance(value, str):
+    if field_type is str:
+        if not isinstance(value, str):
+            raise ValueError(f"Field '{field}' must be a string")
         value = value.strip()
         return value if value else default
 
     # Type validation
     if not isinstance(value, field_type):
-        return default
+        type_name = field_type.__name__
+        raise ValueError(f"Field '{field}' must be a {type_name}")
 
     return value
 
 
-def get_query_parameter(event: dict, param: str, required: bool = False) -> tuple:
+def get_query_parameter(event: dict, param: str, required: bool = False):
     """
     Extract query parameter from API Gateway event.
 
@@ -125,36 +123,45 @@ def get_query_parameter(event: dict, param: str, required: bool = False) -> tupl
         required: Whether parameter is required
 
     Returns:
-        Tuple of (value, error_message)
-        - If successful: (value, None)
-        - If error and required: (None, error_message)
-        - If missing and not required: (None, None)
+        Parameter value or None if not found and not required
+
+    Raises:
+        ValueError: If parameter is required but missing
     """
     params = event.get("queryStringParameters") or {}
     value = params.get(param, "").strip()
 
     if not value and required:
-        return None, f"Missing required query parameter: {param}"
+        raise ValueError(f"Missing required query parameter: {param}")
 
-    return value if value else None, None
+    return value if value else None
 
 
-def get_path_parameter(event: dict, param: str):
+def get_path_parameter(event: dict, param: str, required: bool = True):
     """
     Extract path parameter from API Gateway event.
 
     Args:
         event: API Gateway Lambda event
         param: Parameter name
+        required: Whether parameter is required (default: True)
 
     Returns:
-        Parameter value or None
+        Parameter value
+
+    Raises:
+        ValueError: If parameter is required but missing
     """
     params = event.get("pathParameters") or {}
-    return params.get(param)
+    value = params.get(param)
+
+    if not value and required:
+        raise ValueError(f"Missing required path parameter: {param}")
+
+    return value
 
 
-def get_header(event: dict, header: str, required: bool = False) -> tuple:
+def get_header(event: dict, header: str, required: bool = False):
     """
     Extract header from API Gateway event.
 
@@ -164,7 +171,10 @@ def get_header(event: dict, header: str, required: bool = False) -> tuple:
         required: Whether header is required
 
     Returns:
-        Tuple of (value, error_message)
+        Header value or None if not found and not required
+
+    Raises:
+        ValueError: If header is required but missing
     """
     headers = event.get("headers") or {}
 
@@ -172,12 +182,12 @@ def get_header(event: dict, header: str, required: bool = False) -> tuple:
     header_lower = header.lower()
     for key, value in headers.items():
         if key.lower() == header_lower:
-            return value, None
+            return value
 
     if required:
-        return None, f"Missing required header: {header}"
+        raise ValueError(f"Missing required header: {header}")
 
-    return None, None
+    return None
 
 
 def validate_content_type(event: dict, expected: str = "application/json") -> bool:
@@ -191,7 +201,7 @@ def validate_content_type(event: dict, expected: str = "application/json") -> bo
     Returns:
         True if content type matches or is not present, False otherwise
     """
-    content_type, _ = get_header(event, "Content-Type")
+    content_type = get_header(event, "Content-Type")
     if not content_type:
         return True  # Assume correct content type if not specified
 
@@ -202,39 +212,16 @@ def validate_content_type(event: dict, expected: str = "application/json") -> bo
     return media_type == expected_type
 
 
-def extract_player_id(event: dict) -> tuple:
-    """
-    Extract player ID from Cognito authorizer claims.
-
-    Args:
-        event: API Gateway event with Cognito authorizer.
-
-    Returns:
-        Tuple of (player_id, error_message).
-        - On success: (player_id, None)
-        - On failure: (None, "Unauthorized")
-    """
-    claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    player_id = claims.get("sub")
-
-    if not player_id:
-        return None, "Unauthorized"
-
-    return player_id, None
-
-
-def validate_required_fields(body: dict, required_fields: list) -> tuple:
+def validate_required_fields(body: dict, required_fields: list) -> None:
     """
     Validate that all required fields are present in request body.
 
     Args:
-        body: Parsed request body.
-        required_fields: List of required field names.
+        body: Parsed request body
+        required_fields: List of required field names
 
-    Returns:
-        Tuple of (is_valid, error_message).
-        - On success: (True, None)
-        - On failure: (False, error_message)
+    Raises:
+        ValueError: If any required fields are missing or empty
     """
     missing_fields = []
     for field in required_fields:
@@ -243,6 +230,122 @@ def validate_required_fields(body: dict, required_fields: list) -> tuple:
             missing_fields.append(field)
 
     if missing_fields:
-        return False, f"Missing required fields: {', '.join(missing_fields)}"
+        raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
 
-    return True, None
+
+def get_query_parameter_flexible(event: dict, param_pascal: str, param_camel: str = "", required: bool = False):
+    """
+    Extract query parameter from API Gateway event with flexible casing.
+
+    Tries PascalCase first, then camelCase if provided.
+
+    Args:
+        event: API Gateway Lambda event
+        param_pascal: Parameter name in PascalCase (preferred)
+        param_camel: Parameter name in camelCase (fallback)
+        required: Whether parameter is required
+
+    Returns:
+        Parameter value or None if not found and not required
+
+    Raises:
+        ValueError: If parameter is required but missing
+    """
+    params = event.get("queryStringParameters") or {}
+
+    # Try PascalCase first
+    value = params.get(param_pascal, "").strip()
+
+    # If not found and camelCase provided, try that
+    if not value and param_camel:
+        value = params.get(param_camel, "").strip()
+
+    if not value and required:
+        raise ValueError(f"Missing required query parameter: {param_pascal}")
+
+    return value if value else None
+
+
+def get_required_field_flexible(body: dict, field_pascal: str, field_camel: str = "", field_type: type = str):
+    """
+    Extract and validate required field from request body with flexible casing.
+
+    Tries PascalCase first, then camelCase if provided.
+
+    Args:
+        body: Parsed request body
+        field_pascal: Field name in PascalCase (preferred)
+        field_camel: Field name in camelCase (fallback)
+        field_type: Expected type of the field (default: str)
+
+    Returns:
+        Field value of the expected type
+
+    Raises:
+        ValueError: If field is missing, wrong type, or empty string
+    """
+    # Try PascalCase first
+    if field_pascal in body:
+        value = body[field_pascal]
+    elif field_camel and field_camel in body:
+        value = body[field_camel]
+    else:
+        raise ValueError(f"Missing required field: {field_pascal}")
+
+    # Special handling for strings - strip whitespace
+    if field_type is str:
+        if not isinstance(value, str):
+            raise ValueError(f"Field '{field_pascal}' must be a string")
+        value = value.strip()
+        if not value:
+            raise ValueError(f"Field '{field_pascal}' cannot be empty")
+        return value
+
+    # Type validation for other types
+    if not isinstance(value, field_type):
+        type_name = field_type.__name__
+        raise ValueError(f"Field '{field_pascal}' must be a {type_name}")
+
+    return value
+
+
+def get_optional_field_flexible(body: dict, field_pascal: str, field_camel: str = "", field_type: type = str, default=None):
+    """
+    Extract optional field from request body with flexible casing.
+
+    Tries PascalCase first, then camelCase if provided.
+
+    Args:
+        body: Parsed request body
+        field_pascal: Field name in PascalCase (preferred)
+        field_camel: Field name in camelCase (fallback)
+        field_type: Expected type of the field (default: str)
+        default: Default value if field is missing
+
+    Returns:
+        Field value or default
+
+    Raises:
+        ValueError: If field exists but has wrong type
+    """
+    # Try PascalCase first
+    if field_pascal in body:
+        value = body[field_pascal]
+    elif field_camel and field_camel in body:
+        value = body[field_camel]
+    else:
+        return default
+
+    # Special handling for strings
+    if field_type is str:
+        if not isinstance(value, str):
+            raise ValueError(f"Field '{field_pascal}' must be a string")
+        value = value.strip()
+        return value if value else default
+
+    # Type validation
+    if not isinstance(value, field_type):
+        type_name = field_type.__name__
+        raise ValueError(f"Field '{field_pascal}' must be a {type_name}")
+
+    return value

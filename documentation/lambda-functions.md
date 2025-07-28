@@ -10,14 +10,14 @@ All Lambda functions in this directory serve both the MUD Portal and Incremental
 
 All Lambda functions are fully implemented and working:
 
-- User login and account creation (via Cognito) ✓
-- Account validation ✓
-- Account deletion with complete data cleanup ✓
-- Listing characters ✓
-- Character creation with name validation ✓
-- Character retrieval with active segments ✓
-- Character deletion ✓
-- Archetype listing ✓
+- User login and account creation (via Cognito)
+- Account validation
+- Account deletion with complete data cleanup
+- Listing characters
+- Character creation with name validation
+- Character retrieval with active segments
+- Character deletion
+- Archetype listing
 
 The bloom filter for restricted character names is properly loaded and functional.
 
@@ -36,7 +36,7 @@ These functions handle character operations for both Portal and Incremental inte
 
 - `api_list_characters.py` - List all characters for a player
 - `api_add_character.py` - Create new character with bloom filter name validation
-- `api_get_character.py` - Get character details including active story segments
+- `api_get_character.py` - Get character details including active story segments (enriches inventory with item details)
 - `api_delete_character.py` - Delete a character by ID
 - `api_get_archetypes.py` - Get available character archetypes
 
@@ -60,12 +60,23 @@ Additional Lambda functions will be added for Incremental-specific features:
 Lambda functions import shared modules from the `eidolon/` directory:
 
 ```python
-from eidolon.cors import apply_cors
-from eidolon.dynamo import DynamoOperations
+from eidolon.cors import cors_handler
+from eidolon.dynamo import dynamo
 from eidolon.logger import get_logger
-from eidolon.requests import get_query_parameter, parse_json_body
-from eidolon.responses import success_response, error_response
+from eidolon.requests import get_query_parameter, parse_json_body, get_required_field
+from eidolon.responses import create_response, error_response
+from eidolon.utilities import build_lambda_response, log_lambda_invocation, handle_preflight_if_options, handle_lambda_error
+from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.validation import validate_uuid
 ```
+
+### Key Modules:
+
+- **eidolon.utilities**: Provides high-level convenience functions that wrap common patterns
+- **eidolon.cors**: Provides the `cors_handler` object for CORS management
+- **eidolon.responses**: Low-level response building functions
+- **eidolon.player**: Player authentication and validation functions
+- **eidolon.dynamo**: Database operations wrapper
 
 These modules are automatically included in the deployment package during the build process.
 
@@ -96,9 +107,9 @@ Note: The `ACTIVE_SEGMENTS_TABLE` and `CHARACTER_HISTORY_TABLE` are referenced i
 
 ### Character Configuration
 
-- `DEFAULT_HEALTH` - Default health points for new characters (default: 100)
-- `DEFAULT_ESSENCE` - Default essence points for new characters (default: 100)
-- `MAX_CHARACTERS_PER_PLAYER` - Maximum characters allowed per player (default: 10)
+- `DEFAULT_HEALTH` - Default health points for new characters (default: 10)
+- `DEFAULT_ESSENCE` - Default essence points for new characters (default: 3)
+- `MAX_CHARACTERS_PER_PLAYER` - Maximum characters allowed per player (default: 1)
 
 ### CORS Configuration
 
@@ -118,8 +129,8 @@ All Lambda functions must follow these parameter standards:
   - Use `parse_json_body()` from `eidolon.requests`
 
 - **Path Parameters**: **NEVER** use for IDs - always use query parameters instead
-  - ❌ Wrong: `/characters/123`
-  - ✅ Correct: `/characters?characterId=123`
+  - Wrong: `/characters/123`
+  - Correct: `/characters?characterId=123`
 
 ### Consistency Requirements
 
@@ -157,7 +168,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Now you can import Lambda functions and shared modules
 from lambda.api_list_characters import lambda_handler
-from eidolon.cors import apply_cors
+from eidolon.utilities import build_lambda_response
 
 # Create test event
 event = {
@@ -181,19 +192,161 @@ response = lambda_handler(event, {})
 3. Add the function to the appropriate CDK stack
 4. The build process will automatically package it
 
+## Lambda Function Architecture Pattern
+
+Each Lambda function must have a Lambda handler which handles the event, calls a function with the business logic, then handles the response. The business logic function will call functions from the `./eidolon` library to perform their tasks. None of the database or I/O code should be present in the Lambda function beyond the event feed to the handler and the response back to the API.
+
+### Required Structure
+
+```python
+def lambda_handler(event: dict, context: object) -> dict:
+    """Lambda entry point - handles AWS-specific concerns."""
+    # 1. Log invocation
+    log_lambda_invocation(context, event)
+
+    # 2. Handle CORS preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
+
+    # 3. Extract and validate authentication
+    try:
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+
+    # 4. Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+
+    # 5. Parse request parameters
+    # 6. Call business logic function
+    # 7. Return response
+    try:
+        result = business_logic_function(param1, param2)
+        return build_lambda_response(200, result, event)
+    except ValueError as err:
+        logger.warning("Business logic error", extra={"error": str(err)})
+        return build_lambda_response(400, {"error": str(err)}, event)
+    except RuntimeError as err:
+        logger.error("Database error", extra={"error": str(err)})
+        return build_lambda_response(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error(err, context, event)
+
+def business_logic_function(param1: str, param2: str) -> dict:
+    """Pure business logic - testable and AWS-agnostic."""
+    # 1. Validate business rules
+    # 2. Call eidolon library functions for DB operations
+    # 3. Orchestrate multiple operations as needed
+    # 4. Return success/error dictionary with data
+```
+
+### Benefits of This Pattern
+
+- **Separation of Concerns**: AWS-specific code stays in the handler, business logic remains pure
+- **Testability**: Business logic can be unit tested without mocking AWS services
+- **Consistency**: All database operations go through the eidolon library
+- **Maintainability**: Clear boundaries between infrastructure and business code
+- **Reusability**: Business logic functions can be called from different contexts
+
 ## Best Practices
 
 1. **Error Handling**: Always catch and log exceptions appropriately
-2. **Input Validation**: Validate all inputs from API Gateway
-3. **CORS**: Use the shared `apply_cors` function for consistent CORS handling
-4. **Logging**: Use the standard Python logger for CloudWatch integration
-5. **Environment Variables**: Use environment variables for configuration
-6. **IAM Permissions**: Follow least privilege principle
-7. **Response Format**: Return consistent API Gateway response format:
+2. **Lambda Handler Exception Rule**: The `lambda_handler` function must **NEVER** raise exceptions - all errors must be caught and converted to HTTP responses
+3. **Input Validation**: Validate all inputs from API Gateway
+4. **CORS**: Use the `cors_handler` object from `eidolon.cors` for consistent CORS handling
+5. **Logging**: Use the `log_lambda_invocation` utility for consistent logging
+6. **Environment Variables**: Use environment variables for configuration
+7. **IAM Permissions**: Follow least privilege principle
+8. **Response Format**: Use `build_lambda_response` for consistent responses:
+
    ```python
-   return {
-       "statusCode": 200,
-       "headers": {"Content-Type": "application/json"},
-       "body": json.dumps({"key": "value"})
-   }
+   # Preferred pattern using utilities
+   return build_lambda_response(200, {"key": "value"}, event)
+
+   # This handles CORS headers and response formatting automatically
    ```
+
+9. **Architecture Pattern**: Follow the handler/business logic separation pattern described above
+10. **Utility Functions**: Prefer high-level utility functions from `eidolon.utilities`:
+    - `log_lambda_invocation()` - For logging invocations
+    - `handle_preflight_if_options()` - For CORS preflight handling
+    - `build_lambda_response()` - For building responses with CORS
+    - `handle_lambda_error()` - For consistent error handling
+
+### Critical: Lambda Handler Exception Handling
+
+The `lambda_handler` function is the interface between AWS Lambda and your code. It must **ALWAYS** return a valid HTTP response and **NEVER** allow exceptions to escape. Here's why this is critical:
+
+```python
+def lambda_handler(event: dict, context: object) -> dict:
+    """
+    AWS Lambda entry point.
+
+    CRITICAL: This function must NEVER raise exceptions. All exceptions must be
+    caught and converted to appropriate HTTP responses.
+    """
+    try:
+        # All Lambda logic goes inside this try block
+        logger.info("Lambda invoked", extra={
+            "request_id": context.request_id,
+            "function_name": context.function_name
+        })
+
+        # Your code here...
+
+        return build_lambda_response(200, {"success": True}, event)
+
+    except ValueError as err:
+        # Handle expected business logic errors
+        logger.error("Validation error", extra={"error": str(err)})
+        return build_lambda_response(400, {"error": str(err)}, event)
+
+    except Exception as err:
+        # CRITICAL: Catch ALL exceptions to prevent Lambda failures
+        # Use handle_lambda_error for consistent error handling
+        return handle_lambda_error(err, context, event)
+```
+
+**Why This Matters:**
+
+- **API Gateway**: Unhandled exceptions cause API Gateway to return generic 500 errors with no useful information
+- **Debugging**: Without proper error handling, debugging production issues becomes nearly impossible
+- **Monitoring**: CloudWatch alarms and metrics depend on proper error logging
+- **User Experience**: Clients need consistent, parseable error responses
+
+## Data Transformations
+
+Some Lambda functions apply transformations to data before returning responses:
+
+### Character Data Transformations
+
+The `api_get_character.py` function applies several transformations for client compatibility:
+
+1. **Inventory Enrichment**: Raw inventory UUIDs are enriched with item details
+   - Database: `{"RightHand": "sword-uuid"}`
+   - Response adds: `{"InventoryDetails": {"RightHand": {"itemId": "sword-uuid", "name": "Iron Sword", ...}}}`
+
+2. **Decimal to Float Conversion**: DynamoDB Decimal types are converted to standard floats
+   - Applied to all numeric fields in the response
+
+### JSON Field Naming Convention
+
+All JSON responses use PascalCase for field names to maintain consistency with DynamoDB field names:
+
+- Database field: `CharacterName`
+- API response: `CharacterName` (not transformed)
+- This applies to all fields: `CharacterID`, `AvailableStories`, `Attributes`, etc.
+
+These transformations ensure Flutter clients receive data in a consistent, usable format while maintaining the original database structure.

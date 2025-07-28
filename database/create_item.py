@@ -1,28 +1,23 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Copyright 2024-2025 Jason E. Robinson
 
 This module adds an item based on a prototype to a room.
 """
 
 import os
+import sys
 import uuid
 from decimal import Decimal
 
-from eidolon.dynamo import delete_item, get_item, get_table, put_item, update_item
+# Add parent directory to path to import eidolon modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from botocore.exceptions import ClientError
+
+from eidolon.dynamo import dynamo  # noqa: E402
+from eidolon.dynamo import TableName
 
 
 def display_rooms() -> list:
@@ -33,9 +28,7 @@ def display_rooms() -> list:
         A list of room dictionaries.
     """
     try:
-        rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
-        response = rooms_table.scan()
-        rooms = response.get("Items", [])
+        rooms = dynamo.scan(TableName.ROOMS)
         if not rooms:
             print("No rooms found.")
             return []
@@ -73,9 +66,7 @@ def display_prototypes() -> list:
     Fetches and displays all item prototypes from the 'prototypes' DynamoDB table.
     """
     try:
-        prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
-        response = prototypes_table.scan()
-        prototypes = response.get("Items", [])
+        prototypes = dynamo.scan(TableName.PROTOTYPES)
         if not prototypes:
             print("No prototypes found.")
             return []
@@ -145,16 +136,16 @@ def add_item_to_table(new_item: dict) -> bool:
     Returns:
         True if the item was successfully added to the table, False otherwise.
     """
-    items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
-    if put_item(items_table, new_item):
+    try:
+        dynamo.put_item(TableName.ITEMS, new_item)
         print(f"Successfully added item '{new_item['item_name']}' to items table.")
         return True
-    else:
-        print("Error saving new item to items table.")
+    except Exception as err:
+        print(f"Error saving new item to items table: {err}")
         return False
 
 
-def add_item_to_room(room: dict, new_item: dict) -> bool:
+def add_item_to_room(room: dict, new_item: dict) -> None:
     """
     Adds the new item to the 'items' table and updates the room to include the item.
 
@@ -162,44 +153,48 @@ def add_item_to_room(room: dict, new_item: dict) -> bool:
         room: The room dictionary where the item will be added.
         new_item: The item dictionary to add.
 
-    Returns:
-        True if the item was successfully added to the room, False otherwise.
+    Raises:
+        ValueError: If room or item data is invalid
+        RuntimeError: If database operations fail
     """
     room_id = int(room.get("RoomID", 0))
 
-    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
-    current_room = get_item(rooms_table, {"RoomID": room_id})
+    try:
+        current_room = dynamo.get_item(TableName.ROOMS, {"RoomID": room_id})
+    except ClientError as err:
+        raise RuntimeError(f"Error fetching room: {err}")
 
     if not current_room:
-        print(f"Room {room_id} not found.")
-        return False
+        raise ValueError(f"Room {room_id} not found.")
 
     current_item_ids = current_room.get("ItemID", [])
 
-    # Ensure current_item_ids is a list
     if not isinstance(current_item_ids, list):
         current_item_ids = [current_item_ids] if current_item_ids else []
 
     # Add the new item's ID to the room's ItemID list
     item_id = new_item.get("ItemID")
     if not item_id:
-        print("New item does not have an ID.")
-        return False
+        raise ValueError("New item does not have an ID.")
 
     current_item_ids.append(item_id)
 
-    if update_item(rooms_table, {"RoomID": room_id}, "SET ItemID = :item_ids", {":item_ids": current_item_ids}):
+    try:
+        dynamo.update_item(
+            TableName.ROOMS,
+            Key={"RoomID": room_id},
+            UpdateExpression="SET ItemID = :item_ids",
+            ExpressionAttributeValues={":item_ids": current_item_ids},
+        )
         print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
-        return True
-    else:
-        print("Error updating room.")
+    except ClientError as err:
         # Attempt to roll back by deleting the item we just added
-        items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
-        if delete_item(items_table, {"ItemID": new_item["ItemID"]}):
+        try:
+            dynamo.delete_item(TableName.ITEMS, Key={"ItemID": new_item["ItemID"]})
             print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
-        else:
-            print("Error rolling back item addition.")
-        return False
+        except ClientError as rollback_err:
+            print(f"Error rolling back item addition: {rollback_err}")
+        raise RuntimeError(f"Error updating room: {err}")
 
 
 def main() -> None:
@@ -208,51 +203,61 @@ def main() -> None:
     """
 
     while True:
-        rooms: list = display_rooms()
-        if not rooms:
-            print("No rooms available. Exiting.")
-            break
+        try:
+            rooms: list = display_rooms()
+            if not rooms:
+                print("No rooms available. Exiting.")
+                break
 
-        room_id = prompt_for_room()
-        if room_id is None:
-            print("Exiting.")
-            break
+            room_id = prompt_for_room()
+            if room_id is None:
+                print("Exiting.")
+                break
 
-        room = next((r for r in rooms if int(r["RoomID"]) == room_id), None)
-        if not room:
-            print("Room not found.")
+            room = next((r for r in rooms if int(r["RoomID"]) == room_id), None)
+            if not room:
+                print("Room not found.")
+                continue
+
+            prototypes: list = display_prototypes()
+            if not prototypes:
+                print("No item prototypes found. Please add some prototypes first.")
+                continue
+
+            prototype_id: str = prompt_for_prototype()
+            if not prototype_id:
+                print("No prototype selected. Returning to room selection.")
+                continue
+
+            selected_prototype = next((p for p in prototypes if p.get("PrototypeID") == prototype_id), None)
+            if not selected_prototype:
+                print("Prototype not found.")
+                continue
+
+            print(f"Selected prototype: {selected_prototype}")
+
+            new_item: dict = create_new_item_from_prototype(selected_prototype)
+            print(f"New item created: {new_item}")
+
+            try:
+                add_item_to_table(new_item)
+                print(f"Successfully added '{new_item['item_name']}' to items table.")
+            except (ValueError, RuntimeError) as err:
+                print(f"Failed to add item to table: {err}")
+                continue
+
+            try:
+                add_item_to_room(room, new_item)
+                print(f"Successfully added '{new_item['item_name']}' to room {room_id}.")
+            except (ValueError, RuntimeError) as err:
+                print(f"Failed to add item to room: {err}")
+
+        except RuntimeError as err:
+            print(f"Database error: {err}")
             continue
-
-        prototypes: list = display_prototypes()
-        if not prototypes:
-            print("No item prototypes found. Please add some prototypes first.")
+        except Exception as err:
+            print(f"Unexpected error: {err}")
             continue
-
-        prototype_id: str = prompt_for_prototype()
-        if not prototype_id:
-            print("No prototype selected. Returning to room selection.")
-            continue
-
-        selected_prototype = next((p for p in prototypes if p.get("PrototypeID") == prototype_id), None)
-        if not selected_prototype:
-            print("Prototype not found.")
-            continue
-
-        print(f"Selected prototype: {selected_prototype}")
-
-        new_item: dict = create_new_item_from_prototype(selected_prototype)
-        print(f"New item created: {new_item}")
-
-        if add_item_to_table(new_item):
-            print(f"Successfully added '{new_item['item_name']}' to items table.")
-        else:
-            print("Failed to add item to table.")
-            continue
-
-        if add_item_to_room(room, new_item):
-            print(f"Successfully added '{new_item['item_name']}' to room {room_id}.")
-        else:
-            print("Failed to add item to room.")
 
 
 if __name__ == "__main__":

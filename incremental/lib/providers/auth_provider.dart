@@ -1,21 +1,10 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2024‑2025 Jason E. Robinson
 
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+
 import '../services/auth_service.dart';
 
 enum AuthStatus { uninitialized, authenticated, unauthenticated, loading }
@@ -40,17 +29,13 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('AuthProvider $_instanceId: Initializing auth service...');
       await _authService.initialize();
 
-      debugPrint(
-        'AuthProvider $_instanceId: Checking authentication status...',
-      );
+      debugPrint('AuthProvider $_instanceId: Checking authentication status...');
       final isAuth = await _authService.isAuthenticated();
       debugPrint('AuthProvider $_instanceId: isAuthenticated = $isAuth');
 
       if (isAuth) {
         _userEmail = await _authService.currentUserEmail;
-        debugPrint(
-          'AuthProvider $_instanceId: User authenticated as $_userEmail',
-        );
+        debugPrint('AuthProvider $_instanceId: User authenticated as $_userEmail');
         _status = AuthStatus.authenticated;
       } else {
         debugPrint('AuthProvider $_instanceId: User not authenticated');
@@ -58,9 +43,7 @@ class AuthProvider extends ChangeNotifier {
       }
       notifyListeners();
     } catch (err) {
-      debugPrint(
-        'AuthProvider $_instanceId: Error during initialization: $err',
-      );
+      debugPrint('AuthProvider $_instanceId: Error during initialization: $err');
       _status = AuthStatus.unauthenticated;
       notifyListeners();
     }
@@ -106,9 +89,7 @@ class AuthProvider extends ChangeNotifier {
       await _authService.signIn(email, password);
       _userEmail = email;
       _status = AuthStatus.authenticated;
-      debugPrint(
-        'AuthProvider: SignIn successful, status set to authenticated',
-      );
+      debugPrint('AuthProvider: SignIn successful, status set to authenticated');
       notifyListeners();
 
       // Verify auth status immediately after login
@@ -143,11 +124,7 @@ class AuthProvider extends ChangeNotifier {
     await _authService.forgotPassword(email);
   }
 
-  Future<void> confirmPassword(
-    String email,
-    String code,
-    String newPassword,
-  ) async {
+  Future<void> confirmPassword(String email, String code, String newPassword) async {
     await _authService.confirmPassword(email, code, newPassword);
   }
 

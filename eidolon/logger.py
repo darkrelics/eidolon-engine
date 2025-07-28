@@ -2,10 +2,11 @@
 
 import json
 import logging
-import os
 import sys
 from datetime import datetime, timezone
 from functools import wraps
+
+from eidolon.environment import AWS_EXECUTION_ENV, LOG_LEVEL
 
 
 def get_logger(name: str, level=None):
@@ -21,7 +22,7 @@ def get_logger(name: str, level=None):
     logger = logging.getLogger(name)
 
     # Set logging level from environment or parameter
-    log_level = level or os.environ.get("LOG_LEVEL", "INFO")
+    log_level = level or LOG_LEVEL
     logger.setLevel(getattr(logging, log_level.upper()))
 
     # Remove existing handlers to avoid duplicates
@@ -31,7 +32,7 @@ def get_logger(name: str, level=None):
     handler = logging.StreamHandler(sys.stdout)
 
     # Use JSON formatter in Lambda, simple formatter locally
-    if os.environ.get("AWS_EXECUTION_ENV"):
+    if AWS_EXECUTION_ENV:
         handler.setFormatter(JsonFormatter())
     else:
         handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))

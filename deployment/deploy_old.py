@@ -1,19 +1,7 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Copyright 2024-2025 Jason E. Robinson
 
 Eidolon Engine Deployment Script
 """
@@ -44,6 +32,7 @@ SCRIPTS_PATH = "../scripts_lua"
 
 
 def load_config() -> dict:
+    """Load deployment configuration from YAML file."""
     if not os.path.exists(CONFIG_PATH):
         if not os.path.exists(CONFIG_TEMPLATE_PATH):
             raise FileNotFoundError(f"Neither {CONFIG_PATH} nor {CONFIG_TEMPLATE_PATH} exist")
@@ -58,6 +47,7 @@ def load_config() -> dict:
 
 
 def validate_s3_bucket(bucket_name, region="us-east-1") -> bool:
+    """Check if S3 bucket exists and is accessible."""
     s3_client = boto3.client("s3", region_name=region)
     try:
         s3_client.head_bucket(Bucket=bucket_name)
@@ -69,11 +59,13 @@ def validate_s3_bucket(bucket_name, region="us-east-1") -> bool:
 
 
 def load_template(template_path) -> str:
+    """Load CloudFormation template from file."""
     with open(template_path, "r", encoding="utf-8") as file:
         return file.read()
 
 
 def deploy_stack(client, stack_name, template_body, parameters) -> bool:
+    """Deploy or update CloudFormation stack."""
     cf_parameters: list = [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()]
     try:
         if stack_exists(client, stack_name):
@@ -109,6 +101,7 @@ def deploy_stack(client, stack_name, template_body, parameters) -> bool:
 
 
 def stack_exists(client, stack_name) -> bool:
+    """Check if CloudFormation stack exists."""
     try:
         client.describe_stacks(StackName=stack_name)
         return True
@@ -117,6 +110,7 @@ def stack_exists(client, stack_name) -> bool:
 
 
 def wait_for_stack_completion(client, stack_name) -> None:
+    """Wait for CloudFormation stack operation to complete."""
     print(f"Waiting for stack {stack_name} to complete...")
     waiter = client.get_waiter("stack_create_complete")
     waiter.wait(StackName=stack_name)
@@ -124,6 +118,7 @@ def wait_for_stack_completion(client, stack_name) -> None:
 
 
 def get_stack_outputs(client, stack_name) -> dict:
+    """Get outputs from CloudFormation stack."""
     try:
         stack = client.describe_stacks(StackName=stack_name)
         outputs = stack["Stacks"][0]["Outputs"]
@@ -134,6 +129,7 @@ def get_stack_outputs(client, stack_name) -> dict:
 
 
 def update_configuration_file(config_updates, user_pool_name=None) -> None:
+    """Update deployment configuration file with new values."""
     try:
         config: dict = load_config()
     except (IOError, yaml.YAMLError) as err:
@@ -171,7 +167,10 @@ def update_configuration_file(config_updates, user_pool_name=None) -> None:
         "LogLevel": logging_config.get("LogLevel", 20),
         "LogGroup": cloudwatch_updates.get("LogGroupName", logging_config.get("LogGroup", "/eidolon/game-logs")),
         "LogStream": logging_config.get("LogStream", "application"),
-        "MetricNamespace": cloudwatch_updates.get("MetricNamespace", logging_config.get("MetricNamespace", "eidolon/application")),
+        "MetricNamespace": cloudwatch_updates.get(
+            "MetricNamespace",
+            logging_config.get("MetricNamespace", "eidolon/application"),
+        ),
     }
     logging_config.update(logging_updates)
     config["Logging"] = logging_config
@@ -249,7 +248,12 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
 
             try:
                 with open(local_path, "rb") as file_data:
-                    s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=file_data, ContentType="text/x-lua")
+                    s3_client.put_object(
+                        Bucket=bucket_name,
+                        Key=s3_key,
+                        Body=file_data,
+                        ContentType="text/x-lua",
+                    )
                 print(f"Uploaded: {filename} -> s3://{bucket_name}/{s3_key}")
                 success_count += 1
             except ClientError as err:
@@ -264,6 +268,7 @@ def deploy_scripts(bucket_name, prefix="scripts") -> bool:
 
 
 def gather_all_parameters() -> dict:
+    """Gather deployment parameters from user input."""
     parameters: dict = {}
 
     # Cognito parameters
@@ -305,6 +310,7 @@ def gather_all_parameters() -> dict:
 
 
 def main() -> None:
+    """Main deployment function."""
     cloudformation_client = boto3.client("cloudformation")
     try:
         # Gather all parameters upfront
@@ -318,7 +324,12 @@ def main() -> None:
 
         # Deploy Cognito stack
         cognito_template: str = load_template(COGNITO_TEMPLATE_PATH)
-        if not deploy_stack(cloudformation_client, COGNITO_STACK_NAME, cognito_template, all_parameters["cognito"]):
+        if not deploy_stack(
+            cloudformation_client,
+            COGNITO_STACK_NAME,
+            cognito_template,
+            all_parameters["cognito"],
+        ):
             print("Deployment failed at Cognito stack. Exiting...")
             return
 
@@ -326,7 +337,12 @@ def main() -> None:
 
         # Deploy DynamoDB stack
         dynamo_template: str = load_template(DYNAMO_TEMPLATE_PATH)
-        if not deploy_stack(cloudformation_client, DYNAMO_STACK_NAME, dynamo_template, all_parameters["dynamo"]):
+        if not deploy_stack(
+            cloudformation_client,
+            DYNAMO_STACK_NAME,
+            dynamo_template,
+            all_parameters["dynamo"],
+        ):
             print("Deployment failed at DynamoDB stack. Exiting...")
             return
 
@@ -342,7 +358,12 @@ def main() -> None:
 
         # Deploy CodeBuild stack
         codebuild_template: str = load_template(CODEBUILD_TEMPLATE_PATH)
-        if not deploy_stack(cloudformation_client, CODEBUILD_STACK_NAME, codebuild_template, all_parameters["codebuild"]):
+        if not deploy_stack(
+            cloudformation_client,
+            CODEBUILD_STACK_NAME,
+            codebuild_template,
+            all_parameters["codebuild"],
+        ):
             print("Deployment failed at CodeBuild stack. Exiting...")
             return
 
@@ -359,7 +380,12 @@ def main() -> None:
 
         # Deploy CloudWatch stack
         cloudwatch_template: str = load_template(CLOUDWATCH_TEMPLATE_PATH)
-        if not deploy_stack(cloudformation_client, CLOUDWATCH_STACK_NAME, cloudwatch_template, all_parameters["cloudwatch"]):
+        if not deploy_stack(
+            cloudformation_client,
+            CLOUDWATCH_STACK_NAME,
+            cloudwatch_template,
+            all_parameters["cloudwatch"],
+        ):
             print("Deployment failed at CloudWatch stack. Exiting...")
             return
 

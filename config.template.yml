@@ -46,6 +46,10 @@ DynamoDB:
     Exits: exits
     Prototypes: prototypes
     Motd: motd
+    Segments: segments
+    ActiveSegments: active_segments
+    Opponents: opponents
+    History: history
   AccessPolicyArn: "" # deployment-generated
 
 # API configuration (required)

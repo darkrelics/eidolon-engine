@@ -193,7 +193,7 @@ class BuildExecutor:
             if build_id:
                 builds[project_name] = build_id
             else:
-                print(f"✗ Failed to start build for {project_name}, aborting")
+                print(f"[ERROR] Failed to start build for {project_name}, aborting")
                 return False
 
         # Monitor all builds

@@ -59,16 +59,16 @@ class DeploymentState:
             "status": stack_info.get("status", "CREATE_COMPLETE"),
         }
 
-    def get_stack(self, stack_name: str):
+    def get_stack(self, stack_name: str) -> dict:
         """Get information about a deployed stack.
 
         Args:
             stack_name: Name of the CloudFormation stack
 
         Returns:
-            Stack information if exists, None otherwise
+            Stack information if exists, empty dict otherwise
         """
-        return self.state["stacks"].get(stack_name)
+        return self.state["stacks"].get(stack_name, {})
 
     def add_resource(self, resource_type: str, resource_id: str, resource_info: dict) -> None:
         """Track individual AWS resource.
@@ -88,7 +88,7 @@ class DeploymentState:
             "physical_id": resource_info.get("physical_id"),
         }
 
-    def get_resource(self, resource_type: str, resource_id: str):
+    def get_resource(self, resource_type: str, resource_id: str) -> dict:
         """Get information about a deployed resource.
 
         Args:
@@ -96,9 +96,9 @@ class DeploymentState:
             resource_id: Resource identifier
 
         Returns:
-            Resource information if exists, None otherwise
+            Resource information if exists, empty dict otherwise
         """
-        return self.state["resources"].get(resource_type, {}).get(resource_id)
+        return self.state["resources"].get(resource_type, {}).get(resource_id, {})
 
     def update_parameters(self, parameters: dict) -> None:
         """Update deployment parameters.
@@ -109,7 +109,11 @@ class DeploymentState:
         self.state["parameters"].update(parameters)
 
     def get_parameters(self) -> dict:
-        """Get all stored deployment parameters."""
+        """Get all stored deployment parameters.
+
+        Returns:
+            Copy of parameters dictionary
+        """
         return self.state["parameters"].copy()
 
     def add_deployment_event(self, event_type: str, event_data: dict) -> None:
@@ -127,12 +131,24 @@ class DeploymentState:
         if len(self.state["deployment_history"]) > 100:
             self.state["deployment_history"] = self.state["deployment_history"][-100:]
 
-    def get_deployed_stacks(self) -> set[str]:
-        """Get set of all deployed stack names."""
+    def get_deployed_stacks(self) -> set:
+        """Get set of all deployed stack names.
+
+        Returns:
+            Set of stack names
+        """
         return set(self.state["stacks"].keys())
 
     def get_deployment_summary(self) -> dict:
-        """Get summary of current deployment state."""
+        """Get summary of current deployment state.
+
+        Returns:
+            Dict containing:
+                - last_deployment: ISO timestamp of last deployment
+                - deployed_stacks: List of deployed stack names
+                - total_resources: Total count of all resources
+                - parameter_count: Number of stored parameters
+        """
         return {
             "last_deployment": self.state["last_deployment"],
             "deployed_stacks": list(self.get_deployed_stacks()),
@@ -189,11 +205,19 @@ class ConfigurationManager:
         return self.config.get(section, {})
 
     def exists(self) -> bool:
-        """Check if configuration file exists."""
+        """Check if configuration file exists.
+
+        Returns:
+            True if config file exists, False otherwise
+        """
         return self.config_path.exists()
 
     def get_aws_config(self) -> dict:
-        """Get AWS-specific configuration."""
+        """Get AWS-specific configuration.
+
+        Returns:
+            AWS configuration section, empty dict if not found
+        """
         return self.config.get("AWS", {})
 
     def merge_with_template(self, template_path: str) -> None:
@@ -213,8 +237,11 @@ class ConfigurationManager:
     def _deep_merge(self, base: dict, override: dict) -> None:
         """Deep merge override dict into base dict.
 
+        Recursively merges nested dictionaries, with values from override
+        taking precedence. Non-dict values are replaced entirely.
+
         Args:
-            base: Base dictionary to merge into
+            base: Base dictionary to merge into (modified in place)
             override: Dictionary with values to override
         """
         for key, value in override.items():

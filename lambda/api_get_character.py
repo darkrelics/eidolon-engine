@@ -1,180 +1,168 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason Robinson
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+Copyright 2024-2025 Jason E. Robinson
 
 Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-import os
-
-from eidolon.cors import cors_handler
-from eidolon.dynamo import decimal_to_float, get_item, get_table
+from eidolon.character import get_active_segment_for_character, get_character, validate_character_ownership
+from eidolon.dynamo import decimal_to_float
+from eidolon.items import get_inventory_details
 from eidolon.logger import get_logger
-from eidolon.requests import extract_player_id, get_query_parameter
-from eidolon.responses import create_response, error_response, not_found_response
+from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.requests import get_query_parameter_flexible
+from eidolon.utilities import (
+    build_lambda_response_pascal,
+    handle_lambda_error_pascal,
+    handle_preflight_if_options,
+    log_lambda_invocation,
+)
+from eidolon.validation import validate_uuid
 
 # Configure logging
 logger = get_logger(__name__)
 
-# Get table names from environment
-CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
-ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
 
-
-def get_character_by_id(character_id, player_id):
+def get_character_business_logic(character_id: str, player_id: str) -> dict:
     """
-    Get character by UUID and verify ownership.
+    Business logic for getting character data.
 
     Args:
-        character_id: Character UUID
-        player_id: Cognito user ID for ownership verification
+        character_id: Character UUID from query parameter
+        player_id: Authenticated player ID
 
     Returns:
-        Character data or None if not found or not owned by player
+        Dict containing:
+            - success: bool
+            - data: dict (if success)
+            - error: str (if failed)
+            - status_code: int (if failed)
     """
-    logger.info("Getting character by ID", extra={"character_id": character_id, "player_id": player_id})
+    # Validate character ID format
+    if not character_id:
+        return {"success": False, "error": "Missing required parameter: characterId", "status_code": 400}
 
-    characters_table = get_table(CHARACTERS_TABLE)
-    character = get_item(characters_table, {"CharacterID": character_id})
+    if not validate_uuid(character_id):
+        return {"success": False, "error": "Invalid character ID format", "status_code": 400}
 
-    if not character:
-        logger.warning("Character not found", extra={"character_id": character_id})
-        return None
+    # Get character and validate ownership
+    try:
+        character = get_character(character_id)
+        validate_character_ownership(character, player_id)
+    except ValueError as err:
+        if "not found" in str(err).lower():
+            return {"success": False, "error": "Character not found", "status_code": 404}
+        return {"success": False, "error": str(err), "status_code": 400}
+    except RuntimeError as err:
+        logger.error("Failed to get character", extra={"error": str(err), "character_id": character_id})
+        return {"success": False, "error": "Failed to retrieve character data", "status_code": 500}
 
-    # Verify ownership
-    character_owner = character.get("PlayerID")
-    if character_owner != player_id:
-        logger.warning(
-            "Character ownership mismatch",
-            extra={"character_id": character_id, "player_id": player_id, "character_owner": character_owner},
-        )
-        return None
-
-    logger.info(
-        "Character retrieved successfully",
-        extra={
-            "character_id": character_id,
-            "character_name": character.get("CharacterName"),
-            "game_mode": character.get("GameMode"),
-        },
-    )
-    return character
-
-
-def get_active_segment(player_id):
-    """
-    Get active segment for a player if any.
-
-    Args:
-        player_id: Cognito user ID
-
-    Returns:
-        Active segment data or None
-    """
-    logger.info("Checking for active segment", extra={"player_id": player_id})
-
-    active_segments_table = get_table(ACTIVE_SEGMENTS_TABLE)
-    active_segment = get_item(active_segments_table, {"PlayerID": player_id})
-
-    if active_segment:
-        logger.info(
-            "Active segment found",
+    # Check for active segments using eidolon library
+    active_segment = {}
+    try:
+        active_segment = get_active_segment_for_character(character_id, player_id)
+        if active_segment:
+            logger.info(
+                "Active segment found for character",
+                extra={
+                    "character_id": character_id,
+                    "segment_type": active_segment.get("SegmentType"),
+                    "story_id": active_segment.get("StoryID"),
+                },
+            )
+    except RuntimeError as err:
+        logger.error(
+            "Error retrieving active segments",
             extra={
-                "player_id": player_id,
-                "segment_id": active_segment.get("SegmentID"),
-                "story_id": active_segment.get("StoryID"),
+                "error": str(err),
+                "character_id": character_id,
             },
         )
-    else:
-        logger.info("No active segment for player", extra={"player_id": player_id})
+        # Continue without active segment data - not critical for response
 
-    return active_segment
+    # Normalize attribute and skill keys to lowercase for consistency
+    attributes = character.get("Attributes")
+    if attributes:
+        character["Attributes"] = {k.lower(): v for k, v in attributes.items()}
+
+    skills = character.get("Skills")
+    if skills:
+        character["Skills"] = {k.lower(): v for k, v in skills.items()}
+
+    # Enrich inventory with item details
+    inventory = character.get("Inventory")
+    if inventory:
+        character["InventoryDetails"] = get_inventory_details(inventory)
+
+    # Build response data with PascalCase keys
+    response_data = {"Character": decimal_to_float(character)}
+
+    # Add active segment if found
+    if active_segment:
+        response_data["ActiveSegment"] = decimal_to_float(active_segment)
+
+    return {"success": True, "data": response_data}
 
 
-def lambda_handler(event, context) -> dict:
+def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler for getting incremental character data.
 
     Args:
-        event: API Gateway event with Cognito authorizer
+        event: API Gateway Lambda proxy event
         context: Lambda context
 
     Returns:
-        API Gateway response
+        API Gateway Lambda proxy response
     """
-    # Log Lambda invocation
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
+    # Log invocation
+    log_lambda_invocation(context, event)
 
-    # Handle preflight requests
-    if event.get("httpMethod") == "OPTIONS":
-        return cors_handler.handle_preflight(event)
+    # Handle preflight
+    preflight_response = handle_preflight_if_options(event)
+    if preflight_response:
+        return preflight_response
 
+    # Extract player ID from JWT
     try:
-        # Extract player ID from Cognito authorizer
-        player_id, auth_error = extract_player_id(event)
-        if auth_error:
-            return auth_error
-
-        # Get character ID from query parameters
-        character_id, error_msg = get_query_parameter(event, "characterId", required=True)
-        if error_msg:
-            return cors_handler.add_cors_headers(error_response(error_msg), event)
-
-        logger.info("Extracting character ID from query parameters", extra={"character_id": character_id})
-
-        # Get character data
-        character = get_character_by_id(character_id, player_id)
-
-        if not character:
-            logger.warning("Character not found or access denied", extra={"character_id": character_id, "player_id": player_id})
-            return cors_handler.add_cors_headers(not_found_response("Character"), event)
-
-        # Get active segment if any
-        active_segment = get_active_segment(player_id)
-
-        # Prepare response data
-        response_data: dict = {
-            "character": decimal_to_float(character),
-            "activeSegment": decimal_to_float(active_segment) if active_segment else None,
-        }
-
-        # Return success response
-        logger.info(
-            "Character data retrieved successfully",
-            extra={
-                "status_code": 200,
-                "character_id": character_id,
-                "character_name": character.get("CharacterName"),
-                "has_active_segment": active_segment is not None,
-            },
-        )
-        return cors_handler.add_cors_headers(create_response(200, response_data), event)
-
+        player_id = extract_player_id_from_event(event)
+    except ValueError as err:
+        logger.error("Authentication failed", extra={"error": str(err)})
+        return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
     except Exception as err:
-        logger.error("Unexpected error in lambda_handler", extra={"error": str(err)}, exc_info=True)
-        logger.info("Lambda response", extra={"status_code": 500})
-        return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+        return handle_lambda_error_pascal(err, context, event)
+
+    # Validate player exists
+    try:
+        if not validate_player_exists(player_id):
+            logger.error("Player not found in database", extra={"player_id": player_id})
+            return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
+    except RuntimeError as err:
+        logger.error("Failed to validate player", extra={"error": str(err)})
+        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
+    except Exception as err:
+        return handle_lambda_error_pascal(err, context, event)
+
+    # Get character ID from query parameters (flexible: CharacterID or characterId)
+    character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
+    if not character_id:
+        return build_lambda_response_pascal(400, {"error": "Missing CharacterID parameter"}, event)
+
+    # Call business logic
+    try:
+        result = get_character_business_logic(character_id, player_id)  # type: ignore
+
+        if result["success"]:
+            return build_lambda_response_pascal(200, result["data"], event)
+        else:
+            # Log the error if it's a server error
+            if result["status_code"] >= 500:
+                logger.error(
+                    "Business logic error",
+                    extra={"character_id": character_id, "error": result["error"]},
+                )
+            return build_lambda_response_pascal(result["status_code"], {"error": result["error"]}, event)
+    except Exception as err:
+        return handle_lambda_error_pascal(err, context, event)
