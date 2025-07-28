@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.53.2
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.44.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.84.1
-	github.com/aws/smithy-go v1.22.4
+	github.com/aws/smithy-go v1.22.5
 	github.com/bits-and-blooms/bloom/v3 v3.7.0
 	github.com/goccy/go-yaml v1.18.0
 	github.com/gofrs/uuid/v5 v5.3.2
