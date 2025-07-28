@@ -197,7 +197,7 @@ Present three action buttons:
 
 #### 4.1.1 Application Integration
 
-The incremental game will be integrated into the existing portal structure:
+The incremental game will be integrated into the existing portal structure. The Flutter application follows a standard directory organization with screens for UI components, services for API communication, models for data structures, and providers for state management. This structure ensures clear separation of concerns and maintainable code organization.
 
 ```
 portal/
@@ -245,52 +245,90 @@ New Lambda functions following existing patterns:
 
 **api_start_story**
 
-- Validate character can start story
+- Validate character can start story (GameMode must be "None")
+- Create first segment in ActiveSegments table
+- Immediately process segment to calculate outcomes (unless decision segment)
 - Use DynamoDB transaction to atomically:
   - Set GameMode to "Incremental"
   - Update AvailableStories and ActiveStoryID
-  - Create ActiveSegments record
-  - Create initial History entry
-- Handle transaction conflicts gracefully
-- Return first segment
+  - Apply any immediate character updates
+- Ensure polling system is active (enable EventBridge if needed)
+- Return complete event list to client for display
 
 **api_submit_decision**
 
-- Record player decision
-- Schedule next segment processing
-- Return acknowledgment
+- Validate decision is valid option for segment
+- Record decision in ActiveSegments record
+- Update SegmentHistory with decision made
+- Determine next segment based on choice
+- Create and immediately process next segment
+- Mark current segment for immediate advancement
+- Return new segment events to client
 
 **api_get_current_story**
 
 - Retrieve current active story and segment state
-- Calculate time remaining
-- Return story metadata and segment data
-- Include segment-specific fields (options for decisions, results for narratives, combat state)
+- Calculate time remaining until segment completion
+- For processed segments, return pre-calculated ClientEvents
+- For decision segments awaiting input, return options
+- Include processing status to help client understand state
+- Return story metadata and current progress
 
-**api_complete_segment**
+**ops_advance_story** (Called by EventBridge poller)
 
-- Process segment outcome
-- Consider transaction approach based on frequency:
-  - For story completion: Use transaction for atomic cleanup
-  - For segment advancement: May use standard operations with idempotency
-- Apply character updates (health, XP, inventory)
-- Write History record
-- Delete current segment
-- Create next segment (if continuing)
-- Advance to next segment or complete story
+- Attempt to claim segment by setting RunningFlag
+- Read pre-calculated outcome and next segment from ActiveSegments
+- Apply stored CharacterUpdates to character record
+- Write SegmentHistory record with complete details
+- If story continues:
+  - Create next segment
+  - Process immediately if not decision type
+  - Update character's ActiveSegmentID
+- If story ends:
+  - Write StoryHistory summary record
+  - Reset character GameMode to "None"
+  - Update story lists (completed/abandoned)
+- Delete the completed segment
+- Check if ActiveSegments table is empty to control polling
 
 **api_abandon_story**
 
+- Validate character owns the active story
 - Use DynamoDB transaction for atomic cleanup:
-  - Clear active story and segments
-  - Reset GameMode to "None"
+  - Update character GameMode back to "None"
+  - Clear ActiveStoryID and ActiveSegmentID
   - Update AbandonedStories list
-  - Create History abandonment record
-- Apply abandonment penalties if any
+- Write StoryHistory record marking abandonment
+- Delete all ActiveSegments for this story
+- Return confirmation to player
+
+**ops_process_segment** (Internal processor)
+
+- Called immediately when segments are created
+- Examines segment type and runs appropriate calculations
+- For narrative segments: Execute skill checks using MUD mechanics
+- For combat segments: Simulate full MUD combat with wounds
+- Awards skill/attribute XP using established progression system
+- Generates complete ClientEvents array for display
+- Stores all outcomes in ActiveSegments record
+- Updates ProcessingStatus to "processed"
+
+**ops_segment_poller** (EventBridge triggered)
+
+- Runs every 30 seconds via EventBridge rule
+- Queries EndTimeIndex for segments ready to advance
+- Implements dual-scan strategy for stuck segment recovery
+- Sends ready segments to SQS for processing
+- Manages SSM parameter for polling state control
+- Enables/disables EventBridge rule based on table state
 
 #### 4.2.2 Database Schema (DynamoDB)
 
+The database schema leverages DynamoDB's flexible document structure to store game content and track player progress. Each table serves a specific purpose with carefully chosen key structures for optimal query performance.
+
 **Story Table**
+
+The Story table contains the high-level definitions for each story available in the game. Stories are immutable once deployed to ensure consistent player experiences.
 
 ```
 {
@@ -309,12 +347,15 @@ New Lambda functions following existing patterns:
 
 **Segments Table**
 
+Segments define the individual building blocks of each story. Each segment represents approximately 10 events (no more than 20) to maintain manageable scope. The table uses a composite key structure to group segments by their parent story.
+
 ```
 {
   StoryID: String (HASH),
   SegmentID: String (RANGE),
-  SegmentType: String,  // decision|narrative|combat
+  SegmentType: String,  // decision|narrative|combat|rest
   ShortStatus: String,
+  DefaultStatus: String,  // Status message shown between events
   SegmentDuration: Number,
   DecisionText: String,  // For decision segments
   DecisionOptions: Map,  // For decision segments
@@ -322,34 +363,53 @@ New Lambda functions following existing patterns:
   DefaultDecision: String,  // For decision segments
   Challenges: List,  // For narrative segments
   Combat: Map,  // For combat segments
-  Results: Map  // For narrative/combat segments
+  RestSegment: Boolean  // Indicates if this is a rest segment
 }
 ```
 
 **ActiveSegments Table**
 
+The ActiveSegments table tracks in-progress story segments with a front-loaded processing design. When a segment starts, all outcomes are immediately calculated and stored, allowing for efficient retrieval when the timer expires. This approach prevents cheating and ensures consistent results.
+
 ```
 {
   ActiveSegmentID: String (HASH),
-  CharacterID: String,
+  CharacterID: String (GSI - CharacterID-index),
+  PlayerID: String,
   StoryID: String,
+  StoryTitle: String,
   SegmentID: String,
+  SegmentType: String,
+  DefaultStatus: String,  // Cached from segment definition
   StartTime: Number,
   EndTime: Number (GSI - EndTimeIndex),
+  ProcessedAt: Number,  // When outcomes were calculated
+  ProcessingStatus: String,  // pending|processed|failed|awaiting_decision
+  ProcessingError: String,  // Error details if processing failed
+  NextSegmentID: String,  // Pre-calculated next segment
+  ClientEvents: List,  // Complete event list for client display
+  CharacterUpdates: Map,  // All character changes to apply
   Decision: String,  // For decision segments
-  ChallengeResults: List,  // For narrative segments
-  CombatState: Map,  // For combat segments
-  Outcome: String  // Final outcome
+  DecisionMadeAt: Number,  // When player made decision
+  ChallengeResults: List,  // Detailed challenge outcomes
+  CombatState: Map,  // Final combat results
+  Outcome: String,  // death|failure|minimal|normal|exceptional
+  Transmitted: Boolean,  // Set when sent to SQS
+  TransmittedAt: Number,  // When sent to SQS
+  RunningFlag: String  // Request ID of processor
 }
 ```
 
-**Global Secondary Index:**
+**Global Secondary Indexes:**
 
+- **CharacterID-index**: CharacterID - For querying active segments by character
 - **EndTimeIndex**: EndTime - For finding segments ready to process
 
 _Note: Segments are deleted after processing. All segments in this table are implicitly active._
 
 **Character Table (Extended Fields)**
+
+The Character table gains additional fields to support the incremental game mode while maintaining full compatibility with the MUD system. The GameMode field acts as a mutex to prevent simultaneous access to both game modes.
 
 ```
 {
@@ -369,37 +429,62 @@ _Note: Segments are deleted after processing. All segments in this table are imp
 
 - **CharacterNameIndex**: CharacterName - For ensuring unique character names
 
-**History Table**
+**StoryHistory Table**
+
+The StoryHistory table provides a high-level summary of each story attempt, whether completed or abandoned. This table enables quick queries for player progress and story analytics without loading detailed segment data.
 
 ```
 {
   CharacterID: String (HASH),
   StoryID: String (RANGE),
-  StoryTitle: String,        // Title of the story for display
-  StartedAt: String,         // ISO timestamp when story began
-  FinishedAt: String,        // ISO timestamp when story ended
-  StoryType: String,         // one-time|daily|repeatable
-  SegmentHistory: List[      // Detailed record of each segment
-    {
-      SegmentID: String,
-      SegmentType: String,   // decision|narrative|combat
-      Comment: String,       // Brief description of what happened
-      Decision: String,      // For decision segments - player's choice text
-      Outcome: String,       // For narrative/combat segments
-      ResultText: String,    // Narrative text shown to player
-      ChallengeResults: List,// For narrative segments
-      FinalCombatState: Map, // For combat segments
-      CompletedAt: String
-    }
-  ],
-  FinalOutcome: String,      // death|failure|minimal|normal|exceptional
-  TotalDuration: Number,     // Seconds from start to finish
-  Rewards: Map,              // Aggregated rewards from story
-  AbandonedCount: Number     // Times story was abandoned before completion
+  StoryTitle: String,
+  StoryType: String,  // one-time|daily|repeatable
+  StartedAt: Number,  // Unix timestamp when started
+  CompletedAt: Number,  // Unix timestamp when completed/abandoned
+  Abandoned: Boolean,  // True if story was abandoned
+  FinalOutcome: String,  // death|failure|minimal|normal|exceptional|abandoned
+  TotalDuration: Number,  // Total seconds from start to finish
+  SegmentCount: Number,  // Number of segments completed
+  SkillXPAwarded: Map,  // Total skill XP: {skill_name: amount}
+  AttributeXPAwarded: Map,  // Total attribute XP: {attribute_name: amount}
+  ItemsGained: List,  // Item IDs acquired during story
+  ItemsLost: List,  // Item IDs lost during story
+  RoomsVisited: List,  // Room IDs character moved to
+  DecisionsMade: Map  // {segment_id: decision_choice}
+}
+```
+
+**SegmentHistory Table**
+
+The SegmentHistory table preserves the complete record of each segment's execution, including all events shown to the player and character updates applied. This detailed history supports analytics, debugging, and potential future features like story replay.
+
+```
+{
+  CharacterID: String (HASH),
+  ActiveSegmentID: String (RANGE),
+  PlayerID: String,
+  StoryID: String,
+  SegmentID: String,
+  SegmentType: String,  // narrative|combat|decision|rest
+  StartTime: Number,
+  EndTime: Number,
+  ProcessedAt: Number,  // When outcomes were calculated
+  CompletedAt: Number,  // When segment was advanced
+  Outcome: String,  // death|failure|minimal|normal|exceptional
+  Decision: String,  // For decision segments: choice made
+  DecisionMadeAt: Number,
+  ClientEvents: List,  // Complete event array sent to client
+  CharacterUpdates: Map,  // All character changes applied
+  ChallengeResults: List,  // Detailed skill check results
+  CombatState: Map,  // Final combat results if applicable
+  SkillXPAwarded: Map,  // Skill XP from this segment
+  AttributeXPAwarded: Map  // Attribute XP from this segment
 }
 ```
 
 **Opponents Table**
+
+The Opponents table defines reusable adversaries for combat segments. Each opponent represents a fully-realized combatant with stats that integrate with the MUD combat system, ensuring consistent mechanics across both game modes.
 
 ```
 {
@@ -596,12 +681,12 @@ Operations that benefit from DynamoDB transactions:
 1. **Story Start** (Recommended Transaction):
    - Update Character table (GameMode, ActiveStoryID, AvailableStories)
    - Create ActiveSegments record
-   - Create initial History entry
+   - Create initial StoryHistory entry
    - **Rationale**: Prevents orphaned segments if character update fails
 
 2. **Story Completion/Abandonment** (Recommended Transaction):
    - Update Character table (GameMode to "None", story lists)
-   - Create final History entry
+   - Create final StoryHistory entry
    - Delete ActiveSegment(s)
    - **Rationale**: Ensures clean state transitions
 
@@ -613,7 +698,7 @@ Operations that benefit from DynamoDB transactions:
 
 4. **Segment Processing** (Consider Non-Transactional):
    - Character updates (health, XP, location)
-   - History recording
+   - SegmentHistory recording
    - **Rationale**: High frequency operation; consider idempotent design instead
 
 5. **Combat Rewards** (Mixed Approach):

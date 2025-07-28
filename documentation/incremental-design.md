@@ -4,6 +4,20 @@
 
 This document provides the technical design specifications for implementing the Incremental Game component of the Eidolon Engine. It details the system architecture, data flows, API specifications, and integration patterns required to deliver a timer-based story progression system that seamlessly integrates with the existing MUD infrastructure using a simplified serverless approach.
 
+### 1.1 Key Design Updates
+
+The incremental system now implements a front-loaded processing architecture with the following major changes:
+
+1. **Pre-calculated Outcomes**: All segment outcomes are calculated when the segment starts, stored in the ActiveSegments table, and simply applied when the timer expires.
+
+2. **Enhanced ActiveSegments Table**: New fields include ProcessedAt, ProcessingStatus, ClientEvents, CharacterUpdates, and DefaultStatus to support front-loaded processing.
+
+3. **Split History Tables**: The History table is now divided into StoryHistory (for overall story tracking) and SegmentHistory (for detailed segment progression).
+
+4. **No TTL Fields**: All TTL fields have been removed from the design as segment cleanup is handled by the polling process.
+
+5. **DefaultStatus Field**: All segment definitions now include a DefaultStatus field for consistent UI display.
+
 ## 2. System Architecture Overview
 
 ### 2.1 High-Level Architecture
@@ -59,6 +73,10 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 ```
 
 #### 3.1.2 Segments Table
+
+**Important Design Constraint**: Each segment should contain approximately 10 events (narrative beats, challenges, or combat rounds) and must not exceed 20 events. This ensures segments remain manageable in scope while providing meaningful progression chunks for players.
+
+**DefaultStatus Field**: All segment types now include a DefaultStatus field that provides fallback status text when ShortStatus is not available. This ensures the UI always has descriptive text to display during segment progression.
 
 ```python
 # Decision segment example
@@ -424,7 +442,7 @@ TransactWriteItems:
 2. Delete ActiveSegments:
    - Remove all segments for story
 
-3. Put History:
+3. Put StoryHistory:
    - Record abandonment
 ```
 
@@ -580,8 +598,9 @@ Response: {
         "Status": "active",
         "StartTime": 1737000300,
         "EndTime": 1737003900,
-        "ChallengeResults": [],
-        "Outcome": null
+        "ProcessingStatus": "completed",
+        "TimeRemaining": 240,  // Calculated from EndTime - current time
+        "ShortStatus": "Navigating the moonlit path"  // From segment or DefaultStatus
     }
 }
 
@@ -687,10 +706,22 @@ Purpose: Retrieve completed segment results
 Query Parameters: characterId, segmentId
 Response: {
     "Outcome": "normal",  # death/failure/minimal/normal/exceptional
-    "Narrative": "You navigate successfully...",
-    "Effects": {
-        "Experience": 50,
-        "Items": ["herb_bundle"]
+    "ClientEvents": [  # Pre-calculated narrative events
+        {
+            "type": "narrative",
+            "text": "You navigate successfully through the moonlit path..."
+        },
+        {
+            "type": "outcome",
+            "result": "normal",
+            "effects": {"experience": 50, "items": ["herb_bundle"]}
+        }
+    ],
+    "CharacterUpdates": {  # Applied effects
+        "experience": 50,
+        "items": ["herb_bundle"],
+        "room": null,
+        "wounds": []
     },
     # Additional fields based on segment type:
     "NextSegmentID": "seg-uuid-003",  # For non-terminal outcomes
@@ -699,7 +730,7 @@ Response: {
         {"skill": "Perception", "success": true},
         {"skill": "Survival", "success": false}
     ],
-    "CombatState": {  # For combat segments: final combat state
+    "CombatSummary": {  # For combat segments: final combat state
         "rounds": 8,
         "playerWoundsReceived": 2,
         "opponentDefeated": true
@@ -707,10 +738,11 @@ Response: {
 }
 
 Notes:
+- ClientEvents contains pre-formatted events for UI display
+- CharacterUpdates shows what was applied to the character
 - Outcome types: death, failure, minimal, normal, exceptional
 - NextSegmentID only included for non-terminal outcomes (not death/failure)
-- Type-specific fields are only included for their respective segment types
-- This endpoint is called after a segment timer expires to get results
+- This endpoint retrieves pre-calculated results from ActiveSegments
 ```
 
 **POST /stories/abandon**
@@ -839,34 +871,68 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 """Record player decision and schedule next segment."""
 # Key Operations:
 - Validate decision against current segment options
-- Update story record with decision
-- Calculate and set NextCompletionTime in story record
-- Return acknowledgment
+- Update ActiveSegment record with decision
+- For decision segments, outcomes are simple - just record the choice
+- Return acknowledgment with next segment timing
 ```
 
-#### 5.2.4 api_process_segment
+#### 5.2.4 api_calculate_segment_outcomes
 
 ```python
-"""Process segment completion (triggered by EventBridge)."""
+"""Calculate outcomes for newly created segments (async processing)."""
 # Key Operations:
-- Retrieve story and character data
-- Calculate outcome based on character stats/skills
+- Triggered immediately after segment creation
+- Load segment definition and character data
+- Based on segment type:
+  - Decision: No calculation needed, just set as ready
+  - Narrative: Run all challenge checks, determine outcome
+  - Combat: Simulate entire combat, record all rounds
+- Update ActiveSegments record with:
+  - ProcessingStatus: "completed"
+  - Outcome: Calculated result
+  - ClientEvents: Formatted events for UI display
+  - CharacterUpdates: Effects to apply on completion
+- For combat segments:
+  - Simulate all rounds up to maxRounds
+  - Track wounds inflicted on character
+  - Determine victory/defeat outcome
+- For narrative segments:
+  - Roll all challenge attempts
+  - Calculate average sigma for outcome
+  - Check for critical successes/failures
+# Error Handling:
+- If processing fails, mark ProcessingStatus as "failed"
+- Segment poller will skip failed segments
+- Consider retry logic for transient failures
+```
+
+#### 5.2.5 api_process_segment
+
+```python
+"""Process segment outcomes when timer expires (triggered by EventBridge)."""
+# Key Operations:
+- Query ActiveSegments by EndTimeIndex for expired segments
+- For each expired segment:
+  - Verify ProcessingStatus is "completed"
+  - Apply pre-calculated CharacterUpdates to character
+  - Write outcome to SegmentHistory table
+  - If story complete, update StoryHistory
+  - Delete processed segment from ActiveSegments
 - Design for high-frequency operation:
   Option A - Non-transactional with idempotency:
-    - Store processing results with unique ID
     - Use conditional updates to prevent double processing
     - Apply character updates with version checking
-    - Write History with duplicate detection
+    - Write SegmentHistory with duplicate detection
   Option B - Minimal transaction for critical state:
     - Use transaction only for story completion
     - Standard operations for segment-to-segment
     - Balance consistency with 2x capacity cost
-- If story complete, check if polling should be disabled
+- If no segments remain, disable polling EventBridge rule
 # Performance Considerations:
-- This runs every 10 seconds across all active stories
-- 2x capacity cost adds up quickly with transactions
-- Consider eventual consistency for non-critical updates
-# Note: Called by segment poller Lambda
+- This runs every 10 seconds when stories are active
+- Pre-calculated outcomes eliminate complex processing
+- Consider eventual consistency for history writes
+# Note: Called by segment poller Lambda every 10 seconds
 ```
 
 #### 5.2.5 cognito_new_player
@@ -906,7 +972,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 
 ### 5.3 DynamoDB Polling Implementation
 
-The segment completion system uses EventBridge to create a serverless polling mechanism that processes story segments when their timers expire. This approach eliminates the need for always-on infrastructure while maintaining precise timing control.
+The segment completion system uses EventBridge to create a serverless polling mechanism that checks for segments ready to complete and applies their pre-calculated outcomes. With the front-loaded processing design, the poller simply needs to identify expired segments and trigger the cleanup process.
 
 #### EventBridge Rule Configuration
 
@@ -918,9 +984,13 @@ When the polling Lambda executes, it performs these operations:
 
 1. **Time-based Query**: The function queries the ActiveSegments table using the EndTimeIndex GSI, searching for all segments where the EndTime is less than or equal to the current timestamp. This efficient query leverages the index to avoid scanning the entire table.
 
-2. **Batch Processing**: For each segment found ready for completion, the system invokes the segment completion processor with the necessary identifiers: SegmentID, CharacterID, StoryID, and SegmentDefinitionID. This allows parallel processing of multiple completed segments.
+2. **Outcome Application**: For each segment found ready for completion, the system:
+   - Verifies the ProcessingStatus is "completed" (skips if still pending/processing)
+   - Applies the pre-calculated CharacterUpdates to the character record
+   - Writes the segment outcome to the SegmentHistory table
+   - Updates the StoryHistory if the story is complete
 
-3. **Automatic Cleanup**: After processing, segments are deleted from the ActiveSegments table, keeping the table size manageable and query performance optimal.
+3. **Automatic Cleanup**: After applying outcomes, segments are deleted from the ActiveSegments table, keeping the table size manageable and query performance optimal.
 
 #### Dynamic Polling Control
 
@@ -932,7 +1002,7 @@ The system implements intelligent polling management to minimize costs:
 
 - **Cost Optimization**: This on-demand polling approach ensures Lambda functions only execute when there's actual work to process, significantly reducing operational costs compared to continuous polling.
 
-The combination of EventBridge scheduling, GSI-based queries, and dynamic rule management creates an efficient, scalable system for handling thousands of concurrent story progressions without requiring dedicated infrastructure.
+The combination of EventBridge scheduling, GSI-based queries, and front-loaded processing creates an efficient, scalable system for handling thousands of concurrent story progressions without requiring complex runtime calculations.
 
 ### 5.4 Outcome Calculation Logic
 
