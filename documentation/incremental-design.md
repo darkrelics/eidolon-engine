@@ -355,6 +355,92 @@ The simplified architecture avoids Global Secondary Indexes by:
 - Accepting slightly less efficient queries for admin operations
 - Leveraging existing table structures
 
+### 3.3 Transaction Design Patterns
+
+#### 3.3.1 DynamoDB Transaction Considerations
+
+**GUIDANCE**: Use DynamoDB transactions judiciously, balancing consistency requirements with performance and cost (2x capacity consumption).
+
+**Transaction Limitations**:
+- Maximum 100 unique items per transaction
+- Maximum 4MB total size
+- All items must be in same Region
+- Cannot target same item multiple times
+- Consumes double the read/write capacity units
+
+#### 3.3.2 Story Start Transaction (Recommended)
+
+When starting a story, use a transaction to prevent orphaned segments:
+
+```
+TransactWriteItems:
+1. Update Character:
+   - ConditionExpression: GameMode = "None"
+   - Set GameMode = "Incremental"
+   - Set ActiveStoryID and ActiveSegmentID
+   - Remove story from AvailableStories
+
+2. Put ActiveSegments:
+   - ConditionExpression: attribute_not_exists(ActiveSegmentID)
+   - Create segment with timing data
+
+3. Put History:
+   - Create story start record
+```
+
+**Rationale**: Prevents partial state where character is locked but no segment exists.
+
+#### 3.3.3 Segment Processing Patterns
+
+For high-frequency segment advancement, consider non-transactional approaches:
+
+**Option 1: Idempotent Operations**
+- Use unique request IDs
+- Check if already processed before applying updates
+- Store processing results for retry scenarios
+
+**Option 2: Eventual Consistency**
+- Update character state first
+- Write history asynchronously
+- Use conditional updates to prevent conflicts
+
+**Option 3: Transaction for Story Completion Only**
+- Use standard operations during gameplay
+- Use transaction only for final cleanup
+- Balances consistency with performance
+
+#### 3.3.4 Story Abandonment Transaction (Recommended)
+
+Clean state transitions benefit from atomic operations:
+
+```
+TransactWriteItems:
+1. Update Character:
+   - ConditionExpression: GameMode = "Incremental"
+   - Set GameMode = "None"
+   - Clear ActiveStoryID
+   - Add to AbandonedStories
+
+2. Delete ActiveSegments:
+   - Remove all segments for story
+
+3. Put History:
+   - Record abandonment
+```
+
+#### 3.3.5 Design Trade-offs
+
+**Use Transactions When**:
+- State transitions must be atomic (start/end story)
+- Multiple tables must remain consistent
+- Failure would leave unrecoverable state
+
+**Avoid Transactions When**:
+- Operations are frequent (every segment)
+- Eventual consistency is acceptable
+- Cost is a primary concern
+- Operations can be made idempotent
+
 ## 4. API Design
 
 ### 4.1 RESTful Endpoints
@@ -725,19 +811,25 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - Verify character ownership and GameMode is "None"
 - Validate story is in character's AvailableStories list
 - Load story metadata and first segment from DynamoDB
-- Atomically update character:
-  - Set GameMode to "Incremental"
-  - Remove story from AvailableStories
-- Create ActiveSegments record with:
-  - Unique ActiveSegmentID
-  - Start/End times based on segment duration
-  - Explicit deletion after processing
-- Create History table entry for tracking
+- Use DynamoDB transaction to atomically:
+  - Update Character table:
+    - Set GameMode to "Incremental"
+    - Set ActiveStoryID and ActiveSegmentID
+    - Remove story from AvailableStories
+  - Create ActiveSegments record with:
+    - Unique ActiveSegmentID
+    - Start/End times based on segment duration
+  - Create History table entry for tracking
 - Return formatted segment response based on type
+# Transaction Design:
+- Use TransactWriteItems with conditional expressions
+- Character update: ConditionExpression GameMode = "None"
+- Segment creation: ConditionExpression attribute_not_exists
+- Handle TransactionCanceledException for conflicts
 # Error Handling:
 - 401: Authentication failures
 - 403: Story not available to character
-- 409: Character already in game mode or state conflict
+- 409: Character already in game mode or transaction conflict
 - 400: Invalid request parameters
 ```
 
@@ -759,9 +851,21 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 # Key Operations:
 - Retrieve story and character data
 - Calculate outcome based on character stats/skills
-- Apply effects to character record
-- Update story progression with new NextCompletionTime
+- Design for high-frequency operation:
+  Option A - Non-transactional with idempotency:
+    - Store processing results with unique ID
+    - Use conditional updates to prevent double processing
+    - Apply character updates with version checking
+    - Write History with duplicate detection
+  Option B - Minimal transaction for critical state:
+    - Use transaction only for story completion
+    - Standard operations for segment-to-segment
+    - Balance consistency with 2x capacity cost
 - If story complete, check if polling should be disabled
+# Performance Considerations:
+- This runs every 10 seconds across all active stories
+- 2x capacity cost adds up quickly with transactions
+- Consider eventual consistency for non-critical updates
 # Note: Called by segment poller Lambda
 ```
 
@@ -1020,6 +1124,47 @@ The Incremental and MUD modes share persistent character state, ensuring consequ
 ### 7.2 Mode Exclusivity
 
 The system enforces strict mode exclusivity through the GameMode field on each character. This validation ensures that a character cannot be simultaneously active in both the MUD and Incremental game modes, preventing state conflicts and ensuring data consistency.
+
+### 7.3 Data Consistency Strategy
+
+#### Balanced Approach to Consistency
+
+**PRINCIPLE**: Use DynamoDB transactions where atomicity is critical, but consider alternatives for high-frequency operations to manage costs and performance.
+
+#### Critical Consistency Points
+
+1. **State Transitions** (Use Transactions):
+   - Story start: Character + ActiveSegments + History must be atomic
+   - Story end: GameMode reset + cleanup must be atomic
+   - Character deletion: Complete removal across all tables
+
+2. **Gameplay Updates** (Consider Alternatives):
+   - Segment processing: May use idempotent operations
+   - XP/health updates: Conditional updates with version numbers
+   - Item rewards: Evaluate criticality case-by-case
+
+3. **Design Patterns**:
+   - **Idempotency**: Use unique request IDs to prevent duplicate processing
+   - **Conditional Updates**: Use DynamoDB conditions to prevent conflicts
+   - **Eventually Consistent**: Accept delayed History writes where appropriate
+   - **Compensating Actions**: Design rollback procedures for failures
+
+#### Cost-Performance Trade-offs
+
+1. **Transaction Costs**:
+   - 2x read/write capacity consumption
+   - Can significantly impact high-frequency operations
+   - Monitor CloudWatch metrics for capacity usage
+
+2. **When to Accept Eventual Consistency**:
+   - History recording (can be async)
+   - Non-critical stat updates
+   - Analytics and reporting data
+
+3. **When Atomicity is Required**:
+   - Mode transitions (prevent locked characters)
+   - Financial operations (item transfers)
+   - State cleanup (prevent orphaned data)
 
 The mode transition validation implements several key checks:
 

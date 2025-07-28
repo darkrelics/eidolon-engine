@@ -246,8 +246,12 @@ New Lambda functions following existing patterns:
 **api_start_story**
 
 - Validate character can start story
-- Set GameMode to "Incremental"
-- Initialize story participation record
+- Use DynamoDB transaction to atomically:
+  - Set GameMode to "Incremental"
+  - Update AvailableStories and ActiveStoryID
+  - Create ActiveSegments record
+  - Create initial History entry
+- Handle transaction conflicts gracefully
 - Return first segment
 
 **api_submit_decision**
@@ -266,13 +270,22 @@ New Lambda functions following existing patterns:
 **api_complete_segment**
 
 - Process segment outcome
-- Apply character updates
+- Consider transaction approach based on frequency:
+  - For story completion: Use transaction for atomic cleanup
+  - For segment advancement: May use standard operations with idempotency
+- Apply character updates (health, XP, inventory)
+- Write History record
+- Delete current segment
+- Create next segment (if continuing)
 - Advance to next segment or complete story
 
 **api_abandon_story**
 
-- Clear active story
-- Reset GameMode to "None"
+- Use DynamoDB transaction for atomic cleanup:
+  - Clear active story and segments
+  - Reset GameMode to "None"
+  - Update AbandonedStories list
+  - Create History abandonment record
 - Apply abandonment penalties if any
 
 #### 4.2.2 Database Schema (DynamoDB)
@@ -570,10 +583,51 @@ All character modifications persist between game modes:
 
 ### 6.1 Character Data Integrity
 
-- Use existing DynamoDB transaction patterns
+- **GUIDANCE**: Use DynamoDB transactions for critical multi-table operations where atomicity is required
+- Consider capacity costs (2x standard operations) when designing transaction boundaries
 - GameMode field ensures mode exclusivity
 - CloudWatch audit trail for progression events
 - Standard backup and recovery procedures
+
+#### 6.1.1 Transaction Design Patterns
+
+Operations that benefit from DynamoDB transactions:
+
+1. **Story Start** (Recommended Transaction):
+   - Update Character table (GameMode, ActiveStoryID, AvailableStories)
+   - Create ActiveSegments record
+   - Create initial History entry
+   - **Rationale**: Prevents orphaned segments if character update fails
+
+2. **Story Completion/Abandonment** (Recommended Transaction):
+   - Update Character table (GameMode to "None", story lists)
+   - Create final History entry
+   - Delete ActiveSegment(s)
+   - **Rationale**: Ensures clean state transitions
+
+3. **Character Creation with Items** (Optional Transaction):
+   - Create Character record
+   - Update Player's character list
+   - Create initial Item records
+   - **Rationale**: May use eventual consistency if items can be recreated
+
+4. **Segment Processing** (Consider Non-Transactional):
+   - Character updates (health, XP, location)
+   - History recording
+   - **Rationale**: High frequency operation; consider idempotent design instead
+
+5. **Combat Rewards** (Mixed Approach):
+   - Character health/wounds updates (standard operation)
+   - Item creation and inventory updates (transaction if critical)
+   - **Rationale**: Balance consistency needs with performance
+
+#### 6.1.2 Transaction Alternatives
+
+For high-frequency operations, consider:
+- Idempotent operations with unique request IDs
+- Conditional updates with version numbers
+- Event sourcing with eventual consistency
+- Compensating transactions for rollback
 
 ### 6.2 Timing Service Management
 

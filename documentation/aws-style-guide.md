@@ -131,7 +131,60 @@ Tags:
     Value: CDK # or CloudFormation
 ```
 
-### 5. Security Standards
+### 5. Database Operations Standards
+
+#### DynamoDB Transactions
+
+**GUIDANCE**: Use DynamoDB transactions when atomic, all-or-nothing operations are required across multiple items or tables. Transactions provide ACID guarantees but consume double the read/write capacity units.
+
+##### When to Use Transactions
+
+Use transactions for operations that:
+- Must atomically update multiple items as a unit
+- Require consistency guarantees across related records
+- Need to prevent partial updates during failures
+- Implement conditional updates across multiple items
+
+##### When NOT to Use Transactions
+
+Avoid transactions for:
+- Single item updates (use standard operations)
+- Bulk data imports or exports
+- Operations where eventual consistency is acceptable
+- High-throughput operations (due to 2x capacity cost)
+
+##### Critical Operations Requiring Transactions
+
+1. **Story Operations**:
+   - Starting a story (Character + ActiveSegments + History)
+   - Story completion/abandonment (atomic cleanup required)
+
+2. **Character Operations**:
+   - Creating character with initial items (Player + Character + Items)
+   - Deleting character (ensures complete removal)
+
+3. **Financial/Inventory Operations**:
+   - Transferring items between characters
+   - Applying rewards that affect multiple tables
+
+##### Transaction Limitations
+
+- Maximum 100 unique items per transaction
+- Maximum 4MB total transaction size
+- All items must be in same AWS Region
+- Cannot target same item multiple times
+- Cannot use with Global Secondary Indexes
+- Consumes 2x the standard read/write capacity
+
+##### Implementation Guidelines
+
+- Use idempotency tokens to prevent duplicate transactions
+- Design for transaction failures with proper error handling
+- Monitor capacity consumption (2x standard operations)
+- Consider eventual consistency where appropriate
+- Batch operations carefully to stay within limits
+
+### 6. Security Standards
 
 #### Design Philosophy
 
@@ -215,6 +268,7 @@ Before deploying any infrastructure changes:
 - [ ] Has CloudWatch logs configured
 - [ ] Implements least-privilege IAM
 - [ ] No sensitive data storage introduced
+- [ ] Uses DynamoDB transactions for multi-item operations
 - [ ] CDK code synthesizes successfully
 - [ ] CloudFormation templates are updated
 - [ ] Cost implications documented
