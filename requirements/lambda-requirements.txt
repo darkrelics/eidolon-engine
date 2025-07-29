@@ -1,6 +1,6 @@
 #Required
-boto3==1.39.9
-botocore==1.39.9
+boto3==1.39.15
+botocore==1.39.15
 bloom-filter==1.3.3
 
 #Dependancies
