@@ -11,12 +11,14 @@ The incremental system implements a timer-based processing architecture with fou
 Major architectural decisions:
 
 1. **Four Segment Types**:
+
    - **Rest**: Time-bound segments where wounds heal naturally based on their HealAt timestamps
    - **Decision**: Await player input via API or apply default on timeout
    - **Narrative**: Story with skill challenges, processed via SQS/ops_process_segment
    - **Combat**: Battle encounters, processed via SQS/ops_process_segment
 
 2. **Processing Flow**:
+
    - Segments created when players start stories or make decisions
    - EventBridge polls every 30 seconds for expired segments
    - Decision/Rest handled directly by poller
@@ -24,18 +26,20 @@ Major architectural decisions:
    - Results written to History table
    - New API endpoint retrieves results for client display
 
-3. **History Table**: 
+3. **History Table**:
+
    - Stores processed segment results for client retrieval
    - Composite key (CharacterID, StoryID) for efficient queries
    - Contains narrative events, skill check results, combat logs
 
-4. **Smart Polling System**: 
+4. **Smart Polling System**:
+
    - 30-second EventBridge polling with SSM parameter control
    - Automatic enable/disable based on active segments
    - Handles decision defaults when timers expire
    - Queues complex segments to SQS
 
-5. **MUD Mechanics Integration**: 
+5. **MUD Mechanics Integration**:
    - Static checks for narrative challenges
    - Opposed checks for combat simulation
    - Results stored in history for client narrative generation
@@ -210,26 +214,26 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "ActiveSegmentID": "active-seg-uuid-123",  # HASH - Unique ID for this instance
     "CharacterID": "char-uuid-456",            # GSI - CharacterID-index
     "PlayerID": "player-uuid-123",             # For ownership validation
-    
+
     # Story Context
     "StoryID": "forest-adventure-uuid",        # Parent story
     "StoryTitle": "The Whispering Woods",      # Cached for display
     "SegmentID": "seg-uuid-002a",              # Definition in Segments table
     "SegmentType": "narrative",                # narrative|combat|decision|rest
-    
+
     # Timing
     "StartTime": 1737000300,                   # Unix timestamp when created
     "EndTime": 1737003900,                     # GSI - EndTimeIndex - When segment should advance
-    
+
     # Processing State (Front-loaded)
     "ProcessedAt": 1737000305,                 # When outcomes calculated
     "ProcessingStatus": "processed",           # pending|processed|failed|awaiting_decision
     "ProcessingError": null,                   # Error details if failed
-    
+
     # Outcomes (Set by processor)
     "Outcome": "minimal",                      # death|failure|minimal|normal|exceptional
     "NextSegmentID": "seg-uuid-003",           # Pre-calculated next segment
-    
+
     # Client Events - Complete narrative sequence for progressive display
     "ClientEvents": [
         {
@@ -254,7 +258,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
             }
         },
         {
-            "eventType": "skillCheck", 
+            "eventType": "skillCheck",
             "title": "Perception Challenge - Second Attempt",
             "description": "The shadows play tricks on your eyes...",
             "data": {
@@ -299,7 +303,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
             }
         }
     ],
-    
+
     # Character Updates - All changes to apply when segment completes
     "CharacterUpdates": {
         "Wounds": [{"DamageType": "bashing", "HealAt": "2025-01-15T14:30:00Z"}],
@@ -312,7 +316,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
             "strength": 0.075
         }
     },
-    
+
     # History Entry - Pre-formatted for History table
     "HistoryEntry": {
         "SegmentID": "seg-uuid-002a",
@@ -325,11 +329,11 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
             {"skill": "survival", "success": true, "sigma": 0.63}
         ]
     },
-    
+
     # Decision Tracking
     "Decision": null,                          # Choice made (decision segments)
     "DecisionMadeAt": null,                    # When player decided
-    
+
     # Advancement State
     "Transmitted": null,                       # Set true when sent to SQS
     "TransmittedAt": null,                     # Unix timestamp when sent
@@ -447,7 +451,7 @@ GSI: EndTimeIndex
     "SegmentType": "narrative",               # narrative|combat|decision|rest
     "Outcome": "minimal",                     # Segment outcome
     "Duration": 600,                          # Actual time taken (seconds)
-    
+
     # Segment-specific details
     "Decision": null,                         # For decision segments
     "ChallengeResults": [                     # For narrative segments
@@ -456,7 +460,7 @@ GSI: EndTimeIndex
         {"skill": "survival", "success": true, "sigma": 0.63}
     ],
     "CombatSummary": null,                    # For combat segments: rounds, wounds, etc.
-    
+
     # Applied changes
     "CharacterUpdates": {
         "SkillXP": {"perception": 0.375, "survival": 0.75},
@@ -464,7 +468,7 @@ GSI: EndTimeIndex
         "Wounds": [{"DamageType": "lethal", "HealAt": "2025-01-15T20:00:00Z"}],
         "Items": {"added": [], "removed": []}
     },
-    
+
     # Narrative record
     "NarrativeEvents": [                      # Key events shown to player
         "Entered the dark forest",
@@ -507,6 +511,7 @@ The system uses two critical GSIs for efficient operations:
 **GUIDANCE**: Use DynamoDB transactions judiciously, balancing consistency requirements with performance and cost (2x capacity consumption).
 
 **Transaction Limitations**:
+
 - Maximum 100 unique items per transaction
 - Maximum 4MB total size
 - All items must be in same Region
@@ -540,16 +545,19 @@ TransactWriteItems:
 For high-frequency segment advancement, consider non-transactional approaches:
 
 **Option 1: Idempotent Operations**
+
 - Use unique request IDs
 - Check if already processed before applying updates
 - Store processing results for retry scenarios
 
 **Option 2: Eventual Consistency**
+
 - Update character state first
 - Write history asynchronously
 - Use conditional updates to prevent conflicts
 
 **Option 3: Transaction for Story Completion Only**
+
 - Use standard operations during gameplay
 - Use transaction only for final cleanup
 - Balances consistency with performance
@@ -576,11 +584,13 @@ TransactWriteItems:
 #### 3.3.5 Design Trade-offs
 
 **Use Transactions When**:
+
 - State transitions must be atomic (start/end story)
 - Multiple tables must remain consistent
 - Failure would leave unrecoverable state
 
 **Avoid Transactions When**:
+
 - Operations are frequent (every segment)
 - Eventual consistency is acceptable
 - Cost is a primary concern
@@ -916,11 +926,13 @@ Response: {
 The Flutter portal implements smart polling:
 
 1. **Active Story Polling**
+
    - Poll `/stories/current` based on segment duration
    - Start frequent polling 30 seconds before completion
    - Use exponential backoff: 30s → 15s → 5s → 1s
 
 2. **Decision Windows**
+
    - Check every 30 seconds during decision segments
    - Immediate update after decision submission
 
@@ -1039,21 +1051,21 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
   - Load active segment, segment definition, and character data
   - Evaluate wound healing: remove wounds where current time > HealAt
   - Recalculate health as MaxHealth - len(wounds)
-  
+
   # Narrative Segment Processing:
   - Run all challenge attempts using simulated MUD mechanics
   - Calculate effective score: skill + attribute
   - Use normal distribution for outcome (sigma values)
   - Determine overall outcome based on average sigma
   - Generate narrative events for each challenge
-  
+
   # Combat Segment Processing:
   - Load opponent data from Opponents table
   - Simulate round-by-round combat using opposed checks
   - Track wounds inflicted on both sides
   - Determine victory/defeat based on health/rounds
   - Generate combat log with round details
-  
+
   # After Processing:
   - Write complete results to History table:
     - Outcome (death/failure/minimal/normal/exceptional)
@@ -1062,7 +1074,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
   - Create next segment if story continues
   - Update character GameMode to "None" if story ends
   - Delete processed ActiveSegment record
-  
+
 - Check if ActiveSegments table is empty
 - Update SSM parameter to "stop" if no segments remain
 
@@ -1081,37 +1093,36 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - Read SSM parameter /eidolon/segment-poller-state
 - Query for expired segments where EndTime <= current time
 - Process by segment type:
-  
+
   # Rest Segments:
   - Healing is evaluated at the beginning of each segment
   - Expired wounds (where current time > HealAt) are removed from wounds list
   - Simply advance to next segment or complete story
   - Delete segment record
-  
+
   # Decision Segments (expired without player input):
   - Check if Decision field is null
   - Apply DefaultDecision from segment definition
   - Update segment with decision
   - Create next segment based on decision
   - Delete current segment
-  
+
   # Narrative/Combat Segments:
   - Add to SQS queue for mechanical processing
   - Message includes: ActiveSegmentID, CharacterID, StoryID, SegmentID, SegmentType
   - ops_process_segment will handle skill checks/combat simulation
-  
+
 - Batch SQS operations (max 10 messages per batch)
 - State management:
   - If parameter "stop" and segments found: set to "run"
   - If parameter "run" and no segments: check if table empty
   - If table empty: set parameter to "stop"
-  
+
 # Responsibilities:
 - Rest: Just advance story (no mechanics)
 - Decision: Apply defaults and advance
 - Narrative/Combat: Queue for processing
 ```
-
 
 #### 5.2.6 cognito_new_player
 
@@ -1170,7 +1181,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 
 # Use Cases:
 - Client polls during narrative segment runtime
-- Client polls during combat segment runtime  
+- Client polls during combat segment runtime
 - Display results progressively during timer countdown
 - Not used for rest or decision segments
 
@@ -1202,6 +1213,7 @@ This parameter enables graceful startup/shutdown and prevents race conditions be
 The segment poller implements a two-phase scanning approach:
 
 **Phase 1 - Ready Segments**:
+
 - Queries EndTimeIndex for segments where `EndTime <= (CurrentTime + 15)`
 - The 15-second buffer (half the polling interval) ensures segments are found before they expire
 - Filters for segments without `Transmitted` or `RunningFlag` attributes
@@ -1209,6 +1221,7 @@ The segment poller implements a two-phase scanning approach:
 - Successfully claimed segments are batched to SQS
 
 **Phase 2 - Stuck Segment Recovery**:
+
 - Identifies segments where `Transmitted = true` AND `TransmittedAt < (CurrentTime - 900)`
 - These are segments that were queued but not processed within 15 minutes
 - Clears the `RunningFlag` without condition checking (force clear)
@@ -1239,16 +1252,19 @@ When `ops_advance_story` receives an SQS message:
 The polling system self-manages based on table state:
 
 **When Starting Stories**:
+
 - `api_start_story` checks SSM parameter
 - If "stop", sets to "run" and enables EventBridge rule
 - Ensures polling is active for new segments
 
 **During Polling Cycles**:
+
 - If parameter is "stop" but segments found: set to "run"
 - If parameter is "run" but table empty: set to "stop"
 - Next "stop" cycle disables the EventBridge rule
 
 **Cost Optimization**:
+
 - Zero Lambda invocations when no stories active
 - 30-second polling reduces costs vs 10-second
 - Efficient GSI queries minimize read capacity
@@ -1265,6 +1281,7 @@ The narrative outcome system leverages the MUD mechanics to create consistent, f
 The system uses two core MUD functions for all skill checks:
 
 1. **ResolveStaticCheckWithXP**: Used for narrative challenges against fixed difficulties
+
    - Automatically awards skill XP based on difficulty and outcome
    - Failed attempts award 50% XP to encourage learning from failure
    - Returns sigma value indicating degree of success/failure
@@ -1279,11 +1296,13 @@ The system uses two core MUD functions for all skill checks:
 When a narrative segment contains challenges, the system evaluates each one:
 
 1. **Skill Combination**: Each challenge specifies an attribute (like strength or agility) and a skill (like survival or perception). The effective score is calculated as:
+
    ```
    effectiveScore = character.skills[skill] + character.attributes[attribute]
    ```
 
 2. **XP Award Calculation**: The MUD functions automatically calculate XP awards:
+
    - Skill XP is based on the difficulty and outcome
    - Attribute XP is always 10% of the skill XP award
    - Both are added to the CharacterUpdates for later application
@@ -1302,6 +1321,7 @@ The system determines the final narrative outcome by aggregating the sigma value
 - **Average Performance**: The total sigma is divided by the number of attempts to calculate an average performance level. This ensures that segments with different numbers of challenges remain balanced.
 
 - **Critical Override**: Extreme individual results can override the average:
+
   - Any sigma ≤ -3.0 represents a catastrophic failure that triggers immediate death
   - Multiple critical failures (sigma < -2.0) can downgrade the final outcome
   - Multiple critical successes (sigma > 2.0) can upgrade the final outcome
@@ -1322,6 +1342,7 @@ Combat segments implement the complete MUD combat system using the ResolveOppose
 #### Combat Initialization
 
 When processing a combat segment, the system:
+
 - Loads opponent statistics from the Opponents table
 - Retrieves character's current combat capabilities
 - Applies environmental modifiers from segment definition
@@ -1368,8 +1389,9 @@ The combat environment plays a crucial role in battle outcomes. Before each atta
 **Progressive XP Awards**:
 
 Combat provides rich opportunities for skill development. Throughout each round:
+
 - Every attack attempt improves the attacker's melee skill
-- Every defense attempt enhances the defender's dodge skill  
+- Every defense attempt enhances the defender's dodge skill
 - Successful damage rolls may award additional weapon skill XP
 - Failed attempts still award 50% of normal XP, reflecting learning from mistakes
 - The continuous XP flow ensures that even losing battles contribute to character growth
@@ -1379,17 +1401,20 @@ Combat provides rich opportunities for skill development. Throughout each round:
 The combat system fully implements the MUD wound mechanics with sophisticated tracking:
 
 **Wound Structure:**
+
 - Each point of damage creates a wound map in the character's wounds list
 - Wound maps contain two fields:
   - `DamageType`: The category of damage ("bashing", "lethal", or "aggravated")
   - `HealAt`: ISO 8601 timestamp indicating when the wound will heal
 
 **Damage Types:**
+
 - **Bashing damage** creates bruises that heal within 15 minutes
 - **Lethal damage** causes serious injuries requiring 6 hours to heal
 - **Aggravated damage** inflicts grievous wounds needing 7 days of recovery
 
 **Health Calculation:**
+
 - Health is dynamically calculated as: `Health = MaxHealth - len(wounds)`
 - Each wound in the list represents exactly one point of damage
 - Health is not stored but computed on-demand when needed
@@ -1408,6 +1433,7 @@ The final outcome depends on the combat's resolution and wounds sustained:
 - **Exceptional Victory**: Flawless combat performance without taking any wounds
 
 Character states are determined by health level and wound composition:
+
 - **Standing**: Health > 0 (normal combat state)
 - **Unconscious**: Health = 0 with at least one bashing wound
 - **Dead**: Health = 0 with only lethal/aggravated wounds
@@ -1480,6 +1506,7 @@ The incremental client follows a hierarchical screen structure that guides playe
 1. **Character Sheet**: Displays current attributes, skills, health, and active effects. This panel updates in real-time as story outcomes modify character state. Players can track their progression and understand how their abilities affect story outcomes.
 
 2. **Story Interface**: The central gameplay area with three modes:
+
    - **Story Selection**: Browse available stories filtered by prerequisites and cooldowns. Each story shows its type (one-time, daily, repeatable), estimated duration, and brief description.
    - **Active Progression**: During active segments, displays the current narrative, countdown timer, and appropriate interaction elements (decision buttons for choices, status text for combat/challenges).
    - **History View**: Access completed story outcomes, reviewing past narratives and rewards earned. This provides context for character development and story continuity.
@@ -1497,6 +1524,7 @@ The Incremental and MUD modes share persistent character state, ensuring consequ
 #### Shared Persistent State
 
 1. **Wounds and Health**:
+
    - All wounds persist as maps in the wounds list across modes
    - Each wound contains DamageType and HealAt timestamp fields
    - Health calculated dynamically as `MaxHealth - len(wounds)`
@@ -1507,14 +1535,16 @@ The Incremental and MUD modes share persistent character state, ensuring consequ
      - Lethal wounds heal in 6 hours
      - Aggravated wounds heal in 7 days
    - Character states (standing, unconscious, dead) persist across modes
-   - Death in either mode requires resurrection/respawn
+   - Death in either mode requires resurrection
 
 2. **Inventory and Items**:
+
    - Items gained in Incremental stories appear in MUD inventory
    - Equipment worn in MUD affects Incremental combat stats
    - Item loss/destruction persists across modes
 
 3. **Character Location**:
+
    - Room changes from story effects update MUD position
    - Character returns to new room when switching to MUD mode
    - Death effects may transport to death realm in both modes
@@ -1537,11 +1567,13 @@ The system enforces strict mode exclusivity through the GameMode field on each c
 #### Critical Consistency Points
 
 1. **State Transitions** (Use Transactions):
+
    - Story start: Character + ActiveSegments + History must be atomic
    - Story end: GameMode reset + cleanup must be atomic
    - Character deletion: Complete removal across all tables
 
 2. **Gameplay Updates** (Consider Alternatives):
+
    - Segment processing: May use idempotent operations
    - XP/health updates: Conditional updates with version numbers
    - Item rewards: Evaluate criticality case-by-case
@@ -1555,11 +1587,13 @@ The system enforces strict mode exclusivity through the GameMode field on each c
 #### Cost-Performance Trade-offs
 
 1. **Transaction Costs**:
+
    - 2x read/write capacity consumption
    - Can significantly impact high-frequency operations
    - Monitor CloudWatch metrics for capacity usage
 
 2. **When to Accept Eventual Consistency**:
+
    - History recording (can be async)
    - Non-critical stat updates
    - Analytics and reporting data
@@ -1679,21 +1713,25 @@ The front-loaded processing architecture with 30-second polling significantly re
 ### 10.2 Cost Optimization Strategies
 
 **Smart Polling Management**:
+
 - Automatic enable/disable based on active segments eliminates idle polling costs
 - 30-second intervals provide good UX while reducing Lambda invocations by 67%
 - SSM parameter coordination prevents redundant state checks
 
 **Efficient Processing Architecture**:
+
 - Front-loaded outcome calculation eliminates repeated processing
 - SQS batching reduces API calls and improves throughput
 - Stuck segment recovery prevents infinite retries
 
 **DynamoDB Optimization**:
+
 - GSI queries target only ready segments, avoiding table scans
 - Automatic segment deletion keeps table size minimal
 - Batch operations reduce write capacity consumption
 
 **Additional Savings Opportunities**:
+
 - Use Lambda ARM architecture for 20% cost reduction
 - Implement Reserved Capacity for predictable DynamoDB usage
 - Consider Savings Plans for Lambda if usage is stable
@@ -1742,6 +1780,7 @@ Key architectural decisions:
 - **Cost Optimization**: ~$235-335/month for 10,000 concurrent users
 
 The system successfully implements the incremental game pattern:
+
 - **Set Actions in Motion**: Players start segments then wait for timers
 - **Timer-Based Progress**: Segments advance automatically when timers expire
 - **Retrieve Results**: Clients fetch processed results from History API
