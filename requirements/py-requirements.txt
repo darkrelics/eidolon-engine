@@ -19,7 +19,7 @@ dill==0.4.0
 filelock==3.18.0 
 idna==3.10 
 isort==6.0.1 
-license-expression==30.4.1 
+license-expression==30.4.4 
 markdown-it-py==3.0.0 
 mccabe==0.7.0 
 mdurl==0.1.2 
