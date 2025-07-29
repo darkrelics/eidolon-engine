@@ -19,11 +19,11 @@ dill==0.4.0
 filelock==3.18.0 
 idna==3.10 
 isort==6.0.1 
-license-expression==30.4.1 
+license-expression==30.4.4 
 markdown-it-py==3.0.0 
 mccabe==0.7.0 
 mdurl==0.1.2 
-msgpack==1.1.0 
+msgpack==1.1.1 
 packageurl-python==0.16.0 
 packaging==25.0 
 pbr==6.1.1 
@@ -35,7 +35,7 @@ py-serializable==2.0.0
 pygments==2.19.1 
 pyparsing==3.2.3 
 requests==2.32.4 
-rich==14.0.0 
+rich==14.1.0 
 setuptools==80.8.0 
 sortedcontainers==2.4.0 
 stevedore==5.4.1 
