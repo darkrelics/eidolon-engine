@@ -6,34 +6,39 @@ This document provides the technical design specifications for implementing the 
 
 ### 1.1 Key Design Updates
 
-The incremental system implements a front-loaded processing architecture where all outcomes are determined when segments start, not when they end. This approach ensures consistency, reduces processing delays, and provides immediate feedback to clients.
+The incremental system implements a timer-based processing architecture with four distinct segment types, each with specific processing requirements:
 
 Major architectural decisions:
 
-1. **Process First, Wait Later**: All segment outcomes are calculated immediately upon creation, stored in the ActiveSegments table, and applied when the timer expires. The client receives the complete event sequence upfront.
+1. **Four Segment Types**:
+   - **Rest**: Time-bound healing periods, no mechanical processing needed
+   - **Decision**: Await player input via API or apply default on timeout
+   - **Narrative**: Story with skill challenges, processed via SQS/ops_process_segment
+   - **Combat**: Battle encounters, processed via SQS/ops_process_segment
 
-2. **Enhanced ActiveSegments Table**: New fields support the front-loaded model:
-   - `ProcessedAt`, `ProcessingStatus`, `ProcessingError` for processing state
-   - `ClientEvents` array containing the complete narrative sequence
-   - `CharacterUpdates` map with all changes to apply
-   - `Transmitted`, `TransmittedAt`, `RunningFlag` for polling coordination
-   - `NextSegmentID` pre-calculated based on outcome
+2. **Processing Flow**:
+   - Segments created when players start stories or make decisions
+   - EventBridge polls every 30 seconds for expired segments
+   - Decision/Rest handled directly by poller
+   - Narrative/Combat queued to SQS for mechanical processing
+   - Results written to History table
+   - New API endpoint retrieves results for client display
 
-3. **Dual History Tables**: 
-   - `StoryHistory`: Tracks overall story attempts (start, end, outcome, rewards)
-   - `SegmentHistory`: Detailed segment-by-segment progression with decisions and results
+3. **History Table**: 
+   - Stores processed segment results for client retrieval
+   - Composite key (CharacterID, StoryID) for efficient queries
+   - Contains narrative events, skill check results, combat logs
 
 4. **Smart Polling System**: 
    - 30-second EventBridge polling with SSM parameter control
    - Automatic enable/disable based on active segments
-   - Stuck segment recovery after 15 minutes
-   - SQS queue for reliable segment processing
+   - Handles decision defaults when timers expire
+   - Queues complex segments to SQS
 
-5. **MUD Mechanics Integration**: All skill progression uses the established MUD functions:
-   - `ResolveStaticCheckWithXP` for narrative challenges
-   - `ResolveOpposedCheckWithXP` for combat
-   - Automatic XP awards (skill XP + 10% attribute XP)
-   - No experience points - only skill progression
+5. **MUD Mechanics Integration**: 
+   - Static checks for narrative challenges
+   - Opposed checks for combat simulation
+   - Results stored in history for client narrative generation
 
 ## 2. System Architecture Overview
 
@@ -783,35 +788,8 @@ Response: {
         "segmentType": "narrative",
         "startTime": 1737000000,
         "endTime": 1737000600,
-        "shortStatus": "Navigating the Dark Forest"
-    },
-    "events": [
-        {
-            "eventType": "narrative",
-            "title": "Into the Woods",
-            "description": "You step into the shadowy forest...",
-            "data": {}
-        },
-        {
-            "eventType": "skillCheck",
-            "title": "Navigation Challenge",
-            "description": "You attempt to find your way...",
-            "data": {
-                "skill": "survival",
-                "attribute": "intelligence",
-                "difficulty": 8,
-                "effectiveScore": 7,
-                "sigma": -0.43,
-                "success": false,
-                "skillXPAwarded": 0.125,
-                "attributeXPAwarded": 0.0125
-            }
-        }
-    ],
-    "characterUpdates": {
-        "Health": -1,
-        "SkillXP": {"survival": 0.25, "perception": 0.15},
-        "AttributeXP": {"intelligence": 0.025, "wisdom": 0.015}
+        "shortStatus": "Navigating the Dark Forest",
+        "duration": 600
     }
 }
 Error Cases:
@@ -864,6 +842,58 @@ Notes:
 - Called frequently by client near segment completion
 - Used to detect stuck segments (ready but not advanced)
 - Simple status check without heavy data transfer
+```
+
+**GET /segments/history**
+
+```python
+# Lambda: api_get_segment_history
+Purpose: Retrieve processed segment results from history
+Query Parameters: characterId, segmentId
+Response: {
+    "success": true,
+    "segmentComplete": true,
+    "outcome": "minimal",
+    "events": [
+        {
+            "eventType": "narrative",
+            "title": "Into the Woods",
+            "description": "You step into the shadowy forest...",
+            "data": {}
+        },
+        {
+            "eventType": "skillCheck",
+            "title": "Navigation Challenge",
+            "description": "You attempt to find your way...",
+            "data": {
+                "skill": "survival",
+                "attribute": "intelligence",
+                "success": false,
+                "sigma": -0.43
+            }
+        },
+        {
+            "eventType": "combat",
+            "title": "Goblin Attack",
+            "description": "A goblin scout leaps from the shadows!",
+            "data": {
+                "rounds": 5,
+                "playerWounds": 2,
+                "victory": true
+            }
+        }
+    ],
+    "nextSegment": {
+        "activeSegmentId": "active-seg-uuid-124",
+        "segmentType": "decision",
+        "duration": 300
+    }
+}
+
+Notes:
+- Called by client during segment runtime to display results
+- Returns empty events array if segment not yet processed
+- Narrative and combat segments only - not for rest/decision
 ```
 
 **POST /stories/abandon**
@@ -1000,111 +1030,88 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 #### 5.2.4 ops_process_segment
 
 ```python
-"""Calculate outcomes for newly created segments (async processing)."""
+"""Process narrative and combat segments from SQS queue."""
+# Trigger: SQS messages from segment poller
+# Segment Types Handled: NARRATIVE and COMBAT only
 # Key Operations:
-- Triggered immediately after segment creation
-- Load segment definition and character data
-- Based on segment type:
-  - Decision: No calculation needed, just set as ready
-  - Narrative: Run all challenge checks, determine outcome
-  - Combat: Simulate entire combat, record all rounds
-- Update ActiveSegments record with:
-  - ProcessingStatus: "completed"
-  - Outcome: Calculated result
-  - ClientEvents: Formatted events for UI display
-  - CharacterUpdates: Effects to apply on completion
-- For combat segments:
-  - Simulate all rounds up to maxRounds
-  - Track wounds inflicted on character
-  - Determine victory/defeat outcome
-- For narrative segments:
-  - Roll all challenge attempts
-  - Calculate average sigma for outcome
-  - Check for critical successes/failures
+- Receives SQS messages containing segment data
+- For each segment in batch:
+  - Extract ActiveSegmentID and metadata from message
+  - Load active segment, segment definition, and character data
+  
+  # Narrative Segment Processing:
+  - Run all challenge attempts using simulated MUD mechanics
+  - Calculate effective score: skill + attribute
+  - Use normal distribution for outcome (sigma values)
+  - Determine overall outcome based on average sigma
+  - Generate narrative events for each challenge
+  
+  # Combat Segment Processing:
+  - Load opponent data from Opponents table
+  - Simulate round-by-round combat using opposed checks
+  - Track wounds inflicted on both sides
+  - Determine victory/defeat based on health/rounds
+  - Generate combat log with round details
+  
+  # After Processing:
+  - Write complete results to History table:
+    - Outcome (death/failure/minimal/normal/exceptional)
+    - Events array for client display
+    - Challenge results or combat log
+  - Create next segment if story continues
+  - Update character GameMode to "None" if story ends
+  - Delete processed ActiveSegment record
+  
+- Check if ActiveSegments table is empty
+- Update SSM parameter to "stop" if no segments remain
+
 # Error Handling:
-- If processing fails, mark ProcessingStatus as "failed"
-- Segment poller will skip failed segments
-- Consider retry logic for transient failures
+- Return failed message IDs for SQS retry
+- Log processing failures with full context
+- Failed segments remain in queue for retry
 ```
 
 #### 5.2.5 ops_segment_poller
 
 ```python
-"""Find and queue segments ready for advancement (EventBridge triggered)."""
+"""Find and handle expired segments (EventBridge triggered every 30 seconds)."""
 # Trigger: EventBridge rule every 30 seconds
 # Key Operations:
 - Read SSM parameter /eidolon/segment-poller-state
-- Perform dual scanning strategy:
+- Query for expired segments where EndTime <= current time
+- Process by segment type:
   
-  # First Scan - Ready Segments:
-  - Query EndTimeIndex where EndTime <= (Now + 15 seconds)
-  - Filter: Transmitted attribute does NOT exist
-  - Filter: RunningFlag attribute does NOT exist
-  - For each segment found:
-    - Attempt: SET Transmitted = true, TransmittedAt = Now
-    - Condition: attribute_not_exists(Transmitted)
-    - If successful, add to SQS batch
+  # Rest Segments:
+  - No processing needed (healing happens automatically)
+  - Simply advance to next segment or complete story
+  - Delete segment record
   
-  # Second Scan - Stuck Segments:
-  - Query where Transmitted = true
-  - Filter: TransmittedAt < (Now - 900 seconds)  # 15 minutes
-  - For each stuck segment:
-    - REMOVE RunningFlag (no condition check)
-    - UPDATE TransmittedAt = Now
-    - Add to SQS batch for reprocessing
-    - Log warning about stuck segment
-
-- Send segments to SQS in batches (max 10)
-- State management based on findings:
+  # Decision Segments (expired without player input):
+  - Check if Decision field is null
+  - Apply DefaultDecision from segment definition
+  - Update segment with decision
+  - Create next segment based on decision
+  - Delete current segment
+  
+  # Narrative/Combat Segments:
+  - Add to SQS queue for mechanical processing
+  - Message includes: ActiveSegmentID, CharacterID, StoryID, SegmentID, SegmentType
+  - ops_process_segment will handle skill checks/combat simulation
+  
+- Batch SQS operations (max 10 messages per batch)
+- State management:
   - If parameter "stop" and segments found: set to "run"
   - If parameter "run" and no segments: check if table empty
-  - If table empty: set parameter to "stop", disable EventBridge
+  - If table empty: set parameter to "stop"
   
-# Performance:
-- Efficient GSI queries with time-based filters
-- Batch SQS operations for throughput
-- 15-second buffer prevents race conditions
+# Responsibilities:
+- Rest: Just advance story (no mechanics)
+- Decision: Apply defaults and advance
+- Narrative/Combat: Queue for processing
 ```
 
-#### 5.2.6 ops_advance_story
 
-```python
-"""Process individual segments from SQS queue."""
-# Trigger: SQS messages from segment poller
-# Key Operations:
-- Extract ActiveSegmentID from SQS message
-- Read full segment from ActiveSegments table
-- Attempt to claim ownership:
-  - SET RunningFlag = context.aws_request_id
-  - Condition: attribute_not_exists(RunningFlag)
-  - If fails, exit (another Lambda processing)
-  
-- Verify ProcessingStatus is "processed"
-- Apply pre-calculated updates:
-  - Read CharacterUpdates from segment
-  - Update Character table with all changes
-  - Write HistoryEntry to SegmentHistory
-  
-- Handle story progression:
-  - Check Outcome for terminal states (death/failure)
-  - If continuing, create next segment:
-    - Use NextSegmentID from current segment
-    - Generate new ActiveSegmentID
-    - If not decision type, process immediately
-  - Update character's ActiveSegmentID
-  
-- Cleanup:
-  - Delete processed segment
-  - Check if ActiveSegments table empty
-  - If empty, set SSM parameter to "stop"
-  
-# Error Handling:
-- If segment missing: log and delete SQS message
-- If processing fails: leave for stuck detection
-- Idempotent design handles retries safely
-```
-
-#### 5.2.7 cognito_new_player
+#### 5.2.6 cognito_new_player
 
 ```python
 """Create player record after Cognito registration."""
@@ -1119,7 +1126,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 # Note: System-level function for player lifecycle
 ```
 
-#### 5.2.8 cognito_delete_player
+#### 5.2.7 cognito_delete_player
 
 ```python
 """Complete player data deletion for GDPR compliance."""
@@ -1137,6 +1144,38 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - Status 207 if partial deletion (some errors)
 - Supports multiple trigger sources with appropriate response formats
 # Note: Critical for GDPR compliance and data cleanup
+```
+
+#### 5.2.8 api_get_segment_history
+
+```python
+"""Retrieve processed segment results from History table."""
+# Key Operations:
+- Validate character ownership
+- Query History table by CharacterID and SegmentID
+- Return processed results for narrative/combat segments
+- Empty response if segment not yet processed
+
+# Response Structure:
+- segmentComplete: boolean indicating if processed
+- outcome: death/failure/minimal/normal/exceptional
+- events: Array of narrative events for client display
+  - eventType: narrative/skillCheck/combat
+  - title: Brief description
+  - description: Full narrative text
+  - data: Type-specific details (skill checks, combat rounds)
+- nextSegment: Information about following segment if any
+
+# Use Cases:
+- Client polls during narrative segment runtime
+- Client polls during combat segment runtime  
+- Display results progressively during timer countdown
+- Not used for rest or decision segments
+
+# Error Handling:
+- 404 if segment not found
+- 403 if character not owned by player
+- Empty events array if not yet processed
 ```
 
 ### 5.3 Polling System Architecture
@@ -1664,22 +1703,22 @@ The front-loaded processing architecture with 30-second polling significantly re
 
 ## 12. Conclusion
 
-This technical design implements a sophisticated incremental game system that seamlessly integrates with the existing Eidolon Engine infrastructure. The front-loaded processing architecture ensures consistent, predictable gameplay while maintaining cost efficiency and scalability.
+This technical design implements a sophisticated incremental game system that seamlessly integrates with the existing Eidolon Engine infrastructure. The architecture properly handles four distinct segment types with appropriate processing for each.
 
 Key architectural decisions:
 
-- **Front-loaded Processing**: All outcomes calculated at segment start, eliminating runtime delays
-- **Smart Polling System**: 30-second EventBridge with SSM control, auto-enable/disable
-- **Dual History Tables**: Separate story and segment tracking for optimal query patterns
-- **MUD Mechanics Integration**: ResolveStaticCheckWithXP and ResolveOpposedCheckWithXP for authentic progression
-- **Reliable Processing**: SQS queue with stuck segment recovery ensures no lost progress
-- **Cost Optimization**: ~$235-335/month for 10,000 concurrent users through intelligent resource management
+- **Four Segment Types**: Rest (healing), Decision (player choice), Narrative (skill challenges), Combat (battles)
+- **Smart Polling System**: 30-second EventBridge with type-specific handling
+- **Mechanical Processing**: Narrative/Combat segments processed via SQS and ops_process_segment
+- **History API**: New endpoint for clients to retrieve processed results during runtime
+- **MUD Mechanics**: Simulated skill checks and combat using established algorithms
+- **Cost Optimization**: ~$235-335/month for 10,000 concurrent users
 
-The system successfully balances multiple competing requirements:
-- **Consistency**: Pre-calculated outcomes ensure server authority
-- **Responsiveness**: Clients receive full event sequences immediately
-- **Scalability**: Serverless architecture handles load spikes gracefully
-- **Reliability**: Multiple recovery mechanisms prevent stuck states
-- **Economy**: Self-managing polling eliminates wasteful idle processing
+The system successfully implements the incremental game pattern:
+- **Set Actions in Motion**: Players start segments then wait for timers
+- **Timer-Based Progress**: Segments advance automatically when timers expire
+- **Retrieve Results**: Clients fetch processed results from History API
+- **Player Agency**: Decision segments allow choices before timeout
+- **Mechanical Depth**: Narrative and combat use character skills/attributes
 
-This design creates an engaging timer-based story system that enriches the Eidolon Engine ecosystem while maintaining the core MUD mechanics that define character progression.
+This design creates an engaging timer-based story system where players can start adventures, make meaningful decisions, and return later to see the results of their character's actions.
