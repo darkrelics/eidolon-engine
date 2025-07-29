@@ -140,6 +140,7 @@ Tags:
 ##### When to Use Transactions
 
 Use transactions for operations that:
+
 - Must atomically update multiple items as a unit
 - Require consistency guarantees across related records
 - Need to prevent partial updates during failures
@@ -148,6 +149,7 @@ Use transactions for operations that:
 ##### When NOT to Use Transactions
 
 Avoid transactions for:
+
 - Single item updates (use standard operations)
 - Bulk data imports or exports
 - Operations where eventual consistency is acceptable
@@ -156,10 +158,12 @@ Avoid transactions for:
 ##### Critical Operations Requiring Transactions
 
 1. **Story Operations**:
+
    - Starting a story (Character + ActiveSegments + History)
    - Story completion/abandonment (atomic cleanup required)
 
 2. **Character Operations**:
+
    - Creating character with initial items (Player + Character + Items)
    - Deleting character (ensures complete removal)
 

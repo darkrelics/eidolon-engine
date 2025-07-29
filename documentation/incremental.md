@@ -72,6 +72,7 @@ The incremental module implements the same sophisticated wound tracking system a
 ### Combat Integration
 
 Combat segments fully implement the MUD combat system:
+
 - Opposed skill checks determine hit/miss
 - Damage rolls calculate wounds inflicted
 - Environmental modifiers affect combat (dim lighting, difficult terrain)

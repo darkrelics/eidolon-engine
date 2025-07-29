@@ -608,6 +608,7 @@ The Opponents table defines reusable adversaries for combat segments. Each oppon
 All character modifications persist between game modes:
 
 - **Wounds and Healing**:
+
   - Combat damage creates wounds using MUD damage system
   - Each wound is stored as a map with DamageType and HealAt timestamp fields
   - Health is calculated dynamically as: `Health = MaxHealth - len(wounds)`
@@ -621,12 +622,14 @@ All character modifications persist between game modes:
   - Death in either mode requires appropriate resurrection
 
 - **Inventory Persistence**:
+
   - Items gained from story segments appear in MUD inventory
   - Equipment worn affects combat calculations in both modes
   - Item destruction or loss persists across modes
   - Cursed items maintain their effects
 
 - **Location Updates**:
+
   - Story effects can change character room location
   - Character appears in new room when returning to MUD
   - Death may transport to death realm (room 0 or configured)
@@ -719,24 +722,28 @@ All character modifications persist between game modes:
 Operations that benefit from DynamoDB transactions:
 
 1. **Story Start** (Recommended Transaction):
+
    - Update Character table (GameMode, ActiveStoryID, AvailableStories)
    - Create ActiveSegments record
    - Create initial StoryHistory entry
    - **Rationale**: Prevents orphaned segments if character update fails
 
 2. **Story Completion/Abandonment** (Recommended Transaction):
+
    - Update Character table (GameMode to "None", story lists)
    - Create final StoryHistory entry
    - Delete ActiveSegment(s)
    - **Rationale**: Ensures clean state transitions
 
 3. **Character Creation with Items** (Optional Transaction):
+
    - Create Character record
    - Update Player's character list
    - Create initial Item records
    - **Rationale**: May use eventual consistency if items can be recreated
 
 4. **Segment Processing** (Consider Non-Transactional):
+
    - Character updates (wounds, XP, location)
    - SegmentHistory recording
    - **Rationale**: High frequency operation; consider idempotent design instead
@@ -749,6 +756,7 @@ Operations that benefit from DynamoDB transactions:
 #### 6.1.2 Transaction Alternatives
 
 For high-frequency operations, consider:
+
 - Idempotent operations with unique request IDs
 - Conditional updates with version numbers
 - Event sourcing with eventual consistency

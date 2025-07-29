@@ -12,9 +12,9 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "${GameName}-segments"
-      VisibilityTimeout: 180  # 3x Lambda timeout (60s)
-      MessageRetentionPeriod: 345600  # 4 days
-      ReceiveMessageWaitTimeSeconds: 20  # Long polling
+      VisibilityTimeout: 180 # 3x Lambda timeout (60s)
+      MessageRetentionPeriod: 345600 # 4 days
+      ReceiveMessageWaitTimeSeconds: 20 # Long polling
       Tags:
         - Key: Project
           Value: !Ref GameName
@@ -27,7 +27,7 @@ Outputs:
     Value: !Ref SegmentProcessingQueue
     Export:
       Name: !Sub "${AWS::StackName}-SegmentProcessingQueueUrl"
-  
+
   SegmentProcessingQueueArn:
     Description: "ARN of the segment processing queue"
     Value: !GetAtt SegmentProcessingQueue.Arn

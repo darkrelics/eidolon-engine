@@ -74,6 +74,7 @@ Characters can transition between modes with these safeguards:
 Character state persists across mode transitions, creating meaningful consequences:
 
 **Health and Wounds:**
+
 - Health is calculated dynamically as `Health = MaxHealth - len(wounds)`
 - Each wound is a map in the wounds list containing DamageType and HealAt fields
 - Wounds received in either mode persist when switching:
@@ -89,23 +90,27 @@ Character state persists across mode transitions, creating meaningful consequenc
 - Death in either mode requires resurrection before continuing
 
 **Skill Progression:**
+
 - All XP gained through ResolveStaticCheckWithXP/ResolveOpposedCheckWithXP persists
 - Skills improved in Incremental stories benefit MUD gameplay
 - Combat experience from MUD enhances Incremental combat segments
 - Attribute XP (10% of skill XP) accumulates across both modes
 
 **Inventory and Equipment:**
+
 - Items gained in Incremental stories appear in MUD inventory
 - Equipment worn affects combat stats in both modes
 - Lost or destroyed items affect both game modes
 - Currency (gold, resources) shared between modes
 
 **Location:**
+
 - Story outcomes can change character's room location
 - Death may transport character to death realm
 - Location changes persist when switching to MUD mode
 
 **Combat Mechanics:**
+
 - Combat segments use the full MUD damage system
 - Each point of damage creates a wound map in the wounds list
 - Damage types determine wound severity and healing time
@@ -164,18 +169,21 @@ The system currently uses a bloom filter for restricted name checking:
 The Incremental mode maintains sophisticated state tracking:
 
 **Active Story Tracking:**
+
 - ActiveStoryID and ActiveSegmentID on character record
 - ActiveSegments table holds runtime segment state
 - Front-loaded processing calculates all outcomes at segment start
 - ClientEvents array contains complete narrative sequence
 
 **Story Progression Lists:**
+
 - AvailableStories: Stories the character can start
 - CompletedStories: Successfully finished stories
 - AbandonedStories: Stories started but not completed
 - Story types (one-time, daily, repeatable) control re-availability
 
 **Polling System:**
+
 - 30-second EventBridge polling for segment completion
 - SSM parameter `/eidolon/segment-poller-state` controls polling
 - Automatic enable when stories start, disable when none active
@@ -186,6 +194,7 @@ The Incremental mode maintains sophisticated state tracking:
 The wound healing system operates continuously across both game modes:
 
 **Natural Healing:**
+
 - Healing is automatic and requires no player intervention
 - Each wound has a precise HealAt timestamp in ISO 8601 format
 - System periodically checks and removes expired wounds
@@ -193,12 +202,14 @@ The wound healing system operates continuously across both game modes:
 - Healing continues in real-time regardless of active game mode
 
 **Health Recalculation:**
+
 - When wounds expire, they are removed from the wounds list
 - Health automatically increases as wounds heal
 - Unconscious characters regain consciousness when health > 0
 - Players receive notifications when wounds heal
 
 **Cross-Mode Implications:**
+
 - A character wounded in MUD combat enters Incremental stories injured
 - Combat wounds from Incremental persist when returning to MUD
 - Strategic timing of mode switches can optimize healing downtime
