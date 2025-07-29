@@ -2,6 +2,12 @@
 
 This schema supports the Eidolon Engine's unified backend infrastructure, providing shared data structures used by both MUD and Incremental game modes. All tables listed here are actively used by both game modes, with the GameMode field on characters preventing concurrent access.
 
+**Key Design Principles:**
+- Front-loaded processing: All outcomes are calculated when segments start, not when they end
+- Shared tables: Both game modes use the same character, item, and room data
+- Mode exclusivity: GameMode field ensures characters can only be active in one mode at a time
+- Event-driven advancement: 30-second polling system processes completed segments
+
 ## Player Table
 
 | Field           | Type     | Key      | Description                                                      |
@@ -22,7 +28,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `CharacterID`      | `STRING` | **HASH** | UUID of the character.                                         |
 | `PlayerID`         | `STRING` |          | UUID of the player who owns the character.                     |
 | `CharacterName`    | `STRING` | **GSI**  | Name of the character.                                         |
-| `GameMode`         | `STRING` |          | Current mode: "MUD" or "Incremental" (prevents concurrent use) |
+| `GameMode`         | `STRING` |          | Current mode: "MUD", "Incremental", or "None" (prevents concurrent use) |
 | `RoomID`           | `NUMBER` |          | ID of the room the character is currently in.                  |
 | `Inventory`        | `MAP`    |          | Map of inventory slots to item UUIDs.                          |
 | `Attributes`       | `MAP`    |          | Map of attribute names to their values (e.g., Strength: 4).    |
@@ -245,12 +251,12 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `DefaultStatus`    | `STRING` |          | Cached status message shown between events.               |
 | `StartTime`        | `NUMBER` |          | Unix timestamp when segment started.                      |
 | `EndTime`          | `NUMBER` | **GSI**  | Unix timestamp when segment will complete.                |
-| `ProcessedAt`      | `NUMBER` |          | Unix timestamp when outcomes were calculated.             |
+| `ProcessedAt`      | `NUMBER` |          | Unix timestamp when outcomes were calculated (immediately after creation). |
 | `ProcessingStatus` | `STRING` |          | Status: pending, processed, failed, or awaiting_decision. |
 | `ProcessingError`  | `STRING` |          | Error details if processing failed.                       |
-| `NextSegmentID`    | `STRING` |          | Pre-calculated next segment ID.                           |
-| `ClientEvents`     | `LIST`   |          | Complete event list for client display.                   |
-| `CharacterUpdates` | `MAP`    |          | All character changes to apply.                           |
+| `NextSegmentID`    | `STRING` |          | Pre-calculated next segment ID based on outcome.          |
+| `ClientEvents`     | `LIST`   |          | Complete event sequence for client to display over time.  |
+| `CharacterUpdates` | `MAP`    |          | All character changes to apply when segment completes.    |
 | `Decision`         | `STRING` |          | For decision segments: choice made by player.             |
 | `DecisionMadeAt`   | `NUMBER` |          | Unix timestamp when player made decision.                 |
 | `ChallengeResults` | `LIST`   |          | For narrative segments: results of each challenge roll.   |
@@ -273,6 +279,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | ------------------- | -------- | --------- | --------------------------------------------------------- |
 | `CharacterID`       | `STRING` | **HASH**  | UUID of the character.                                    |
 | `StoryID`           | `STRING` | **RANGE** | UUID of the story.                                        |
+| `AttemptNumber`     | `NUMBER` | **RANGE** | Increments for each attempt of this story.                |
 | `StoryTitle`        | `STRING` |           | Cached title for display without additional lookup.       |
 | `StoryType`         | `STRING` |           | Type: one-time, daily, or repeatable.                     |
 | `StartedAt`         | `NUMBER` |           | Unix timestamp when story started.                        |

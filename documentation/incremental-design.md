@@ -6,17 +6,34 @@ This document provides the technical design specifications for implementing the 
 
 ### 1.1 Key Design Updates
 
-The incremental system now implements a front-loaded processing architecture with the following major changes:
+The incremental system implements a front-loaded processing architecture where all outcomes are determined when segments start, not when they end. This approach ensures consistency, reduces processing delays, and provides immediate feedback to clients.
 
-1. **Pre-calculated Outcomes**: All segment outcomes are calculated when the segment starts, stored in the ActiveSegments table, and simply applied when the timer expires.
+Major architectural decisions:
 
-2. **Enhanced ActiveSegments Table**: New fields include ProcessedAt, ProcessingStatus, ClientEvents, CharacterUpdates, and DefaultStatus to support front-loaded processing.
+1. **Process First, Wait Later**: All segment outcomes are calculated immediately upon creation, stored in the ActiveSegments table, and applied when the timer expires. The client receives the complete event sequence upfront.
 
-3. **Split History Tables**: The History table is now divided into StoryHistory (for overall story tracking) and SegmentHistory (for detailed segment progression).
+2. **Enhanced ActiveSegments Table**: New fields support the front-loaded model:
+   - `ProcessedAt`, `ProcessingStatus`, `ProcessingError` for processing state
+   - `ClientEvents` array containing the complete narrative sequence
+   - `CharacterUpdates` map with all changes to apply
+   - `Transmitted`, `TransmittedAt`, `RunningFlag` for polling coordination
+   - `NextSegmentID` pre-calculated based on outcome
 
-4. **No TTL Fields**: All TTL fields have been removed from the design as segment cleanup is handled by the polling process.
+3. **Dual History Tables**: 
+   - `StoryHistory`: Tracks overall story attempts (start, end, outcome, rewards)
+   - `SegmentHistory`: Detailed segment-by-segment progression with decisions and results
 
-5. **DefaultStatus Field**: All segment definitions now include a DefaultStatus field for consistent UI display.
+4. **Smart Polling System**: 
+   - 30-second EventBridge polling with SSM parameter control
+   - Automatic enable/disable based on active segments
+   - Stuck segment recovery after 15 minutes
+   - SQS queue for reliable segment processing
+
+5. **MUD Mechanics Integration**: All skill progression uses the established MUD functions:
+   - `ResolveStaticCheckWithXP` for narrative challenges
+   - `ResolveOpposedCheckWithXP` for combat
+   - Automatic XP awards (skill XP + 10% attribute XP)
+   - No experience points - only skill progression
 
 ## 2. System Architecture Overview
 
@@ -42,8 +59,13 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 
 1. **Shared Data Layer**: All existing DynamoDB tables used by both modes
 2. **Mode Exclusivity**: GameMode field prevents concurrent access
-3. **Timing Service**: DynamoDB polling with EventBridge-triggered Lambda at 10-second intervals
+3. **Timing Service**: EventBridge-triggered Lambda polling at 30-second intervals
+   - SSM parameter controls polling state (run/stop)
+   - SQS queue ensures reliable segment processing
+   - Automatic enable/disable based on active segments
 4. **Stateless Compute**: Lambda functions handle all game logic
+   - Segment processing happens immediately on creation
+   - Polling system only applies pre-calculated results
 5. **Unified Portal**: Single Flutter web app serves both game modes
 
 ## 3. Data Architecture
@@ -85,6 +107,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "SegmentID": "seg-uuid-001",          # RANGE
     "SegmentType": "decision",
     "ShortStatus": "Choosing your path",
+    "DefaultStatus": "Contemplating your options",  # Status shown between events
     "SegmentDuration": 300,               # 5 minutes to decide
     "DecisionText": "You stand at the forest edge. The path splits into two directions.",
     "DecisionOptions": {
@@ -100,11 +123,12 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "SegmentID": "seg-uuid-002a",         # RANGE
     "SegmentType": "narrative",
     "ShortStatus": "Navigating the moonlit path",
+    "DefaultStatus": "Walking through the dark forest",  # Status shown between events
     "SegmentDuration": 600,               # 10 minutes
     "NextSegmentID": "seg-uuid-003",     # Single linked list
     "Challenges": [
-        {"attribute": "Agility", "skill": "Perception", "difficulty": 8, "attempts": 2},
-        {"attribute": "Strength", "skill": "Survival", "difficulty": 7, "attempts": 3}
+        {"attribute": "agility", "skill": "perception", "difficulty": 8, "attempts": 2},
+        {"attribute": "strength", "skill": "survival", "difficulty": 7, "attempts": 3}
     ],
     "Results": {
         "death": {
@@ -136,10 +160,11 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     "SegmentID": "seg-uuid-combat-001",   # RANGE
     "SegmentType": "combat",
     "ShortStatus": "Fighting the goblin scout",
+    "DefaultStatus": "Engaged in combat",  # Status shown between events
     "SegmentDuration": 120,               # 2 minutes for combat
     "NextSegmentID": "seg-uuid-004",
     "Combat": {
-        "opponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+        "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
         "maxRounds": 15,              # Combat ends after this many rounds
         "environment": {
             "lighting": "dim",        # -1 to hit rolls
@@ -174,52 +199,135 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
 #### 3.1.3 ActiveSegments Table
 
 ```python
-# Tracks runtime segment instances - Narrative example
+# Tracks runtime segment instances with front-loaded processing
 {
-    "ActiveSegmentID": "active-seg-uuid-123",  # HASH
+    # Identity
+    "ActiveSegmentID": "active-seg-uuid-123",  # HASH - Unique ID for this instance
     "CharacterID": "char-uuid-456",            # GSI - CharacterID-index
-    "PlayerID": "player-uuid-123",
-    "StoryID": "forest-adventure-uuid",
-    "StoryTitle": "The Whispering Woods",
-    "SegmentID": "seg-uuid-002a",
-    "SegmentType": "narrative",
-    "Status": "active",
-    "StartTime": 1737000300,
-    "EndTime": 1737003900,              # GSI - EndTimeIndex
-    "Decision": null,                   # For decision segments
-    "ChallengeResults": [               # For narrative segments
-        {"attribute": "Agility", "skill": "Perception", "effectiveScore": 12, "difficulty": 8, "sigma": 0.82, "success": true},
-        {"attribute": "Agility", "skill": "Perception", "effectiveScore": 12, "difficulty": 8, "sigma": -0.45, "success": false},
-        {"attribute": "Strength", "skill": "Survival", "effectiveScore": 10, "difficulty": 7, "sigma": 0.63, "success": true},
-        {"attribute": "Strength", "skill": "Survival", "effectiveScore": 10, "difficulty": 7, "sigma": 1.21, "success": true},
-        {"attribute": "Strength", "skill": "Survival", "effectiveScore": 10, "difficulty": 7, "sigma": 0.94, "success": true}
+    "PlayerID": "player-uuid-123",             # For ownership validation
+    
+    # Story Context
+    "StoryID": "forest-adventure-uuid",        # Parent story
+    "StoryTitle": "The Whispering Woods",      # Cached for display
+    "SegmentID": "seg-uuid-002a",              # Definition in Segments table
+    "SegmentType": "narrative",                # narrative|combat|decision|rest
+    
+    # Timing
+    "StartTime": 1737000300,                   # Unix timestamp when created
+    "EndTime": 1737003900,                     # GSI - EndTimeIndex - When segment should advance
+    
+    # Processing State (Front-loaded)
+    "ProcessedAt": 1737000305,                 # When outcomes calculated
+    "ProcessingStatus": "processed",           # pending|processed|failed|awaiting_decision
+    "ProcessingError": null,                   # Error details if failed
+    
+    # Outcomes (Set by processor)
+    "Outcome": "minimal",                      # death|failure|minimal|normal|exceptional
+    "NextSegmentID": "seg-uuid-003",           # Pre-calculated next segment
+    
+    # Client Events - Complete narrative sequence for progressive display
+    "ClientEvents": [
+        {
+            "eventType": "narrative",
+            "title": "Into the Woods",
+            "description": "The morning mist clings to the forest floor as you step into the shadowy forest...",
+            "data": {}
+        },
+        {
+            "eventType": "skillCheck",
+            "title": "Perception Challenge",
+            "description": "You scan the forest for hidden dangers...",
+            "data": {
+                "skill": "perception",
+                "attribute": "agility",
+                "effectiveScore": 12,
+                "difficulty": 8,
+                "sigma": 0.82,
+                "success": true,
+                "skillXPAwarded": 0.25,
+                "attributeXPAwarded": 0.025
+            }
+        },
+        {
+            "eventType": "skillCheck", 
+            "title": "Perception Challenge - Second Attempt",
+            "description": "The shadows play tricks on your eyes...",
+            "data": {
+                "skill": "perception",
+                "attribute": "agility",
+                "effectiveScore": 12,
+                "difficulty": 8,
+                "sigma": -0.45,
+                "success": false,
+                "skillXPAwarded": 0.125,
+                "attributeXPAwarded": 0.0125
+            }
+        },
+        {
+            "eventType": "narrative",
+            "title": "Lost in the Woods",
+            "description": "Despite your best efforts, the forest paths confuse you. You wander in circles...",
+            "data": {}
+        },
+        {
+            "eventType": "status",
+            "title": "Health Lost",
+            "description": "The thorny undergrowth scratches you as you push through.",
+            "data": {
+                "healthChange": -1
+            }
+        },
+        {
+            "eventType": "reward",
+            "title": "Experience Gained",
+            "description": "You learn from your struggles in the forest.",
+            "data": {
+                "skillsImproved": {
+                    "perception": 0.375,
+                    "survival": 0.75
+                },
+                "attributesImproved": {
+                    "agility": 0.0375,
+                    "strength": 0.075
+                }
+            }
+        }
     ],
-    "Outcome": "minimal",               # Calculated from challenges
-    "TTL": 1737007500                   # Expires 1 hour after EndTime
-}
-
-# Combat segment example
-{
-    "ActiveSegmentID": "active-seg-uuid-combat",  # HASH
-    "CharacterID": "char-uuid-456",               # GSI - CharacterID-index
-    "PlayerID": "player-uuid-123",
-    "StoryID": "forest-adventure-uuid",
-    "StoryTitle": "The Whispering Woods",
-    "SegmentID": "seg-uuid-combat-001",
-    "SegmentType": "combat",
-    "Status": "active",
-    "StartTime": 1737000300,
-    "EndTime": 1737000420,              # GSI - EndTimeIndex
-    "CombatState": {                    # For combat segments
-        "round": 3,
-        "playerWounds": [
-            {"type": "lethal", "healAt": "2025-01-23T10:30:00Z"},
-            {"type": "bashing", "healAt": "2025-01-23T08:15:00Z"}
-        ],
-        "opponentHealth": 4
+    
+    # Character Updates - All changes to apply when segment completes
+    "CharacterUpdates": {
+        "Health": -1,
+        "SkillXP": {
+            "perception": 0.375,               # Total from all skill checks
+            "survival": 0.75
+        },
+        "AttributeXP": {
+            "agility": 0.0375,                 # 10% of skill XP
+            "strength": 0.075
+        }
     },
-    "Outcome": null,                    # Set when combat completes
-    "TTL": 1737004020                   # Expires 1 hour after EndTime
+    
+    # History Entry - Pre-formatted for History table
+    "HistoryEntry": {
+        "SegmentID": "seg-uuid-002a",
+        "SegmentType": "narrative",
+        "Outcome": "minimal",
+        "ResultText": "You stumble through the forest, learning from your mistakes.",
+        "ChallengeResults": [
+            {"skill": "perception", "success": true, "sigma": 0.82},
+            {"skill": "perception", "success": false, "sigma": -0.45},
+            {"skill": "survival", "success": true, "sigma": 0.63}
+        ]
+    },
+    
+    # Decision Tracking
+    "Decision": null,                          # Choice made (decision segments)
+    "DecisionMadeAt": null,                    # When player decided
+    
+    # Advancement State
+    "Transmitted": null,                       # Set true when sent to SQS
+    "TransmittedAt": null,                     # Unix timestamp when sent
+    "RunningFlag": null                        # Request ID of processor
 }
 
 # Global Secondary Indexes
@@ -251,8 +359,8 @@ GSI: EndTimeIndex
     "WeaponType": "lethal",     # Damage type
     "WeaponDamage": 2,          # Weapon bonus
     "LootTable": [
-        {"itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "chance": 0.5},  # Healing potion
-        {"itemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481", "chance": 0.3}   # Rusty blade
+        {"ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "chance": 0.5},  # Healing potion
+        {"ItemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481", "chance": 0.3}   # Rusty blade
     ],
     "Tags": ["goblinoid", "forest", "weak"],
     "CreatedAt": "2025-01-23T10:00:00Z"
@@ -286,74 +394,88 @@ GSI: EndTimeIndex
 }
 ```
 
-#### 3.1.6 History Table
+#### 3.1.6 StoryHistory Table
 
 ```python
-# Tracks completed and abandoned story runs
+# Tracks overall story attempts and completions
 {
     "CharacterID": "char-uuid-456",           # HASH
     "StoryID": "forest-adventure-uuid",       # RANGE
-    "StoryTitle": "The Whispering Woods",     # Cached story title
+    "StoryTitle": "The Whispering Woods",     # Cached for display
+    "StoryType": "daily",                     # one-time|daily|repeatable
     "StartedAt": "2025-01-23T08:00:00Z",     # When story began
     "FinishedAt": "2025-01-23T10:30:00Z",    # When story ended
-    "StoryType": "daily",                     # one-time|daily|repeatable
-    "SegmentHistory": [                       # Detailed segment outcomes
-        {
-            "SegmentID": "seg-uuid-001",
-            "SegmentType": "decision",
-            "Comment": "Chose the left path through the forest",
-            "Decision": "Take the left path",
-            "CompletedAt": "2025-01-23T08:00:00Z"
-        },
-        {
-            "SegmentID": "seg-uuid-002a",
-            "SegmentType": "narrative",
-            "Comment": "Navigated the moonlit path with mixed success",
-            "Outcome": "minimal",
-            "ResultText": "You make slow progress through brambles and thick undergrowth. Your survival skills help you find the way, though not without difficulty.",
-            "ChallengeResults": [
-                {"skill": "Perception", "success": true},
-                {"skill": "Perception", "success": false},
-                {"skill": "Survival", "success": true}
-            ],
-            "CompletedAt": "2025-01-23T08:10:00Z"
-        },
-        {
-            "SegmentID": "seg-uuid-combat-001",
-            "SegmentType": "combat",
-            "Comment": "Fought a goblin scout and emerged victorious",
-            "Outcome": "normal",
-            "ResultText": "Your combat training prevails. The goblin falls beneath your blade, leaving behind its meager possessions.",
-            "FinalCombatState": {
-                "rounds": 8,
-                "playerWoundsReceived": 2,
-                "opponentDefeated": true
-            },
-            "CompletedAt": "2025-01-23T08:12:00Z"
-        }
-    ],
-    "FinalOutcome": "normal",                 # Overall story outcome
+    "FinalOutcome": "normal",                 # death|failure|minimal|normal|exceptional|abandoned
     "TotalDuration": 9000,                    # Seconds from start to finish
-    "Rewards": {                              # Aggregated rewards
-        "experience": 150,
+    "TotalSegments": 12,                      # Number of segments completed
+    "Rewards": {                              # Aggregated rewards from all segments
+        "skillXP": {
+            "perception": 2.5,
+            "survival": 3.0,
+            "melee": 1.5
+        },
+        "attributeXP": {
+            "agility": 0.25,
+            "strength": 0.45,
+            "intelligence": 0.15
+        },
         "items": ["herb_bundle", "goblin_pouch", "rusty_blade"],
-        "gold": 50,
-        "roomChanges": [5, 7]
+        "gold": 150,
+        "finalRoom": 42                       # Where character ended up
     },
-    "AbandonedCount": 0                       # Prior abandonment attempts
+    "AbandonedAt": null,                      # Set if story was abandoned
+    "AbandonedReason": null                   # Player-provided or system reason
 }
 ```
 
-- **`CharacterID` + `StoryID`**: Composite key enables efficient queries by character
-- **`StoryTitle`**: Cached story title eliminates need for Story table lookup
-- **`StartedAt`/`FinishedAt`**: Track full story duration for analytics
-- **`SegmentHistory`**: Preserves complete path through story with:
-  - Comment describing what happened in each segment
-  - Decision text for player choices
-  - ResultText containing the narrative shown to player
-  - Full outcome details for analysis
-- **`No TTL`**: Data persists until character deletion
-- **Cleanup**: Character deletion Lambda removes all associated history
+#### 3.1.7 SegmentHistory Table
+
+```python
+# Detailed segment-by-segment progression records
+{
+    "CharacterID": "char-uuid-456",           # HASH
+    "CompletedAt": "2025-01-23T08:10:00Z",   # RANGE - When segment completed
+    "SegmentID": "seg-uuid-002a",             # For reference
+    "StoryID": "forest-adventure-uuid",       # Parent story
+    "ActiveSegmentID": "active-seg-uuid-123", # Original runtime instance
+    "SegmentType": "narrative",               # narrative|combat|decision|rest
+    "Outcome": "minimal",                     # Segment outcome
+    "Duration": 600,                          # Actual time taken (seconds)
+    
+    # Segment-specific details
+    "Decision": null,                         # For decision segments
+    "ChallengeResults": [                     # For narrative segments
+        {"skill": "perception", "success": true, "sigma": 0.82},
+        {"skill": "perception", "success": false, "sigma": -0.45},
+        {"skill": "survival", "success": true, "sigma": 0.63}
+    ],
+    "CombatSummary": null,                    # For combat segments: rounds, wounds, etc.
+    
+    # Applied changes
+    "CharacterUpdates": {
+        "Health": -1,
+        "SkillXP": {"perception": 0.375, "survival": 0.75},
+        "AttributeXP": {"agility": 0.0375, "strength": 0.075},
+        "Wounds": [],
+        "Items": {"added": [], "removed": []}
+    },
+    
+    # Narrative record
+    "NarrativeEvents": [                      # Key events shown to player
+        "Entered the dark forest",
+        "Failed to spot the hidden trap",
+        "Successfully navigated using survival skills"
+    ]
+}
+```
+
+- **StoryHistory**: High-level story tracking for achievements and progression
+- **SegmentHistory**: Detailed play-by-play for analysis and debugging
+- **Separation Benefits**:
+  - Story completion queries don't scan segment details
+  - Segment analysis doesn't require story context
+  - Stories provide permanent achievement record
+  - Cleaner data model with appropriate granularity
 
 ### 3.2 Data Access Patterns
 
@@ -365,13 +487,13 @@ GSI: EndTimeIndex
 4. **Process Segment Completion**: Update ActiveSegments record
 5. **Update Story Lists**: Move story IDs between Available/Abandoned/Completed
 
-#### 3.2.2 No GSIs Required
+#### 3.2.2 Global Secondary Index Usage
 
-The simplified architecture avoids Global Secondary Indexes by:
+The system uses two critical GSIs for efficient operations:
 
-- Using direct key lookups where possible
-- Accepting slightly less efficient queries for admin operations
-- Leveraging existing table structures
+- **CharacterID-index**: Enables querying all active segments for a character
+- **EndTimeIndex**: Powers the polling system to find segments ready for completion
+- These indexes are essential for the 30-second polling cycle to remain performant
 
 ### 3.3 Transaction Design Patterns
 
@@ -598,8 +720,7 @@ Response: {
         "Status": "active",
         "StartTime": 1737000300,
         "EndTime": 1737003900,
-        "ProcessingStatus": "completed",
-        "TimeRemaining": 240,  // Calculated from EndTime - current time
+        "ProcessingStatus": "processed",
         "ShortStatus": "Navigating the moonlit path"  // From segment or DefaultStatus
     }
 }
@@ -656,20 +777,47 @@ Request: {
     "StoryID": "forest-adventure"
 }
 Response: {
-    "Segment": {
-        "SegmentID": "active-seg-uuid",
-        "StoryID": "forest-adventure",
-        "Type": "decision|narrative|combat",
-        "TimeRemaining": 300,
-        // Additional fields based on type:
-        // Decision: "Content", "Options"
-        // Narrative: "ShortStatus", "Narrative"
-        // Combat: "ShortStatus", "OpponentID"
+    "success": true,
+    "segment": {
+        "activeSegmentId": "active-seg-uuid-123",
+        "segmentType": "narrative",
+        "startTime": 1737000000,
+        "endTime": 1737000600,
+        "shortStatus": "Navigating the Dark Forest"
+    },
+    "events": [
+        {
+            "eventType": "narrative",
+            "title": "Into the Woods",
+            "description": "You step into the shadowy forest...",
+            "data": {}
+        },
+        {
+            "eventType": "skillCheck",
+            "title": "Navigation Challenge",
+            "description": "You attempt to find your way...",
+            "data": {
+                "skill": "survival",
+                "attribute": "intelligence",
+                "difficulty": 8,
+                "effectiveScore": 7,
+                "sigma": -0.43,
+                "success": false,
+                "skillXPAwarded": 0.125,
+                "attributeXPAwarded": 0.0125
+            }
+        }
+    ],
+    "characterUpdates": {
+        "Health": -1,
+        "SkillXP": {"survival": 0.25, "perception": 0.15},
+        "AttributeXP": {"intelligence": 0.025, "wisdom": 0.015}
     }
 }
 Error Cases:
 - 409: Character already in story or MUD mode
 - 403: Story not available
+- 400: Invalid parameters
 ```
 
 **GET /stories/current**
@@ -698,51 +846,24 @@ Response: {
 }
 ```
 
-**GET /segments/outcome**
+**GET /segments/status**
 
 ```python
-# Lambda: api_get_segment_outcome
-Purpose: Retrieve completed segment results
-Query Parameters: characterId, segmentId
+# Lambda: api_get_segment_status
+Purpose: Check if segment is ready for advancement
+Query Parameters: characterId
 Response: {
-    "Outcome": "normal",  # death/failure/minimal/normal/exceptional
-    "ClientEvents": [  # Pre-calculated narrative events
-        {
-            "type": "narrative",
-            "text": "You navigate successfully through the moonlit path..."
-        },
-        {
-            "type": "outcome",
-            "result": "normal",
-            "effects": {"experience": 50, "items": ["herb_bundle"]}
-        }
-    ],
-    "CharacterUpdates": {  # Applied effects
-        "experience": 50,
-        "items": ["herb_bundle"],
-        "room": null,
-        "wounds": []
-    },
-    # Additional fields based on segment type:
-    "NextSegmentID": "seg-uuid-003",  # For non-terminal outcomes
-    "Decision": "take-left-path",  # For decision segments: choice made
-    "ChallengeResults": [  # For narrative segments: skill check results
-        {"skill": "Perception", "success": true},
-        {"skill": "Survival", "success": false}
-    ],
-    "CombatSummary": {  # For combat segments: final combat state
-        "rounds": 8,
-        "playerWoundsReceived": 2,
-        "opponentDefeated": true
-    }
+    "segmentReady": true,
+    "activeSegmentId": "active-seg-uuid-123",
+    "endTime": 1737000600,
+    "currentTime": 1737000605,
+    "processingStatus": "processed"
 }
 
 Notes:
-- ClientEvents contains pre-formatted events for UI display
-- CharacterUpdates shows what was applied to the character
-- Outcome types: death, failure, minimal, normal, exceptional
-- NextSegmentID only included for non-terminal outcomes (not death/failure)
-- This endpoint retrieves pre-calculated results from ActiveSegments
+- Called frequently by client near segment completion
+- Used to detect stuck segments (ready but not advanced)
+- Simple status check without heavy data transfer
 ```
 
 **POST /stories/abandon**
@@ -876,7 +997,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - Return acknowledgment with next segment timing
 ```
 
-#### 5.2.4 api_calculate_segment_outcomes
+#### 5.2.4 ops_process_segment
 
 ```python
 """Calculate outcomes for newly created segments (async processing)."""
@@ -906,36 +1027,84 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - Consider retry logic for transient failures
 ```
 
-#### 5.2.5 api_process_segment
+#### 5.2.5 ops_segment_poller
 
 ```python
-"""Process segment outcomes when timer expires (triggered by EventBridge)."""
+"""Find and queue segments ready for advancement (EventBridge triggered)."""
+# Trigger: EventBridge rule every 30 seconds
 # Key Operations:
-- Query ActiveSegments by EndTimeIndex for expired segments
-- For each expired segment:
-  - Verify ProcessingStatus is "completed"
-  - Apply pre-calculated CharacterUpdates to character
-  - Write outcome to SegmentHistory table
-  - If story complete, update StoryHistory
-  - Delete processed segment from ActiveSegments
-- Design for high-frequency operation:
-  Option A - Non-transactional with idempotency:
-    - Use conditional updates to prevent double processing
-    - Apply character updates with version checking
-    - Write SegmentHistory with duplicate detection
-  Option B - Minimal transaction for critical state:
-    - Use transaction only for story completion
-    - Standard operations for segment-to-segment
-    - Balance consistency with 2x capacity cost
-- If no segments remain, disable polling EventBridge rule
-# Performance Considerations:
-- This runs every 10 seconds when stories are active
-- Pre-calculated outcomes eliminate complex processing
-- Consider eventual consistency for history writes
-# Note: Called by segment poller Lambda every 10 seconds
+- Read SSM parameter /eidolon/segment-poller-state
+- Perform dual scanning strategy:
+  
+  # First Scan - Ready Segments:
+  - Query EndTimeIndex where EndTime <= (Now + 15 seconds)
+  - Filter: Transmitted attribute does NOT exist
+  - Filter: RunningFlag attribute does NOT exist
+  - For each segment found:
+    - Attempt: SET Transmitted = true, TransmittedAt = Now
+    - Condition: attribute_not_exists(Transmitted)
+    - If successful, add to SQS batch
+  
+  # Second Scan - Stuck Segments:
+  - Query where Transmitted = true
+  - Filter: TransmittedAt < (Now - 900 seconds)  # 15 minutes
+  - For each stuck segment:
+    - REMOVE RunningFlag (no condition check)
+    - UPDATE TransmittedAt = Now
+    - Add to SQS batch for reprocessing
+    - Log warning about stuck segment
+
+- Send segments to SQS in batches (max 10)
+- State management based on findings:
+  - If parameter "stop" and segments found: set to "run"
+  - If parameter "run" and no segments: check if table empty
+  - If table empty: set parameter to "stop", disable EventBridge
+  
+# Performance:
+- Efficient GSI queries with time-based filters
+- Batch SQS operations for throughput
+- 15-second buffer prevents race conditions
 ```
 
-#### 5.2.5 cognito_new_player
+#### 5.2.6 ops_advance_story
+
+```python
+"""Process individual segments from SQS queue."""
+# Trigger: SQS messages from segment poller
+# Key Operations:
+- Extract ActiveSegmentID from SQS message
+- Read full segment from ActiveSegments table
+- Attempt to claim ownership:
+  - SET RunningFlag = context.aws_request_id
+  - Condition: attribute_not_exists(RunningFlag)
+  - If fails, exit (another Lambda processing)
+  
+- Verify ProcessingStatus is "processed"
+- Apply pre-calculated updates:
+  - Read CharacterUpdates from segment
+  - Update Character table with all changes
+  - Write HistoryEntry to SegmentHistory
+  
+- Handle story progression:
+  - Check Outcome for terminal states (death/failure)
+  - If continuing, create next segment:
+    - Use NextSegmentID from current segment
+    - Generate new ActiveSegmentID
+    - If not decision type, process immediately
+  - Update character's ActiveSegmentID
+  
+- Cleanup:
+  - Delete processed segment
+  - Check if ActiveSegments table empty
+  - If empty, set SSM parameter to "stop"
+  
+# Error Handling:
+- If segment missing: log and delete SQS message
+- If processing fails: leave for stuck detection
+- Idempotent design handles retries safely
+```
+
+#### 5.2.7 cognito_new_player
 
 ```python
 """Create player record after Cognito registration."""
@@ -950,7 +1119,7 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 # Note: System-level function for player lifecycle
 ```
 
-#### 5.2.6 cognito_delete_player
+#### 5.2.8 cognito_delete_player
 
 ```python
 """Complete player data deletion for GDPR compliance."""
@@ -970,53 +1139,118 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 # Note: Critical for GDPR compliance and data cleanup
 ```
 
-### 5.3 DynamoDB Polling Implementation
+### 5.3 Polling System Architecture
 
-The segment completion system uses EventBridge to create a serverless polling mechanism that checks for segments ready to complete and applies their pre-calculated outcomes. With the front-loaded processing design, the poller simply needs to identify expired segments and trigger the cleanup process.
+The segment advancement system uses a sophisticated polling mechanism with EventBridge, SQS, and SSM Parameter Store to reliably process completed segments while maintaining cost efficiency.
 
 #### EventBridge Rule Configuration
 
-The system establishes a single EventBridge rule named 'incremental-segment-poller' that triggers every 10 seconds. This rule starts in a disabled state and only activates when players have active story segments. The rule targets a Lambda function responsible for checking and processing completed segments.
+The system uses a single EventBridge rule named 'eidolon-segment-poller' that triggers every 30 seconds. This rule starts disabled and activates only when players have active story segments. The 30-second interval balances timely segment advancement with operational costs.
 
-#### Segment Polling Process
+#### SSM Parameter Control
 
-When the polling Lambda executes, it performs these operations:
+The polling system uses SSM Parameter Store (`/eidolon/segment-poller-state`) to coordinate state across Lambda executions:
 
-1. **Time-based Query**: The function queries the ActiveSegments table using the EndTimeIndex GSI, searching for all segments where the EndTime is less than or equal to the current timestamp. This efficient query leverages the index to avoid scanning the entire table.
+- **"run"**: Polling is active, segments need processing
+- **"stop"**: No active segments, polling should disable itself
 
-2. **Outcome Application**: For each segment found ready for completion, the system:
-   - Verifies the ProcessingStatus is "completed" (skips if still pending/processing)
-   - Applies the pre-calculated CharacterUpdates to the character record
-   - Writes the segment outcome to the SegmentHistory table
-   - Updates the StoryHistory if the story is complete
+This parameter enables graceful startup/shutdown and prevents race conditions between concurrent executions.
 
-3. **Automatic Cleanup**: After applying outcomes, segments are deleted from the ActiveSegments table, keeping the table size manageable and query performance optimal.
+#### Dual-Scan Polling Strategy
 
-#### Dynamic Polling Control
+The segment poller implements a two-phase scanning approach:
 
-The system implements intelligent polling management to minimize costs:
+**Phase 1 - Ready Segments**:
+- Queries EndTimeIndex for segments where `EndTime <= (CurrentTime + 15)`
+- The 15-second buffer (half the polling interval) ensures segments are found before they expire
+- Filters for segments without `Transmitted` or `RunningFlag` attributes
+- Claims segments by setting `Transmitted = true` with conditional updates
+- Successfully claimed segments are batched to SQS
 
-- **Activation Logic**: When a new story segment begins, the system checks if polling is already active. If not, it enables the EventBridge rule to start the 10-second polling cycle.
+**Phase 2 - Stuck Segment Recovery**:
+- Identifies segments where `Transmitted = true` AND `TransmittedAt < (CurrentTime - 900)`
+- These are segments that were queued but not processed within 15 minutes
+- Clears the `RunningFlag` without condition checking (force clear)
+- Updates `TransmittedAt` to current time
+- Re-queues for processing with warning logs
 
-- **Deactivation Logic**: After processing segments, if no active segments remain in the table, the system disables the EventBridge rule to stop unnecessary Lambda invocations. This check uses a simple scan with a limit of 1 to determine if any records exist.
+#### SQS Integration
 
-- **Cost Optimization**: This on-demand polling approach ensures Lambda functions only execute when there's actual work to process, significantly reducing operational costs compared to continuous polling.
+The poller sends discovered segments to an SQS queue for processing:
 
-The combination of EventBridge scheduling, GSI-based queries, and front-loaded processing creates an efficient, scalable system for handling thousands of concurrent story progressions without requiring complex runtime calculations.
+- Batches up to 10 segments per SQS send operation
+- Each message contains the ActiveSegmentID
+- SQS provides reliable delivery and automatic retries
+- Dead letter queue captures persistent failures
+
+#### Segment Processing Flow
+
+When `ops_advance_story` receives an SQS message:
+
+1. **Ownership Claim**: Sets `RunningFlag = RequestID` with conditional update
+2. **Validation**: Ensures `ProcessingStatus = "processed"`
+3. **Application**: Applies pre-calculated CharacterUpdates
+4. **Progression**: Creates next segment if story continues
+5. **Cleanup**: Deletes completed segment
+
+#### Dynamic Enable/Disable Logic
+
+The polling system self-manages based on table state:
+
+**When Starting Stories**:
+- `api_start_story` checks SSM parameter
+- If "stop", sets to "run" and enables EventBridge rule
+- Ensures polling is active for new segments
+
+**During Polling Cycles**:
+- If parameter is "stop" but segments found: set to "run"
+- If parameter is "run" but table empty: set to "stop"
+- Next "stop" cycle disables the EventBridge rule
+
+**Cost Optimization**:
+- Zero Lambda invocations when no stories active
+- 30-second polling reduces costs vs 10-second
+- Efficient GSI queries minimize read capacity
+- Batch operations reduce API calls
+
+This architecture ensures reliable segment processing while maintaining cost efficiency through intelligent self-management.
 
 ### 5.4 Outcome Calculation Logic
 
 The narrative outcome system leverages the MUD mechanics to create consistent, fair results based on character abilities. This ensures that character progression in the incremental game directly impacts story success rates.
 
+#### MUD Mechanics Integration
+
+The system uses two core MUD functions for all skill checks:
+
+1. **ResolveStaticCheckWithXP**: Used for narrative challenges against fixed difficulties
+   - Automatically awards skill XP based on difficulty and outcome
+   - Failed attempts award 50% XP to encourage learning from failure
+   - Returns sigma value indicating degree of success/failure
+
+2. **ResolveOpposedCheckWithXP**: Used for combat and contested actions
+   - Awards XP to both participants based on relative skill levels
+   - Handles asymmetric contests (e.g., attack vs dodge)
+   - Provides realistic combat progression
+
 #### Challenge Resolution Process
 
-When a narrative segment contains challenges, the system evaluates each one using the character's relevant attributes and skills:
+When a narrative segment contains challenges, the system evaluates each one:
 
-1. **Skill Combination**: Each challenge specifies an attribute (like Strength or Agility) and a skill (like Survival or Perception). The system combines these values to create an effective score representing the character's total capability for that challenge.
+1. **Skill Combination**: Each challenge specifies an attribute (like strength or agility) and a skill (like survival or perception). The effective score is calculated as:
+   ```
+   effectiveScore = character.skills[skill] + character.attributes[attribute]
+   ```
 
-2. **Multiple Attempts**: Challenges can require multiple dice rolls, simulating extended efforts. For example, navigating through a forest might require three Survival checks, representing different obstacles encountered along the way.
+2. **XP Award Calculation**: The MUD functions automatically calculate XP awards:
+   - Skill XP is based on the difficulty and outcome
+   - Attribute XP is always 10% of the skill XP award
+   - Both are added to the CharacterUpdates for later application
 
-3. **Statistical Accumulation**: The system tracks the statistical outcome (sigma value) of each roll using the MUD's ResolveStaticCheck function. These sigma values represent degrees of success or failure, with positive values indicating success and negative values indicating failure.
+3. **Multiple Attempts**: Challenges can require multiple attempts, with each attempt:
+   - Calling ResolveStaticCheckWithXP independently
+   - Awarding XP for every attempt (full or 50%)
+   - Contributing to the overall outcome determination
 
 #### Outcome Determination
 
@@ -1042,29 +1276,62 @@ This approach directly leverages the MUD mechanics system's probability model. A
 
 ### 5.5 Combat Resolution Logic
 
-Combat segments implement the complete MUD combat system, ensuring that battles in the incremental game feel authentic and consequential. The system preserves all the tactical depth of MUD combat while automating the round-by-round resolution.
+Combat segments implement the complete MUD combat system using the ResolveOpposedCheckWithXP function for all combat actions. This ensures authentic battles with proper skill progression.
 
 #### Combat Initialization
 
-When a combat segment begins, the system loads the opponent's statistics from the Opponents table and establishes the initial combat state. This includes tracking the current round number, any wounds inflicted on the player, and the opponent's remaining health. If resuming an interrupted combat, the system restores the previous state to continue where the battle left off.
+When processing a combat segment, the system:
+- Loads opponent statistics from the Opponents table
+- Retrieves character's current combat capabilities
+- Applies environmental modifiers from segment definition
+- Initializes round counter and combat state
 
-#### Round-by-Round Combat Flow
+#### Round-by-Round Combat Resolution
 
-Combat proceeds through a series of alternating attacks until one of three conditions is met: the character dies, the opponent is defeated, or the maximum number of rounds is reached. Each round follows this sequence:
+Combat simulation proceeds through alternating attacks, with each round representing a few seconds of intense battle. The system uses the MUD's opposed check mechanics to create realistic combat outcomes where skill differences matter but aren't deterministic.
 
-**Environmental Factors**: The combat environment affects both combatants. Dim lighting impairs accuracy, while difficult terrain like mud hampers defensive maneuvers. These modifiers apply equally to both sides, creating tactical considerations for story designers.
+**Attack Resolution**:
 
-**Player Attack Phase**: The character attempts to strike their opponent using a two-stage resolution process:
+Each attack begins with the attacker attempting to land a blow on their opponent. The system calls ResolveOpposedCheckWithXP, pitting the attacker's offensive capabilities against the defender's defensive skills:
 
-- First, an attack roll determines if the character hits, combining their Agility and Melee skill against the opponent's Defense Rating
-- If successful (sigma ≥ 1.0), a damage roll follows, pitting the character's Strength and weapon damage against the opponent's Toughness and armor
-- Successful damage rolls reduce the opponent's health by the sigma value (rounded down)
+```python
+# Player attacks opponent
+attack_result = ResolveOpposedCheckWithXP(
+    character, opponent,
+    "melee", "strength",      # Attacker uses melee + strength
+    "dodge", "agility"        # Defender uses dodge + agility
+)
+```
 
-**Opponent Counter-Attack**: If still standing, the opponent retaliates using the same two-stage process:
+The function returns a sigma value representing the degree of success. A sigma of 1.0 or higher indicates a successful hit, with higher values representing more solid connections. Importantly, both combatants receive XP from every exchange - the attacker gains melee experience while the defender improves their dodge skill, even on misses.
 
-- The opponent's Combat Rating contests the character's defensive capabilities (Agility + Dodge)
-- Successful hits trigger damage resolution against the character's Endurance and equipped armor
-- Damage inflicted creates wounds using the MUD wound system, with wound types determined by the opponent's weapon
+**Damage Calculation**:
+
+When an attack succeeds, the system determines how much damage penetrates the defender's armor and toughness. This uses a second opposed check that models the impact force versus the defender's ability to absorb punishment:
+
+```python
+# Damage roll using opposed check
+damage_result = ResolveOpposedCheck(
+    character, opponent,
+    "melee", "strength",      # Damage based on strength + weapon
+    "toughness", "endurance"  # Resistance based on toughness + armor
+)
+```
+
+The resulting sigma value is floored to determine health levels lost. A glancing blow might only remove one health level, while a critical strike could inflict three or more levels of damage.
+
+**Environmental Factors**:
+
+The combat environment plays a crucial role in battle outcomes. Before each attack or defense roll, the system applies environmental modifiers that reflect the fighting conditions. Dim lighting makes it harder to spot openings (reducing attack accuracy by 1), while muddy terrain hampers footwork (reducing dodge effectiveness by 1). These modifiers affect both combatants equally, adding tactical depth to encounter design.
+
+**Progressive XP Awards**:
+
+Combat provides rich opportunities for skill development. Throughout each round:
+- Every attack attempt improves the attacker's melee skill
+- Every defense attempt enhances the defender's dodge skill  
+- Successful damage rolls may award additional weapon skill XP
+- Failed attempts still award 50% of normal XP, reflecting learning from mistakes
+- The continuous XP flow ensures that even losing battles contribute to character growth
 
 #### Wound System Integration
 
@@ -1298,7 +1565,7 @@ The deployment adds nine Lambda functions to support story and player lifecycle 
 
 **Cognito Integration Functions**: Two functions handle player lifecycle management. The new player function creates initial player records upon registration, while the delete player function ensures complete data removal for GDPR compliance. These system-level functions support both MUD and Incremental game modes.
 
-**EventBridge Integration**: A new EventBridge rule triggers the segment poller every 10 seconds. This rule can be dynamically enabled or disabled based on whether any stories are active, optimizing costs during idle periods.
+**EventBridge Integration**: A new EventBridge rule triggers the segment poller every 30 seconds. This rule can be dynamically enabled or disabled based on whether any stories are active, optimizing costs during idle periods.
 
 ### 9.2 API Gateway Routes
 
@@ -1324,32 +1591,46 @@ The deployment extends the DynamoDB infrastructure with new tables that follow e
 
 ## 10. Cost Analysis
 
-### 10.1 Simplified Cost Structure
+### 10.1 Cost Structure with 30-Second Polling
 
-With the DynamoDB polling approach:
+The front-loaded processing architecture with 30-second polling significantly reduces operational costs while maintaining responsive gameplay.
 
 **Monthly Costs (10,000 concurrent users)**:
 
-- Lambda invocations: ~$100-150 (includes polling overhead)
-- EventBridge rules: <$1 (single polling rule)
-- DynamoDB (pay-per-request): ~$150-250 (includes GSI queries)
-- **Total: ~$250-400/month**
+- **Lambda Invocations**: ~$80-120
+  - Segment processing happens once per creation (not polling)
+  - 30-second polling reduces invocations by 3x vs 10-second
+  - SQS-triggered processing only when segments ready
+- **EventBridge Rules**: <$1 (single polling rule)
+- **SQS**: ~$5-10 (message passing between poller and processor)
+- **DynamoDB**: ~$150-200
+  - Pay-per-request pricing
+  - Efficient GSI queries (EndTimeIndex)
+  - Reduced reads due to front-loaded processing
+- **SSM Parameter Store**: <$1 (polling state management)
+- **Total: ~$235-335/month**
 
-### 10.2 Cost Optimization
+### 10.2 Cost Optimization Strategies
 
-1. **Lambda Optimization**:
-   - Use appropriate memory allocation (128MB typical)
-   - Disable polling when no active stories
+**Smart Polling Management**:
+- Automatic enable/disable based on active segments eliminates idle polling costs
+- 30-second intervals provide good UX while reducing Lambda invocations by 67%
+- SSM parameter coordination prevents redundant state checks
 
-2. **Polling Efficiency**:
-   - 10-second intervals balance precision vs cost
-   - Process multiple segments per poll cycle
-   - Use GSI for efficient time-based queries
+**Efficient Processing Architecture**:
+- Front-loaded outcome calculation eliminates repeated processing
+- SQS batching reduces API calls and improves throughput
+- Stuck segment recovery prevents infinite retries
 
-3. **DynamoDB Efficiency**:
-   - Delete segments after processing
-   - Batch process segment updates
-   - Efficient GSI usage for polling queries
+**DynamoDB Optimization**:
+- GSI queries target only ready segments, avoiding table scans
+- Automatic segment deletion keeps table size minimal
+- Batch operations reduce write capacity consumption
+
+**Additional Savings Opportunities**:
+- Use Lambda ARM architecture for 20% cost reduction
+- Implement Reserved Capacity for predictable DynamoDB usage
+- Consider Savings Plans for Lambda if usage is stable
 
 ## 11. Implementation Plan
 
@@ -1383,14 +1664,22 @@ With the DynamoDB polling approach:
 
 ## 12. Conclusion
 
-This simplified technical design leverages the existing Eidolon Engine infrastructure to implement the incremental game with minimal additional complexity. By using shared tables, dual-purpose Lambda functions, and DynamoDB polling with EventBridge, the system can support 10,000 concurrent users while maintaining consistency with the MUD game mechanics and keeping operational costs low.
+This technical design implements a sophisticated incremental game system that seamlessly integrates with the existing Eidolon Engine infrastructure. The front-loaded processing architecture ensures consistent, predictable gameplay while maintaining cost efficiency and scalability.
 
 Key architectural decisions:
 
-- Shared DynamoDB tables eliminate synchronization needs
-- DynamoDB + 10-second polling provides scalable timing
-- GSI enables efficient time-based queries
-- Enable/disable polling based on active stories
-- Existing Lambda patterns ensure consistency
-- GameMode field provides simple mode exclusivity
-- 10-second resolution balances precision and cost
+- **Front-loaded Processing**: All outcomes calculated at segment start, eliminating runtime delays
+- **Smart Polling System**: 30-second EventBridge with SSM control, auto-enable/disable
+- **Dual History Tables**: Separate story and segment tracking for optimal query patterns
+- **MUD Mechanics Integration**: ResolveStaticCheckWithXP and ResolveOpposedCheckWithXP for authentic progression
+- **Reliable Processing**: SQS queue with stuck segment recovery ensures no lost progress
+- **Cost Optimization**: ~$235-335/month for 10,000 concurrent users through intelligent resource management
+
+The system successfully balances multiple competing requirements:
+- **Consistency**: Pre-calculated outcomes ensure server authority
+- **Responsiveness**: Clients receive full event sequences immediately
+- **Scalability**: Serverless architecture handles load spikes gracefully
+- **Reliability**: Multiple recovery mechanisms prevent stuck states
+- **Economy**: Self-managing polling eliminates wasteful idle processing
+
+This design creates an engaging timer-based story system that enriches the Eidolon Engine ecosystem while maintaining the core MUD mechanics that define character progression.

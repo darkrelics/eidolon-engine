@@ -109,11 +109,13 @@ Present three action buttons:
 
 - **Minimum Segment Duration**: 1 minute
 - **Maximum Segment Duration**: 24 hours
-- **Processing Resolution**: 1 second (aligned with MUD ticker)
+- **Processing Resolution**: 30 seconds (EventBridge polling interval)
 - **Processing Time Limit**: Lambda functions complete within 30 seconds
+- **Front-loaded Processing**: All outcomes calculated when segment starts
 - **Auto-Progress**: Segments advance automatically after timer expiration
-- **Offline Progression**: Calculate results for segments completed while offline
-- **Default Decisions**: System determines optimal choice when player doesn't respond
+- **Offline Progression**: Pre-calculated results ensure consistent outcomes
+- **Default Decisions**: System uses configured default when player doesn't respond
+- **Stuck Recovery**: Segments not processed within 15 minutes are automatically retried
 
 ### 3.3 Character State Management
 
@@ -274,22 +276,23 @@ New Lambda functions following existing patterns:
 - Include processing status to help client understand state
 - Return story metadata and current progress
 
-**ops_advance_story** (Called by EventBridge poller)
+**ops_advance_story** (SQS triggered from poller)
 
-- Attempt to claim segment by setting RunningFlag
+- Attempt to claim segment by setting RunningFlag = Request ID
+- Verify ProcessingStatus is "processed" (skip if failed/pending)
 - Read pre-calculated outcome and next segment from ActiveSegments
 - Apply stored CharacterUpdates to character record
 - Write SegmentHistory record with complete details
 - If story continues:
-  - Create next segment
-  - Process immediately if not decision type
+  - Create next segment with new ActiveSegmentID
+  - Call ops_process_segment immediately if not decision type
   - Update character's ActiveSegmentID
 - If story ends:
   - Write StoryHistory summary record
   - Reset character GameMode to "None"
   - Update story lists (completed/abandoned)
 - Delete the completed segment
-- Check if ActiveSegments table is empty to control polling
+- Check if ActiveSegments table is empty, update SSM parameter if so
 
 **api_abandon_story**
 
@@ -313,14 +316,22 @@ New Lambda functions following existing patterns:
 - Stores all outcomes in ActiveSegments record
 - Updates ProcessingStatus to "processed"
 
-**ops_segment_poller** (EventBridge triggered)
+**ops_segment_poller** (EventBridge triggered every 30 seconds)
 
-- Runs every 30 seconds via EventBridge rule
-- Queries EndTimeIndex for segments ready to advance
-- Implements dual-scan strategy for stuck segment recovery
-- Sends ready segments to SQS for processing
-- Manages SSM parameter for polling state control
-- Enables/disables EventBridge rule based on table state
+- Read SSM parameter `/eidolon/segment-poller-state` to check current state
+- First scan: Query EndTimeIndex for segments where EndTime <= (Now + 15)
+  - Filter for segments without Transmitted or RunningFlag attributes
+  - Attempt to claim each by setting Transmitted = true
+  - Add successfully claimed segments to SQS batch
+- Second scan: Find stuck segments where Transmitted = true AND TransmittedAt < (Now - 900)
+  - Clear RunningFlag without condition check
+  - Update TransmittedAt to current time
+  - Re-queue for processing with warning logs
+- Send all discovered segments to SQS in batches of 10
+- Update SSM parameter based on findings:
+  - If "stop" but segments found: set to "run"
+  - If "run" but table empty: set to "stop"
+  - If "stop" and table empty: disable EventBridge rule
 
 #### 4.2.2 Database Schema (DynamoDB)
 
@@ -514,38 +525,50 @@ The Opponents table defines reusable adversaries for combat segments. Each oppon
 
 #### 4.3.1 Skill Check System
 
-- Implement summarized skill checks for narrative segments
-- Use same probability calculations as MUD combat
-- Apply modifiers based on equipment and stats
-- Support multiple simultaneous skill checks
+- Use ResolveStaticCheckWithXP for all narrative challenges
+- Automatic skill XP awards based on difficulty and outcome
+- Attribute XP calculated as 10% of skill XP
+- Failed attempts award 50% XP to encourage learning
+- Support multiple attempts per challenge
+- Apply environmental and equipment modifiers
+- Track sigma values for outcome determination
 
 #### 4.3.2 Combat Resolution
 
-- Use full MUD combat mechanics including:
-  - Two-stage resolution (hit check + damage check)
-  - MUD wound system with time-based healing
-  - Weapon and armor effects
-  - Environmental modifiers
-- Track opponent health levels dynamically
+- Use ResolveOpposedCheckWithXP for all combat actions:
+  - Attack rolls: attacker's melee+strength vs defender's dodge+agility
+  - Damage rolls: ResolveOpposedCheck for damage calculation
+  - Automatic XP awards to both participants
+  - Failed attempts award 50% XP
+- MUD wound system with real-time healing:
+  - Bashing: 15 minutes
+  - Lethal: 6 hours
+  - Aggravated: 7 days
+- Environmental modifiers apply before checks:
+  - Dim lighting: -1 to attack rolls
+  - Difficult terrain: -1 to dodge rolls
 - Combat ends when:
   - Character reaches 0 health (death)
   - Opponent reaches 0 health (victory)
   - Maximum rounds reached (failure)
-- Apply wounds that persist across segments
-- Determine outcomes based on:
+- Outcomes based on wounds received:
   - Death: Character reduced to 0 health
-  - Failure: Max rounds reached without defeating opponent
-  - Minimal: Victory with significant wounds
-  - Normal: Victory with minor wounds
+  - Failure: Max rounds without defeating opponent
+  - Minimal: Victory with 3+ wounds
+  - Normal: Victory with 1-2 wounds
   - Exceptional: Victory without wounds
 
 #### 4.3.3 Experience and Progression
 
-- Award experience based on segment difficulty
-- Scale rewards with character attributes and skills
-- Apply same progression curves as MUD
-- Track skill improvements from story actions
-- **Critical**: Ensure progression rate never exceeds MUD gameplay speed
+- All XP awards use MUD mechanics functions:
+  - ResolveStaticCheckWithXP for challenges
+  - ResolveOpposedCheckWithXP for combat
+  - Automatic calculation based on difficulty
+- Skill XP awarded for every attempt (full or 50%)
+- Attribute XP always 10% of skill XP
+- No experience points - only skill progression
+- Skills dynamically created when first awarded XP
+- **Critical**: Progression rate controlled by MUD mechanics
 
 ### 4.4 Performance and Scalability
 
@@ -564,11 +587,12 @@ The Opponents table defines reusable adversaries for combat segments. Each oppon
 
 #### 4.4.3 Timing Service Architecture
 
-- **EventBridge Rule**: Single rule triggers polling Lambda every 10 seconds
-- **Lambda Processing**: Query EndTimeIndex GSI for completed segments
-- **Batch Processing**: Process all ready segments in single invocation
-- **Dynamic Scaling**: Enable/disable polling based on active story count
-- **Failure Handling**: Retry logic with exponential backoff
+- **EventBridge Rule**: Single rule triggers polling Lambda every 30 seconds
+- **SSM Parameter Control**: `/eidolon/segment-poller-state` coordinates polling state
+- **Dual-Scan Strategy**: Ready segments + stuck segment recovery
+- **SQS Integration**: Reliable delivery between poller and processor
+- **Dynamic Scaling**: Auto-enable/disable based on active segments
+- **Failure Handling**: 15-minute stuck detection with automatic retry
 
 ### 4.5 Persistent Effects and Consequences
 
@@ -652,7 +676,9 @@ All character modifications persist between game modes:
 - AWS Lambda with Python 3.12+ runtime
 - DynamoDB with existing table structure
 - API Gateway REST APIs (existing)
-- EventBridge for timing (replaces Fargate)
+- EventBridge for 30-second polling
+- SQS for reliable segment processing
+- SSM Parameter Store for polling state
 - CloudWatch for logging and monitoring
 
 ### 5.2 Integration Constraints
@@ -716,11 +742,13 @@ For high-frequency operations, consider:
 
 ### 6.2 Timing Service Management
 
-- Single EventBridge rule for all segment polling
+- Single EventBridge rule triggers every 30 seconds
+- SSM parameter `/eidolon/segment-poller-state` controls polling (run/stop)
+- Automatic enable when stories start, disable when none active
+- SQS queue between poller and processor for reliability
+- Stuck segment recovery after 15 minutes
 - Automatic cleanup of completed segments (deletion from ActiveSegments)
-- Lambda functions query GSI for time-based processing
-- CloudWatch monitoring of timing accuracy
-- Dynamic enable/disable based on active story presence
+- CloudWatch monitoring of polling performance and stuck segments
 
 ## 7. Acceptance Criteria
 
