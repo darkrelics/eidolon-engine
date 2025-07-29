@@ -155,7 +155,6 @@ func setupTestCharacterConsole(_ *testing.T) (*Character, *Game, *mockPlayer, ch
 		end:              make(chan bool, 1),
 		prompt:           "> ",
 		mutex:            sync.RWMutex{},
-		health:           100,
 		maxHealth:        100,
 		essence:          50,
 		skills:           make(map[string]float64),

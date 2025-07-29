@@ -11,7 +11,7 @@ The incremental system implements a timer-based processing architecture with fou
 Major architectural decisions:
 
 1. **Four Segment Types**:
-   - **Rest**: Time-bound healing periods, no mechanical processing needed
+   - **Rest**: Time-bound segments where wounds heal naturally based on their HealAt timestamps
    - **Decision**: Await player input via API or apply default on timeout
    - **Narrative**: Story with skill challenges, processed via SQS/ops_process_segment
    - **Combat**: Battle encounters, processed via SQS/ops_process_segment
@@ -276,10 +276,11 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
         },
         {
             "eventType": "status",
-            "title": "Health Lost",
+            "title": "Wound Taken",
             "description": "The thorny undergrowth scratches you as you push through.",
             "data": {
-                "healthChange": -1
+                "woundType": "bashing",
+                "amount": 1
             }
         },
         {
@@ -301,7 +302,7 @@ The Incremental Game system operates as an alternative gameplay mode to the MUD,
     
     # Character Updates - All changes to apply when segment completes
     "CharacterUpdates": {
-        "Health": -1,
+        "Wounds": [{"DamageType": "bashing", "HealAt": "2025-01-15T14:30:00Z"}],
         "SkillXP": {
             "perception": 0.375,               # Total from all skill checks
             "survival": 0.75
@@ -458,10 +459,9 @@ GSI: EndTimeIndex
     
     # Applied changes
     "CharacterUpdates": {
-        "Health": -1,
         "SkillXP": {"perception": 0.375, "survival": 0.75},
         "AttributeXP": {"agility": 0.0375, "strength": 0.075},
-        "Wounds": [],
+        "Wounds": [{"DamageType": "lethal", "HealAt": "2025-01-15T20:00:00Z"}],
         "Items": {"added": [], "removed": []}
     },
     
@@ -698,7 +698,6 @@ Response: {
         "Attributes": {"strength": 4, "agility": 2, "endurance": 3},  // Normalized to lowercase
         "Skills": {"melee": 3, "dodge": 2, "perception": 1},          // Normalized to lowercase
         "Essence": 3,
-        "Health": 10,
         "MaxHealth": 12,
         "MaxEssence": 5,
         "Hidden": false,
@@ -1038,6 +1037,8 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - For each segment in batch:
   - Extract ActiveSegmentID and metadata from message
   - Load active segment, segment definition, and character data
+  - Evaluate wound healing: remove wounds where current time > HealAt
+  - Recalculate health as MaxHealth - len(wounds)
   
   # Narrative Segment Processing:
   - Run all challenge attempts using simulated MUD mechanics
@@ -1082,7 +1083,8 @@ All Lambda functions follow the existing pattern in the `lambda/` directory and 
 - Process by segment type:
   
   # Rest Segments:
-  - No processing needed (healing happens automatically)
+  - Healing is evaluated at the beginning of each segment
+  - Expired wounds (where current time > HealAt) are removed from wounds list
   - Simply advance to next segment or complete story
   - Delete segment record
   
@@ -1357,7 +1359,7 @@ damage_result = ResolveOpposedCheck(
 )
 ```
 
-The resulting sigma value is floored to determine health levels lost. A glancing blow might only remove one health level, while a critical strike could inflict three or more levels of damage.
+The resulting sigma value is floored to determine the number of wounds inflicted. Each point of damage creates one wound map in the character's wounds list. A glancing blow might create only one wound, while a critical strike could inflict three or more wounds, each with its own DamageType and HealAt timestamp.
 
 **Environmental Factors**:
 
@@ -1374,23 +1376,41 @@ Combat provides rich opportunities for skill development. Throughout each round:
 
 #### Wound System Integration
 
-The combat system fully implements the MUD wound mechanics:
+The combat system fully implements the MUD wound mechanics with sophisticated tracking:
 
+**Wound Structure:**
+- Each point of damage creates a wound map in the character's wounds list
+- Wound maps contain two fields:
+  - `DamageType`: The category of damage ("bashing", "lethal", or "aggravated")
+  - `HealAt`: ISO 8601 timestamp indicating when the wound will heal
+
+**Damage Types:**
 - **Bashing damage** creates bruises that heal within 15 minutes
 - **Lethal damage** causes serious injuries requiring 6 hours to heal
 - **Aggravated damage** inflicts grievous wounds needing 7 days of recovery
 
-These wounds persist across game modes, meaning a character injured in an incremental combat will still bear those wounds when returning to the MUD.
+**Health Calculation:**
+- Health is dynamically calculated as: `Health = MaxHealth - len(wounds)`
+- Each wound in the list represents exactly one point of damage
+- Health is not stored but computed on-demand when needed
+
+**Cross-Mode Persistence:**
+These wounds persist across game modes, meaning a character injured in an incremental combat will still bear those wounds when returning to the MUD. Healing continues in real-time regardless of which mode the character is actively playing.
 
 #### Combat Outcome Determination
 
-The final outcome depends on the combat's resolution:
+The final outcome depends on the combat's resolution and wounds sustained:
 
-- **Death**: The character's health reaches zero, triggering death mechanics
+- **Death**: The character's health reaches zero (when `len(wounds) >= MaxHealth`)
 - **Failure**: Maximum rounds expire with the opponent still standing
-- **Minimal Victory**: The character wins but sustains significant wounds
-- **Normal Victory**: Victory achieved with only minor injuries
-- **Exceptional Victory**: Flawless combat performance without taking damage
+- **Minimal Victory**: The character wins but sustains 3 or more wounds
+- **Normal Victory**: Victory achieved with 1-2 wounds
+- **Exceptional Victory**: Flawless combat performance without taking any wounds
+
+Character states are determined by health level and wound composition:
+- **Standing**: Health > 0 (normal combat state)
+- **Unconscious**: Health = 0 with at least one bashing wound
+- **Dead**: Health = 0 with only lethal/aggravated wounds
 
 This nuanced outcome system rewards skilled character builds while maintaining the risk inherent in combat encounters.
 
@@ -1477,9 +1497,16 @@ The Incremental and MUD modes share persistent character state, ensuring consequ
 #### Shared Persistent State
 
 1. **Wounds and Health**:
-   - All wounds (bashing, lethal, aggravated) persist across modes
+   - All wounds persist as maps in the wounds list across modes
+   - Each wound contains DamageType and HealAt timestamp fields
+   - Health calculated dynamically as `MaxHealth - len(wounds)`
    - Character entering Incremental mode with MUD wounds starts injured
    - Combat wounds from Incremental stories affect MUD gameplay
+   - Healing continues in real-time based on HealAt timestamps:
+     - Bashing wounds heal in 15 minutes
+     - Lethal wounds heal in 6 hours
+     - Aggravated wounds heal in 7 days
+   - Character states (standing, unconscious, dead) persist across modes
    - Death in either mode requires resurrection/respawn
 
 2. **Inventory and Items**:

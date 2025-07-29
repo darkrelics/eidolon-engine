@@ -34,10 +34,9 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `Attributes`       | `MAP`    |          | Map of attribute names to their values (e.g., Strength: 4).    |
 | `Skills`           | `MAP`    |          | Map of skill names to their values (e.g., Stealth: 3).         |
 | `Essence`          | `NUMBER` |          | The character's essence or magical energy.                     |
-| `Health`           | `NUMBER` |          | The character's current health points.                         |
-| `MaxHealth`        | `NUMBER` |          | The character's maximum health points.                         |
+| `MaxHealth`        | `NUMBER` |          | The character's maximum health levels.                         |
 | `Hidden`           | `BOOL`   |          | Whether the character is currently hidden.                     |
-| `Wounds`           | `LIST`   |          | List of wound objects affecting the character.                 |
+| `Wounds`           | `LIST` of `MAP` |          | List of wound objects. Each wound is a map with DamageType and HealAt fields. |
 | `CharState`        | `STRING` |          | Current character state (e.g., "standing", "unconscious").     |
 | `LeftHandID`       | `STRING` |          | UUID of item equipped in left hand (if any).                   |
 | `RightHandID`      | `STRING` |          | UUID of item equipped in right hand (if any).                  |
@@ -59,6 +58,12 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 **Global Secondary Index:**
 
 - **CharacterNameIndex**: CharacterName - For ensuring unique character names across all players
+
+**Health Calculation:**
+
+- Current health is not stored in the database but calculated dynamically as: `Health = MaxHealth - len(Wounds)`
+- Each wound in the Wounds list represents exactly one point of damage
+- The length of the Wounds list directly indicates the total damage taken
 
 **API Response Transformations:**
 
@@ -345,6 +350,35 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `CreatedAt`     | `STRING` |          | ISO timestamp of creation.                        |
 
 **Primary Key:** OpponentID (HASH)
+
+---
+
+## Data Structure Definitions
+
+### Wound Object Structure
+
+The Wound object is stored as a MAP within the Character table's Wounds list. Each wound map represents one point of damage:
+
+| Field        | Type     | Description                                                          |
+| ------------ | -------- | -------------------------------------------------------------------- |
+| `DamageType` | `STRING` | Type of damage: "bashing", "lethal", or "aggravated"                |
+| `HealAt`     | `STRING` | ISO 8601 timestamp indicating when this wound will naturally heal   |
+
+**Example Wounds List:**
+```json
+[
+  {
+    "DamageType": "bashing",
+    "HealAt": "2025-01-15T14:30:00Z"
+  },
+  {
+    "DamageType": "lethal",
+    "HealAt": "2025-01-15T20:00:00Z"
+  }
+]
+```
+
+This character has taken 2 points of damage (2 wounds in the list), so with MaxHealth of 10, their current health would be 8.
 
 ---
 

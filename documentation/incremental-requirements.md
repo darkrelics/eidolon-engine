@@ -34,7 +34,7 @@ The Incremental Game component provides an alternative gameplay mode to the trad
 - **Primary Display Area**: Shows current story text with optional accompanying image
 - **Story Progress Indicator**: Visual representation of current position within the story
 - **Timer Display**: Shows remaining time until next segment becomes available
-- **Character Status Bar**: Displays key character stats (Health, Experience, Current Equipment)
+- **Character Status Bar**: Displays key character stats (Health calculated as MaxHealth - wounds, Experience, Current Equipment)
 
 #### 3.1.2 Decision Interface
 
@@ -57,7 +57,7 @@ After each narrative segment completion:
   - Normal success narrative
   - Exceptional success narrative
 - **Rewards Summary**: Show changes to character sheet including:
-  - Health changes
+  - Wounds taken or healed
   - Experience gained
   - Equipment received
   - New room location
@@ -540,16 +540,19 @@ The Opponents table defines reusable adversaries for combat segments. Each oppon
   - Damage rolls: ResolveOpposedCheck for damage calculation
   - Automatic XP awards to both participants
   - Failed attempts award 50% XP
-- MUD wound system with real-time healing:
-  - Bashing: 15 minutes
-  - Lethal: 6 hours
-  - Aggravated: 7 days
+- MUD wound system implementation:
+  - Each point of damage creates a wound map in the wounds list
+  - Wound maps contain DamageType and HealAt timestamp
+  - Damage types and healing times:
+    - Bashing: 15 minutes (bruises, stunning)
+    - Lethal: 6 hours (serious injuries)
+    - Aggravated: 7 days (grievous wounds)
 - Environmental modifiers apply before checks:
   - Dim lighting: -1 to attack rolls
   - Difficult terrain: -1 to dodge rolls
 - Combat ends when:
-  - Character reaches 0 health (death)
-  - Opponent reaches 0 health (victory)
+  - Character's health reaches 0 (when len(wounds) >= MaxHealth)
+  - Opponent's health reaches 0 (victory)
   - Maximum rounds reached (failure)
 - Outcomes based on wounds received:
   - Death: Character reduced to 0 health
@@ -557,6 +560,10 @@ The Opponents table defines reusable adversaries for combat segments. Each oppon
   - Minimal: Victory with 3+ wounds
   - Normal: Victory with 1-2 wounds
   - Exceptional: Victory without wounds
+- Special unconscious damage rules:
+  - New bashing damage converts to lethal when unconscious
+  - Lethal/aggravated damage replaces existing bashing wounds first
+  - Progressive severity ensures unconscious characters move toward death
 
 #### 4.3.3 Experience and Progression
 
@@ -602,8 +609,15 @@ All character modifications persist between game modes:
 
 - **Wounds and Healing**:
   - Combat damage creates wounds using MUD damage system
+  - Each wound is stored as a map with DamageType and HealAt timestamp fields
+  - Health is calculated dynamically as: `Health = MaxHealth - len(wounds)`
   - Wounds heal based on real-time (bashing: 15min, lethal: 6hr, aggravated: 7d)
+  - Healing is evaluated at the beginning of each segment (wounds with expired HealAt timestamps are removed)
   - Character entering either mode retains all active wounds
+  - Character states persist across modes:
+    - Standing: Health > 0
+    - Unconscious: Health = 0 with at least one bashing wound
+    - Dead: Health = 0 with only lethal/aggravated wounds
   - Death in either mode requires appropriate resurrection
 
 - **Inventory Persistence**:
@@ -723,7 +737,7 @@ Operations that benefit from DynamoDB transactions:
    - **Rationale**: May use eventual consistency if items can be recreated
 
 4. **Segment Processing** (Consider Non-Transactional):
-   - Character updates (health, XP, location)
+   - Character updates (wounds, XP, location)
    - SegmentHistory recording
    - **Rationale**: High frequency operation; consider idempotent design instead
 

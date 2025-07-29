@@ -42,7 +42,6 @@ func TestTakeDamage(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           10,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -77,7 +76,6 @@ func TestMixedDamage(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           10,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -121,7 +119,6 @@ func TestHealing(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           10,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -136,7 +133,6 @@ func TestHealing(t *testing.T) {
 		{DamageType: DamageTypeBashing, HealAt: now.Add(5 * time.Minute)},
 		{DamageType: DamageTypeLethal, HealAt: now.Add(-1 * time.Hour)},
 	}
-	char.health = 7
 
 	// Calculate healing
 	char.CalculateCurrentHealth()
@@ -166,7 +162,6 @@ func TestDeath(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           10,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -196,7 +191,6 @@ func TestUnconscious(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           10,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -223,7 +217,6 @@ func TestDamageConversionWhileUnconscious(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           0,
 		maxHealth:        10,
 		wounds:           make([]Wound, 10),
 		mutex:            sync.RWMutex{},
@@ -278,7 +271,6 @@ func TestHealingFromUnconscious(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           0,
 		maxHealth:        3,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -326,7 +318,6 @@ func TestDeadCharacterNoHealing(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           0,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -365,7 +356,6 @@ func TestOfflineHealing(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           5,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},

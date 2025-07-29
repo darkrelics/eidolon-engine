@@ -112,7 +112,6 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 		Attributes:       c.attributes,
 		Skills:           c.skills,
 		Essence:          c.essence,
-		Health:           c.health,
 		MaxHealth:        c.maxHealth,
 		Wounds:           c.wounds,
 		RoomID:           c.room.roomID,
@@ -217,7 +216,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 			// Use archetype's Health and Essence if specified, otherwise keep defaults
 			if archetypeObj.Health > 0 {
-				character.health = int(archetypeObj.Health)
 				character.maxHealth = int(archetypeObj.Health)
 			}
 			if archetypeObj.Essence > 0 {

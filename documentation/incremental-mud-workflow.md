@@ -74,11 +74,18 @@ Characters can transition between modes with these safeguards:
 Character state persists across mode transitions, creating meaningful consequences:
 
 **Health and Wounds:**
-- Wounds received in either mode persist when switching
-- Bashing wounds heal in 15 minutes regardless of mode
-- Lethal wounds require 6 hours to heal
-- Aggravated wounds need 7 days of recovery
+- Health is calculated dynamically as `Health = MaxHealth - len(wounds)`
+- Each wound is a map in the wounds list containing DamageType and HealAt fields
+- Wounds received in either mode persist when switching:
+  - Bashing wounds heal in 15 minutes (bruises, stunning)
+  - Lethal wounds require 6 hours to heal (serious injuries)
+  - Aggravated wounds need 7 days of recovery (grievous wounds)
 - Character entering Incremental mode wounded starts at disadvantage
+- Wounds heal automatically when their HealAt timestamp expires
+- Character states persist across modes:
+  - Standing: Normal state with health > 0
+  - Unconscious: Health = 0 with at least one bashing wound
+  - Dead: Health = 0 with only lethal/aggravated wounds
 - Death in either mode requires resurrection before continuing
 
 **Skill Progression:**
@@ -97,6 +104,19 @@ Character state persists across mode transitions, creating meaningful consequenc
 - Story outcomes can change character's room location
 - Death may transport character to death realm
 - Location changes persist when switching to MUD mode
+
+**Combat Mechanics:**
+- Combat segments use the full MUD damage system
+- Each point of damage creates a wound map in the wounds list
+- Damage types determine wound severity and healing time
+- Unconscious characters face special damage rules:
+  - New bashing damage converts to lethal
+  - Lethal/aggravated damage replaces existing bashing wounds first
+- Combat outcomes classified by wounds sustained:
+  - Exceptional: Victory without wounds
+  - Normal: Victory with 1-2 wounds
+  - Minimal: Victory with 3+ wounds
+  - Death: Health reduced to 0
 
 ### 6. Concurrent Access Prevention
 
@@ -160,6 +180,29 @@ The Incremental mode maintains sophisticated state tracking:
 - SSM parameter `/eidolon/segment-poller-state` controls polling
 - Automatic enable when stories start, disable when none active
 - Stuck segment recovery after 15 minutes
+
+## Healing System Integration
+
+The wound healing system operates continuously across both game modes:
+
+**Natural Healing:**
+- Healing is automatic and requires no player intervention
+- Each wound has a precise HealAt timestamp in ISO 8601 format
+- System periodically checks and removes expired wounds
+- Multiple wounds can heal simultaneously
+- Healing continues in real-time regardless of active game mode
+
+**Health Recalculation:**
+- When wounds expire, they are removed from the wounds list
+- Health automatically increases as wounds heal
+- Unconscious characters regain consciousness when health > 0
+- Players receive notifications when wounds heal
+
+**Cross-Mode Implications:**
+- A character wounded in MUD combat enters Incremental stories injured
+- Combat wounds from Incremental persist when returning to MUD
+- Strategic timing of mode switches can optimize healing downtime
+- Severely wounded characters may need to wait before engaging difficult content
 
 ## Security Considerations
 

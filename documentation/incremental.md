@@ -44,6 +44,7 @@ The module follows a serverless architecture pattern:
 - GameMode field prevents concurrent MUD/Incremental play
 - Skills and attributes affect story outcomes
 - Items and resources earned transfer to MUD inventory
+- Wound system persists across both game modes
 
 ### 4. Content Management
 
@@ -53,6 +54,39 @@ The module follows a serverless architecture pattern:
 - Administrative tools for managing published story content
 - Version field in Story table enables content updates
 - Direct database updates for immediate content availability
+
+## Health and Damage System
+
+The incremental module implements the same sophisticated wound tracking system as the MUD:
+
+### Wound Mechanics
+
+- **Damage creates wounds**: Each point of damage adds a wound map to the character's wounds list
+- **Three damage types**:
+  - Bashing: Heals in 15 minutes (bruises, stunning)
+  - Lethal: Heals in 6 hours (cuts, serious injuries)
+  - Aggravated: Heals in 7 days (grievous wounds)
+- **Health calculation**: `Health = MaxHealth - len(wounds)`
+- **Real-time healing**: Wounds heal automatically when their HealAt timestamp expires
+
+### Combat Integration
+
+Combat segments fully implement the MUD combat system:
+- Opposed skill checks determine hit/miss
+- Damage rolls calculate wounds inflicted
+- Environmental modifiers affect combat (dim lighting, difficult terrain)
+- Combat outcomes based on wounds sustained:
+  - Death: Health reaches 0
+  - Minimal: Victory with 3+ wounds
+  - Normal: Victory with 1-2 wounds
+  - Exceptional: Victory without wounds
+
+### Persistent Consequences
+
+- Wounds persist when switching between MUD and Incremental modes
+- Character entering Incremental mode wounded starts at disadvantage
+- Death in either mode affects the character across both systems
+- Healing continues in real-time regardless of which mode is active
 
 ## Technology Stack
 
