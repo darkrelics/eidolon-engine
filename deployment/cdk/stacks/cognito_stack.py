@@ -14,7 +14,6 @@ class CognitoStack(Stack):
         scope: Construct,
         construct_id: str,
         contact_email: str = "",
-        post_confirmation_lambda_arn=None,
         dev_mode: bool = False,
         portal_domain: str = "",
         **kwargs,
@@ -25,7 +24,6 @@ class CognitoStack(Stack):
             scope: CDK app scope
             construct_id: Stack identifier
             contact_email: Administrator contact email (optional in dev mode)
-            post_confirmation_lambda_arn: Optional Lambda function ARN for post-confirmation trigger
             dev_mode: If True, disables email sending and auto-verifies users
             portal_domain: Domain name for the portal (e.g., portal.darkrelics.net)
             **kwargs: Additional stack properties
