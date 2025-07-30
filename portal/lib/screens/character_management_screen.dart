@@ -171,7 +171,6 @@ class _CharacterManagementScreenState extends State<CharacterManagementScreen> {
   }
 
   void _playStory(Character character) {
-    // TODO: Navigate to story gameplay screen
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Story gameplay coming soon!')),
     );

@@ -229,16 +229,16 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | ----------------- | --------- | --------- | ------------------------------------------------------------------------- |
 | `StoryID`         | `STRING`  | **HASH**  | UUID of the parent story.                                                 |
 | `SegmentID`       | `STRING`  | **RANGE** | UUID of the segment.                                                      |
-| `SegmentType`     | `STRING`  |           | Type: decision, narrative, combat, or rest.                               |
+| `SegmentType`     | `STRING`  |           | Type: decision, mechanical, or rest.                                      |
 | `ShortStatus`     | `STRING`  |           | Brief status text shown during segment.                                   |
 | `DefaultStatus`   | `STRING`  |           | Status message shown between events (e.g., "Walking through the forest"). |
 | `SegmentDuration` | `NUMBER`  |           | Time in seconds for this segment.                                         |
 | `DecisionText`    | `STRING`  |           | For decision segments: the choice presented.                              |
 | `DecisionOptions` | `MAP`     |           | For decision segments: map of option ID to next segment ID.               |
-| `NextSegmentID`   | `STRING`  |           | For narrative/combat segments: UUID of the next segment.                  |
+| `NextSegmentID`   | `STRING`  |           | For mechanical segments: UUID of the next segment.                        |
 | `DefaultDecision` | `STRING`  |           | For decision segments: which option to auto-select.                       |
-| `Challenges`      | `LIST`    |           | For narrative segments: list of skill/attribute challenges.               |
-| `Combat`          | `MAP`     |           | For combat segments: combat configuration.                                |
+| `Challenges`      | `LIST`    |           | For mechanical segments: list of skill/attribute challenges.              |
+| `Combat`          | `MAP`     |           | For mechanical segments: combat configuration (if applicable).            |
 | `RestSegment`     | `BOOLEAN` |           | Indicates if this is a rest segment.                                      |
 
 **Primary Key:** StoryID (HASH), SegmentID (RANGE)
@@ -253,7 +253,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `StoryID`          | `STRING`  |          | UUID of the story being played.                                            |
 | `StoryTitle`       | `STRING`  |          | Cached title of the story for quick access.                                |
 | `SegmentID`        | `STRING`  |          | UUID of the current segment definition.                                    |
-| `SegmentType`      | `STRING`  |          | Type of segment: decision, narrative, combat, or rest.                     |
+| `SegmentType`      | `STRING`  |          | Type of segment: decision, mechanical, or rest.                           |
 | `DefaultStatus`    | `STRING`  |          | Cached status message shown between events.                                |
 | `StartTime`        | `NUMBER`  |          | Unix timestamp when segment started.                                       |
 | `EndTime`          | `NUMBER`  | **GSI**  | Unix timestamp when segment will complete.                                 |
@@ -265,8 +265,8 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `CharacterUpdates` | `MAP`     |          | All character changes to apply when segment completes.                     |
 | `Decision`         | `STRING`  |          | For decision segments: choice made by player.                              |
 | `DecisionMadeAt`   | `NUMBER`  |          | Unix timestamp when player made decision.                                  |
-| `ChallengeResults` | `LIST`    |          | For narrative segments: results of each challenge roll.                    |
-| `CombatState`      | `MAP`     |          | For combat segments: final combat state.                                   |
+| `ChallengeResults` | `LIST`    |          | For mechanical segments: results of each challenge roll.                   |
+| `CombatState`      | `MAP`     |          | For mechanical segments: final combat state (if applicable).              |
 | `Outcome`          | `STRING`  |          | Final outcome (death/failure/minimal/normal/exceptional).                  |
 | `Transmitted`      | `BOOLEAN` |          | Set when segment has been sent to SQS for processing.                      |
 | `TransmittedAt`    | `NUMBER`  |          | Unix timestamp when sent to SQS.                                           |
@@ -312,7 +312,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `PlayerID`           | `STRING` |           | UUID of the player for ownership verification.            |
 | `StoryID`            | `STRING` |           | UUID of the parent story.                                 |
 | `SegmentID`          | `STRING` |           | UUID of the segment definition.                           |
-| `SegmentType`        | `STRING` |           | Type: narrative, combat, decision, or rest.               |
+| `SegmentType`        | `STRING` |           | Type: mechanical, decision, or rest.                      |
 | `StartTime`          | `NUMBER` |           | Unix timestamp when segment started.                      |
 | `EndTime`            | `NUMBER` |           | Unix timestamp when segment ended.                        |
 | `ProcessedAt`        | `NUMBER` |           | Unix timestamp when outcomes were calculated.             |
