@@ -319,20 +319,25 @@ class ApiService {
   }
 
   /// Rest instead of continuing
-  Future<Character> rest() async {
+  Future<Map<String, dynamic>> rest(String characterId) async {
+    debugPrint('ApiService: Initiating rest for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/character/rest'),
       headers: headers,
+      body: jsonEncode({'CharacterID': characterId}),
     );
 
+    debugPrint('ApiService: Rest response status: ${response.statusCode}');
+    debugPrint('ApiService: Rest response body: ${response.body}');
+
     if (response.statusCode != 200) {
-      throw Exception('Failed to rest: ${response.body}');
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['error'] ?? 'Failed to rest');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final characterData = JsonUtils.getFlexibleMap(json, 'Character', 'character');
-    return Character.fromJson(characterData);
+    return json;
   }
 
   /// Get available stories for a character
@@ -417,6 +422,69 @@ class ApiService {
         .toList();
 
     return archetypes;
+  }
+
+  /// Get segment history Lambda
+  Future<List<Map<String, dynamic>>> getSegmentHistory({
+    required String characterId,
+  }) async {
+    debugPrint('ApiService: Getting segment history for character: $characterId');
+    final headers = await _getHeaders();
+    final response = await _httpClient.get(
+      Uri.parse('$baseUrl/segments/history?CharacterID=$characterId'),
+      headers: headers,
+    );
+
+    debugPrint(
+      'ApiService: Get segment history response status: ${response.statusCode}',
+    );
+    debugPrint('ApiService: Get segment history response body: ${response.body}');
+
+    if (response.statusCode == 404) {
+      return [];
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to get segment history: ${response.body}');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final segments = JsonUtils.getFlexibleList<dynamic>(
+      json,
+      'Segments',
+      'segments',
+    );
+    return segments
+        .map((s) => s as Map<String, dynamic>)
+        .toList();
+  }
+
+  /// Get segment status
+  Future<Map<String, dynamic>> getSegmentStatus({
+    required String characterId,
+  }) async {
+    debugPrint('ApiService: Getting segment status for character: $characterId');
+    final headers = await _getHeaders();
+    final response = await _httpClient.get(
+      Uri.parse('$baseUrl/segments/status?CharacterID=$characterId'),
+      headers: headers,
+    );
+
+    debugPrint(
+      'ApiService: Get segment status response status: ${response.statusCode}',
+    );
+    debugPrint('ApiService: Get segment status response body: ${response.body}');
+
+    if (response.statusCode == 404) {
+      throw Exception('No active segment found');
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to get segment status: ${response.body}');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json;
   }
 }
 

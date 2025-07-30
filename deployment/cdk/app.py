@@ -22,6 +22,8 @@ from stacks.dynamodb_stack import DynamoDBStack
 from stacks.iam_stack import IAMStack
 from stacks.lambda_stack import LambdaStack
 from stacks.s3_stack import S3Stack
+from stacks.sqs_stack import SQSStack
+from stacks.ssm_stack import SSMStack
 
 
 def load_json_file(file_path: Path) -> dict:
@@ -581,6 +583,22 @@ class EidolonEngineApp:
             retention_days=params.get("log_retention_days", 365),
             env=env,
         )
+        
+        # Create SSM stack for parameter management
+        self.ssm_stack = SSMStack(
+            self.app,
+            "ssm",
+            config={"game_name": params.get("game_name", "eidolon-engine")},
+            env=env,
+        )
+        
+        # Create SQS stack for message queuing
+        self.sqs_stack = SQSStack(
+            self.app,
+            "sqs",
+            config={"game_name": params.get("game_name", "eidolon-engine")},
+            env=env,
+        )
 
     def create_build_infrastructure(self, env: cdk.Environment, params: dict, deploy_mode: str) -> None:
         """Create CodeBuild infrastructure."""
@@ -656,6 +674,14 @@ class EidolonEngineApp:
                 "api_subdomain": params.get("api_subdomain", "api"),
                 "allowed_cors_origins": params.get("allowed_cors_origins", []),
                 "lambda_execution_role_arn": self.iam_stack.lambda_execution_role.role_arn,
+                "lambda_ssm_sqs_execution_role_arn": self.iam_stack.lambda_execution_role.role_arn,
+                "segment_queue_arn": self.sqs_stack.segment_queue.queue_arn,
+                "segment_queue_url": self.sqs_stack.segment_queue.queue_url,
+                "story_advancement_queue_arn": self.sqs_stack.story_advancement_queue.queue_arn,
+                "story_advancement_queue_url": self.sqs_stack.story_advancement_queue.queue_url,
+                "ssm_poller_state_parameter_name": self.ssm_stack.segment_poller_state.parameter_name,
+                "story_history_table": unified_tables.get("StoryHistory", ""),
+                "segment_history_table": unified_tables.get("SegmentHistory", ""),
                 "default_health": params.get("default_health", 10),
                 "default_essence": params.get("default_essence", 3),
             },
@@ -664,6 +690,8 @@ class EidolonEngineApp:
         self.lambda_stack.add_dependency(self.base_lambda_stack)
         self.lambda_stack.add_dependency(self.dynamodb_stack)
         self.lambda_stack.add_dependency(self.iam_stack)
+        self.lambda_stack.add_dependency(self.sqs_stack)
+        self.lambda_stack.add_dependency(self.ssm_stack)
         if self.cognito_stack:
             self.lambda_stack.add_dependency(self.cognito_stack)
 

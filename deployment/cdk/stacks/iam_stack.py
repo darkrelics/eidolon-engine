@@ -217,6 +217,15 @@ class IAMStack(Stack):
                     iam.PolicyStatement(
                         effect=iam.Effect.ALLOW,
                         actions=[
+                            "events:EnableRule",
+                            "events:DisableRule",
+                            "events:DescribeRule",
+                        ],
+                        resources=[f"arn:aws:events:{self.region}:{self.account}:rule/eidolon-segment-poller-rule"],
+                    ),
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        actions=[
                             "sqs:SendMessage",
                             "sqs:SendMessageBatch",
                             "sqs:ReceiveMessage",
@@ -225,7 +234,10 @@ class IAMStack(Stack):
                             "sqs:GetQueueAttributes",
                             "sqs:GetQueueUrl",
                         ],
-                        resources=[f"arn:aws:sqs:{self.region}:{self.account}:{game_name}-segments"],
+                        resources=[
+                            f"arn:aws:sqs:{self.region}:{self.account}:{game_name}-segments",
+                            f"arn:aws:sqs:{self.region}:{self.account}:{game_name}-story-advancement"
+                        ],
                     ),
                 ]
             ),

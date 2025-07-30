@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/character.dart';
 import '../models/story.dart';
+import '../models/active_segment.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../utils/error_handler.dart';
 import '../utils/json_utils.dart';
+import '../widgets/mechanical_segment_display.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -476,9 +478,48 @@ class _ActionPanelState extends State<ActionPanel> {
     });
 
     try {
-      final currentStory = await _apiService.getCurrentStory(
+      var currentStory = await _apiService.getCurrentStory(
         characterId: widget.character.id,
       );
+      
+      // Check if we have a mechanical segment that needs history data
+      if (currentStory != null) {
+        final activeSegmentData = currentStory['ActiveSegment'] as Map<String, dynamic>?;
+        if (activeSegmentData != null) {
+          final segmentType = activeSegmentData['SegmentType'] as String?;
+          final processingStatus = activeSegmentData['ProcessingStatus'] as String?;
+          final clientEvents = activeSegmentData['ClientEvents'] as List<dynamic>?;
+          
+          // If mechanical segment is processed but missing client events, fetch from history
+          if (segmentType == 'mechanical' && 
+              processingStatus == 'processed' && 
+              clientEvents == null) {
+            try {
+              final history = await _apiService.getSegmentHistory(
+                characterId: widget.character.id,
+              );
+              
+              if (history.isNotEmpty) {
+                // Find matching segment in history
+                final activeSegmentId = activeSegmentData['ActiveSegmentID'] as String;
+                final historySegment = history.firstWhere(
+                  (seg) => seg['ActiveSegmentID'] == activeSegmentId,
+                  orElse: () => <String, dynamic>{},
+                );
+                
+                if (historySegment.isNotEmpty) {
+                  // Merge history data into active segment
+                  activeSegmentData['ClientEvents'] = historySegment['ClientEvents'];
+                  activeSegmentData['CharacterUpdates'] = historySegment['CharacterUpdates'];
+                  activeSegmentData['Outcome'] = historySegment['Outcome'];
+                }
+              }
+            } catch (e) {
+              debugPrint('Error fetching segment history: $e');
+            }
+          }
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -515,6 +556,26 @@ class _ActionPanelState extends State<ActionPanel> {
             widget.character.storyState = null;
           }
         });
+        
+        // For mechanical segments still processing, poll more frequently
+        if (_currentStoryData != null) {
+          final activeSegmentData = _currentStoryData!['ActiveSegment'] as Map<String, dynamic>?;
+          if (activeSegmentData != null) {
+            final segmentType = activeSegmentData['SegmentType'] as String?;
+            final processingStatus = activeSegmentData['ProcessingStatus'] as String?;
+            
+            if (segmentType == 'mechanical' && processingStatus != 'processed') {
+              // Cancel existing refresh timer
+              _refreshTimer?.cancel();
+              // Poll every 2 seconds for mechanical segment processing
+              _refreshTimer = Timer(const Duration(seconds: 2), () {
+                if (mounted) {
+                  _loadCurrentStory();
+                }
+              });
+            }
+          }
+        }
       }
     } catch (e) {
       debugPrint('Error loading current story: $e');
@@ -577,6 +638,14 @@ class _ActionPanelState extends State<ActionPanel> {
     final Map<String, dynamic> segment = storyData != null 
         ? JsonUtils.getFlexibleMap(storyData, 'Segment', 'segment') 
         : <String, dynamic>{};
+    
+    // Check if we have an active segment that's mechanical and processed
+    final activeSegmentData = storyData?['ActiveSegment'] as Map<String, dynamic>?;
+    ActiveSegment? activeSegment;
+    if (activeSegmentData != null) {
+      activeSegment = ActiveSegment.fromJson(activeSegmentData);
+    }
+    
     final segmentType = JsonUtils.getFlexibleRequired<String>(
       segment,
       'Type',
@@ -671,61 +740,83 @@ class _ActionPanelState extends State<ActionPanel> {
           const SizedBox(height: 16),
 
           // Segment Content Card
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _getSegmentIcon(segmentType),
-                        size: 20,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _getSegmentTypeLabel(segmentType),
-                        style: theme.textTheme.titleMedium,
-                      ),
-                    ],
+          if (activeSegment != null && 
+              activeSegment.segmentType == 'mechanical' &&
+              (activeSegment.processingStatus == 'processed' || activeSegment.clientEvents != null)) ...[
+            // Use mechanical segment display for processed mechanical segments
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: SizedBox(
+                  height: 400, // Fixed height for the mechanical display
+                  child: MechanicalSegmentDisplay(
+                    segment: activeSegment,
+                    onComplete: () {
+                      // Handle segment completion
+                      _loadCurrentStory();
+                    },
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    JsonUtils.getFlexibleRequired<String>(
-                      segment,
-                      'Content',
-                      'content',
-                      defaultValue: 'Loading segment content...',
-                    ),
-                    style: theme.textTheme.bodyLarge,
-                  ),
-                  if (JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl') != null) ...[
-                    const SizedBox(height: 16),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl')!,
-                        fit: BoxFit.cover,
-                        height: 200,
-                        width: double.infinity,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            height: 200,
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            child: const Center(
-                              child: Icon(Icons.broken_image, size: 48),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
-          ),
+          ] else ...[
+            // Use regular display for other segment types or unprocessed mechanical
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _getSegmentIcon(segmentType),
+                          size: 20,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _getSegmentTypeLabel(segmentType),
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      JsonUtils.getFlexibleRequired<String>(
+                        segment,
+                        'Content',
+                        'content',
+                        defaultValue: 'Loading segment content...',
+                      ),
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                    if (JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl') != null) ...[
+                      const SizedBox(height: 16),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl')!,
+                          fit: BoxFit.cover,
+                          height: 200,
+                          width: double.infinity,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: 200,
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              child: const Center(
+                                child: Icon(Icons.broken_image, size: 48),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
 
           // Decision Options (if decision segment)
           if (segmentType == 'decision' && JsonUtils.getFlexible(segment, 'Options', 'options') != null) ...[
@@ -761,6 +852,15 @@ class _ActionPanelState extends State<ActionPanel> {
                 icon: const Icon(Icons.arrow_forward),
                 label: Text(_timeRemaining == 0 ? 'Continue' : 'Processing...'),
               ),
+              // Show rest option if not already in a rest segment
+              if (segmentType != 'rest') ...[
+                const SizedBox(width: 16),
+                OutlinedButton.icon(
+                  onPressed: _initiateRest,
+                  icon: const Icon(Icons.healing),
+                  label: const Text('Rest'),
+                ),
+              ],
               const SizedBox(width: 16),
               OutlinedButton.icon(
                 onPressed: () => _abandonStory(),
@@ -851,6 +951,10 @@ class _ActionPanelState extends State<ActionPanel> {
         return Icons.book;
       case 'combat':
         return Icons.sports_kabaddi;
+      case 'mechanical':
+        return Icons.engineering;
+      case 'rest':
+        return Icons.healing;
       default:
         return Icons.help_outline;
     }
@@ -864,6 +968,10 @@ class _ActionPanelState extends State<ActionPanel> {
         return 'Story Segment';
       case 'combat':
         return 'Combat Encounter';
+      case 'mechanical':
+        return 'Challenge';
+      case 'rest':
+        return 'Rest & Recovery';
       default:
         return 'Unknown Segment';
     }
@@ -1139,6 +1247,60 @@ class _ActionPanelState extends State<ActionPanel> {
           ),
       ],
     );
+  }
+
+  Future<void> _initiateRest() async {
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              CircularProgressIndicator(strokeWidth: 2),
+              SizedBox(width: 16),
+              Text('Initiating rest...'),
+            ],
+          ),
+          duration: Duration(seconds: 30),
+        ),
+      );
+
+      // Call rest API
+      await _apiService.rest(widget.character.id);
+      
+      // Clear the loading snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+      
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rest initiated. You will heal over time.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      
+      // Reload current story to show the rest segment
+      await _loadCurrentStory();
+      
+    } catch (e) {
+      // Clear any existing snackbars
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initiate rest: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _abandonStory() async {

@@ -19,8 +19,9 @@
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-      "SegmentType": "narrative",
+      "SegmentType": "mechanical",
       "ShortStatus": "Entering the forest",
+      "DefaultStatus": "You are making your way through the dense forest undergrowth",
       "SegmentDuration": 60,
       "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
       "Challenges": [
@@ -70,6 +71,7 @@
       "SegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
       "SegmentType": "decision",
       "ShortStatus": "Choosing your path",
+      "DefaultStatus": "You stand at the fork in the path, considering your options",
       "SegmentDuration": 60,
       "DecisionText": "The forest path splits into two directions. To the left, you can hear the sound of running water - likely the babbling brook. To the right, the path seems to lead toward denser vegetation. Which way do you go?",
       "DecisionOptions": {
@@ -81,8 +83,9 @@
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
-      "SegmentType": "narrative",
+      "SegmentType": "mechanical",
       "ShortStatus": "Following the brook",
+      "DefaultStatus": "You carefully follow the sound of water through the underbrush",
       "SegmentDuration": 60,
       "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
       "Challenges": [
@@ -129,8 +132,9 @@
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
-      "SegmentType": "narrative",
+      "SegmentType": "mechanical",
       "ShortStatus": "Pushing through the thicket",
+      "DefaultStatus": "You struggle against the dense vegetation, thorns catching at your clothing",
       "SegmentDuration": 60,
       "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
       "Challenges": [
@@ -177,8 +181,9 @@
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
-      "SegmentType": "combat",
+      "SegmentType": "mechanical",
       "ShortStatus": "Fighting the goblin scout",
+      "DefaultStatus": "You are locked in combat with the goblin scout",
       "SegmentDuration": 90,
       "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
       "Combat": {
@@ -225,6 +230,7 @@
       "SegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
       "SegmentType": "decision",
       "ShortStatus": "Following the goblin's trail",
+      "DefaultStatus": "You study the tracks in the dirt, weighing your options",
       "SegmentDuration": 60,
       "DecisionText": "After the encounter with the goblin, you notice tracks leading deeper into the forest. You could follow them to investigate further, or you could take a safer path around through the fern gully. What do you do?",
       "DecisionOptions": {
@@ -236,8 +242,9 @@
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
-      "SegmentType": "combat",
+      "SegmentType": "mechanical",
       "ShortStatus": "Fighting the goblin warrior in the dark",
+      "DefaultStatus": "You battle the armored goblin warrior in the dim light and treacherous footing",
       "SegmentDuration": 120,
       "NextSegmentID": null,
       "Combat": {
@@ -291,8 +298,9 @@
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
-      "SegmentType": "narrative",
+      "SegmentType": "mechanical",
       "ShortStatus": "Taking the long way around",
+      "DefaultStatus": "You navigate carefully through the fern gully, avoiding the goblin patrols",
       "SegmentDuration": 60,
       "NextSegmentID": null,
       "Challenges": [

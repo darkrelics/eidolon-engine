@@ -132,6 +132,8 @@ def validate_config(config: dict) -> None:
         "active_segments_table",
         "history_table",
         "opponents_table",
+        "story_history_table",
+        "segment_history_table",
         "cognito_user_pool_arn",
         "dependencies_layer_arn",
         "domain_name",
@@ -182,6 +184,8 @@ class LambdaStack(cdk.Stack):
         self.active_segments_table = config.get("active_segments_table", "")
         self.history_table = config.get("history_table", "")
         self.opponents_table = config.get("opponents_table", "")
+        self.story_history_table = config.get("story_history_table", "")
+        self.segment_history_table = config.get("segment_history_table", "")
         self.cognito_user_pool_arn = config.get("cognito_user_pool_arn", "")
         self.dependencies_layer_arn = config.get("dependencies_layer_arn", "")
         self.domain_name = config.get("domain_name", "darkrelics.net")
@@ -190,6 +194,8 @@ class LambdaStack(cdk.Stack):
         self.lambda_ssm_sqs_execution_role_arn = config.get("lambda_ssm_sqs_execution_role_arn", "")
         self.segment_queue_arn = config.get("segment_queue_arn", "")
         self.segment_queue_url = config.get("segment_queue_url", "")
+        self.story_advancement_queue_arn = config.get("story_advancement_queue_arn", "")
+        self.story_advancement_queue_url = config.get("story_advancement_queue_url", "")
         self.ssm_poller_state_parameter_name = config.get("ssm_poller_state_parameter_name", "")
 
         # Import the shared Lambda execution roles
@@ -471,6 +477,45 @@ class LambdaStack(cdk.Stack):
             dependencies_layer,
         )
 
+        # Get Segment Status Lambda
+        self.get_segment_status_function = self.create_lambda_function(
+            "api-get-segment-status",
+            "api_get_segment_status.lambda_handler",
+            {
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Gets the current status of a segment",
+            dependencies_layer,
+        )
+
+        # Get Segment History Lambda
+        self.get_segment_history_function = self.create_lambda_function(
+            "api-get-segment-history",
+            "api_get_segment_history.lambda_handler",
+            {
+                "SEGMENT_HISTORY_TABLE": self.segment_history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Gets historical segment data for a character",
+            dependencies_layer,
+        )
+
+        # Character Rest Lambda
+        self.character_rest_function = self.create_lambda_function(
+            "api-character-rest",
+            "api_character_rest.lambda_handler",
+            {
+                "CHARACTERS_TABLE": self.characters_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "STORY_TABLE": self.story_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Initiates a rest segment for character healing",
+            dependencies_layer,
+        )
+
         # Process Segment Lambda (backend) - Now processes from SQS
         self.process_segment_function = lambda_.Function(
             self,
@@ -530,6 +575,7 @@ class LambdaStack(cdk.Stack):
                 "MAX_SEGMENTS_PER_POLL": "50",
                 "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
                 "SEGMENT_QUEUE_URL": self.segment_queue_url,
+                "STORY_ADVANCEMENT_QUEUE_URL": self.story_advancement_queue_url,
             },
             description="Polls for completed segments and sends to SQS for processing",
             function_name="ops-segment-poller",
@@ -551,6 +597,46 @@ class LambdaStack(cdk.Stack):
                 self.segment_poller_function, retry_attempts=2  # type: ignore
             )  # type: ignore
         )
+
+        # Advance Story Lambda (backend) - Processes incremental updates from SQS
+        self.advance_story_function = lambda_.Function(
+            self,
+            "ops-advance-story",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="ops_advance_story.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-advance-story.zip"),
+            layers=[dependencies_layer],
+            role=self.lambda_ssm_sqs_execution_role,
+            timeout=cdk.Duration.seconds(60),
+            memory_size=256,
+            environment={
+                "CHARACTERS_TABLE": self.characters_table,
+                "STORY_TABLE": self.story_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
+                "SEGMENT_HISTORY_TABLE": self.segment_history_table,
+            },
+            description="Advances stories by applying character updates and progressing to next segments",
+            function_name="ops-advance-story",
+            reserved_concurrent_executions=5,
+        )
+
+        # Add SQS event source to Advance Story function
+        if self.story_advancement_queue_arn:
+            story_advancement_queue = sqs.Queue.from_queue_arn(
+                self,
+                "imported-story-advancement-queue",
+                self.story_advancement_queue_arn,
+            )
+            self.advance_story_function.add_event_source(
+                lambda_event_sources.SqsEventSource(
+                    story_advancement_queue,
+                    batch_size=10,
+                    max_batching_window=cdk.Duration.seconds(5),
+                    report_batch_item_failures=True,
+                )
+            )
 
     def configure_api_routes(self) -> None:
         """Configure API Gateway routes and methods."""
@@ -597,6 +683,15 @@ class LambdaStack(cdk.Stack):
         character_resource.add_method(
             "DELETE",
             apigateway.LambdaIntegration(self.delete_character_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # POST /character/rest - Initiate rest for healing
+        rest_resource = character_resource.add_resource("rest")
+        rest_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.character_rest_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
@@ -662,6 +757,24 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
+        # GET /segments/status - Get segment status
+        status_resource = segments_resource.add_resource("status")
+        status_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_segment_status_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # GET /segments/history - Get segment history
+        history_resource = segments_resource.add_resource("history")
+        history_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_segment_history_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
     def create_log_groups(self) -> None:
         """Create CloudWatch log groups for all Lambda functions."""
         log_configs: list = [
@@ -678,8 +791,12 @@ class LambdaStack(cdk.Stack):
             ("get-segment-outcome-logs", self.get_segment_outcome_function),
             ("abandon-story-logs", self.abandon_story_function),
             ("get-current-story-logs", self.get_current_story_function),
+            ("get-segment-status-logs", self.get_segment_status_function),
+            ("get-segment-history-logs", self.get_segment_history_function),
+            ("character-rest-logs", self.character_rest_function),
             ("ops-segment-poller-logs", self.segment_poller_function),
             ("ops-process-segment-logs", self.process_segment_function),
+            ("ops-advance-story-logs", self.advance_story_function),
         ]
 
         for log_id, function in log_configs:

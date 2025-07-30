@@ -13,6 +13,9 @@ class ActiveSegment {
   final String? decision;
   final Map<String, dynamic>? decisionOptions;
   final Map<String, dynamic>? combatState;
+  final List<dynamic>? clientEvents;
+  final Map<String, dynamic>? characterUpdates;
+  final String? processingStatus;
 
   ActiveSegment({
     required this.activeSegmentID,
@@ -28,6 +31,9 @@ class ActiveSegment {
     this.decision,
     this.decisionOptions,
     this.combatState,
+    this.clientEvents,
+    this.characterUpdates,
+    this.processingStatus,
   });
 
   factory ActiveSegment.fromJson(Map<String, dynamic> json) {
@@ -45,6 +51,9 @@ class ActiveSegment {
       decision: json['Decision'] as String?,
       decisionOptions: json['DecisionOptions'] as Map<String, dynamic>?,
       combatState: json['CombatState'] as Map<String, dynamic>?,
+      clientEvents: json['ClientEvents'] as List<dynamic>?,
+      characterUpdates: json['CharacterUpdates'] as Map<String, dynamic>?,
+      processingStatus: json['ProcessingStatus'] as String?,
     );
   }
 
@@ -63,6 +72,9 @@ class ActiveSegment {
       if (decision != null) 'Decision': decision,
       if (decisionOptions != null) 'DecisionOptions': decisionOptions,
       if (combatState != null) 'CombatState': combatState,
+      if (clientEvents != null) 'ClientEvents': clientEvents,
+      if (characterUpdates != null) 'CharacterUpdates': characterUpdates,
+      if (processingStatus != null) 'ProcessingStatus': processingStatus,
     };
   }
 
