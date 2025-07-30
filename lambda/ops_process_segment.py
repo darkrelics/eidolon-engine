@@ -171,7 +171,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to process completed mechanical segments.
 
-    Triggered by SQS to handle narrative, combat, and mechanical segments.
+    Triggered by SQS to handle mechanical segments only.
     Rest and Decision segments are processed directly by the poller.
 
     Args:

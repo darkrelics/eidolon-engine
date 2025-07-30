@@ -90,13 +90,12 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         outcome_data["Narrative"] = outcome_result.get("narrative", "")
         outcome_data["Effects"] = outcome_result.get("effects", {})
 
-        # Add challenge results for narrative segments
-        if segment_type == "narrative":
+        # Add challenge results for mechanical segments
+        if segment_type == "mechanical":
             outcome_data["ChallengeResults"] = active_segment.get("ChallengeResults", [])
-
-        # Add combat state for combat segments
-        if segment_type == "combat":
-            outcome_data["CombatState"] = active_segment.get("CombatState", {})
+            # Add combat state if present
+            if active_segment.get("CombatState"):
+                outcome_data["CombatState"] = active_segment.get("CombatState", {})
 
         # Get next segment for non-terminal outcomes
         if outcome not in ["death", "failure"]:

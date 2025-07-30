@@ -1,8 +1,8 @@
 """
 Segment processing utilities for Lambda functions.
 
-Provides functions for processing story segments including narrative,
-combat, and decision segments.
+Provides functions for processing story segments including mechanical,
+decision, and rest segments.
 """
 
 import math
@@ -100,9 +100,9 @@ def resolve_opposed_check(aggressor: float, defender: float) -> dict:
     return {"success": success, "sigma": sigma}
 
 
-def process_narrative_segment(segment_def: dict, character: dict) -> tuple:
+def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
     """
-    Process a narrative segment by running challenges and determining outcome.
+    Process skill challenges within a mechanical segment and determine outcome.
 
     Args:
         segment_def: Segment definition from Segments table
@@ -472,7 +472,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     """
     Process a mechanical segment containing skill challenges and/or combat.
 
-    Mechanical segments combine what were previously narrative and combat segments.
+    Mechanical segments contain skill challenges and/or combat encounters.
     They can contain skill challenges, combat encounters, or both.
 
     Args:
@@ -496,7 +496,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 "challenge_count": len(challenges),
             },
         )
-        challenge_outcome, challenge_results = process_narrative_segment(segment_def, character)
+        challenge_outcome, challenge_results = process_skill_challenges(segment_def, character)
         results["challengeResults"] = challenge_results
         outcomes.append(challenge_outcome)
 
@@ -763,7 +763,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         Active segment ID
     """
     segment_id = segment.get("SegmentID")
-    segment_type = segment.get("SegmentType", "narrative")
+    segment_type = segment.get("SegmentType", "mechanical")
     duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
 
     current_time = int(time.time())

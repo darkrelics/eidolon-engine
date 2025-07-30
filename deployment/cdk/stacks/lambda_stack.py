@@ -419,6 +419,7 @@ class LambdaStack(cdk.Stack):
                 "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "HISTORY_TABLE": self.history_table,
+                "SEGMENT_QUEUE_URL": self.segment_queue_url,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Starts a story for a character",

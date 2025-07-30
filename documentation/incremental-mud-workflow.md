@@ -93,7 +93,7 @@ Character state persists across mode transitions, creating meaningful consequenc
 
 - All XP gained through ResolveStaticCheckWithXP/ResolveOpposedCheckWithXP persists
 - Skills improved in Incremental stories benefit MUD gameplay
-- Combat experience from MUD enhances Incremental combat segments
+- Combat experience from MUD enhances Incremental mechanical segments
 - Attribute XP (10% of skill XP) accumulates across both modes
 
 **Inventory and Equipment:**
@@ -111,7 +111,7 @@ Character state persists across mode transitions, creating meaningful consequenc
 
 **Combat Mechanics:**
 
-- Combat segments use the full MUD damage system
+- Mechanical segments with combat use the full MUD damage system
 - Each point of damage creates a wound map in the wounds list
 - Damage types determine wound severity and healing time
 - Unconscious characters face special damage rules:

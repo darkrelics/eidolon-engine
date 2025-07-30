@@ -41,7 +41,7 @@ def format_start_story_response(active_segment: dict, segment: dict) -> dict:
         "success": True,
         "segment": {
             "activeSegmentId": active_segment.get("ActiveSegmentID", ""),
-            "segmentType": segment.get("SegmentType", "narrative"),
+            "segmentType": segment.get("SegmentType", "mechanical"),
             "startTime": active_segment.get("StartTime", 0),
             "endTime": active_segment.get("EndTime", 0),
             "shortStatus": segment.get("ShortStatus", "Starting your adventure..."),

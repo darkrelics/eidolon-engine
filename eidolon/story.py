@@ -628,7 +628,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
     from uuid_extension import uuid7
 
     segment_id = segment.get("SegmentID")
-    segment_type = segment.get("SegmentType", "narrative")
+    segment_type = segment.get("SegmentType", "mechanical")
     duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
 
     current_time = int(time.time())
@@ -856,7 +856,7 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
     """
     import time
 
-    segment_type = segment.get("SegmentType", "narrative")
+    segment_type = segment.get("SegmentType", "mechanical")
     time_remaining = max(0, active_segment.get("EndTime", 0) - int(time.time()))
 
     response = {
@@ -1161,7 +1161,7 @@ def format_story_segment_response(active_segment: dict, story_metadata: dict, se
             "SegmentID": active_segment.get("SegmentID"),
             "SegmentType": segment_data.get("SegmentType", ""),
             "ShortStatus": segment_data.get("ShortStatus", ""),
-            "Narrative": "",  # Will be set based on segment type
+            "Description": "",  # Will be set based on segment type
             "Duration": segment_data.get("SegmentDuration", 0),
             "TimeRemaining": time_remaining,
             "StartTime": active_segment.get("StartTime", 0),
@@ -1184,15 +1184,9 @@ def format_story_segment_response(active_segment: dict, story_metadata: dict, se
         response["Segment"]["Options"] = options
         response["Segment"]["Decision"] = active_segment.get("Decision")
 
-    elif segment_type == "narrative":
-        response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
-        response["Segment"]["Challenges"] = segment_data.get("Challenges", [])
-        response["Segment"]["ChallengeResults"] = active_segment.get("ChallengeResults", [])
-        response["Segment"]["Outcome"] = active_segment.get("Outcome")
-
     elif segment_type == "mechanical":
         # Mechanical segments can contain skill challenges and/or combat
-        response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
+        response["Segment"]["Description"] = segment_data.get("Description", segment_data.get("Narrative", ""))
         response["Segment"]["Challenges"] = segment_data.get("Challenges", [])
         response["Segment"]["ChallengeResults"] = active_segment.get("ChallengeResults", [])
 
@@ -1205,7 +1199,7 @@ def format_story_segment_response(active_segment: dict, story_metadata: dict, se
 
     elif segment_type == "rest":
         # Rest segments allow wound healing over time
-        response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
+        response["Segment"]["Description"] = segment_data.get("Description", segment_data.get("Narrative", ""))
         response["Segment"]["RestBenefit"] = segment_data.get("RestBenefit", {})
         response["Segment"]["HealingApplied"] = active_segment.get("HealingApplied", {})
 
@@ -1215,6 +1209,6 @@ def format_story_segment_response(active_segment: dict, story_metadata: dict, se
             "Unknown segment type",
             extra={"segment_type": segment_type, "segment_id": active_segment.get("SegmentID")},
         )
-        response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
+        response["Segment"]["Description"] = segment_data.get("Description", segment_data.get("Narrative", ""))
 
     return response

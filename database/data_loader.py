@@ -445,14 +445,16 @@ def store_story(story_data):
                 segment_item["DecisionText"] = segment.get("DecisionText", "")
                 segment_item["DecisionOptions"] = segment.get("DecisionOptions", {})
                 segment_item["DefaultDecision"] = segment.get("DefaultDecision", "")
-            elif segment["SegmentType"] == "combat":
-                segment_item["NextSegmentID"] = segment.get("NextSegmentID")
-                segment_item["Combat"] = segment.get("Combat", {})
-                segment_item["Results"] = segment.get("Results", {})
-            else:  # narrative
+            elif segment["SegmentType"] == "mechanical":
                 segment_item["NextSegmentID"] = segment.get("NextSegmentID")
                 segment_item["Challenges"] = segment.get("Challenges", [])
+                segment_item["Combat"] = segment.get("Combat", {})
                 segment_item["Results"] = segment.get("Results", {})
+            elif segment["SegmentType"] == "rest":
+                segment_item["NextSegmentID"] = segment.get("NextSegmentID")
+                segment_item["RestBenefit"] = segment.get("RestBenefit", {})
+            else:
+                print(f"Unknown segment type: {segment['SegmentType']}")
 
             # Build update expression
             update_expression = "SET "
@@ -702,17 +704,22 @@ def display_story(story_data):
                     print("    Options:")
                     for opt_key, opt_value in options.items():
                         print(f"      {opt_key}: -> {opt_value}")
-            elif segment.get("SegmentType") == "combat":
-                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
-                combat = segment.get("Combat", {})
-                if combat:
-                    print(f"    Opponent ID: {combat.get('opponentId', 'None')}")
-                    print(f"    Max Rounds: {combat.get('maxRounds', 0)}")
-            else:
+            elif segment.get("SegmentType") == "mechanical":
                 print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
                 challenges = segment.get("Challenges", [])
                 if challenges:
                     print(f"    Challenges: {len(challenges)}")
+                combat = segment.get("Combat", {})
+                if combat:
+                    print(f"    Combat: Opponent ID: {combat.get('opponentId', 'None')}, Max Rounds: {combat.get('maxRounds', 0)}")
+            elif segment.get("SegmentType") == "rest":
+                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
+                rest_benefit = segment.get("RestBenefit", {})
+                if rest_benefit:
+                    print(f"    Rest Benefit: {rest_benefit}")
+            else:
+                print(f"    Unknown segment type: {segment.get('SegmentType')}")
+                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
             print()
 
 

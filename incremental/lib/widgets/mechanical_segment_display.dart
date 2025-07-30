@@ -124,17 +124,9 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
     Color iconColor;
     
     switch (eventType) {
-      case 'narrative':
-        icon = Icons.book;
-        iconColor = Colors.blue;
-        break;
       case 'skillCheck':
         icon = Icons.psychology;
         iconColor = data['success'] == true ? Colors.green : Colors.orange;
-        break;
-      case 'combat':
-        icon = Icons.sports_kabaddi;
-        iconColor = Colors.red;
         break;
       default:
         icon = Icons.info;

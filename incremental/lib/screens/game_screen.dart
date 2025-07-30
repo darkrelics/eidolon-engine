@@ -537,10 +537,8 @@ class _ActionPanelState extends State<ActionPanel> {
               defaultValue: 0,
             );
             
-            final narrative = JsonUtils.getFlexible<String>(segmentData, 'Narrative', 'narrative') ?? '';
             final shortStatus = JsonUtils.getFlexible<String>(segmentData, 'ShortStatus', 'shortStatus') ?? 'In progress';
-            final segmentName = narrative.isNotEmpty ? 
-              (narrative.length > 50 ? narrative.substring(0, 50) : narrative) : shortStatus;
+            final segmentName = shortStatus;
             
             widget.character.storyState = {
               'storyId': JsonUtils.getFlexible<String>(storyData, 'StoryID', 'storyId'),
@@ -824,8 +822,8 @@ class _ActionPanelState extends State<ActionPanel> {
             _buildDecisionOptions(JsonUtils.getFlexible(segment, 'Options', 'options'), theme),
           ],
 
-          // Challenge Results (if narrative segment)
-          if (segmentType == 'narrative' && JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults') != null) ...[
+          // Challenge Results (if mechanical segment with results)
+          if (segmentType == 'mechanical' && JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults') != null) ...[
             const SizedBox(height: 16),
             _buildChallengeResults(JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults'), theme),
           ],
@@ -947,10 +945,6 @@ class _ActionPanelState extends State<ActionPanel> {
     switch (type.toLowerCase()) {
       case 'decision':
         return Icons.psychology;
-      case 'narrative':
-        return Icons.book;
-      case 'combat':
-        return Icons.sports_kabaddi;
       case 'mechanical':
         return Icons.engineering;
       case 'rest':
@@ -964,10 +958,6 @@ class _ActionPanelState extends State<ActionPanel> {
     switch (type.toLowerCase()) {
       case 'decision':
         return 'Decision Point';
-      case 'narrative':
-        return 'Story Segment';
-      case 'combat':
-        return 'Combat Encounter';
       case 'mechanical':
         return 'Challenge';
       case 'rest':
@@ -988,18 +978,20 @@ class _ActionPanelState extends State<ActionPanel> {
               'Available Choices',
               style: theme.textTheme.titleMedium,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Note: Decision submission coming soon',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
             const SizedBox(height: 16),
             ...options.map((option) => Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: OutlinedButton(
-                onPressed: null, // Disabled until api_submit_decision is implemented
+                onPressed: () => _submitDecision(
+                  option is Map<String, dynamic>
+                    ? JsonUtils.getFlexibleRequired<String>(
+                        option,
+                        'Id',
+                        'id',
+                        defaultValue: option.toString(),
+                      )
+                    : option.toString(),
+                ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 48),
                 ),
@@ -1409,6 +1401,73 @@ class _ActionPanelState extends State<ActionPanel> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to start story: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitDecision(String decisionId) async {
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              CircularProgressIndicator(strokeWidth: 2),
+              SizedBox(width: 16),
+              Text('Submitting decision...'),
+            ],
+          ),
+          duration: Duration(seconds: 30),
+        ),
+      );
+
+      // Submit the decision
+      final result = await _apiService.submitDecision(
+        characterId: widget.character.id,
+        decision: decisionId,
+      );
+
+      // Clear the loading snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+
+      // Check if decision was accepted
+      if (result['Accepted'] == true || result['accepted'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Decision submitted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+
+        // Refresh the current story to get the next segment
+        await _loadCurrentStory();
+      } else {
+        throw Exception('Decision was not accepted');
+      }
+    } catch (e) {
+      // Clear any existing snackbars
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+
+      String errorMessage = 'Failed to submit decision';
+      if (e.toString().contains('already submitted')) {
+        errorMessage = 'Decision has already been submitted';
+      } else if (e.toString().contains('not found')) {
+        errorMessage = 'Decision segment no longer active';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$errorMessage: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
