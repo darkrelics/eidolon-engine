@@ -50,13 +50,13 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
 
     # Get active segment
     active_segment = get_active_story_segment_with_player_check(character_id, player_id)
-    
+
     # Calculate status
     current_time = int(time.time())
     end_time = int(active_segment.get("EndTime", 0))
     is_complete = current_time >= end_time
     time_remaining = max(0, end_time - current_time)
-    
+
     response = {
         "ActiveSegmentID": active_segment.get("ActiveSegmentID"),
         "StoryID": active_segment.get("StoryID"),
@@ -66,7 +66,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         "TimeRemaining": time_remaining,
         "EndTime": end_time,
     }
-    
+
     # Include results if segment is complete
     if is_complete:
         response["ChallengeResults"] = active_segment.get("ChallengeResults", [])
@@ -74,7 +74,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         response["Decision"] = active_segment.get("Decision")
         response["CombatState"] = active_segment.get("CombatState")
         response["HealingApplied"] = active_segment.get("HealingApplied")
-    
+
     logger.info(
         "Segment status retrieved",
         extra={
@@ -84,7 +84,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             "time_remaining": time_remaining,
         },
     )
-    
+
     return response
 
 

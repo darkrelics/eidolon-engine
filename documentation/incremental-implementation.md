@@ -25,9 +25,11 @@ These examples show the complete JSON structure of database records as they appe
 
 This complete example shows how segment processing results are stored, including pre-calculated outcomes, client events for progressive display, and character updates that will be applied when the segment completes.
 
+**Important**: ActiveSegmentID must be generated using UUIDv7 to ensure proper time-based ordering and efficient querying. UUIDv7 includes a timestamp component that aids in chronological sorting and partition distribution.
+
 ```json
 {
-    "ActiveSegmentID": "550e8400-e29b-41d4-a716-446655440000",
+    "ActiveSegmentID": "550e8400-e29b-41d4-a716-446655440000",  // UUIDv7 format required
     "CharacterID": "7d793dc0-5e27-4a68-b40e-8f52ae06ad8e",
     "PlayerID": "a4b5c6d7-e8f9-0a1b-2c3d-4e5f6a7b8c9d",
     "StoryID": "forest-adventure-001",
@@ -168,7 +170,12 @@ DynamoDB transactions ensure atomic updates across multiple tables when starting
 This transaction atomically updates the character's game mode and creates the active segment record, ensuring data consistency even if failures occur during the story start process.
 
 ```python
+import uuid_utils  # Use uuid-utils library for UUIDv7 generation
+
 def start_story_transaction(character_id, story_id, segment_data):
+    # Generate UUIDv7 for the active segment
+    segment_data['ActiveSegmentID'] = str(uuid_utils.uuid7())
+    
     return {
         'TransactItems': [
             {

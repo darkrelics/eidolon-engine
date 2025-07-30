@@ -10,7 +10,7 @@ Handles different segment types appropriately and manages polling state.
 
 import time
 
-from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
+from eidolon.environment import MAX_SEGMENTS_PER_POLL, STORY_ADVANCEMENT_QUEUE_URL
 from eidolon.logger import get_logger
 from eidolon.polling import (
     disable_polling_infrastructure,
@@ -44,10 +44,10 @@ def poll_and_process_segments_business_logic() -> dict:
     """
     # First check SSM parameter state
     poller_state = get_polling_state()
-    
+
     # Calculate time window for segment polling
     current_time = int(time.time())
-    
+
     # Get completed segments (including stuck segments 15+ minutes past EndTime)
     completed_segments = get_completed_segments(MAX_SEGMENTS_PER_POLL)
 
@@ -63,12 +63,12 @@ def poll_and_process_segments_business_logic() -> dict:
     # Count segment types for logging
     mechanical_count = 0
     simple_count = 0
-    
+
     for segment in completed_segments:
         segment_type = segment.get("SegmentType", "").lower()
         end_time = int(segment.get("EndTime", 0))
         is_stuck = (current_time - end_time) > 900  # 15 minutes
-        
+
         if is_stuck:
             logger.warning(
                 "Found stuck segment",
@@ -79,7 +79,7 @@ def poll_and_process_segments_business_logic() -> dict:
                     "overdue_seconds": current_time - end_time,
                 },
             )
-        
+
         if is_mechanical_segment(segment_type):
             mechanical_count += 1
         else:
@@ -93,20 +93,22 @@ def poll_and_process_segments_business_logic() -> dict:
         # Prepare messages for SQS
         messages = []
         for segment in completed_segments:
-            messages.append({
-                "body": {
-                    "ActiveSegmentID": segment.get("ActiveSegmentID"),
-                    "CharacterID": segment.get("CharacterID"),
-                    "StoryID": segment.get("StoryID"),
-                    "SegmentID": segment.get("SegmentID"),
-                    "SegmentType": segment.get("SegmentType"),
+            messages.append(
+                {
+                    "body": {
+                        "ActiveSegmentID": segment.get("ActiveSegmentID"),
+                        "CharacterID": segment.get("CharacterID"),
+                        "StoryID": segment.get("StoryID"),
+                        "SegmentID": segment.get("SegmentID"),
+                        "SegmentType": segment.get("SegmentType"),
+                    }
                 }
-            })
-        
+            )
+
         # Send to story advancement queue
         if not STORY_ADVANCEMENT_QUEUE_URL:
             raise RuntimeError("STORY_ADVANCEMENT_QUEUE_URL environment variable not set")
-            
+
         result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, messages)
         segments_queued = result.get("successful", 0)
         segments_failed = result.get("failed", 0)
@@ -121,7 +123,7 @@ def poll_and_process_segments_business_logic() -> dict:
         if not completed_segments:
             # No segments found, check if table is empty
             has_active_segments = check_active_segments_exist()
-            
+
             if not has_active_segments:
                 # No active segments at all, switch to stop
                 disable_polling_infrastructure()

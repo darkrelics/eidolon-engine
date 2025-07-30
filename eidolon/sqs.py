@@ -37,19 +37,19 @@ def send_message(queue_url: str, message_body: dict, message_attributes=None) ->
             "QueueUrl": queue_url,
             "MessageBody": json.dumps(message_body),
         }
-        
+
         if message_attributes:
             params["MessageAttributes"] = message_attributes
 
         response = sqs_client.send_message(**params)
-        
+
         message_id = response.get("MessageId")
         logger.debug(
             "Message sent to SQS",
             extra={"queue_url": queue_url, "message_id": message_id},
         )
         return message_id
-        
+
     except ClientError as err:
         logger.error(
             "Failed to send message to SQS",
@@ -92,17 +92,14 @@ def send_message_batch(queue_url: str, messages: list) -> dict:
         # Send in batches of 10 (SQS limit)
         successful = 0
         failed = 0
-        
+
         for i in range(0, len(entries), 10):
-            batch = entries[i:i+10]
-            response = sqs_client.send_message_batch(
-                QueueUrl=queue_url,
-                Entries=batch
-            )
-            
+            batch = entries[i : i + 10]
+            response = sqs_client.send_message_batch(QueueUrl=queue_url, Entries=batch)
+
             successful += len(response.get("Successful", []))
             failed += len(response.get("Failed", []))
-            
+
             if response.get("Failed"):
                 logger.warning(
                     "Some messages failed to send",
@@ -121,9 +118,9 @@ def send_message_batch(queue_url: str, messages: list) -> dict:
                 "total": len(messages),
             },
         )
-        
+
         return {"successful": successful, "failed": failed}
-        
+
     except ClientError as err:
         logger.error(
             "Failed to send batch messages to SQS",

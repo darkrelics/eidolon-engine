@@ -8,8 +8,9 @@ combat, and decision segments.
 import math
 import random
 import time
-import uuid
 from datetime import datetime, timezone
+
+from uuid_extension import uuid7
 
 from botocore.exceptions import ClientError
 
@@ -26,10 +27,10 @@ MECHANICAL_ONLY_TYPES = ["mechanical"]
 def validate_segment_type(segment_type: str) -> bool:
     """
     Validate that a segment type is recognized.
-    
+
     Args:
         segment_type: Type of segment to validate
-        
+
     Returns:
         True if segment type is valid, False otherwise
     """
@@ -39,13 +40,13 @@ def validate_segment_type(segment_type: str) -> bool:
 def is_mechanical_segment(segment_type: str) -> bool:
     """
     Check if a segment type should be processed as mechanical.
-    
+
     Mechanical segments include challenges and/or combat and are
     processed by the ops_process_segment Lambda via SQS.
-    
+
     Args:
         segment_type: Type of segment to check
-        
+
     Returns:
         True if segment should be processed as mechanical
     """
@@ -55,13 +56,13 @@ def is_mechanical_segment(segment_type: str) -> bool:
 def is_simple_segment(segment_type: str) -> bool:
     """
     Check if a segment type can be processed directly by the poller.
-    
+
     Simple segments (rest and decision) don't require complex processing
     and can be handled directly without queuing.
-    
+
     Args:
         segment_type: Type of segment to check
-        
+
     Returns:
         True if segment can be processed directly
     """
@@ -470,21 +471,21 @@ def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
 def process_mechanical_segment(segment_def: dict, character: dict, active_segment: dict) -> tuple:
     """
     Process a mechanical segment containing skill challenges and/or combat.
-    
+
     Mechanical segments combine what were previously narrative and combat segments.
     They can contain skill challenges, combat encounters, or both.
-    
+
     Args:
         segment_def: Segment definition from Segments table
         character: Character data
         active_segment: Active segment data
-        
+
     Returns:
         Tuple of (outcome, results)
     """
     results = {}
     outcomes = []
-    
+
     # Process skill challenges if present
     challenges = segment_def.get("Challenges", [])
     if challenges:
@@ -498,7 +499,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         challenge_outcome, challenge_results = process_narrative_segment(segment_def, character)
         results["challengeResults"] = challenge_results
         outcomes.append(challenge_outcome)
-    
+
     # Process combat if present
     combat_config = segment_def.get("Combat", {})
     if combat_config:
@@ -512,7 +513,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         combat_outcome, combat_state = process_combat_segment(active_segment, segment_def, character)
         results["combatState"] = combat_state
         outcomes.append(combat_outcome)
-    
+
     # Determine overall outcome
     if not outcomes:
         # No challenges or combat, default to normal
@@ -521,21 +522,21 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             extra={"segment_id": segment_def.get("SegmentID")},
         )
         return "normal", results
-    
+
     # If any outcome is death, overall is death
     if "death" in outcomes:
         return "death", results
-    
+
     # If any outcome is failure, overall is failure
     if "failure" in outcomes:
         return "failure", results
-    
+
     # Otherwise, take the worst non-failure outcome
     outcome_priority = ["minimal", "normal", "exceptional"]
     for outcome in outcome_priority:
         if outcome in outcomes:
             return outcome, results
-    
+
     # Default to normal
     return "normal", results
 
@@ -543,20 +544,20 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
 def process_rest_segment(segment_def: dict, character: dict) -> tuple:
     """
     Process a rest segment for healing wounds.
-    
+
     Rest segments allow characters to heal wounds over time based on
     the RestBenefit configuration in the segment definition.
-    
+
     Args:
         segment_def: Segment definition from Segments table
         character: Character data
-        
+
     Returns:
         Tuple of (outcome, healing_applied)
     """
     rest_benefit = segment_def.get("RestBenefit", {})
     wounds = character.get("Wounds", [])
-    
+
     if not wounds:
         # No wounds to heal
         logger.info(
@@ -564,19 +565,19 @@ def process_rest_segment(segment_def: dict, character: dict) -> tuple:
             extra={"character_id": character.get("CharacterID")},
         )
         return "normal", {"healingApplied": {"bashingHealed": 0, "lethalHealed": 0}}
-    
+
     # Calculate healing based on rest benefit configuration
     bashing_heal = rest_benefit.get("bashingHeal", 1)  # Default 1 bashing wound
-    lethal_heal = rest_benefit.get("lethalHeal", 0)   # Default 0 lethal wounds
-    
+    lethal_heal = rest_benefit.get("lethalHeal", 0)  # Default 0 lethal wounds
+
     # Count wounds by type
     bashing_count = sum(1 for w in wounds if w.get("damageType") == "bashing")
     lethal_count = sum(1 for w in wounds if w.get("damageType") == "lethal")
-    
+
     # Calculate actual healing (can't heal more than exists)
     bashing_healed = min(bashing_heal, bashing_count)
     lethal_healed = min(lethal_heal, lethal_count)
-    
+
     # Apply healing (this would normally update the character in the database)
     # For now, we just calculate what would be healed
     healing_applied = {
@@ -585,7 +586,7 @@ def process_rest_segment(segment_def: dict, character: dict) -> tuple:
         "totalWoundsBefore": len(wounds),
         "totalWoundsAfter": len(wounds) - bashing_healed - lethal_healed,
     }
-    
+
     logger.info(
         "Rest segment healing applied",
         extra={
@@ -594,7 +595,7 @@ def process_rest_segment(segment_def: dict, character: dict) -> tuple:
             "lethal_healed": lethal_healed,
         },
     )
-    
+
     # Rest segments always succeed
     return "normal", {"healingApplied": healing_applied}
 
@@ -740,10 +741,10 @@ def get_next_segment_and_create(
     # Create active segment for next segment
     return create_next_active_segment(
         character_id,
-        active_segment.get("PlayerID"), # type: ignore
+        active_segment.get("PlayerID"),  # type: ignore
         story_id,
         next_segment,
-        active_segment.get("StoryTitle"), # type: ignore
+        active_segment.get("StoryTitle"),  # type: ignore
     )
 
 
@@ -768,8 +769,8 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
     current_time = int(time.time())
     end_time = current_time + duration
 
-    # Generate unique ID for this active segment
-    active_segment_id = str(uuid.uuid4())
+    # Generate UUIDv7 for time-based ordering
+    active_segment_id = str(uuid7())
 
     # Create TTL for auto-cleanup (24 hours after end time)
     ttl = end_time + 86400
@@ -965,12 +966,12 @@ def process_segment_completely(
     if segment_type == "mechanical":
         # Mechanical segment type that combines challenges and combat
         outcome, results = process_mechanical_segment(segment_def, character, active_segment)
-        
+
     elif segment_type == "rest":
         # Rest segment for healing
         outcome, healing_data = process_rest_segment(segment_def, character)
         results.update(healing_data)
-        
+
     elif segment_type == "decision":
         # Decision segment
         outcome = process_decision_segment(active_segment, segment_def)
@@ -993,9 +994,7 @@ def process_segment_completely(
     update_history_segment(character_id, story_id, segment_history_data)
 
     # Determine next segment or complete story
-    next_active_segment_id = get_next_segment_and_create(
-        character_id, story_id, segment_def, active_segment, outcome
-    )
+    next_active_segment_id = get_next_segment_and_create(character_id, story_id, segment_def, active_segment, outcome)
 
     if not next_active_segment_id:
         # No next segment - story is complete
@@ -1045,7 +1044,7 @@ def get_completed_segments(max_segments: int) -> list:
             ExpressionAttributeValues={":status": "active", ":current_time": current_time},
             Limit=max_segments,
         )
-        return items # type: ignore
+        return items  # type: ignore
     except ClientError as err:
         logger.error(
             "Failed to query completed segments",
@@ -1087,17 +1086,17 @@ def check_active_segments_exist() -> bool:
 def claim_segment_for_processing(active_segment_id: str) -> bool:
     """
     Claim a segment for processing by setting RunningFlag.
-    
+
     Uses conditional update to ensure only one Lambda processes the segment.
     This prevents race conditions when multiple processors attempt to handle
     the same segment.
-    
+
     Args:
         active_segment_id: Active segment UUID
-        
+
     Returns:
         True if segment was claimed, False if already being processed
-        
+
     Raises:
         RuntimeError: If database operation fails
     """

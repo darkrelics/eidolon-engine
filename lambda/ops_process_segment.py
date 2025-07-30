@@ -12,7 +12,11 @@ import json
 
 from eidolon.logger import get_logger
 from eidolon.polling import disable_polling_infrastructure
-from eidolon.segment import check_active_segments_exist, claim_segment_for_processing, is_mechanical_segment, process_segment_completely
+from eidolon.segment import (
+    check_active_segments_exist,
+    is_mechanical_segment,
+    process_segment_completely,
+)
 from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
 
 # Configure logging
@@ -22,10 +26,10 @@ logger = get_logger(__name__)
 def validate_segment_for_processing(segment_type: str) -> bool:
     """
     Validate that the segment type should be processed by this handler.
-    
+
     Args:
         segment_type: Type of segment
-        
+
     Returns:
         True if segment should be processed, False otherwise
     """
@@ -68,7 +72,7 @@ def process_segment_business_logic(
             },
         )
         raise ValueError(f"Segment type '{segment_type}' should not be processed by this handler")
-    
+
     # Log processing details
     logger.info(
         "Processing mechanical segment",
@@ -78,7 +82,7 @@ def process_segment_business_logic(
             "character_id": character_id,
         },
     )
-    
+
     # Use the eidolon library to process the segment
     return process_segment_completely(active_segment_id, character_id, story_id, segment_id, segment_type)
 
@@ -115,9 +119,7 @@ def process_segments_batch(segments: list) -> dict:
                 },
             )
 
-            result = process_segment_business_logic(
-                active_segment_id, character_id, story_id, segment_id, segment_type
-            )
+            result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)
 
             results.append(
                 {
@@ -168,7 +170,7 @@ def process_segments_batch(segments: list) -> dict:
 def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to process completed mechanical segments.
-    
+
     Triggered by SQS to handle narrative, combat, and mechanical segments.
     Rest and Decision segments are processed directly by the poller.
 
@@ -182,29 +184,29 @@ def lambda_handler(event: dict, context: object) -> dict:
     """
     # Log invocation
     log_lambda_invocation(context, event)
-    
+
     # Check if this is an SQS event
     if "Records" in event:
         # SQS batch event
         success_count = 0
         failure_count = 0
         batch_item_failures = []
-        
+
         for record in event.get("Records", []):
             try:
                 # Parse message body
                 message_body = json.loads(record.get("body", "{}"))
-                
+
                 # Extract segment data
                 active_segment_id = message_body.get("ActiveSegmentID", "")
                 character_id = message_body.get("CharacterID")
                 story_id = message_body.get("StoryID")
                 segment_id = message_body.get("SegmentID")
                 segment_type = message_body.get("SegmentType")
-                
+
                 if not all([active_segment_id, character_id, story_id, segment_id, segment_type]):
                     raise ValueError("Missing required segment data")
-                
+
                 # Validate segment type
                 if not validate_segment_for_processing(segment_type):
                     logger.warning(
@@ -218,7 +220,7 @@ def lambda_handler(event: dict, context: object) -> dict:
                     # Don't fail the message, just skip it
                     success_count += 1
                     continue
-                
+
                 logger.info(
                     "Processing SQS message",
                     extra={
@@ -227,7 +229,7 @@ def lambda_handler(event: dict, context: object) -> dict:
                         "segment_type": segment_type,
                     },
                 )
-                
+
                 # Process the segment
                 result = process_segment_business_logic(
                     active_segment_id=active_segment_id,
@@ -236,18 +238,18 @@ def lambda_handler(event: dict, context: object) -> dict:
                     segment_id=segment_id,
                     segment_type=segment_type,
                 )
-                
+
                 success_count += 1
-                
+
                 # If no next segment (story complete), check if we should disable polling
                 if not result.get("nextSegment"):
                     # Check if any active segments remain
                     has_active_segments = check_active_segments_exist()
-                    
+
                     if not has_active_segments:
                         # No more active segments, disable polling infrastructure
                         disable_polling_infrastructure()
-                
+
             except Exception as err:
                 logger.error(
                     "Failed to process SQS message",
@@ -259,10 +261,8 @@ def lambda_handler(event: dict, context: object) -> dict:
                 )
                 failure_count += 1
                 # Add to batch item failures for SQS retry
-                batch_item_failures.append({
-                    "itemIdentifier": record.get("messageId", "unknown")
-                })
-        
+                batch_item_failures.append({"itemIdentifier": record.get("messageId", "unknown")})
+
         # Return response for SQS batch processing
         logger.info(
             "SQS batch processing completed",
@@ -271,11 +271,9 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "failure_count": failure_count,
             },
         )
-        
-        return {
-            "batchItemFailures": batch_item_failures
-        }
-    
+
+        return {"batchItemFailures": batch_item_failures}
+
     # Legacy direct invocation support (for testing)
     else:
         try:

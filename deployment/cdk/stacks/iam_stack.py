@@ -236,7 +236,7 @@ class IAMStack(Stack):
                         ],
                         resources=[
                             f"arn:aws:sqs:{self.region}:{self.account}:{game_name}-segments",
-                            f"arn:aws:sqs:{self.region}:{self.account}:{game_name}-story-advancement"
+                            f"arn:aws:sqs:{self.region}:{self.account}:{game_name}-story-advancement",
                         ],
                     ),
                 ]

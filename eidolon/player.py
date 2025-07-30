@@ -397,7 +397,7 @@ def delete_player_active_segments(player_id: str) -> int:
             ExpressionAttributeValues={":pid": player_id},
         )
 
-        for item in items: # type: ignore
+        for item in items:  # type: ignore
             try:
                 dynamo.delete_item(
                     TableName.ACTIVE_SEGMENTS,
@@ -452,7 +452,7 @@ def delete_player_character_history(player_id: str) -> int:
             ExpressionAttributeValues={":pid": player_id},
         )
 
-        for item in items: # type: ignore
+        for item in items:  # type: ignore
             try:
                 dynamo.delete_item(
                     TableName.CHARACTER_HISTORY,

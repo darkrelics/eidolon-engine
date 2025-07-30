@@ -7,7 +7,6 @@ Lambda function to start a story for a character.
 Validates character state, creates active segment, and returns first segment details.
 """
 
-
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
@@ -30,11 +29,11 @@ logger = get_logger(__name__)
 def format_start_story_response(active_segment: dict, segment: dict) -> dict:
     """
     Format response per API documentation.
-    
+
     Args:
         active_segment: Active segment record from database
         segment: Segment definition from Segments table
-        
+
     Returns:
         Dict with success and segment data
     """
@@ -46,47 +45,41 @@ def format_start_story_response(active_segment: dict, segment: dict) -> dict:
             "startTime": active_segment.get("StartTime", 0),
             "endTime": active_segment.get("EndTime", 0),
             "shortStatus": segment.get("ShortStatus", "Starting your adventure..."),
-            "duration": active_segment.get("EndTime", 0) - active_segment.get("StartTime", 0)
-        }
+            "duration": active_segment.get("EndTime", 0) - active_segment.get("StartTime", 0),
+        },
     }
 
 
 def queue_mechanical_segment_for_processing(active_segment: dict) -> None:
     """
     Queue mechanical segment to SQS for processing.
-    
+
     Args:
         active_segment: Active segment record containing segment details
     """
     if not SEGMENT_QUEUE_URL:
         logger.warning("SEGMENT_QUEUE_URL not configured")
         return
-    
+
     message_body = {
         "ActiveSegmentID": active_segment.get("ActiveSegmentID", ""),
         "CharacterID": active_segment.get("CharacterID", ""),
         "StoryID": active_segment.get("StoryID", ""),
         "SegmentID": active_segment.get("SegmentID", ""),
-        "SegmentType": "mechanical"
+        "SegmentType": "mechanical",
     }
-    
+
     try:
         send_message(SEGMENT_QUEUE_URL, message_body)
         logger.info(
-            "Queued mechanical segment for processing",
-            extra={"active_segment_id": active_segment.get("ActiveSegmentID", "")}
+            "Queued mechanical segment for processing", extra={"active_segment_id": active_segment.get("ActiveSegmentID", "")}
         )
     except RuntimeError as err:
         # Non-critical failure - log but don't block story start
         logger.warning(
             "Failed to queue segment for processing",
-            extra={
-                "active_segment_id": active_segment.get("ActiveSegmentID", ""),
-                "error": str(err)
-            }
+            extra={"active_segment_id": active_segment.get("ActiveSegmentID", ""), "error": str(err)},
         )
-
-
 
 
 def start_story_business_logic(character_id: str, story_id: str, player_id: str) -> dict:
@@ -107,17 +100,17 @@ def start_story_business_logic(character_id: str, story_id: str, player_id: str)
     """
     # Start the story (critical - can raise)
     result = start_story_for_character(character_id, story_id, player_id)
-    
+
     active_segment = result.get("active_segment", {})
     segment = result.get("segment", {})
-    
+
     # Queue mechanical segments (non-critical)
     if segment.get("SegmentType") == "mechanical":
         queue_mechanical_segment_for_processing(active_segment)
-    
+
     # Enable polling (non-critical)
     ensure_polling_enabled()
-    
+
     # Format response
     return format_start_story_response(active_segment, segment)
 
@@ -125,7 +118,7 @@ def start_story_business_logic(character_id: str, story_id: str, player_id: str)
 def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to start a story for a character.
-    
+
     Validates character ownership and game mode, then creates an active
     segment for the story. Queues mechanical segments for processing and
     enables the polling system if needed.

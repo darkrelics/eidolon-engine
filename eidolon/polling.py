@@ -58,17 +58,17 @@ def manage_eventbridge_rule(should_enable: bool) -> None:
 def update_polling_state(state: str) -> None:
     """
     Update the SSM parameter that controls polling state.
-    
+
     Args:
         state: New state value ("run" or "stop")
-        
+
     Raises:
         ValueError: If state is not "run" or "stop"
         RuntimeError: If SSM update fails
     """
     if state not in ["run", "stop"]:
         raise ValueError(f"Invalid polling state: {state}. Must be 'run' or 'stop'")
-    
+
     try:
         put_parameter(SSM_POLLER_STATE_PARAMETER, state)
         logger.info(
@@ -94,10 +94,10 @@ def update_polling_state(state: str) -> None:
 def get_polling_state() -> str:
     """
     Get the current polling state from SSM parameter.
-    
+
     Returns:
         Current state ("run" or "stop")
-        
+
     Raises:
         RuntimeError: If SSM read fails
     """
@@ -127,29 +127,29 @@ def get_polling_state() -> str:
 def enable_polling_infrastructure() -> None:
     """
     Enable the polling infrastructure by updating SSM state and enabling EventBridge rule.
-    
+
     This is typically called when a new story starts and polling needs to be activated.
     """
     logger.info("Enabling polling infrastructure")
-    
+
     # Update SSM parameter first
     update_polling_state("run")
-    
+
     # Then enable EventBridge rule
     manage_eventbridge_rule(True)
-    
+
     logger.info("Polling infrastructure enabled")
 
 
 def disable_polling_infrastructure() -> None:
     """
     Disable the polling infrastructure by updating SSM state and disabling EventBridge rule.
-    
+
     This is typically called when no active segments remain and polling should stop
     to save costs.
     """
     logger.info("Disabling polling infrastructure")
-    
+
     # Update SSM parameter first
     try:
         update_polling_state("stop")
@@ -158,17 +158,17 @@ def disable_polling_infrastructure() -> None:
             "Failed to update SSM parameter during shutdown",
             extra={"error": str(err)},
         )
-    
+
     # Then disable EventBridge rule
     manage_eventbridge_rule(False)
-    
+
     logger.info("Polling infrastructure disabled")
 
 
 def ensure_polling_enabled() -> None:
     """
     Ensure polling is enabled, starting it if necessary.
-    
+
     This is typically called when starting a new story to make sure
     the polling system is active.
     """

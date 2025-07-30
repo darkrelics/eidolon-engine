@@ -583,7 +583,7 @@ class EidolonEngineApp:
             retention_days=params.get("log_retention_days", 365),
             env=env,
         )
-        
+
         # Create SSM stack for parameter management
         self.ssm_stack = SSMStack(
             self.app,
@@ -591,7 +591,7 @@ class EidolonEngineApp:
             config={"game_name": params.get("game_name", "eidolon-engine")},
             env=env,
         )
-        
+
         # Create SQS stack for message queuing
         self.sqs_stack = SQSStack(
             self.app,
@@ -684,6 +684,7 @@ class EidolonEngineApp:
                 "segment_history_table": unified_tables.get("SegmentHistory", ""),
                 "default_health": params.get("default_health", 10),
                 "default_essence": params.get("default_essence", 3),
+                "max_characters_per_player": params.get("max_characters_per_player", 10),
             },
             env=env,
         )
@@ -796,6 +797,7 @@ class EidolonEngineApp:
             params["game_name"] = game_config.get("Name", params.get("game_name", "eidolon-engine"))
             params["default_health"] = game_config.get("StartingHealth", 10)
             params["default_essence"] = game_config.get("StartingEssence", 3)
+            params["max_characters_per_player"] = game_config.get("MaxCharactersPerPlayer", 10)
 
     def load_deployment_config(self, params: dict) -> None:
         """Load deployment configuration section."""

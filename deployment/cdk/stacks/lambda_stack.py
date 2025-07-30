@@ -200,7 +200,9 @@ class LambdaStack(cdk.Stack):
 
         # Import the shared Lambda execution roles
         self.lambda_execution_role = iam.Role.from_role_arn(self, "imported-lambda-execution-role", self.lambda_execution_role_arn)
-        self.lambda_ssm_sqs_execution_role = iam.Role.from_role_arn(self, "imported-lambda-ssm-sqs-execution-role", self.lambda_ssm_sqs_execution_role_arn)
+        self.lambda_ssm_sqs_execution_role = iam.Role.from_role_arn(
+            self, "imported-lambda-ssm-sqs-execution-role", self.lambda_ssm_sqs_execution_role_arn
+        )
 
         # Extract API configuration
         self.api_subdomain = config.get("api_subdomain", "api")
@@ -209,6 +211,7 @@ class LambdaStack(cdk.Stack):
         # Extract game configuration defaults
         self.default_health = config.get("default_health", 10)
         self.default_essence = config.get("default_essence", 3)
+        self.max_characters_per_player = config.get("max_characters_per_player", 10)
 
         # Store CORS origins for Lambda environment
         self.cors_origins_str: str = ",".join(self.allowed_cors_origins) if self.allowed_cors_origins else ""
@@ -303,7 +306,7 @@ class LambdaStack(cdk.Stack):
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ARCHETYPES_TABLE": self.archetypes_table,
-                "MAX_CHARACTERS_PER_PLAYER": "10",
+                "MAX_CHARACTERS_PER_PLAYER": str(self.max_characters_per_player),
                 "ALLOWED_ORIGINS": self.cors_origins_str,
                 "DEFAULT_HEALTH": str(self.default_health),
                 "DEFAULT_ESSENCE": str(self.default_essence),

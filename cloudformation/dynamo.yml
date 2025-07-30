@@ -28,9 +28,18 @@ Resources:
       AttributeDefinitions:
         - AttributeName: CharacterID
           AttributeType: S
+        - AttributeName: CharacterName
+          AttributeType: S
       KeySchema:
         - AttributeName: CharacterID
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: CharacterNameIndex
+          KeySchema:
+            - AttributeName: CharacterName
+              KeyType: HASH
+          Projection:
+            ProjectionType: KEYS_ONLY
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: true
 
@@ -152,20 +161,24 @@ Resources:
       AttributeDefinitions:
         - AttributeName: ActiveSegmentID
           AttributeType: S
-        - AttributeName: Status
-          AttributeType: S
         - AttributeName: EndTime
           AttributeType: N
+        - AttributeName: CharacterID
+          AttributeType: S
       KeySchema:
         - AttributeName: ActiveSegmentID
           KeyType: HASH
       GlobalSecondaryIndexes:
-        - IndexName: CompletionTimeIndex
+        - IndexName: EndTimeIndex
           KeySchema:
-            - AttributeName: Status
-              KeyType: HASH
             - AttributeName: EndTime
-              KeyType: RANGE
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: CharacterID-index
+          KeySchema:
+            - AttributeName: CharacterID
+              KeyType: HASH
           Projection:
             ProjectionType: ALL
       BillingMode: PAY_PER_REQUEST
@@ -206,6 +219,42 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: true
 
+  # Story history table for tracking individual story attempts
+  StoryHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: story_history
+      AttributeDefinitions:
+        - AttributeName: CharacterID
+          AttributeType: S
+        - AttributeName: StoryID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: CharacterID
+          KeyType: HASH
+        - AttributeName: StoryID
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  # Segment history table for tracking segment completions
+  SegmentHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: segment_history
+      AttributeDefinitions:
+        - AttributeName: CharacterID
+          AttributeType: S
+        - AttributeName: ActiveSegmentID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: CharacterID
+          KeyType: HASH
+        - AttributeName: ActiveSegmentID
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
   EidolonDynamoDBPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -227,6 +276,7 @@ Resources:
             Resource:
               - !GetAtt PlayersTable.Arn
               - !GetAtt CharactersTable.Arn
+              - !Sub "${CharactersTable.Arn}/index/CharacterNameIndex"
               - !GetAtt RoomsTable.Arn
               - !GetAtt ExitsTable.Arn
               - !GetAtt ItemsTable.Arn
@@ -236,9 +286,12 @@ Resources:
               - !GetAtt StoryTable.Arn
               - !GetAtt SegmentsTable.Arn
               - !GetAtt ActiveSegmentsTable.Arn
-              - !Sub "${ActiveSegmentsTable.Arn}/index/CompletionTimeIndex"
+              - !Sub "${ActiveSegmentsTable.Arn}/index/EndTimeIndex"
+              - !Sub "${ActiveSegmentsTable.Arn}/index/CharacterID-index"
               - !GetAtt OpponentsTable.Arn
               - !GetAtt HistoryTable.Arn
+              - !GetAtt StoryHistoryTable.Arn
+              - !GetAtt SegmentHistoryTable.Arn
 
 Outputs:
   PlayersTableName:
@@ -318,6 +371,18 @@ Outputs:
     Value: !Ref HistoryTable
     Export:
       Name: !Sub "${AWS::StackName}-HistoryTableName"
+
+  StoryHistoryTableName:
+    Description: "DynamoDB table name for story history"
+    Value: !Ref StoryHistoryTable
+    Export:
+      Name: !Sub "${AWS::StackName}-StoryHistoryTableName"
+
+  SegmentHistoryTableName:
+    Description: "DynamoDB table name for segment history"
+    Value: !Ref SegmentHistoryTable
+    Export:
+      Name: !Sub "${AWS::StackName}-SegmentHistoryTableName"
 
   DynamoDBAccessPolicyArn:
     Description: "ARN of the DynamoDB access policy"

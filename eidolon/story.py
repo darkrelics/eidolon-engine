@@ -624,7 +624,8 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
         RuntimeError: If database operation fails
     """
     import time
-    import uuid
+
+    from uuid_extension import uuid7
 
     segment_id = segment.get("SegmentID")
     segment_type = segment.get("SegmentType", "narrative")
@@ -633,8 +634,8 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
     current_time = int(time.time())
     end_time = current_time + duration
 
-    # Generate unique ID for this active segment
-    active_segment_id = str(uuid.uuid4())
+    # Generate UUIDv7 for time-based ordering
+    active_segment_id = str(uuid7())
 
     active_segment = {
         "ActiveSegmentID": active_segment_id,
@@ -1172,7 +1173,7 @@ def format_story_segment_response(active_segment: dict, story_metadata: dict, se
 
     # Add segment type specific data
     segment_type = segment_data.get("SegmentType", "")
-    
+
     if segment_type == "decision":
         response["Segment"]["DecisionText"] = segment_data.get("DecisionText", "")
         # Format options from DecisionOptions map
@@ -1182,32 +1183,32 @@ def format_story_segment_response(active_segment: dict, story_metadata: dict, se
             options.append({"Id": option_id, "Text": option_id.replace("-", " ").title()})
         response["Segment"]["Options"] = options
         response["Segment"]["Decision"] = active_segment.get("Decision")
-        
+
     elif segment_type == "narrative":
         response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
         response["Segment"]["Challenges"] = segment_data.get("Challenges", [])
         response["Segment"]["ChallengeResults"] = active_segment.get("ChallengeResults", [])
         response["Segment"]["Outcome"] = active_segment.get("Outcome")
-        
+
     elif segment_type == "mechanical":
         # Mechanical segments can contain skill challenges and/or combat
         response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
         response["Segment"]["Challenges"] = segment_data.get("Challenges", [])
         response["Segment"]["ChallengeResults"] = active_segment.get("ChallengeResults", [])
-        
+
         # Combat is optional within mechanical segments
         if segment_data.get("Combat"):
             response["Segment"]["Combat"] = segment_data.get("Combat", {})
             response["Segment"]["CombatState"] = active_segment.get("CombatState", {})
-        
+
         response["Segment"]["Outcome"] = active_segment.get("Outcome")
-        
+
     elif segment_type == "rest":
         # Rest segments allow wound healing over time
         response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
         response["Segment"]["RestBenefit"] = segment_data.get("RestBenefit", {})
         response["Segment"]["HealingApplied"] = active_segment.get("HealingApplied", {})
-        
+
     else:
         # Unknown segment type - add minimal data
         logger.warning(

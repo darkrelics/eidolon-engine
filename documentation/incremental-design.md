@@ -112,6 +112,7 @@ def business_logic(param1: str, param2: str) -> dict:
 **api_start_story**
 - Validates character ownership and GameMode="None"
 - Creates ActiveSegments record with calculated end time
+- Generates ActiveSegmentID using UUIDv7 for time-based ordering
 - Immediately calls ops_process_segment for non-decision segments
 - Uses DynamoDB transaction to ensure atomicity
 - Enables polling if not already active

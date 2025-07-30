@@ -38,7 +38,7 @@ def get_all_player_archetypes() -> list:
 
     # Filter for player archetypes
     player_archetypes = []
-    for item in items: # type: ignore
+    for item in items:  # type: ignore
         # Check if Player field exists and is True
         if item.get("Player", False):
             # Normalize attribute and skill keys to lowercase

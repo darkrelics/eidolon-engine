@@ -37,7 +37,7 @@ def get_parameter(parameter_name: str) -> str:
         if error_code == "ParameterNotFound":
             logger.error("Parameter not found", extra={"parameter_name": parameter_name})
             raise ValueError(f"Parameter {parameter_name} not found")
-        
+
         logger.error(
             "Failed to get parameter",
             extra={

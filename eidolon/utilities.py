@@ -25,7 +25,7 @@ def log_lambda_invocation(context: object, event: dict) -> None:
         logger.info(
             "Lambda invocation",
             extra={
-                "request_id": context.aws_request_id, # type: ignore
+                "request_id": context.aws_request_id,  # type: ignore
                 "function_name": getattr(context, "function_name", "unknown"),
                 "http_method": event.get("httpMethod"),
                 "path": event.get("path"),

@@ -193,7 +193,7 @@ class DynamoInterface:
         # Only initialize once
         if not self._initialized:
             self._resource = resource("dynamodb")
-            self._client = self._resource.meta.client # type: ignore
+            self._client = self._resource.meta.client  # type: ignore
             self._tables = {}
             self._connection_status = {}
 
@@ -239,7 +239,7 @@ class DynamoInterface:
                 self._connection_status[table_enum] = False
                 return False
 
-            table = self._resource.Table(table_name) # type: ignore
+            table = self._resource.Table(table_name)  # type: ignore
             # Test the connection by loading the table
             table.load()
 
@@ -314,7 +314,7 @@ class DynamoInterface:
         # Convert Decimal to float for JSON compatibility
         result = decimal_to_float(item)
         logger.debug("DB Interface: Get Item: Return", extra={"result": result})
-        return result # type: ignore
+        return result  # type: ignore
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
     def put_item(self, table_enum: TableName, item: dict, **kwargs) -> None:
@@ -599,7 +599,7 @@ class DynamoInterface:
                 request[table_name]["AttributesToGet"] = attributes_to_get
 
             try:
-                response = self._resource.batch_get_items(RequestItems=request) # type: ignore
+                response = self._resource.batch_get_items(RequestItems=request)  # type: ignore
             except ClientError as err:
                 logger.error(
                     "Error in batch get operation",
@@ -690,7 +690,7 @@ class DynamoInterface:
         )
 
         # Use the existing query method
-        return self.query(table_enum, **kwargs) # type: ignore
+        return self.query(table_enum, **kwargs)  # type: ignore
 
     def update_item_fields(self, table_enum: TableName, key: dict, updates: dict, condition_expression=None) -> dict:
         """
@@ -750,7 +750,7 @@ class DynamoInterface:
         )
 
         # Use the existing update_item method
-        return self.update_item(table_enum, **update_params) # type: ignore
+        return self.update_item(table_enum, **update_params)  # type: ignore
 
 
 def clean_value(value: object) -> object:
