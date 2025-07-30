@@ -109,7 +109,7 @@ def list_files(bucket_name: str, prefix: str = "") -> list:
         logger.error("Failed to list files in S3 bucket", extra={"bucket_name": bucket_name, "prefix": prefix, "error": str(err)})
         raise RuntimeError(f"Failed to list files in S3 bucket: {str(err)}")
 
-    files = [item["Key"] for item in response.get("Contents", [])]
+    files = [item.get("Key") for item in response.get("Contents", [])]
 
     logger.info("Listed files in S3 bucket", extra={"bucket_name": bucket_name, "prefix": prefix, "file_count": len(files)})
 

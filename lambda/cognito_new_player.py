@@ -59,8 +59,8 @@ def lambda_handler(event: dict, context: object) -> dict:
         user_attributes: dict = event.get("request", {}).get("userAttributes", {})
 
         # Get the user's Cognito UUID (sub) and email
-        user_uuid: str = user_attributes.get("sub")  # type: ignore
-        email: str = user_attributes.get("email")  # type: ignore
+        user_uuid: str = user_attributes.get("sub") # type: ignore
+        email: str = user_attributes.get("email") # type: ignore
 
         # Call business logic
         create_player_business_logic(user_uuid, email)
@@ -69,6 +69,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error(
             "Invalid user attributes",
             extra={"error": str(err)},
+            exc_info=True,
         )
         # For Cognito triggers, we still return the event to allow the flow to continue
         # but log the error for monitoring
@@ -76,6 +77,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error(
             "Failed to process user registration",
             extra={"error": str(err)},
+            exc_info=True,
         )
         # For Cognito triggers, we still return the event to allow the flow to continue
         # but log the error for monitoring

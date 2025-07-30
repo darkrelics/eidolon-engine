@@ -18,8 +18,12 @@
               └───────────┘                        └──────┬──────┘     │
                                                           │            │
                                                    ┌──────▼──────┐     │
-                                                   │     SQS     │─────┘
-                                                   │   Queue     │
+                                                   │  SQS Queue  │─────┘
+                                                   │  (Segment)  │
+                                                   └─────────────┘
+                                                   ┌─────────────┐
+                                                   │  SQS Queue  │─────┘
+                                                   │   (Story)   │
                                                    └─────────────┘
 ```
 
@@ -30,8 +34,10 @@ The system uses a front-loaded processing model where all outcomes are calculate
 1. **Segment Creation**: When a story starts or advances, outcomes are immediately calculated
 2. **Timer Management**: Segments have start/end times for client countdown display
 3. **Polling System**: EventBridge triggers every 30 seconds to find completed segments
-4. **Queue Processing**: Mechanical segments (skill challenges/combat) processed via SQS
-5. **Result Application**: Pre-calculated outcomes applied when timer expires
+4. **Dual Queue Processing**: 
+   - Segment Processing Queue: Mechanical segments processed immediately when created
+   - Story Advancement Queue: All segments processed when timer expires
+5. **Result Application**: Pre-calculated outcomes applied and story advanced
 
 ## 2. API Design
 
@@ -112,10 +118,8 @@ def business_logic(param1: str, param2: str) -> dict:
 
 **ops_segment_poller** (EventBridge triggered)
 - Reads SSM parameter for run/stop state
-- Queries EndTimeIndex for segments where EndTime <= (Now + 15)
-- Handles different segment types:
-  - Rest/Decision: Process directly
-  - Mechanical: Queue to SQS
+- Queries EndTimeIndex for segments where EndTime <= Now
+- Sends ALL completed segments to Story Advancement Queue
 - Manages polling state (auto-disable when no segments)
 
 **ops_process_segment** (SQS triggered)
@@ -126,12 +130,13 @@ def business_logic(param1: str, param2: str) -> dict:
 - Generates ClientEvents array for display
 - Stores results in ActiveSegments record
 
-**ops_advance_story** (SQS triggered)
-- Claims segment with RunningFlag
-- Applies pre-calculated CharacterUpdates
+**ops_advance_story** (SQS triggered from Story Advancement Queue)
+- Claims segment with RunningFlag to prevent duplicates
+- Processes simple segments (rest/decision) if not already processed
+- Applies CharacterUpdates (XP, wounds, room changes)
 - Creates next segment if story continues
 - Resets GameMode="None" if story ends
-- Writes history records
+- Writes to StoryHistory and SegmentHistory tables
 
 ## 4. Database Design
 
@@ -180,16 +185,14 @@ Avoid transactions for high-frequency operations:
 ### 5.2 Segment Processing Flow
 
 ```
-1. EventBridge: Trigger ops_segment_poller
-2. Poller: Query EndTimeIndex for ready segments
-3. Poller: For each segment:
-     - Rest: Just advance
-     - Decision: Apply default if needed
-     - Mechanical: Queue to SQS
-4. SQS: Trigger ops_advance_story
-5. Advance: Apply CharacterUpdates
-6. Advance: Create next segment or end story
-7. Advance: Delete completed segment
+1. EventBridge: Trigger ops_segment_poller every 30 seconds
+2. Poller: Query EndTimeIndex for expired segments
+3. Poller: Send ALL segments to Story Advancement Queue
+4. SQS: Trigger ops_advance_story for each message
+5. Advance: Process simple segments if needed (rest/decision)
+6. Advance: Apply CharacterUpdates
+7. Advance: Create next segment or complete story
+8. Advance: Record history and delete completed segment
 ```
 
 ### 5.3 Mechanical Segment Flow
@@ -311,7 +314,9 @@ if (timeRemaining <= 30) {
 - **Lambda**: Python 3.12 runtime with eidolon library
 - **DynamoDB**: Pay-per-request pricing
 - **EventBridge**: Single rule, 30-second schedule
-- **SQS**: Standard queue for segment processing
+- **SQS**: Two standard queues:
+  - Segment Processing Queue: For immediate mechanical segment processing
+  - Story Advancement Queue: For all segment advancement when timers expire
 - **SSM Parameter**: /eidolon/segment-poller-state
 - **CloudWatch**: Logs and metrics
 
@@ -395,5 +400,6 @@ Required for Lambda functions:
 - OPPONENTS_TABLE
 - STORY_HISTORY_TABLE
 - SEGMENT_HISTORY_TABLE
-- SQS_QUEUE_URL
+- SEGMENT_QUEUE_URL
+- STORY_ADVANCEMENT_QUEUE_URL
 - SSM_PARAMETER_NAME

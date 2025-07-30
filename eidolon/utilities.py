@@ -25,7 +25,7 @@ def log_lambda_invocation(context: object, event: dict) -> None:
         logger.info(
             "Lambda invocation",
             extra={
-                "request_id": context.aws_request_id,  # type: ignore
+                "request_id": context.aws_request_id, # type: ignore
                 "function_name": getattr(context, "function_name", "unknown"),
                 "http_method": event.get("httpMethod"),
                 "path": event.get("path"),
@@ -181,7 +181,7 @@ def build_lambda_response_pascal(status_code: int, body: dict, event: dict) -> d
     if "error" in body and status_code >= 400:
         from eidolon.responses import error_response_pascal
 
-        error_msg = body["error"]
+        error_msg = body.get("error", "")
         # Remove the error key and treat rest as details
         details = {k: v for k, v in body.items() if k != "error"}
         response = error_response_pascal(error_msg, status_code, details if details else None)

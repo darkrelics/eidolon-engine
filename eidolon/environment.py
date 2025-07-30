@@ -20,6 +20,8 @@ SEGMENTS_TABLE = os.environ.get("SEGMENTS_TABLE", "segments")
 ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
 HISTORY_TABLE = os.environ.get("HISTORY_TABLE", "history")
 CHARACTER_HISTORY_TABLE = os.environ.get("CHARACTER_HISTORY_TABLE", "character_history")
+STORY_HISTORY_TABLE = os.environ.get("STORY_HISTORY_TABLE", "story_history")
+SEGMENT_HISTORY_TABLE = os.environ.get("SEGMENT_HISTORY_TABLE", "segment_history")
 OPPONENTS_TABLE = os.environ.get("OPPONENTS_TABLE", "opponents")
 ROOMS_TABLE = os.environ.get("ROOMS_TABLE", "rooms")
 EXITS_TABLE = os.environ.get("EXITS_TABLE", "exits")
@@ -59,3 +61,7 @@ SSM_POLLER_STATE_PARAMETER = os.environ.get("SSM_POLLER_STATE_PARAMETER", "/eido
 
 # SQS Configuration
 SEGMENT_QUEUE_URL = os.environ.get("SEGMENT_QUEUE_URL", "")
+STORY_ADVANCEMENT_QUEUE_URL = os.environ.get("STORY_ADVANCEMENT_QUEUE_URL", "")
+
+# EventBridge Configuration
+EVENTBRIDGE_RULE_NAME = os.environ.get("EVENTBRIDGE_RULE_NAME", "eidolon-segment-poller")

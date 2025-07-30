@@ -849,13 +849,13 @@ def create_character_record(character_item: dict) -> bool:
         dynamo.put_item(TableName.CHARACTERS, character_item)
         logger.info(
             "Character record created successfully",
-            extra={"character_id": character_item["CharacterID"]},
+            extra={"character_id": character_item.get("CharacterID")},
         )
         return True
     except ClientError as err:
         logger.error(
             "Failed to create character record",
-            extra={"character_name": character_item["CharacterName"], "error": str(err)},
+            extra={"character_name": character_item.get("CharacterName"), "error": str(err)},
         )
         raise RuntimeError(f"Failed to create character record: {str(err)}")
 

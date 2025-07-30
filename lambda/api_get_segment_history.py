@@ -3,20 +3,15 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason E. Robinson
 
-Lambda function to get the current active story and segment for a character.
-Returns story metadata and segment details for the client to display.
+Lambda function to retrieve segment history for a character.
+Returns completed segment results from the character's story history.
 """
 
 from eidolon.character import get_character, validate_character_ownership
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
-from eidolon.story import (
-    format_story_segment_response,
-    get_active_story_segment_with_player_check,
-    get_story_metadata,
-    get_story_segment,
-)
+from eidolon.story import get_story_history
 from eidolon.utilities import (
     build_lambda_response_pascal,
     handle_lambda_error_pascal,
@@ -28,19 +23,19 @@ from eidolon.validation import validate_uuid
 logger = get_logger(__name__)
 
 
-def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
+def get_segment_history_business_logic(character_id: str, player_id: str) -> dict:
     """
-    Business logic for getting current active story and segment.
+    Business logic for retrieving segment history.
 
     Args:
         character_id: Character UUID
         player_id: Authenticated player ID
 
     Returns:
-        Response data dict with story and segment information
+        Response data dict with segment history
 
     Raises:
-        ValueError: If character not found, not owned, or no active story
+        ValueError: If character not found or not owned
         RuntimeError: If database operations fail
     """
     # Validate character ID format
@@ -51,52 +46,99 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
     character = get_character(character_id)
     validate_character_ownership(character, player_id)
 
-    # Get active segment
-    active_segment = get_active_story_segment_with_player_check(character_id, player_id)
-    story_id = active_segment.get("StoryID")
-    segment_id = active_segment.get("SegmentID")
+    # Get current story ID from character
+    story_id = character.get("ActiveStoryID")
+    if not story_id:
+        # No active story, return empty history
+        logger.info(
+            "No active story for character",
+            extra={"character_id": character_id},
+        )
+        return {
+            "CharacterID": character_id,
+            "StoryID": None,
+            "Segments": [],
+        }
 
-    if not story_id or not segment_id:
-        raise ValueError("Invalid active segment data")
+    # Get story history
+    try:
+        history = get_story_history(character_id, story_id)
+    except RuntimeError as err:
+        logger.error(
+            "Failed to get story history",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "error": str(err),
+            },
+        )
+        raise
 
-    # Get story and segment metadata
-    story_metadata = get_story_metadata(story_id)
-    segment_data = get_story_segment(story_id, segment_id)
+    # Extract segment history
+    segment_history = history.get("SegmentHistory", [])
 
-    # Format response using eidolon library function
-    response_data = format_story_segment_response(
-        active_segment=active_segment,
-        story_metadata=story_metadata,
-        segment_data=segment_data,
-    )
+    # Format segments for response
+    formatted_segments = []
+    for segment in segment_history:
+        formatted_segment = {
+            "SegmentID": segment.get("SegmentID"),
+            "SegmentType": segment.get("SegmentType"),
+            "CompletedAt": segment.get("CompletedAt"),
+            "Outcome": segment.get("Outcome"),
+        }
+
+        # Add optional fields if present
+        if segment.get("Decision"):
+            formatted_segment["Decision"] = segment.get("Decision")
+
+        if segment.get("ChallengeResults"):
+            formatted_segment["ChallengeResults"] = segment.get("ChallengeResults")
+
+        if segment.get("SkillXPAwarded"):
+            formatted_segment["SkillXPAwarded"] = segment.get("SkillXPAwarded")
+
+        if segment.get("AttributeXPAwarded"):
+            formatted_segment["AttributeXPAwarded"] = segment.get("AttributeXPAwarded")
+
+        if segment.get("CombatState"):
+            formatted_segment["CombatState"] = segment.get("CombatState")
+
+        formatted_segments.append(formatted_segment)
+
+    # Sort by completion time, newest first
+    formatted_segments.sort(key=lambda x: x.get("CompletedAt", ""), reverse=True)
+
+    response = {
+        "CharacterID": character_id,
+        "StoryID": story_id,
+        "Segments": formatted_segments,
+    }
 
     logger.info(
-        "Current story retrieved successfully",
+        "Segment history retrieved",
         extra={
             "character_id": character_id,
             "story_id": story_id,
-            "segment_type": segment_data.get("SegmentType"),
-            "segment_id": segment_id,
+            "segment_count": len(formatted_segments),
         },
     )
 
-    return response_data
+    return response
 
 
 def lambda_handler(event: dict, context: object) -> dict:
     """
-    Get current active story and segment for a character.
+    Get segment history for a character.
 
-    Lambda function to get the current active story segment for a character.
-    This function retrieves the current active segment if a character is in a story,
-    along with relevant story metadata and segment details.
+    Lambda function to retrieve completed segment history for a character's
+    active story. Used by clients to display past outcomes and decisions.
 
     Query Parameters:
-        characterId: Character ID to check (supports both CharacterID and characterId)
+        characterId: Character ID to get history for (supports both CharacterID and characterId)
 
     Returns:
-        200: Current story and segment data
-        404: No active story or character not found
+        200: Segment history data
+        404: Character not found
         400: Missing parameters or invalid request
         401: Unauthorized
         500: Internal error
@@ -121,7 +163,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Validate player exists
     try:
         if not validate_player_exists(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id})
+            logger.error("Player not found in database", extra={"player_id": player_id}, exc_info=True)
             return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
         logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
@@ -136,23 +178,20 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Call business logic
     try:
-        response_data = get_current_story_business_logic(character_id, player_id)  # type: ignore
+        response_data = get_segment_history_business_logic(character_id, player_id)  # type: ignore
         logger.info("Lambda response", extra={"status_code": 200})
         return build_lambda_response_pascal(200, response_data, event)
     except ValueError as err:
         logger.warning(
-            "Invalid request or not found",
+            "Invalid request",
             extra={"character_id": character_id, "error": str(err)},
         )
-        error_msg = str(err).lower()
-        if "no active story" in error_msg:
-            return build_lambda_response_pascal(404, {"Error": "No active story found"}, event)
-        elif "not found" in error_msg:
+        if "not found" in str(err).lower():
             return build_lambda_response_pascal(404, {"Error": "Character not found"}, event)
         return build_lambda_response_pascal(400, {"Error": str(err)}, event)
     except RuntimeError as err:
         logger.error(
-            "Failed to get current story",
+            "Failed to get segment history",
             extra={"character_id": character_id, "error": str(err)},
             exc_info=True,
         )

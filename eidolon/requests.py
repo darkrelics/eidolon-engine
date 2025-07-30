@@ -58,7 +58,7 @@ def get_required_field(body: dict, field: str, field_type: type = str):
     if field not in body:
         raise ValueError(f"Missing required field: {field}")
 
-    value = body[field]
+    value = body.get(field)
 
     # Special handling for strings - strip whitespace
     if field_type is str:
@@ -286,9 +286,9 @@ def get_required_field_flexible(body: dict, field_pascal: str, field_camel: str 
     """
     # Try PascalCase first
     if field_pascal in body:
-        value = body[field_pascal]
+        value = body.get(field_pascal)
     elif field_camel and field_camel in body:
-        value = body[field_camel]
+        value = body.get(field_camel)
     else:
         raise ValueError(f"Missing required field: {field_pascal}")
 
@@ -330,9 +330,9 @@ def get_optional_field_flexible(body: dict, field_pascal: str, field_camel: str 
     """
     # Try PascalCase first
     if field_pascal in body:
-        value = body[field_pascal]
+        value = body.get(field_pascal)
     elif field_camel and field_camel in body:
-        value = body[field_camel]
+        value = body.get(field_camel)
     else:
         return default
 

@@ -31,7 +31,7 @@ def get_parameter(parameter_name: str) -> str:
     """
     try:
         response = ssm_client.get_parameter(Name=parameter_name)
-        return response["Parameter"]["Value"]
+        return response.get("Parameter", {}).get("Value")
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "Unknown")
         if error_code == "ParameterNotFound":

@@ -763,7 +763,12 @@ def query_ready_segments(end_time_threshold):
 
 ### 5.2 SQS Message Processing
 
-The SQS handler processes segment completion messages with atomic claiming to prevent duplicate processing, returning failed messages to the queue for retry while tracking successful completions.
+The system uses two SQS queues with different processing patterns:
+
+1. **Segment Processing Queue**: Handles mechanical segments that require immediate processing when created
+2. **Story Advancement Queue**: Handles all segments when their timers expire, processing simple segments and advancing stories
+
+Both handlers use atomic claiming to prevent duplicate processing, returning failed messages to the queue for retry while tracking successful completions.
 
 ```python
 def advance_story_handler(event, context):
@@ -955,7 +960,7 @@ class _StoryEventDisplayState extends State<StoryEventDisplay> {
 
 ### 7.1 CDK Stack Configuration
 
-The CDK stack defines the infrastructure for segment processing, including SQS queues with dead letter handling, SSM parameters for state management, and EventBridge rules that automatically enable and disable based on system activity.
+The CDK stack defines the infrastructure for segment processing, including two SQS queues (one for segment processing and one for story advancement) with dead letter handling, SSM parameters for state management, and EventBridge rules that automatically enable and disable based on system activity.
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
@@ -969,7 +974,7 @@ export class IncrementalStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
     
-    // SQS Queue for segment processing
+    // SQS Queue for mechanical segment processing
     const segmentQueue = new sqs.Queue(this, 'SegmentProcessingQueue', {
       queueName: 'eidolon-segment-processing',
       visibilityTimeout: cdk.Duration.seconds(300),
@@ -978,6 +983,19 @@ export class IncrementalStack extends cdk.Stack {
         maxReceiveCount: 3,
         queue: new sqs.Queue(this, 'SegmentProcessingDLQ', {
           queueName: 'eidolon-segment-processing-dlq',
+        }),
+      },
+    });
+    
+    // SQS Queue for story advancement
+    const storyAdvancementQueue = new sqs.Queue(this, 'StoryAdvancementQueue', {
+      queueName: 'eidolon-story-advancement',
+      visibilityTimeout: cdk.Duration.seconds(180),
+      retentionPeriod: cdk.Duration.days(14),
+      deadLetterQueue: {
+        maxReceiveCount: 3,
+        queue: new sqs.Queue(this, 'StoryAdvancementDLQ', {
+          queueName: 'eidolon-story-advancement-dlq',
         }),
       },
     });
@@ -997,7 +1015,8 @@ export class IncrementalStack extends cdk.Stack {
       code: lambda.Code.fromAsset('lambda'),
       environment: {
         ACTIVE_SEGMENTS_TABLE: props.activeSegmentsTable.tableName,
-        SQS_QUEUE_URL: segmentQueue.queueUrl,
+        SEGMENT_QUEUE_URL: segmentQueue.queueUrl,
+        STORY_ADVANCEMENT_QUEUE_URL: storyAdvancementQueue.queueUrl,
         SSM_PARAMETER_NAME: pollingStateParam.parameterName,
       },
       timeout: cdk.Duration.seconds(30),
@@ -1015,7 +1034,7 @@ export class IncrementalStack extends cdk.Stack {
     
     // Grant permissions
     props.activeSegmentsTable.grantReadWriteData(pollerFunction);
-    segmentQueue.grantSendMessages(pollerFunction);
+    storyAdvancementQueue.grantSendMessages(pollerFunction);
     pollingStateParam.grantRead(pollerFunction);
     pollingStateParam.grantWrite(pollerFunction);
   }
@@ -1040,7 +1059,8 @@ CommonEnvironment:
   PLAYER_TABLE: ${self:provider.environment.DYNAMODB_PREFIX}-player
 
 PollerSpecific:
-  SQS_QUEUE_URL: !Ref SegmentProcessingQueue
+  SEGMENT_QUEUE_URL: !Ref SegmentProcessingQueue
+  STORY_ADVANCEMENT_QUEUE_URL: !Ref StoryAdvancementQueue
   SSM_PARAMETER_NAME: /eidolon/segment-poller-state
   EVENTBRIDGE_RULE_NAME: eidolon-segment-poller
 ```

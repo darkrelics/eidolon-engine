@@ -434,7 +434,7 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
 
         if story_type == "daily":
             # Calculate time until midnight UTC
-            finished_at = datetime.fromisoformat(history["FinishedAt"].replace("Z", "+00:00"))
+            finished_at = datetime.fromisoformat(history.get("FinishedAt", "").replace("Z", "+00:00"))
             now = datetime.now(timezone.utc)
 
             # Check if completion was today
@@ -545,7 +545,7 @@ def get_stories_for_character(character_id: str, available_story_ids: list) -> l
                 extra={
                     "story_id": story_id,
                     "story_type": story_type,
-                    "available": formatted_story["Available"],
+                    "available": formatted_story.get("Available"),
                     "cooldown": cooldown,
                 },
             )
@@ -786,7 +786,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
                 ":mode": "Incremental",
                 ":none": "None",
                 ":story_id": story_id,
-                ":segment_id": active_segment["ActiveSegmentID"],
+                ":segment_id": active_segment.get("ActiveSegmentID"),
             },
             ConditionExpression="GameMode = :none",
         )
@@ -796,18 +796,18 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         try:
             dynamo.delete_item(
                 TableName.ACTIVE_SEGMENTS,
-                Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]},
+                Key={"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
             )
         except Exception as rollback_err:
             logger.error(
                 "Failed to rollback active segment",
                 extra={
-                    "active_segment_id": active_segment["ActiveSegmentID"],
+                    "active_segment_id": active_segment.get("ActiveSegmentID"),
                     "error": str(rollback_err),
                 },
             )
 
-        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             logger.warning(
                 "Character state changed during story start",
                 extra={"character_id": character_id},
@@ -834,7 +834,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         extra={
             "character_id": character_id,
             "story_id": story_id,
-            "active_segment_id": active_segment["ActiveSegmentID"],
+            "active_segment_id": active_segment.get("ActiveSegmentID"),
             "segment_type": first_segment.get("SegmentType"),
         },
     )
@@ -856,11 +856,11 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
     import time
 
     segment_type = segment.get("SegmentType", "narrative")
-    time_remaining = max(0, active_segment["EndTime"] - int(time.time()))
+    time_remaining = max(0, active_segment.get("EndTime", 0) - int(time.time()))
 
     response = {
-        "SegmentID": active_segment["ActiveSegmentID"],
-        "StoryID": active_segment["StoryID"],
+        "SegmentID": active_segment.get("ActiveSegmentID"),
+        "StoryID": active_segment.get("StoryID"),
         "Type": segment_type,
         "TimeRemaining": time_remaining,
     }
@@ -1126,3 +1126,94 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     )
 
     return response_data
+
+
+def format_story_segment_response(active_segment: dict, story_metadata: dict, segment_data: dict) -> dict:
+    """
+    Format story and segment data for API response.
+
+    Args:
+        active_segment: Active segment record from database
+        story_metadata: Story metadata from STORY table
+        segment_data: Segment definition from SEGMENTS table
+
+    Returns:
+        Formatted response dict with story and segment information
+    """
+    import time
+
+    # Calculate time remaining
+    end_time = int(active_segment.get("EndTime", 0))
+    current_time = int(time.time())
+    time_remaining = max(0, end_time - current_time)
+
+    # Build base response
+    response = {
+        "Story": {
+            "StoryID": active_segment.get("StoryID"),
+            "Title": story_metadata.get("Title", ""),
+            "Type": story_metadata.get("StoryType", ""),
+            "TotalSegments": story_metadata.get("TotalSegments", 1),
+            "CurrentSegmentIndex": segment_data.get("SegmentIndex", 0),
+        },
+        "Segment": {
+            "SegmentID": active_segment.get("SegmentID"),
+            "SegmentType": segment_data.get("SegmentType", ""),
+            "ShortStatus": segment_data.get("ShortStatus", ""),
+            "Narrative": "",  # Will be set based on segment type
+            "Duration": segment_data.get("SegmentDuration", 0),
+            "TimeRemaining": time_remaining,
+            "StartTime": active_segment.get("StartTime", 0),
+            "EndTime": int(active_segment.get("EndTime", 0)),
+        },
+        "ActiveSegmentID": active_segment.get("ActiveSegmentID", ""),
+        "Status": active_segment.get("Status", ""),
+    }
+
+    # Add segment type specific data
+    segment_type = segment_data.get("SegmentType", "")
+    
+    if segment_type == "decision":
+        response["Segment"]["DecisionText"] = segment_data.get("DecisionText", "")
+        # Format options from DecisionOptions map
+        decision_options = segment_data.get("DecisionOptions", {})
+        options = []
+        for option_id, _ in decision_options.items():
+            options.append({"Id": option_id, "Text": option_id.replace("-", " ").title()})
+        response["Segment"]["Options"] = options
+        response["Segment"]["Decision"] = active_segment.get("Decision")
+        
+    elif segment_type == "narrative":
+        response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
+        response["Segment"]["Challenges"] = segment_data.get("Challenges", [])
+        response["Segment"]["ChallengeResults"] = active_segment.get("ChallengeResults", [])
+        response["Segment"]["Outcome"] = active_segment.get("Outcome")
+        
+    elif segment_type == "mechanical":
+        # Mechanical segments can contain skill challenges and/or combat
+        response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
+        response["Segment"]["Challenges"] = segment_data.get("Challenges", [])
+        response["Segment"]["ChallengeResults"] = active_segment.get("ChallengeResults", [])
+        
+        # Combat is optional within mechanical segments
+        if segment_data.get("Combat"):
+            response["Segment"]["Combat"] = segment_data.get("Combat", {})
+            response["Segment"]["CombatState"] = active_segment.get("CombatState", {})
+        
+        response["Segment"]["Outcome"] = active_segment.get("Outcome")
+        
+    elif segment_type == "rest":
+        # Rest segments allow wound healing over time
+        response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
+        response["Segment"]["RestBenefit"] = segment_data.get("RestBenefit", {})
+        response["Segment"]["HealingApplied"] = active_segment.get("HealingApplied", {})
+        
+    else:
+        # Unknown segment type - add minimal data
+        logger.warning(
+            "Unknown segment type",
+            extra={"segment_type": segment_type, "segment_id": active_segment.get("SegmentID")},
+        )
+        response["Segment"]["Narrative"] = segment_data.get("Narrative", "")
+
+    return response

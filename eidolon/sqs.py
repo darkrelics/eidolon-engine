@@ -43,7 +43,7 @@ def send_message(queue_url: str, message_body: dict, message_attributes=None) ->
 
         response = sqs_client.send_message(**params)
         
-        message_id = response["MessageId"]
+        message_id = response.get("MessageId")
         logger.debug(
             "Message sent to SQS",
             extra={"queue_url": queue_url, "message_id": message_id},
@@ -83,10 +83,10 @@ def send_message_batch(queue_url: str, messages: list) -> dict:
         for i, msg in enumerate(messages):
             entry = {
                 "Id": str(i),
-                "MessageBody": json.dumps(msg["body"]),
+                "MessageBody": json.dumps(msg.get("body")),
             }
             if "attributes" in msg:
-                entry["MessageAttributes"] = msg["attributes"]
+                entry["MessageAttributes"] = msg.get("attributes")
             entries.append(entry)
 
         # Send in batches of 10 (SQS limit)
@@ -108,7 +108,7 @@ def send_message_batch(queue_url: str, messages: list) -> dict:
                     "Some messages failed to send",
                     extra={
                         "queue_url": queue_url,
-                        "failed_messages": response["Failed"],
+                        "failed_messages": response.get("Failed"),
                     },
                 )
 
