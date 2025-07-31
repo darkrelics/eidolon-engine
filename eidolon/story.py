@@ -6,6 +6,7 @@ and managing story segments.
 """
 import time
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
@@ -1550,3 +1551,138 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
             exc_info=True,
         )
         raise RuntimeError(f"Failed to apply outcome effects: {str(err)}")
+
+
+def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, attribute_xp: dict) -> None:
+    """
+    Update the story history with accumulated XP from this segment.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        skill_xp: Skill XP awarded in this segment
+        attribute_xp: Attribute XP awarded in this segment
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    if not skill_xp and not attribute_xp:
+        # No XP to update
+        return
+
+    try:
+        # Build update expressions for XP accumulation
+        update_expressions = ["SegmentCount = SegmentCount + :one"]
+        expression_names = {}
+        expression_values = {":one": 1}
+
+        # Add skill XP updates
+        for skill, xp_value in skill_xp.items():
+            if xp_value > 0:
+                safe_skill = skill.replace("-", "_")
+                update_expressions.append(
+                    f"SkillXPAwarded.#skill_{safe_skill} = if_not_exists(SkillXPAwarded.#skill_{safe_skill}, :zero) + :xp_{safe_skill}"
+                )
+                expression_names[f"#skill_{safe_skill}"] = skill
+                expression_values[f":xp_{safe_skill}"] = Decimal(str(xp_value))
+
+        # Add attribute XP updates
+        for attribute, xp_value in attribute_xp.items():
+            if xp_value > 0:
+                safe_attr = attribute.replace("-", "_")
+                update_expressions.append(
+                    f"AttributeXPAwarded.#attr_{safe_attr} = if_not_exists(AttributeXPAwarded.#attr_{safe_attr}, :zero) + :xp_attr_{safe_attr}"
+                )
+                expression_names[f"#attr_{safe_attr}"] = attribute
+                expression_values[f":xp_attr_{safe_attr}"] = Decimal(str(xp_value))
+
+        # Add zero value if needed
+        if ":zero" not in expression_values:
+            expression_values[":zero"] = Decimal("0")
+
+        # Execute update
+        update_expression = "SET " + ", ".join(update_expressions)
+        
+        dynamo.update_item(
+            TableName.STORY_HISTORY,
+            Key={"CharacterID": character_id, "StoryID": story_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_names if expression_names else None,
+            ExpressionAttributeValues=expression_values,
+        )
+
+        logger.info(
+            "Updated story history with XP",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "skill_xp_count": len(skill_xp),
+                "attribute_xp_count": len(attribute_xp),
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to update story history XP",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
+            },
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to update story history XP: {str(err)}")
+
+
+def ensure_story_history_exists(character_id: str, story_id: str, story_title: str) -> None:
+    """
+    Ensure story history record exists.
+
+    Creates a new story history record if one doesn't exist.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        story_title: Story title for display
+
+    Raises:
+        RuntimeError: If database operations fail
+    """
+    try:
+        # Check if story history exists
+        history = dynamo.get_item(
+            TableName.STORY_HISTORY,
+            {"CharacterID": character_id, "StoryID": story_id},
+        )
+
+        if not history:
+            # Create new story history
+            dynamo.put_item(
+                TableName.STORY_HISTORY,
+                {
+                    "CharacterID": character_id,
+                    "StoryID": story_id,
+                    "StoryTitle": story_title,
+                    "StartedAt": datetime.now(timezone.utc).isoformat(),
+                    "SegmentCount": 0,
+                },
+            )
+            logger.info(
+                "Created story history record",
+                extra={
+                    "character_id": character_id,
+                    "story_id": story_id,
+                },
+            )
+    except ClientError as err:
+        logger.error(
+            "Failed to ensure story history exists",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
+            },
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to ensure story history exists: {str(err)}")

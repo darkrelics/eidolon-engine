@@ -38,14 +38,14 @@ def format_start_story_response(active_segment: dict, segment: dict) -> dict:
         Dict with success and segment data
     """
     return {
-        "success": True,
-        "segment": {
-            "activeSegmentId": active_segment.get("ActiveSegmentID", ""),
-            "segmentType": segment.get("SegmentType", "mechanical"),
-            "startTime": active_segment.get("StartTime", 0),
-            "endTime": active_segment.get("EndTime", 0),
-            "shortStatus": segment.get("ShortStatus", "Starting your adventure..."),
-            "duration": active_segment.get("EndTime", 0) - active_segment.get("StartTime", 0),
+        "Success": True,
+        "Segment": {
+            "ActiveSegmentID": active_segment.get("ActiveSegmentID", ""),
+            "SegmentType": segment.get("SegmentType", "mechanical"),
+            "StartTime": active_segment.get("StartTime", 0),
+            "EndTime": active_segment.get("EndTime", 0),
+            "ShortStatus": segment.get("ShortStatus", "Starting your adventure..."),
+            "Duration": active_segment.get("EndTime", 0) - active_segment.get("StartTime", 0),
         },
     }
 

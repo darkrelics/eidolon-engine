@@ -95,13 +95,13 @@ class SegmentProvider extends ChangeNotifier {
           characterId: characterId,
         );
         
-        final processingStatus = statusData['processingStatus'] as String?;
+        final isComplete = statusData['IsComplete'] as bool? ?? false;
         
-        if (processingStatus == 'processed') {
+        if (isComplete) {
           timer.cancel();
           retryCount = 0; // Reset retry count on success
           
-          // Fetch the updated segment with results
+          // Fetch the updated segment with full results
           await loadCurrentStory(characterId);
         }
       } catch (e) {

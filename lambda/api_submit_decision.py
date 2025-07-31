@@ -106,7 +106,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             return build_lambda_response_pascal(404, {"Error": error_msg}, event)
         elif "already submitted" in error_msg.lower():
             return build_lambda_response_pascal(409, {"Error": error_msg}, event)
-        return build_lambda_response_pascal(400, {"error": error_msg}, event)
+        return build_lambda_response_pascal(400, {"Error": error_msg}, event)
     except RuntimeError as err:
         logger.error(
             "Failed to submit decision",

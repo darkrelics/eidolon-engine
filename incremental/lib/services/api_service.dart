@@ -173,7 +173,8 @@ class ApiService {
 
     if (response.statusCode != 200) {
       debugPrint('ApiService: ERROR - Failed to list characters');
-      throw Exception('Failed to list characters: ${response.body}');
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['Error'] ?? errorBody['error'] ?? 'Failed to list characters');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -224,7 +225,7 @@ class ApiService {
 
     if (response.statusCode != 200) {
       final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(errorBody['error'] ?? 'Failed to start story');
+      throw Exception(errorBody['Error'] ?? errorBody['error'] ?? 'Failed to start story');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -257,7 +258,7 @@ class ApiService {
 
     if (response.statusCode != 200) {
       final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(errorBody['error'] ?? 'Failed to submit decision');
+      throw Exception(errorBody['Error'] ?? errorBody['error'] ?? 'Failed to submit decision');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -370,7 +371,8 @@ class ApiService {
     debugPrint('ApiService: Get stories response body: ${response.body}');
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to get stories: ${response.body}');
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['Error'] ?? errorBody['error'] ?? 'Failed to get stories');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -498,7 +500,8 @@ class ApiService {
     }
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to get segment status: ${response.body}');
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(errorBody['Error'] ?? errorBody['error'] ?? 'Failed to get segment status');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;

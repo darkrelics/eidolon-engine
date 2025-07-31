@@ -7,6 +7,7 @@ Provides common functions for character creation and management.
 import pickle
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from botocore.exceptions import ClientError
 
@@ -1141,3 +1142,101 @@ def heal_expired_wounds(character_id: str) -> dict:
             exc_info=True
         )
         raise RuntimeError(f"Failed to heal wounds: {str(err)}")
+
+
+def apply_character_updates(character_id: str, updates: dict) -> None:
+    """
+    Apply accumulated updates to character.
+
+    Handles skill XP, attribute XP, wounds, and room changes.
+
+    Args:
+        character_id: Character UUID
+        updates: Dict containing CharacterUpdates from segment processing
+
+    Raises:
+        RuntimeError: If database update fails
+    """
+    if not updates:
+        logger.info("No character updates to apply", extra={"character_id": character_id})
+        return
+
+    update_expressions = []
+    expression_names = {}
+    expression_values = {}
+
+    # Apply skill XP updates
+    skill_xp = updates.get("SkillXP", {})
+    for skill, xp_value in skill_xp.items():
+        if xp_value > 0:
+            safe_skill = skill.replace("-", "_")
+            update_expressions.append(
+                f"Skills.#skill_{safe_skill} = if_not_exists(Skills.#skill_{safe_skill}, :zero) + :xp_{safe_skill}"
+            )
+            expression_names[f"#skill_{safe_skill}"] = skill
+            expression_values[f":xp_{safe_skill}"] = Decimal(str(xp_value))
+
+    # Apply attribute XP updates
+    attribute_xp = updates.get("AttributeXP", {})
+    for attribute, xp_value in attribute_xp.items():
+        if xp_value > 0:
+            safe_attr = attribute.replace("-", "_")
+            update_expressions.append(
+                f"Attributes.#attr_{safe_attr} = if_not_exists(Attributes.#attr_{safe_attr}, :zero) + :xp_{safe_attr}"
+            )
+            expression_names[f"#attr_{safe_attr}"] = attribute
+            expression_values[f":xp_{safe_attr}"] = Decimal(str(xp_value))
+
+    # Apply wounds
+    wounds = updates.get("Wounds", [])
+    if wounds:
+        update_expressions.append("Wounds = list_append(if_not_exists(Wounds, :empty_list), :new_wounds)")
+        expression_values[":new_wounds"] = wounds
+        expression_values[":empty_list"] = []
+
+    # Apply room change
+    room_id = updates.get("Room")
+    if room_id is not None:
+        update_expressions.append("RoomID = :room")
+        expression_values[":room"] = room_id
+
+    # Set common values
+    if expression_values and ":zero" not in expression_values:
+        expression_values[":zero"] = Decimal("0")
+
+    # Execute update if there are changes
+    if update_expressions:
+        try:
+            update_expression = "SET " + ", ".join(update_expressions)
+            update_expression += ", UpdatedAt = :updated_at"
+            expression_values[":updated_at"] = datetime.now(timezone.utc).isoformat()
+
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_names if expression_names else None,
+                ExpressionAttributeValues=expression_values,
+            )
+
+            logger.info(
+                "Character updates applied",
+                extra={
+                    "character_id": character_id,
+                    "skills_updated": len(skill_xp),
+                    "attributes_updated": len(attribute_xp),
+                    "wounds_added": len(wounds),
+                    "room_changed": room_id is not None,
+                },
+            )
+        except ClientError as err:
+            logger.error(
+                "Failed to apply character updates",
+                extra={
+                    "character_id": character_id,
+                    "error": str(err),
+                    "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
+                },
+                exc_info=True,
+            )
+            raise RuntimeError(f"Failed to apply character updates: {str(err)}")

@@ -21,6 +21,8 @@ from eidolon.segment import (
     check_active_segments_exist,
     get_completed_segments,
     is_mechanical_segment,
+    mark_segment_as_completed_exceptional,
+    reset_segment_processing_status,
 )
 from eidolon.sqs import send_message_batch
 from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
@@ -177,13 +179,7 @@ def poll_and_process_segments_business_logic() -> dict:
             for segment in stuck_mechanical_segments:
                 # Clear processing flag by updating segment
                 try:
-                    from eidolon.dynamo import TableName, dynamo
-                    dynamo.update_item(
-                        TableName.ACTIVE_SEGMENTS,
-                        Key={"ActiveSegmentID": segment.get("ActiveSegmentID")},
-                        UpdateExpression="SET ProcessingStatus = :status",
-                        ExpressionAttributeValues={":status": "pending"}
-                    )
+                    reset_segment_processing_status(segment.get("ActiveSegmentID"))
                     segments_cleaned += 1
                     
                     # Queue for reprocessing
@@ -218,22 +214,12 @@ def poll_and_process_segments_business_logic() -> dict:
 
     # 3. Mark exhausted segments as done and send to advancement
     if exhausted_segments:
-        from eidolon.dynamo import TableName, dynamo
         messages = []
         for segment in exhausted_segments:
             try:
                 # Mark as completed with exceptional outcome to protect player from system failures
                 # If our processing failed repeatedly, give the player the best possible outcome
-                dynamo.update_item(
-                    TableName.ACTIVE_SEGMENTS,
-                    Key={"ActiveSegmentID": segment.get("ActiveSegmentID")},
-                    UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome",
-                    ExpressionAttributeNames={"#outcome": "Outcome"},
-                    ExpressionAttributeValues={
-                        ":status": "completed",
-                        ":outcome": "exceptional"
-                    }
-                )
+                mark_segment_as_completed_exceptional(segment.get("ActiveSegmentID"))
                 segments_marked_done += 1
                 
                 # Queue for advancement to complete the story flow
