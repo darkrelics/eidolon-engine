@@ -78,7 +78,7 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         outcome_data["Narrative"] = ""
         outcome_data["Effects"] = {}
 
-    elif segment_type in ["narrative", "combat"]:
+    elif segment_type == "mechanical":
         # Get the outcome from the active segment
         outcome = active_segment.get("Outcome", "normal")
 
@@ -91,15 +91,28 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         outcome_data["Effects"] = outcome_result.get("effects", {})
 
         # Add challenge results for mechanical segments
-        if segment_type == "mechanical":
-            outcome_data["ChallengeResults"] = active_segment.get("ChallengeResults", [])
-            # Add combat state if present
-            if active_segment.get("CombatState"):
-                outcome_data["CombatState"] = active_segment.get("CombatState", {})
+        outcome_data["ChallengeResults"] = active_segment.get("ChallengeResults", [])
+        # Add combat state if present
+        if active_segment.get("CombatState"):
+            outcome_data["CombatState"] = active_segment.get("CombatState", {})
 
         # Get next segment for non-terminal outcomes
         if outcome not in ["death", "failure"]:
             outcome_data["NextSegmentID"] = segment.get("NextSegmentID")
+
+    elif segment_type == "rest":
+        # Rest segments have simple completion
+        outcome_data["Outcome"] = "normal"
+        outcome_data["Narrative"] = "You have rested and recovered."
+        outcome_data["Effects"] = {}
+        outcome_data["NextSegmentID"] = segment.get("NextSegmentID")
+
+    else:
+        # Unknown segment type
+        logger.warning(f"Unknown segment type: {segment_type}")
+        outcome_data["Outcome"] = "normal"
+        outcome_data["Narrative"] = ""
+        outcome_data["Effects"] = {}
 
     logger.info(
         "Segment outcome retrieved successfully",

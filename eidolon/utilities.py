@@ -9,6 +9,7 @@ from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.responses import create_response, error_response, unauthorized_response
+from eidolon.responses import error_response_pascal
 
 logger = get_logger(__name__)
 
@@ -140,8 +141,6 @@ def handle_lambda_error_pascal(err: Exception, context: object, event: dict, cus
     )
     logger.info("Lambda response", extra={"status_code": 500})
 
-    from eidolon.responses import error_response_pascal
-
     return cors_handler.add_cors_headers(error_response_pascal("Internal server error", status_code=500), event)
 
 
@@ -179,7 +178,7 @@ def build_lambda_response_pascal(status_code: int, body: dict, event: dict) -> d
 
     # If it's an error response with lowercase "error" key, convert to PascalCase
     if "error" in body and status_code >= 400:
-        from eidolon.responses import error_response_pascal
+        
 
         error_msg = body.get("error", "")
         # Remove the error key and treat rest as details

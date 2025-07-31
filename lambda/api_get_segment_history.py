@@ -7,11 +7,13 @@ Lambda function to retrieve segment history for a character.
 Returns completed segment results from the character's story history.
 """
 
+from botocore.exceptions import ClientError
+
 from eidolon.character import get_character, validate_character_ownership
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
-from eidolon.story import get_story_history
 from eidolon.utilities import (
     build_lambda_response_pascal,
     handle_lambda_error_pascal,
@@ -60,34 +62,57 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
             "Segments": [],
         }
 
-    # Get story history
+    # Query completed segments from ActiveSegments table
+    # This gives us the full segment data including ClientEvents, CharacterUpdates, etc.
     try:
-        history = get_story_history(character_id, story_id)
-    except RuntimeError as err:
+        segments = dynamo.query(
+            TableName.ACTIVE_SEGMENTS,
+            IndexName="CharacterID-index",
+            KeyConditionExpression="CharacterID = :cid",
+            FilterExpression="StoryID = :sid AND #status IN (:completed, :processed)",
+            ExpressionAttributeNames={"#status": "Status"},
+            ExpressionAttributeValues={
+                ":cid": character_id,
+                ":sid": story_id,
+                ":completed": "completed",
+                ":processed": "processed",
+            },
+        )
+    except ClientError as err:
         logger.error(
-            "Failed to get story history",
+            "Failed to query active segments",
             extra={
                 "character_id": character_id,
                 "story_id": story_id,
                 "error": str(err),
             },
+            exc_info=True,
         )
-        raise
+        raise RuntimeError(f"Failed to query active segments: {str(err)}")
 
-    # Extract segment history
-    segment_history = history.get("SegmentHistory", [])
-
-    # Format segments for response
+    # Format segments for response with all the data Flutter expects
     formatted_segments = []
-    for segment in segment_history:
+    for segment in (segments or []):
         formatted_segment = {
+            "ActiveSegmentID": segment.get("ActiveSegmentID"),
             "SegmentID": segment.get("SegmentID"),
             "SegmentType": segment.get("SegmentType"),
-            "CompletedAt": segment.get("CompletedAt"),
-            "Outcome": segment.get("Outcome"),
+            "Status": segment.get("Status"),
+            "ProcessingStatus": segment.get("ProcessingStatus"),
+            "StartTime": segment.get("StartTime"),
+            "EndTime": segment.get("EndTime"),
         }
 
-        # Add optional fields if present
+        # Add enriched data that Flutter needs
+        if segment.get("Outcome"):
+            formatted_segment["Outcome"] = segment.get("Outcome")
+
+        if segment.get("ClientEvents"):
+            formatted_segment["ClientEvents"] = segment.get("ClientEvents")
+
+        if segment.get("CharacterUpdates"):
+            formatted_segment["CharacterUpdates"] = segment.get("CharacterUpdates")
+
         if segment.get("Decision"):
             formatted_segment["Decision"] = segment.get("Decision")
 
@@ -103,10 +128,13 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
         if segment.get("CombatState"):
             formatted_segment["CombatState"] = segment.get("CombatState")
 
+        if segment.get("NextSegmentID"):
+            formatted_segment["NextSegmentID"] = segment.get("NextSegmentID")
+
         formatted_segments.append(formatted_segment)
 
-    # Sort by completion time, newest first
-    formatted_segments.sort(key=lambda x: x.get("CompletedAt", ""), reverse=True)
+    # Sort by start time, newest first
+    formatted_segments.sort(key=lambda x: x.get("StartTime", 0), reverse=True)
 
     response = {
         "CharacterID": character_id,

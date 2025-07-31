@@ -16,7 +16,7 @@ The incremental module serves as:
 ### Story System
 - **Twine-Authored Content**: Visual narrative design with branching paths
 - **Three Story Types**: One-time (unique rewards), daily (reset at midnight UTC), and repeatable
-- **Prerequisite System**: Stories unlock based on skills, items, or room locations
+- **Prerequisite System**: Stories unlock based on skills and items
 - **Timer-Based Progression**: Segments advance automatically (1 minute to 24 hours)
 
 ### Segment Types

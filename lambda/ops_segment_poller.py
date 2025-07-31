@@ -10,7 +10,7 @@ Handles different segment types appropriately and manages polling state.
 
 import time
 
-from eidolon.environment import MAX_SEGMENTS_PER_POLL, STORY_ADVANCEMENT_QUEUE_URL
+from eidolon.environment import MAX_SEGMENTS_PER_POLL, STORY_ADVANCEMENT_QUEUE_URL, SEGMENT_QUEUE_URL
 from eidolon.logger import get_logger
 from eidolon.polling import (
     disable_polling_infrastructure,
@@ -60,41 +60,184 @@ def poll_and_process_segments_business_logic() -> dict:
         },
     )
 
-    # Count segment types for logging
+    # Categorize segments by their processing needs
+    segments_for_advancement = []  # Recently completed (within 15 seconds)
+    stuck_mechanical_segments = []  # Mechanical segments stuck >15 minutes
+    exhausted_segments = []  # Segments past their time window
+    
     mechanical_count = 0
     simple_count = 0
+    stuck_count = 0
+    exhausted_count = 0
 
     for segment in completed_segments:
         segment_type = segment.get("SegmentType", "").lower()
         end_time = int(segment.get("EndTime", 0))
-        is_stuck = (current_time - end_time) > 900  # 15 minutes
-
-        if is_stuck:
-            logger.warning(
-                "Found stuck segment",
+        start_time = int(segment.get("StartTime", 0))
+        time_since_end = current_time - end_time
+        processing_status = segment.get("ProcessingStatus", "")
+        
+        # Skip segments already processed - they're waiting for advancement
+        if processing_status == "processed":
+            segments_for_advancement.append(segment)
+            logger.debug(
+                "Segment already processed, sending to advancement",
                 extra={
                     "active_segment_id": segment.get("ActiveSegmentID"),
                     "segment_type": segment_type,
-                    "end_time": end_time,
-                    "overdue_seconds": current_time - end_time,
+                }
+            )
+        # Check if mechanical segment is stuck (>15 minutes in processing state)
+        # Only retry if there's at least 15 minutes remaining before end time
+        elif is_mechanical_segment(segment_type) and processing_status == "processing":
+            # Calculate how long it's been processing
+            time_in_processing = current_time - start_time
+            time_remaining = end_time - current_time
+            
+            if time_in_processing > 900 and time_remaining > 900:
+                # Been processing >15 min AND >15 min remaining - retry it
+                stuck_mechanical_segments.append(segment)
+                stuck_count += 1
+                logger.warning(
+                    "Found stuck mechanical segment with time to retry",
+                    extra={
+                        "active_segment_id": segment.get("ActiveSegmentID"),
+                        "minutes_processing": time_in_processing / 60,
+                        "minutes_remaining": time_remaining / 60,
+                    },
+                )
+            elif time_since_end > 0:
+                # Past end time while still processing - mark as exceptional
+                exhausted_segments.append(segment)
+                exhausted_count += 1
+                logger.warning(
+                    "Found stuck segment past end time - marking as exceptional",
+                    extra={
+                        "active_segment_id": segment.get("ActiveSegmentID"),
+                        "segment_type": segment_type,
+                        "seconds_past_end": time_since_end,
+                    },
+                )
+            # Otherwise, it's still processing within normal timeframe - let it continue
+        # Any segment past its end time that isn't processed should be marked exceptional
+        elif time_since_end > 0 and processing_status not in ["processed", "completed"]:
+            exhausted_segments.append(segment)
+            exhausted_count += 1
+            logger.warning(
+                "Found exhausted segment - marking as exceptional to protect player from system failure",
+                extra={
+                    "active_segment_id": segment.get("ActiveSegmentID"),
+                    "segment_type": segment_type,
+                    "processing_status": processing_status,
+                    "seconds_past_end": time_since_end,
                 },
             )
+        # Normal segments within their time window
+        else:
+            segments_for_advancement.append(segment)
 
         if is_mechanical_segment(segment_type):
             mechanical_count += 1
         else:
             simple_count += 1
 
-    # Queue ALL segments to story advancement queue
+    # Process each category
     segments_queued = 0
     segments_failed = 0
+    segments_cleaned = 0
+    segments_marked_done = 0
 
-    if completed_segments:
-        # Prepare messages for SQS
+    # 1. Send recently completed segments to advancement queue
+    if segments_for_advancement:
         messages = []
-        for segment in completed_segments:
-            messages.append(
-                {
+        for segment in segments_for_advancement:
+            messages.append({
+                "body": {
+                    "ActiveSegmentID": segment.get("ActiveSegmentID"),
+                    "CharacterID": segment.get("CharacterID"),
+                    "StoryID": segment.get("StoryID"),
+                    "SegmentID": segment.get("SegmentID"),
+                    "SegmentType": segment.get("SegmentType"),
+                }
+            })
+
+        if not STORY_ADVANCEMENT_QUEUE_URL:
+            raise RuntimeError("STORY_ADVANCEMENT_QUEUE_URL environment variable not set")
+
+        result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, messages)
+        segments_queued += result.get("successful", 0)
+        segments_failed += result.get("failed", 0)
+
+    # 2. Clean and retry stuck mechanical segments
+    if stuck_mechanical_segments:
+        if not SEGMENT_QUEUE_URL:
+            logger.error("SEGMENT_QUEUE_URL not set, cannot retry stuck segments")
+        else:
+            messages = []
+            for segment in stuck_mechanical_segments:
+                # Clear processing flag by updating segment
+                try:
+                    from eidolon.dynamo import TableName, dynamo
+                    dynamo.update_item(
+                        TableName.ACTIVE_SEGMENTS,
+                        Key={"ActiveSegmentID": segment.get("ActiveSegmentID")},
+                        UpdateExpression="SET ProcessingStatus = :status",
+                        ExpressionAttributeValues={":status": "pending"}
+                    )
+                    segments_cleaned += 1
+                    
+                    # Queue for reprocessing
+                    messages.append({
+                        "body": {
+                            "ActiveSegmentID": segment.get("ActiveSegmentID"),
+                            "CharacterID": segment.get("CharacterID"),
+                            "StoryID": segment.get("StoryID"),
+                            "SegmentID": segment.get("SegmentID"),
+                            "SegmentType": segment.get("SegmentType"),
+                        }
+                    })
+                except Exception as err:
+                    logger.error(
+                        "Failed to clean stuck segment",
+                        extra={
+                            "active_segment_id": segment.get("ActiveSegmentID"),
+                            "error": str(err)
+                        }
+                    )
+
+            if messages:
+                result = send_message_batch(SEGMENT_QUEUE_URL, messages)
+                logger.info(
+                    "Retried stuck mechanical segments",
+                    extra={
+                        "count": len(messages),
+                        "successful": result.get("successful", 0),
+                        "failed": result.get("failed", 0)
+                    }
+                )
+
+    # 3. Mark exhausted segments as done and send to advancement
+    if exhausted_segments:
+        from eidolon.dynamo import TableName, dynamo
+        messages = []
+        for segment in exhausted_segments:
+            try:
+                # Mark as completed with exceptional outcome to protect player from system failures
+                # If our processing failed repeatedly, give the player the best possible outcome
+                dynamo.update_item(
+                    TableName.ACTIVE_SEGMENTS,
+                    Key={"ActiveSegmentID": segment.get("ActiveSegmentID")},
+                    UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome",
+                    ExpressionAttributeNames={"#outcome": "Outcome"},
+                    ExpressionAttributeValues={
+                        ":status": "completed",
+                        ":outcome": "exceptional"
+                    }
+                )
+                segments_marked_done += 1
+                
+                # Queue for advancement to complete the story flow
+                messages.append({
                     "body": {
                         "ActiveSegmentID": segment.get("ActiveSegmentID"),
                         "CharacterID": segment.get("CharacterID"),
@@ -102,16 +245,20 @@ def poll_and_process_segments_business_logic() -> dict:
                         "SegmentID": segment.get("SegmentID"),
                         "SegmentType": segment.get("SegmentType"),
                     }
-                }
-            )
+                })
+            except Exception as err:
+                logger.error(
+                    "Failed to mark exhausted segment as done",
+                    extra={
+                        "active_segment_id": segment.get("ActiveSegmentID"),
+                        "error": str(err)
+                    }
+                )
 
-        # Send to story advancement queue
-        if not STORY_ADVANCEMENT_QUEUE_URL:
-            raise RuntimeError("STORY_ADVANCEMENT_QUEUE_URL environment variable not set")
-
-        result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, messages)
-        segments_queued = result.get("successful", 0)
-        segments_failed = result.get("failed", 0)
+        if messages:
+            result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, messages)
+            segments_queued += result.get("successful", 0)
+            segments_failed += result.get("failed", 0)
 
     # Update SSM parameter and EventBridge rule based on state
     if poller_state == "stop":
@@ -137,6 +284,10 @@ def poll_and_process_segments_business_logic() -> dict:
             "simple_count": simple_count,
             "segments_queued": segments_queued,
             "segments_failed": segments_failed,
+            "stuck_count": stuck_count,
+            "segments_cleaned": segments_cleaned,
+            "exhausted_count": exhausted_count,
+            "segments_marked_done": segments_marked_done,
             "current_state": poller_state,
         },
     )
@@ -147,6 +298,10 @@ def poll_and_process_segments_business_logic() -> dict:
         "SimpleCount": simple_count,
         "SegmentsQueued": segments_queued,
         "SegmentsFailed": segments_failed,
+        "StuckCount": stuck_count,
+        "SegmentsCleaned": segments_cleaned,
+        "ExhaustedCount": exhausted_count,
+        "SegmentsMarkedDone": segments_marked_done,
         "PollerState": poller_state,
     }
 

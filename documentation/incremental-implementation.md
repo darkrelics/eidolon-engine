@@ -523,6 +523,8 @@ def calculate_mechanical_outcome(challenge_results):
 
 Character updates are applied atomically using DynamoDB update expressions. This function builds dynamic update statements based on the specific changes needed, handling XP additions, wound applications, and room changes in a single database operation for consistency and performance. These updates are accumulated from both skill challenges and combat encounters within mechanical segments.
 
+**Important XP Multiplier Constraint**: The BaseXPMultiplier field in story metadata must default to 0.5 and must never equal or exceed 1.0. This ensures incremental gameplay provides experience at a slower rate than active MUD play, maintaining game balance between the two modes.
+
 ```python
 def apply_character_updates(character_id, updates):
     """Apply accumulated XP and other updates to character."""
@@ -1190,8 +1192,7 @@ class TestStoryProcessing:
             'FirstSegmentID': 'seg-001',
             'Prerequisites': {
                 'minSkills': {'survival': 2},
-                'requiredItems': [],
-                'requiredRooms': []
+                'requiredItems': []
             }
         }
     

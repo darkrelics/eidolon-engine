@@ -152,7 +152,13 @@ def lambda_handler(event: dict, context: object) -> dict:
             "Character deletion validation failed",
             extra={"character_id": character_id, "player_id": player_id, "error": str(err)},
         )
-        return build_lambda_response_pascal(404, {"Error": "Character not found or access denied"}, event)
+        error_msg = str(err).lower()
+        if "not found" in error_msg:
+            return build_lambda_response_pascal(404, {"Error": "Character not found"}, event)
+        elif "not owned" in error_msg or "ownership" in error_msg:
+            return build_lambda_response_pascal(403, {"Error": "Access denied"}, event)
+        else:
+            return build_lambda_response_pascal(400, {"Error": str(err)}, event)
     except RuntimeError as err:
         # Database or deletion failures
         logger.error(

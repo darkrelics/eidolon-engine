@@ -82,14 +82,8 @@ def get_character_business_logic(character_id: str, player_id: str) -> dict:
         )
         # Continue without active segment data - not critical for response
 
-    # Normalize attribute and skill keys to lowercase for consistency
-    attributes = character.get("Attributes")
-    if attributes:
-        character["Attributes"] = {k.lower(): v for k, v in attributes.items()}
-
-    skills = character.get("Skills")
-    if skills:
-        character["Skills"] = {k.lower(): v for k, v in skills.items()}
+    # Note: Attributes and skills maintain their original casing from the database
+    # The Flutter client handles any casing differences flexibly
 
     # Enrich inventory with item details
     inventory = character.get("Inventory")

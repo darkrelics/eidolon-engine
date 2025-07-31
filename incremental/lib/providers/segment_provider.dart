@@ -74,9 +74,22 @@ class SegmentProvider extends ChangeNotifier {
   void _startPollingForProcessing(String characterId) {
     _pollingTimer?.cancel();
     
+    int retryCount = 0;
+    const maxRetries = 5;
+    const maxPollingDuration = Duration(minutes: 5);
+    final startTime = DateTime.now();
+    
     // Poll every 2 seconds for processed status
     _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
       try {
+        // Check if we've exceeded max polling duration
+        if (DateTime.now().difference(startTime) > maxPollingDuration) {
+          timer.cancel();
+          _error = 'Processing timeout - please refresh';
+          notifyListeners();
+          return;
+        }
+        
         // Check segment status
         final statusData = await _apiService.getSegmentStatus(
           characterId: characterId,
@@ -86,12 +99,21 @@ class SegmentProvider extends ChangeNotifier {
         
         if (processingStatus == 'processed') {
           timer.cancel();
+          retryCount = 0; // Reset retry count on success
           
           // Fetch the updated segment with results
           await loadCurrentStory(characterId);
         }
       } catch (e) {
         debugPrint('Polling error: $e');
+        retryCount++;
+        
+        // If we've had too many consecutive errors, stop polling
+        if (retryCount >= maxRetries) {
+          timer.cancel();
+          _error = 'Connection error - please check your network and refresh';
+          notifyListeners();
+        }
       }
     });
   }
@@ -130,6 +152,7 @@ class SegmentProvider extends ChangeNotifier {
   Future<void> completeSegment(String characterId) async {
     try {
       _isLoading = true;
+      _error = null;
       notifyListeners();
       
       // Advance to next segment
@@ -139,7 +162,23 @@ class SegmentProvider extends ChangeNotifier {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
+      
+      // Retry once after a delay
+      await Future.delayed(const Duration(seconds: 2));
+      try {
+        _error = null;
+        await loadCurrentStory(characterId);
+      } catch (retryError) {
+        _error = 'Failed to advance segment: $retryError';
+        notifyListeners();
+      }
     }
+  }
+  
+  /// Manually refresh the current segment
+  Future<void> refresh(String characterId) async {
+    _pollingTimer?.cancel();
+    await loadCurrentStory(characterId);
   }
   
   @override

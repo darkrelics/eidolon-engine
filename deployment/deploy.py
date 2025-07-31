@@ -1447,7 +1447,6 @@ class IncrementalDeploymentOrchestrator:
             # Wait a moment for distribution update to propagate if we just updated it
             if needs_distribution_update:
                 print("    Waiting for distribution update to propagate...")
-                import time
 
                 time.sleep(5)
 

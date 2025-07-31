@@ -11,6 +11,7 @@ from eidolon.character import get_character, reset_character_game_mode, validate
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
+from eidolon.segment import delete_active_segment, record_abandoned_segment_history
 from eidolon.story import add_story_to_abandoned_list, get_active_story_segment, mark_segment_as_abandoned, record_story_abandonment
 from eidolon.utilities import (
     build_lambda_response_pascal,
@@ -50,30 +51,59 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     active_segment_id = active_segment.get("ActiveSegmentID")
     story_id = active_segment.get("StoryID")
     story_title = active_segment.get("StoryTitle", "Unknown Story")
+    
+    if not active_segment_id or not story_id:
+        logger.error(
+            "Active segment missing required fields",
+            extra={"character_id": character_id, "has_segment_id": bool(active_segment_id), "has_story_id": bool(story_id)}
+        )
+        raise ValueError("Invalid active segment data")
 
+    # Reset character game mode first to immediately free the character
+    reset_character_game_mode(character_id)
+
+    # Add story to abandoned list
     try:
-        add_story_to_abandoned_list(character_id, story_id)  # type: ignore
+        add_story_to_abandoned_list(character_id, story_id)
     except (ValueError, RuntimeError) as err:
         logger.error(
             "Failed to add story to abandoned list but continuing",
             extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
         )
 
+    # Record story abandonment in story history
     try:
-        mark_segment_as_abandoned(active_segment_id)  # type: ignore
+        record_story_abandonment(character_id, story_id)
+    except (ValueError, RuntimeError) as err:
+        logger.error(
+            "Failed to update story history but continuing", extra={"character_id": character_id, "story_id": story_id, "error": str(err)}
+        )
+
+    # Mark segment as abandoned
+    try:
+        mark_segment_as_abandoned(active_segment_id)
     except (ValueError, RuntimeError) as err:
         logger.error(
             "Failed to mark segment as abandoned but continuing", extra={"active_segment_id": active_segment_id, "error": str(err)}
         )
 
+    # Record abandoned segment in history
     try:
-        record_story_abandonment(character_id, story_id)  # type: ignore
-    except (ValueError, RuntimeError) as err:
+        record_abandoned_segment_history(character_id, story_id, active_segment)
+    except RuntimeError as err:
         logger.error(
-            "Failed to update history but continuing", extra={"character_id": character_id, "story_id": story_id, "error": str(err)}
+            "Failed to record segment history but continuing",
+            extra={"character_id": character_id, "segment_id": active_segment.get("SegmentID"), "error": str(err)}
         )
-
-    reset_character_game_mode(character_id)
+    
+    # Delete the active segment after recording history
+    try:
+        delete_active_segment(active_segment_id)
+    except ValueError as err:
+        logger.error(
+            "Failed to delete active segment - invalid ID",
+            extra={"active_segment_id": active_segment_id, "error": str(err)}
+        )
 
     logger.info(
         "Story abandoned successfully",

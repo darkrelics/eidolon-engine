@@ -128,6 +128,30 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
         icon = Icons.psychology;
         iconColor = data['success'] == true ? Colors.green : Colors.orange;
         break;
+      case 'combat':
+        icon = Icons.shield;
+        iconColor = Colors.red;
+        break;
+      case 'combatAttack':
+        icon = Icons.sports_martial_arts;
+        iconColor = Colors.deepOrange;
+        break;
+      case 'combatDefense':
+        icon = Icons.shield_outlined;
+        iconColor = Colors.blue;
+        break;
+      case 'combatDamage':
+        icon = Icons.favorite;
+        iconColor = Colors.red;
+        break;
+      case 'combatVictory':
+        icon = Icons.emoji_events;
+        iconColor = Colors.amber;
+        break;
+      case 'combatDefeat':
+        icon = Icons.heart_broken;
+        iconColor = Colors.grey;
+        break;
       default:
         icon = Icons.info;
         iconColor = Colors.grey;
@@ -164,6 +188,10 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
             if (eventType == 'skillCheck' && data.isNotEmpty) ...[
               const SizedBox(height: 12),
               _buildSkillCheckDetails(data),
+            ],
+            if (eventType != null && eventType.startsWith('combat') && data.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildCombatDetails(eventType, data),
             ],
           ],
         ),
@@ -281,6 +309,134 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
             label: const Text('Continue'),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildCombatDetails(String eventType, Map<String, dynamic> data) {
+    final theme = Theme.of(context);
+    
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: theme.colorScheme.error.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (eventType == 'combatAttack') ...[
+            _buildCombatStat('Target', data['target'] as String? ?? 'Unknown'),
+            _buildCombatStat('Attack', data['attack'] as String? ?? 'Unknown'),
+            _buildCombatStat('Result', data['result'] as String? ?? 'Unknown'),
+            if (data['damage'] != null)
+              _buildCombatStat('Damage', '${data['damage']}'),
+          ] else if (eventType == 'combatDefense') ...[
+            _buildCombatStat('Attacker', data['attacker'] as String? ?? 'Unknown'),
+            _buildCombatStat('Defense', data['defense'] as String? ?? 'Unknown'),
+            _buildCombatStat('Result', data['result'] as String? ?? 'Unknown'),
+          ] else if (eventType == 'combatDamage') ...[
+            if (data['source'] != null)
+              _buildCombatStat('Source', data['source'] as String),
+            _buildCombatStat('Damage', '${data['amount'] ?? 0}'),
+            _buildCombatStat('Type', data['damageType'] as String? ?? 'Unknown'),
+            if (data['wounds'] != null && (data['wounds'] as List).isNotEmpty)
+              _buildWoundsList(data['wounds'] as List),
+          ] else if (eventType == 'combatVictory') ...[
+            if (data['opponent'] != null)
+              _buildCombatStat('Defeated', data['opponent'] as String),
+            if (data['experience'] != null)
+              _buildCombatStat('Experience', '+${data['experience']} XP'),
+            if (data['loot'] != null && (data['loot'] as List).isNotEmpty)
+              _buildLootList(data['loot'] as List),
+          ] else if (eventType == 'combatDefeat') ...[
+            if (data['opponent'] != null)
+              _buildCombatStat('Defeated by', data['opponent'] as String),
+            if (data['finalBlow'] != null)
+              _buildCombatStat('Final blow', data['finalBlow'] as String),
+          ] else ...[
+            // Generic combat event
+            ...data.entries.map((entry) => 
+              _buildCombatStat(
+                entry.key.replaceAll('_', ' ').split(' ')
+                  .map((word) => word.isNotEmpty ? word[0].toUpperCase() + word.substring(1) : '')
+                  .join(' '),
+                entry.value.toString(),
+              )
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCombatStat(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWoundsList(List wounds) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 4),
+        const Text(
+          'Wounds received:',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+        ),
+        ...wounds.map((wound) => Padding(
+          padding: const EdgeInsets.only(left: 12, top: 2),
+          child: Text(
+            '• ${wound['location'] ?? 'Unknown'} (${wound['damageType'] ?? 'Unknown'})',
+            style: const TextStyle(fontSize: 11),
+          ),
+        )),
+      ],
+    );
+  }
+
+  Widget _buildLootList(List loot) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 4),
+        const Text(
+          'Loot gained:',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+        ),
+        ...loot.map((item) => Padding(
+          padding: const EdgeInsets.only(left: 12, top: 2),
+          child: Text(
+            '• ${item['name'] ?? item.toString()}',
+            style: const TextStyle(fontSize: 11),
+          ),
+        )),
       ],
     );
   }

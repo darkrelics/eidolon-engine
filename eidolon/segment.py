@@ -8,7 +8,7 @@ decision, and rest segments.
 import math
 import random
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from uuid_extension import uuid7
 
@@ -16,12 +16,39 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
+from eidolon.character import heal_expired_wounds
 
 logger = get_logger(__name__)
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES = ["mechanical", "decision", "rest"]
 MECHANICAL_ONLY_TYPES = ["mechanical"]
+
+# Wound healing durations (matching MUD server)
+BASHING_HEAL_TIME = timedelta(minutes=15)
+LETHAL_HEAL_TIME = timedelta(hours=6)
+AGGRAVATED_HEAL_TIME = timedelta(days=7)
+
+
+def calculate_heal_time(damage_type: str) -> str:
+    """
+    Calculate when a wound will heal based on damage type.
+    
+    Args:
+        damage_type: Type of damage (bashing, lethal, aggravated)
+        
+    Returns:
+        ISO 8601 timestamp string for when the wound will heal
+    """
+    heal_times = {
+        "bashing": BASHING_HEAL_TIME,
+        "lethal": LETHAL_HEAL_TIME,
+        "aggravated": AGGRAVATED_HEAL_TIME,
+    }
+    
+    heal_delta = heal_times.get(damage_type.lower(), LETHAL_HEAL_TIME)
+    heal_at = datetime.now(timezone.utc) + heal_delta
+    return heal_at.isoformat()
 
 
 def validate_segment_type(segment_type: str) -> bool:
@@ -302,9 +329,11 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
 
             # Apply damage as wounds to opponent
             for _ in range(damage):
+                wound_type = "lethal" if damage_type == "critical" else "bashing"
                 opponent_wounds.append(
                     {
-                        "type": "lethal" if damage_type == "critical" else "bashing",
+                        "DamageType": wound_type,
+                        "HealAt": calculate_heal_time(wound_type),
                         "round": round_num + 1,
                     }
                 )
@@ -317,7 +346,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             }
 
             # Check if opponent is defeated
-            lethal_wounds = sum(1 for w in opponent_wounds if w.get("type") == "lethal")
+            lethal_wounds = sum(1 for w in opponent_wounds if w.get("DamageType") == "lethal")
             if lethal_wounds >= opponent_health or len(opponent_wounds) >= opponent_health * 2:
                 combat_log.append(round_results)
                 return "normal", {
@@ -326,6 +355,8 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
                     "opponentWounds": opponent_wounds,
                     "combatLog": combat_log,
                     "victor": "player",
+                    "opponentDefeated": True,
+                    "opponentId": opponent_id,
                 }
         else:
             round_results["playerAttack"] = {
@@ -351,9 +382,11 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
 
             # Apply damage as wounds to player
             for _ in range(damage):
+                wound_type = "lethal" if damage_type == "critical" else "bashing"
                 player_wounds.append(
                     {
-                        "type": "lethal" if damage_type == "critical" else "bashing",
+                        "DamageType": wound_type,
+                        "HealAt": calculate_heal_time(wound_type),
                         "round": round_num + 1,
                     }
                 )
@@ -366,7 +399,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             }
 
             # Check if player is defeated
-            lethal_wounds = sum(1 for w in player_wounds if w.get("type") == "lethal")
+            lethal_wounds = sum(1 for w in player_wounds if w.get("DamageType") == "lethal")
             total_wounds = len(player_wounds)
 
             if lethal_wounds >= 5:  # 5+ lethal wounds = death
@@ -406,14 +439,17 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         # Player dealt significantly more damage
         outcome = "normal"
         victor = "player"
+        opponent_defeated = True
     elif player_total_wounds > opponent_total_wounds * 2:
         # Opponent dealt significantly more damage
         outcome = "failure"
         victor = "opponent"
+        opponent_defeated = False
     else:
         # Close fight - minor success
         outcome = "minimal"
         victor = "draw"
+        opponent_defeated = opponent_total_wounds >= opponent_health
 
     return outcome, {
         "rounds": final_rounds,
@@ -421,6 +457,8 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         "opponentWounds": opponent_wounds,
         "combatLog": combat_log,
         "victor": victor,
+        "opponentDefeated": opponent_defeated,
+        "opponentId": opponent_id,
     }
 
 
@@ -543,61 +581,131 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
 
 def process_rest_segment(segment_def: dict, character: dict) -> tuple:
     """
-    Process a rest segment for healing wounds.
+    Process a rest segment.
 
-    Rest segments allow characters to heal wounds over time based on
-    the RestBenefit configuration in the segment definition.
+    Rest segments are simply time delays that allow natural wound healing
+    to occur via heal_expired_wounds() at the start of the next segment.
 
     Args:
         segment_def: Segment definition from Segments table
         character: Character data
 
     Returns:
-        Tuple of (outcome, healing_applied)
+        Tuple of (outcome, empty dict)
     """
-    rest_benefit = segment_def.get("RestBenefit", {})
-    wounds = character.get("Wounds", [])
-
-    if not wounds:
-        # No wounds to heal
-        logger.info(
-            "Rest segment: character has no wounds",
-            extra={"character_id": character.get("CharacterID")},
-        )
-        return "normal", {"healingApplied": {"bashingHealed": 0, "lethalHealed": 0}}
-
-    # Calculate healing based on rest benefit configuration
-    bashing_heal = rest_benefit.get("bashingHeal", 1)  # Default 1 bashing wound
-    lethal_heal = rest_benefit.get("lethalHeal", 0)  # Default 0 lethal wounds
-
-    # Count wounds by type
-    bashing_count = sum(1 for w in wounds if w.get("damageType") == "bashing")
-    lethal_count = sum(1 for w in wounds if w.get("damageType") == "lethal")
-
-    # Calculate actual healing (can't heal more than exists)
-    bashing_healed = min(bashing_heal, bashing_count)
-    lethal_healed = min(lethal_heal, lethal_count)
-
-    # Apply healing (this would normally update the character in the database)
-    # For now, we just calculate what would be healed
-    healing_applied = {
-        "bashingHealed": bashing_healed,
-        "lethalHealed": lethal_healed,
-        "totalWoundsBefore": len(wounds),
-        "totalWoundsAfter": len(wounds) - bashing_healed - lethal_healed,
-    }
-
     logger.info(
-        "Rest segment healing applied",
-        extra={
-            "character_id": character.get("CharacterID"),
-            "bashing_healed": bashing_healed,
-            "lethal_healed": lethal_healed,
-        },
+        "Rest segment completed",
+        extra={"character_id": character.get("CharacterID")},
     )
+    
+    # Rest segments always have normal outcome
+    # Healing happens automatically via heal_expired_wounds() at segment start
+    return "normal", {}
 
-    # Rest segments always succeed
-    return "normal", {"healingApplied": healing_applied}
+
+def extract_character_updates_from_results(results: dict) -> dict:
+    """
+    Extract character updates from segment processing results.
+    
+    Args:
+        results: Results from segment processing
+        
+    Returns:
+        Dict containing character updates (wounds, skills, etc.)
+    """
+    updates = {}
+    
+    # Extract wounds from combat
+    if "combatState" in results:
+        combat_state = results["combatState"]
+        player_wounds = combat_state.get("playerWounds", [])
+        if player_wounds:
+            updates["Wounds"] = player_wounds
+    
+    # Extract skill/attribute XP from challenges
+    if "challengeResults" in results:
+        skill_xp = {}
+        attribute_xp = {}
+        
+        for challenge in results["challengeResults"]:
+            if challenge.get("passed"):
+                # Award XP for passed challenges
+                skill = challenge.get("skill")
+                attribute = challenge.get("attribute")
+                
+                if skill:
+                    skill_xp[skill] = skill_xp.get(skill, 0) + 0.1
+                if attribute:
+                    attribute_xp[attribute] = attribute_xp.get(attribute, 0) + 0.05
+        
+        if skill_xp:
+            updates["SkillXP"] = skill_xp
+        if attribute_xp:
+            updates["AttributeXP"] = attribute_xp
+    
+    return updates
+
+
+def generate_combat_client_events(combat_state: dict) -> list:
+    """
+    Generate client events from combat state for visualization.
+    
+    Args:
+        combat_state: Combat state containing log and results
+        
+    Returns:
+        List of client events for UI animation
+    """
+    events = []
+    
+    # Process combat log rounds
+    for round_data in combat_state.get("combatLog", []):
+        round_num = round_data.get("round", 0)
+        
+        # Player attack event
+        player_attack = round_data.get("playerAttack")
+        if player_attack:
+            event = {
+                "type": "playerAttack",
+                "round": round_num,
+                "hit": player_attack.get("hit", False),
+                "sigma": player_attack.get("sigma", 0)
+            }
+            
+            if player_attack.get("hit"):
+                event["damage"] = player_attack.get("damage", 0)
+                event["damageType"] = player_attack.get("damageType", "normal")
+            
+            events.append(event)
+        
+        # Opponent attack event
+        opponent_attack = round_data.get("opponentAttack")
+        if opponent_attack:
+            event = {
+                "type": "opponentAttack",
+                "round": round_num,
+                "hit": opponent_attack.get("hit", False),
+                "sigma": opponent_attack.get("sigma", 0)
+            }
+            
+            if opponent_attack.get("hit"):
+                event["damage"] = opponent_attack.get("damage", 0)
+                event["damageType"] = opponent_attack.get("damageType", "normal")
+            
+            events.append(event)
+    
+    # Combat end event
+    victor = combat_state.get("victor")
+    if victor:
+        events.append({
+            "type": "combatEnd",
+            "victor": victor,
+            "totalRounds": combat_state.get("rounds", 0),
+            "playerWounds": len(combat_state.get("playerWounds", [])),
+            "opponentWounds": len(combat_state.get("opponentWounds", []))
+        })
+    
+    return events
 
 
 def update_active_segment_outcome(active_segment_id: str, outcome: str, results: dict) -> None:
@@ -609,17 +717,30 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         outcome: Outcome type
         results: Challenge or combat results
     """
-    update_expression = "SET #status = :status, #outcome = :outcome"
+    update_expression = "SET #status = :status, #outcome = :outcome, ProcessingStatus = :proc_status"
     expression_names = {"#status": "Status", "#outcome": "Outcome"}
-    expression_values = {":status": "completed", ":outcome": outcome}
+    expression_values = {":status": "completed", ":outcome": outcome, ":proc_status": "processed"}
 
     # Add results based on segment type
     if "challengeResults" in results:
         update_expression += ", ChallengeResults = :results"
         expression_values[":results"] = results["challengeResults"]
-    elif "combatState" in results:
+    if "combatState" in results:
         update_expression += ", CombatState = :state"
         expression_values[":state"] = results["combatState"]
+    
+    # Extract and add character updates
+    character_updates = extract_character_updates_from_results(results)
+    if character_updates:
+        update_expression += ", CharacterUpdates = :updates"
+        expression_values[":updates"] = character_updates # type: ignore
+    
+    # Generate and add client events for combat
+    if "combatState" in results:
+        client_events = generate_combat_client_events(results["combatState"])
+        if client_events:
+            update_expression += ", ClientEvents = :events"
+            expression_values[":events"] = client_events # type: ignore
 
     try:
         dynamo.update_item(
@@ -641,42 +762,6 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         )
         raise RuntimeError(f"Failed to update segment outcome: {str(err)}")
 
-
-def update_history_segment(character_id: str, story_id: str, segment_data: dict) -> None:
-    """
-    Add segment completion to history.
-
-    Args:
-        character_id: Character UUID
-        story_id: Story UUID
-        segment_data: Data about completed segment
-    """
-    try:
-        # Get existing history
-        history = dynamo.get_item(TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id})
-
-        if history:
-            segment_history = history.get("SegmentHistory", [])
-            segment_history.append(segment_data)
-
-            dynamo.update_item(
-                TableName.HISTORY,
-                Key={"CharacterID": character_id, "StoryID": story_id},
-                UpdateExpression="SET SegmentHistory = :history",
-                ExpressionAttributeValues={":history": segment_history},
-            )
-    except ClientError as err:
-        logger.error(
-            "Failed to update history",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to update history: {str(err)}")
 
 
 def get_next_segment_and_create(
@@ -762,6 +847,21 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
     Returns:
         Active segment ID
     """
+    # Heal any expired wounds before creating new segment
+    try:
+        heal_result = heal_expired_wounds(character_id)
+        if heal_result.get("healed_count", 0) > 0:
+            logger.info(
+                "Healed wounds before creating next segment",
+                extra={"character_id": character_id, "healed_count": heal_result["healed_count"]}
+            )
+    except Exception as err:
+        logger.warning(
+            "Failed to heal wounds before segment creation",
+            extra={"character_id": character_id, "error": str(err)}
+        )
+        # Non-critical - continue with segment creation
+    
     segment_id = segment.get("SegmentID")
     segment_type = segment.get("SegmentType", "mechanical")
     duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
@@ -771,9 +871,6 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
 
     # Generate UUIDv7 for time-based ordering
     active_segment_id = str(uuid7())
-
-    # Create TTL for auto-cleanup (24 hours after end time)
-    ttl = end_time + 86400
 
     active_segment = {
         "ActiveSegmentID": active_segment_id,
@@ -786,7 +883,6 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         "StartTime": current_time,
         "EndTime": end_time,
         "Status": "active",
-        "TTL": ttl,
     }
 
     # Add type-specific fields
@@ -825,52 +921,45 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
 
 def complete_story(character_id: str, story_id: str, outcome: str) -> None:
     """
-    Complete the story and update character state.
+    Complete the story, apply rewards, and update character state.
 
     Args:
         character_id: Character UUID
         story_id: Story UUID
         outcome: Final outcome
     """
+    from eidolon.story import (
+        complete_story_for_character,
+        calculate_story_rewards,
+        apply_story_rewards,
+        get_story_metadata,
+        get_story_history,
+    )
+    
+    # Complete the story and clean up character state
+    complete_story_for_character(character_id, story_id, outcome)
+    
+    # Get story metadata for reward calculation
     try:
-        # Update character GameMode back to None
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression="SET GameMode = :none",
-            ExpressionAttributeValues={":none": "None"},
-        )
-    except ClientError as err:
+        story_metadata = get_story_metadata(story_id)
+        history = get_story_history(character_id, story_id)
+        
+        # Count completed segments from history
+        segments_completed = len(history.get("SegmentHistory", []))
+        
+        # Calculate and apply rewards
+        rewards = calculate_story_rewards(story_metadata, outcome, segments_completed)
+        if rewards.get("xp", 0) > 0 or rewards.get("items") or rewards.get("currency", 0) > 0:
+            apply_story_rewards(character_id, rewards)
+            
+    except Exception as err:
         logger.error(
-            "Failed to update character GameMode",
-            extra={
-                "character_id": character_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to update character GameMode: {str(err)}")
-
-    try:
-        # Update history with completion
-        dynamo.update_item(
-            TableName.HISTORY,
-            Key={"CharacterID": character_id, "StoryID": story_id},
-            UpdateExpression="SET FinishedAt = :finished, FinalOutcome = :outcome",
-            ExpressionAttributeValues={
-                ":finished": datetime.now(timezone.utc).isoformat(),
-                ":outcome": outcome,
-            },
-        )
-    except ClientError as err:
-        logger.error(
-            "Failed to update history completion",
+            "Failed to apply story rewards",
             extra={
                 "character_id": character_id,
                 "story_id": story_id,
+                "outcome": outcome,
                 "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
             exc_info=True,
         )
@@ -980,18 +1069,64 @@ def process_segment_completely(
         logger.error("Unknown segment type", extra={"segment_type": segment_type})
         outcome = "failure"
 
+    # Apply combat rewards if opponent was defeated
+    if results.get("combatState", {}).get("opponentDefeated"):
+        from eidolon.story import apply_combat_rewards
+        opponent_id = results["combatState"].get("opponentId")
+        if opponent_id:
+            try:
+                opponent_data = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+                if opponent_data:
+                    apply_combat_rewards(character_id, opponent_data)
+            except Exception as err:
+                logger.error(
+                    "Failed to apply combat rewards",
+                    extra={
+                        "character_id": character_id,
+                        "opponent_id": opponent_id,
+                        "error": str(err),
+                    },
+                    exc_info=True,
+                )
+    
+    # Apply story outcome effects (room changes, item rewards)
+    if outcome in ["death", "failure", "minimal", "normal", "exceptional"]:
+        outcome_results = segment_def.get("Results", {}).get(outcome, {})
+        outcome_effects = outcome_results.get("effects", {})
+        if outcome_effects:
+            from eidolon.story import apply_story_outcome_effects
+            try:
+                apply_story_outcome_effects(character_id, outcome_effects)
+            except Exception as err:
+                logger.error(
+                    "Failed to apply outcome effects",
+                    extra={
+                        "character_id": character_id,
+                        "segment_id": segment_id,
+                        "outcome": outcome,
+                        "error": str(err),
+                    },
+                    exc_info=True,
+                )
+    
     # Update active segment with outcome
     update_active_segment_outcome(active_segment_id, outcome, results)
 
-    # Update history
-    segment_history_data = {
-        "SegmentID": segment_id,
-        "SegmentType": segment_type,
-        "Outcome": outcome,
-        "CompletedAt": datetime.now(timezone.utc).isoformat(),
-        **results,
-    }
-    update_history_segment(character_id, story_id, segment_history_data)
+    # Add segment to story history
+    from eidolon.story import add_segment_to_history
+    try:
+        add_segment_to_history(character_id, story_id, segment_id, outcome)
+    except Exception as err:
+        logger.error(
+            "Failed to add segment to history",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "segment_id": segment_id,
+                "error": str(err),
+            },
+            exc_info=True,
+        )
 
     # Determine next segment or complete story
     next_active_segment_id = get_next_segment_and_create(character_id, story_id, segment_def, active_segment, outcome)
@@ -1083,6 +1218,369 @@ def check_active_segments_exist() -> bool:
         raise RuntimeError(f"Failed to scan active segments: {str(err)}")
 
 
+def delete_active_segment(active_segment_id: str) -> None:
+    """
+    Delete an active segment from the database.
+    
+    Args:
+        active_segment_id: Active segment UUID to delete
+        
+    Raises:
+        ValueError: If active_segment_id is empty
+        RuntimeError: If database operation fails (non-critical)
+    """
+    if not active_segment_id:
+        raise ValueError("Active segment ID cannot be empty")
+        
+    try:
+        dynamo.delete_item(
+            TableName.ACTIVE_SEGMENTS,
+            {"ActiveSegmentID": active_segment_id}
+        )
+        logger.info(
+            "Deleted active segment",
+            extra={"active_segment_id": active_segment_id}
+        )
+    except ClientError as err:
+        # Log but don't raise - deletion failure is non-critical
+        logger.warning(
+            "Failed to delete active segment",
+            extra={
+                "active_segment_id": active_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            }
+        )
+
+
+def record_abandoned_segment_history(character_id: str, story_id: str, active_segment: dict) -> None:
+    """
+    Record abandoned segment in history table.
+    
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID  
+        active_segment: Active segment data
+        
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    try:
+        history_entry = {
+            "CharacterID": character_id,
+            "ActiveSegmentID": active_segment.get("ActiveSegmentID"),
+            "PlayerID": active_segment.get("PlayerID"),
+            "StoryID": story_id,
+            "StoryTitle": active_segment.get("StoryTitle"),
+            "SegmentID": active_segment.get("SegmentID"),
+            "SegmentType": active_segment.get("SegmentType"),
+            "StartTime": active_segment.get("StartTime"),
+            "EndTime": active_segment.get("EndTime"),
+            "ProcessedAt": active_segment.get("ProcessedAt"),
+            "CompletedAt": datetime.now(timezone.utc).isoformat(),
+            "Outcome": "abandoned",
+            "ClientEvents": active_segment.get("ClientEvents", []),
+            "CharacterUpdates": {},
+            "SkillXPAwarded": {},
+            "AttributeXPAwarded": {},
+        }
+        
+        dynamo.put_item(TableName.SEGMENT_HISTORY, history_entry)
+        
+        logger.info(
+            "Recorded abandoned segment in history",
+            extra={"character_id": character_id, "segment_id": active_segment.get("SegmentID")}
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to record segment history",
+            extra={"character_id": character_id, "error": str(err)},
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to record segment history: {str(err)}")
+
+
+def update_character_active_segment(character_id: str, active_segment_id: str) -> None:
+    """
+    Update character's ActiveSegmentID field.
+    
+    Args:
+        character_id: Character UUID
+        active_segment_id: Active segment UUID to set
+        
+    Raises:
+        ValueError: If character_id or active_segment_id is empty
+        RuntimeError: If database update fails
+    """
+    if not character_id:
+        raise ValueError("Character ID cannot be empty")
+    if not active_segment_id:
+        raise ValueError("Active segment ID cannot be empty")
+        
+    try:
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET ActiveSegmentID = :segment_id",
+            ExpressionAttributeValues={
+                ":segment_id": active_segment_id
+            }
+        )
+        logger.info(
+            "Updated character active segment",
+            extra={
+                "character_id": character_id,
+                "active_segment_id": active_segment_id
+            }
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to update character active segment",
+            extra={
+                "character_id": character_id,
+                "active_segment_id": active_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to update character active segment: {str(err)}")
+
+
+def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: int = 900, time_remaining: int = 0) -> str:
+    """
+    Insert a rest segment into the story flow after the current segment.
+    
+    This function:
+    1. Checks if current segment has at least 30 seconds remaining
+    2. If not, attempts to insert after the next segment(s)
+    3. Creates a rest segment that points to the appropriate NextSegmentID
+    4. Updates the appropriate segment to point to the rest segment
+    
+    Args:
+        story_id: Story UUID
+        current_segment_id: Current segment UUID
+        rest_duration: Duration of rest segment in seconds (default 15 minutes)
+        time_remaining: Time remaining in current segment (seconds)
+        
+    Returns:
+        Rest segment ID
+        
+    Raises:
+        ValueError: If no suitable segment found or segments not found
+        RuntimeError: If database operations fail
+    """
+    MIN_TIME_REQUIRED = 30  # Minimum seconds needed to insert rest
+    
+    # Get current segment (A)
+    try:
+        current_segment = dynamo.get_item(
+            TableName.SEGMENTS,
+            {"StoryID": story_id, "SegmentID": current_segment_id}
+        )
+        if not current_segment:
+            raise ValueError(f"Current segment not found: {current_segment_id}")
+    except ClientError as err:
+        logger.error(
+            "Failed to get current segment",
+            extra={
+                "segment_id": current_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to get current segment: {str(err)}")
+    
+    # Check if current segment (A) has a next segment (B)
+    next_segment_id = current_segment.get("NextSegmentID")
+    if not next_segment_id:
+        # A is the last segment - early return
+        logger.warning(
+            "Cannot insert rest - current segment is the last in story",
+            extra={
+                "story_id": story_id,
+                "current_segment_id": current_segment_id
+            }
+        )
+        raise ValueError("Cannot insert rest segment - current segment is the last in the story")
+    
+    # Determine where to insert rest
+    if time_remaining >= MIN_TIME_REQUIRED:
+        # Enough time on A - insert between A and B
+        segment_to_update_id = current_segment_id
+        segment_to_update = current_segment
+        original_next_segment_id = next_segment_id
+        
+        logger.info(
+            "Inserting rest after current segment",
+            extra={
+                "current_segment_id": current_segment_id,
+                "time_remaining": time_remaining,
+                "rest_will_point_to": original_next_segment_id
+            }
+        )
+    else:
+        # Not enough time on A - check if we can insert between B and C
+        try:
+            next_segment = dynamo.get_item(
+                TableName.SEGMENTS,
+                {"StoryID": story_id, "SegmentID": next_segment_id}
+            )
+            if not next_segment:
+                raise ValueError(f"Next segment not found: {next_segment_id}")
+        except ClientError as err:
+            logger.error(
+                "Failed to get next segment",
+                extra={
+                    "segment_id": next_segment_id,
+                    "error": str(err),
+                    "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+                },
+                exc_info=True
+            )
+            raise RuntimeError(f"Failed to get next segment: {str(err)}")
+        
+        # Check if B has a next segment (C)
+        segment_c_id = next_segment.get("NextSegmentID")
+        if not segment_c_id:
+            # B is the last segment - early return
+            logger.warning(
+                "Cannot insert rest - insufficient time on current and next is last segment",
+                extra={
+                    "story_id": story_id,
+                    "current_segment_id": current_segment_id,
+                    "next_segment_id": next_segment_id,
+                    "time_remaining": time_remaining
+                }
+            )
+            raise ValueError("Cannot insert rest segment - insufficient time and next segment is the last in the story")
+        
+        # Insert between B and C
+        segment_to_update_id = next_segment_id
+        segment_to_update = next_segment
+        original_next_segment_id = segment_c_id
+        
+        logger.info(
+            "Inserting rest after next segment due to insufficient time",
+            extra={
+                "current_segment_id": current_segment_id,
+                "time_remaining": time_remaining,
+                "inserting_after": next_segment_id,
+                "rest_will_point_to": original_next_segment_id
+            }
+        )
+    
+    # Generate unique ID for rest segment
+    rest_segment_id = str(uuid7())
+    
+    # Create rest segment definition
+    rest_segment = {
+        "StoryID": story_id,
+        "SegmentID": rest_segment_id,
+        "SegmentType": "rest",
+        "ShortStatus": "Resting to heal wounds",
+        "DefaultStatus": "Resting to heal wounds",
+        "SegmentDuration": rest_duration,
+        "NextSegmentID": original_next_segment_id,
+    }
+    
+    try:
+        # Create the rest segment
+        dynamo.put_item(TableName.SEGMENTS, rest_segment)
+        
+        logger.info(
+            "Created rest segment",
+            extra={
+                "rest_segment_id": rest_segment_id,
+                "story_id": story_id,
+                "next_segment_id": original_next_segment_id
+            }
+        )
+        
+        # Update the appropriate segment to point to rest segment
+        dynamo.update_item(
+            TableName.SEGMENTS,
+            Key={"StoryID": story_id, "SegmentID": segment_to_update_id},
+            UpdateExpression="SET NextSegmentID = :rest_segment_id",
+            ExpressionAttributeValues={
+                ":rest_segment_id": rest_segment_id
+            }
+        )
+        
+        logger.info(
+            "Updated segment to point to rest",
+            extra={
+                "updated_segment_id": segment_to_update_id,
+                "new_next_segment_id": rest_segment_id
+            }
+        )
+        
+        return rest_segment_id
+        
+    except ClientError as err:
+        logger.error(
+            "Failed to insert rest segment",
+            extra={
+                "rest_segment_id": rest_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        # Attempt rollback
+        try:
+            dynamo.delete_item(
+                TableName.SEGMENTS,
+                {"StoryID": story_id, "SegmentID": rest_segment_id}
+            )
+            logger.info("Rolled back rest segment creation")
+        except Exception:
+            logger.warning("Failed to rollback rest segment")
+        
+        raise RuntimeError(f"Failed to insert rest segment: {str(err)}")
+
+
+def get_active_segment_info(active_segment_id: str) -> dict:
+    """
+    Get active segment information.
+    
+    Args:
+        active_segment_id: Active segment UUID
+        
+    Returns:
+        Active segment data
+        
+    Raises:
+        ValueError: If active segment not found
+        RuntimeError: If database operation fails
+    """
+    if not active_segment_id:
+        raise ValueError("Active segment ID cannot be empty")
+        
+    try:
+        active_segment = dynamo.get_item(
+            TableName.ACTIVE_SEGMENTS,
+            {"ActiveSegmentID": active_segment_id}
+        )
+        if not active_segment:
+            raise ValueError(f"Active segment not found: {active_segment_id}")
+            
+        return active_segment
+        
+    except ClientError as err:
+        logger.error(
+            "Failed to get active segment",
+            extra={
+                "active_segment_id": active_segment_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown")
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to get active segment: {str(err)}")
+
+
 def claim_segment_for_processing(active_segment_id: str) -> bool:
     """
     Claim a segment for processing by setting RunningFlag.
@@ -1104,11 +1602,12 @@ def claim_segment_for_processing(active_segment_id: str) -> bool:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET RunningFlag = :true",
+            UpdateExpression="SET RunningFlag = :true, ProcessingStatus = :processing",
             ConditionExpression="attribute_not_exists(RunningFlag) OR RunningFlag = :false",
             ExpressionAttributeValues={
                 ":true": True,
                 ":false": False,
+                ":processing": "processing",
             },
         )
         logger.info(

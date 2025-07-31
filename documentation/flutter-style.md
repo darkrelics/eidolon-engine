@@ -435,6 +435,48 @@ SizedBox(height: 16);
 EdgeInsets.all(8.0);
 ```
 
+### Conditional Widget Lists
+
+When using conditional content in widget lists, always use spread syntax with lists to maintain type consistency:
+
+```dart
+// Good - consistent list types
+Column(
+  children: [
+    Text('Always visible'),
+    if (showExtra) ...[
+      Text('Extra content'),
+      Icon(Icons.star),
+    ] else ...[
+      Text('Alternative content'),
+    ],
+  ],
+)
+
+// Bad - creates Set<Widget> type error
+Column(
+  children: [
+    Text('Always visible'),
+    if (showExtra) ...[
+      Text('Extra content'),
+    ] else {  // This creates a Set<Widget>, not a List<Widget>
+      Text('Alternative content'),
+    },
+  ],
+)
+
+// Also good - single widgets don't need spread
+Column(
+  children: [
+    Text('Always visible'),
+    if (showExtra)
+      Text('Extra content')
+    else
+      Text('Alternative content'),
+  ],
+)
+```
+
 ### Keys for Lists
 
 ```dart

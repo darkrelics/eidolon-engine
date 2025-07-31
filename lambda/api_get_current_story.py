@@ -69,6 +69,9 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
         story_metadata=story_metadata,
         segment_data=segment_data,
     )
+    
+    # Add the raw active segment data for client compatibility
+    response_data["ActiveSegment"] = active_segment
 
     logger.info(
         "Current story retrieved successfully",

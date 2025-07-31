@@ -18,6 +18,7 @@ from eidolon.logger import get_logger
 from eidolon.segment import (
     claim_segment_for_processing,
     create_next_active_segment,
+    delete_active_segment,
     is_simple_segment,
     process_decision_segment,
     process_rest_segment,
@@ -128,22 +129,40 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
 
 def record_segment_history(character_id: str, story_id: str, active_segment_id: str, segment_data: dict) -> None:
     """
-    Record segment completion in history table.
+    Record segment completion in history table with all required fields.
 
     Args:
         character_id: Character UUID
         story_id: Story UUID
-        segment_data: Segment completion data
+        active_segment_id: Active segment UUID
+        segment_data: Complete active segment data including all fields
 
     Raises:
         RuntimeError: If database operation fails
     """
+    # Extract XP awards from CharacterUpdates
+    character_updates = segment_data.get("CharacterUpdates", {})
+    skill_xp_awarded = character_updates.get("SkillXP", {})
+    attribute_xp_awarded = character_updates.get("AttributeXP", {})
+    
+    # Build complete history entry with all required fields
     history_entry = {
+        "CharacterID": character_id,
+        "ActiveSegmentID": active_segment_id,
+        "PlayerID": segment_data.get("PlayerID"),  # Required for ownership verification
+        "StoryID": story_id,
+        "StoryTitle": segment_data.get("StoryTitle"),
         "SegmentID": segment_data.get("SegmentID"),
         "SegmentType": segment_data.get("SegmentType"),
+        "StartTime": segment_data.get("StartTime"),  # Unix timestamp from active segment
+        "EndTime": segment_data.get("EndTime"),  # Unix timestamp from active segment
+        "ProcessedAt": segment_data.get("ProcessedAt"),  # When outcomes were calculated
+        "CompletedAt": datetime.now(timezone.utc).isoformat(),  # When segment was advanced
         "Outcome": segment_data.get("Outcome"),
-        "CompletedAt": datetime.now(timezone.utc).isoformat(),
         "ClientEvents": segment_data.get("ClientEvents", []),
+        "CharacterUpdates": character_updates,  # Complete updates applied
+        "SkillXPAwarded": skill_xp_awarded,  # Extracted skill XP
+        "AttributeXPAwarded": attribute_xp_awarded,  # Extracted attribute XP
     }
 
     # Add type-specific data
@@ -153,32 +172,12 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
         history_entry["CombatState"] = segment_data["CombatState"]
     if segment_data.get("Decision"):
         history_entry["Decision"] = segment_data["Decision"]
+    if segment_data.get("DecisionMadeAt"):
+        history_entry["DecisionMadeAt"] = segment_data["DecisionMadeAt"]
 
     try:
-        # Check if segment history record exists
-        history = dynamo.get_item(
-            TableName.SEGMENT_HISTORY,
-            {"CharacterID": character_id, "ActiveSegmentID": active_segment_id},
-        )
-
-        if not history:
-            # Create new segment history record
-            dynamo.put_item(
-                TableName.SEGMENT_HISTORY,
-                {
-                    "CharacterID": character_id,
-                    "ActiveSegmentID": active_segment_id,
-                    "StoryID": story_id,
-                    "SegmentID": segment_data.get("SegmentID"),
-                    "SegmentType": segment_data.get("SegmentType"),
-                    "Outcome": segment_data.get("Outcome"),
-                    "CompletedAt": datetime.now(timezone.utc).isoformat(),
-                    "ClientEvents": segment_data.get("ClientEvents", []),
-                    "ChallengeResults": segment_data.get("ChallengeResults"),
-                    "CombatState": segment_data.get("CombatState"),
-                    "Decision": segment_data.get("Decision"),
-                },
-            )
+        # Create segment history record
+        dynamo.put_item(TableName.SEGMENT_HISTORY, history_entry)
 
         logger.info(
             "Segment history recorded",
@@ -186,6 +185,10 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
                 "character_id": character_id,
                 "story_id": story_id,
                 "segment_id": segment_data.get("SegmentID"),
+                "active_segment_id": active_segment_id,
+                "skill_xp_count": len(skill_xp_awarded),
+                "attribute_xp_count": len(attribute_xp_awarded),
+                "outcome": segment_data.get("Outcome"),
             },
         )
     except ClientError as err:
@@ -194,12 +197,94 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
             extra={
                 "character_id": character_id,
                 "story_id": story_id,
+                "active_segment_id": active_segment_id,
                 "error": str(err),
                 "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
             },
             exc_info=True,
         )
         raise RuntimeError(f"Failed to record segment history: {str(err)}")
+
+
+def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, attribute_xp: dict) -> None:
+    """
+    Update the story history with accumulated XP from this segment.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        skill_xp: Skill XP awarded in this segment
+        attribute_xp: Attribute XP awarded in this segment
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    if not skill_xp and not attribute_xp:
+        # No XP to update
+        return
+
+    try:
+        # Build update expressions for XP accumulation
+        update_expressions = ["SegmentCount = SegmentCount + :one"]
+        expression_names = {}
+        expression_values = {":one": 1}
+
+        # Add skill XP updates
+        for skill, xp_value in skill_xp.items():
+            if xp_value > 0:
+                safe_skill = skill.replace("-", "_")
+                update_expressions.append(
+                    f"SkillXPAwarded.#skill_{safe_skill} = if_not_exists(SkillXPAwarded.#skill_{safe_skill}, :zero) + :xp_{safe_skill}"
+                )
+                expression_names[f"#skill_{safe_skill}"] = skill
+                expression_values[f":xp_{safe_skill}"] = Decimal(str(xp_value))
+
+        # Add attribute XP updates
+        for attribute, xp_value in attribute_xp.items():
+            if xp_value > 0:
+                safe_attr = attribute.replace("-", "_")
+                update_expressions.append(
+                    f"AttributeXPAwarded.#attr_{safe_attr} = if_not_exists(AttributeXPAwarded.#attr_{safe_attr}, :zero) + :xp_attr_{safe_attr}"
+                )
+                expression_names[f"#attr_{safe_attr}"] = attribute
+                expression_values[f":xp_attr_{safe_attr}"] = Decimal(str(xp_value))
+
+        # Add zero value if needed
+        if ":zero" not in expression_values:
+            expression_values[":zero"] = Decimal("0")
+
+        # Execute update
+        update_expression = "SET " + ", ".join(update_expressions)
+        
+        dynamo.update_item(
+            TableName.STORY_HISTORY,
+            Key={"CharacterID": character_id, "StoryID": story_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_names if expression_names else None,
+            ExpressionAttributeValues=expression_values,
+        )
+
+        logger.info(
+            "Updated story history with XP",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "skill_xp_count": len(skill_xp),
+                "attribute_xp_count": len(attribute_xp),
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to update story history XP",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
+            },
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to update story history XP: {str(err)}")
 
 
 def ensure_story_history_exists(character_id: str, story_id: str, story_title: str) -> None:
@@ -474,8 +559,8 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
         # Process based on type
         if segment_type == "rest":
-            outcome, healing_data = process_rest_segment(segment_def, character)
-            character_updates = {"healingApplied": healing_data}
+            outcome, _ = process_rest_segment(segment_def, character)
+            character_updates = {}
         elif segment_type == "decision":
             outcome = process_decision_segment(active_segment, segment_def)
             character_updates = {}
@@ -517,6 +602,12 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Record segment history
     record_segment_history(character_id, story_id, active_segment_id, active_segment)
+    
+    # Update story history with accumulated XP
+    skill_xp = character_updates.get("SkillXP", {})
+    attribute_xp = character_updates.get("AttributeXP", {})
+    if skill_xp or attribute_xp:
+        update_story_history_xp(character_id, story_id, skill_xp, attribute_xp)
 
     # Get segment definition to determine next action
     try:
@@ -573,8 +664,38 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                     "character_id": character_id,
                     "next_segment_id": next_segment_id,
                     "next_active_segment_id": next_active_segment_id,
+                    "segment_type": next_segment_def.get("SegmentType"),
                 },
             )
+            
+            # Queue mechanical segments for immediate processing
+            if next_segment_def.get("SegmentType") == "mechanical":
+                try:
+                    from eidolon.environment import SEGMENT_QUEUE_URL
+                    from eidolon.sqs import send_message
+                    
+                    if SEGMENT_QUEUE_URL:
+                        message_body = {
+                            "ActiveSegmentID": next_active_segment_id,
+                            "CharacterID": character_id,
+                            "StoryID": story_id,
+                            "SegmentID": next_segment_id,
+                            "SegmentType": "mechanical",
+                        }
+                        send_message(SEGMENT_QUEUE_URL, message_body)
+                        logger.info(
+                            "Queued next mechanical segment for processing",
+                            extra={"active_segment_id": next_active_segment_id}
+                        )
+                except Exception as err:
+                    # Non-critical - segment will be picked up by poller
+                    logger.warning(
+                        "Failed to queue mechanical segment",
+                        extra={
+                            "active_segment_id": next_active_segment_id,
+                            "error": str(err)
+                        }
+                    )
         except ClientError as err:
             logger.error(
                 "Failed to create next segment",
@@ -591,20 +712,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
         complete_story(character_id, story_id, outcome)
 
     # Delete processed segment
-    try:
-        dynamo.delete_item(
-            TableName.ACTIVE_SEGMENTS,
-            {"ActiveSegmentID": active_segment_id},
-        )
-    except ClientError as err:
-        logger.warning(
-            "Failed to delete processed segment",
-            extra={
-                "active_segment_id": active_segment_id,
-                "error": str(err),
-            },
-        )
-        # Non-critical, continue
+    delete_active_segment(active_segment_id)
 
     return {
         "success": True,

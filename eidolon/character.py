@@ -1025,3 +1025,119 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     )
 
     return {"character_id": character_id, "character_name": character_name, "archetype": archetype_name}
+
+
+def heal_expired_wounds(character_id: str) -> dict:
+    """
+    Check and heal wounds that have passed their recovery timestamp.
+    
+    This function removes wounds from the character's wounds list where the HealAt
+    timestamp is in the past. Should be called at the start of every segment.
+    
+    Args:
+        character_id: Character UUID
+        
+    Returns:
+        Dict with:
+            - healed_count: Number of wounds healed
+            - remaining_wounds: List of wounds still active
+            - error: Error message if operation failed
+            
+    Raises:
+        ValueError: If character_id is invalid
+        RuntimeError: If database operation fails
+    """
+    if not validate_uuid(character_id):
+        raise ValueError("Invalid character ID format")
+    
+    try:
+        # Get character to check wounds
+        character = get_character(character_id)
+        wounds = character.get("Wounds", [])
+        
+        if not wounds:
+            logger.info("No wounds to heal", extra={"character_id": character_id})
+            return {"healed_count": 0, "remaining_wounds": [], "error": None}
+        
+        # Current time for comparison
+        current_time = datetime.now(timezone.utc)
+        
+        # Separate wounds into healed and remaining
+        remaining_wounds = []
+        healed_wounds = []
+        
+        for wound in wounds:
+            heal_at_str = wound.get("HealAt")
+            if not heal_at_str:
+                # Keep wounds without HealAt timestamp
+                remaining_wounds.append(wound)
+                continue
+            
+            try:
+                # Parse HealAt timestamp
+                heal_at = datetime.fromisoformat(heal_at_str.replace("Z", "+00:00"))
+                
+                if heal_at <= current_time:
+                    # Wound has healed
+                    healed_wounds.append(wound)
+                    logger.debug(
+                        "Wound healed",
+                        extra={
+                            "character_id": character_id,
+                            "damage_type": wound.get("DamageType"),
+                            "heal_at": heal_at_str,
+                        }
+                    )
+                else:
+                    # Wound still active
+                    remaining_wounds.append(wound)
+            except (ValueError, AttributeError) as err:
+                logger.warning(
+                    "Invalid wound HealAt timestamp",
+                    extra={
+                        "character_id": character_id,
+                        "heal_at": heal_at_str,
+                        "error": str(err)
+                    }
+                )
+                # Keep wounds with invalid timestamps
+                remaining_wounds.append(wound)
+        
+        # Update character if any wounds healed
+        if healed_wounds:
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression="SET Wounds = :wounds, UpdatedAt = :timestamp",
+                ExpressionAttributeValues={
+                    ":wounds": remaining_wounds,
+                    ":timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            
+            logger.info(
+                "Healed expired wounds",
+                extra={
+                    "character_id": character_id,
+                    "healed_count": len(healed_wounds),
+                    "remaining_count": len(remaining_wounds),
+                    "healed_types": [w.get("DamageType") for w in healed_wounds],
+                }
+            )
+        
+        return {
+            "healed_count": len(healed_wounds),
+            "remaining_wounds": remaining_wounds,
+            "error": None
+        }
+        
+    except ClientError as err:
+        logger.error(
+            "Failed to heal wounds",
+            extra={
+                "character_id": character_id,
+                "error": str(err)
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"Failed to heal wounds: {str(err)}")

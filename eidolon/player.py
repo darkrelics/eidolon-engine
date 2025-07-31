@@ -3,11 +3,13 @@ Player management utilities for Lambda functions.
 
 Provides functions for player authentication and validation.
 """
+from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
+from eidolon.character import delete_character
 
 logger = get_logger(__name__)
 
@@ -24,8 +26,6 @@ def create_player_record(user_uuid: str, email: str) -> None:
         ValueError: If user_uuid or email is missing
         RuntimeError: If database operations fail
     """
-    from datetime import datetime, timezone
-
     if not user_uuid or not email:
         raise ValueError("Missing required user attributes (sub or email)")
 
@@ -297,7 +297,7 @@ def delete_all_characters_for_player(player_id: str) -> dict:
     Raises:
         RuntimeError: If critical database operations fail
     """
-    from eidolon.character import delete_character
+    
 
     results = {
         "characters_deleted": 0,
@@ -506,7 +506,7 @@ def delete_player_data_completely(player_id: str) -> dict:
     Raises:
         ValueError: If player_id is empty
     """
-    from datetime import datetime, timezone
+    
 
     if not player_id:
         raise ValueError("Player ID cannot be empty")
