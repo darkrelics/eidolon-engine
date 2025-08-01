@@ -1473,7 +1473,6 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
     if time_remaining >= MIN_TIME_REQUIRED:
         # Enough time on A - insert between A and B
         segment_to_update_id = current_segment_id
-        segment_to_update = current_segment
         original_next_segment_id = next_segment_id
         
         logger.info(
@@ -1522,7 +1521,6 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         
         # Insert between B and C
         segment_to_update_id = next_segment_id
-        segment_to_update = next_segment
         original_next_segment_id = segment_c_id
         
         logger.info(

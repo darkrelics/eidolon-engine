@@ -17,10 +17,8 @@ Resources:
       Description: "Controls the segment polling state (run/stop)"
       Tier: Standard
       Tags:
-        - Key: Project
-          Value: !Ref GameName
-        - Key: ManagedBy
-          Value: CloudFormation
+        Project: !Ref GameName
+        ManagedBy: CloudFormation
 
 Outputs:
   SegmentPollerStateParameterName:

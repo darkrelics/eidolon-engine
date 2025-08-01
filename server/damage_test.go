@@ -57,8 +57,8 @@ func TestTakeDamage(t *testing.T) {
 	}
 
 	// Check health
-	if char.health != 7 {
-		t.Errorf("Expected health 7, got %d", char.health)
+	if char.GetHealth() != 7 {
+		t.Errorf("Expected health 7, got %d", char.GetHealth())
 	}
 
 	// Check damage type
@@ -93,8 +93,8 @@ func TestMixedDamage(t *testing.T) {
 	}
 
 	// Check health
-	if char.health != 5 {
-		t.Errorf("Expected health 5, got %d", char.health)
+	if char.GetHealth() != 5 {
+		t.Errorf("Expected health 5, got %d", char.GetHealth())
 	}
 
 	// Check wound counts by type
@@ -143,8 +143,8 @@ func TestHealing(t *testing.T) {
 	}
 
 	// Check health restored
-	if char.health != 9 {
-		t.Errorf("Expected health 9, got %d", char.health)
+	if char.GetHealth() != 9 {
+		t.Errorf("Expected health 9, got %d", char.GetHealth())
 	}
 
 	// Check healing message
@@ -178,8 +178,8 @@ func TestDeath(t *testing.T) {
 	}
 
 	// Check health
-	if char.health != 0 {
-		t.Errorf("Expected health 0, got %d", char.health)
+	if char.GetHealth() != 0 {
+		t.Errorf("Expected health 0, got %d", char.GetHealth())
 	}
 
 	// Drain messages
@@ -296,8 +296,8 @@ func TestHealingFromUnconscious(t *testing.T) {
 	}
 
 	// Health should be 1
-	if char.health != 1 {
-		t.Errorf("Expected health 1, got %d", char.health)
+	if char.GetHealth() != 1 {
+		t.Errorf("Expected health 1, got %d", char.GetHealth())
 	}
 
 	// Check messages
@@ -342,8 +342,8 @@ func TestDeadCharacterNoHealing(t *testing.T) {
 	}
 
 	// Health should remain 0
-	if char.health != 0 {
-		t.Errorf("Expected health 0, got %d", char.health)
+	if char.GetHealth() != 0 {
+		t.Errorf("Expected health 0, got %d", char.GetHealth())
 	}
 
 	// State should remain dead
@@ -380,8 +380,8 @@ func TestOfflineHealing(t *testing.T) {
 	}
 
 	// Health should be updated
-	if char.health != 9 {
-		t.Errorf("Expected health 9 after offline healing, got %d", char.health)
+	if char.GetHealth() != 9 {
+		t.Errorf("Expected health 9 after offline healing, got %d", char.GetHealth())
 	}
 
 	// Check healing message was sent

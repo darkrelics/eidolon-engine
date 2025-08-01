@@ -165,7 +165,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		attributes:       make(map[string]float64),
 		skills:           make(map[string]float64),
 		essence:          float64(p.server.game.startingEssence), // Default from config
-		health:           int(p.server.game.startingHealth),      // Default from config
 		maxHealth:        int(p.server.game.startingHealth),      // Default from config
 		wounds:           []Wound{},                              // Start with no wounds
 		inventory:        make(map[string]*Item),
@@ -489,7 +488,7 @@ func FormatCharacterDescription(target *Character, viewer *Character) string {
 		desc.WriteString("unconscious ")
 	} else if target.charState == CharStateDead {
 		desc.WriteString("dead ")
-	} else if target.health < target.maxHealth/2 {
+	} else if target.GetHealth() < target.maxHealth/2 {
 		desc.WriteString("wounded ")
 	}
 

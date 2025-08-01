@@ -87,9 +87,6 @@ Resources:
   # IAM roles with attached policies
   IAMStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn:
-      - SSMStack
-      - SQSStack
     Properties:
       TemplateURL: !Sub "https://s3.amazonaws.com/${LambdaBucketName}/cloudformation/iam.yml"
       Parameters:
