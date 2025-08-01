@@ -6,7 +6,7 @@ Provides common functions for character creation and management.
 
 import pickle
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from botocore.exceptions import ClientError

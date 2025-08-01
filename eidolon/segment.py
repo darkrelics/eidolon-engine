@@ -8,15 +8,14 @@ decision, and rest segments.
 import math
 import random
 import time
-from datetime import datetime, timezone, timedelta
-
-from uuid_extension import uuid7
+from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
+from uuid_extension import uuid7
 
+from eidolon.character import heal_expired_wounds
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
-from eidolon.character import heal_expired_wounds
 
 logger = get_logger(__name__)
 
@@ -1031,13 +1030,13 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
         outcome: Final outcome
     """
     from eidolon.story import (
-        complete_story_for_character,
-        calculate_story_rewards,
         apply_story_rewards,
-        get_story_metadata,
+        calculate_story_rewards,
+        complete_story_for_character,
         get_story_history,
+        get_story_metadata,
     )
-    
+
     # Complete the story and clean up character state
     complete_story_for_character(character_id, story_id, outcome)
     

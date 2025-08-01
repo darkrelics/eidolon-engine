@@ -10,13 +10,9 @@ Handles different segment types appropriately and manages polling state.
 
 import time
 
-from eidolon.environment import MAX_SEGMENTS_PER_POLL, STORY_ADVANCEMENT_QUEUE_URL, SEGMENT_QUEUE_URL
+from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
 from eidolon.logger import get_logger
-from eidolon.polling import (
-    disable_polling_infrastructure,
-    enable_polling_infrastructure,
-    get_polling_state,
-)
+from eidolon.polling import disable_polling_infrastructure, enable_polling_infrastructure, get_polling_state
 from eidolon.segment import (
     check_active_segments_exist,
     get_completed_segments,

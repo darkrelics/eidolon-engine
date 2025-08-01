@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
+from eidolon.character import delete_character
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
-from eidolon.character import delete_character
 
 logger = get_logger(__name__)
 

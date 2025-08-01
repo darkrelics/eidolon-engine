@@ -9,9 +9,8 @@ Triggered by SQS to apply character updates and progress stories.
 
 import json
 
-from eidolon.character import get_character, apply_death_or_unconscious_outcome
+from eidolon.character import apply_death_or_unconscious_outcome, get_character
 from eidolon.logger import get_logger
-from eidolon.story import apply_combat_rewards, apply_story_outcome_effects
 from eidolon.segment import (
     claim_segment_for_processing,
     complete_story,
@@ -28,7 +27,7 @@ from eidolon.segment import (
     update_character_active_segment,
     update_segment_processing_status,
 )
-from eidolon.story import ensure_story_history_exists, update_story_history_xp
+from eidolon.story import apply_combat_rewards, apply_story_outcome_effects, ensure_story_history_exists, update_story_history_xp
 from eidolon.utilities import log_lambda_invocation
 
 # Configure logging

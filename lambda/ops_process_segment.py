@@ -12,11 +12,7 @@ import json
 
 from eidolon.logger import get_logger
 from eidolon.polling import disable_polling_infrastructure
-from eidolon.segment import (
-    check_active_segments_exist,
-    is_mechanical_segment,
-    process_segment_completely,
-)
+from eidolon.segment import check_active_segments_exist, is_mechanical_segment, process_segment_completely
 from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
 
 # Configure logging

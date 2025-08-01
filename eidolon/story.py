@@ -11,18 +11,18 @@ from decimal import Decimal
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
+from eidolon.character import get_character, heal_expired_wounds, validate_character_ownership
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import get_logger
-from eidolon.character import get_character, validate_character_ownership, heal_expired_wounds
 from eidolon.segment import (
-    record_segment_history,
-    delete_active_segment,
-    get_segment_definition,
-    determine_next_segment,
-    create_next_active_segment,
-    update_character_active_segment,
     complete_story,
+    create_next_active_segment,
+    delete_active_segment,
+    determine_next_segment,
+    get_segment_definition,
+    record_segment_history,
+    update_character_active_segment,
 )
 from eidolon.sqs import send_message
 from eidolon.validation import validate_uuid

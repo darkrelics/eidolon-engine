@@ -8,8 +8,7 @@ while keeping the handler function visible in each Lambda file.
 from eidolon.cors import cors_handler
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
-from eidolon.responses import create_response, error_response, unauthorized_response
-from eidolon.responses import error_response_pascal
+from eidolon.responses import create_response, error_response, error_response_pascal, unauthorized_response
 
 logger = get_logger(__name__)
 
