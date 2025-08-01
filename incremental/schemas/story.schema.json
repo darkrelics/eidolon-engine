@@ -260,16 +260,6 @@
                 "type": "boolean",
                 "default": true,
                 "description": "Whether player can rest instead of continuing"
-              },
-              "abandonPenalty": {
-                "type": "object",
-                "description": "Penalties for abandoning the story",
-                "properties": {
-                  "resources": {
-                    "type": "object",
-                    "additionalProperties": { "type": "integer" }
-                  }
-                }
               }
             }
           }
@@ -284,10 +274,6 @@
           "type": "integer",
           "default": 3600,
           "description": "Default rest duration in seconds"
-        },
-        "defaultAbandonPenalty": {
-          "type": "object",
-          "description": "Default penalty for abandoning if not specified per passage"
         }
       }
     }

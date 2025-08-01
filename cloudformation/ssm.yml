@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "SSM parameters for Eidolon Engine"
+
+Parameters:
+  GameName:
+    Type: String
+    Default: "eidolon"
+    Description: "Name of the game"
+
+Resources:
+  SegmentPollerStateParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${GameName}/segment-poller-state"
+      Type: String
+      Value: "stop"
+      Description: "Controls the segment polling state (run/stop)"
+      Tier: Standard
+      Tags:
+        Project: !Ref GameName
+        ManagedBy: CloudFormation
+
+Outputs:
+  SegmentPollerStateParameterName:
+    Description: "Name of the segment poller state parameter"
+    Value: !Ref SegmentPollerStateParameter
+    Export:
+      Name: !Sub "${AWS::StackName}-SegmentPollerStateParameterName"

@@ -11,10 +11,12 @@ from aws_cdk import aws_events as events
 from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_lambda_event_sources as lambda_event_sources
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as route53_targets
 from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_sqs as sqs
 from constructs import Construct
 
 # Note: Using route53_targets.ApiGatewayDomain directly now
@@ -128,8 +130,9 @@ def validate_config(config: dict) -> None:
         "story_table",
         "segments_table",
         "active_segments_table",
-        "history_table",
         "opponents_table",
+        "story_history_table",
+        "segment_history_table",
         "cognito_user_pool_arn",
         "dependencies_layer_arn",
         "domain_name",
@@ -178,16 +181,26 @@ class LambdaStack(cdk.Stack):
         self.story_table = config.get("story_table", "")
         self.segments_table = config.get("segments_table", "")
         self.active_segments_table = config.get("active_segments_table", "")
-        self.history_table = config.get("history_table", "")
         self.opponents_table = config.get("opponents_table", "")
+        self.story_history_table = config.get("story_history_table", "")
+        self.segment_history_table = config.get("segment_history_table", "")
         self.cognito_user_pool_arn = config.get("cognito_user_pool_arn", "")
         self.dependencies_layer_arn = config.get("dependencies_layer_arn", "")
         self.domain_name = config.get("domain_name", "darkrelics.net")
         self.hosted_zone_id = config.get("hosted_zone_id", "")
         self.lambda_execution_role_arn = config.get("lambda_execution_role_arn", "")
+        self.lambda_ssm_sqs_execution_role_arn = config.get("lambda_ssm_sqs_execution_role_arn", "")
+        self.segment_queue_arn = config.get("segment_queue_arn", "")
+        self.segment_queue_url = config.get("segment_queue_url", "")
+        self.story_advancement_queue_arn = config.get("story_advancement_queue_arn", "")
+        self.story_advancement_queue_url = config.get("story_advancement_queue_url", "")
+        self.ssm_poller_state_parameter_name = config.get("ssm_poller_state_parameter_name", "")
 
-        # Import the shared Lambda execution role
+        # Import the shared Lambda execution roles
         self.lambda_execution_role = iam.Role.from_role_arn(self, "imported-lambda-execution-role", self.lambda_execution_role_arn)
+        self.lambda_ssm_sqs_execution_role = iam.Role.from_role_arn(
+            self, "imported-lambda-ssm-sqs-execution-role", self.lambda_ssm_sqs_execution_role_arn
+        )
 
         # Extract API configuration
         self.api_subdomain = config.get("api_subdomain", "api")
@@ -196,6 +209,7 @@ class LambdaStack(cdk.Stack):
         # Extract game configuration defaults
         self.default_health = config.get("default_health", 10)
         self.default_essence = config.get("default_essence", 3)
+        self.max_characters_per_player = config.get("max_characters_per_player", 10)
 
         # Store CORS origins for Lambda environment
         self.cors_origins_str: str = ",".join(self.allowed_cors_origins) if self.allowed_cors_origins else ""
@@ -290,7 +304,7 @@ class LambdaStack(cdk.Stack):
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
                 "ARCHETYPES_TABLE": self.archetypes_table,
-                "MAX_CHARACTERS_PER_PLAYER": "10",
+                "MAX_CHARACTERS_PER_PLAYER": str(self.max_characters_per_player),
                 "ALLOWED_ORIGINS": self.cors_origins_str,
                 "DEFAULT_HEALTH": str(self.default_health),
                 "DEFAULT_ESSENCE": str(self.default_essence),
@@ -336,7 +350,7 @@ class LambdaStack(cdk.Stack):
                 "CHARACTERS_TABLE": self.characters_table,
                 "ITEMS_TABLE": self.items_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Deletes a character for players",
@@ -386,7 +400,7 @@ class LambdaStack(cdk.Stack):
             {
                 "CHARACTERS_TABLE": self.characters_table,
                 "STORY_TABLE": self.story_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Returns available stories for a character",
@@ -402,7 +416,8 @@ class LambdaStack(cdk.Stack):
                 "STORY_TABLE": self.story_table,
                 "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
+                "SEGMENT_QUEUE_URL": self.segment_queue_url,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Starts a story for a character",
@@ -443,7 +458,7 @@ class LambdaStack(cdk.Stack):
             {
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "SEGMENTS_TABLE": self.segments_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Gets the outcome of a completed segment",
@@ -457,53 +472,124 @@ class LambdaStack(cdk.Stack):
             {
                 "CHARACTERS_TABLE": self.characters_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Abandons an active story and updates character state",
             dependencies_layer,
         )
 
-        # Process Segment Lambda (backend)
-        self.process_segment_function = self.create_lambda_function(
-            "process-segment",
-            "ops_process_segment.lambda_handler",
+        # Get Segment Status Lambda
+        self.get_segment_status_function = self.create_lambda_function(
+            "api-get-segment-status",
+            "api_get_segment_status.lambda_handler",
+            {
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Gets the current status of a segment",
+            dependencies_layer,
+        )
+
+        # Get Segment History Lambda
+        self.get_segment_history_function = self.create_lambda_function(
+            "api-get-segment-history",
+            "api_get_segment_history.lambda_handler",
+            {
+                "SEGMENT_HISTORY_TABLE": self.segment_history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Gets historical segment data for a character",
+            dependencies_layer,
+        )
+
+        # Character Rest Lambda
+        self.character_rest_function = self.create_lambda_function(
+            "api-character-rest",
+            "api_character_rest.lambda_handler",
             {
                 "CHARACTERS_TABLE": self.characters_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "STORY_TABLE": self.story_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            "Initiates a rest segment for character healing",
+            dependencies_layer,
+        )
+
+        # Process Segment Lambda (backend) - Now processes from SQS
+        self.process_segment_function = lambda_.Function(
+            self,
+            "ops-process-segment",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="ops_process_segment.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-process-segment.zip"),
+            layers=[dependencies_layer],
+            role=self.lambda_ssm_sqs_execution_role,
+            timeout=cdk.Duration.seconds(60),
+            memory_size=128,
+            environment={
+                "CHARACTERS_TABLE": self.characters_table,
+                "STORY_TABLE": self.story_table,
                 "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "HISTORY_TABLE": self.history_table,
                 "OPPONENTS_TABLE": self.opponents_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
+                "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
             },
-            "Processes completed segments and determines outcomes",
-            dependencies_layer,
+            description="Processes completed segments and determines outcomes",
+            function_name="ops-process-segment",
+            reserved_concurrent_executions=5,
         )
 
-        # Segment Poller Lambda (backend)
-        self.segment_poller_function = self.create_lambda_function(
-            "segment-poller",
-            "ops_segment_poller.lambda_handler",
-            {
+        # Add SQS event source to Process Segment function
+        if self.segment_queue_arn:
+            segment_queue = sqs.Queue.from_queue_arn(
+                self,
+                "imported-segment-queue",
+                self.segment_queue_arn,
+            )
+            self.process_segment_function.add_event_source(
+                lambda_event_sources.SqsEventSource(
+                    segment_queue,
+                    batch_size=10,
+                    max_batching_window=cdk.Duration.seconds(5),
+                    report_batch_item_failures=True,
+                )
+            )
+
+        # Segment Poller Lambda (backend) - Now sends to SQS
+        self.segment_poller_function = lambda_.Function(
+            self,
+            "ops-segment-poller",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="ops_segment_poller.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-segment-poller.zip"),
+            layers=[dependencies_layer],
+            role=self.lambda_ssm_sqs_execution_role,
+            timeout=cdk.Duration.seconds(60),
+            memory_size=128,
+            environment={
+                "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "PROCESS_SEGMENT_FUNCTION": self.process_segment_function.function_name,
-                "ENABLE_BATCH_PROCESSING": "true",
-                "MAX_SEGMENTS_PER_POLL": "100",
-                "SEGMENT_BATCH_SIZE": "10",
+                "STORY_HISTORY_TABLE": self.story_history_table,
+                "MAX_SEGMENTS_PER_POLL": "50",
+                "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
+                "SEGMENT_QUEUE_URL": self.segment_queue_url,
+                "STORY_ADVANCEMENT_QUEUE_URL": self.story_advancement_queue_url,
             },
-            "Polls for completed segments and triggers processing",
-            dependencies_layer,
+            description="Polls for completed segments and sends to SQS for processing",
+            function_name="ops-segment-poller",
         )
 
-        # Grant permissions for segment_poller to invoke process_segment
-        self.process_segment_function.grant_invoke(self.segment_poller_function)
-
-        # Create EventBridge rule to trigger segment poller every minute
+        # Create EventBridge rule to trigger segment poller every 30 seconds
         self.segment_poller_rule = events.Rule(
             self,
             "segment-poller-rule",
             rule_name="eidolon-segment-poller-rule",
-            description="Triggers segment poller Lambda every 10 seconds",
-            schedule=events.Schedule.rate(cdk.Duration.seconds(10)),
+            description="Triggers segment poller Lambda every 30 seconds",
+            schedule=events.Schedule.rate(cdk.Duration.seconds(30)),
         )
 
         # Add Lambda target to the rule
@@ -513,6 +599,46 @@ class LambdaStack(cdk.Stack):
                 self.segment_poller_function, retry_attempts=2  # type: ignore
             )  # type: ignore
         )
+
+        # Advance Story Lambda (backend) - Processes incremental updates from SQS
+        self.advance_story_function = lambda_.Function(
+            self,
+            "ops-advance-story",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="ops_advance_story.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-advance-story.zip"),
+            layers=[dependencies_layer],
+            role=self.lambda_ssm_sqs_execution_role,
+            timeout=cdk.Duration.seconds(60),
+            memory_size=128,
+            environment={
+                "CHARACTERS_TABLE": self.characters_table,
+                "STORY_TABLE": self.story_table,
+                "SEGMENTS_TABLE": self.segments_table,
+                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
+                "SEGMENT_HISTORY_TABLE": self.segment_history_table,
+            },
+            description="Advances stories by applying character updates and progressing to next segments",
+            function_name="ops-advance-story",
+            reserved_concurrent_executions=5,
+        )
+
+        # Add SQS event source to Advance Story function
+        if self.story_advancement_queue_arn:
+            story_advancement_queue = sqs.Queue.from_queue_arn(
+                self,
+                "imported-story-advancement-queue",
+                self.story_advancement_queue_arn,
+            )
+            self.advance_story_function.add_event_source(
+                lambda_event_sources.SqsEventSource(
+                    story_advancement_queue,
+                    batch_size=10,
+                    max_batching_window=cdk.Duration.seconds(5),
+                    report_batch_item_failures=True,
+                )
+            )
 
     def configure_api_routes(self) -> None:
         """Configure API Gateway routes and methods."""
@@ -559,6 +685,15 @@ class LambdaStack(cdk.Stack):
         character_resource.add_method(
             "DELETE",
             apigateway.LambdaIntegration(self.delete_character_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # POST /character/rest - Initiate rest for healing
+        rest_resource = character_resource.add_resource("rest")
+        rest_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.character_rest_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
@@ -624,6 +759,24 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
+        # GET /segments/status - Get segment status
+        status_resource = segments_resource.add_resource("status")
+        status_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_segment_status_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # GET /segments/history - Get segment history
+        history_resource = segments_resource.add_resource("history")
+        history_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_segment_history_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
     def create_log_groups(self) -> None:
         """Create CloudWatch log groups for all Lambda functions."""
         log_configs: list = [
@@ -640,8 +793,12 @@ class LambdaStack(cdk.Stack):
             ("get-segment-outcome-logs", self.get_segment_outcome_function),
             ("abandon-story-logs", self.abandon_story_function),
             ("get-current-story-logs", self.get_current_story_function),
-            ("segment-poller-logs", self.segment_poller_function),
-            ("process-segment-logs", self.process_segment_function),
+            ("get-segment-status-logs", self.get_segment_status_function),
+            ("get-segment-history-logs", self.get_segment_history_function),
+            ("character-rest-logs", self.character_rest_function),
+            ("ops-segment-poller-logs", self.segment_poller_function),
+            ("ops-process-segment-logs", self.process_segment_function),
+            ("ops-advance-story-logs", self.advance_story_function),
         ]
 
         for log_id, function in log_configs:

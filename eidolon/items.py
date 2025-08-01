@@ -75,7 +75,7 @@ def create_items_from_prototypes(prototype_ids: list[str], character_id: str) ->
                 extra={
                     "item_id": item_id,
                     "prototype_id": prototype_id,
-                    "item_name": item_data["Name"],
+                    "item_name": item_data.get("Name"),
                     "character_id": character_id,
                     "slot": str(slot_num - 1),
                 },

@@ -65,19 +65,19 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id = extract_player_id_from_event(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)})
-        return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
+        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
+        return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
     # Validate player exists
     try:
         if not validate_player_exists(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
+            logger.error("Player not found in database", extra={"player_id": player_id}, exc_info=True)
+            return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)})
-        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
+        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
+        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
@@ -87,13 +87,14 @@ def lambda_handler(event: dict, context: object) -> dict:
         character_id = get_required_field_flexible(body, "CharacterID", "characterID")
         decision_id = get_required_field_flexible(body, "Decision", "decision")
     except ValueError as err:
-        return build_lambda_response_pascal(400, {"error": str(err)}, event)
+        return build_lambda_response_pascal(400, {"Error": str(err)}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
     # Call business logic
     try:
         response_data = submit_decision_business_logic(character_id, decision_id, player_id)  # type: ignore
+        logger.info("Lambda response", extra={"status_code": 200})
         return build_lambda_response_pascal(200, response_data, event)
     except ValueError as err:
         logger.warning(
@@ -102,15 +103,16 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         error_msg = str(err)
         if "not found" in error_msg.lower():
-            return build_lambda_response_pascal(404, {"error": error_msg}, event)
+            return build_lambda_response_pascal(404, {"Error": error_msg}, event)
         elif "already submitted" in error_msg.lower():
-            return build_lambda_response_pascal(409, {"error": error_msg}, event)
-        return build_lambda_response_pascal(400, {"error": error_msg}, event)
+            return build_lambda_response_pascal(409, {"Error": error_msg}, event)
+        return build_lambda_response_pascal(400, {"Error": error_msg}, event)
     except RuntimeError as err:
         logger.error(
             "Failed to submit decision",
             extra={"character_id": character_id, "decision_id": decision_id, "error": str(err)},
+            exc_info=True,
         )
-        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
+        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)

@@ -104,6 +104,7 @@ Resources:
           ARCHETYPES_TABLE: archetypes
           DEFAULT_HEALTH: "10"
           DEFAULT_ESSENCE: "3"
+          MAX_CHARACTERS_PER_PLAYER: "10"
       MemorySize: 128
       Timeout: 30
       Role: !ImportValue
@@ -235,6 +236,70 @@ Resources:
       Timeout: 30
       Role: !ImportValue
         Fn::Sub: "iam-${AWS::StackName}-LambdaExecutionRoleArn"
+
+  # Ops Lambda Functions
+  OpsSegmentPollerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${GameName}-ops-segment-poller"
+      Runtime: python3.12
+      Handler: ops_segment_poller.lambda_handler
+      Code:
+        S3Bucket: !Ref LambdaBucketName
+        S3Key: !Ref LambdaZipKey
+      Layers:
+        - !Ref BaseLambdaLayer
+      Environment:
+        Variables:
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          HISTORY_TABLE: history
+          MAX_SEGMENTS_PER_POLL: "50"
+          SSM_POLLER_STATE_PARAMETER: !Sub "/${GameName}/segment-poller-state"
+          SEGMENT_QUEUE_URL: !ImportValue
+            Fn::Sub: "sqs-${AWS::StackName}-SegmentQueueUrl"
+      MemorySize: 256
+      Timeout: 60
+      Role: !ImportValue
+        Fn::Sub: "iam-${AWS::StackName}-LambdaSSMSQSExecutionRoleArn"
+
+  OpsProcessSegmentFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${GameName}-ops-process-segment"
+      Runtime: python3.12
+      Handler: ops_process_segment.lambda_handler
+      Code:
+        S3Bucket: !Ref LambdaBucketName
+        S3Key: !Ref LambdaZipKey
+      Layers:
+        - !Ref BaseLambdaLayer
+      Environment:
+        Variables:
+          CHARACTERS_TABLE: characters
+          STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          OPPONENTS_TABLE: opponents
+          HISTORY_TABLE: history
+          SSM_POLLER_STATE_PARAMETER: !Sub "/${GameName}/segment-poller-state"
+      MemorySize: 256
+      Timeout: 60
+      Role: !ImportValue
+        Fn::Sub: "iam-${AWS::StackName}-LambdaSSMSQSExecutionRoleArn"
+      ReservedConcurrentExecutions: 5
+
+  # SQS Event Source Mapping for Process Segment
+  ProcessSegmentEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !ImportValue
+        Fn::Sub: "sqs-${AWS::StackName}-SegmentQueueArn"
+      FunctionName: !Ref OpsProcessSegmentFunction
+      BatchSize: 10
+      MaximumBatchingWindowInSeconds: 5
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
 
   # API Resources and Methods
   ArchetypesResource:

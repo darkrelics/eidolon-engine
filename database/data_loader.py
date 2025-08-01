@@ -331,27 +331,49 @@ def store_opponents(opponents_data):
     """
     Stores opponent data into the 'opponents' DynamoDB table using update operations.
 
+    Supports both MUD-style opponents (with CombatRating, DefenseRating, etc.) and
+    Incremental-style opponents (with Attributes and Skills).
+
     Args:
         opponents_data (dict): The opponents data to store.
     """
     try:
         for opponent in opponents_data.get("opponents", []):
-            opponent_item = {
-                "OpponentID": opponent["OpponentID"],
-                "Name": opponent["Name"],
-                "Description": opponent.get("Description", ""),
-                "CombatRating": opponent["CombatRating"],
-                "DefenseRating": opponent["DefenseRating"],
-                "DamageRating": opponent["DamageRating"],
-                "Toughness": opponent["Toughness"],
-                "ArmorRating": opponent.get("ArmorRating", 0),
-                "Health": opponent["Health"],
-                "WeaponType": opponent.get("WeaponType", "bashing"),
-                "WeaponDamage": opponent["WeaponDamage"],
-                "LootTable": opponent.get("LootTable", []),
-                "Tags": opponent.get("Tags", []),
-                "CreatedAt": opponent.get("CreatedAt", ""),
-            }
+            # Check if this is incremental game format (has Attributes/Skills)
+            if "Attributes" in opponent and "Skills" in opponent:
+                # Incremental game format
+                opponent_item = {
+                    "OpponentID": opponent["OpponentID"],
+                    "Name": opponent["Name"],
+                    "Description": opponent.get("Description", ""),
+                    "Health": opponent["Health"],
+                    "MaxHealth": opponent.get("MaxHealth", opponent["Health"]),
+                    "Attributes": opponent["Attributes"],
+                    "Skills": opponent["Skills"],
+                    "Level": opponent.get("Level", 1),
+                    "XPReward": opponent.get("XPReward", 10),
+                    "LootTable": opponent.get("LootTable", []),
+                    "Tags": opponent.get("Tags", []),
+                    "CreatedAt": opponent.get("CreatedAt", ""),
+                }
+            else:
+                # MUD format (legacy)
+                opponent_item = {
+                    "OpponentID": opponent["OpponentID"],
+                    "Name": opponent["Name"],
+                    "Description": opponent.get("Description", ""),
+                    "CombatRating": opponent["CombatRating"],
+                    "DefenseRating": opponent["DefenseRating"],
+                    "DamageRating": opponent["DamageRating"],
+                    "Toughness": opponent["Toughness"],
+                    "ArmorRating": opponent.get("ArmorRating", 0),
+                    "Health": opponent["Health"],
+                    "WeaponType": opponent.get("WeaponType", "bashing"),
+                    "WeaponDamage": opponent["WeaponDamage"],
+                    "LootTable": opponent.get("LootTable", []),
+                    "Tags": opponent.get("Tags", []),
+                    "CreatedAt": opponent.get("CreatedAt", ""),
+                }
 
             # Build update expression dynamically
             update_expression = "SET "
@@ -404,6 +426,9 @@ def store_story(story_data):
                 "StoryType": story["StoryType"],
                 "EstimatedDuration": story["EstimatedDuration"],
                 "Prerequisites": story.get("Prerequisites", {}),
+                "DifficultyMap": story.get("DifficultyMap", {}),
+                "RewardTiers": story.get("RewardTiers", {}),
+                "BaseXPMultiplier": story.get("BaseXPMultiplier", 0.5),
                 "FirstSegmentID": story["FirstSegmentID"],
                 "CreatedAt": story["CreatedAt"],
                 "Version": story.get("Version", 1),
@@ -437,6 +462,7 @@ def store_story(story_data):
                 "SegmentID": segment["SegmentID"],
                 "SegmentType": segment["SegmentType"],
                 "ShortStatus": segment["ShortStatus"],
+                "DefaultStatus": segment.get("DefaultStatus", ""),
                 "SegmentDuration": segment["SegmentDuration"],
             }
 
@@ -445,14 +471,15 @@ def store_story(story_data):
                 segment_item["DecisionText"] = segment.get("DecisionText", "")
                 segment_item["DecisionOptions"] = segment.get("DecisionOptions", {})
                 segment_item["DefaultDecision"] = segment.get("DefaultDecision", "")
-            elif segment["SegmentType"] == "combat":
-                segment_item["NextSegmentID"] = segment.get("NextSegmentID")
-                segment_item["Combat"] = segment.get("Combat", {})
-                segment_item["Results"] = segment.get("Results", {})
-            else:  # narrative
+            elif segment["SegmentType"] == "mechanical":
                 segment_item["NextSegmentID"] = segment.get("NextSegmentID")
                 segment_item["Challenges"] = segment.get("Challenges", [])
-                segment_item["Results"] = segment.get("Results", {})
+                segment_item["Combat"] = segment.get("Combat", {})
+            elif segment["SegmentType"] == "rest":
+                segment_item["NextSegmentID"] = segment.get("NextSegmentID")
+                segment_item["RestBenefit"] = segment.get("RestBenefit", {})
+            else:
+                print(f"Unknown segment type: {segment['SegmentType']}")
 
             # Build update expression
             update_expression = "SET "
@@ -638,20 +665,41 @@ def display_opponents(opponents_data):
         print(f"Opponent ID: {opponent.get('OpponentID', 'No ID')}")
         print(f"  Name: {opponent.get('Name', 'No Name')}")
         print(f"  Description: {opponent.get('Description', 'No description')}")
-        print(f"  Combat Rating: {opponent.get('CombatRating', 0)}")
-        print(f"  Defense Rating: {opponent.get('DefenseRating', 0)}")
-        print(f"  Damage Rating: {opponent.get('DamageRating', 0)}")
-        print(f"  Toughness: {opponent.get('Toughness', 0)}")
-        print(f"  Armor Rating: {opponent.get('ArmorRating', 0)}")
-        print(f"  Health: {opponent.get('Health', 0)}")
-        print(f"  Weapon Type: {opponent.get('WeaponType', 'Unknown')}")
-        print(f"  Weapon Damage: {opponent.get('WeaponDamage', 0)}")
+
+        # Check if this is incremental format (has Attributes/Skills)
+        if "Attributes" in opponent and "Skills" in opponent:
+            # Incremental format
+            print(f"  Health: {opponent.get('Health', 0)} / {opponent.get('MaxHealth', opponent.get('Health', 0))}")
+            print(f"  Level: {opponent.get('Level', 1)}")
+            print(f"  XP Reward: {opponent.get('XPReward', 0)}")
+
+            print("  Attributes:")
+            for attr, value in opponent.get("Attributes", {}).items():
+                print(f"    {attr}: {value}")
+
+            print("  Skills:")
+            for skill, value in opponent.get("Skills", {}).items():
+                print(f"    {skill}: {value}")
+        else:
+            # MUD format (legacy)
+            print(f"  Combat Rating: {opponent.get('CombatRating', 0)}")
+            print(f"  Defense Rating: {opponent.get('DefenseRating', 0)}")
+            print(f"  Damage Rating: {opponent.get('DamageRating', 0)}")
+            print(f"  Toughness: {opponent.get('Toughness', 0)}")
+            print(f"  Armor Rating: {opponent.get('ArmorRating', 0)}")
+            print(f"  Health: {opponent.get('Health', 0)}")
+            print(f"  Weapon Type: {opponent.get('WeaponType', 'Unknown')}")
+            print(f"  Weapon Damage: {opponent.get('WeaponDamage', 0)}")
 
         loot_table = opponent.get("LootTable", [])
         if loot_table:
             print("  Loot Table:")
             for loot in loot_table:
-                print(f"    Item: {loot.get('itemId', 'Unknown')} (chance: {loot.get('chance', 0)})")
+                if isinstance(loot, dict):
+                    print(f"    Item: {loot.get('itemID', 'Unknown')} (chance: {loot.get('chance', 0)})")
+                else:
+                    # Simple string format
+                    print(f"    {loot}")
 
         tags = opponent.get("Tags", [])
         if tags:
@@ -702,17 +750,22 @@ def display_story(story_data):
                     print("    Options:")
                     for opt_key, opt_value in options.items():
                         print(f"      {opt_key}: -> {opt_value}")
-            elif segment.get("SegmentType") == "combat":
-                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
-                combat = segment.get("Combat", {})
-                if combat:
-                    print(f"    Opponent ID: {combat.get('opponentId', 'None')}")
-                    print(f"    Max Rounds: {combat.get('maxRounds', 0)}")
-            else:
+            elif segment.get("SegmentType") == "mechanical":
                 print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
                 challenges = segment.get("Challenges", [])
                 if challenges:
                     print(f"    Challenges: {len(challenges)}")
+                combat = segment.get("Combat", {})
+                if combat:
+                    print(f"    Combat: Opponent ID: {combat.get('OpponentID', 'None')}, Max Rounds: {combat.get('maxRounds', 0)}")
+            elif segment.get("SegmentType") == "rest":
+                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
+                rest_benefit = segment.get("RestBenefit", {})
+                if rest_benefit:
+                    print(f"    Rest Benefit: {rest_benefit}")
+            else:
+                print(f"    Unknown segment type: {segment.get('SegmentType')}")
+                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
             print()
 
 

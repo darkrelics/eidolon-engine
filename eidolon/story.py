@@ -5,12 +5,28 @@ Provides common functions for story operations including starting, abandoning,
 and managing story segments.
 """
 
+import time
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from botocore.exceptions import ClientError
+from uuid_extension import uuid7
 
+from eidolon.character import get_character, heal_expired_wounds, validate_character_ownership
 from eidolon.dynamo import TableName, dynamo
+from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import get_logger
+from eidolon.segment import (
+    complete_story,
+    create_next_active_segment,
+    delete_active_segment,
+    determine_next_segment,
+    get_segment_definition,
+    record_segment_history,
+    update_character_active_segment,
+)
+from eidolon.sqs import send_message
+from eidolon.validation import validate_uuid
 
 logger = get_logger(__name__)
 
@@ -114,7 +130,7 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
         raise ValueError("Story ID cannot be empty")
 
     try:
-        history = dynamo.get_item(TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id})
+        history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryID": story_id})
     except ClientError as err:
         logger.error(
             "Failed to get story history",
@@ -128,7 +144,7 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
 
         try:
             dynamo.update_item(
-                TableName.HISTORY,
+                TableName.STORY_HISTORY,
                 Key={"CharacterID": character_id, "StoryID": story_id},
                 UpdateExpression="SET FinishedAt = :finished, AbandonedCount = :count, FinalOutcome = :outcome",
                 ExpressionAttributeValues={
@@ -389,7 +405,7 @@ def get_story_history(character_id: str, story_id: str) -> dict:
         raise ValueError("Story ID cannot be empty")
 
     try:
-        history = dynamo.get_item(TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id})
+        history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryID": story_id})
         return history or {}
     except ClientError as err:
         logger.error(
@@ -434,7 +450,7 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
 
         if story_type == "daily":
             # Calculate time until midnight UTC
-            finished_at = datetime.fromisoformat(history["FinishedAt"].replace("Z", "+00:00"))
+            finished_at = datetime.fromisoformat(history.get("FinishedAt", "").replace("Z", "+00:00"))
             now = datetime.now(timezone.utc)
 
             # Check if completion was today
@@ -479,12 +495,6 @@ def check_story_prerequisites(character: dict, prerequisites: dict) -> bool:
             if item_id not in inventory_items:
                 return False
 
-    # Check required rooms visited (not implemented yet)
-    required_rooms = prerequisites.get("requiredRooms", [])
-    if required_rooms:
-        # TODO: Implement room visit tracking
-        pass
-
     return True
 
 
@@ -506,9 +516,6 @@ def get_stories_for_character(character_id: str, available_story_ids: list) -> l
         return []
 
     stories = []
-
-    # Need character data for prerequisite checking
-    from eidolon.character import get_character
 
     character = get_character(character_id)
 
@@ -537,6 +544,10 @@ def get_stories_for_character(character_id: str, available_story_ids: list) -> l
                 "Available": cooldown == 0,
                 "CooldownRemaining": max(0, cooldown) if cooldown is not None else 0,
                 "EstimatedDuration": int(story_data.get("EstimatedDuration", 0)),
+                "Prerequisites": prerequisites,
+                "DifficultyMap": story_data.get("DifficultyMap", {}),
+                "RewardTiers": story_data.get("RewardTiers", {}),
+                "BaseXPMultiplier": float(story_data.get("BaseXPMultiplier", 0.5)),
             }
 
             stories.append(formatted_story)
@@ -545,7 +556,7 @@ def get_stories_for_character(character_id: str, available_story_ids: list) -> l
                 extra={
                     "story_id": story_id,
                     "story_type": story_type,
-                    "available": formatted_story["Available"],
+                    "available": formatted_story.get("Available"),
                     "cooldown": cooldown,
                 },
             )
@@ -623,18 +634,16 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
     Raises:
         RuntimeError: If database operation fails
     """
-    import time
-    import uuid
 
     segment_id = segment.get("SegmentID")
-    segment_type = segment.get("SegmentType", "narrative")
+    segment_type = segment.get("SegmentType", "mechanical")
     duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
 
     current_time = int(time.time())
     end_time = current_time + duration
 
-    # Generate unique ID for this active segment
-    active_segment_id = str(uuid.uuid4())
+    # Generate UUIDv7 for time-based ordering
+    active_segment_id = str(uuid7())
 
     active_segment = {
         "ActiveSegmentID": active_segment_id,
@@ -653,17 +662,35 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
     if segment_type == "decision":
         active_segment["Decision"] = None
         active_segment["DecisionOptions"] = segment.get("DecisionOptions", {})
-    elif segment_type == "narrative":
+    elif segment_type == "mechanical":
+        # Mechanical segments can have challenges and/or combat
         active_segment["ChallengeResults"] = []
         active_segment["Outcome"] = None
-    elif segment_type == "combat":
+
+        # If combat is configured, set up combat state
         combat_config = segment.get("Combat", {})
-        active_segment["CombatState"] = {
-            "round": 0,
-            "playerWounds": [],
-            "opponentHealth": None,
-            "opponentId": combat_config.get("opponentId"),
-        }
+        if combat_config:
+            opponent_id = combat_config.get("opponentId")
+
+            # Load opponent to get initial health
+            opponent_health = 5  # Default health
+            if opponent_id:
+                try:
+                    opponent = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+                    if opponent:
+                        opponent_health = opponent.get("Health", 5)
+                except Exception as err:
+                    logger.warning(
+                        "Failed to load opponent for combat state init", extra={"opponent_id": opponent_id, "error": str(err)}
+                    )
+
+            active_segment["CombatState"] = {
+                "round": 0,
+                "playerWounds": [],
+                "opponentWounds": [],
+                "opponentHealth": opponent_health,
+                "opponentId": opponent_id,
+            }
 
     # Store in DynamoDB
     try:
@@ -708,7 +735,7 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
         }
 
         # Put item (will overwrite if exists - handles retries)
-        dynamo.put_item(TableName.HISTORY, history_entry)
+        dynamo.put_item(TableName.STORY_HISTORY, history_entry)
     except ClientError as err:
         logger.error(
             "Failed to create history entry",
@@ -739,11 +766,22 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         ValueError: If validation fails
         RuntimeError: If database operations fail
     """
-    from eidolon.character import get_character, validate_character_ownership
 
     # Get character and verify ownership
     character = get_character(character_id)
     validate_character_ownership(character, player_id)
+
+    # Heal any expired wounds before starting new segment
+    try:
+        heal_result = heal_expired_wounds(character_id)
+        if heal_result.get("healed_count", 0) > 0:
+            logger.info(
+                "Healed wounds before story start",
+                extra={"character_id": character_id, "healed_count": heal_result["healed_count"]},
+            )
+    except Exception as err:
+        logger.warning("Failed to heal wounds before story start", extra={"character_id": character_id, "error": str(err)})
+        # Non-critical - continue with story start
 
     # Check if character is already in a game mode
     game_mode = character.get("GameMode", "None")
@@ -786,7 +824,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
                 ":mode": "Incremental",
                 ":none": "None",
                 ":story_id": story_id,
-                ":segment_id": active_segment["ActiveSegmentID"],
+                ":segment_id": active_segment.get("ActiveSegmentID"),
             },
             ConditionExpression="GameMode = :none",
         )
@@ -796,18 +834,18 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         try:
             dynamo.delete_item(
                 TableName.ACTIVE_SEGMENTS,
-                Key={"ActiveSegmentID": active_segment["ActiveSegmentID"]},
+                Key={"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
             )
         except Exception as rollback_err:
             logger.error(
                 "Failed to rollback active segment",
                 extra={
-                    "active_segment_id": active_segment["ActiveSegmentID"],
+                    "active_segment_id": active_segment.get("ActiveSegmentID"),
                     "error": str(rollback_err),
                 },
             )
 
-        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             logger.warning(
                 "Character state changed during story start",
                 extra={"character_id": character_id},
@@ -834,7 +872,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         extra={
             "character_id": character_id,
             "story_id": story_id,
-            "active_segment_id": active_segment["ActiveSegmentID"],
+            "active_segment_id": active_segment.get("ActiveSegmentID"),
             "segment_type": first_segment.get("SegmentType"),
         },
     )
@@ -853,14 +891,13 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
     Returns:
         Formatted response data
     """
-    import time
 
-    segment_type = segment.get("SegmentType", "narrative")
-    time_remaining = max(0, active_segment["EndTime"] - int(time.time()))
+    segment_type = segment.get("SegmentType", "mechanical")
+    time_remaining = max(0, active_segment.get("EndTime", 0) - int(time.time()))
 
     response = {
-        "SegmentID": active_segment["ActiveSegmentID"],
-        "StoryID": active_segment["StoryID"],
+        "SegmentID": active_segment.get("ActiveSegmentID"),
+        "StoryID": active_segment.get("StoryID"),
         "Type": segment_type,
         "TimeRemaining": time_remaining,
     }
@@ -875,12 +912,12 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         for option_id, _ in decision_options.items():
             options.append({"Id": option_id, "Text": option_id.replace("-", " ").title()})  # Format option ID as display text
         response["Options"] = options
-    elif segment_type == "narrative":
+    elif segment_type == "mechanical":
         response["ShortStatus"] = segment.get("ShortStatus", "Progressing through the story...")
-        response["Narrative"] = ""
-    elif segment_type == "combat":
-        response["ShortStatus"] = segment.get("ShortStatus", "Engaged in combat!")
-        response["OpponentID"] = segment.get("Combat", {}).get("opponentID")
+        # Include combat opponent if configured
+        combat_config = segment.get("Combat", {})
+        if combat_config:
+            response["OpponentID"] = combat_config.get("opponentID")
 
     return response
 
@@ -1028,7 +1065,6 @@ def get_next_segment_time(active_segment: dict, decision_id: str) -> int:
     Returns:
         Next segment completion time (0 if no next segment)
     """
-    import time
 
     decision_options = active_segment.get("DecisionOptions", {})
     next_segment_id = decision_options.get(decision_id)
@@ -1077,8 +1113,6 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
         ValueError: If validation fails
         RuntimeError: If database operations fail
     """
-    from eidolon.character import get_character, validate_character_ownership
-    from eidolon.validation import validate_uuid
 
     # Validate character ID format
     if not validate_uuid(character_id):
@@ -1102,27 +1136,651 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     # Validate decision is valid for this segment
     validate_decision_option(active_segment, decision_id)
 
-    # Update active segment with decision
+    # Update active segment with decision and mark as completed
     update_segment_decision(active_segment_id, decision_id)
 
-    # Calculate next segment time if applicable
-    next_segment_time = get_next_segment_time(active_segment, decision_id)
+    # Record segment history before advancing
+    story_id = active_segment.get("StoryID")
+    if not story_id:
+        raise ValueError("Story ID not found in active segment")
 
-    # Build response per documentation with PascalCase
+    # Mark outcome as normal for completed decision segments
+    active_segment["Outcome"] = "normal"
+    active_segment["Decision"] = decision_id
+    active_segment["DecisionMadeAt"] = datetime.now(timezone.utc).isoformat()
+
+    record_segment_history(character_id, story_id, active_segment_id, active_segment)
+
+    # Get segment definition to determine next segment
+    segment_id = active_segment.get("SegmentID")
+    if not segment_id:
+        raise ValueError("Segment ID not found in active segment")
+
+    segment_def = get_segment_definition(str(story_id), str(segment_id))
+
+    # Determine next segment based on decision
+    next_segment_id = determine_next_segment(segment_def, active_segment, "normal")
+
     response_data: dict = {
         "Accepted": True,
     }
 
-    if next_segment_time > 0:
-        response_data["NextSegmentTime"] = next_segment_time
+    if next_segment_id:
+        # Create next segment
+        try:
+            next_segment_def = get_segment_definition(story_id, next_segment_id)  # type: ignore
+
+            next_active_segment_id = create_next_active_segment(
+                character_id,
+                player_id,
+                story_id,
+                next_segment_def,
+                active_segment.get("StoryTitle", "Unknown Story"),
+            )
+
+            # Update character with new active segment
+            update_character_active_segment(character_id, next_active_segment_id)
+
+            # Calculate next segment time
+            next_segment_time = int(time.time()) + next_segment_def.get("SegmentDuration", 60)
+            response_data["NextSegmentTime"] = next_segment_time
+
+            logger.info(
+                "Advanced to next segment after decision",
+                extra={
+                    "character_id": character_id,
+                    "next_segment_id": next_segment_id,
+                    "next_active_segment_id": next_active_segment_id,
+                    "segment_type": next_segment_def.get("SegmentType"),
+                },
+            )
+
+            # Queue mechanical segments for immediate processing
+            if next_segment_def.get("SegmentType") == "mechanical":
+                try:
+                    if SEGMENT_QUEUE_URL:
+                        message_body = {
+                            "ActiveSegmentID": next_active_segment_id,
+                            "CharacterID": character_id,
+                            "StoryID": story_id,
+                            "SegmentID": next_segment_id,
+                            "SegmentType": "mechanical",
+                        }
+                        send_message(SEGMENT_QUEUE_URL, message_body)
+                        logger.info(
+                            "Queued next mechanical segment for processing", extra={"active_segment_id": next_active_segment_id}
+                        )
+                except Exception as err:
+                    # Non-critical - segment will be picked up by poller
+                    logger.warning(
+                        "Failed to queue mechanical segment", extra={"active_segment_id": next_active_segment_id, "error": str(err)}
+                    )
+        except Exception as err:
+            logger.error(
+                "Failed to create next segment after decision",
+                extra={
+                    "next_segment_id": next_segment_id,
+                    "error": str(err),
+                },
+                exc_info=True,
+            )
+            raise RuntimeError(f"Failed to create next segment: {str(err)}")
+    else:
+        # Story complete
+        complete_story(character_id, story_id, "normal")
+        logger.info(
+            "Story completed after decision",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+            },
+        )
+
+    # Delete processed segment
+    delete_active_segment(active_segment_id)
 
     logger.info(
-        "Decision submitted successfully",
+        "Decision submitted and story advanced",
         extra={
             "active_segment_id": active_segment_id,
             "decision_id": decision_id,
-            "has_next_segment": next_segment_time > 0,
+            "advanced_to_next": next_segment_id is not None,
         },
     )
 
     return response_data
+
+
+def format_story_segment_response(active_segment: dict, story_metadata: dict, segment_data: dict) -> dict:
+    """
+    Format story and segment data for API response.
+
+    Args:
+        active_segment: Active segment record from database
+        story_metadata: Story metadata from STORY table
+        segment_data: Segment definition from SEGMENTS table
+
+    Returns:
+        Formatted response dict with story and segment information
+    """
+
+    # Calculate time remaining
+    end_time = int(active_segment.get("EndTime", 0))
+    current_time = int(time.time())
+    time_remaining = max(0, end_time - current_time)
+
+    # Build base response
+    response = {
+        "Story": {
+            "StoryID": active_segment.get("StoryID"),
+            "Title": story_metadata.get("Title", ""),
+            "Type": story_metadata.get("StoryType", ""),
+            "TotalSegments": story_metadata.get("TotalSegments", 1),
+            "CurrentSegmentIndex": segment_data.get("SegmentIndex", 0),
+        },
+        "Segment": {
+            "SegmentID": active_segment.get("SegmentID"),
+            "SegmentType": segment_data.get("SegmentType", ""),
+            "ShortStatus": segment_data.get("ShortStatus", ""),
+            "Description": "",  # Will be set based on segment type
+            "Duration": segment_data.get("SegmentDuration", 0),
+            "TimeRemaining": time_remaining,
+            "StartTime": active_segment.get("StartTime", 0),
+            "EndTime": int(active_segment.get("EndTime", 0)),
+        },
+        "ActiveSegmentID": active_segment.get("ActiveSegmentID", ""),
+        "Status": active_segment.get("Status", ""),
+    }
+
+    # Add segment type specific data
+    segment_type = segment_data.get("SegmentType", "")
+
+    if segment_type == "decision":
+        response["Segment"]["DecisionText"] = segment_data.get("DecisionText", "")
+        # Format options from DecisionOptions map
+        decision_options = segment_data.get("DecisionOptions", {})
+        options = []
+        for option_id, _ in decision_options.items():
+            options.append({"Id": option_id, "Text": option_id.replace("-", " ").title()})
+        response["Segment"]["Options"] = options
+        response["Segment"]["Decision"] = active_segment.get("Decision")
+
+    elif segment_type == "mechanical":
+        # Mechanical segments can contain skill challenges and/or combat
+        response["Segment"]["Description"] = segment_data.get("Description", segment_data.get("Narrative", ""))
+        response["Segment"]["Challenges"] = segment_data.get("Challenges", [])
+        response["Segment"]["ChallengeResults"] = active_segment.get("ChallengeResults", [])
+
+        # Combat is optional within mechanical segments
+        if segment_data.get("Combat"):
+            response["Segment"]["Combat"] = segment_data.get("Combat", {})
+            response["Segment"]["CombatState"] = active_segment.get("CombatState", {})
+
+        response["Segment"]["Outcome"] = active_segment.get("Outcome")
+
+    elif segment_type == "rest":
+        # Rest segments allow wound healing over time
+        response["Segment"]["Description"] = segment_data.get("Description", segment_data.get("Narrative", ""))
+
+    else:
+        # Unknown segment type - add minimal data
+        logger.warning(
+            "Unknown segment type",
+            extra={"segment_type": segment_type, "segment_id": active_segment.get("SegmentID")},
+        )
+        response["Segment"]["Description"] = segment_data.get("Description", segment_data.get("Narrative", ""))
+
+    return response
+
+
+def complete_story_for_character(character_id: str, story_id: str, final_outcome: str) -> None:
+    """
+    Mark a story as completed and clean up character state.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        final_outcome: Story outcome (death, failure, minimal, normal, exceptional)
+
+    Raises:
+        RuntimeError: If database operations fail
+    """
+    try:
+        # Update character to clear GameMode and story references
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET GameMode = :none REMOVE ActiveStoryID, ActiveSegmentID",
+            ExpressionAttributeValues={":none": "None"},
+        )
+
+        # Update story history with completion
+        dynamo.update_item(
+            TableName.STORY_HISTORY,
+            Key={"CharacterID": character_id, "StoryID": story_id},
+            UpdateExpression="SET FinishedAt = :finished, FinalOutcome = :outcome",
+            ExpressionAttributeValues={
+                ":finished": datetime.now(timezone.utc).isoformat(),
+                ":outcome": final_outcome,
+            },
+        )
+
+        logger.info(
+            "Story completed",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "outcome": final_outcome,
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to complete story",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "error": str(err),
+            },
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to complete story: {str(err)}")
+
+
+def calculate_story_rewards(story_metadata: dict, outcome: str, segments_completed: int) -> dict:
+    """
+    Calculate rewards based on story outcome and segments completed.
+
+    Args:
+        story_metadata: Story data from STORY table
+        outcome: Final outcome (death, failure, minimal, normal, exceptional)
+        segments_completed: Number of segments completed
+
+    Returns:
+        Dict with calculated rewards (xp, items, etc.)
+    """
+    rewards = {
+        "xp": 0,
+        "items": [],
+        "currency": 0,
+    }
+
+    # No rewards for death
+    if outcome == "death":
+        return rewards
+
+    # Get base XP multiplier and reward tiers
+    base_xp_multiplier = float(story_metadata.get("BaseXPMultiplier", 0.5))
+    reward_tiers = story_metadata.get("RewardTiers", {})
+
+    # Calculate XP based on outcome
+    outcome_multipliers = {
+        "failure": 0.25,
+        "minimal": 0.5,
+        "normal": 1.0,
+        "exceptional": 1.5,
+    }
+
+    outcome_multiplier = outcome_multipliers.get(outcome, 0)
+    base_xp = story_metadata.get("EstimatedDuration", 300) * base_xp_multiplier
+
+    # XP = base * outcome * (segments_completed / total_segments)
+    total_segments = story_metadata.get("TotalSegments", 1)
+    completion_ratio = min(1.0, segments_completed / max(1, total_segments))
+
+    rewards["xp"] = int(base_xp * outcome_multiplier * completion_ratio)
+
+    # Get items and currency from reward tiers
+    tier_rewards = reward_tiers.get(outcome, {})
+    rewards["items"] = tier_rewards.get("items", [])
+    rewards["currency"] = tier_rewards.get("currency", 0)
+
+    return rewards
+
+
+def apply_story_rewards(character_id: str, rewards: dict) -> None:
+    """
+    Apply calculated rewards to a character.
+
+    Args:
+        character_id: Character UUID
+        rewards: Dict containing xp, items, currency
+
+    Raises:
+        RuntimeError: If database operations fail
+    """
+    try:
+        # Apply XP to character's story skill
+        if rewards.get("xp", 0) > 0:
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression="ADD #skills.#story :xp",
+                ExpressionAttributeNames={
+                    "#skills": "Skills",
+                    "#story": "story",
+                },
+                ExpressionAttributeValues={
+                    ":xp": rewards["xp"],
+                },
+            )
+
+        # TODO: Add items to inventory when item system is implemented
+        # TODO: Add currency when currency system is implemented
+
+        logger.info(
+            "Applied story rewards",
+            extra={
+                "character_id": character_id,
+                "xp": rewards.get("xp", 0),
+                "items": rewards.get("items", []),
+                "currency": rewards.get("currency", 0),
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to apply rewards",
+            extra={
+                "character_id": character_id,
+                "rewards": rewards,
+                "error": str(err),
+            },
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to apply rewards: {str(err)}")
+
+
+def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
+    """
+    Apply rewards from defeating an opponent in combat.
+
+    Args:
+        character_id: Character UUID
+        opponent_data: Opponent data including XPReward and LootTable
+
+    Raises:
+        RuntimeError: If database operations fail
+    """
+    try:
+        # Apply XP reward to combat skill
+        xp_reward = opponent_data.get("XPReward", 10)
+        if xp_reward > 0:
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression="ADD #skills.#combat :xp",
+                ExpressionAttributeNames={
+                    "#skills": "Skills",
+                    "#combat": "combat",
+                },
+                ExpressionAttributeValues={
+                    ":xp": xp_reward,
+                },
+            )
+
+        # TODO: Process loot table and add items to inventory
+        loot_table = opponent_data.get("LootTable", [])
+
+        logger.info(
+            "Applied combat rewards",
+            extra={
+                "character_id": character_id,
+                "opponent": opponent_data.get("Name", "Unknown"),
+                "xp": xp_reward,
+                "potential_loot": loot_table,
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to apply combat rewards",
+            extra={
+                "character_id": character_id,
+                "opponent_id": opponent_data.get("OpponentID"),
+                "error": str(err),
+            },
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to apply combat rewards: {str(err)}")
+
+
+def add_segment_to_history(character_id: str, story_id: str, segment_id: str, outcome: str) -> None:
+    """
+    Add a completed segment to the story history.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        segment_id: Segment UUID
+        outcome: Segment outcome
+
+    Raises:
+        RuntimeError: If database operations fail
+    """
+    try:
+        segment_entry = {
+            "segmentId": segment_id,
+            "completedAt": datetime.now(timezone.utc).isoformat(),
+            "outcome": outcome,
+        }
+
+        dynamo.update_item(
+            TableName.STORY_HISTORY,
+            Key={"CharacterID": character_id, "StoryID": story_id},
+            UpdateExpression="SET SegmentHistory = list_append(SegmentHistory, :segment)",
+            ExpressionAttributeValues={
+                ":segment": [segment_entry],
+            },
+        )
+
+        logger.info(
+            "Added segment to history",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "segment_id": segment_id,
+                "outcome": outcome,
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to add segment to history",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "segment_id": segment_id,
+                "error": str(err),
+            },
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to add segment to history: {str(err)}")
+
+
+def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> None:
+    """
+    Apply story outcome effects like room changes and item rewards.
+
+    Args:
+        character_id: Character UUID
+        outcome_effects: Dict containing room changes, items, etc.
+
+    Raises:
+        RuntimeError: If database operations fail
+    """
+    try:
+        update_expressions = []
+        expression_attribute_names = {}
+        expression_attribute_values = {}
+
+        # Handle room change
+        if "room" in outcome_effects:
+            update_expressions.append("#room = :room")
+            expression_attribute_names["#room"] = "RoomID"
+            expression_attribute_values[":room"] = outcome_effects["room"]
+
+        # TODO: Handle item rewards when inventory system is implemented
+        # if "items" in outcome_effects:
+        #     # Add items to inventory
+
+        if update_expressions:
+            update_expression = "SET " + ", ".join(update_expressions)
+
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
+
+            logger.info(
+                "Applied story outcome effects",
+                extra={
+                    "character_id": character_id,
+                    "effects": outcome_effects,
+                },
+            )
+    except ClientError as err:
+        logger.error(
+            "Failed to apply outcome effects",
+            extra={
+                "character_id": character_id,
+                "effects": outcome_effects,
+                "error": str(err),
+            },
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to apply outcome effects: {str(err)}")
+
+
+def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, attribute_xp: dict) -> None:
+    """
+    Update the story history with accumulated XP from this segment.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        skill_xp: Skill XP awarded in this segment
+        attribute_xp: Attribute XP awarded in this segment
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    if not skill_xp and not attribute_xp:
+        # No XP to update
+        return
+
+    try:
+        # Build update expressions for XP accumulation
+        update_expressions = ["SegmentCount = SegmentCount + :one"]
+        expression_names = {}
+        expression_values = {":one": Decimal("1")}
+
+        # Add skill XP updates
+        for skill, xp_value in skill_xp.items():
+            if xp_value > 0:
+                safe_skill = skill.replace("-", "_")
+                update_expressions.append(
+                    f"SkillXPAwarded.#skill_{safe_skill} = if_not_exists(SkillXPAwarded.#skill_{safe_skill}, :zero) + :xp_{safe_skill}"
+                )
+                expression_names[f"#skill_{safe_skill}"] = skill
+                expression_values[f":xp_{safe_skill}"] = Decimal(str(xp_value))
+
+        # Add attribute XP updates
+        for attribute, xp_value in attribute_xp.items():
+            if xp_value > 0:
+                safe_attr = attribute.replace("-", "_")
+                update_expressions.append(
+                    f"AttributeXPAwarded.#attr_{safe_attr} = if_not_exists(AttributeXPAwarded.#attr_{safe_attr}, :zero) + :xp_attr_{safe_attr}"
+                )
+                expression_names[f"#attr_{safe_attr}"] = attribute
+                expression_values[f":xp_attr_{safe_attr}"] = Decimal(str(xp_value))
+
+        # Add zero value if needed
+        if ":zero" not in expression_values:
+            expression_values[":zero"] = Decimal("0")
+
+        # Execute update
+        update_expression = "SET " + ", ".join(update_expressions)
+
+        dynamo.update_item(
+            TableName.STORY_HISTORY,
+            Key={"CharacterID": character_id, "StoryID": story_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_names if expression_names else None,
+            ExpressionAttributeValues=expression_values,
+        )
+
+        logger.info(
+            "Updated story history with XP",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "skill_xp_count": len(skill_xp),
+                "attribute_xp_count": len(attribute_xp),
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to update story history XP",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
+            },
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to update story history XP: {str(err)}")
+
+
+def ensure_story_history_exists(character_id: str, story_id: str, story_title: str) -> None:
+    """
+    Ensure story history record exists.
+
+    Creates a new story history record if one doesn't exist.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        story_title: Story title for display
+
+    Raises:
+        RuntimeError: If database operations fail
+    """
+    try:
+        # Check if story history exists
+        history = dynamo.get_item(
+            TableName.STORY_HISTORY,
+            {"CharacterID": character_id, "StoryID": story_id},
+        )
+
+        if not history:
+            # Create new story history
+            dynamo.put_item(
+                TableName.STORY_HISTORY,
+                {
+                    "CharacterID": character_id,
+                    "StoryID": story_id,
+                    "StoryTitle": story_title,
+                    "StartedAt": datetime.now(timezone.utc).isoformat(),
+                    "SegmentCount": 0,
+                },
+            )
+            logger.info(
+                "Created story history record",
+                extra={
+                    "character_id": character_id,
+                    "story_id": story_id,
+                },
+            )
+    except ClientError as err:
+        logger.error(
+            "Failed to ensure story history exists",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+                "error": str(err),
+                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
+            },
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to ensure story history exists: {str(err)}")

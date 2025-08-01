@@ -62,13 +62,13 @@ func (c *Character) TakeDamage(damageType string, amount int) {
 	}
 
 	c.addWounds(damageType, amount)
-	c.health = c.maxHealth - len(c.wounds)
+	currentHealth := c.maxHealth - len(c.wounds)
 
 	damageMsg := fmt.Sprintf("You take %d %s damage! Health: %d/%d\n\r",
-		originalAmount, damageType, c.health, c.maxHealth)
+		originalAmount, damageType, currentHealth, c.maxHealth)
 	c.playerCommandOut <- damageMsg
 
-	if c.health <= 0 {
+	if currentHealth <= 0 {
 		c.updateStateWhenHealthZero()
 	}
 }
@@ -162,6 +162,18 @@ func min(a, b int) int {
 	return b
 }
 
+// GetHealth returns the current health calculated as MaxHealth - number of wounds
+func (c *Character) GetHealth() int {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if c.charState == CharStateDead {
+		return 0
+	}
+
+	return c.maxHealth - len(c.wounds)
+}
+
 func (c *Character) CalculateCurrentHealth() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -181,11 +193,11 @@ func (c *Character) CalculateCurrentHealth() {
 
 	if len(activeWounds) != len(c.wounds) {
 		healed := len(c.wounds) - len(activeWounds)
+		oldWoundsCount := len(c.wounds)
 		c.wounds = activeWounds
-		oldHealth := c.health
-		c.health = c.maxHealth - len(c.wounds)
+		currentHealth := c.maxHealth - len(c.wounds)
 
-		if oldHealth <= 0 && c.health > 0 && c.charState == CharStateUnconscious {
+		if oldWoundsCount >= c.maxHealth && currentHealth > 0 && c.charState == CharStateUnconscious {
 			c.charState = CharStateStanding
 			if c.player != nil {
 				c.playerCommandOut <- ApplyColor("green", "You regain consciousness!\n\r")
@@ -194,7 +206,7 @@ func (c *Character) CalculateCurrentHealth() {
 
 		if healed > 0 && c.player != nil {
 			c.playerCommandOut <- fmt.Sprintf("You heal %d wound%s. Health: %d/%d\n\r",
-				healed, pluralize(healed), c.health, c.maxHealth)
+				healed, pluralize(healed), currentHealth, c.maxHealth)
 		}
 	}
 }

@@ -81,7 +81,7 @@ CLAUDE.md
 **/*.pyo
 **/*.pyd
 **/*.pdb
-
+**/.pytest_cache
 
 # Apple Problems
 **/.DS_Store

@@ -4,8 +4,11 @@ Player management utilities for Lambda functions.
 Provides functions for player authentication and validation.
 """
 
+from datetime import datetime, timezone
+
 from botocore.exceptions import ClientError
 
+from eidolon.character import delete_character
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import get_logger
 
@@ -24,8 +27,6 @@ def create_player_record(user_uuid: str, email: str) -> None:
         ValueError: If user_uuid or email is missing
         RuntimeError: If database operations fail
     """
-    from datetime import datetime, timezone
-
     if not user_uuid or not email:
         raise ValueError("Missing required user attributes (sub or email)")
 
@@ -242,13 +243,13 @@ def get_formatted_character_list(player_id: str) -> list:
             "Processing character",
             extra={
                 "character_name": char_name,
-                "character_id": char_data["CharacterID"],
-                "is_dead": char_data["Dead"],
+                "character_id": char_data.get("CharacterID"),
+                "is_dead": char_data.get("Dead"),
             },
         )
 
     # Sort by name for consistent ordering
-    characters.sort(key=lambda x: x["CharacterName"])
+    characters.sort(key=lambda x: x.get("CharacterName", ""))
 
     logger.info(
         "Character list prepared successfully",
@@ -297,7 +298,6 @@ def delete_all_characters_for_player(player_id: str) -> dict:
     Raises:
         RuntimeError: If critical database operations fail
     """
-    from eidolon.character import delete_character
 
     results = {
         "characters_deleted": 0,
@@ -326,14 +326,14 @@ def delete_all_characters_for_player(player_id: str) -> dict:
                     # No need to verify ownership here since we're getting characters from player's own list
                     deletion_result = delete_character(character_id, remove_from_player_list=False)
 
-                    if deletion_result["character_deleted"]:
+                    if deletion_result.get("character_deleted"):
                         results["characters_deleted"] += 1
-                    results["items_deleted"] += deletion_result["items_deleted"]
-                    results["active_segments_deleted"] += deletion_result["active_segments_deleted"]
-                    results["history_deleted"] += deletion_result["history_deleted"]
+                    results["items_deleted"] += deletion_result.get("items_deleted", 0)
+                    results["active_segments_deleted"] += deletion_result.get("active_segments_deleted", 0)
+                    results["history_deleted"] += deletion_result.get("history_deleted", 0)
 
-                    if deletion_result["errors"]:
-                        results["errors"].extend(deletion_result["errors"])
+                    if deletion_result.get("errors"):
+                        results["errors"].extend(deletion_result.get("errors", []))
 
                     logger.info(
                         "Processed character deletion",
@@ -401,7 +401,7 @@ def delete_player_active_segments(player_id: str) -> int:
             try:
                 dynamo.delete_item(
                     TableName.ACTIVE_SEGMENTS,
-                    Key={"ActiveSegmentID": item["ActiveSegmentID"]},
+                    Key={"ActiveSegmentID": item.get("ActiveSegmentID")},
                 )
                 deleted_count += 1
             except ClientError as err:
@@ -409,7 +409,7 @@ def delete_player_active_segments(player_id: str) -> int:
                     "Failed to delete active segment",
                     extra={
                         "error": str(err),
-                        "segment_id": item["ActiveSegmentID"],
+                        "segment_id": item.get("ActiveSegmentID"),
                         "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
                     },
                 )
@@ -456,7 +456,7 @@ def delete_player_character_history(player_id: str) -> int:
             try:
                 dynamo.delete_item(
                     TableName.CHARACTER_HISTORY,
-                    Key={"PlayerID": player_id, "Timestamp": item["Timestamp"]},
+                    Key={"PlayerID": player_id, "Timestamp": item.get("Timestamp")},
                 )
                 deleted_count += 1
             except ClientError as err:
@@ -464,7 +464,7 @@ def delete_player_character_history(player_id: str) -> int:
                     "Failed to delete history record",
                     extra={
                         "error": str(err),
-                        "timestamp": item["Timestamp"],
+                        "timestamp": item.get("Timestamp"),
                         "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
                     },
                 )
@@ -506,7 +506,6 @@ def delete_player_data_completely(player_id: str) -> dict:
     Raises:
         ValueError: If player_id is empty
     """
-    from datetime import datetime, timezone
 
     if not player_id:
         raise ValueError("Player ID cannot be empty")
@@ -549,12 +548,12 @@ def delete_player_data_completely(player_id: str) -> dict:
     # Delete all characters and their associated data
     try:
         char_deletion_results = delete_all_characters_for_player(player_id)
-        results["deletions"]["characters"] = char_deletion_results["characters_deleted"]
-        results["deletions"]["items"] = char_deletion_results["items_deleted"]
-        results["deletions"]["active_segments"] += char_deletion_results["active_segments_deleted"]
-        results["deletions"]["story_history"] = char_deletion_results["history_deleted"]
-        if char_deletion_results["errors"]:
-            results["errors"].extend(char_deletion_results["errors"])
+        results["deletions"]["characters"] = char_deletion_results.get("characters_deleted", 0)
+        results["deletions"]["items"] = char_deletion_results.get("items_deleted", 0)
+        results["deletions"]["active_segments"] += char_deletion_results.get("active_segments_deleted", 0)
+        results["deletions"]["story_history"] = char_deletion_results.get("history_deleted", 0)
+        if char_deletion_results.get("errors"):
+            results["errors"].extend(char_deletion_results.get("errors", []))
     except Exception as err:
         logger.error(
             "Unexpected error deleting characters",

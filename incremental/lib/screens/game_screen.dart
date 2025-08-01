@@ -2,10 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/character.dart';
 import '../models/story.dart';
+import '../models/active_segment.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../utils/error_handler.dart';
 import '../utils/json_utils.dart';
+import '../widgets/mechanical_segment_display.dart';
+import '../widgets/outcome_display.dart';
+import '../widgets/story_card_components.dart';
+import '../utils/difficulty_calculator.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -415,7 +420,7 @@ class ActionPanel extends StatefulWidget {
   State<ActionPanel> createState() => _ActionPanelState();
 }
 
-class _ActionPanelState extends State<ActionPanel> {
+class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin {
   late ApiService _apiService;
   Future<List<StoryMetadata>>? _storiesFuture;
   bool _showStoryList = false;
@@ -426,6 +431,14 @@ class _ActionPanelState extends State<ActionPanel> {
   int _timeRemaining = 0;
   String? _selectedStoryType;
   bool _showOnlyAvailable = false;
+  bool _showingStoryCompletion = false;
+  Map<String, dynamic>? _storyCompletionData;
+  bool _isStartingStory = false;
+  bool _isTransitioning = false;
+  
+  // Animation controller for timer pulse
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
   
   // Configuration constants
   static const int _autoRefreshIntervalSeconds = 60; // Auto-refresh every 60 seconds
@@ -435,6 +448,20 @@ class _ActionPanelState extends State<ActionPanel> {
   void initState() {
     super.initState();
     _apiService = ApiService(authService: AuthService.instance);
+    
+    // Initialize pulse animation for critical timer
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _pulseAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.1,
+    ).animate(CurvedAnimation(
+      parent: _pulseController,
+      curve: Curves.easeInOut,
+    ));
+    
     _loadCurrentStory();
     _startTimers();
   }
@@ -443,6 +470,7 @@ class _ActionPanelState extends State<ActionPanel> {
   void dispose() {
     _refreshTimer?.cancel();
     _countdownTimer?.cancel();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -476,9 +504,48 @@ class _ActionPanelState extends State<ActionPanel> {
     });
 
     try {
-      final currentStory = await _apiService.getCurrentStory(
+      var currentStory = await _apiService.getCurrentStory(
         characterId: widget.character.id,
       );
+      
+      // Check if we have a mechanical segment that needs history data
+      if (currentStory != null) {
+        final activeSegmentData = currentStory['ActiveSegment'] as Map<String, dynamic>?;
+        if (activeSegmentData != null) {
+          final segmentType = activeSegmentData['SegmentType'] as String?;
+          final processingStatus = activeSegmentData['ProcessingStatus'] as String?;
+          final clientEvents = activeSegmentData['ClientEvents'] as List<dynamic>?;
+          
+          // If mechanical segment is processed but missing client events, fetch from history
+          if (segmentType == 'mechanical' && 
+              processingStatus == 'processed' && 
+              clientEvents == null) {
+            try {
+              final history = await _apiService.getSegmentHistory(
+                characterId: widget.character.id,
+              );
+              
+              if (history.isNotEmpty) {
+                // Find matching segment in history
+                final activeSegmentId = activeSegmentData['ActiveSegmentID'] as String;
+                final historySegment = history.firstWhere(
+                  (seg) => seg['ActiveSegmentID'] == activeSegmentId,
+                  orElse: () => <String, dynamic>{},
+                );
+                
+                if (historySegment.isNotEmpty) {
+                  // Merge history data into active segment
+                  activeSegmentData['ClientEvents'] = historySegment['ClientEvents'];
+                  activeSegmentData['CharacterUpdates'] = historySegment['CharacterUpdates'];
+                  activeSegmentData['Outcome'] = historySegment['Outcome'];
+                }
+              }
+            } catch (e) {
+              debugPrint('Error fetching segment history: $e');
+            }
+          }
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -489,32 +556,84 @@ class _ActionPanelState extends State<ActionPanel> {
           if (currentStory != null) {
             final storyData = JsonUtils.getFlexibleMap(currentStory, 'Story', 'story');
             final segmentData = JsonUtils.getFlexibleMap(currentStory, 'Segment', 'segment');
-            _timeRemaining = JsonUtils.getFlexibleRequired<int>(
-              segmentData,
-              'TimeRemaining',
-              'timeRemaining',
-              defaultValue: 0,
-            );
+            final activeSegmentData = currentStory['ActiveSegment'] as Map<String, dynamic>?;
             
-            final narrative = JsonUtils.getFlexible<String>(segmentData, 'Narrative', 'narrative') ?? '';
-            final shortStatus = JsonUtils.getFlexible<String>(segmentData, 'ShortStatus', 'shortStatus') ?? 'In progress';
-            final segmentName = narrative.isNotEmpty ? 
-              (narrative.length > 50 ? narrative.substring(0, 50) : narrative) : shortStatus;
-            
-            widget.character.storyState = {
-              'storyId': JsonUtils.getFlexible<String>(storyData, 'StoryID', 'storyId'),
-              'storyName': JsonUtils.getFlexible<String>(storyData, 'Title', 'title'),
-              'segmentId': JsonUtils.getFlexible<String>(segmentData, 'SegmentID', 'segmentId'),
-              'segmentType': JsonUtils.getFlexible<String>(segmentData, 'SegmentType', 'segmentType'),
-              'segmentName': segmentName,
-              'timeRemaining': JsonUtils.getFlexible<int>(segmentData, 'TimeRemaining', 'timeRemaining'),
-              'totalSegments': JsonUtils.getFlexible<int>(storyData, 'TotalSegments', 'totalSegments'),
-              'currentSegmentIndex': JsonUtils.getFlexible<int>(storyData, 'CurrentSegmentIndex', 'currentSegmentIndex'),
-            };
+            // Check if this is a story completion (no next segment)
+            if (activeSegmentData != null && 
+                activeSegmentData['Outcome'] != null &&
+                activeSegmentData['NextSegmentID'] == null) {
+              // Story is complete - show completion screen with transition
+              setState(() {
+                _isTransitioning = true;
+              });
+              
+              // Delay to show transition effect
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (mounted) {
+                  setState(() {
+                    _showingStoryCompletion = true;
+                    _storyCompletionData = {
+                      'story': storyData,
+                      'outcome': activeSegmentData['Outcome'],
+                      'activeSegment': activeSegmentData,
+                    };
+                    widget.character.storyState = null;
+                    _isTransitioning = false;
+                  });
+                }
+              });
+            } else {
+              // Normal segment processing
+              _showingStoryCompletion = false;
+              _storyCompletionData = null;
+              
+              _timeRemaining = JsonUtils.getFlexibleRequired<int>(
+                segmentData,
+                'TimeRemaining',
+                'timeRemaining',
+                defaultValue: 0,
+              );
+              
+              final shortStatus = JsonUtils.getFlexible<String>(segmentData, 'ShortStatus', 'shortStatus') ?? 'In progress';
+              final segmentName = shortStatus;
+              
+              widget.character.storyState = {
+                'storyId': JsonUtils.getFlexible<String>(storyData, 'StoryID', 'storyId'),
+                'storyName': JsonUtils.getFlexible<String>(storyData, 'Title', 'title'),
+                'segmentId': JsonUtils.getFlexible<String>(segmentData, 'SegmentID', 'segmentId'),
+                'segmentType': JsonUtils.getFlexible<String>(segmentData, 'SegmentType', 'segmentType'),
+                'segmentName': segmentName,
+                'timeRemaining': JsonUtils.getFlexible<int>(segmentData, 'TimeRemaining', 'timeRemaining'),
+                'totalSegments': JsonUtils.getFlexible<int>(storyData, 'TotalSegments', 'totalSegments'),
+                'currentSegmentIndex': JsonUtils.getFlexible<int>(storyData, 'CurrentSegmentIndex', 'currentSegmentIndex'),
+              };
+            }
           } else {
             widget.character.storyState = null;
+            _showingStoryCompletion = false;
+            _storyCompletionData = null;
           }
         });
+        
+        // For mechanical segments still processing, poll more frequently
+        if (_currentStoryData != null) {
+          final activeSegmentData = _currentStoryData!['ActiveSegment'] as Map<String, dynamic>?;
+          if (activeSegmentData != null) {
+            final segmentType = activeSegmentData['SegmentType'] as String?;
+            final processingStatus = activeSegmentData['ProcessingStatus'] as String?;
+            
+            if (segmentType == 'mechanical' && processingStatus != 'processed') {
+              // Cancel existing refresh timer
+              _refreshTimer?.cancel();
+              // Poll every 10 seconds for mechanical segment processing
+              _refreshTimer = Timer(const Duration(seconds: 10), () {
+                if (mounted) {
+                  _loadCurrentStory();
+                }
+              });
+            }
+          }
+        }
       }
     } catch (e) {
       debugPrint('Error loading current story: $e');
@@ -545,28 +664,98 @@ class _ActionPanelState extends State<ActionPanel> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text('Adventures', style: theme.textTheme.headlineSmall),
-          const SizedBox(height: 32),
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text('Adventures', style: theme.textTheme.headlineSmall),
+              const SizedBox(height: 32),
 
-          // Show loading indicator while checking for current story
-          if (_loadingCurrentStory) ...[
-            const CircularProgressIndicator(),
-          ] else if (widget.character.storyState != null &&
-              widget.character.storyState!['segmentId'] != null) ...[
-            _buildActiveStory(theme),
-          ] else if (_showStoryList) ...[
-            _buildStorySelection(theme),
-          ] else ...[
-            _buildNoActiveStory(theme),
-          ],
-        ],
-      ),
+              // Animated content transitions
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: animation.drive(
+                        Tween<Offset>(
+                          begin: const Offset(0.0, 0.02),
+                          end: Offset.zero,
+                        ),
+                      ),
+                      child: child,
+                    ),
+                  );
+                },
+                child: _buildContent(theme),
+              ),
+            ],
+          ),
+        ),
+        
+        // Loading overlay for transitions
+        if (_isStartingStory || _isTransitioning)
+          Container(
+            color: Colors.black54,
+            child: Center(
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(
+                        _isStartingStory ? 'Starting story...' : 'Loading...',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
+  }
+
+  Widget _buildContent(ThemeData theme) {
+    if (_loadingCurrentStory) {
+      return const Center(
+        key: ValueKey('loading'),
+        child: CircularProgressIndicator(),
+      );
+    } else if (_showingStoryCompletion && _storyCompletionData != null) {
+      return SizedBox(
+        key: const ValueKey('completion'),
+        width: double.infinity,
+        child: _buildStoryCompletionScreen(theme),
+      );
+    } else if (widget.character.storyState != null &&
+        widget.character.storyState!['segmentId'] != null) {
+      return SizedBox(
+        key: const ValueKey('active'),
+        width: double.infinity,
+        child: _buildActiveStory(theme),
+      );
+    } else if (_showStoryList) {
+      return SizedBox(
+        key: const ValueKey('list'),
+        width: double.infinity,
+        child: _buildStorySelection(theme),
+      );
+    } else {
+      return SizedBox(
+        key: const ValueKey('none'),
+        width: double.infinity,
+        child: _buildNoActiveStory(theme),
+      );
+    }
   }
 
   Widget _buildActiveStory(ThemeData theme) {
@@ -577,6 +766,14 @@ class _ActionPanelState extends State<ActionPanel> {
     final Map<String, dynamic> segment = storyData != null 
         ? JsonUtils.getFlexibleMap(storyData, 'Segment', 'segment') 
         : <String, dynamic>{};
+    
+    // Check if we have an active segment that's mechanical and processed
+    final activeSegmentData = storyData?['ActiveSegment'] as Map<String, dynamic>?;
+    ActiveSegment? activeSegment;
+    if (activeSegmentData != null) {
+      activeSegment = ActiveSegment.fromJson(activeSegmentData);
+    }
+    
     final segmentType = JsonUtils.getFlexibleRequired<String>(
       segment,
       'Type',
@@ -671,61 +868,83 @@ class _ActionPanelState extends State<ActionPanel> {
           const SizedBox(height: 16),
 
           // Segment Content Card
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _getSegmentIcon(segmentType),
-                        size: 20,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _getSegmentTypeLabel(segmentType),
-                        style: theme.textTheme.titleMedium,
-                      ),
-                    ],
+          if (activeSegment != null && 
+              activeSegment.segmentType == 'mechanical' &&
+              (activeSegment.processingStatus == 'processed' || activeSegment.clientEvents != null)) ...[
+            // Use mechanical segment display for processed mechanical segments
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: SizedBox(
+                  height: 400, // Fixed height for the mechanical display
+                  child: MechanicalSegmentDisplay(
+                    segment: activeSegment,
+                    onComplete: () async {
+                      // Handle segment completion
+                      await _loadCurrentStory();
+                    },
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    JsonUtils.getFlexibleRequired<String>(
-                      segment,
-                      'Content',
-                      'content',
-                      defaultValue: 'Loading segment content...',
-                    ),
-                    style: theme.textTheme.bodyLarge,
-                  ),
-                  if (JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl') != null) ...[
-                    const SizedBox(height: 16),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl')!,
-                        fit: BoxFit.cover,
-                        height: 200,
-                        width: double.infinity,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            height: 200,
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            child: const Center(
-                              child: Icon(Icons.broken_image, size: 48),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
-          ),
+          ] else ...[
+            // Use regular display for other segment types or unprocessed mechanical
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _getSegmentIcon(segmentType),
+                          size: 20,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _getSegmentTypeLabel(segmentType),
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      JsonUtils.getFlexibleRequired<String>(
+                        segment,
+                        'Content',
+                        'content',
+                        defaultValue: 'Loading segment content...',
+                      ),
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                    if (JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl') != null) ...[
+                      const SizedBox(height: 16),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl')!,
+                          fit: BoxFit.cover,
+                          height: 200,
+                          width: double.infinity,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: 200,
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              child: const Center(
+                                child: Icon(Icons.broken_image, size: 48),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
 
           // Decision Options (if decision segment)
           if (segmentType == 'decision' && JsonUtils.getFlexible(segment, 'Options', 'options') != null) ...[
@@ -733,8 +952,8 @@ class _ActionPanelState extends State<ActionPanel> {
             _buildDecisionOptions(JsonUtils.getFlexible(segment, 'Options', 'options'), theme),
           ],
 
-          // Challenge Results (if narrative segment)
-          if (segmentType == 'narrative' && JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults') != null) ...[
+          // Challenge Results (if mechanical segment with results)
+          if (segmentType == 'mechanical' && JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults') != null) ...[
             const SizedBox(height: 16),
             _buildChallengeResults(JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults'), theme),
           ],
@@ -751,16 +970,22 @@ class _ActionPanelState extends State<ActionPanel> {
               ),
               const SizedBox(width: 16),
               FilledButton.icon(
-                onPressed: _timeRemaining == 0 ? () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Segment completion not yet implemented'),
-                    ),
-                  );
+                onPressed: _timeRemaining == 0 ? () async {
+                  // Continue to next segment or complete story
+                  await _loadCurrentStory();
                 } : null,
                 icon: const Icon(Icons.arrow_forward),
                 label: Text(_timeRemaining == 0 ? 'Continue' : 'Processing...'),
               ),
+              // Show rest option if not already in a rest segment
+              if (segmentType != 'rest') ...[
+                const SizedBox(width: 16),
+                OutlinedButton.icon(
+                  onPressed: _timeRemaining >= 30 ? _initiateRest : null,
+                  icon: const Icon(Icons.healing),
+                  label: Text(_timeRemaining < 30 ? 'Rest (${_timeRemaining}s)' : 'Rest'),
+                ),
+              ],
               const SizedBox(width: 16),
               OutlinedButton.icon(
                 onPressed: () => _abandonStory(),
@@ -779,26 +1004,78 @@ class _ActionPanelState extends State<ActionPanel> {
     final seconds = _timeRemaining % 60;
     final timerText = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     
-    return Row(
-      children: [
-        Icon(
-          Icons.timer,
-          size: 16,
-          color: _timeRemaining < 60 
-              ? theme.colorScheme.error 
-              : theme.colorScheme.onSurfaceVariant,
+    final isUrgent = _timeRemaining < 60;
+    final isCritical = _timeRemaining < 10;
+    
+    // Start/stop pulse animation based on critical state
+    if (isCritical && !_pulseController.isAnimating) {
+      _pulseController.repeat(reverse: true);
+    } else if (!isCritical && _pulseController.isAnimating) {
+      _pulseController.stop();
+      _pulseController.reset();
+    }
+    
+    Widget timerWidget = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isCritical 
+            ? theme.colorScheme.error.withValues(alpha: 0.2)
+            : isUrgent 
+                ? theme.colorScheme.errorContainer
+                : theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isCritical 
+              ? theme.colorScheme.error
+              : isUrgent 
+                  ? theme.colorScheme.error.withValues(alpha: 0.5)
+                  : theme.colorScheme.primary.withValues(alpha: 0.3),
+          width: isCritical ? 2 : 1,
         ),
-        const SizedBox(width: 4),
-        Text(
-          'Time remaining: $timerText',
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: _timeRemaining < 60 
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isCritical ? Icons.warning : Icons.timer,
+            size: 20,
+            color: isCritical 
                 ? theme.colorScheme.error 
-                : null,
+                : isUrgent
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.primary,
           ),
-        ),
-      ],
+          const SizedBox(width: 6),
+          Text(
+            timerText,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: isCritical 
+                  ? theme.colorScheme.error 
+                  : isUrgent
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+        ],
+      ),
     );
+    
+    // Apply pulse animation only when critical
+    if (isCritical) {
+      return AnimatedBuilder(
+        animation: _pulseAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _pulseAnimation.value,
+            child: timerWidget,
+          );
+        },
+      );
+    }
+    
+    return timerWidget;
   }
 
   Widget _buildStoryTypeChip(String type, ThemeData theme) {
@@ -847,10 +1124,10 @@ class _ActionPanelState extends State<ActionPanel> {
     switch (type.toLowerCase()) {
       case 'decision':
         return Icons.psychology;
-      case 'narrative':
-        return Icons.book;
-      case 'combat':
-        return Icons.sports_kabaddi;
+      case 'mechanical':
+        return Icons.engineering;
+      case 'rest':
+        return Icons.healing;
       default:
         return Icons.help_outline;
     }
@@ -860,10 +1137,10 @@ class _ActionPanelState extends State<ActionPanel> {
     switch (type.toLowerCase()) {
       case 'decision':
         return 'Decision Point';
-      case 'narrative':
-        return 'Story Segment';
-      case 'combat':
-        return 'Combat Encounter';
+      case 'mechanical':
+        return 'Challenge';
+      case 'rest':
+        return 'Rest & Recovery';
       default:
         return 'Unknown Segment';
     }
@@ -880,18 +1157,20 @@ class _ActionPanelState extends State<ActionPanel> {
               'Available Choices',
               style: theme.textTheme.titleMedium,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Note: Decision submission coming soon',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
             const SizedBox(height: 16),
             ...options.map((option) => Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: OutlinedButton(
-                onPressed: null, // Disabled until api_submit_decision is implemented
+                onPressed: () => _submitDecision(
+                  option is Map<String, dynamic>
+                    ? JsonUtils.getFlexibleRequired<String>(
+                        option,
+                        'Id',
+                        'id',
+                        defaultValue: option.toString(),
+                      )
+                    : option.toString(),
+                ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 48),
                 ),
@@ -973,6 +1252,250 @@ class _ActionPanelState extends State<ActionPanel> {
           label: const Text('Choose Adventure'),
         ),
       ],
+    );
+  }
+
+  Widget _buildStoryCompletionScreen(ThemeData theme) {
+    if (_storyCompletionData == null) return const SizedBox.shrink();
+    
+    final storyData = _storyCompletionData!['story'] as Map<String, dynamic>;
+    final outcomeData = _storyCompletionData!['outcome'] as Map<String, dynamic>;
+    final activeSegmentData = _storyCompletionData!['activeSegment'] as Map<String, dynamic>;
+    
+    // Extract story info
+    final storyTitle = JsonUtils.getFlexible<String>(storyData, 'Title', 'title') ?? 'Unknown Story';
+    final totalSegments = JsonUtils.getFlexible<int>(storyData, 'TotalSegments', 'totalSegments') ?? 0;
+    
+    // Extract outcome info
+    final outcome = JsonUtils.getFlexible<String>(outcomeData, 'Outcome', 'outcome') ?? 'unknown';
+    final narrative = JsonUtils.getFlexible<String>(outcomeData, 'Narrative', 'narrative') ?? '';
+    final effects = JsonUtils.getFlexibleMap(outcomeData, 'Effects', 'effects');
+    
+    // Extract rewards from character updates
+    final characterUpdates = activeSegmentData['CharacterUpdates'] as Map<String, dynamic>?;
+    
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Story Complete Header
+          Card(
+            elevation: 8,
+            color: theme.colorScheme.primaryContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.emoji_events,
+                    size: 72,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'STORY COMPLETE!',
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    storyTitle,
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$totalSegments segments completed',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Outcome Display
+          OutcomeDisplay(
+            outcome: SegmentOutcomeData(
+              outcome: outcome,
+              narrative: narrative,
+              effects: effects,
+              nextSegmentID: null, // Story is complete
+            ),
+            onContinue: () {
+              setState(() {
+                _showingStoryCompletion = false;
+                _storyCompletionData = null;
+              });
+            },
+          ),
+          
+          // Rewards Summary
+          if (characterUpdates != null && characterUpdates.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.card_giftcard,
+                          color: theme.colorScheme.secondary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Total Rewards',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildRewardsSummary(characterUpdates, theme),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildRewardsSummary(Map<String, dynamic> updates, ThemeData theme) {
+    final List<Widget> rewardWidgets = [];
+    
+    // Check for skill XP
+    final skills = updates['Skills'] as Map<String, dynamic>?;
+    if (skills != null && skills.isNotEmpty) {
+      rewardWidgets.add(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Skill Experience:',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...skills.entries.map((entry) => Padding(
+              padding: const EdgeInsets.only(left: 16.0, bottom: 2.0),
+              child: Row(
+                children: [
+                  Icon(Icons.arrow_upward, size: 16, color: Colors.green),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${entry.key}: +${entry.value} XP',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+          ],
+        ),
+      );
+    }
+    
+    // Check for resources
+    final resources = updates['Resources'] as Map<String, dynamic>?;
+    if (resources != null && resources.isNotEmpty) {
+      if (rewardWidgets.isNotEmpty) rewardWidgets.add(const SizedBox(height: 12));
+      rewardWidgets.add(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Resources Gained:',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...resources.entries.map((entry) => Padding(
+              padding: const EdgeInsets.only(left: 16.0, bottom: 2.0),
+              child: Row(
+                children: [
+                  Icon(Icons.add_circle_outline, size: 16, color: Colors.blue),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${entry.key}: +${entry.value}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+          ],
+        ),
+      );
+    }
+    
+    // Check for items
+    final inventory = updates['Inventory'] as Map<String, dynamic>?;
+    if (inventory != null && inventory.isNotEmpty) {
+      if (rewardWidgets.isNotEmpty) rewardWidgets.add(const SizedBox(height: 12));
+      rewardWidgets.add(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Items Received:',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...inventory.entries.map((entry) => Padding(
+              padding: const EdgeInsets.only(left: 16.0, bottom: 2.0),
+              child: Row(
+                children: [
+                  Icon(Icons.inventory_2, size: 16, color: Colors.purple),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '${entry.key}: ${entry.value}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.purple,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+          ],
+        ),
+      );
+    }
+    
+    if (rewardWidgets.isEmpty) {
+      rewardWidgets.add(
+        Text(
+          'No additional rewards',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      );
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: rewardWidgets,
     );
   }
 
@@ -1129,6 +1652,7 @@ class _ActionPanelState extends State<ActionPanel> {
                 children: filteredStories.map((story) => 
                   _StoryCard(
                     story: story,
+                    character: widget.character,
                     onTap: story.available
                         ? () => _startStory(story)
                         : null,
@@ -1139,6 +1663,75 @@ class _ActionPanelState extends State<ActionPanel> {
           ),
       ],
     );
+  }
+
+  Future<void> _initiateRest() async {
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              CircularProgressIndicator(strokeWidth: 2),
+              SizedBox(width: 16),
+              Text('Initiating rest...'),
+            ],
+          ),
+          duration: Duration(seconds: 30),
+        ),
+      );
+
+      // Call rest API
+      final restResult = await _apiService.rest(widget.character.id);
+      
+      // Clear the loading snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+      
+      // Check the response
+      final success = restResult['Success'] ?? false;
+      final message = restResult['Message'] ?? 'Rest initiated. You will heal over time.';
+      
+      // Show result message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: success ? Colors.green : Colors.orange,
+          ),
+        );
+      }
+      
+      // Reload current story to show the rest segment
+      await _loadCurrentStory();
+      
+    } catch (e) {
+      // Clear any existing snackbars
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+      
+      // Extract error message
+      String errorMessage = e.toString();
+      if (errorMessage.contains('Cannot insert rest segment')) {
+        // This is a 422 error - cannot insert rest (not enough time or at end of story)
+        errorMessage = 'Cannot rest at this time. Try again later or continue the story.';
+      } else if (errorMessage.contains('Failed to initiate rest:')) {
+        errorMessage = errorMessage;
+      } else {
+        errorMessage = 'Failed to initiate rest: $errorMessage';
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _abandonStory() async {
@@ -1181,7 +1774,7 @@ class _ActionPanelState extends State<ActionPanel> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Story "${result['storyTitle']}" abandoned successfully'),
+              content: Text('Story "${result['StoryTitle']}" abandoned successfully'),
             ),
           );
         }
@@ -1204,13 +1797,11 @@ class _ActionPanelState extends State<ActionPanel> {
   }
 
   Future<void> _startStory(StoryMetadata story) async {
-    try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Starting ${story.title}...'),
-        ),
-      );
+    setState(() {
+      _isStartingStory = true;
+    });
 
+    try {
       // Call API to start the story
       final segment = await _apiService.startStory(
         characterId: widget.character.id,
@@ -1231,6 +1822,7 @@ class _ActionPanelState extends State<ActionPanel> {
           'timeRemaining': JsonUtils.getFlexible<int>(segment, 'TimeRemaining', 'timeRemaining'),
         };
         _showStoryList = false;
+        _isStartingStory = false;
       });
 
       // Show success message
@@ -1244,9 +1836,79 @@ class _ActionPanelState extends State<ActionPanel> {
       }
     } catch (e) {
       if (mounted) {
+        setState(() {
+          _isStartingStory = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to start story: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitDecision(String decisionId) async {
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              CircularProgressIndicator(strokeWidth: 2),
+              SizedBox(width: 16),
+              Text('Submitting decision...'),
+            ],
+          ),
+          duration: Duration(seconds: 30),
+        ),
+      );
+
+      // Submit the decision
+      final result = await _apiService.submitDecision(
+        characterId: widget.character.id,
+        decision: decisionId,
+      );
+
+      // Clear the loading snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+
+      // Check if decision was accepted
+      if (result['Accepted'] == true || result['accepted'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Decision submitted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+
+        // Refresh the current story to get the next segment
+        await _loadCurrentStory();
+      } else {
+        throw Exception('Decision was not accepted');
+      }
+    } catch (e) {
+      // Clear any existing snackbars
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+
+      String errorMessage = 'Failed to submit decision';
+      if (e.toString().contains('already submitted')) {
+        errorMessage = 'Decision has already been submitted';
+      } else if (e.toString().contains('not found')) {
+        errorMessage = 'Decision segment no longer active';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$errorMessage: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1257,10 +1919,12 @@ class _ActionPanelState extends State<ActionPanel> {
 
 class _StoryCard extends StatelessWidget {
   final StoryMetadata story;
+  final Character character;
   final VoidCallback? onTap;
 
   const _StoryCard({
     required this.story,
+    required this.character,
     this.onTap,
   });
 
@@ -1300,19 +1964,29 @@ class _StoryCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                story.description,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+              ExpandableDescription(
+                description: story.description,
                 maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
+              // Prerequisites if any
+              if (story.prerequisites.isNotEmpty) ...[
+                PrerequisitesDisplay(
+                  prerequisites: story.prerequisites,
+                  character: character,
+                ),
+                const SizedBox(height: 8),
+              ],
+              // Metadata row
               Row(
                 children: [
-                  _StoryTypeChip(type: story.type),
+                  StoryTypeChip(type: story.type),
                   const SizedBox(width: 8),
+                  // Difficulty indicator
+                  if (story.difficultyMap.isNotEmpty) ...[
+                    _buildDifficultyChip(theme),
+                    const SizedBox(width: 8),
+                  ],
                   Icon(
                     Icons.timer_outlined,
                     size: 14,
@@ -1340,9 +2014,50 @@ class _StoryCard extends StatelessWidget {
                   ],
                 ],
               ),
+              // Rewards preview
+              if (story.rewardTiers.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                RewardsPreview(rewardTiers: story.rewardTiers),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDifficultyChip(ThemeData theme) {
+    final difficulty = DifficultyCalculator.calculateStoryDifficulty(
+      story.difficultyMap,
+      character,
+    );
+    final color = DifficultyCalculator.getDifficultyColor(difficulty);
+    final label = DifficultyCalculator.getDifficultyLabel(difficulty);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.trending_up,
+            size: 12,
+            color: color,
+          ),
+          const SizedBox(width: 2),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1357,57 +2072,6 @@ class _StoryCard extends StatelessWidget {
     } else {
       return '${seconds ~/ 86400} days';
     }
-  }
-}
-
-class _StoryTypeChip extends StatelessWidget {
-  final String type;
-
-  const _StoryTypeChip({required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
-    Color backgroundColor;
-    IconData icon;
-    
-    switch (type.toLowerCase()) {
-      case 'one-time':
-        backgroundColor = theme.colorScheme.primaryContainer;
-        icon = Icons.stars;
-        break;
-      case 'daily':
-        backgroundColor = theme.colorScheme.secondaryContainer;
-        icon = Icons.today;
-        break;
-      case 'repeatable':
-        backgroundColor = theme.colorScheme.tertiaryContainer;
-        icon = Icons.refresh;
-        break;
-      default:
-        backgroundColor = theme.colorScheme.surfaceContainerHighest;
-        icon = Icons.help_outline;
-    }
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12),
-          const SizedBox(width: 2),
-          Text(
-            type,
-            style: theme.textTheme.labelSmall,
-          ),
-        ],
-      ),
-    );
   }
 }
 

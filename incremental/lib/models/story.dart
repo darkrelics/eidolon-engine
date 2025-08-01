@@ -7,6 +7,10 @@ class StoryMetadata {
   final bool available;
   final int cooldownRemaining;
   final int estimatedDuration;
+  final Map<String, dynamic> prerequisites;
+  final Map<String, num> difficultyMap;
+  final Map<String, dynamic> rewardTiers;
+  final double baseXPMultiplier;
 
   StoryMetadata({
     required this.storyID,
@@ -16,6 +20,10 @@ class StoryMetadata {
     required this.available,
     required this.cooldownRemaining,
     required this.estimatedDuration,
+    required this.prerequisites,
+    required this.difficultyMap,
+    required this.rewardTiers,
+    required this.baseXPMultiplier,
   });
 
   factory StoryMetadata.fromJson(Map<String, dynamic> json) {
@@ -27,6 +35,11 @@ class StoryMetadata {
       available: json['Available'] as bool,
       cooldownRemaining: json['CooldownRemaining'] as int? ?? 0,
       estimatedDuration: json['EstimatedDuration'] as int? ?? 0,
+      prerequisites: json['Prerequisites'] as Map<String, dynamic>? ?? {},
+      difficultyMap: (json['DifficultyMap'] as Map<String, dynamic>? ?? {})
+          .map((key, value) => MapEntry(key, (value as num).toDouble())),
+      rewardTiers: json['RewardTiers'] as Map<String, dynamic>? ?? {},
+      baseXPMultiplier: (json['BaseXPMultiplier'] as num? ?? 0.5).toDouble(),
     );
   }
 
@@ -39,6 +52,10 @@ class StoryMetadata {
       'Available': available,
       'CooldownRemaining': cooldownRemaining,
       'EstimatedDuration': estimatedDuration,
+      'Prerequisites': prerequisites,
+      'DifficultyMap': difficultyMap,
+      'RewardTiers': rewardTiers,
+      'BaseXPMultiplier': baseXPMultiplier,
     };
   }
 }

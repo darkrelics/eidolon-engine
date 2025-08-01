@@ -78,7 +78,7 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         outcome_data["Narrative"] = ""
         outcome_data["Effects"] = {}
 
-    elif segment_type in ["narrative", "combat"]:
+    elif segment_type == "mechanical":
         # Get the outcome from the active segment
         outcome = active_segment.get("Outcome", "normal")
 
@@ -90,17 +90,29 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         outcome_data["Narrative"] = outcome_result.get("narrative", "")
         outcome_data["Effects"] = outcome_result.get("effects", {})
 
-        # Add challenge results for narrative segments
-        if segment_type == "narrative":
-            outcome_data["ChallengeResults"] = active_segment.get("ChallengeResults", [])
-
-        # Add combat state for combat segments
-        if segment_type == "combat":
+        # Add challenge results for mechanical segments
+        outcome_data["ChallengeResults"] = active_segment.get("ChallengeResults", [])
+        # Add combat state if present
+        if active_segment.get("CombatState"):
             outcome_data["CombatState"] = active_segment.get("CombatState", {})
 
         # Get next segment for non-terminal outcomes
         if outcome not in ["death", "failure"]:
             outcome_data["NextSegmentID"] = segment.get("NextSegmentID")
+
+    elif segment_type == "rest":
+        # Rest segments have simple completion
+        outcome_data["Outcome"] = "normal"
+        outcome_data["Narrative"] = "You have rested and recovered."
+        outcome_data["Effects"] = {}
+        outcome_data["NextSegmentID"] = segment.get("NextSegmentID")
+
+    else:
+        # Unknown segment type
+        logger.warning(f"Unknown segment type: {segment_type}")
+        outcome_data["Outcome"] = "normal"
+        outcome_data["Narrative"] = ""
+        outcome_data["Effects"] = {}
 
     logger.info(
         "Segment outcome retrieved successfully",
@@ -142,30 +154,30 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id = extract_player_id_from_event(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)})
-        return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
+        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
+        return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
     # Validate player exists
     try:
         if not validate_player_exists(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response_pascal(401, {"error": "Unauthorized"}, event)
+            logger.error("Player not found in database", extra={"player_id": player_id}, exc_info=True)
+            return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)})
-        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
+        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
+        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
     # Get parameters from query (flexible: PascalCase or camelCase)
     character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
     if not character_id:
-        return build_lambda_response_pascal(400, {"error": "Missing CharacterID parameter"}, event)
+        return build_lambda_response_pascal(400, {"Error": "Missing CharacterID parameter"}, event)
 
     segment_id = get_query_parameter_flexible(event, "SegmentID", "segmentId")
     if not segment_id:
-        return build_lambda_response_pascal(400, {"error": "Missing SegmentID parameter"}, event)
+        return build_lambda_response_pascal(400, {"Error": "Missing SegmentID parameter"}, event)
 
     # Call business logic
     try:
@@ -191,6 +203,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         if "CombatState" in outcome_data:
             response_data["CombatState"] = outcome_data["CombatState"]
 
+        logger.info("Lambda response", extra={"status_code": 200})
         return build_lambda_response_pascal(200, response_data, event)
 
     except ValueError as err:
@@ -202,28 +215,29 @@ def lambda_handler(event: dict, context: object) -> dict:
         if "not found" in error_msg.lower():
             return build_lambda_response_pascal(
                 404,
-                {"error": error_msg},
+                {"Error": error_msg},
                 event,
             )
         elif "not yet completed" in error_msg.lower():
             return build_lambda_response_pascal(
                 409,
-                {"error": error_msg},
+                {"Error": error_msg},
                 event,
             )
         return build_lambda_response_pascal(
             400,
-            {"error": error_msg},
+            {"Error": error_msg},
             event,
         )
     except RuntimeError as err:
         logger.error(
             "Failed to get segment outcome",
             extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
+            exc_info=True,
         )
         return build_lambda_response_pascal(
             500,
-            {"error": "Internal server error"},
+            {"Error": "Internal server error"},
             event,
         )
 

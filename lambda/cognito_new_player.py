@@ -69,6 +69,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error(
             "Invalid user attributes",
             extra={"error": str(err)},
+            exc_info=True,
         )
         # For Cognito triggers, we still return the event to allow the flow to continue
         # but log the error for monitoring
@@ -76,6 +77,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error(
             "Failed to process user registration",
             extra={"error": str(err)},
+            exc_info=True,
         )
         # For Cognito triggers, we still return the event to allow the flow to continue
         # but log the error for monitoring

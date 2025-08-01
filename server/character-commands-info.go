@@ -125,7 +125,7 @@ func (c *Character) GetCharacterInfo() string {
 	info.WriteString("----------------\n\r")
 
 	// Core stats provide combat and survival metrics
-	info.WriteString(fmt.Sprintf("Health: %d/%d\n\r", c.health, c.maxHealth))
+	info.WriteString(fmt.Sprintf("Health: %d/%d\n\r", c.GetHealth(), c.maxHealth))
 
 	switch c.charState {
 	case CharStateUnconscious:

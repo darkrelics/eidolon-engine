@@ -61,7 +61,8 @@ class DynamoDBStack(Stack):
             "segments",
             "active_segments",
             "opponents",
-            "history",
+            "story_history",
+            "segment_history",
         ]
 
         # Initialize existing tables from context
@@ -125,6 +126,20 @@ class DynamoDBStack(Stack):
                 "pk": "CharacterID",
                 "pk_type": "S",
                 "sk": "StoryID",
+                "sk_type": "S",
+            },
+            {
+                "name": "story_history",
+                "pk": "CharacterID",
+                "pk_type": "S",
+                "sk": "StoryID",
+                "sk_type": "S",
+            },
+            {
+                "name": "segment_history",
+                "pk": "CharacterID",
+                "pk_type": "S",
+                "sk": "ActiveSegmentID",
                 "sk_type": "S",
             },
         ]
@@ -244,6 +259,11 @@ class DynamoDBStack(Stack):
                 partition_key=dynamodb.Attribute(name="EndTime", type=dynamodb.AttributeType.NUMBER),
                 projection_type=dynamodb.ProjectionType.ALL,
             )
+            table.add_global_secondary_index(
+                index_name="CharacterID-index",
+                partition_key=dynamodb.Attribute(name="CharacterID", type=dynamodb.AttributeType.STRING),
+                projection_type=dynamodb.ProjectionType.ALL,
+            )
         elif logical_id == "characters":
             table.add_global_secondary_index(
                 index_name="CharacterNameIndex",
@@ -266,6 +286,7 @@ class DynamoDBStack(Stack):
             # Add GSI ARNs for tables with indexes
             if table_name == "active_segments":
                 resources.append(f"{table.table_arn}/index/EndTimeIndex")
+                resources.append(f"{table.table_arn}/index/CharacterID-index")
             elif table_name == "characters":
                 resources.append(f"{table.table_arn}/index/CharacterNameIndex")
 

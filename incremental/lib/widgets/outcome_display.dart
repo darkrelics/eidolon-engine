@@ -19,6 +19,18 @@ class SegmentOutcomeData {
     this.challengeResults,
     this.combatState,
   });
+
+  factory SegmentOutcomeData.fromJson(Map<String, dynamic> json) {
+    return SegmentOutcomeData(
+      outcome: json['Outcome'] as String? ?? 'normal',
+      narrative: json['Narrative'] as String? ?? '',
+      effects: Map<String, dynamic>.from(json['Effects'] ?? {}),
+      nextSegmentID: json['NextSegmentID'] as String?,
+      decision: json['Decision'] as String?,
+      challengeResults: json['ChallengeResults'] as List<dynamic>?,
+      combatState: json['CombatState'] as Map<String, dynamic>?,
+    );
+  }
 }
 
 /// Widget to display segment outcome results

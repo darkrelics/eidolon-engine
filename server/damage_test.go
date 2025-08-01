@@ -42,7 +42,6 @@ func TestTakeDamage(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           10,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -58,8 +57,8 @@ func TestTakeDamage(t *testing.T) {
 	}
 
 	// Check health
-	if char.health != 7 {
-		t.Errorf("Expected health 7, got %d", char.health)
+	if char.GetHealth() != 7 {
+		t.Errorf("Expected health 7, got %d", char.GetHealth())
 	}
 
 	// Check damage type
@@ -77,7 +76,6 @@ func TestMixedDamage(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           10,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -95,8 +93,8 @@ func TestMixedDamage(t *testing.T) {
 	}
 
 	// Check health
-	if char.health != 5 {
-		t.Errorf("Expected health 5, got %d", char.health)
+	if char.GetHealth() != 5 {
+		t.Errorf("Expected health 5, got %d", char.GetHealth())
 	}
 
 	// Check wound counts by type
@@ -121,7 +119,6 @@ func TestHealing(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           10,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -136,7 +133,6 @@ func TestHealing(t *testing.T) {
 		{DamageType: DamageTypeBashing, HealAt: now.Add(5 * time.Minute)},
 		{DamageType: DamageTypeLethal, HealAt: now.Add(-1 * time.Hour)},
 	}
-	char.health = 7
 
 	// Calculate healing
 	char.CalculateCurrentHealth()
@@ -147,8 +143,8 @@ func TestHealing(t *testing.T) {
 	}
 
 	// Check health restored
-	if char.health != 9 {
-		t.Errorf("Expected health 9, got %d", char.health)
+	if char.GetHealth() != 9 {
+		t.Errorf("Expected health 9, got %d", char.GetHealth())
 	}
 
 	// Check healing message
@@ -166,7 +162,6 @@ func TestDeath(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           10,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -183,8 +178,8 @@ func TestDeath(t *testing.T) {
 	}
 
 	// Check health
-	if char.health != 0 {
-		t.Errorf("Expected health 0, got %d", char.health)
+	if char.GetHealth() != 0 {
+		t.Errorf("Expected health 0, got %d", char.GetHealth())
 	}
 
 	// Drain messages
@@ -196,7 +191,6 @@ func TestUnconscious(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           10,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -223,7 +217,6 @@ func TestDamageConversionWhileUnconscious(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           0,
 		maxHealth:        10,
 		wounds:           make([]Wound, 10),
 		mutex:            sync.RWMutex{},
@@ -278,7 +271,6 @@ func TestHealingFromUnconscious(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           0,
 		maxHealth:        3,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -304,8 +296,8 @@ func TestHealingFromUnconscious(t *testing.T) {
 	}
 
 	// Health should be 1
-	if char.health != 1 {
-		t.Errorf("Expected health 1, got %d", char.health)
+	if char.GetHealth() != 1 {
+		t.Errorf("Expected health 1, got %d", char.GetHealth())
 	}
 
 	// Check messages
@@ -326,7 +318,6 @@ func TestDeadCharacterNoHealing(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           0,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -351,8 +342,8 @@ func TestDeadCharacterNoHealing(t *testing.T) {
 	}
 
 	// Health should remain 0
-	if char.health != 0 {
-		t.Errorf("Expected health 0, got %d", char.health)
+	if char.GetHealth() != 0 {
+		t.Errorf("Expected health 0, got %d", char.GetHealth())
 	}
 
 	// State should remain dead
@@ -365,7 +356,6 @@ func TestOfflineHealing(t *testing.T) {
 	char := &Character{
 		id:               uuid.Must(uuid.NewV4()),
 		name:             "TestChar",
-		health:           5,
 		maxHealth:        10,
 		wounds:           []Wound{},
 		mutex:            sync.RWMutex{},
@@ -390,8 +380,8 @@ func TestOfflineHealing(t *testing.T) {
 	}
 
 	// Health should be updated
-	if char.health != 9 {
-		t.Errorf("Expected health 9 after offline healing, got %d", char.health)
+	if char.GetHealth() != 9 {
+		t.Errorf("Expected health 9 after offline healing, got %d", char.GetHealth())
 	}
 
 	// Check healing message was sent

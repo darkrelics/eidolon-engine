@@ -31,7 +31,6 @@ type Character struct {
 	attributes       map[string]float64
 	skills           map[string]float64
 	essence          float64
-	health           int
 	maxHealth        int
 	wounds           []Wound
 	room             *Room
@@ -78,7 +77,6 @@ type CharacterData struct {
 	Attributes       map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
 	Skills           map[string]float64 `json:"Skills" dynamodbav:"Skills"`
 	Essence          float64            `json:"Essence" dynamodbav:"Essence"`
-	Health           int                `json:"Health" dynamodbav:"Health"`
 	MaxHealth        int                `json:"MaxHealth" dynamodbav:"MaxHealth"`
 	Wounds           []Wound            `json:"Wounds" dynamodbav:"Wounds"`
 	RoomID           int64              `json:"RoomID" dynamodbav:"RoomID"`
@@ -149,7 +147,6 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	character.attributes = cd.Attributes
 	character.skills = cd.Skills
 	character.essence = cd.Essence
-	character.health = cd.Health
 	character.maxHealth = cd.MaxHealth
 	character.wounds = cd.Wounds
 	if character.wounds == nil {

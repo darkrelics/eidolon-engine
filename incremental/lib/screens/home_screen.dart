@@ -131,28 +131,44 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 16),
                 const Text('Archetype:'),
                 const SizedBox(height: 8),
-                DropdownButton<String>(
-                  isExpanded: true,
-                  value: selectedArchetype,
-                  items: archetypes.map((archetype) {
-                    return DropdownMenuItem(
-                      value: archetype.name,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(archetype.name),
-                          if (archetype.description.isNotEmpty)
-                            Text(archetype.description, style: Theme.of(context).textTheme.bodySmall),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setDialogState(() {
-                      selectedArchetype = value;
-                    });
-                  },
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 300),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: archetypes.map((archetype) {
+                        final isSelected = selectedArchetype == archetype.name;
+                        return Card(
+                          elevation: isSelected ? 2 : 0,
+                          color: isSelected 
+                            ? Theme.of(context).colorScheme.primaryContainer 
+                            : Theme.of(context).colorScheme.surface,
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          child: ListTile(
+                            selected: isSelected,
+                            title: Text(
+                              archetype.name,
+                              style: TextStyle(
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                            subtitle: archetype.description.isNotEmpty
+                              ? Text(
+                                  archetype.description,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                )
+                              : null,
+                            onTap: () {
+                              setDialogState(() {
+                                selectedArchetype = archetype.name;
+                              });
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
                 ),
               ] else ...[
                 const SizedBox(height: 16),
@@ -211,11 +227,23 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       debugPrint('CharacterSelectionScreen: Calling API to add character...');
-      final characterId = await _apiService.addCharacter(name: name, archetype: archetype);
+      final result = await _apiService.addCharacter(name: name, archetype: archetype);
+      final characterId = result['CharacterID'] ?? '';
+      final createdName = result['CharacterName'] ?? name;
+      final createdArchetype = result['Archetype'] ?? archetype;
       debugPrint('CharacterSelectionScreen: Character created with ID: $characterId');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Created character: $name')));
+        String message = 'Created character: $createdName';
+        if (createdArchetype != 'default' && createdArchetype.isNotEmpty) {
+          message += ' ($createdArchetype)';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
 
       // Reload characters
@@ -228,9 +256,21 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _isLoading = false;
         });
+        // Extract error message
+        String errorMessage = e.toString();
+        if (errorMessage.contains('Character name is already taken')) {
+          errorMessage = 'That character name is already taken. Please choose another.';
+        } else if (errorMessage.contains('Character limit reached')) {
+          errorMessage = 'You have reached the maximum number of characters.';
+        } else if (errorMessage.contains('Character name is not available')) {
+          errorMessage = 'That character name is not available. Please choose another.';
+        } else {
+          errorMessage = ErrorHandler.getUserFriendlyMessage(e, context: 'createCharacter');
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'createCharacter')),
+            content: Text(errorMessage),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -266,10 +306,27 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = true;
       });
 
-      await _apiService.deleteCharacter(character.id);
+      final deleteResult = await _apiService.deleteCharacter(character.id);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Deleted character: ${character.name}')));
+        // Use character name from response if available, otherwise use local name
+        final deletedName = deleteResult['CharacterName'] ?? character.name;
+        final itemsDeleted = deleteResult['ItemsDeleted'] ?? 0;
+        final segmentsDeleted = deleteResult['ActiveSegmentsDeleted'] ?? 0;
+        final historyDeleted = deleteResult['HistoryDeleted'] ?? 0;
+        
+        // Build detailed message
+        String message = 'Deleted character: $deletedName';
+        if (itemsDeleted > 0 || segmentsDeleted > 0 || historyDeleted > 0) {
+          message += ' ($itemsDeleted items, $segmentsDeleted segments, $historyDeleted history records)';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
 
       // Reload characters
@@ -280,9 +337,19 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _isLoading = false;
         });
+        // Extract error message
+        String errorMessage = e.toString();
+        if (errorMessage.contains('Character not found')) {
+          errorMessage = 'Character not found';
+        } else if (errorMessage.contains('Access denied')) {
+          errorMessage = 'You do not have permission to delete this character';
+        } else {
+          errorMessage = ErrorHandler.getUserFriendlyMessage(e, context: 'deleteCharacter');
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'deleteCharacter')),
+            content: Text(errorMessage),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

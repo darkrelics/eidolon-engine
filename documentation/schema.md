@@ -2,6 +2,13 @@
 
 This schema supports the Eidolon Engine's unified backend infrastructure, providing shared data structures used by both MUD and Incremental game modes. All tables listed here are actively used by both game modes, with the GameMode field on characters preventing concurrent access.
 
+**Key Design Principles:**
+
+- Front-loaded processing: All outcomes are calculated when segments start, not when they end
+- Shared tables: Both game modes use the same character, item, and room data
+- Mode exclusivity: GameMode field ensures characters can only be active in one mode at a time
+- Event-driven advancement: 30-second polling system processes completed segments
+
 ## Player Table
 
 | Field           | Type     | Key      | Description                                                      |
@@ -17,42 +24,47 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 ## Character Table
 
-| Field              | Type     | Key      | Description                                                    |
-| ------------------ | -------- | -------- | -------------------------------------------------------------- |
-| `CharacterID`      | `STRING` | **HASH** | UUID of the character.                                         |
-| `PlayerID`         | `STRING` |          | UUID of the player who owns the character.                     |
-| `CharacterName`    | `STRING` | **GSI**  | Name of the character.                                         |
-| `GameMode`         | `STRING` |          | Current mode: "MUD" or "Incremental" (prevents concurrent use) |
-| `RoomID`           | `NUMBER` |          | ID of the room the character is currently in.                  |
-| `Inventory`        | `MAP`    |          | Map of inventory slots to item UUIDs.                          |
-| `Attributes`       | `MAP`    |          | Map of attribute names to their values (e.g., Strength: 4).    |
-| `Skills`           | `MAP`    |          | Map of skill names to their values (e.g., Stealth: 3).         |
-| `Essence`          | `NUMBER` |          | The character's essence or magical energy.                     |
-| `Health`           | `NUMBER` |          | The character's current health points.                         |
-| `MaxHealth`        | `NUMBER` |          | The character's maximum health points.                         |
-| `Hidden`           | `BOOL`   |          | Whether the character is currently hidden.                     |
-| `Wounds`           | `LIST`   |          | List of wound objects affecting the character.                 |
-| `CharState`        | `STRING` |          | Current character state (e.g., "standing", "unconscious").     |
-| `LeftHandID`       | `STRING` |          | UUID of item equipped in left hand (if any).                   |
-| `RightHandID`      | `STRING` |          | UUID of item equipped in right hand (if any).                  |
-| `AvailableStories` | `LIST`   |          | List of story IDs available to this character.                 |
-| `AbandonedStories` | `LIST`   |          | List of story IDs the character has abandoned.                 |
-| `CompletedStories` | `LIST`   |          | List of story IDs the character has completed.                 |
-| `ActiveStoryID`    | `STRING` |          | UUID of the currently active story (if any).                   |
-| `ActiveSegmentID`  | `STRING` |          | UUID of the currently active segment (if any).                 |
-| `Archetype`        | `STRING` |          | Name of the character's archetype.                             |
-| `MaxEssence`       | `NUMBER` |          | The character's maximum essence points.                        |
-| `Resources`        | `MAP`    |          | Map of resource types to quantities (e.g., gold: 100).         |
-| `Progress`         | `MAP`    |          | Map tracking story progress flags and achievements.            |
-| `CreatedAt`        | `STRING` |          | ISO 8601 timestamp when character was created.                 |
-| `UpdatedAt`        | `STRING` |          | ISO 8601 timestamp of last character update.                   |
-| `LastPlayed`       | `STRING` |          | ISO 8601 timestamp when character was last active.             |
+| Field              | Type            | Key      | Description                                                                   |
+| ------------------ | --------------- | -------- | ----------------------------------------------------------------------------- |
+| `CharacterID`      | `STRING`        | **HASH** | UUID of the character.                                                        |
+| `PlayerID`         | `STRING`        |          | UUID of the player who owns the character.                                    |
+| `CharacterName`    | `STRING`        | **GSI**  | Name of the character.                                                        |
+| `GameMode`         | `STRING`        |          | Current mode: "MUD", "Incremental", or "None" (prevents concurrent use)       |
+| `RoomID`           | `NUMBER`        |          | ID of the room the character is currently in.                                 |
+| `Inventory`        | `MAP`           |          | Map of inventory slots to item UUIDs.                                         |
+| `Attributes`       | `MAP`           |          | Map of attribute names to their values (e.g., Strength: 4).                   |
+| `Skills`           | `MAP`           |          | Map of skill names to their values (e.g., Stealth: 3).                        |
+| `Essence`          | `NUMBER`        |          | The character's essence or magical energy.                                    |
+| `MaxHealth`        | `NUMBER`        |          | The character's maximum health levels.                                        |
+| `Hidden`           | `BOOL`          |          | Whether the character is currently hidden.                                    |
+| `Wounds`           | `LIST` of `MAP` |          | List of wound objects. Each wound is a map with DamageType and HealAt fields. |
+| `CharState`        | `STRING`        |          | Current character state (e.g., "standing", "unconscious").                    |
+| `LeftHandID`       | `STRING`        |          | UUID of item equipped in left hand (if any).                                  |
+| `RightHandID`      | `STRING`        |          | UUID of item equipped in right hand (if any).                                 |
+| `AvailableStories` | `LIST`          |          | List of story IDs available to this character.                                |
+| `AbandonedStories` | `LIST`          |          | List of story IDs the character has abandoned.                                |
+| `CompletedStories` | `LIST`          |          | List of story IDs the character has completed.                                |
+| `ActiveStoryID`    | `STRING`        |          | UUID of the currently active story (if any).                                  |
+| `ActiveSegmentID`  | `STRING`        |          | UUID of the currently active segment (if any).                                |
+| `Archetype`        | `STRING`        |          | Name of the character's archetype.                                            |
+| `MaxEssence`       | `NUMBER`        |          | The character's maximum essence points.                                       |
+| `Resources`        | `MAP`           |          | Map of resource types to quantities (e.g., gold: 100).                        |
+| `Progress`         | `MAP`           |          | Map tracking story progress flags and achievements.                           |
+| `CreatedAt`        | `STRING`        |          | ISO 8601 timestamp when character was created.                                |
+| `UpdatedAt`        | `STRING`        |          | ISO 8601 timestamp of last character update.                                  |
+| `LastPlayed`       | `STRING`        |          | ISO 8601 timestamp when character was last active.                            |
 
 **Primary Key:** CharacterID (HASH)
 
 **Global Secondary Index:**
 
 - **CharacterNameIndex**: CharacterName - For ensuring unique character names across all players
+
+**Health Calculation:**
+
+- Current health is not stored in the database but calculated dynamically as: `Health = MaxHealth - len(Wounds)`
+- Each wound in the Wounds list represents exactly one point of damage
+- The length of the Wounds list directly indicates the total damage taken
 
 **API Response Transformations:**
 
@@ -196,59 +208,73 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 ## Story Table
 
-| Field               | Type     | Key      | Description                                   |
-| ------------------- | -------- | -------- | --------------------------------------------- |
-| `StoryID`           | `STRING` | **HASH** | UUID of the story.                            |
-| `Title`             | `STRING` |          | Display title of the story.                   |
-| `Description`       | `STRING` |          | Brief description of the story.               |
-| `NarrativeText`     | `STRING` |          | Full narrative text introducing the story.    |
-| `StoryType`         | `STRING` |          | Type: one-time, daily, or repeatable.         |
-| `EstimatedDuration` | `NUMBER` |          | Estimated completion time in seconds.         |
-| `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items, rooms). |
-| `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.                 |
-| `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.         |
-| `Version`           | `NUMBER` |          | Story version for updates.                    |
+| Field               | Type     | Key      | Description                                 |
+| ------------------- | -------- | -------- | ------------------------------------------- |
+| `StoryID`           | `STRING` | **HASH** | UUID of the story.                          |
+| `Title`             | `STRING` |          | Display title of the story.                 |
+| `Description`       | `STRING` |          | Brief description of the story.             |
+| `NarrativeText`     | `STRING` |          | Full narrative text introducing the story.  |
+| `StoryType`         | `STRING` |          | Type: one-time, daily, or repeatable.       |
+| `EstimatedDuration` | `NUMBER` |          | Estimated completion time in seconds.       |
+| `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items).      |
+| `DifficultyMap`     | `MAP`    |          | Map of skill checks to base difficulties.   |
+| `RewardTiers`       | `MAP`    |          | Reward descriptions by outcome tier.        |
+| `BaseXPMultiplier`  | `NUMBER` |          | XP multiplier (default 0.5, must be < 1.0). |
+| `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.               |
+| `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.       |
+| `Version`           | `NUMBER` |          | Story version for updates.                  |
 
 **Primary Key:** StoryID (HASH)
 
 ## Segments Table
 
-| Field             | Type     | Key       | Description                                                 |
-| ----------------- | -------- | --------- | ----------------------------------------------------------- |
-| `StoryID`         | `STRING` | **HASH**  | UUID of the parent story.                                   |
-| `SegmentID`       | `STRING` | **RANGE** | UUID of the segment.                                        |
-| `SegmentType`     | `STRING` |           | Type: decision, narrative, or combat.                       |
-| `ShortStatus`     | `STRING` |           | Brief status text shown during segment.                     |
-| `SegmentDuration` | `NUMBER` |           | Time in seconds for this segment.                           |
-| `DecisionText`    | `STRING` |           | For decision segments: the choice presented.                |
-| `DecisionOptions` | `MAP`    |           | For decision segments: map of option ID to next segment ID. |
-| `NextSegmentID`   | `STRING` |           | For narrative/combat segments: UUID of the next segment.    |
-| `DefaultDecision` | `STRING` |           | For decision segments: which option to auto-select.         |
-| `Challenges`      | `LIST`   |           | For narrative segments: list of skill/attribute challenges. |
-| `Combat`          | `MAP`    |           | For combat segments: combat configuration.                  |
-| `Results`         | `MAP`    |           | For narrative/combat segments: outcomes mapped to updates.  |
+| Field             | Type      | Key       | Description                                                               |
+| ----------------- | --------- | --------- | ------------------------------------------------------------------------- |
+| `StoryID`         | `STRING`  | **HASH**  | UUID of the parent story.                                                 |
+| `SegmentID`       | `STRING`  | **RANGE** | UUID of the segment.                                                      |
+| `SegmentType`     | `STRING`  |           | Type: decision, mechanical, or rest.                                      |
+| `ShortStatus`     | `STRING`  |           | Brief status text shown during segment.                                   |
+| `DefaultStatus`   | `STRING`  |           | Status message shown between events (e.g., "Walking through the forest"). |
+| `SegmentDuration` | `NUMBER`  |           | Time in seconds for this segment.                                         |
+| `DecisionText`    | `STRING`  |           | For decision segments: the choice presented.                              |
+| `DecisionOptions` | `MAP`     |           | For decision segments: map of option ID to next segment ID.               |
+| `NextSegmentID`   | `STRING`  |           | For mechanical segments: UUID of the next segment.                        |
+| `DefaultDecision` | `STRING`  |           | For decision segments: which option to auto-select.                       |
+| `Challenges`      | `LIST`    |           | For mechanical segments: list of skill/attribute challenges.              |
+| `Combat`          | `MAP`     |           | For mechanical segments: combat configuration (if applicable).            |
+| `RestSegment`     | `BOOLEAN` |           | Indicates if this is a rest segment.                                      |
 
 **Primary Key:** StoryID (HASH), SegmentID (RANGE)
 
 ## ActiveSegments Table
 
-| Field              | Type     | Key      | Description                                               |
-| ------------------ | -------- | -------- | --------------------------------------------------------- |
-| `ActiveSegmentID`  | `STRING` | **HASH** | UUID for this active segment instance.                    |
-| `CharacterID`      | `STRING` | **GSI**  | UUID of the character (for processing context).           |
-| `PlayerID`         | `STRING` |          | UUID of the player who owns the character.                |
-| `StoryID`          | `STRING` |          | UUID of the story being played.                           |
-| `StoryTitle`       | `STRING` |          | Cached title of the story for quick access.               |
-| `SegmentID`        | `STRING` |          | UUID of the current segment definition.                   |
-| `SegmentType`      | `STRING` |          | Type of segment: decision, narrative, or combat.          |
-| `Status`           | `STRING` |          | Segment status: active, abandoned, or completed.          |
-| `StartTime`        | `NUMBER` |          | Unix timestamp when segment started.                      |
-| `EndTime`          | `NUMBER` | **GSI**  | Unix timestamp when segment will complete.                |
-| `Decision`         | `STRING` |          | For decision segments: choice made by player.             |
-| `ChallengeResults` | `LIST`   |          | For narrative segments: results of each challenge roll.   |
-| `CombatState`      | `MAP`    |          | For combat segments: tracks ongoing combat state.         |
-| `Outcome`          | `STRING` |          | Final outcome (death/failure/minimal/normal/exceptional). |
-| `TTL`              | `NUMBER` |          | Time-to-live for automatic cleanup of old segments.       |
+| Field              | Type      | Key      | Description                                                                |
+| ------------------ | --------- | -------- | -------------------------------------------------------------------------- |
+| `ActiveSegmentID`  | `STRING`  | **HASH** | UUID for this active segment instance.                                     |
+| `CharacterID`      | `STRING`  | **GSI**  | UUID of the character (for processing context).                            |
+| `PlayerID`         | `STRING`  |          | UUID of the player who owns the character.                                 |
+| `StoryID`          | `STRING`  |          | UUID of the story being played.                                            |
+| `StoryTitle`       | `STRING`  |          | Cached title of the story for quick access.                                |
+| `SegmentID`        | `STRING`  |          | UUID of the current segment definition.                                    |
+| `SegmentType`      | `STRING`  |          | Type of segment: decision, mechanical, or rest.                            |
+| `DefaultStatus`    | `STRING`  |          | Cached status message shown between events.                                |
+| `Status`           | `STRING`  |          | Segment status: active, completed, or abandoned.                           |
+| `StartTime`        | `NUMBER`  |          | Unix timestamp when segment started.                                       |
+| `EndTime`          | `NUMBER`  | **GSI**  | Unix timestamp when segment will complete.                                 |
+| `ProcessedAt`      | `NUMBER`  |          | Unix timestamp when outcomes were calculated (immediately after creation). |
+| `ProcessingStatus` | `STRING`  |          | Status: pending, processed, failed, or awaiting_decision.                  |
+| `ProcessingError`  | `STRING`  |          | Error details if processing failed.                                        |
+| `NextSegmentID`    | `STRING`  |          | Pre-calculated next segment ID based on outcome.                           |
+| `ClientEvents`     | `LIST`    |          | Complete event sequence for client to display over time.                   |
+| `CharacterUpdates` | `MAP`     |          | All character changes to apply when segment completes.                     |
+| `Decision`         | `STRING`  |          | For decision segments: choice made by player.                              |
+| `DecisionMadeAt`   | `NUMBER`  |          | Unix timestamp when player made decision.                                  |
+| `ChallengeResults` | `LIST`    |          | For mechanical segments: results of each challenge roll.                   |
+| `CombatState`      | `MAP`     |          | For mechanical segments: final combat state (if applicable).               |
+| `Outcome`          | `STRING`  |          | Final outcome (death/failure/minimal/normal/exceptional).                  |
+| `Transmitted`      | `BOOLEAN` |          | Set when segment has been sent to SQS for processing.                      |
+| `TransmittedAt`    | `NUMBER`  |          | Unix timestamp when sent to SQS.                                           |
+| `RunningFlag`      | `STRING`  |          | Request ID of Lambda currently processing this segment.                    |
 
 **Primary Key:** ActiveSegmentID (HASH)
 
@@ -257,23 +283,64 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 - **CharacterID-index**: CharacterID - For querying active segments by character
 - **EndTimeIndex**: EndTime - For finding segments ready to process and monitoring upcoming completions
 
-## History Table
+## StoryHistory Table
 
-| Field            | Type     | Key       | Description                                                          |
-| ---------------- | -------- | --------- | -------------------------------------------------------------------- |
-| `CharacterID`    | `STRING` | **HASH**  | UUID of the character.                                               |
-| `StoryID`        | `STRING` | **RANGE** | UUID of the story.                                                   |
-| `StoryTitle`     | `STRING` |           | Title of the story for display without additional lookup.            |
-| `StartedAt`      | `STRING` |           | ISO timestamp when the story began.                                  |
-| `FinishedAt`     | `STRING` |           | ISO timestamp when the story ended (completion or abandonment).      |
-| `StoryType`      | `STRING` |           | Type of story (one-time, daily, or repeatable).                      |
-| `SegmentHistory` | `LIST`   |           | Detailed record of each segment's progression and outcomes.          |
-| `FinalOutcome`   | `STRING` |           | Overall story result (death, failure, minimal, normal, exceptional). |
-| `TotalDuration`  | `NUMBER` |           | Total seconds from start to finish.                                  |
-| `Rewards`        | `MAP`    |           | Aggregated rewards earned (experience, items, gold, room changes).   |
-| `AbandonedCount` | `NUMBER` |           | Number of times this story was abandoned before completion.          |
+| Field                | Type      | Key       | Description                                                 |
+| -------------------- | --------- | --------- | ----------------------------------------------------------- |
+| `CharacterID`        | `STRING`  | **HASH**  | UUID of the character.                                      |
+| `StoryID`            | `STRING`  | **RANGE** | UUID of the story.                                          |
+| `AttemptNumber`      | `NUMBER`  | **RANGE** | Increments for each attempt of this story.                  |
+| `StoryTitle`         | `STRING`  |           | Cached title for display without additional lookup.         |
+| `StoryType`          | `STRING`  |           | Type: one-time, daily, or repeatable.                       |
+| `StartedAt`          | `NUMBER`  |           | Unix timestamp when story started.                          |
+| `CompletedAt`        | `NUMBER`  |           | Unix timestamp when completed or abandoned.                 |
+| `Abandoned`          | `BOOLEAN` |           | True if story was abandoned.                                |
+| `FinalOutcome`       | `STRING`  |           | death, failure, minimal, normal, exceptional, or abandoned. |
+| `TotalDuration`      | `NUMBER`  |           | Total seconds from start to finish.                         |
+| `SegmentCount`       | `NUMBER`  |           | Number of segments completed.                               |
+| `SkillXPAwarded`     | `MAP`     |           | Total skill XP earned: {skill_name: amount}.                |
+| `AttributeXPAwarded` | `MAP`     |           | Total attribute XP earned: {attribute_name: amount}.        |
+| `ItemsGained`        | `LIST`    |           | Item IDs acquired during story.                             |
+| `ItemsLost`          | `LIST`    |           | Item IDs lost during story.                                 |
+| `RoomsVisited`       | `LIST`    |           | Room IDs character moved to.                                |
+| `DecisionsMade`      | `MAP`     |           | Map of segment_id to decision_choice.                       |
 
 **Primary Key:** CharacterID (HASH), StoryID (RANGE)
+
+## SegmentHistory Table
+
+Records the complete history of each segment played by a character. This table serves as an audit trail and enables player progress tracking, analytics, and debugging. All fields from the ActiveSegments table should be copied here when a segment completes.
+
+| Field                | Type     | Key       | Required | Description                                                |
+| -------------------- | -------- | --------- | -------- | ---------------------------------------------------------- |
+| `CharacterID`        | `STRING` | **HASH**  | **Yes**  | UUID of the character.                                     |
+| `ActiveSegmentID`    | `STRING` | **RANGE** | **Yes**  | UUID matching the ActiveSegments record.                   |
+| `PlayerID`           | `STRING` |           | **Yes**  | UUID of the player for ownership verification.             |
+| `StoryID`            | `STRING` |           | **Yes**  | UUID of the parent story.                                  |
+| `SegmentID`          | `STRING` |           | **Yes**  | UUID of the segment definition.                            |
+| `SegmentType`        | `STRING` |           | **Yes**  | Type: mechanical, decision, or rest.                       |
+| `StartTime`          | `NUMBER` |           | **Yes**  | Unix timestamp when segment started (from ActiveSegments). |
+| `EndTime`            | `NUMBER` |           | **Yes**  | Unix timestamp when segment ended (from ActiveSegments).   |
+| `ProcessedAt`        | `NUMBER` |           | No       | Unix timestamp when outcomes were calculated.              |
+| `CompletedAt`        | `NUMBER` |           | **Yes**  | Unix timestamp when segment was advanced.                  |
+| `Outcome`            | `STRING` |           | **Yes**  | death, failure, minimal, normal, or exceptional.           |
+| `Decision`           | `STRING` |           | No       | For decision segments: choice made by player.              |
+| `DecisionMadeAt`     | `NUMBER` |           | No       | Unix timestamp when player made decision.                  |
+| `ClientEvents`       | `LIST`   |           | No       | Complete event array sent to client.                       |
+| `CharacterUpdates`   | `MAP`    |           | **Yes**  | All character changes applied (contains XP data).          |
+| `ChallengeResults`   | `LIST`   |           | No       | Detailed skill check results (mechanical segments).        |
+| `CombatState`        | `MAP`    |           | No       | Final combat results if applicable.                        |
+| `SkillXPAwarded`     | `MAP`    |           | **Yes**  | Skill XP from this segment: {skill_name: amount}.          |
+| `AttributeXPAwarded` | `MAP`    |           | **Yes**  | Attribute XP from this segment: {attribute_name: amount}.  |
+
+**Primary Key:** CharacterID (HASH), ActiveSegmentID (RANGE)
+
+**Implementation Notes:**
+
+- The `SkillXPAwarded` and `AttributeXPAwarded` fields must be extracted from the `CharacterUpdates.SkillXP` and `CharacterUpdates.AttributeXP` maps respectively
+- All timestamp fields should be copied directly from the ActiveSegments record
+- The `PlayerID` must be included to maintain security and ownership verification
+- For segments with no XP awards, the XP fields should be empty maps `{}` rather than null
 
 ---
 
@@ -297,6 +364,69 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `CreatedAt`     | `STRING` |          | ISO timestamp of creation.                        |
 
 **Primary Key:** OpponentID (HASH)
+
+---
+
+## Data Structure Definitions
+
+### Wound Object Structure
+
+The Wound object is stored as a MAP within the Character table's Wounds list. Each wound map represents one point of damage:
+
+| Field        | Type     | Description                                                       |
+| ------------ | -------- | ----------------------------------------------------------------- |
+| `DamageType` | `STRING` | Type of damage: "bashing", "lethal", or "aggravated"              |
+| `HealAt`     | `STRING` | ISO 8601 timestamp indicating when this wound will naturally heal |
+
+**Example Wounds List:**
+
+```json
+[
+  {
+    "DamageType": "bashing",
+    "HealAt": "2025-01-15T14:30:00Z"
+  },
+  {
+    "DamageType": "lethal",
+    "HealAt": "2025-01-15T20:00:00Z"
+  }
+]
+```
+
+This character has taken 2 points of damage (2 wounds in the list), so with MaxHealth of 10, their current health would be 8.
+
+### CharacterUpdates Structure
+
+The CharacterUpdates map stored in ActiveSegments and SegmentHistory contains all changes to apply to a character when a segment completes:
+
+```json
+{
+  "SkillXP": {
+    "fighting": 0.5,
+    "dodge": 0.25
+  },
+  "AttributeXP": {
+    "strength": 0.1,
+    "agility": 0.05
+  },
+  "Wounds": [
+    {
+      "DamageType": "bashing",
+      "HealAt": "2025-01-15T14:30:00Z"
+    }
+  ],
+  "Room": 12345,
+  "Resources": {
+    "gold": 10,
+    "supplies": -2
+  },
+  "Inventory": {
+    "right_hand": "item-uuid-123"
+  }
+}
+```
+
+**Note:** When recording SegmentHistory, the SkillXP and AttributeXP values must be extracted into the dedicated `SkillXPAwarded` and `AttributeXPAwarded` fields for easier querying and analytics.
 
 ---
 

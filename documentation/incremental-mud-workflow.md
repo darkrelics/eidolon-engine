@@ -21,9 +21,10 @@ This document describes how characters transition between Incremental and MUD ga
 - Player's character count checked against limit (max 10 per player)
 - Archetype data loaded from archetypes table (defaults used if invalid/missing)
 - Starting items created from archetype's prototype list
-- Character created with `GameMode: "Incremental"`
+- Character created with `GameMode: "None"` (allows player to choose initial mode)
 - Character record stored in shared characters table
 - Player's CharacterList updated with new character entry
+- AvailableStories list populated from archetype configuration
 
 ### 3. Character Customization (Rapid Inactive)
 
@@ -36,25 +37,98 @@ This document describes how characters transition between Incremental and MUD ga
 
 Characters can transition between modes with these safeguards:
 
-**Incremental to MUD:**
+**None to Incremental:**
 
-- Character must not have active story segments
-- GameMode updated from "Incremental" to "MUD"
+- Character must have GameMode "None" (not in any active mode)
+- Player selects a story from AvailableStories list
+- GameMode updated to "Incremental"
+- ActiveStoryID and ActiveSegmentID set
+- First segment created and processed immediately
+- SSM parameter checked, polling enabled if needed
+
+**Incremental to None:**
+
+- Occurs automatically when story completes (success or failure)
+- Can be triggered manually via abandon story API
+- All ActiveSegments for character deleted
+- GameMode reset to "None"
+- ActiveStoryID and ActiveSegmentID cleared
+- Story moved to CompletedStories or AbandonedStories list
+
+**None to MUD:**
+
+- Character must have GameMode "None"
+- GameMode updated to "MUD"
 - Character placed in appropriate room
 - Full MUD gameplay becomes available
 
-**MUD to Incremental:**
+**MUD to None:**
 
 - Character must be logged out of MUD
-- GameMode updated from "MUD" to "Incremental"
+- GameMode updated to "None"
 - Character position preserved for return
-- Incremental story progression resumes
+- Character ready to start new Incremental story or re-enter MUD
 
-### 5. Concurrent Access Prevention
+### 5. Persistent State Between Modes
+
+Character state persists across mode transitions, creating meaningful consequences:
+
+**Health and Wounds:**
+
+- Health is calculated dynamically as `Health = MaxHealth - len(wounds)`
+- Each wound is a map in the wounds list containing DamageType and HealAt fields
+- Wounds received in either mode persist when switching:
+  - Bashing wounds heal in 15 minutes (bruises, stunning)
+  - Lethal wounds require 6 hours to heal (serious injuries)
+  - Aggravated wounds need 7 days of recovery (grievous wounds)
+- Character entering Incremental mode wounded starts at disadvantage
+- Wounds heal automatically when their HealAt timestamp expires
+- Character states persist across modes:
+  - Standing: Normal state with health > 0
+  - Unconscious: Health = 0 with at least one bashing wound
+  - Dead: Health = 0 with only lethal/aggravated wounds
+- Death in either mode requires resurrection before continuing
+
+**Skill Progression:**
+
+- All XP gained through ResolveStaticCheckWithXP/ResolveOpposedCheckWithXP persists
+- Skills improved in Incremental stories benefit MUD gameplay
+- Combat experience from MUD enhances Incremental mechanical segments
+- Attribute XP (10% of skill XP) accumulates across both modes
+
+**Inventory and Equipment:**
+
+- Items gained in Incremental stories appear in MUD inventory
+- Equipment worn affects combat stats in both modes
+- Lost or destroyed items affect both game modes
+- Currency (gold, resources) shared between modes
+
+**Location:**
+
+- Story outcomes can change character's room location
+- Death may transport character to death realm
+- Location changes persist when switching to MUD mode
+
+**Combat Mechanics:**
+
+- Mechanical segments with combat use the full MUD damage system
+- Each point of damage creates a wound map in the wounds list
+- Damage types determine wound severity and healing time
+- Unconscious characters face special damage rules:
+  - New bashing damage converts to lethal
+  - Lethal/aggravated damage replaces existing bashing wounds first
+- Combat outcomes classified by wounds sustained:
+  - Exceptional: Victory without wounds
+  - Normal: Victory with 1-2 wounds
+  - Minimal: Victory with 3+ wounds
+  - Death: Health reduced to 0
+
+### 6. Concurrent Access Prevention
 
 - Lambda functions check GameMode before any character operation
 - Attempts to use character in wrong mode are rejected
 - Clear error messages guide players to switch modes properly
+- Timestamp tracking allows timeout recovery for stuck states
 
 ## Character Name Management
 
@@ -90,12 +164,65 @@ The system currently uses a bloom filter for restricted name checking:
 - Prevents offensive or reserved names from being used
 - Separate from uniqueness checking (handled by GSI query)
 
+## Story State Management
+
+The Incremental mode maintains sophisticated state tracking:
+
+**Active Story Tracking:**
+
+- ActiveStoryID and ActiveSegmentID on character record
+- ActiveSegments table holds runtime segment state
+- Front-loaded processing calculates all outcomes at segment start
+- ClientEvents array contains complete narrative sequence
+
+**Story Progression Lists:**
+
+- AvailableStories: Stories the character can start
+- CompletedStories: Successfully finished stories
+- AbandonedStories: Stories started but not completed
+- Story types (one-time, daily, repeatable) control re-availability
+
+**Polling System:**
+
+- 30-second EventBridge polling for segment completion
+- SSM parameter `/eidolon/segment-poller-state` controls polling
+- Automatic enable when stories start, disable when none active
+- Stuck segment recovery after 15 minutes
+
+## Healing System Integration
+
+The wound healing system operates continuously across both game modes:
+
+**Natural Healing:**
+
+- Healing is automatic and requires no player intervention
+- Each wound has a precise HealAt timestamp in ISO 8601 format
+- System periodically checks and removes expired wounds
+- Multiple wounds can heal simultaneously
+- Healing continues in real-time regardless of active game mode
+
+**Health Recalculation:**
+
+- When wounds expire, they are removed from the wounds list
+- Health automatically increases as wounds heal
+- Unconscious characters regain consciousness when health > 0
+- Players receive notifications when wounds heal
+
+**Cross-Mode Implications:**
+
+- A character wounded in MUD combat enters Incremental stories injured
+- Combat wounds from Incremental persist when returning to MUD
+- Strategic timing of mode switches can optimize healing downtime
+- Severely wounded characters may need to wait before engaging difficult content
+
 ## Security Considerations
 
 - GameMode field is only modifiable through authorized Lambda functions
 - Mode transitions require validation of game state
 - IAM roles restrict direct database access
 - API Gateway authentication required for all operations
+- RunningFlag prevents concurrent segment processing
+- Conditional updates prevent race conditions
 
 ## Performance Optimization
 
@@ -103,3 +230,7 @@ The system currently uses a bloom filter for restricted name checking:
 - GameMode checks are simple string comparisons
 - Lambda functions cache archetype data
 - Conditional writes prevent race conditions
+- Front-loaded segment processing eliminates runtime calculations
+- GSI queries (EndTimeIndex) enable efficient polling
+- SQS batching reduces API calls
+- Auto-disable polling when no active stories

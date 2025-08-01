@@ -61,7 +61,6 @@ func createTestCharacterForCommands(name string, game *Game, room *Room) *Charac
 		player:     player,
 		room:       room,
 		mutex:      sync.RWMutex{},
-		health:     100,
 		maxHealth:  100,
 		essence:    50,
 		attributes: make(map[string]float64),

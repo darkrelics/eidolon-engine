@@ -62,7 +62,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Extract player ID based on event source
         if "detail" in event and "requestParameters" in event.get("detail", {}):
             # CloudWatch Events from Cognito
-            player_id = event["detail"]["requestParameters"].get("username")
+            player_id = event.get("detail", {}).get("requestParameters", {}).get("username")
         elif "body" in event:
             # API Gateway or direct invocation
             try:
@@ -72,8 +72,8 @@ def lambda_handler(event: dict, context: object) -> dict:
             player_id = body.get("player_id") if body else None
         elif "player_id" in event:
             # Direct invocation
-            player_id = event["player_id"]
-        elif "requestContext" in event and "authorizer" in event["requestContext"]:
+            player_id = event.get("player_id")
+        elif "requestContext" in event and "authorizer" in event.get("requestContext", {}):
             # API Gateway with Cognito authorizer
             try:
                 player_id = extract_player_id_from_event(event)
@@ -83,10 +83,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         if not player_id:
             logger.error("No player ID provided in request")
             if "requestContext" in event:
-                return build_lambda_response_pascal(400, {"error": "Player ID required"}, event)
+                return build_lambda_response_pascal(400, {"Error": "Player ID required"}, event)
             return {
                 "statusCode": 400,
-                "body": json.dumps({"error": "Player ID required"}),
+                "body": json.dumps({"Error": "Player ID required"}),
             }
 
         logger.info("Starting deletion process", extra={"player_id": player_id})
@@ -103,20 +103,20 @@ def lambda_handler(event: dict, context: object) -> dict:
         return results
 
     except ValueError as err:
-        logger.error("Invalid request", extra={"error": str(err)})
+        logger.error("Invalid request", extra={"error": str(err)}, exc_info=True)
         if "requestContext" in event:
-            return build_lambda_response_pascal(400, {"error": str(err)}, event)
+            return build_lambda_response_pascal(400, {"Error": str(err)}, event)
         return {
             "statusCode": 400,
-            "body": json.dumps({"error": str(err)}),
+            "body": json.dumps({"Error": str(err)}),
         }
     except RuntimeError as err:
         logger.error("Deletion operation failed", extra={"error": str(err)}, exc_info=True)
         if "requestContext" in event:
-            return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
+            return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": "Internal server error"}),
+            "body": json.dumps({"Error": "Internal server error"}),
         }
     except Exception as err:
         logger.error(
@@ -127,8 +127,8 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.info("Lambda response", extra={"status_code": 500})
 
         if "requestContext" in event:
-            return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
+            return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": "Internal server error"}),
+            "body": json.dumps({"Error": "Internal server error"}),
         }

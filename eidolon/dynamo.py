@@ -20,14 +20,15 @@ from eidolon.environment import (
     CHARACTER_HISTORY_TABLE,
     CHARACTERS_TABLE,
     EXITS_TABLE,
-    HISTORY_TABLE,
     ITEMS_TABLE,
     MOTD_TABLE,
     OPPONENTS_TABLE,
     PLAYERS_TABLE,
     PROTOTYPES_TABLE,
     ROOMS_TABLE,
+    SEGMENT_HISTORY_TABLE,
     SEGMENTS_TABLE,
+    STORY_HISTORY_TABLE,
     STORY_TABLE,
 )
 from eidolon.logger import get_logger
@@ -46,8 +47,9 @@ class TableName(Enum):
     STORY = "story"
     SEGMENTS = "segments"
     ACTIVE_SEGMENTS = "active_segments"
-    HISTORY = "history"
     CHARACTER_HISTORY = "character_history"
+    STORY_HISTORY = "story_history"
+    SEGMENT_HISTORY = "segment_history"
     OPPONENTS = "opponents"
     ROOMS = "rooms"
     EXITS = "exits"
@@ -64,8 +66,9 @@ TABLE_ENV_MAP = {
     TableName.STORY: STORY_TABLE,
     TableName.SEGMENTS: SEGMENTS_TABLE,
     TableName.ACTIVE_SEGMENTS: ACTIVE_SEGMENTS_TABLE,
-    TableName.HISTORY: HISTORY_TABLE,
     TableName.CHARACTER_HISTORY: CHARACTER_HISTORY_TABLE,
+    TableName.STORY_HISTORY: STORY_HISTORY_TABLE,
+    TableName.SEGMENT_HISTORY: SEGMENT_HISTORY_TABLE,
     TableName.OPPONENTS: OPPONENTS_TABLE,
     TableName.ROOMS: ROOMS_TABLE,
     TableName.EXITS: EXITS_TABLE,
@@ -368,7 +371,7 @@ class DynamoInterface:
         try:
             response = table.update_item(**kwargs)
         except ClientError as err:
-            if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
                 logger.error(
                     "Condition check failed",
                     extra={
@@ -463,9 +466,9 @@ class DynamoInterface:
         items.extend(response.get("Items", []))
 
         # Handle pagination
-        while "LastEvaluatedKey" in response and response["LastEvaluatedKey"]:
+        while "LastEvaluatedKey" in response and response.get("LastEvaluatedKey"):
             logger.debug("DB Interface: Query: Paginating...")
-            kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+            kwargs["ExclusiveStartKey"] = response.get("LastEvaluatedKey")
 
             try:
                 response = table.query(**kwargs)

@@ -3,16 +3,35 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason E. Robinson
 
-Lambda function to process a completed segment.
-Determines outcome, applies effects, and creates next segment if applicable.
+Lambda function to process completed mechanical segments.
+Triggered by SQS to process mechanical segments only.
+Rest and Decision segments are handled directly by the poller.
 """
 
+import json
+
 from eidolon.logger import get_logger
-from eidolon.segment import process_segment_completely
+from eidolon.polling import disable_polling_infrastructure
+from eidolon.segment import check_active_segments_exist, is_mechanical_segment, process_segment_completely
 from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
 
 # Configure logging
 logger = get_logger(__name__)
+
+
+def validate_segment_for_processing(segment_type: str) -> bool:
+    """
+    Validate that the segment type should be processed by this handler.
+
+    Args:
+        segment_type: Type of segment
+
+    Returns:
+        True if segment should be processed, False otherwise
+    """
+    # Only mechanical segments should be processed by this handler
+    # Rest and Decision segments are handled directly by the poller
+    return is_mechanical_segment(segment_type)
 
 
 def process_segment_business_logic(
@@ -23,7 +42,7 @@ def process_segment_business_logic(
     segment_type: str,
 ) -> dict:
     """
-    Business logic for processing a completed segment.
+    Business logic for processing a completed mechanical segment.
 
     Args:
         active_segment_id: Active segment UUID
@@ -36,9 +55,30 @@ def process_segment_business_logic(
         Dict with outcome and next segment ID
 
     Raises:
-        ValueError: If required data not found
+        ValueError: If required data not found or invalid segment type
         RuntimeError: If database operations fail
     """
+    # Validate segment type
+    if not validate_segment_for_processing(segment_type):
+        logger.warning(
+            "Invalid segment type for mechanical processing",
+            extra={
+                "segment_type": segment_type,
+                "active_segment_id": active_segment_id,
+            },
+        )
+        raise ValueError(f"Segment type '{segment_type}' should not be processed by this handler")
+
+    # Log processing details
+    logger.info(
+        "Processing mechanical segment",
+        extra={
+            "active_segment_id": active_segment_id,
+            "segment_type": segment_type,
+            "character_id": character_id,
+        },
+    )
+
     # Use the eidolon library to process the segment
     return process_segment_completely(active_segment_id, character_id, story_id, segment_id, segment_type)
 
@@ -75,16 +115,14 @@ def process_segments_batch(segments: list) -> dict:
                 },
             )
 
-            result = process_segment_business_logic(
-                active_segment_id, character_id, story_id, segment_id, segment_type  # type: ignore
-            )
+            result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)
 
             results.append(
                 {
                     "SegmentID": active_segment_id,
                     "Success": True,
-                    "Outcome": result["outcome"],
-                    "NextSegment": result["nextSegment"],
+                    "Outcome": result.get("outcome"),
+                    "NextSegment": result.get("nextSegment"),
                 }
             )
             success_count += 1
@@ -127,78 +165,165 @@ def process_segments_batch(segments: list) -> dict:
 
 def lambda_handler(event: dict, context: object) -> dict:
     """
-    Lambda handler to process completed segments.
-    Supports both single segment and batch processing.
+    Lambda handler to process completed mechanical segments.
+
+    Triggered by SQS to handle mechanical segments only.
+    Rest and Decision segments are processed directly by the poller.
 
     Args:
-        event: Event containing segment information or batch of segments
+        event: SQS event with segment data or direct invocation event
         context: Lambda context
 
     Returns:
-        Processing result
+        For SQS: batchItemFailures response
+        For direct: Processing result with outcome
     """
     # Log invocation
     log_lambda_invocation(context, event)
 
-    # Check if this is a batch request
-    if "segments" in event:
-        try:
-            batch_result = process_segments_batch(event["segments"])
-            return build_lambda_response_pascal(200, batch_result, event)
-        except Exception as err:
-            return handle_lambda_error_pascal(err, context, event)
+    # Check if this is an SQS event
+    if "Records" in event:
+        # SQS batch event
+        success_count = 0
+        failure_count = 0
+        batch_item_failures = []
 
-    # Single segment processing (original behavior)
-    try:
-        # Extract segment information from event
-        active_segment_id: str = event.get("ActiveSegmentID", "")
-        character_id = event.get("CharacterID")
-        story_id = event.get("StoryID")
-        segment_id = event.get("SegmentID")
-        segment_type = event.get("SegmentType")
+        for record in event.get("Records", []):
+            try:
+                # Parse message body
+                message_body = json.loads(record.get("body", "{}"))
 
-        if not active_segment_id:
-            raise ValueError("ActiveSegmentID is required")
-        if not character_id:
-            raise ValueError("CharacterID is required")
-        if not story_id:
-            raise ValueError("StoryID is required")
-        if not segment_id:
-            raise ValueError("SegmentID is required")
-        if not segment_type:
-            raise ValueError("SegmentType is required")
+                # Extract segment data
+                active_segment_id = message_body.get("ActiveSegmentID", "")
+                character_id = message_body.get("CharacterID")
+                story_id = message_body.get("StoryID")
+                segment_id = message_body.get("SegmentID")
+                segment_type = message_body.get("SegmentType")
 
+                if not all([active_segment_id, character_id, story_id, segment_id, segment_type]):
+                    raise ValueError("Missing required segment data")
+
+                # Validate segment type
+                if not validate_segment_for_processing(segment_type):
+                    logger.warning(
+                        "Skipping non-mechanical segment from SQS",
+                        extra={
+                            "message_id": record.get("messageId"),
+                            "segment_type": segment_type,
+                            "active_segment_id": active_segment_id,
+                        },
+                    )
+                    # Don't fail the message, just skip it
+                    success_count += 1
+                    continue
+
+                logger.info(
+                    "Processing SQS message",
+                    extra={
+                        "message_id": record.get("messageId"),
+                        "active_segment_id": active_segment_id,
+                        "segment_type": segment_type,
+                    },
+                )
+
+                # Process the segment
+                result = process_segment_business_logic(
+                    active_segment_id=active_segment_id,
+                    character_id=character_id,
+                    story_id=story_id,
+                    segment_id=segment_id,
+                    segment_type=segment_type,
+                )
+
+                success_count += 1
+
+                # If no next segment (story complete), check if we should disable polling
+                if not result.get("nextSegment"):
+                    # Check if any active segments remain
+                    has_active_segments = check_active_segments_exist()
+
+                    if not has_active_segments:
+                        # No more active segments, disable polling infrastructure
+                        disable_polling_infrastructure()
+
+            except Exception as err:
+                logger.error(
+                    "Failed to process SQS message",
+                    extra={
+                        "message_id": record.get("messageId"),
+                        "error": str(err),
+                    },
+                    exc_info=True,
+                )
+                failure_count += 1
+                # Add to batch item failures for SQS retry
+                batch_item_failures.append({"itemIdentifier": record.get("messageId", "unknown")})
+
+        # Return response for SQS batch processing
         logger.info(
-            "Processing single segment",
+            "SQS batch processing completed",
             extra={
-                "active_segment_id": active_segment_id,
-                "segment_type": segment_type,
+                "success_count": success_count,
+                "failure_count": failure_count,
             },
         )
 
-        # Call business logic
-        result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)  # type: ignore
+        return {"batchItemFailures": batch_item_failures}
 
-        response_data = {
-            "Message": "Segment processed successfully",
-            "Outcome": result["outcome"],
-            "NextSegment": result["nextSegment"],
-        }
+    # Legacy direct invocation support (for testing)
+    else:
+        try:
+            # Extract segment information from event
+            active_segment_id: str = event.get("ActiveSegmentID", "")
+            character_id = event.get("CharacterID")
+            story_id = event.get("StoryID")
+            segment_id = event.get("SegmentID")
+            segment_type = event.get("SegmentType")
 
-        logger.info("Lambda response", extra={"status_code": 200})
-        return build_lambda_response_pascal(200, response_data, event)
+            if not active_segment_id:
+                raise ValueError("ActiveSegmentID is required")
+            if not character_id:
+                raise ValueError("CharacterID is required")
+            if not story_id:
+                raise ValueError("StoryID is required")
+            if not segment_id:
+                raise ValueError("SegmentID is required")
+            if not segment_type:
+                raise ValueError("SegmentType is required")
 
-    except ValueError as err:
-        logger.error(
-            "Invalid request",
-            extra={"error": str(err)},
-        )
-        return build_lambda_response_pascal(400, {"error": str(err)}, event)
-    except RuntimeError as err:
-        logger.error(
-            "Failed to process segment",
-            extra={"error": str(err)},
-        )
-        return build_lambda_response_pascal(500, {"error": "Internal server error"}, event)
-    except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+            logger.info(
+                "Processing single segment (direct invocation)",
+                extra={
+                    "active_segment_id": active_segment_id,
+                    "segment_type": segment_type,
+                },
+            )
+
+            # Call business logic
+            result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)
+
+            response_data = {
+                "Message": "Segment processed successfully",
+                "Outcome": result.get("outcome"),
+                "NextSegment": result.get("nextSegment"),
+            }
+
+            logger.info("Lambda response", extra={"status_code": 200})
+            return build_lambda_response_pascal(200, response_data, event)
+
+        except ValueError as err:
+            logger.error(
+                "Invalid request",
+                extra={"error": str(err)},
+                exc_info=True,
+            )
+            return build_lambda_response_pascal(400, {"Error": str(err)}, event)
+        except RuntimeError as err:
+            logger.error(
+                "Failed to process segment",
+                extra={"error": str(err)},
+                exc_info=True,
+            )
+            return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        except Exception as err:
+            return handle_lambda_error_pascal(err, context, event)

@@ -2,68 +2,53 @@
 
 ## Overview
 
-The Incremental Game Module is a server-authoritative idle RPG subsystem within the Eidolon Engine ecosystem. It provides players with an automated, story-driven progression experience that serves as both an introduction to the game world and a complementary gameplay mode to the main MUD experience.
+The Incremental Game Module is an idle RPG subsystem within the Eidolon Engine that provides timer-based story progression. Players experience narrative-driven gameplay through automated mechanics while maintaining full character compatibility with the main MUD.
 
 ## Purpose
 
-The incremental module serves three primary purposes:
+The incremental module serves as:
 
-1. **Gateway Experience**: Introduces new players to the Eidolon Engine universe through guided story content
-2. **Idle Progression**: Offers time-based gameplay for players who want to progress without active engagement
-3. **Character Development**: Provides an alternative path for character advancement through story completion
+- **New Player Gateway**: Story-driven introduction to the Eidolon Engine universe
+- **Idle Progression**: Time-based gameplay for players wanting passive advancement
+- **Alternative Gameplay**: Different experience from active MUD participation while using the same character
 
-## Architecture Overview
+## Core Features
 
-The module follows a serverless architecture pattern:
+### Story System
 
-- **Backend**: AWS Lambda functions handle all game logic and state transitions
-- **Frontend**: Flutter web application provides the user interface
-- **Storage**: DynamoDB stores all game data including character state, story definitions, and progress
-- **Authentication**: Shared AWS Cognito identity with the main MUD
+- **Twine-Authored Content**: Visual narrative design with branching paths
+- **Three Story Types**: One-time (unique rewards), daily (reset at midnight UTC), and repeatable
+- **Prerequisite System**: Stories unlock based on skills and items
+- **Timer-Based Progression**: Segments advance automatically (1 minute to 24 hours)
 
-## Key Components
+### Segment Types
 
-### 1. Story System
+1. **Decision**: Player choices with configurable timeouts
+2. **Mechanical**: Skill challenges and/or combat using MUD mechanics
+3. **Rest**: Healing periods where wounds recover
 
-- Stories composed using Twine for visual narrative design
-- Story definitions stored in DynamoDB tables after conversion
-- Three story types: one-time, daily, and repeatable
-- Prerequisite checking for gated content
-- Branching narratives with player decisions
+### Character Integration
 
-### 2. Segment Processing
+- **Shared Character Data**: Same character plays both MUD and Incremental
+- **Mode Exclusivity**: GameMode field prevents concurrent play
+- **Persistent State**: Wounds, inventory, skills, and location carry between modes
+- **Unified Progression**: Experience gained in either mode contributes to growth
 
-- Time-gated progression through story segments
-- Server-calculated outcomes based on character stats
-- Automatic reward distribution upon completion
-- EventBridge-driven polling for segment completion
+## Technical Overview
 
-### 3. Character Integration
+- **Serverless Architecture**: AWS Lambda functions handle all game logic
+- **Flutter Web Client**: Responsive interface for story progression
+- **Shared Infrastructure**: Uses existing DynamoDB tables, Cognito auth, and API Gateway
+- **Event-Driven Processing**: 30-second polling system with SQS reliability
+- **Cost Efficient**: ~$235-335/month for 10,000 concurrent users
 
-- Shared character records with the MUD system
-- GameMode field prevents concurrent MUD/Incremental play
-- Skills and attributes affect story outcomes
-- Items and resources earned transfer to MUD inventory
+## Documentation
 
-### 4. Content Management
+- [Requirements](incremental-requirements.md) - Functional and non-functional requirements
+- [Technical Design](incremental-design.md) - Architecture and implementation details
+- [MUD Integration](incremental-mud-workflow.md) - Character transition workflows
+- [Database Schema](schema.md) - Shared data structures
 
-- Authors create stories using Twine's visual editor
-- Twine to Incremental conversion tool transforms stories for the game engine
-- Story content stored in DynamoDB tables (Story and Segments)
-- Administrative tools for managing published story content
-- Version field in Story table enables content updates
-- Direct database updates for immediate content availability
+## Getting Started
 
-## Technology Stack
-
-- **Runtime**: Python 3.12 Lambda functions
-- **Database**: DynamoDB storing all game data and content
-- **Frontend**: Flutter targeting web (mobile planned)
-- **Infrastructure**: AWS CDK for deployment
-- **Monitoring**: CloudWatch metrics and logging
-
-## Related Documentation
-
-- [Requirements](incremental-requirements.md) - Product requirements and user stories
-- [Design](incremental-design.md) - Technical architecture and implementation details
-- [MUD Workflow](incremental-mud-workflow.md) - Integration patterns with the MUD system
+Players can access the Incremental game through the same portal as the MUD. After character creation, they choose their initial game mode and can switch between modes when not actively playing.

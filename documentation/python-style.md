@@ -129,6 +129,60 @@ This eliminates the need for Union types and makes the code more predictable.
 
 ## Return Values
 
+### Return Intermediate Values
+
+Functions should return values to intermediate variables rather than returning the results of other function calls directly. This improves debugging, readability, and makes it easier to add error handling or logging:
+
+```python
+# Good - return intermediate values
+def get_character_data(character_id: str) -> dict:
+    """Get complete character data including inventory."""
+    character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+    if not character:
+        raise ValueError(f"Character {character_id} not found")
+
+    inventory = get_character_inventory(character_id)
+    character["Inventory"] = inventory
+
+    return character
+
+def process_combat(attacker_id: str, defender_id: str) -> dict:
+    """Process combat between two characters."""
+    attacker = get_character(attacker_id)
+    defender = get_character(defender_id)
+
+    damage = calculate_damage(attacker, defender)
+    updated_defender = apply_damage(defender, damage)
+
+    return {
+        "damage": damage,
+        "defender": updated_defender
+    }
+
+# Bad - directly returning function results
+def get_character_data(character_id: str) -> dict:
+    """Get complete character data including inventory."""
+    return {
+        **dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id}),
+        "Inventory": get_character_inventory(character_id)
+    }
+
+def process_combat(attacker_id: str, defender_id: str) -> dict:
+    """Process combat between two characters."""
+    return {
+        "damage": calculate_damage(get_character(attacker_id), get_character(defender_id)),
+        "defender": apply_damage(get_character(defender_id), damage)  # damage not defined!
+    }
+```
+
+Benefits of using intermediate values:
+
+- **Debugging**: Can inspect intermediate values with breakpoints
+- **Logging**: Can log important intermediate results
+- **Error Handling**: Can validate intermediate results before proceeding
+- **Readability**: Each step is clear and self-documenting
+- **Maintainability**: Easy to add new logic between steps
+
 ### Prefer Dicts for Complex Returns
 
 Use dictionaries for functions that need to return multiple values or status information:

@@ -193,8 +193,59 @@ class IAMStack(Stack):
             role_name=f"{game_name}-lambda-execution-role",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),  # type: ignore
             description="Execution role for Eidolon Engine Lambda functions",
-            managed_policies=[iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")],
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaSQSQueueExecutionRole"),
+            ],
         )
+
+        # Create SSM and SQS access policy for Lambda
+        self.lambda_ssm_sqs_policy = iam.ManagedPolicy(
+            self,
+            "lambda-ssm-sqs-policy",
+            managed_policy_name=f"{game_name}-lambda-ssm-sqs-access",
+            document=iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        actions=[
+                            "ssm:GetParameter",
+                            "ssm:PutParameter",
+                        ],
+                        resources=[f"arn:aws:ssm:{self.region}:{self.account}:parameter/{game_name}/*"],
+                    ),
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        actions=[
+                            "events:EnableRule",
+                            "events:DisableRule",
+                            "events:DescribeRule",
+                        ],
+                        resources=[f"arn:aws:events:{self.region}:{self.account}:rule/eidolon-segment-poller-rule"],
+                    ),
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        actions=[
+                            "sqs:SendMessage",
+                            "sqs:SendMessageBatch",
+                            "sqs:ReceiveMessage",
+                            "sqs:DeleteMessage",
+                            "sqs:DeleteMessageBatch",
+                            "sqs:GetQueueAttributes",
+                            "sqs:GetQueueUrl",
+                        ],
+                        resources=[
+                            f"arn:aws:sqs:{self.region}:{self.account}:{game_name}-segments",
+                            f"arn:aws:sqs:{self.region}:{self.account}:{game_name}-story-advancement",
+                        ],
+                    ),
+                ]
+            ),
+            description="Policy for Lambda access to SSM parameters and SQS queues",
+        )
+
+        # Attach SSM/SQS policy to Lambda role
+        self.lambda_execution_role.add_managed_policy(self.lambda_ssm_sqs_policy)
 
         # Output values
         CfnOutput(
