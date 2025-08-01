@@ -129,7 +129,7 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
         raise ValueError("Story ID cannot be empty")
 
     try:
-        history = dynamo.get_item(TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id})
+        history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryID": story_id})
     except ClientError as err:
         logger.error(
             "Failed to get story history",
@@ -143,7 +143,7 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
 
         try:
             dynamo.update_item(
-                TableName.HISTORY,
+                TableName.STORY_HISTORY,
                 Key={"CharacterID": character_id, "StoryID": story_id},
                 UpdateExpression="SET FinishedAt = :finished, AbandonedCount = :count, FinalOutcome = :outcome",
                 ExpressionAttributeValues={
@@ -404,7 +404,7 @@ def get_story_history(character_id: str, story_id: str) -> dict:
         raise ValueError("Story ID cannot be empty")
 
     try:
-        history = dynamo.get_item(TableName.HISTORY, {"CharacterID": character_id, "StoryID": story_id})
+        history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryID": story_id})
         return history or {}
     except ClientError as err:
         logger.error(
@@ -735,7 +735,7 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
         }
 
         # Put item (will overwrite if exists - handles retries)
-        dynamo.put_item(TableName.HISTORY, history_entry)
+        dynamo.put_item(TableName.STORY_HISTORY, history_entry)
     except ClientError as err:
         logger.error(
             "Failed to create history entry",
@@ -1366,7 +1366,7 @@ def complete_story_for_character(character_id: str, story_id: str, final_outcome
         
         # Update story history with completion
         dynamo.update_item(
-            TableName.HISTORY,
+            TableName.STORY_HISTORY,
             Key={"CharacterID": character_id, "StoryID": story_id},
             UpdateExpression="SET FinishedAt = :finished, FinalOutcome = :outcome",
             ExpressionAttributeValues={
@@ -1573,7 +1573,7 @@ def add_segment_to_history(character_id: str, story_id: str, segment_id: str, ou
         }
         
         dynamo.update_item(
-            TableName.HISTORY,
+            TableName.STORY_HISTORY,
             Key={"CharacterID": character_id, "StoryID": story_id},
             UpdateExpression="SET SegmentHistory = list_append(SegmentHistory, :segment)",
             ExpressionAttributeValues={

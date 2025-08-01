@@ -61,7 +61,6 @@ class DynamoDBStack(Stack):
             "segments",
             "active_segments",
             "opponents",
-            "history",
             "story_history",
             "segment_history",
         ]

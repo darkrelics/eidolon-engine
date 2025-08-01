@@ -584,7 +584,7 @@ def delete_character_history(character_id: str) -> dict:
 
     try:
         history_records = dynamo.query(
-            TableName.HISTORY,
+            TableName.STORY_HISTORY,
             KeyConditionExpression="CharacterID = :cid",
             ExpressionAttributeValues={":cid": character_id},
         )
@@ -592,7 +592,7 @@ def delete_character_history(character_id: str) -> dict:
         for record in history_records:  # type: ignore
             try:
                 dynamo.delete_item(
-                    TableName.HISTORY,
+                    TableName.STORY_HISTORY,
                     Key={"CharacterID": character_id, "StoryID": record["StoryID"]},
                 )
                 result["deleted_count"] += 1

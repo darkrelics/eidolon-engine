@@ -20,7 +20,6 @@ from eidolon.environment import (
     CHARACTER_HISTORY_TABLE,
     CHARACTERS_TABLE,
     EXITS_TABLE,
-    HISTORY_TABLE,
     ITEMS_TABLE,
     MOTD_TABLE,
     OPPONENTS_TABLE,
@@ -48,7 +47,6 @@ class TableName(Enum):
     STORY = "story"
     SEGMENTS = "segments"
     ACTIVE_SEGMENTS = "active_segments"
-    HISTORY = "history"
     CHARACTER_HISTORY = "character_history"
     STORY_HISTORY = "story_history"
     SEGMENT_HISTORY = "segment_history"
@@ -68,7 +66,6 @@ TABLE_ENV_MAP = {
     TableName.STORY: STORY_TABLE,
     TableName.SEGMENTS: SEGMENTS_TABLE,
     TableName.ACTIVE_SEGMENTS: ACTIVE_SEGMENTS_TABLE,
-    TableName.HISTORY: HISTORY_TABLE,
     TableName.CHARACTER_HISTORY: CHARACTER_HISTORY_TABLE,
     TableName.STORY_HISTORY: STORY_HISTORY_TABLE,
     TableName.SEGMENT_HISTORY: SEGMENT_HISTORY_TABLE,

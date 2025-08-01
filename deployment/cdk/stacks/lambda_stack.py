@@ -130,7 +130,6 @@ def validate_config(config: dict) -> None:
         "story_table",
         "segments_table",
         "active_segments_table",
-        "history_table",
         "opponents_table",
         "story_history_table",
         "segment_history_table",
@@ -182,7 +181,6 @@ class LambdaStack(cdk.Stack):
         self.story_table = config.get("story_table", "")
         self.segments_table = config.get("segments_table", "")
         self.active_segments_table = config.get("active_segments_table", "")
-        self.history_table = config.get("history_table", "")
         self.opponents_table = config.get("opponents_table", "")
         self.story_history_table = config.get("story_history_table", "")
         self.segment_history_table = config.get("segment_history_table", "")
@@ -352,7 +350,7 @@ class LambdaStack(cdk.Stack):
                 "CHARACTERS_TABLE": self.characters_table,
                 "ITEMS_TABLE": self.items_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Deletes a character for players",
@@ -402,7 +400,7 @@ class LambdaStack(cdk.Stack):
             {
                 "CHARACTERS_TABLE": self.characters_table,
                 "STORY_TABLE": self.story_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Returns available stories for a character",
@@ -418,7 +416,7 @@ class LambdaStack(cdk.Stack):
                 "STORY_TABLE": self.story_table,
                 "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "SEGMENT_QUEUE_URL": self.segment_queue_url,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
@@ -460,7 +458,7 @@ class LambdaStack(cdk.Stack):
             {
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "SEGMENTS_TABLE": self.segments_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Gets the outcome of a completed segment",
@@ -474,7 +472,7 @@ class LambdaStack(cdk.Stack):
             {
                 "CHARACTERS_TABLE": self.characters_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             "Abandons an active story and updates character state",
@@ -537,7 +535,7 @@ class LambdaStack(cdk.Stack):
                 "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "OPPONENTS_TABLE": self.opponents_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
             },
             description="Processes completed segments and determines outcomes",
@@ -575,7 +573,7 @@ class LambdaStack(cdk.Stack):
             environment={
                 "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "HISTORY_TABLE": self.history_table,
+                "STORY_HISTORY_TABLE": self.story_history_table,
                 "MAX_SEGMENTS_PER_POLL": "50",
                 "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
                 "SEGMENT_QUEUE_URL": self.segment_queue_url,
