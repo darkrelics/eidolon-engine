@@ -9,11 +9,13 @@ This document defines the functional and non-functional requirements for the Inc
 ### 2.1 Story Management
 
 **FR-001**: The system SHALL provide three types of stories:
+
 - One-time: Playable once per character lifetime
 - Daily: Resets availability at midnight UTC
 - Repeatable: No cooldown restrictions
 
 **FR-002**: Stories SHALL have prerequisites based on:
+
 - Minimum skill levels
 - Required items in inventory
 - Previous story completions
@@ -47,6 +49,7 @@ This document defines the functional and non-functional requirements for the Inc
 **FR-006**: Characters SHALL maintain a single game mode at a time (MUD, Incremental, or None).
 
 **FR-007**: Character state SHALL persist across modes including:
+
 - Wounds and health status
 - Inventory and equipment
 - Skills and attributes
@@ -57,12 +60,14 @@ This document defines the functional and non-functional requirements for the Inc
 ### 2.4 User Interface
 
 **FR-009**: The interface SHALL display:
+
 - Current story progress and narrative
 - Countdown timer for segment completion
 - Character status (health, experience)
 - Decision options when applicable
 
 **FR-010**: Players SHALL be able to:
+
 - Select available stories
 - Make decisions during choice segments
 - Abandon active stories
@@ -75,6 +80,7 @@ This document defines the functional and non-functional requirements for the Inc
 **FR-012**: Experience awards SHALL follow MUD progression rates.
 
 **FR-013**: Story completion SHALL provide rewards including:
+
 - Skill and attribute experience
 - Items and resources
 - New story unlocks
@@ -157,7 +163,6 @@ This document defines the functional and non-functional requirements for the Inc
 **CON-005**: Progression rate must not exceed MUD advancement speed.
 
 **CON-006**: Infrastructure costs must remain under $500/month for 10,000 users.
-
 
 ## 5. Acceptance Criteria
 

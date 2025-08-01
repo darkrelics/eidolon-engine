@@ -208,21 +208,21 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 ## Story Table
 
-| Field               | Type     | Key      | Description                                   |
-| ------------------- | -------- | -------- | --------------------------------------------- |
-| `StoryID`           | `STRING` | **HASH** | UUID of the story.                            |
-| `Title`             | `STRING` |          | Display title of the story.                   |
-| `Description`       | `STRING` |          | Brief description of the story.               |
-| `NarrativeText`     | `STRING` |          | Full narrative text introducing the story.    |
-| `StoryType`         | `STRING` |          | Type: one-time, daily, or repeatable.         |
-| `EstimatedDuration` | `NUMBER` |          | Estimated completion time in seconds.         |
-| `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items).        |
-| `DifficultyMap`     | `MAP`    |          | Map of skill checks to base difficulties.     |
-| `RewardTiers`       | `MAP`    |          | Reward descriptions by outcome tier.          |
-| `BaseXPMultiplier`  | `NUMBER` |          | XP multiplier (default 0.5, must be < 1.0).   |
-| `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.                 |
-| `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.         |
-| `Version`           | `NUMBER` |          | Story version for updates.                    |
+| Field               | Type     | Key      | Description                                 |
+| ------------------- | -------- | -------- | ------------------------------------------- |
+| `StoryID`           | `STRING` | **HASH** | UUID of the story.                          |
+| `Title`             | `STRING` |          | Display title of the story.                 |
+| `Description`       | `STRING` |          | Brief description of the story.             |
+| `NarrativeText`     | `STRING` |          | Full narrative text introducing the story.  |
+| `StoryType`         | `STRING` |          | Type: one-time, daily, or repeatable.       |
+| `EstimatedDuration` | `NUMBER` |          | Estimated completion time in seconds.       |
+| `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items).      |
+| `DifficultyMap`     | `MAP`    |          | Map of skill checks to base difficulties.   |
+| `RewardTiers`       | `MAP`    |          | Reward descriptions by outcome tier.        |
+| `BaseXPMultiplier`  | `NUMBER` |          | XP multiplier (default 0.5, must be < 1.0). |
+| `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.               |
+| `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.       |
+| `Version`           | `NUMBER` |          | Story version for updates.                  |
 
 **Primary Key:** StoryID (HASH)
 
@@ -256,7 +256,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `StoryID`          | `STRING`  |          | UUID of the story being played.                                            |
 | `StoryTitle`       | `STRING`  |          | Cached title of the story for quick access.                                |
 | `SegmentID`        | `STRING`  |          | UUID of the current segment definition.                                    |
-| `SegmentType`      | `STRING`  |          | Type of segment: decision, mechanical, or rest.                           |
+| `SegmentType`      | `STRING`  |          | Type of segment: decision, mechanical, or rest.                            |
 | `DefaultStatus`    | `STRING`  |          | Cached status message shown between events.                                |
 | `Status`           | `STRING`  |          | Segment status: active, completed, or abandoned.                           |
 | `StartTime`        | `NUMBER`  |          | Unix timestamp when segment started.                                       |
@@ -270,7 +270,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `Decision`         | `STRING`  |          | For decision segments: choice made by player.                              |
 | `DecisionMadeAt`   | `NUMBER`  |          | Unix timestamp when player made decision.                                  |
 | `ChallengeResults` | `LIST`    |          | For mechanical segments: results of each challenge roll.                   |
-| `CombatState`      | `MAP`     |          | For mechanical segments: final combat state (if applicable).              |
+| `CombatState`      | `MAP`     |          | For mechanical segments: final combat state (if applicable).               |
 | `Outcome`          | `STRING`  |          | Final outcome (death/failure/minimal/normal/exceptional).                  |
 | `Transmitted`      | `BOOLEAN` |          | Set when segment has been sent to SQS for processing.                      |
 | `TransmittedAt`    | `NUMBER`  |          | Unix timestamp when sent to SQS.                                           |
@@ -311,31 +311,32 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 Records the complete history of each segment played by a character. This table serves as an audit trail and enables player progress tracking, analytics, and debugging. All fields from the ActiveSegments table should be copied here when a segment completes.
 
-| Field                | Type     | Key       | Required | Description                                               |
-| -------------------- | -------- | --------- | -------- | --------------------------------------------------------- |
-| `CharacterID`        | `STRING` | **HASH**  | **Yes**  | UUID of the character.                                    |
-| `ActiveSegmentID`    | `STRING` | **RANGE** | **Yes**  | UUID matching the ActiveSegments record.                  |
-| `PlayerID`           | `STRING` |           | **Yes**  | UUID of the player for ownership verification.            |
-| `StoryID`            | `STRING` |           | **Yes**  | UUID of the parent story.                                 |
-| `SegmentID`          | `STRING` |           | **Yes**  | UUID of the segment definition.                           |
-| `SegmentType`        | `STRING` |           | **Yes**  | Type: mechanical, decision, or rest.                      |
+| Field                | Type     | Key       | Required | Description                                                |
+| -------------------- | -------- | --------- | -------- | ---------------------------------------------------------- |
+| `CharacterID`        | `STRING` | **HASH**  | **Yes**  | UUID of the character.                                     |
+| `ActiveSegmentID`    | `STRING` | **RANGE** | **Yes**  | UUID matching the ActiveSegments record.                   |
+| `PlayerID`           | `STRING` |           | **Yes**  | UUID of the player for ownership verification.             |
+| `StoryID`            | `STRING` |           | **Yes**  | UUID of the parent story.                                  |
+| `SegmentID`          | `STRING` |           | **Yes**  | UUID of the segment definition.                            |
+| `SegmentType`        | `STRING` |           | **Yes**  | Type: mechanical, decision, or rest.                       |
 | `StartTime`          | `NUMBER` |           | **Yes**  | Unix timestamp when segment started (from ActiveSegments). |
 | `EndTime`            | `NUMBER` |           | **Yes**  | Unix timestamp when segment ended (from ActiveSegments).   |
-| `ProcessedAt`        | `NUMBER` |           | No       | Unix timestamp when outcomes were calculated.             |
-| `CompletedAt`        | `NUMBER` |           | **Yes**  | Unix timestamp when segment was advanced.                 |
-| `Outcome`            | `STRING` |           | **Yes**  | death, failure, minimal, normal, or exceptional.          |
-| `Decision`           | `STRING` |           | No       | For decision segments: choice made by player.             |
-| `DecisionMadeAt`     | `NUMBER` |           | No       | Unix timestamp when player made decision.                 |
-| `ClientEvents`       | `LIST`   |           | No       | Complete event array sent to client.                      |
-| `CharacterUpdates`   | `MAP`    |           | **Yes**  | All character changes applied (contains XP data).         |
-| `ChallengeResults`   | `LIST`   |           | No       | Detailed skill check results (mechanical segments).       |
-| `CombatState`        | `MAP`    |           | No       | Final combat results if applicable.                       |
-| `SkillXPAwarded`     | `MAP`    |           | **Yes**  | Skill XP from this segment: {skill_name: amount}.         |
-| `AttributeXPAwarded` | `MAP`    |           | **Yes**  | Attribute XP from this segment: {attribute_name: amount}. |
+| `ProcessedAt`        | `NUMBER` |           | No       | Unix timestamp when outcomes were calculated.              |
+| `CompletedAt`        | `NUMBER` |           | **Yes**  | Unix timestamp when segment was advanced.                  |
+| `Outcome`            | `STRING` |           | **Yes**  | death, failure, minimal, normal, or exceptional.           |
+| `Decision`           | `STRING` |           | No       | For decision segments: choice made by player.              |
+| `DecisionMadeAt`     | `NUMBER` |           | No       | Unix timestamp when player made decision.                  |
+| `ClientEvents`       | `LIST`   |           | No       | Complete event array sent to client.                       |
+| `CharacterUpdates`   | `MAP`    |           | **Yes**  | All character changes applied (contains XP data).          |
+| `ChallengeResults`   | `LIST`   |           | No       | Detailed skill check results (mechanical segments).        |
+| `CombatState`        | `MAP`    |           | No       | Final combat results if applicable.                        |
+| `SkillXPAwarded`     | `MAP`    |           | **Yes**  | Skill XP from this segment: {skill_name: amount}.          |
+| `AttributeXPAwarded` | `MAP`    |           | **Yes**  | Attribute XP from this segment: {attribute_name: amount}.  |
 
 **Primary Key:** CharacterID (HASH), ActiveSegmentID (RANGE)
 
 **Implementation Notes:**
+
 - The `SkillXPAwarded` and `AttributeXPAwarded` fields must be extracted from the `CharacterUpdates.SkillXP` and `CharacterUpdates.AttributeXP` maps respectively
 - All timestamp fields should be copied directly from the ActiveSegments record
 - The `PlayerID` must be included to maintain security and ownership verification

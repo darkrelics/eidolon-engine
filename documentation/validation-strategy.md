@@ -5,6 +5,7 @@ This document outlines the data validation strategy for consistent communication
 ## Overview
 
 The system uses a standardized approach to ensure data consistency:
+
 1. **PascalCase** for all API field names
 2. **Strict validation** on both frontend and backend
 3. **Shared schemas** for common data structures
@@ -13,11 +14,13 @@ The system uses a standardized approach to ensure data consistency:
 ## Field Naming Convention
 
 ### API Communication
+
 - All API requests and responses use **PascalCase** field names
 - Examples: `CharacterID`, `StoryName`, `TimeRemaining`
 - This matches AWS DynamoDB field naming conventions
 
 ### Internal Storage
+
 - Frontend may use camelCase internally for Flutter conventions
 - Backend uses PascalCase consistently
 - Conversion happens at API boundaries
@@ -25,18 +28,23 @@ The system uses a standardized approach to ensure data consistency:
 ## Validation Layers
 
 ### Frontend Validation
+
 Located in `incremental/lib/utils/`:
+
 - `api_validation.dart` - Core validation utilities
 - `api_parser.dart` - Standardized response parsing
 
 Features:
+
 - Required field validation
 - Type checking
 - UUID format validation
 - Schema-based validation
 
 ### Backend Validation
+
 Located in `eidolon/requests.py`:
+
 - Strict field validation functions
 - Type checking
 - Required/optional field handling
@@ -45,6 +53,7 @@ Located in `eidolon/requests.py`:
 ## Common Schemas
 
 ### Character Response
+
 ```json
 {
   "Character": {
@@ -60,21 +69,25 @@ Located in `eidolon/requests.py`:
 ```
 
 ### Story Response
+
 ```json
 {
-  "Stories": [{
-    "StoryID": "uuid",
-    "Title": "string",
-    "Description": "string",
-    "Type": "string",
-    "Available": "boolean",
-    "CooldownRemaining": "number",
-    "EstimatedDuration": "number"
-  }]
+  "Stories": [
+    {
+      "StoryID": "uuid",
+      "Title": "string",
+      "Description": "string",
+      "Type": "string",
+      "Available": "boolean",
+      "CooldownRemaining": "number",
+      "EstimatedDuration": "number"
+    }
+  ]
 }
 ```
 
 ### Segment Response
+
 ```json
 {
   "Segment": {
@@ -89,11 +102,13 @@ Located in `eidolon/requests.py`:
 ## Error Handling
 
 ### Frontend
+
 - Catches `ValidationException` for field/type errors
 - Provides user-friendly error messages
 - Logs validation failures for debugging
 
 ### Backend
+
 - Returns standardized error format: `{"Error": "message"}`
 - HTTP status codes indicate error type
 - Detailed error logging for troubleshooting
@@ -101,11 +116,13 @@ Located in `eidolon/requests.py`:
 ## Migration Guide
 
 ### Updating Frontend Code
+
 1. Replace `JsonUtils.getFlexible()` with `ApiParser` methods
 2. Add try-catch blocks for `ValidationException`
 3. Ensure all API calls use PascalCase field names
 
 ### Updating Backend Code
+
 1. Use strict validation functions from `requests.py`
 2. Remove flexible field parsing
 3. Ensure all responses use PascalCase

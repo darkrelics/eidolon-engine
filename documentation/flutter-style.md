@@ -55,13 +55,13 @@ import '../utils/json_utils.dart';
 
 ```dart
 /// Service for managing character data.
-/// 
+///
 /// Handles API communication and local caching.
 class CharacterService {
   final ApiService _apiService;
   final _characterCache = <String, Character>{};
 
-  CharacterService({required ApiService apiService}) 
+  CharacterService({required ApiService apiService})
     : _apiService = apiService;
 
   /// Fetches character by ID from API or cache.
@@ -76,7 +76,7 @@ class CharacterService {
     if (character != null) {
       _characterCache[characterId] = character;
     }
-    
+
     return character;
   }
 }
@@ -312,7 +312,7 @@ For shared state, use Provider or similar state management:
 ```dart
 class CharacterProvider extends ChangeNotifier {
   Character? _currentCharacter;
-  
+
   Character? get currentCharacter => _currentCharacter;
 
   void setCharacter(Character character) {
@@ -331,7 +331,7 @@ Always use theme colors and text styles:
 ```dart
 Widget build(BuildContext context) {
   final theme = Theme.of(context);
-  
+
   return Container(
     color: theme.colorScheme.surface,
     child: Text(

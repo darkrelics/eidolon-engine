@@ -7,6 +7,7 @@ The Incremental Game Module is an idle RPG subsystem within the Eidolon Engine t
 ## Purpose
 
 The incremental module serves as:
+
 - **New Player Gateway**: Story-driven introduction to the Eidolon Engine universe
 - **Idle Progression**: Time-based gameplay for players wanting passive advancement
 - **Alternative Gameplay**: Different experience from active MUD participation while using the same character
@@ -14,17 +15,20 @@ The incremental module serves as:
 ## Core Features
 
 ### Story System
+
 - **Twine-Authored Content**: Visual narrative design with branching paths
 - **Three Story Types**: One-time (unique rewards), daily (reset at midnight UTC), and repeatable
 - **Prerequisite System**: Stories unlock based on skills and items
 - **Timer-Based Progression**: Segments advance automatically (1 minute to 24 hours)
 
 ### Segment Types
+
 1. **Decision**: Player choices with configurable timeouts
 2. **Mechanical**: Skill challenges and/or combat using MUD mechanics
 3. **Rest**: Healing periods where wounds recover
 
 ### Character Integration
+
 - **Shared Character Data**: Same character plays both MUD and Incremental
 - **Mode Exclusivity**: GameMode field prevents concurrent play
 - **Persistent State**: Wounds, inventory, skills, and location carry between modes

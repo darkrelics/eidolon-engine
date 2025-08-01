@@ -140,20 +140,20 @@ def get_character_data(character_id: str) -> dict:
     character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
     if not character:
         raise ValueError(f"Character {character_id} not found")
-    
+
     inventory = get_character_inventory(character_id)
     character["Inventory"] = inventory
-    
+
     return character
 
 def process_combat(attacker_id: str, defender_id: str) -> dict:
     """Process combat between two characters."""
     attacker = get_character(attacker_id)
     defender = get_character(defender_id)
-    
+
     damage = calculate_damage(attacker, defender)
     updated_defender = apply_damage(defender, damage)
-    
+
     return {
         "damage": damage,
         "defender": updated_defender
@@ -176,6 +176,7 @@ def process_combat(attacker_id: str, defender_id: str) -> dict:
 ```
 
 Benefits of using intermediate values:
+
 - **Debugging**: Can inspect intermediate values with breakpoints
 - **Logging**: Can log important intermediate results
 - **Error Handling**: Can validate intermediate results before proceeding

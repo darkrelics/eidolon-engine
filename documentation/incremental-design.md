@@ -34,7 +34,7 @@ The system uses a front-loaded processing model where all outcomes are calculate
 1. **Segment Creation**: When a story starts or advances, outcomes are immediately calculated
 2. **Timer Management**: Segments have start/end times for client countdown display
 3. **Polling System**: EventBridge triggers every 30 seconds to find completed segments
-4. **Dual Queue Processing**: 
+4. **Dual Queue Processing**:
    - Segment Processing Queue: Mechanical segments processed immediately when created
    - Story Advancement Queue: All segments processed when timer expires
 5. **Result Application**: Pre-calculated outcomes applied and story advanced
@@ -45,21 +45,22 @@ The system uses a front-loaded processing model where all outcomes are calculate
 
 All endpoints extend the existing API Gateway configuration. Field names use PascalCase to match DynamoDB schemas.
 
-| Method | Endpoint | Lambda Function | Purpose |
-|--------|----------|-----------------|---------|
-| GET | /stories | api_get_stories | List available stories for character |
-| POST | /stories/start | api_start_story | Begin a new story |
-| GET | /stories/current | api_get_current_story | Get active story state |
-| POST | /stories/abandon | api_abandon_story | Exit current story |
-| POST | /segments/decision | api_submit_decision | Submit player choice |
-| GET | /segments/status | api_get_segment_status | Check segment readiness |
-| GET | /segments/history | api_get_segment_history | Retrieve processed results |
+| Method | Endpoint           | Lambda Function         | Purpose                              |
+| ------ | ------------------ | ----------------------- | ------------------------------------ |
+| GET    | /stories           | api_get_stories         | List available stories for character |
+| POST   | /stories/start     | api_start_story         | Begin a new story                    |
+| GET    | /stories/current   | api_get_current_story   | Get active story state               |
+| POST   | /stories/abandon   | api_abandon_story       | Exit current story                   |
+| POST   | /segments/decision | api_submit_decision     | Submit player choice                 |
+| GET    | /segments/status   | api_get_segment_status  | Check segment readiness              |
+| GET    | /segments/history  | api_get_segment_history | Retrieve processed results           |
 
 ### 2.2 Request/Response Examples
 
 The API uses JSON for all request and response payloads. When a player initiates a story, the client sends the character ID and desired story ID to the backend. The server validates prerequisites, ensures the character is not already in a game mode, and creates the first segment. The response includes timing information that allows the client to display an accurate countdown timer and the segment's status text for immediate display.
 
 **Start Story Request:**
+
 ```json
 POST /stories/start
 {
@@ -69,17 +70,18 @@ POST /stories/start
 ```
 
 **Start Story Response:**
+
 ```json
 {
-    "success": true,
-    "segment": {
-        "activeSegmentId": "active-seg-uuid-123",
-        "segmentType": "decision",
-        "startTime": 1737000000,
-        "endTime": 1737000300,
-        "shortStatus": "Choosing your path",
-        "duration": 300
-    }
+  "success": true,
+  "segment": {
+    "activeSegmentId": "active-seg-uuid-123",
+    "segmentType": "decision",
+    "startTime": 1737000000,
+    "endTime": 1737000300,
+    "shortStatus": "Choosing your path",
+    "duration": 300
+  }
 }
 ```
 
@@ -110,6 +112,7 @@ def business_logic(param1: str, param2: str) -> dict:
 ### 3.2 Core Lambda Functions
 
 **api_start_story**
+
 - Validates character ownership and GameMode="None"
 - Creates ActiveSegments record with calculated end time
 - Generates ActiveSegmentID using UUIDv7 for time-based ordering
@@ -118,12 +121,14 @@ def business_logic(param1: str, param2: str) -> dict:
 - Enables polling if not already active
 
 **ops_segment_poller** (EventBridge triggered)
+
 - Reads SSM parameter for run/stop state
 - Queries EndTimeIndex for segments where EndTime <= Now
 - Sends ALL completed segments to Story Advancement Queue
 - Manages polling state (auto-disable when no segments)
 
 **ops_process_segment** (SQS triggered)
+
 - Processes mechanical segments only
 - Uses MUD mechanics for calculations:
   - ResolveStaticCheckWithXP for skill challenges
@@ -132,6 +137,7 @@ def business_logic(param1: str, param2: str) -> dict:
 - Stores results in ActiveSegments record
 
 **ops_advance_story** (SQS triggered from Story Advancement Queue)
+
 - Claims segment with RunningFlag to prevent duplicates
 - Processes simple segments (rest/decision) if not already processed
 - Applies CharacterUpdates (XP, wounds, room changes)
@@ -159,10 +165,12 @@ See [schema.md](schema.md) for complete table definitions. Key design patterns:
 ### 4.3 Transaction Patterns
 
 Use DynamoDB transactions for critical operations:
+
 - Story start (Character + ActiveSegments)
 - Story completion (Character + History + Cleanup)
 
 Avoid transactions for high-frequency operations:
+
 - Segment processing (use idempotent design)
 - XP updates (use conditional writes)
 
@@ -220,14 +228,14 @@ All skill checks use MUD mechanics functions:
 ```python
 # Narrative challenges
 result = ResolveStaticCheckWithXP(
-    character, 
+    character,
     skill="perception",
-    attribute="agility", 
+    attribute="agility",
     difficulty=8
 )
 # Returns: (success, sigma, skill_xp, attribute_xp)
 
-# Combat actions  
+# Combat actions
 result = ResolveOpposedCheckWithXP(
     attacker, defender,
     "melee", "strength",  # Attacker
@@ -240,6 +248,7 @@ result = ResolveOpposedCheckWithXP(
 Mechanical segment outcomes combine all challenge and combat results:
 
 For skill challenges (based on average sigma):
+
 - Death: Any sigma ≤ -3.0 or average < -2.0
 - Failure: Average -2.0 to -0.5
 - Minimal: Average -0.5 to 0.5
@@ -247,6 +256,7 @@ For skill challenges (based on average sigma):
 - Exceptional: Average > 1.5
 
 For combat encounters (based on wounds):
+
 - Death: Health reaches 0
 - Failure: Max rounds without victory
 - Minimal: Victory with 3+ wounds
@@ -258,6 +268,7 @@ When both exist in a segment, the worse outcome takes precedence.
 ### 6.3 Wound System
 
 Full MUD wound implementation:
+
 - Each damage point creates wound map: {DamageType, HealAt}
 - Damage types: bashing (15min), lethal (6hr), aggravated (7d)
 - Health = MaxHealth - len(wounds)
@@ -288,6 +299,7 @@ portal/lib/
 ### 7.2 State Management
 
 Using Provider pattern:
+
 - IncrementalProvider manages active story state
 - Polling based on segment end time
 - Local countdown calculation
@@ -302,7 +314,7 @@ The client implements an intelligent polling strategy that balances server load 
 if (timeRemaining <= 30) {
     pollInterval = Duration(seconds: 1);
 } else if (timeRemaining <= 300) {
-    pollInterval = Duration(seconds: 10);  
+    pollInterval = Duration(seconds: 10);
 } else {
     pollInterval = Duration(seconds: 30);
 }
@@ -324,6 +336,7 @@ if (timeRemaining <= 30) {
 ### 8.2 Cost Optimization
 
 For 10,000 concurrent users:
+
 - Lambda: ~$80-120/month (reduced by 67% with 30-sec polling)
 - DynamoDB: ~$150-200/month (efficient GSI usage)
 - EventBridge: <$1/month (single rule)
@@ -333,6 +346,7 @@ For 10,000 concurrent users:
 ### 8.3 Monitoring
 
 CloudWatch metrics:
+
 - Lambda duration and errors
 - Segment processing times
 - Stuck segment detection
@@ -364,7 +378,7 @@ The incremental game functions integrate seamlessly with the existing Eidolon En
 # Lambda function definitions in CDK
 incremental_functions = [
     'api_get_stories',
-    'api_start_story', 
+    'api_start_story',
     'api_submit_decision',
     'api_get_current_story',
     'api_abandon_story',
@@ -385,7 +399,7 @@ for func_name in incremental_functions:
         environment=common_env_vars,
         timeout=Duration.seconds(30)
     )
-    
+
     # Grant DynamoDB permissions
     for table in [story_table, segments_table, active_segments_table]:
         table.grant_read_write_data(lambda_function)
@@ -394,8 +408,9 @@ for func_name in incremental_functions:
 ### 10.2 Environment Variables
 
 Required for Lambda functions:
+
 - STORY_TABLE
-- SEGMENTS_TABLE  
+- SEGMENTS_TABLE
 - ACTIVE_SEGMENTS_TABLE
 - CHARACTER_TABLE
 - OPPONENTS_TABLE

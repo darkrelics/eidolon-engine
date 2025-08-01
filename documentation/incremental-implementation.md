@@ -29,109 +29,110 @@ This complete example shows how segment processing results are stored, including
 
 ```json
 {
-    "ActiveSegmentID": "550e8400-e29b-41d4-a716-446655440000",  // UUIDv7 format required
-    "CharacterID": "7d793dc0-5e27-4a68-b40e-8f52ae06ad8e",
-    "PlayerID": "a4b5c6d7-e8f9-0a1b-2c3d-4e5f6a7b8c9d",
-    "StoryID": "forest-adventure-001",
-    "StoryTitle": "The Whispering Woods",
-    "SegmentID": "seg-forest-002a",
-    "SegmentType": "mechanical",
-    "DefaultStatus": "Walking through the dark forest",
-    "StartTime": 1737000300,
-    "EndTime": 1737003900,
-    "ProcessedAt": 1737000305,
-    "ProcessingStatus": "processed",
-    "ProcessingError": null,
-    "NextSegmentID": "seg-forest-003",
-    "Outcome": "minimal",
-    "ClientEvents": [
-        {
-            "eventType": "narrative",
-            "title": "Into the Woods",
-            "description": "The morning mist clings to the forest floor...",
-            "data": {}
-        },
-        {
-            "eventType": "skillCheck",
-            "title": "Perception Challenge",
-            "description": "You scan the forest for hidden dangers...",
-            "data": {
-                "skill": "perception",
-                "attribute": "agility",
-                "effectiveScore": 12,
-                "difficulty": 8,
-                "sigma": 0.82,
-                "success": true,
-                "skillXPAwarded": 0.25,
-                "attributeXPAwarded": 0.025
-            }
-        }
-    ],
-    "CharacterUpdates": {
-        "Wounds": [
-            {
-                "DamageType": "bashing",
-                "HealAt": "2025-01-15T14:30:00Z"
-            }
-        ],
-        "SkillXP": {
-            "perception": 0.375,
-            "survival": 0.75
-        },
-        "AttributeXP": {
-            "agility": 0.0375,
-            "strength": 0.075
-        }
+  "ActiveSegmentID": "550e8400-e29b-41d4-a716-446655440000", // UUIDv7 format required
+  "CharacterID": "7d793dc0-5e27-4a68-b40e-8f52ae06ad8e",
+  "PlayerID": "a4b5c6d7-e8f9-0a1b-2c3d-4e5f6a7b8c9d",
+  "StoryID": "forest-adventure-001",
+  "StoryTitle": "The Whispering Woods",
+  "SegmentID": "seg-forest-002a",
+  "SegmentType": "mechanical",
+  "DefaultStatus": "Walking through the dark forest",
+  "StartTime": 1737000300,
+  "EndTime": 1737003900,
+  "ProcessedAt": 1737000305,
+  "ProcessingStatus": "processed",
+  "ProcessingError": null,
+  "NextSegmentID": "seg-forest-003",
+  "Outcome": "minimal",
+  "ClientEvents": [
+    {
+      "eventType": "narrative",
+      "title": "Into the Woods",
+      "description": "The morning mist clings to the forest floor...",
+      "data": {}
     },
-    "ChallengeResults": [
-        {"skill": "perception", "success": true, "sigma": 0.82},
-        {"skill": "perception", "success": false, "sigma": -0.45}
-    ]
+    {
+      "eventType": "skillCheck",
+      "title": "Perception Challenge",
+      "description": "You scan the forest for hidden dangers...",
+      "data": {
+        "skill": "perception",
+        "attribute": "agility",
+        "effectiveScore": 12,
+        "difficulty": 8,
+        "sigma": 0.82,
+        "success": true,
+        "skillXPAwarded": 0.25,
+        "attributeXPAwarded": 0.025
+      }
+    }
+  ],
+  "CharacterUpdates": {
+    "Wounds": [
+      {
+        "DamageType": "bashing",
+        "HealAt": "2025-01-15T14:30:00Z"
+      }
+    ],
+    "SkillXP": {
+      "perception": 0.375,
+      "survival": 0.75
+    },
+    "AttributeXP": {
+      "agility": 0.0375,
+      "strength": 0.075
+    }
+  },
+  "ChallengeResults": [
+    { "skill": "perception", "success": true, "sigma": 0.82 },
+    { "skill": "perception", "success": false, "sigma": -0.45 }
+  ]
 }
 ```
 
 #### Mechanical Segment Definition Example
 
 Mechanical segments can contain both skill challenges and combat encounters. This structure shows how mechanical segments support both types of challenges, with combat configuration linking to the Opponents table and specifying different narrative results based on performance.
+
 ```json
 {
-    "StoryID": "forest-adventure-001",
-    "SegmentID": "seg-combat-goblin-001",
-    "SegmentType": "mechanical",
-    "ShortStatus": "Fighting the goblin scout",
-    "DefaultStatus": "Engaged in combat",
-    "SegmentDuration": 120,
-    "NextSegmentID": "seg-forest-004",
-    "Combat": {
-        "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
-        "maxRounds": 15,
-        "environment": {
-            "lighting": "dim",
-            "terrain": "muddy"
-        }
-    },
-    "Results": {
-        "death": {
-            "narrative": "The goblin's blade finds your heart...",
-            "effects": {"room": 0}
-        },
-        "failure": {
-            "narrative": "Exhausted, you retreat from battle...",
-            "effects": {"room": 5}
-        },
-        "minimal": {
-            "narrative": "You defeat the goblin but suffer grievous wounds...",
-            "effects": {"room": 7, "items": ["goblin-pouch-001"]}
-        },
-        "normal": {
-            "narrative": "Your combat training prevails...",
-            "effects": {"room": 7, "items": ["goblin-pouch-001", "rusty-blade-001"]}
-        },
-        "exceptional": {
-            "narrative": "You dispatch the goblin without a scratch!",
-            "effects": {"room": 7, "items": ["goblin-pouch-001", "rusty-blade-001", "goblin-ear-001"]}
-        }
+  "StoryID": "forest-adventure-001",
+  "SegmentID": "seg-combat-goblin-001",
+  "SegmentType": "mechanical",
+  "ShortStatus": "Fighting the goblin scout",
+  "DefaultStatus": "Engaged in combat",
+  "SegmentDuration": 120,
+  "NextSegmentID": "seg-forest-004",
+  "Combat": {
+    "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+    "maxRounds": 15,
+    "environment": {
+      "lighting": "dim",
+      "terrain": "muddy"
     }
+  },
+  "Results": {
+    "death": {
+      "narrative": "The goblin's blade finds your heart...",
+      "effects": { "room": 0 }
+    },
+    "failure": {
+      "narrative": "Exhausted, you retreat from battle...",
+      "effects": { "room": 5 }
+    },
+    "minimal": {
+      "narrative": "You defeat the goblin but suffer grievous wounds...",
+      "effects": { "room": 7, "items": ["goblin-pouch-001"] }
+    },
+    "normal": {
+      "narrative": "Your combat training prevails...",
+      "effects": { "room": 7, "items": ["goblin-pouch-001", "rusty-blade-001"] }
+    },
+    "exceptional": {
+      "narrative": "You dispatch the goblin without a scratch!",
+      "effects": { "room": 7, "items": ["goblin-pouch-001", "rusty-blade-001", "goblin-ear-001"] }
+    }
+  }
 }
 ```
 
@@ -175,7 +176,7 @@ import uuid_utils  # Use uuid-utils library for UUIDv7 generation
 def start_story_transaction(character_id, story_id, segment_data):
     # Generate UUIDv7 for the active segment
     segment_data['ActiveSegmentID'] = str(uuid_utils.uuid7())
-    
+
     return {
         'TransactItems': [
             {
@@ -226,43 +227,43 @@ def lambda_handler(event, context):
         "http_method": event.get('httpMethod'),
         "path": event.get('path')
     })
-    
+
     # Handle OPTIONS preflight
     if event.get('httpMethod') == 'OPTIONS':
         return create_response(200, {})
-    
+
     try:
         # Extract player ID from authorizer
         player_id = event['requestContext']['authorizer']['claims']['sub']
-        
+
         # Parse request body if POST
         body = {}
         if event.get('body'):
             body = json.loads(event['body'])
-        
+
         # Extract query parameters if GET
         character_id = None
         if event.get('queryStringParameters'):
             character_id = event['queryStringParameters'].get('characterId')
-        
+
         # Call business logic
         result = process_story_request(
             player_id=player_id,
             character_id=character_id or body.get('CharacterID'),
             story_id=body.get('StoryID')
         )
-        
+
         # Return response
         logger.info("Request completed", extra={
             "status_code": result['status_code'],
             "character_id": character_id
         })
-        
+
         return create_response(
             result['status_code'],
             result['body']
         )
-        
+
     except Exception as e:
         logger.error("Lambda error", exc_info=True)
         return create_response(500, {"error": "Internal server error"})
@@ -288,10 +289,10 @@ def validate_character_ownership(character_id, player_id):
     character = get_character(character_id)
     if not character:
         return not_found_response("Character")
-    
+
     if character.get('PlayerID') != player_id:
         return create_response(403, {"error": "Character not owned by player"})
-    
+
     return character
 
 def check_game_mode(character, required_mode="None"):
@@ -315,27 +316,27 @@ def process_segment(active_segment_id):
     if not segment:
         logger.error(f"Segment not found: {active_segment_id}")
         return {"success": False, "error": "Segment not found"}
-    
+
     # Skip if already processed
     if segment.get('ProcessingStatus') == 'processed':
         logger.info(f"Segment already processed: {active_segment_id}")
         return {"success": True, "skipped": True}
-    
+
     # Mark as processing
     update_processing_status(active_segment_id, 'processing')
-    
+
     try:
         if segment['SegmentType'] == 'mechanical':
             result = process_mechanical_segment(segment)
         else:
             raise ValueError(f"Unknown segment type: {segment['SegmentType']}")
-        
+
         # Store results
         update_segment_results(active_segment_id, result)
         update_processing_status(active_segment_id, 'processed')
-        
+
         return {"success": True, "result": result}
-        
+
     except Exception as e:
         logger.error(f"Segment processing failed", exc_info=True)
         update_processing_status(active_segment_id, 'failed', str(e))
@@ -350,12 +351,12 @@ The `process_mechanical_segment` function handles both skill challenges and comb
 def process_mechanical_segment(segment):
     """Process a mechanical segment containing skill challenges and/or combat."""
     segment_definition = get_segment_definition(
-        segment['StoryID'], 
+        segment['StoryID'],
         segment['SegmentID']
     )
-    
+
     character = get_character(segment['CharacterID'])
-    
+
     # Initialize results
     client_events = []
     character_updates = {
@@ -364,19 +365,19 @@ def process_mechanical_segment(segment):
         'Wounds': []
     }
     challenge_results = []
-    
+
     # Process skill challenges if present
     if 'Challenges' in segment_definition:
         for challenge in segment_definition['Challenges']:
             result = resolve_skill_challenge(character, challenge)
             challenge_results.extend(result['results'])
-            
+
             # Accumulate XP
             for skill, xp in result['totalSkillXP'].items():
                 character_updates['SkillXP'][skill] = character_updates['SkillXP'].get(skill, 0) + xp
             for attr, xp in result['totalAttributeXP'].items():
                 character_updates['AttributeXP'][attr] = character_updates['AttributeXP'].get(attr, 0) + xp
-            
+
             # Create client event
             for r in result['results']:
                 client_events.append({
@@ -385,37 +386,37 @@ def process_mechanical_segment(segment):
                     'description': challenge.get('description', ''),
                     'data': r
                 })
-    
+
     # Process combat if present
     if 'Combat' in segment_definition:
         combat_result = simulate_combat(character, segment_definition['Combat'])
-        
+
         # Add combat events
         client_events.extend(combat_result['events'])
-        
+
         # Add wounds from combat
         character_updates['Wounds'].extend(combat_result['wounds'])
-        
+
         # Include combat results in outcome calculation
         challenge_results.extend(combat_result['challenge_results'])
-    
+
     # Determine overall outcome based on all challenges
     outcome = calculate_mechanical_outcome(challenge_results)
-    
+
     # Apply narrative and effects from outcome
     outcome_def = segment_definition['Results'][outcome]
-    
+
     # Add narrative event
     client_events.insert(0, {
         'eventType': 'narrative',
         'title': segment_definition.get('Title', 'Story Progress'),
         'description': outcome_def['narrative']
     })
-    
+
     # Apply outcome effects
     if 'room' in outcome_def.get('effects', {}):
         character_updates['Room'] = outcome_def['effects']['room']
-    
+
     return {
         'Outcome': outcome,
         'ClientEvents': client_events,
@@ -438,22 +439,22 @@ def resolve_skill_challenge(character, challenge_def):
     attribute = challenge_def['attribute']
     difficulty = challenge_def['difficulty']
     attempts = challenge_def.get('attempts', 1)
-    
+
     results = []
     total_skill_xp = 0
     total_attribute_xp = 0
-    
+
     for attempt in range(attempts):
         # Calculate effective score
         skill_value = character.get('Skills', {}).get(skill, 0)
         attribute_value = character.get('Attributes', {}).get(attribute, 0)
         effective_score = skill_value + attribute_value
-        
+
         # Call MUD mechanics
         success, sigma, skill_xp, attribute_xp = ResolveStaticCheckWithXP(
             character, skill, attribute, difficulty
         )
-        
+
         results.append({
             "attempt": attempt + 1,
             "skill": skill,
@@ -465,10 +466,10 @@ def resolve_skill_challenge(character, challenge_def):
             "skillXPAwarded": skill_xp,
             "attributeXPAwarded": attribute_xp
         })
-        
+
         total_skill_xp += skill_xp
         total_attribute_xp += attribute_xp
-    
+
     return {
         "results": results,
         "totalSkillXP": {skill: total_skill_xp},
@@ -485,27 +486,27 @@ def calculate_mechanical_outcome(challenge_results):
     """Determine mechanical segment outcome based on all challenge results (skill checks and combat)."""
     if not challenge_results:
         return "normal"
-    
+
     # Extract sigma values
     sigmas = []
     for challenge in challenge_results:
         for result in challenge.get('results', []):
             sigmas.append(result['sigma'])
-    
+
     if not sigmas:
         return "normal"
-    
+
     # Check for catastrophic failure
     if any(sigma <= -3.0 for sigma in sigmas):
         return "death"
-    
+
     # Calculate average performance
     avg_sigma = sum(sigmas) / len(sigmas)
-    
+
     # Check for critical overrides
     critical_failures = sum(1 for s in sigmas if s < -2.0)
     critical_successes = sum(1 for s in sigmas if s > 2.0)
-    
+
     # Determine outcome
     if avg_sigma < -2.0 or critical_failures >= 2:
         return "death"
@@ -530,29 +531,29 @@ def apply_character_updates(character_id, updates):
     """Apply accumulated XP and other updates to character."""
     update_expressions = []
     expression_values = {}
-    
+
     # Skills XP
     if updates.get('SkillXP'):
         for skill, xp in updates['SkillXP'].items():
             update_expressions.append(f"Skills.{skill} = Skills.{skill} + :xp_{skill}")
             expression_values[f":xp_{skill}"] = Decimal(str(xp))
-    
-    # Attributes XP  
+
+    # Attributes XP
     if updates.get('AttributeXP'):
         for attr, xp in updates['AttributeXP'].items():
             update_expressions.append(f"Attributes.{attr} = Attributes.{attr} + :xp_{attr}")
             expression_values[f":xp_{attr}"] = Decimal(str(xp))
-    
+
     # Wounds
     if updates.get('Wounds'):
         update_expressions.append("Wounds = list_append(Wounds, :new_wounds)")
         expression_values[":new_wounds"] = updates['Wounds']
-    
+
     # Room change
     if updates.get('Room'):
         update_expressions.append("RoomID = :room")
         expression_values[":room"] = updates['Room']
-    
+
     # Execute update
     if update_expressions:
         dynamodb.update_item(
@@ -577,19 +578,19 @@ def simulate_combat_round(attacker, defender, round_num, environment):
     # Apply environmental modifiers
     attack_modifier = 0
     defense_modifier = 0
-    
+
     if environment.get('lighting') == 'dim':
         attack_modifier -= 1
     if environment.get('terrain') == 'muddy':
         defense_modifier -= 1
-    
+
     # Attack roll
     hit_result = ResolveOpposedCheckWithXP(
         attacker, defender,
         "melee", "strength",  # Attacker skills
         "dodge", "agility"    # Defender skills
     )
-    
+
     round_event = {
         "round": round_num,
         "attackRoll": {
@@ -598,7 +599,7 @@ def simulate_combat_round(attacker, defender, round_num, environment):
             "hit": hit_result['success']
         }
     }
-    
+
     if hit_result['success']:
         # Damage roll - note this uses ResolveOpposedCheck (no XP)
         damage_result = ResolveOpposedCheck(
@@ -606,38 +607,38 @@ def simulate_combat_round(attacker, defender, round_num, environment):
             "melee", "strength",
             "toughness", "endurance"
         )
-        
+
         # Calculate wounds
         damage = max(0, int(damage_result['sigma']))
         if damage > 0:
             wounds = []
             weapon_type = attacker.get('WeaponType', 'bashing')
-            
+
             for _ in range(damage):
                 heal_time = calculate_heal_time(weapon_type)
                 wounds.append({
                     "DamageType": weapon_type,
                     "HealAt": heal_time
                 })
-            
+
             round_event['damage'] = {
                 "amount": damage,
                 "type": weapon_type,
                 "wounds": wounds
             }
-    
+
     return round_event
 
 def calculate_heal_time(damage_type):
     """Calculate when a wound will heal."""
     from datetime import datetime, timedelta
-    
+
     heal_times = {
         'bashing': timedelta(minutes=15),
         'lethal': timedelta(hours=6),
         'aggravated': timedelta(days=7)
     }
-    
+
     heal_delta = heal_times.get(damage_type, timedelta(hours=6))
     heal_at = datetime.utcnow() + heal_delta
     return heal_at.isoformat() + 'Z'
@@ -654,7 +655,7 @@ def determine_combat_outcome(character_wounds, opponent_health, rounds_fought, m
     character_health = character['MaxHealth'] - len(character_wounds)
     if character_health <= 0:
         return "death"
-    
+
     # Victory conditions
     if opponent_health <= 0:
         # Check wounds for victory quality
@@ -665,11 +666,11 @@ def determine_combat_outcome(character_wounds, opponent_health, rounds_fought, m
             return "normal"
         else:
             return "minimal"
-    
+
     # Timeout failure
     if rounds_fought >= max_rounds:
         return "failure"
-    
+
     # Should not reach here
     logger.error("Combat ended without clear outcome")
     return "failure"
@@ -683,17 +684,17 @@ This implementation handles the special damage conversion rules when characters 
 def apply_unconscious_damage(character, new_damage_type):
     """Handle damage to unconscious characters."""
     wounds = character.get('Wounds', [])
-    
+
     # Count wound types
     bashing_indices = []
     for i, wound in enumerate(wounds):
         if wound['DamageType'] == 'bashing':
             bashing_indices.append(i)
-    
+
     # New bashing damage to unconscious converts to lethal
     if new_damage_type == 'bashing':
         new_damage_type = 'lethal'
-    
+
     # Lethal/aggravated replaces existing bashing first
     if new_damage_type in ['lethal', 'aggravated'] and bashing_indices:
         # Replace oldest bashing wound
@@ -703,7 +704,7 @@ def apply_unconscious_damage(character, new_damage_type):
             'HealAt': calculate_heal_time(new_damage_type)
         }
         return wounds
-    
+
     # Otherwise add new wound
     wounds.append({
         'DamageType': new_damage_type,
@@ -743,7 +744,7 @@ def create_next_active_segment(character_id, player_id, story_id, segment, story
             extra={"character_id": character_id, "error": str(err)}
         )
         # Non-critical - continue with segment creation
-    
+
     # Continue with segment creation...
 ```
 
@@ -755,14 +756,14 @@ Rest segments themselves are simple time delays with no challenges or decisions:
 def process_rest_segment(segment_def, character):
     """
     Process a rest segment.
-    
+
     Rest segments are simply time delays that allow natural wound healing
     to occur via heal_expired_wounds() at the start of the next segment.
-    
+
     Args:
         segment_def: Segment definition from Segments table
         character: Character data
-        
+
     Returns:
         Tuple of (outcome, empty dict)
     """
@@ -770,7 +771,7 @@ def process_rest_segment(segment_def, character):
         "Rest segment completed",
         extra={"character_id": character.get("CharacterID")},
     )
-    
+
     # Rest segments always have normal outcome
     # Healing happens automatically via heal_expired_wounds() at segment start
     return "normal", {}
@@ -782,14 +783,14 @@ A rest segment in the Segments table:
 
 ```json
 {
-    "StoryID": "forest-adventure-001",
-    "SegmentID": "seg-rest-001",
-    "SegmentType": "rest",
-    "ShortStatus": "Resting at the campfire",
-    "DefaultStatus": "You rest by the warm campfire, tending to your wounds",
-    "SegmentDuration": 600,  // 10 minutes
-    "RestSegment": true,
-    "NextSegmentID": "seg-forest-003"
+  "StoryID": "forest-adventure-001",
+  "SegmentID": "seg-rest-001",
+  "SegmentType": "rest",
+  "ShortStatus": "Resting at the campfire",
+  "DefaultStatus": "You rest by the warm campfire, tending to your wounds",
+  "SegmentDuration": 600, // 10 minutes
+  "RestSegment": true,
+  "NextSegmentID": "seg-forest-003"
 }
 ```
 
@@ -819,31 +820,31 @@ def segment_poller_handler(event, context):
     ssm = boto3.client('ssm')
     param = ssm.get_parameter(Name='/eidolon/segment-poller-state')
     state = param['Parameter']['Value']
-    
+
     current_time = int(time.time())
     buffer_time = 15  # Half the polling interval
-    
+
     # Phase 1: Find ready segments
     ready_segments = query_ready_segments(current_time + buffer_time)
-    
+
     # Phase 2: Find stuck segments
     stuck_segments = query_stuck_segments(current_time - 900)  # 15 minutes
-    
+
     all_segments = ready_segments + stuck_segments
-    
+
     if all_segments:
         # Process segments
         process_discovered_segments(all_segments)
-        
+
         # Update state if needed
         if state == 'stop':
             update_polling_state('run', enable_rule=True)
-    
+
     elif state == 'run':
         # Check if table is empty
         if is_active_segments_empty():
             update_polling_state('stop', enable_rule=False)
-    
+
     return {
         'statusCode': 200,
         'processed': len(all_segments),
@@ -878,27 +879,27 @@ def advance_story_handler(event, context):
     """Process segments from SQS queue."""
     successful = []
     failed = []
-    
+
     for record in event['Records']:
         try:
             # Parse message
             message = json.loads(record['body'])
             active_segment_id = message['ActiveSegmentID']
-            
+
             # Claim segment
             if not claim_segment_for_processing(active_segment_id):
                 logger.warning(f"Could not claim segment: {active_segment_id}")
                 failed.append(record['receiptHandle'])
                 continue
-            
+
             # Process segment
             process_segment_completion(active_segment_id)
             successful.append(record['receiptHandle'])
-            
+
         except Exception as e:
             logger.error(f"Failed to process segment", exc_info=True)
             failed.append(record['receiptHandle'])
-    
+
     # Return failed messages to queue
     if failed:
         return {
@@ -906,7 +907,7 @@ def advance_story_handler(event, context):
                 {'itemIdentifier': receipt} for receipt in failed
             ]
         }
-    
+
     return {'statusCode': 200}
 
 def claim_segment_for_processing(active_segment_id):
@@ -939,37 +940,37 @@ class IncrementalProvider extends ChangeNotifier {
   ActiveSegment? _activeSegment;
   Timer? _pollingTimer;
   Timer? _countdownTimer;
-  
+
   Duration _timeRemaining = Duration.zero;
-  
+
   void startSegment(SegmentData segmentData) {
     _activeSegment = ActiveSegment.fromJson(segmentData);
     _startCountdown();
     _schedulePolling();
     notifyListeners();
   }
-  
+
   void _startCountdown() {
     _countdownTimer?.cancel();
-    
+
     _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) {
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       final endTime = _activeSegment?.endTime ?? 0;
-      
+
       if (now >= endTime) {
         _timeRemaining = Duration.zero;
         timer.cancel();
       } else {
         _timeRemaining = Duration(seconds: endTime - now);
       }
-      
+
       notifyListeners();
     });
   }
-  
+
   void _schedulePolling() {
     _pollingTimer?.cancel();
-    
+
     // Calculate polling interval based on time remaining
     Duration interval;
     if (_timeRemaining.inSeconds <= 30) {
@@ -979,19 +980,19 @@ class IncrementalProvider extends ChangeNotifier {
     } else {
       interval = Duration(seconds: 30);
     }
-    
+
     _pollingTimer = Timer(interval, () async {
       await _checkSegmentStatus();
       _schedulePolling(); // Reschedule
     });
   }
-  
+
   Future<void> _checkSegmentStatus() async {
     try {
       final response = await IncrementalService.getSegmentStatus(
         characterId: _activeSegment!.characterId,
       );
-      
+
       if (response['segmentReady'] == true) {
         // Fetch full results
         await _loadSegmentResults();
@@ -1011,7 +1012,7 @@ This widget progressively reveals story events over the segment duration, creati
 class StoryEventDisplay extends StatefulWidget {
   final List<ClientEvent> events;
   final Duration segmentDuration;
-  
+
   @override
   _StoryEventDisplayState createState() => _StoryEventDisplayState();
 }
@@ -1019,34 +1020,34 @@ class StoryEventDisplay extends StatefulWidget {
 class _StoryEventDisplayState extends State<StoryEventDisplay> {
   int _currentEventIndex = 0;
   Timer? _eventTimer;
-  
+
   @override
   void initState() {
     super.initState();
     _scheduleEventDisplay();
   }
-  
+
   void _scheduleEventDisplay() {
     if (widget.events.isEmpty) return;
-    
+
     // Calculate time per event
     final eventCount = widget.events.length;
     final msPerEvent = widget.segmentDuration.inMilliseconds ~/ eventCount;
-    
+
     _eventTimer = Timer.periodic(
       Duration(milliseconds: msPerEvent),
       (timer) {
         setState(() {
           _currentEventIndex++;
         });
-        
+
         if (_currentEventIndex >= eventCount) {
           timer.cancel();
         }
       }
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
@@ -1066,56 +1067,56 @@ class _StoryEventDisplayState extends State<StoryEventDisplay> {
 The CDK stack defines the infrastructure for segment processing, including two SQS queues (one for segment processing and one for story advancement) with dead letter handling, SSM parameters for state management, and EventBridge rules that automatically enable and disable based on system activity.
 
 ```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as events from 'aws-cdk-lib/aws-events';
-import * as targets from 'aws-cdk-lib/aws-events-targets';
-import * as sqs from 'aws-cdk-lib/aws-sqs';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as cdk from "aws-cdk-lib";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as events from "aws-cdk-lib/aws-events";
+import * as targets from "aws-cdk-lib/aws-events-targets";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 
 export class IncrementalStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
-    
+
     // SQS Queue for mechanical segment processing
-    const segmentQueue = new sqs.Queue(this, 'SegmentProcessingQueue', {
-      queueName: 'eidolon-segment-processing',
+    const segmentQueue = new sqs.Queue(this, "SegmentProcessingQueue", {
+      queueName: "eidolon-segment-processing",
       visibilityTimeout: cdk.Duration.seconds(300),
       retentionPeriod: cdk.Duration.days(14),
       deadLetterQueue: {
         maxReceiveCount: 3,
-        queue: new sqs.Queue(this, 'SegmentProcessingDLQ', {
-          queueName: 'eidolon-segment-processing-dlq',
+        queue: new sqs.Queue(this, "SegmentProcessingDLQ", {
+          queueName: "eidolon-segment-processing-dlq",
         }),
       },
     });
-    
+
     // SQS Queue for story advancement
-    const storyAdvancementQueue = new sqs.Queue(this, 'StoryAdvancementQueue', {
-      queueName: 'eidolon-story-advancement',
+    const storyAdvancementQueue = new sqs.Queue(this, "StoryAdvancementQueue", {
+      queueName: "eidolon-story-advancement",
       visibilityTimeout: cdk.Duration.seconds(180),
       retentionPeriod: cdk.Duration.days(14),
       deadLetterQueue: {
         maxReceiveCount: 3,
-        queue: new sqs.Queue(this, 'StoryAdvancementDLQ', {
-          queueName: 'eidolon-story-advancement-dlq',
+        queue: new sqs.Queue(this, "StoryAdvancementDLQ", {
+          queueName: "eidolon-story-advancement-dlq",
         }),
       },
     });
-    
+
     // SSM Parameter for polling state
-    const pollingStateParam = new ssm.StringParameter(this, 'PollingState', {
-      parameterName: '/eidolon/segment-poller-state',
-      stringValue: 'stop',
-      description: 'Controls segment polling state (run/stop)',
+    const pollingStateParam = new ssm.StringParameter(this, "PollingState", {
+      parameterName: "/eidolon/segment-poller-state",
+      stringValue: "stop",
+      description: "Controls segment polling state (run/stop)",
     });
-    
+
     // Lambda functions
-    const pollerFunction = new lambda.Function(this, 'SegmentPoller', {
-      functionName: 'eidolon-ops-segment-poller',
+    const pollerFunction = new lambda.Function(this, "SegmentPoller", {
+      functionName: "eidolon-ops-segment-poller",
       runtime: lambda.Runtime.PYTHON_3_12,
-      handler: 'ops_segment_poller.lambda_handler',
-      code: lambda.Code.fromAsset('lambda'),
+      handler: "ops_segment_poller.lambda_handler",
+      code: lambda.Code.fromAsset("lambda"),
       environment: {
         ACTIVE_SEGMENTS_TABLE: props.activeSegmentsTable.tableName,
         SEGMENT_QUEUE_URL: segmentQueue.queueUrl,
@@ -1125,16 +1126,16 @@ export class IncrementalStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
     });
-    
+
     // EventBridge rule (starts disabled)
-    const pollingRule = new events.Rule(this, 'SegmentPollingRule', {
-      ruleName: 'eidolon-segment-poller',
+    const pollingRule = new events.Rule(this, "SegmentPollingRule", {
+      ruleName: "eidolon-segment-poller",
       schedule: events.Schedule.rate(cdk.Duration.seconds(30)),
       enabled: false,
     });
-    
+
     pollingRule.addTarget(new targets.LambdaFunction(pollerFunction));
-    
+
     // Grant permissions
     props.activeSegmentsTable.grantReadWriteData(pollerFunction);
     storyAdvancementQueue.grantSendMessages(pollerFunction);
@@ -1236,7 +1237,7 @@ def retry_with_backoff(func, max_attempts=3, base_delay=1):
         except Exception as e:
             if attempt == max_attempts - 1:
                 raise
-            
+
             delay = base_delay * (2 ** attempt)
             logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay}s", exc_info=True)
             time.sleep(delay)
@@ -1250,7 +1251,7 @@ def update_with_retry(table_name, key, update_expression, expression_values):
             UpdateExpression=update_expression,
             ExpressionAttributeValues=expression_values
         )
-    
+
     return retry_with_backoff(update)
 ```
 
@@ -1277,7 +1278,7 @@ class TestStoryProcessing:
             'MaxHealth': 10,
             'Wounds': []
         }
-    
+
     @pytest.fixture
     def mock_story(self):
         return {
@@ -1289,29 +1290,29 @@ class TestStoryProcessing:
                 'requiredItems': []
             }
         }
-    
+
     def test_validate_prerequisites(self, mock_character, mock_story):
         """Test story prerequisite validation."""
         # Character meets requirements
         assert validate_prerequisites(mock_character, mock_story['Prerequisites']) == True
-        
+
         # Character lacks skill
         mock_story['Prerequisites']['minSkills']['combat'] = 10
         assert validate_prerequisites(mock_character, mock_story['Prerequisites']) == False
-    
+
     @patch('boto3.client')
     def test_start_story_transaction(self, mock_boto, mock_character):
         """Test atomic story start."""
         mock_dynamodb = Mock()
         mock_boto.return_value = mock_dynamodb
-        
+
         # Execute transaction
         start_story('test-char-001', 'test-story-001')
-        
+
         # Verify transaction structure
         mock_dynamodb.transact_write_items.assert_called_once()
         transaction = mock_dynamodb.transact_write_items.call_args[0][0]
-        
+
         assert len(transaction['TransactItems']) == 2
         assert 'Update' in transaction['TransactItems'][0]
         assert 'Put' in transaction['TransactItems'][1]
@@ -1327,7 +1328,7 @@ class TestSegmentPolling:
     def setup_test_segments(self, dynamodb_table):
         """Create test segments with various states."""
         current_time = int(time.time())
-        
+
         segments = [
             {
                 'ActiveSegmentID': 'ready-001',
@@ -1346,19 +1347,19 @@ class TestSegmentPolling:
                 'ProcessingStatus': 'pending'
             }
         ]
-        
+
         for segment in segments:
             dynamodb_table.put_item(Item=segment)
-        
+
         return segments
-    
+
     def test_polling_discovers_segments(self, setup_test_segments):
         """Test poller finds ready and stuck segments."""
         event = {}  # EventBridge event
         context = Mock()
-        
+
         result = segment_poller_handler(event, context)
-        
+
         assert result['processed'] == 2  # ready + stuck
         assert result['statusCode'] == 200
 ```
@@ -1375,7 +1376,7 @@ import uuid
 
 class IncrementalUser(HttpUser):
     wait_time = between(1, 5)
-    
+
     def on_start(self):
         """Login and select character."""
         # Login flow
@@ -1385,12 +1386,12 @@ class IncrementalUser(HttpUser):
         })
         self.token = response.json()['token']
         self.headers = {'Authorization': f'Bearer {self.token}'}
-        
+
         # Get characters
         response = self.client.get("/characters", headers=self.headers)
         characters = response.json()['Characters']
         self.character_id = characters[0]['CharacterID']
-    
+
     @task(3)
     def view_stories(self):
         """Check available stories."""
@@ -1398,7 +1399,7 @@ class IncrementalUser(HttpUser):
             f"/stories?characterId={self.character_id}",
             headers=self.headers
         )
-    
+
     @task(1)
     def start_story(self):
         """Start a random story."""
@@ -1408,10 +1409,10 @@ class IncrementalUser(HttpUser):
             headers=self.headers
         )
         stories = response.json()['Stories']
-        
+
         if stories:
             story = random.choice(stories)
-            self.client.post("/stories/start", 
+            self.client.post("/stories/start",
                 json={
                     "CharacterID": self.character_id,
                     "StoryID": story['StoryID']
@@ -1432,7 +1433,7 @@ def batch_write_segments(segments):
     """Write multiple segments in batches."""
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(ACTIVE_SEGMENTS_TABLE)
-    
+
     with table.batch_writer() as batch:
         for segment in segments:
             batch.put_item(Item=segment)
@@ -1480,19 +1481,19 @@ def get_story_cached(story_id):
     """Get story with caching."""
     cache_key = f"story:{story_id}"
     cached = story_cache.get(cache_key)
-    
+
     if cached and cached['expires'] > time.time():
         return cached['data']
-    
+
     # Fetch from database
     story = get_story_from_db(story_id)
-    
+
     # Update cache
     story_cache[cache_key] = {
         'data': story,
         'expires': time.time() + CACHE_TTL
     }
-    
+
     return story
 
 # Minimize cold starts
@@ -1500,7 +1501,7 @@ def warm_lambda_handler(event, context):
     """Periodic warming to prevent cold starts."""
     if event.get('source') == 'aws.events' and event.get('warmer'):
         return {'statusCode': 200, 'body': 'Lambda warmed'}
-    
+
     # Regular processing
     return lambda_handler(event, context)
 ```
@@ -1513,7 +1514,7 @@ Cost tracking implementation emits CloudWatch metrics for every DynamoDB operati
 def emit_cost_metrics(operation, item_count=1):
     """Emit CloudWatch metrics for cost tracking."""
     cloudwatch = boto3.client('cloudwatch')
-    
+
     cloudwatch.put_metric_data(
         Namespace='eidolon/incremental/costs',
         MetricData=[
@@ -1540,10 +1541,10 @@ def update_character_with_metrics(character_id, updates):
         UpdateExpression=updates['expression'],
         ExpressionAttributeValues=updates['values']
     )
-    
+
     # Track the operation
     emit_cost_metrics('UpdateItem', 1)
-    
+
     return result
 ```
 
