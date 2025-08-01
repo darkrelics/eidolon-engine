@@ -166,6 +166,11 @@ func min(a, b int) int {
 func (c *Character) GetHealth() int {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
+	
+	if c.charState == CharStateDead {
+		return 0
+	}
+	
 	return c.maxHealth - len(c.wounds)
 }
 
