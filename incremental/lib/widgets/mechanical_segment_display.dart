@@ -23,6 +23,8 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
   Timer? _countdownTimer;
   Duration _timeRemaining = Duration.zero;
   bool _allEventsShown = false;
+  String _currentNarrative = '';
+  bool _showingDefaultNarrative = true;
 
   @override
   void initState() {
@@ -30,16 +32,20 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
     _calculateTimeRemaining();
     _startCountdown();
     
+    // Set initial narrative
+    _currentNarrative = widget.segment.defaultStatus ?? widget.segment.status;
+    
     // If segment is already processed, show all events immediately
     if (widget.segment.processingStatus == 'processed' && 
         widget.segment.clientEvents != null) {
       setState(() {
         _currentEventIndex = widget.segment.clientEvents!.length - 1;
         _allEventsShown = true;
+        _showingDefaultNarrative = false;
       });
     } else {
       // Otherwise, schedule progressive display
-      _scheduleEventDisplay();
+      _scheduleNarrativeProgression();
     }
   }
 
@@ -78,40 +84,125 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
     });
   }
 
-  void _scheduleEventDisplay() {
+  void _scheduleNarrativeProgression() {
     final events = widget.segment.clientEvents;
-    if (events == null || events.isEmpty) return;
+    if (events == null || events.isEmpty) {
+      // No events, just show default narrative
+      return;
+    }
     
-    // Calculate time between events
     final totalDuration = Duration(
       seconds: widget.segment.endTime - widget.segment.startTime,
     );
-    final msPerEvent = totalDuration.inMilliseconds ~/ events.length;
     
-    // Show first event immediately
-    setState(() {
-      _currentEventIndex = 0;
+    // Create a timeline of narrative changes
+    final narrativeTimeline = _buildNarrativeTimeline(events, totalDuration);
+    
+    // Schedule narrative changes
+    int timelineIndex = 0;
+    _eventTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      final elapsed = totalDuration - _timeRemaining;
+      
+      // Check if we should advance to the next narrative point
+      while (timelineIndex < narrativeTimeline.length &&
+             elapsed.inMilliseconds >= (narrativeTimeline[timelineIndex]['time'] as Duration).inMilliseconds) {
+        final point = narrativeTimeline[timelineIndex];
+        
+        setState(() {
+          _currentNarrative = point['narrative'] as String;
+          _showingDefaultNarrative = point['isDefault'] as bool;
+          
+          // If this point has an event to show, update the index
+          if (point['eventIndex'] != null) {
+            _currentEventIndex = point['eventIndex'] as int;
+          }
+        });
+        
+        timelineIndex++;
+      }
+      
+      // Check if we're done
+      if (timelineIndex >= narrativeTimeline.length) {
+        _allEventsShown = true;
+        timer.cancel();
+      }
     });
+  }
+  
+  List<Map<String, dynamic>> _buildNarrativeTimeline(
+    List<dynamic> events, 
+    Duration totalDuration
+  ) {
+    final timeline = <Map<String, dynamic>>[];
     
-    // Schedule remaining events
-    if (events.length > 1) {
-      _eventTimer = Timer.periodic(
-        Duration(milliseconds: msPerEvent),
-        (timer) {
-          setState(() {
-            _currentEventIndex++;
-            
-            if (_currentEventIndex >= events.length - 1) {
-              _currentEventIndex = events.length - 1;
-              _allEventsShown = true;
-              timer.cancel();
-            }
+    // If we have events, space them throughout the duration
+    if (events.isNotEmpty) {
+      // Reserve time for final outcome (last 20% of duration)
+      final activeTime = totalDuration.inMilliseconds * 0.8;
+      final segmentDuration = activeTime / events.length;
+      
+      for (int i = 0; i < events.length; i++) {
+        final event = events[i] as Map<String, dynamic>;
+        final eventTime = Duration(milliseconds: (segmentDuration * i).round());
+        
+        // Add task start narrative
+        if (event['description'] != null) {
+          timeline.add({
+            'time': eventTime,
+            'narrative': event['description'] as String,
+            'isDefault': false,
+            'eventIndex': null,
           });
-        },
-      );
-    } else {
-      _allEventsShown = true;
+        }
+        
+        // Add event display slightly after narrative
+        timeline.add({
+          'time': eventTime + const Duration(seconds: 1),
+          'narrative': event['description'] as String? ?? _currentNarrative,
+          'isDefault': false,
+          'eventIndex': i,
+        });
+        
+        // Add idle period between events (if not the last event)
+        if (i < events.length - 1) {
+          final idleTime = eventTime + Duration(milliseconds: (segmentDuration * 0.7).round());
+          timeline.add({
+            'time': idleTime,
+            'narrative': widget.segment.defaultStatus ?? widget.segment.status,
+            'isDefault': true,
+            'eventIndex': null,
+          });
+        }
+      }
+      
+      // Add final outcome narrative
+      final finalTime = Duration(milliseconds: (totalDuration.inMilliseconds * 0.9).round());
+      timeline.add({
+        'time': finalTime,
+        'narrative': _getFinalNarrative(events),
+        'isDefault': false,
+        'eventIndex': null,
+      });
     }
+    
+    return timeline;
+  }
+  
+  String _getFinalNarrative(List<dynamic> events) {
+    // Look for combat victory/defeat or other completion events
+    for (final event in events.reversed) {
+      final eventMap = event as Map<String, dynamic>;
+      final eventType = eventMap['eventType'] as String?;
+      
+      if (eventType == 'combatVictory') {
+        return 'You have emerged victorious!';
+      } else if (eventType == 'combatDefeat') {
+        return 'You have been defeated...';
+      }
+    }
+    
+    // Default completion message
+    return 'You have completed this segment of your journey.';
   }
 
   Widget _buildEventCard(Map<String, dynamic> event) {
@@ -270,11 +361,28 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
         ),
         const SizedBox(height: 16),
         
-        // Status text
-        Text(
-          widget.segment.status,
-          style: Theme.of(context).textTheme.bodyLarge,
-          textAlign: TextAlign.center,
+        // Narrative text
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: _showingDefaultNarrative 
+              ? Theme.of(context).colorScheme.surface
+              : Theme.of(context).colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _showingDefaultNarrative
+                ? Theme.of(context).dividerColor
+                : Theme.of(context).colorScheme.primary,
+              width: 1,
+            ),
+          ),
+          child: Text(
+            _currentNarrative,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              fontStyle: _showingDefaultNarrative ? FontStyle.italic : FontStyle.normal,
+            ),
+            textAlign: TextAlign.center,
+          ),
         ),
         const SizedBox(height: 16),
         
@@ -287,16 +395,31 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
                 return AnimatedOpacity(
                   opacity: index <= _currentEventIndex ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 500),
-                  child: _buildEventCard(events[index] as Map<String, dynamic>),
+                  child: AnimatedSlide(
+                    offset: index == _currentEventIndex ? Offset.zero : const Offset(0, 0.1),
+                    duration: const Duration(milliseconds: 300),
+                    child: _buildEventCard(events[index] as Map<String, dynamic>),
+                  ),
                 );
               },
             ),
           ),
-        ] else ...[
+        ] else if (widget.segment.processingStatus != 'processed') ...[
           const Expanded(
             child: Center(
-              child: CircularProgressIndicator(),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Processing your actions...'),
+                ],
+              ),
             ),
+          ),
+        ] else ...[
+          const Expanded(
+            child: SizedBox(),
           ),
         ],
         

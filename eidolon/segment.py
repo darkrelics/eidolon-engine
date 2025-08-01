@@ -259,7 +259,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         Tuple of (outcome, combat_state)
     """
     combat_config = segment_def.get("Combat", {})
-    opponent_id = combat_config.get("opponentId")
+    opponent_id = combat_config.get("OpponentID")
     max_rounds = combat_config.get("maxRounds", 10)
 
     # Get opponent data
@@ -537,6 +537,50 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         challenge_outcome, challenge_results = process_skill_challenges(segment_def, character)
         results["challengeResults"] = challenge_results
         outcomes.append(challenge_outcome)
+        
+        # Apply skill and attribute XP immediately
+        from eidolon.character import apply_character_updates
+        skill_xp = {}
+        attribute_xp = {}
+        
+        for challenge in challenge_results:
+            if challenge.get("passed"):
+                skill = challenge.get("skill")
+                attribute = challenge.get("attribute")
+                
+                if skill:
+                    skill_xp[skill] = skill_xp.get(skill, 0) + 0.1
+                if attribute:
+                    attribute_xp[attribute] = attribute_xp.get(attribute, 0) + 0.05
+        
+        if skill_xp or attribute_xp:
+            xp_updates = {}
+            if skill_xp:
+                xp_updates["SkillXP"] = skill_xp
+            if attribute_xp:
+                xp_updates["AttributeXP"] = attribute_xp
+                
+            try:
+                character_id = character.get("CharacterID")
+                if character_id:
+                    apply_character_updates(character_id, xp_updates)
+                logger.info(
+                    "Applied skill and attribute XP immediately",
+                    extra={
+                        "character_id": character.get("CharacterID"),
+                        "skills_updated": len(skill_xp),
+                        "attributes_updated": len(attribute_xp),
+                    },
+                )
+            except Exception as err:
+                logger.error(
+                    "Failed to apply XP updates",
+                    extra={
+                        "character_id": character.get("CharacterID"),
+                        "error": str(err),
+                    },
+                    exc_info=True,
+                )
 
     # Process combat if present
     combat_config = segment_def.get("Combat", {})
@@ -545,12 +589,39 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             "Processing combat encounter",
             extra={
                 "segment_id": segment_def.get("SegmentID"),
-                "opponent_id": combat_config.get("opponentId"),
+                "opponent_id": combat_config.get("OpponentID"),
             },
         )
         combat_outcome, combat_state = process_combat_segment(active_segment, segment_def, character)
         results["combatState"] = combat_state
         outcomes.append(combat_outcome)
+        
+        # Apply wounds immediately
+        player_wounds = combat_state.get("playerWounds", [])
+        if player_wounds:
+            from eidolon.character import apply_character_updates
+            wound_updates = {"Wounds": player_wounds}
+            
+            try:
+                character_id = character.get("CharacterID")
+                if character_id:
+                    apply_character_updates(character_id, wound_updates)
+                logger.info(
+                    "Applied combat wounds immediately",
+                    extra={
+                        "character_id": character.get("CharacterID"),
+                        "wounds_applied": len(player_wounds),
+                    },
+                )
+            except Exception as err:
+                logger.error(
+                    "Failed to apply wounds",
+                    extra={
+                        "character_id": character.get("CharacterID"),
+                        "error": str(err),
+                    },
+                    exc_info=True,
+                )
 
     # Determine overall outcome
     if not outcomes:
@@ -603,45 +674,49 @@ def process_rest_segment(segment_def: dict, character: dict) -> tuple:
     return "normal", {}
 
 
-def extract_character_updates_from_results(results: dict) -> dict:
+def extract_character_updates_from_results(results: dict, segment_def: dict, outcome: str) -> dict:
     """
-    Extract character updates from segment processing results.
+    Extract deferred rewards to be applied at segment completion.
+    
+    Note: XP and wounds are applied immediately during segment processing.
+    This function only extracts rewards that should be deferred.
     
     Args:
         results: Results from segment processing
+        segment_def: Segment definition containing outcome effects
+        outcome: The calculated outcome (death/failure/minimal/normal/exceptional)
         
     Returns:
-        Dict containing character updates (wounds, skills, etc.)
+        Dict containing deferred rewards (combat rewards, story effects)
     """
     updates = {}
     
-    # Extract wounds from combat
-    if "combatState" in results:
-        combat_state = results["combatState"]
-        player_wounds = combat_state.get("playerWounds", [])
-        if player_wounds:
-            updates["Wounds"] = player_wounds
+    # Extract combat rewards to be applied later
+    if results.get("combatState", {}).get("opponentDefeated"):
+        opponent_id = results["combatState"].get("opponentId")
+        if opponent_id:
+            # Get opponent data to store for later reward application
+            try:
+                opponent_data = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+                if opponent_data:
+                    updates["CombatRewards"] = {
+                        "opponentId": opponent_id,
+                        "defeated": True,
+                        "opponentData": opponent_data  # Store full opponent data
+                    }
+            except Exception as err:
+                logger.error(
+                    "Failed to get opponent data for rewards",
+                    extra={"opponent_id": opponent_id, "error": str(err)},
+                    exc_info=True,
+                )
     
-    # Extract skill/attribute XP from challenges
-    if "challengeResults" in results:
-        skill_xp = {}
-        attribute_xp = {}
-        
-        for challenge in results["challengeResults"]:
-            if challenge.get("passed"):
-                # Award XP for passed challenges
-                skill = challenge.get("skill")
-                attribute = challenge.get("attribute")
-                
-                if skill:
-                    skill_xp[skill] = skill_xp.get(skill, 0) + 0.1
-                if attribute:
-                    attribute_xp[attribute] = attribute_xp.get(attribute, 0) + 0.05
-        
-        if skill_xp:
-            updates["SkillXP"] = skill_xp
-        if attribute_xp:
-            updates["AttributeXP"] = attribute_xp
+    # Extract story outcome effects to be applied later
+    if outcome in ["death", "failure", "minimal", "normal", "exceptional"]:
+        outcome_results = segment_def.get("Results", {}).get(outcome, {})
+        outcome_effects = outcome_results.get("effects", {})
+        if outcome_effects:
+            updates["StoryEffects"] = outcome_effects
     
     return updates
 
@@ -658,7 +733,7 @@ def generate_combat_client_events(combat_state: dict) -> list:
     """
     events = []
     
-    # Process combat log rounds
+    # Only generate structural combat data - narrative comes from Results
     for round_data in combat_state.get("combatLog", []):
         round_num = round_data.get("round", 0)
         
@@ -666,49 +741,50 @@ def generate_combat_client_events(combat_state: dict) -> list:
         player_attack = round_data.get("playerAttack")
         if player_attack:
             event = {
-                "type": "playerAttack",
-                "round": round_num,
-                "hit": player_attack.get("hit", False),
-                "sigma": player_attack.get("sigma", 0)
+                "eventType": "combatAttack",
+                "data": player_attack
             }
-            
-            if player_attack.get("hit"):
-                event["damage"] = player_attack.get("damage", 0)
-                event["damageType"] = player_attack.get("damageType", "normal")
-            
+            event["data"]["round"] = round_num
             events.append(event)
         
-        # Opponent attack event
+        # Opponent attack event  
         opponent_attack = round_data.get("opponentAttack")
         if opponent_attack:
             event = {
-                "type": "opponentAttack",
-                "round": round_num,
-                "hit": opponent_attack.get("hit", False),
-                "sigma": opponent_attack.get("sigma", 0)
+                "eventType": "combatDefense",
+                "data": opponent_attack
             }
-            
-            if opponent_attack.get("hit"):
-                event["damage"] = opponent_attack.get("damage", 0)
-                event["damageType"] = opponent_attack.get("damageType", "normal")
-            
+            event["data"]["round"] = round_num
             events.append(event)
     
-    # Combat end event
-    victor = combat_state.get("victor")
-    if victor:
-        events.append({
-            "type": "combatEnd",
-            "victor": victor,
-            "totalRounds": combat_state.get("rounds", 0),
-            "playerWounds": len(combat_state.get("playerWounds", [])),
-            "opponentWounds": len(combat_state.get("opponentWounds", []))
-        })
+    # Combat outcome is handled by narrative from Results
+    return events
+
+
+def generate_skill_check_events(challenge_results: list) -> list:
+    """
+    Generate client events from challenge results.
+    
+    Args:
+        challenge_results: List of challenge results from skill checks
+        
+    Returns:
+        List of client events for UI display
+    """
+    events = []
+    
+    for challenge in challenge_results:
+        # Pass through challenge data - narrative comes from Results
+        event = {
+            "eventType": "skillCheck",
+            "data": challenge
+        }
+        events.append(event)
     
     return events
 
 
-def update_active_segment_outcome(active_segment_id: str, outcome: str, results: dict, segment_def: dict = None) -> None:
+def update_active_segment_outcome(active_segment_id: str, outcome: str, results: dict, segment_def = None) -> None:
     """
     Update active segment with outcome and mark as completed.
 
@@ -730,11 +806,12 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         update_expression += ", CombatState = :state"
         expression_values[":state"] = results["combatState"]
     
-    # Extract and add character updates
-    character_updates = extract_character_updates_from_results(results)
-    if character_updates:
-        update_expression += ", CharacterUpdates = :updates"
-        expression_values[":updates"] = character_updates # type: ignore
+    # Extract and add deferred rewards
+    if segment_def:
+        character_updates = extract_character_updates_from_results(results, segment_def, outcome)
+        if character_updates:
+            update_expression += ", CharacterUpdates = :updates"
+            expression_values[":updates"] = character_updates # type: ignore
     
     # Generate client events including narrative
     client_events = []
@@ -749,6 +826,11 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
                 "description": outcome_results["narrative"],
                 "data": {"outcome": outcome}
             })
+    
+    # Add skill check events if present
+    if "challengeResults" in results:
+        skill_events = generate_skill_check_events(results["challengeResults"])
+        client_events.extend(skill_events)
     
     # Add combat events if present (only for combat segments)
     if "combatState" in results:
@@ -813,7 +895,7 @@ def get_next_segment_and_create(
         decision_options = current_segment.get("DecisionOptions", {})
         next_segment_id = decision_options.get(decision)
 
-    elif segment_type in ["narrative", "combat"]:
+    elif segment_type == "mechanical":
         # Check if outcome is terminal
         if outcome not in ["death", "failure"]:
             next_segment_id = current_segment.get("NextSegmentID")
@@ -906,17 +988,20 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
     if segment_type == "decision":
         active_segment["Decision"] = None
         active_segment["DecisionOptions"] = segment.get("DecisionOptions", {})
-    elif segment_type == "narrative":
+    elif segment_type == "mechanical":
+        # Mechanical segments can have challenges and/or combat
         active_segment["ChallengeResults"] = []
         active_segment["Outcome"] = None
-    elif segment_type == "combat":
+        
+        # If combat is configured, set up combat state
         combat_config = segment.get("Combat", {})
-        active_segment["CombatState"] = {
-            "round": 0,
-            "playerWounds": [],
-            "opponentHealth": None,
-            "opponentId": combat_config.get("opponentId"),
-        }
+        if combat_config:
+            active_segment["CombatState"] = {
+                "round": 0,
+                "playerWounds": [],
+                "opponentHealth": None,
+                "opponentId": combat_config.get("OpponentID"),
+            }
 
     # Store in DynamoDB
     try:
@@ -1086,45 +1171,8 @@ def process_segment_completely(
         logger.error("Unknown segment type", extra={"segment_type": segment_type})
         outcome = "failure"
 
-    # Apply combat rewards if opponent was defeated
-    if results.get("combatState", {}).get("opponentDefeated"):
-        from eidolon.story import apply_combat_rewards
-        opponent_id = results["combatState"].get("opponentId")
-        if opponent_id:
-            try:
-                opponent_data = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
-                if opponent_data:
-                    apply_combat_rewards(character_id, opponent_data)
-            except Exception as err:
-                logger.error(
-                    "Failed to apply combat rewards",
-                    extra={
-                        "character_id": character_id,
-                        "opponent_id": opponent_id,
-                        "error": str(err),
-                    },
-                    exc_info=True,
-                )
-    
-    # Apply story outcome effects (room changes, item rewards)
-    if outcome in ["death", "failure", "minimal", "normal", "exceptional"]:
-        outcome_results = segment_def.get("Results", {}).get(outcome, {})
-        outcome_effects = outcome_results.get("effects", {})
-        if outcome_effects:
-            from eidolon.story import apply_story_outcome_effects
-            try:
-                apply_story_outcome_effects(character_id, outcome_effects)
-            except Exception as err:
-                logger.error(
-                    "Failed to apply outcome effects",
-                    extra={
-                        "character_id": character_id,
-                        "segment_id": segment_id,
-                        "outcome": outcome,
-                        "error": str(err),
-                    },
-                    exc_info=True,
-                )
+    # Note: Combat rewards and story outcome effects are deferred until segment completion
+    # They will be applied by ops_advance_story when the segment timer expires
     
     # Update active segment with outcome
     update_active_segment_outcome(active_segment_id, outcome, results, segment_def)

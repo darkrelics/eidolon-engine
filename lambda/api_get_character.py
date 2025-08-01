@@ -7,7 +7,7 @@ Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-from eidolon.character import get_active_segment_for_character, get_character, validate_character_ownership
+from eidolon.character import get_active_segment_for_character, get_character, heal_expired_wounds, validate_character_ownership
 from eidolon.dynamo import decimal_to_float
 from eidolon.items import get_inventory_details
 from eidolon.logger import get_logger
@@ -47,6 +47,21 @@ def get_character_business_logic(character_id: str, player_id: str) -> dict:
     if not validate_uuid(character_id):
         return {"success": False, "error": "Invalid character ID format", "status_code": 400}
 
+    # Heal expired wounds before getting character data
+    try:
+        heal_result = heal_expired_wounds(character_id)
+        if heal_result.get("healed_count", 0) > 0:
+            logger.info(
+                "Healed wounds before returning character",
+                extra={"character_id": character_id, "healed_count": heal_result["healed_count"]}
+            )
+    except Exception as err:
+        logger.warning(
+            "Failed to heal wounds before getting character",
+            extra={"character_id": character_id, "error": str(err)}
+        )
+        # Non-critical - continue with character retrieval
+    
     # Get character and validate ownership
     try:
         character = get_character(character_id)

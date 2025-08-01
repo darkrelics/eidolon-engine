@@ -45,7 +45,31 @@
           "difficulty": 7,
           "attempts": 3
         }
-      ]
+      ],
+      "Results": {
+        "death": {
+          "narrative": "Lost in the deepening gloom, you stumble into a ravine. Your cries echo unheard as darkness claims you.",
+          "effects": {
+            "room": 0
+          }
+        },
+        "failure": {
+          "narrative": "The forest proves too dense and disorienting. You retreat to the village, your investigation incomplete.",
+          "effects": {}
+        },
+        "minimal": {
+          "narrative": "You push through the undergrowth with difficulty, finding only vague traces of recent activity.",
+          "effects": {}
+        },
+        "normal": {
+          "narrative": "Your sharp eyes catch important details - broken branches and faint footprints guide you deeper into the forest.",
+          "effects": {}
+        },
+        "exceptional": {
+          "narrative": "Your exceptional perception reveals a hidden trail! Fresh goblin tracks and discarded equipment tell a clear story.",
+          "effects": {}
+        }
+      }
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
@@ -76,7 +100,31 @@
           "difficulty": 8,
           "attempts": 2
         }
-      ]
+      ],
+      "Results": {
+        "death": {
+          "narrative": "A misstep sends you tumbling into the rushing brook. The current sweeps you away before you can cry out.",
+          "effects": {
+            "room": 0
+          }
+        },
+        "failure": {
+          "narrative": "Your clumsy movements alert every creature within earshot. You hear goblin war cries approaching rapidly.",
+          "effects": {}
+        },
+        "minimal": {
+          "narrative": "You move quietly enough to avoid immediate danger, though twigs snap underfoot at crucial moments.",
+          "effects": {}
+        },
+        "normal": {
+          "narrative": "Your stealthy approach pays off. You spot the goblin encampment ahead without being detected.",
+          "effects": {}
+        },
+        "exceptional": {
+          "narrative": "Like a shadow, you glide through the forest. You're close enough to overhear the goblins' plans!",
+          "effects": {}
+        }
+      }
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
@@ -93,7 +141,31 @@
           "difficulty": 6,
           "attempts": 3
         }
-      ]
+      ],
+      "Results": {
+        "death": {
+          "narrative": "The thorns prove too much. Poisonous barbs pierce your skin, and fever takes you within moments.",
+          "effects": {
+            "room": 0
+          }
+        },
+        "failure": {
+          "narrative": "Bloodied by thorns and exhausted, you're forced to turn back and find another route.",
+          "effects": {}
+        },
+        "minimal": {
+          "narrative": "You force your way through, clothes torn and skin scratched, but you emerge on the other side.",
+          "effects": {}
+        },
+        "normal": {
+          "narrative": "With determined effort, you push through the thicket, finding a game trail that eases your passage.",
+          "effects": {}
+        },
+        "exceptional": {
+          "narrative": "Your strength makes short work of the obstacles. You even find an old adventurer's pack tangled in the vines!",
+          "effects": {}
+        }
+      }
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
@@ -107,6 +179,30 @@
         "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
         "maxRounds": 12,
         "environment": {}
+      },
+      "Results": {
+        "death": {
+          "narrative": "The goblin's blade finds its mark. As your vision fades, you hear its victorious cackling.",
+          "effects": {
+            "room": 0
+          }
+        },
+        "failure": {
+          "narrative": "Overwhelmed by the goblin's ferocity, you flee deeper into the forest, wounded and disoriented.",
+          "effects": {}
+        },
+        "minimal": {
+          "narrative": "You manage to drive off the goblin scout, though not without taking several painful wounds.",
+          "effects": {}
+        },
+        "normal": {
+          "narrative": "After a fierce battle, you defeat the goblin scout. It flees, dropping a small pouch in its haste.",
+          "effects": {}
+        },
+        "exceptional": {
+          "narrative": "You dispatch the goblin with masterful combat prowess! It surrenders, revealing the location of its camp.",
+          "effects": {}
+        }
       }
     },
     {
@@ -138,6 +234,32 @@
           "lighting": "dim",
           "terrain": "muddy"
         }
+      },
+      "Results": {
+        "death": {
+          "narrative": "The goblin warrior's axe cleaves through your defenses. The last thing you see is its cruel grin.",
+          "effects": {
+            "room": 0
+          }
+        },
+        "failure": {
+          "narrative": "Battered and bleeding, you barely escape the warrior's fury. The forest offers refuge as you limp away.",
+          "effects": {}
+        },
+        "minimal": {
+          "narrative": "You survive the encounter, though the warrior's skill leaves you badly wounded. It retreats, honor satisfied.",
+          "effects": {}
+        },
+        "normal": {
+          "narrative": "Through skill and determination, you best the goblin warrior. It yields, tossing down its weapon in defeat.",
+          "effects": {}
+        },
+        "exceptional": {
+          "narrative": "Your legendary combat display defeats the warrior utterly! You claim its enchanted armor as your prize.",
+          "effects": {
+            "items": ["goblin_warrior_armor"]
+          }
+        }
       }
     },
     {
@@ -161,7 +283,33 @@
           "difficulty": 7,
           "attempts": 2
         }
-      ]
+      ],
+      "Results": {
+        "death": {
+          "narrative": "Exhausted and lost, you collapse in the fern gully. The forest creatures find you before help arrives.",
+          "effects": {
+            "room": 0
+          }
+        },
+        "failure": {
+          "narrative": "The detour proves too challenging. Tired and hungry, you abandon your quest and return to civilization.",
+          "effects": {}
+        },
+        "minimal": {
+          "narrative": "You navigate the gully successfully, though the journey leaves you weary and your supplies depleted.",
+          "effects": {}
+        },
+        "normal": {
+          "narrative": "Your wilderness skills serve you well. You find edible berries and a safe path through the gully.",
+          "effects": {}
+        },
+        "exceptional": {
+          "narrative": "Your masterful woodcraft reveals hidden treasures! You discover a cache of supplies left by previous adventurers.",
+          "effects": {
+            "items": ["healing_potion", "trail_rations"]
+          }
+        }
+      }
     }
   ]
 }

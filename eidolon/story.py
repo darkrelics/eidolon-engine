@@ -12,8 +12,19 @@ from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
 from eidolon.dynamo import TableName, dynamo
+from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import get_logger
 from eidolon.character import get_character, validate_character_ownership, heal_expired_wounds
+from eidolon.segment import (
+    record_segment_history,
+    delete_active_segment,
+    get_segment_definition,
+    determine_next_segment,
+    create_next_active_segment,
+    update_character_active_segment,
+    complete_story,
+)
+from eidolon.sqs import send_message
 from eidolon.validation import validate_uuid
 
 logger = get_logger(__name__)
@@ -650,33 +661,36 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
     if segment_type == "decision":
         active_segment["Decision"] = None
         active_segment["DecisionOptions"] = segment.get("DecisionOptions", {})
-    elif segment_type == "narrative":
+    elif segment_type == "mechanical":
+        # Mechanical segments can have challenges and/or combat
         active_segment["ChallengeResults"] = []
         active_segment["Outcome"] = None
-    elif segment_type == "combat":
+        
+        # If combat is configured, set up combat state
         combat_config = segment.get("Combat", {})
-        opponent_id = combat_config.get("opponentId")
-        
-        # Load opponent to get initial health
-        opponent_health = 5  # Default health
-        if opponent_id:
-            try:
-                opponent = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
-                if opponent:
-                    opponent_health = opponent.get("Health", 5)
-            except Exception as err:
-                logger.warning(
-                    "Failed to load opponent for combat state init",
-                    extra={"opponent_id": opponent_id, "error": str(err)}
-                )
-        
-        active_segment["CombatState"] = {
-            "round": 0,
-            "playerWounds": [],
-            "opponentWounds": [],
-            "opponentHealth": opponent_health,
-            "opponentId": opponent_id,
-        }
+        if combat_config:
+            opponent_id = combat_config.get("opponentId")
+            
+            # Load opponent to get initial health
+            opponent_health = 5  # Default health
+            if opponent_id:
+                try:
+                    opponent = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+                    if opponent:
+                        opponent_health = opponent.get("Health", 5)
+                except Exception as err:
+                    logger.warning(
+                        "Failed to load opponent for combat state init",
+                        extra={"opponent_id": opponent_id, "error": str(err)}
+                    )
+            
+            active_segment["CombatState"] = {
+                "round": 0,
+                "playerWounds": [],
+                "opponentWounds": [],
+                "opponentHealth": opponent_health,
+                "opponentId": opponent_id,
+            }
 
     # Store in DynamoDB
     try:
@@ -901,12 +915,12 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         for option_id, _ in decision_options.items():
             options.append({"Id": option_id, "Text": option_id.replace("-", " ").title()})  # Format option ID as display text
         response["Options"] = options
-    elif segment_type == "narrative":
+    elif segment_type == "mechanical":
         response["ShortStatus"] = segment.get("ShortStatus", "Progressing through the story...")
-        response["Narrative"] = ""
-    elif segment_type == "combat":
-        response["ShortStatus"] = segment.get("ShortStatus", "Engaged in combat!")
-        response["OpponentID"] = segment.get("Combat", {}).get("opponentID")
+        # Include combat opponent if configured
+        combat_config = segment.get("Combat", {})
+        if combat_config:
+            response["OpponentID"] = combat_config.get("opponentID")
 
     return response
 
@@ -1126,26 +1140,120 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     # Validate decision is valid for this segment
     validate_decision_option(active_segment, decision_id)
 
-    # Update active segment with decision
+    # Update active segment with decision and mark as completed
     update_segment_decision(active_segment_id, decision_id)
-
-    # Calculate next segment time if applicable
-    next_segment_time = get_next_segment_time(active_segment, decision_id)
-
-    # Build response per documentation with PascalCase
+    
+    # Record segment history before advancing
+    story_id = active_segment.get("StoryID")
+    if not story_id:
+        raise ValueError("Story ID not found in active segment")
+        
+    # Mark outcome as normal for completed decision segments
+    active_segment["Outcome"] = "normal"
+    active_segment["Decision"] = decision_id
+    active_segment["DecisionMadeAt"] = datetime.now(timezone.utc).isoformat()
+    
+    record_segment_history(character_id, story_id, active_segment_id, active_segment)
+    
+    # Get segment definition to determine next segment
+    segment_id = active_segment.get("SegmentID")
+    if not segment_id:
+        raise ValueError("Segment ID not found in active segment")
+        
+    segment_def = get_segment_definition(str(story_id), str(segment_id))
+    
+    # Determine next segment based on decision
+    next_segment_id = determine_next_segment(segment_def, active_segment, "normal")
+    
     response_data: dict = {
         "Accepted": True,
     }
-
-    if next_segment_time > 0:
-        response_data["NextSegmentTime"] = next_segment_time
-
+    
+    if next_segment_id:
+        # Create next segment
+        try:
+            next_segment_def = get_segment_definition(story_id, next_segment_id) # type: ignore
+            
+            next_active_segment_id = create_next_active_segment(
+                character_id,
+                player_id,
+                story_id,
+                next_segment_def,
+                active_segment.get("StoryTitle", "Unknown Story"),
+            )
+            
+            # Update character with new active segment
+            update_character_active_segment(character_id, next_active_segment_id)
+            
+            # Calculate next segment time
+            next_segment_time = int(time.time()) + next_segment_def.get("SegmentDuration", 60)
+            response_data["NextSegmentTime"] = next_segment_time
+            
+            logger.info(
+                "Advanced to next segment after decision",
+                extra={
+                    "character_id": character_id,
+                    "next_segment_id": next_segment_id,
+                    "next_active_segment_id": next_active_segment_id,
+                    "segment_type": next_segment_def.get("SegmentType"),
+                },
+            )
+            
+            # Queue mechanical segments for immediate processing
+            if next_segment_def.get("SegmentType") == "mechanical":
+                try:
+                    if SEGMENT_QUEUE_URL:
+                        message_body = {
+                            "ActiveSegmentID": next_active_segment_id,
+                            "CharacterID": character_id,
+                            "StoryID": story_id,
+                            "SegmentID": next_segment_id,
+                            "SegmentType": "mechanical",
+                        }
+                        send_message(SEGMENT_QUEUE_URL, message_body)
+                        logger.info(
+                            "Queued next mechanical segment for processing",
+                            extra={"active_segment_id": next_active_segment_id}
+                        )
+                except Exception as err:
+                    # Non-critical - segment will be picked up by poller
+                    logger.warning(
+                        "Failed to queue mechanical segment",
+                        extra={
+                            "active_segment_id": next_active_segment_id,
+                            "error": str(err)
+                        }
+                    )
+        except Exception as err:
+            logger.error(
+                "Failed to create next segment after decision",
+                extra={
+                    "next_segment_id": next_segment_id,
+                    "error": str(err),
+                },
+                exc_info=True,
+            )
+            raise RuntimeError(f"Failed to create next segment: {str(err)}")
+    else:
+        # Story complete
+        complete_story(character_id, story_id, "normal")
+        logger.info(
+            "Story completed after decision",
+            extra={
+                "character_id": character_id,
+                "story_id": story_id,
+            }
+        )
+    
+    # Delete processed segment
+    delete_active_segment(active_segment_id)
+    
     logger.info(
-        "Decision submitted successfully",
+        "Decision submitted and story advanced",
         extra={
             "active_segment_id": active_segment_id,
             "decision_id": decision_id,
-            "has_next_segment": next_segment_time > 0,
+            "advanced_to_next": next_segment_id is not None,
         },
     )
 
@@ -1574,7 +1682,7 @@ def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, at
         # Build update expressions for XP accumulation
         update_expressions = ["SegmentCount = SegmentCount + :one"]
         expression_names = {}
-        expression_values = {":one": 1}
+        expression_values = {":one": Decimal("1")}
 
         # Add skill XP updates
         for skill, xp_value in skill_xp.items():

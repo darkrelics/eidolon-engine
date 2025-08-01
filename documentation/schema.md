@@ -258,6 +258,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `SegmentID`        | `STRING`  |          | UUID of the current segment definition.                                    |
 | `SegmentType`      | `STRING`  |          | Type of segment: decision, mechanical, or rest.                           |
 | `DefaultStatus`    | `STRING`  |          | Cached status message shown between events.                                |
+| `Status`           | `STRING`  |          | Segment status: active, completed, or abandoned.                           |
 | `StartTime`        | `NUMBER`  |          | Unix timestamp when segment started.                                       |
 | `EndTime`          | `NUMBER`  | **GSI**  | Unix timestamp when segment will complete.                                 |
 | `ProcessedAt`      | `NUMBER`  |          | Unix timestamp when outcomes were calculated (immediately after creation). |

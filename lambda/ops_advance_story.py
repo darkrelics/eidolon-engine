@@ -9,8 +9,9 @@ Triggered by SQS to apply character updates and progress stories.
 
 import json
 
-from eidolon.character import apply_character_updates, get_character
+from eidolon.character import get_character, apply_death_or_unconscious_outcome
 from eidolon.logger import get_logger
+from eidolon.story import apply_combat_rewards, apply_story_outcome_effects
 from eidolon.segment import (
     claim_segment_for_processing,
     complete_story,
@@ -19,6 +20,7 @@ from eidolon.segment import (
     determine_next_segment,
     get_active_segment,
     get_segment_definition,
+    insert_rest_segment,
     is_simple_segment,
     process_decision_segment,
     process_rest_segment,
@@ -76,11 +78,11 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Ensure story history exists
     story_title = active_segment.get("StoryTitle", "Unknown Story")
-    ensure_story_history_exists(character_id, story_id, story_title)
+    ensure_story_history_exists(character_id, story_id, story_title) # type: ignore
 
     # Process simple segments if not already processed
     processing_status = active_segment.get("ProcessingStatus")
-    if is_simple_segment(segment_type) and processing_status != "processed":
+    if is_simple_segment(segment_type) and processing_status != "processed": # type: ignore
         logger.info(
             "Processing simple segment",
             extra={
@@ -90,10 +92,10 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
         )
 
         # Get segment definition
-        segment_def = get_segment_definition(story_id, segment_id)
+        segment_def = get_segment_definition(story_id, segment_id) # type: ignore
 
         # Get character data for processing
-        character = get_character(character_id)
+        character = get_character(character_id) # type: ignore
 
         # Process based on type
         if segment_type == "rest":
@@ -111,41 +113,136 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
         active_segment["CharacterUpdates"] = character_updates
         active_segment["ProcessingStatus"] = "processed"
 
-    # Apply character updates
+    # Check for death outcome and apply character state changes
+    new_character_state = None
+    if outcome == "death" and character_id:
+        try:
+            # Get current character to check wounds
+            character = get_character(character_id)
+            wounds = character.get("Wounds", [])
+            
+            # Apply death or unconscious state based on wounds
+            new_character_state = apply_death_or_unconscious_outcome(character_id, outcome, wounds)
+            
+            logger.info(
+                "Applied character state change for death outcome",
+                extra={
+                    "character_id": character_id,
+                    "new_state": new_character_state,
+                    "wound_count": len(wounds)
+                }
+            )
+        except Exception as err:
+            logger.error(
+                "Failed to apply death/unconscious state",
+                extra={
+                    "character_id": character_id,
+                    "error": str(err)
+                },
+                exc_info=True
+            )
+    
+    # Apply deferred rewards (combat rewards and story outcome effects)
     character_updates = active_segment.get("CharacterUpdates", {})
-    if character_updates:
-        apply_character_updates(character_id, character_updates)
+    if character_updates and character_id:
+        # Apply combat rewards if present
+        combat_rewards = character_updates.get("CombatRewards", {})
+        if combat_rewards and combat_rewards.get("defeated"):
+            opponent_data = combat_rewards.get("opponentData")
+            if opponent_data:
+                try:
+                    apply_combat_rewards(character_id, opponent_data)
+                except Exception as err:
+                    logger.error(
+                        "Failed to apply combat rewards",
+                        extra={
+                            "character_id": character_id,
+                            "opponent_id": combat_rewards.get("opponentId"),
+                            "error": str(err),
+                        },
+                        exc_info=True,
+                    )
+        
+        # Apply story outcome effects if present
+        story_effects = character_updates.get("StoryEffects", {})
+        if story_effects:
+            try:
+                apply_story_outcome_effects(character_id, story_effects)
+            except Exception as err:
+                logger.error(
+                    "Failed to apply story outcome effects",
+                    extra={
+                        "character_id": character_id,
+                        "effects": story_effects,
+                        "error": str(err),
+                    },
+                    exc_info=True,
+                )
 
     # Record segment history
-    record_segment_history(character_id, story_id, active_segment_id, active_segment)
+    record_segment_history(character_id, story_id, active_segment_id, active_segment) # type: ignore
     
     # Update story history with accumulated XP
     skill_xp = character_updates.get("SkillXP", {})
     attribute_xp = character_updates.get("AttributeXP", {})
     if skill_xp or attribute_xp:
-        update_story_history_xp(character_id, story_id, skill_xp, attribute_xp)
+        update_story_history_xp(character_id, story_id, skill_xp, attribute_xp) # type: ignore
 
     # Get segment definition to determine next action
-    segment_def = get_segment_definition(story_id, segment_id)
-
-    # Determine next segment
-    next_segment_id = determine_next_segment(segment_def, active_segment, outcome)
+    segment_def = get_segment_definition(story_id, segment_id) # type: ignore
+    
+    # Check if we need to insert a rest segment for unconscious character
+    if new_character_state == "unconscious":
+        try:
+            # Insert a rest segment after current segment
+            rest_segment_id = insert_rest_segment(
+                story_id, # type: ignore
+                segment_id, # type: ignore
+                rest_duration=900,  # 15 minutes to heal
+                time_remaining=0  # Current segment is done
+            )
+            
+            # Override next segment to be the rest segment
+            next_segment_id = rest_segment_id
+            
+            logger.info(
+                "Inserted rest segment for unconscious character",
+                extra={
+                    "character_id": character_id,
+                    "rest_segment_id": rest_segment_id,
+                    "story_id": story_id
+                }
+            )
+        except Exception as err:
+            logger.error(
+                "Failed to insert rest segment for unconscious character",
+                extra={
+                    "character_id": character_id,
+                    "error": str(err)
+                },
+                exc_info=True
+            )
+            # Fall back to normal next segment determination
+            next_segment_id = determine_next_segment(segment_def, active_segment, outcome)
+    else:
+        # Determine next segment normally
+        next_segment_id = determine_next_segment(segment_def, active_segment, outcome)
 
     if next_segment_id:
         # Create next segment
         try:
-            next_segment_def = get_segment_definition(story_id, next_segment_id)
+            next_segment_def = get_segment_definition(story_id, next_segment_id) # type: ignore
 
             next_active_segment_id = create_next_active_segment(
-                character_id,
-                active_segment.get("PlayerID"),
-                story_id,
+                character_id, # type: ignore
+                active_segment.get("PlayerID"), # type: ignore
+                story_id, # type: ignore
                 next_segment_def,
-                active_segment.get("StoryTitle"),
+                active_segment.get("StoryTitle"), # type: ignore
             )
 
             # Update character with new active segment
-            update_character_active_segment(character_id, next_active_segment_id)
+            update_character_active_segment(character_id, next_active_segment_id) # type: ignore
 
             logger.info(
                 "Created next segment",
@@ -197,7 +294,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             raise RuntimeError(f"Failed to create next segment: {str(err)}")
     else:
         # Story complete
-        complete_story(character_id, story_id, outcome)
+        complete_story(character_id, story_id, outcome) # type: ignore
 
     # Delete processed segment
     delete_active_segment(active_segment_id)

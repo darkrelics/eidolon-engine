@@ -696,7 +696,7 @@ def display_opponents(opponents_data):
             print("  Loot Table:")
             for loot in loot_table:
                 if isinstance(loot, dict):
-                    print(f"    Item: {loot.get('itemID', 'Unknown')} (chance: {loot.get('chance', 0)}")")
+                    print(f"    Item: {loot.get('itemID', 'Unknown')} (chance: {loot.get('chance', 0)})")
                 else:
                     # Simple string format
                     print(f"    {loot}")

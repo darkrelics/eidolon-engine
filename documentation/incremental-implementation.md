@@ -712,6 +712,100 @@ def apply_unconscious_damage(character, new_damage_type):
     return wounds
 ```
 
+### 4.4 Rest Segments and Healing Mechanics
+
+Rest segments provide pacing in stories and allow characters time to recover. However, healing checks are not limited to rest segments - they occur at the start of EVERY segment.
+
+#### Healing Process
+
+When any new segment is created (mechanical, decision, or rest), the system automatically:
+
+1. Calls `heal_expired_wounds()` to check all wounds
+2. Checks if the character is dead - dead characters do not heal
+3. Removes wounds that have passed their `HealAt` timestamp (for living characters)
+4. Updates the character's Wounds array
+5. Logs the healing results
+
+```python
+def create_next_active_segment(character_id, player_id, story_id, segment, story_title):
+    """Create an active segment record for the next segment."""
+    # Heal any expired wounds before creating new segment
+    try:
+        heal_result = heal_expired_wounds(character_id)
+        if heal_result.get("healed_count", 0) > 0:
+            logger.info(
+                "Healed wounds before creating next segment",
+                extra={"character_id": character_id, "healed_count": heal_result["healed_count"]}
+            )
+    except Exception as err:
+        logger.warning(
+            "Failed to heal wounds before segment creation",
+            extra={"character_id": character_id, "error": str(err)}
+        )
+        # Non-critical - continue with segment creation
+    
+    # Continue with segment creation...
+```
+
+#### Rest Segment Implementation
+
+Rest segments themselves are simple time delays with no challenges or decisions:
+
+```python
+def process_rest_segment(segment_def, character):
+    """
+    Process a rest segment.
+    
+    Rest segments are simply time delays that allow natural wound healing
+    to occur via heal_expired_wounds() at the start of the next segment.
+    
+    Args:
+        segment_def: Segment definition from Segments table
+        character: Character data
+        
+    Returns:
+        Tuple of (outcome, empty dict)
+    """
+    logger.info(
+        "Rest segment completed",
+        extra={"character_id": character.get("CharacterID")},
+    )
+    
+    # Rest segments always have normal outcome
+    # Healing happens automatically via heal_expired_wounds() at segment start
+    return "normal", {}
+```
+
+#### Segment Definition Example
+
+A rest segment in the Segments table:
+
+```json
+{
+    "StoryID": "forest-adventure-001",
+    "SegmentID": "seg-rest-001",
+    "SegmentType": "rest",
+    "ShortStatus": "Resting at the campfire",
+    "DefaultStatus": "You rest by the warm campfire, tending to your wounds",
+    "SegmentDuration": 600,  // 10 minutes
+    "RestSegment": true,
+    "NextSegmentID": "seg-forest-003"
+}
+```
+
+#### Key Points
+
+- **Healing is universal**: The `heal_expired_wounds()` function runs at the start of ALL segments, not just rest segments
+- **Healing at story start**: Wounds are also healed when starting a new story (in `start_story()`)
+- **Healing on character retrieval**: The `api_get_character` endpoint heals expired wounds before returning character data
+- **Dead characters don't heal**: Characters with `CharState` of "dead" skip healing entirely
+- **Rest segments are passive**: They provide narrative pacing but have no active mechanics
+- **Healing is time-based**: Wounds heal based on their `HealAt` timestamp, not segment type
+- **Non-blocking**: Healing failures don't prevent segment creation or character retrieval
+- **Consistent outcome**: Rest segments always result in "normal" outcome
+
+This design ensures characters naturally recover over time regardless of segment type, while rest segments provide narrative breathing room in the story flow.
+
 ## 5. Processing Flow Implementation
 
 ### 5.1 Polling System Implementation

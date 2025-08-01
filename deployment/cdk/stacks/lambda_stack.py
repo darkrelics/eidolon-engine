@@ -530,7 +530,7 @@ class LambdaStack(cdk.Stack):
             layers=[dependencies_layer],
             role=self.lambda_ssm_sqs_execution_role,
             timeout=cdk.Duration.seconds(60),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "CHARACTERS_TABLE": self.characters_table,
                 "STORY_TABLE": self.story_table,
@@ -571,7 +571,7 @@ class LambdaStack(cdk.Stack):
             layers=[dependencies_layer],
             role=self.lambda_ssm_sqs_execution_role,
             timeout=cdk.Duration.seconds(60),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
@@ -612,7 +612,7 @@ class LambdaStack(cdk.Stack):
             layers=[dependencies_layer],
             role=self.lambda_ssm_sqs_execution_role,
             timeout=cdk.Duration.seconds(60),
-            memory_size=256,
+            memory_size=128,
             environment={
                 "CHARACTERS_TABLE": self.characters_table,
                 "STORY_TABLE": self.story_table,
