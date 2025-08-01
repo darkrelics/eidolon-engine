@@ -62,7 +62,7 @@ def poll_and_process_segments_business_logic() -> dict:
     segments_for_advancement = []  # Recently completed (within 15 seconds)
     stuck_mechanical_segments = []  # Mechanical segments stuck >15 minutes
     exhausted_segments = []  # Segments past their time window
-    
+
     mechanical_count = 0
     simple_count = 0
     stuck_count = 0
@@ -74,7 +74,7 @@ def poll_and_process_segments_business_logic() -> dict:
         start_time = int(segment.get("StartTime", 0))
         time_since_end = current_time - end_time
         processing_status = segment.get("ProcessingStatus", "")
-        
+
         # Skip segments already processed - they're waiting for advancement
         if processing_status == "processed":
             segments_for_advancement.append(segment)
@@ -83,7 +83,7 @@ def poll_and_process_segments_business_logic() -> dict:
                 extra={
                     "active_segment_id": segment.get("ActiveSegmentID"),
                     "segment_type": segment_type,
-                }
+                },
             )
         # Check if mechanical segment is stuck (>15 minutes in processing state)
         # Only retry if there's at least 15 minutes remaining before end time
@@ -91,7 +91,7 @@ def poll_and_process_segments_business_logic() -> dict:
             # Calculate how long it's been processing
             time_in_processing = current_time - start_time
             time_remaining = end_time - current_time
-            
+
             if time_in_processing > 900 and time_remaining > 900:
                 # Been processing >15 min AND >15 min remaining - retry it
                 stuck_mechanical_segments.append(segment)
@@ -149,15 +149,17 @@ def poll_and_process_segments_business_logic() -> dict:
     if segments_for_advancement:
         messages = []
         for segment in segments_for_advancement:
-            messages.append({
-                "body": {
-                    "ActiveSegmentID": segment.get("ActiveSegmentID"),
-                    "CharacterID": segment.get("CharacterID"),
-                    "StoryID": segment.get("StoryID"),
-                    "SegmentID": segment.get("SegmentID"),
-                    "SegmentType": segment.get("SegmentType"),
+            messages.append(
+                {
+                    "body": {
+                        "ActiveSegmentID": segment.get("ActiveSegmentID"),
+                        "CharacterID": segment.get("CharacterID"),
+                        "StoryID": segment.get("StoryID"),
+                        "SegmentID": segment.get("SegmentID"),
+                        "SegmentType": segment.get("SegmentType"),
+                    }
                 }
-            })
+            )
 
         if not STORY_ADVANCEMENT_QUEUE_URL:
             raise RuntimeError("STORY_ADVANCEMENT_QUEUE_URL environment variable not set")
@@ -177,35 +179,30 @@ def poll_and_process_segments_business_logic() -> dict:
                 try:
                     reset_segment_processing_status(segment.get("ActiveSegmentID"))
                     segments_cleaned += 1
-                    
+
                     # Queue for reprocessing
-                    messages.append({
-                        "body": {
-                            "ActiveSegmentID": segment.get("ActiveSegmentID"),
-                            "CharacterID": segment.get("CharacterID"),
-                            "StoryID": segment.get("StoryID"),
-                            "SegmentID": segment.get("SegmentID"),
-                            "SegmentType": segment.get("SegmentType"),
+                    messages.append(
+                        {
+                            "body": {
+                                "ActiveSegmentID": segment.get("ActiveSegmentID"),
+                                "CharacterID": segment.get("CharacterID"),
+                                "StoryID": segment.get("StoryID"),
+                                "SegmentID": segment.get("SegmentID"),
+                                "SegmentType": segment.get("SegmentType"),
+                            }
                         }
-                    })
+                    )
                 except Exception as err:
                     logger.error(
                         "Failed to clean stuck segment",
-                        extra={
-                            "active_segment_id": segment.get("ActiveSegmentID"),
-                            "error": str(err)
-                        }
+                        extra={"active_segment_id": segment.get("ActiveSegmentID"), "error": str(err)},
                     )
 
             if messages:
                 result = send_message_batch(SEGMENT_QUEUE_URL, messages)
                 logger.info(
                     "Retried stuck mechanical segments",
-                    extra={
-                        "count": len(messages),
-                        "successful": result.get("successful", 0),
-                        "failed": result.get("failed", 0)
-                    }
+                    extra={"count": len(messages), "successful": result.get("successful", 0), "failed": result.get("failed", 0)},
                 )
 
     # 3. Mark exhausted segments as done and send to advancement
@@ -217,24 +214,23 @@ def poll_and_process_segments_business_logic() -> dict:
                 # If our processing failed repeatedly, give the player the best possible outcome
                 mark_segment_as_completed_exceptional(segment.get("ActiveSegmentID"))
                 segments_marked_done += 1
-                
+
                 # Queue for advancement to complete the story flow
-                messages.append({
-                    "body": {
-                        "ActiveSegmentID": segment.get("ActiveSegmentID"),
-                        "CharacterID": segment.get("CharacterID"),
-                        "StoryID": segment.get("StoryID"),
-                        "SegmentID": segment.get("SegmentID"),
-                        "SegmentType": segment.get("SegmentType"),
+                messages.append(
+                    {
+                        "body": {
+                            "ActiveSegmentID": segment.get("ActiveSegmentID"),
+                            "CharacterID": segment.get("CharacterID"),
+                            "StoryID": segment.get("StoryID"),
+                            "SegmentID": segment.get("SegmentID"),
+                            "SegmentType": segment.get("SegmentType"),
+                        }
                     }
-                })
+                )
             except Exception as err:
                 logger.error(
                     "Failed to mark exhausted segment as done",
-                    extra={
-                        "active_segment_id": segment.get("ActiveSegmentID"),
-                        "error": str(err)
-                    }
+                    extra={"active_segment_id": segment.get("ActiveSegmentID"), "error": str(err)},
                 )
 
         if messages:

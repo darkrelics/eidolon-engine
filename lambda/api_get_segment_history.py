@@ -92,7 +92,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
 
     # Format segments for response with all the data Flutter expects
     formatted_segments = []
-    for segment in (segments or []):
+    for segment in segments or []:
         formatted_segment = {
             "ActiveSegmentID": segment.get("ActiveSegmentID"),
             "SegmentID": segment.get("SegmentID"),

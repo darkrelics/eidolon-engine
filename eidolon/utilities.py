@@ -177,7 +177,6 @@ def build_lambda_response_pascal(status_code: int, body: dict, event: dict) -> d
 
     # If it's an error response with lowercase "error" key, convert to PascalCase
     if "error" in body and status_code >= 400:
-        
 
         error_msg = body.get("error", "")
         # Remove the error key and treat rest as details

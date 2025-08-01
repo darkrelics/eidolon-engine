@@ -70,40 +70,38 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
             raise ValueError("Active segment missing SegmentID")
     except (ValueError, RuntimeError) as err:
         logger.error(
-            "Failed to get active segment info",
-            extra={"active_segment_id": active_segment_id, "error": str(err)},
-            exc_info=True
+            "Failed to get active segment info", extra={"active_segment_id": active_segment_id, "error": str(err)}, exc_info=True
         )
         raise
-    
+
     # Calculate time remaining on current segment
     current_time = int(time.time())
     end_time = active_segment.get("EndTime", 0)
     time_remaining = max(0, end_time - current_time)
-    
+
     logger.info(
         "Current segment timing",
         extra={
             "current_segment_id": current_segment_id,
             "end_time": end_time,
             "current_time": current_time,
-            "time_remaining": time_remaining
-        }
+            "time_remaining": time_remaining,
+        },
     )
-    
+
     # Insert rest segment into story flow
     try:
         rest_segment_id = insert_rest_segment(
             story_id=active_story_id,
             current_segment_id=current_segment_id,
             rest_duration=REST_SEGMENT_DURATION,
-            time_remaining=time_remaining
+            time_remaining=time_remaining,
         )
     except (ValueError, RuntimeError) as err:
         logger.error(
             "Failed to insert rest segment",
             extra={"story_id": active_story_id, "current_segment_id": current_segment_id, "error": str(err)},
-            exc_info=True
+            exc_info=True,
         )
         raise
 
@@ -117,13 +115,7 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
         },
     )
 
-    return {
-        "rest_segment_id": rest_segment_id,
-        "current_segment_id": current_segment_id,
-        "active_segment_id": active_segment_id
-    }
-
-
+    return {"rest_segment_id": rest_segment_id, "current_segment_id": current_segment_id, "active_segment_id": active_segment_id}
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -196,7 +188,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Business logic errors
         logger.warning("Character rest validation failed", extra={"error": str(err)})
         error_msg = str(err)
-        
+
         # Check for specific error cases
         if "not owned by player" in error_msg:
             status_code = 403
@@ -205,7 +197,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             status_code = 422  # Unprocessable Entity
         else:
             status_code = 400
-            
+
         return build_lambda_response_pascal(status_code, {"Error": error_msg}, event)
     except RuntimeError as err:
         # System errors

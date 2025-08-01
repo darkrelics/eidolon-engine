@@ -330,7 +330,7 @@ def load_item_prototypes():
 def store_opponents(opponents_data):
     """
     Stores opponent data into the 'opponents' DynamoDB table using update operations.
-    
+
     Supports both MUD-style opponents (with CombatRating, DefenseRating, etc.) and
     Incremental-style opponents (with Attributes and Skills).
 
@@ -665,18 +665,18 @@ def display_opponents(opponents_data):
         print(f"Opponent ID: {opponent.get('OpponentID', 'No ID')}")
         print(f"  Name: {opponent.get('Name', 'No Name')}")
         print(f"  Description: {opponent.get('Description', 'No description')}")
-        
+
         # Check if this is incremental format (has Attributes/Skills)
         if "Attributes" in opponent and "Skills" in opponent:
             # Incremental format
             print(f"  Health: {opponent.get('Health', 0)} / {opponent.get('MaxHealth', opponent.get('Health', 0))}")
             print(f"  Level: {opponent.get('Level', 1)}")
             print(f"  XP Reward: {opponent.get('XPReward', 0)}")
-            
+
             print("  Attributes:")
             for attr, value in opponent.get("Attributes", {}).items():
                 print(f"    {attr}: {value}")
-                
+
             print("  Skills:")
             for skill, value in opponent.get("Skills", {}).items():
                 print(f"    {skill}: {value}")

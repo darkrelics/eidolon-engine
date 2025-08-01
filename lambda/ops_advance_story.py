@@ -34,8 +34,6 @@ from eidolon.utilities import log_lambda_invocation
 logger = get_logger(__name__)
 
 
-
-
 def advance_story_business_logic(active_segment_id: str) -> dict:
     """
     Business logic for advancing a story after segment completion.
@@ -77,11 +75,11 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Ensure story history exists
     story_title = active_segment.get("StoryTitle", "Unknown Story")
-    ensure_story_history_exists(character_id, story_id, story_title) # type: ignore
+    ensure_story_history_exists(character_id, story_id, story_title)  # type: ignore
 
     # Process simple segments if not already processed
     processing_status = active_segment.get("ProcessingStatus")
-    if is_simple_segment(segment_type) and processing_status != "processed": # type: ignore
+    if is_simple_segment(segment_type) and processing_status != "processed":  # type: ignore
         logger.info(
             "Processing simple segment",
             extra={
@@ -91,10 +89,10 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
         )
 
         # Get segment definition
-        segment_def = get_segment_definition(story_id, segment_id) # type: ignore
+        segment_def = get_segment_definition(story_id, segment_id)  # type: ignore
 
         # Get character data for processing
-        character = get_character(character_id) # type: ignore
+        character = get_character(character_id)  # type: ignore
 
         # Process based on type
         if segment_type == "rest":
@@ -119,28 +117,19 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             # Get current character to check wounds
             character = get_character(character_id)
             wounds = character.get("Wounds", [])
-            
+
             # Apply death or unconscious state based on wounds
             new_character_state = apply_death_or_unconscious_outcome(character_id, outcome, wounds)
-            
+
             logger.info(
                 "Applied character state change for death outcome",
-                extra={
-                    "character_id": character_id,
-                    "new_state": new_character_state,
-                    "wound_count": len(wounds)
-                }
+                extra={"character_id": character_id, "new_state": new_character_state, "wound_count": len(wounds)},
             )
         except Exception as err:
             logger.error(
-                "Failed to apply death/unconscious state",
-                extra={
-                    "character_id": character_id,
-                    "error": str(err)
-                },
-                exc_info=True
+                "Failed to apply death/unconscious state", extra={"character_id": character_id, "error": str(err)}, exc_info=True
             )
-    
+
     # Apply deferred rewards (combat rewards and story outcome effects)
     character_updates = active_segment.get("CharacterUpdates", {})
     if character_updates and character_id:
@@ -161,7 +150,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                         },
                         exc_info=True,
                     )
-        
+
         # Apply story outcome effects if present
         story_effects = character_updates.get("StoryEffects", {})
         if story_effects:
@@ -179,47 +168,40 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 )
 
     # Record segment history
-    record_segment_history(character_id, story_id, active_segment_id, active_segment) # type: ignore
-    
+    record_segment_history(character_id, story_id, active_segment_id, active_segment)  # type: ignore
+
     # Update story history with accumulated XP
     skill_xp = character_updates.get("SkillXP", {})
     attribute_xp = character_updates.get("AttributeXP", {})
     if skill_xp or attribute_xp:
-        update_story_history_xp(character_id, story_id, skill_xp, attribute_xp) # type: ignore
+        update_story_history_xp(character_id, story_id, skill_xp, attribute_xp)  # type: ignore
 
     # Get segment definition to determine next action
-    segment_def = get_segment_definition(story_id, segment_id) # type: ignore
-    
+    segment_def = get_segment_definition(story_id, segment_id)  # type: ignore
+
     # Check if we need to insert a rest segment for unconscious character
     if new_character_state == "unconscious":
         try:
             # Insert a rest segment after current segment
             rest_segment_id = insert_rest_segment(
-                story_id, # type: ignore
-                segment_id, # type: ignore
+                story_id,  # type: ignore
+                segment_id,  # type: ignore
                 rest_duration=900,  # 15 minutes to heal
-                time_remaining=0  # Current segment is done
+                time_remaining=0,  # Current segment is done
             )
-            
+
             # Override next segment to be the rest segment
             next_segment_id = rest_segment_id
-            
+
             logger.info(
                 "Inserted rest segment for unconscious character",
-                extra={
-                    "character_id": character_id,
-                    "rest_segment_id": rest_segment_id,
-                    "story_id": story_id
-                }
+                extra={"character_id": character_id, "rest_segment_id": rest_segment_id, "story_id": story_id},
             )
         except Exception as err:
             logger.error(
                 "Failed to insert rest segment for unconscious character",
-                extra={
-                    "character_id": character_id,
-                    "error": str(err)
-                },
-                exc_info=True
+                extra={"character_id": character_id, "error": str(err)},
+                exc_info=True,
             )
             # Fall back to normal next segment determination
             next_segment_id = determine_next_segment(segment_def, active_segment, outcome)
@@ -230,18 +212,18 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     if next_segment_id:
         # Create next segment
         try:
-            next_segment_def = get_segment_definition(story_id, next_segment_id) # type: ignore
+            next_segment_def = get_segment_definition(story_id, next_segment_id)  # type: ignore
 
             next_active_segment_id = create_next_active_segment(
-                character_id, # type: ignore
-                active_segment.get("PlayerID"), # type: ignore
-                story_id, # type: ignore
+                character_id,  # type: ignore
+                active_segment.get("PlayerID"),  # type: ignore
+                story_id,  # type: ignore
                 next_segment_def,
-                active_segment.get("StoryTitle"), # type: ignore
+                active_segment.get("StoryTitle"),  # type: ignore
             )
 
             # Update character with new active segment
-            update_character_active_segment(character_id, next_active_segment_id) # type: ignore
+            update_character_active_segment(character_id, next_active_segment_id)  # type: ignore
 
             logger.info(
                 "Created next segment",
@@ -252,13 +234,13 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                     "segment_type": next_segment_def.get("SegmentType"),
                 },
             )
-            
+
             # Queue mechanical segments for immediate processing
             if next_segment_def.get("SegmentType") == "mechanical":
                 try:
                     from eidolon.environment import SEGMENT_QUEUE_URL
                     from eidolon.sqs import send_message
-                    
+
                     if SEGMENT_QUEUE_URL:
                         message_body = {
                             "ActiveSegmentID": next_active_segment_id,
@@ -269,17 +251,12 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                         }
                         send_message(SEGMENT_QUEUE_URL, message_body)
                         logger.info(
-                            "Queued next mechanical segment for processing",
-                            extra={"active_segment_id": next_active_segment_id}
+                            "Queued next mechanical segment for processing", extra={"active_segment_id": next_active_segment_id}
                         )
                 except Exception as err:
                     # Non-critical - segment will be picked up by poller
                     logger.warning(
-                        "Failed to queue mechanical segment",
-                        extra={
-                            "active_segment_id": next_active_segment_id,
-                            "error": str(err)
-                        }
+                        "Failed to queue mechanical segment", extra={"active_segment_id": next_active_segment_id, "error": str(err)}
                     )
         except Exception as err:
             logger.error(
@@ -293,7 +270,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             raise RuntimeError(f"Failed to create next segment: {str(err)}")
     else:
         # Story complete
-        complete_story(character_id, story_id, outcome) # type: ignore
+        complete_story(character_id, story_id, outcome)  # type: ignore
 
     # Delete processed segment
     delete_active_segment(active_segment_id)

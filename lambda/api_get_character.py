@@ -53,15 +53,12 @@ def get_character_business_logic(character_id: str, player_id: str) -> dict:
         if heal_result.get("healed_count", 0) > 0:
             logger.info(
                 "Healed wounds before returning character",
-                extra={"character_id": character_id, "healed_count": heal_result["healed_count"]}
+                extra={"character_id": character_id, "healed_count": heal_result["healed_count"]},
             )
     except Exception as err:
-        logger.warning(
-            "Failed to heal wounds before getting character",
-            extra={"character_id": character_id, "error": str(err)}
-        )
+        logger.warning("Failed to heal wounds before getting character", extra={"character_id": character_id, "error": str(err)})
         # Non-critical - continue with character retrieval
-    
+
     # Get character and validate ownership
     try:
         character = get_character(character_id)

@@ -51,11 +51,11 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     active_segment_id = active_segment.get("ActiveSegmentID")
     story_id = active_segment.get("StoryID")
     story_title = active_segment.get("StoryTitle", "Unknown Story")
-    
+
     if not active_segment_id or not story_id:
         logger.error(
             "Active segment missing required fields",
-            extra={"character_id": character_id, "has_segment_id": bool(active_segment_id), "has_story_id": bool(story_id)}
+            extra={"character_id": character_id, "has_segment_id": bool(active_segment_id), "has_story_id": bool(story_id)},
         )
         raise ValueError("Invalid active segment data")
 
@@ -76,7 +76,8 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
         record_story_abandonment(character_id, story_id)
     except (ValueError, RuntimeError) as err:
         logger.error(
-            "Failed to update story history but continuing", extra={"character_id": character_id, "story_id": story_id, "error": str(err)}
+            "Failed to update story history but continuing",
+            extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
         )
 
     # Mark segment as abandoned
@@ -93,16 +94,15 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     except RuntimeError as err:
         logger.error(
             "Failed to record segment history but continuing",
-            extra={"character_id": character_id, "segment_id": active_segment.get("SegmentID"), "error": str(err)}
+            extra={"character_id": character_id, "segment_id": active_segment.get("SegmentID"), "error": str(err)},
         )
-    
+
     # Delete the active segment after recording history
     try:
         delete_active_segment(active_segment_id)
     except ValueError as err:
         logger.error(
-            "Failed to delete active segment - invalid ID",
-            extra={"active_segment_id": active_segment_id, "error": str(err)}
+            "Failed to delete active segment - invalid ID", extra={"active_segment_id": active_segment_id, "error": str(err)}
         )
 
     logger.info(

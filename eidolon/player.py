@@ -3,6 +3,7 @@ Player management utilities for Lambda functions.
 
 Provides functions for player authentication and validation.
 """
+
 from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
@@ -297,7 +298,6 @@ def delete_all_characters_for_player(player_id: str) -> dict:
     Raises:
         RuntimeError: If critical database operations fail
     """
-    
 
     results = {
         "characters_deleted": 0,
@@ -506,7 +506,6 @@ def delete_player_data_completely(player_id: str) -> dict:
     Raises:
         ValueError: If player_id is empty
     """
-    
 
     if not player_id:
         raise ValueError("Player ID cannot be empty")
