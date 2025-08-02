@@ -11,7 +11,7 @@ class SSMStack(cdk.Stack):
     def __init__(self, scope: Construct, ssm_id: str, config: dict, **kwargs):
         super().__init__(scope, ssm_id, **kwargs)
 
-        game_name = config.get("game_name", "eidolon")
+        game_name = config.get("game_name", "eidolon-engine")
 
         # Create segment poller state parameter
         self.segment_poller_state = ssm.StringParameter(

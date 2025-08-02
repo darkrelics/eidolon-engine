@@ -77,7 +77,7 @@ def store_exits(exits_data):
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        print("Exit data stored in DynamoDB successfully")
+        logging.info(f"Successfully stored {len(exits_data.get('exits', []))} exits in DynamoDB")
     except ClientError as err:
         logging.error(f"Failed to store exits in DynamoDB: {str(err)}")
         raise
@@ -123,7 +123,7 @@ def store_rooms(rooms_data):
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        print("Room data stored in DynamoDB successfully")
+        logging.info(f"Successfully stored {len(rooms_data.get('rooms', []))} rooms in DynamoDB")
     except ClientError as err:
         logging.error(f"Failed to store rooms in DynamoDB: {str(err)}")
         raise
@@ -190,7 +190,7 @@ def store_archetypes(archetypes_data):
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        print("Archetype data stored in DynamoDB successfully")
+        logging.info(f"Successfully stored {len(archetypes_data.get('archetypes', {}))} archetypes in DynamoDB")
     except ClientError as err:
         logging.error(f"Failed to store archetypes in DynamoDB: {str(err)}")
         raise
@@ -234,7 +234,7 @@ def store_item_prototypes(prototypes_data):
                 ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        print("Item prototype data stored in DynamoDB successfully")
+        logging.info(f"Successfully stored {len(prototypes_data.get('itemPrototypes', []))} item prototypes in DynamoDB")
     except ClientError as err:
         logging.error(f"Failed to store item prototypes in DynamoDB: {str(err)}")
         raise
@@ -254,7 +254,7 @@ def load_exits():
         result: dict = dynamo.scan(TableName.EXITS)  # type: ignore
         items = result.get("items", [])
         exits = {item["ExitID"]: item for item in items}
-        print("Exit data loaded from DynamoDB successfully")
+        logging.info(f"Successfully loaded {len(exits)} exits from DynamoDB")
         return exits
     except ClientError as err:
         logging.error(f"Failed to load exits from DynamoDB: {str(err)}")
@@ -275,7 +275,7 @@ def load_rooms():
         result: dict = dynamo.scan(TableName.ROOMS)  # type: ignore
         items = result.get("items", [])
         rooms = {item["RoomID"]: item for item in items}  # type: ignore
-        print("Room data loaded from DynamoDB successfully")
+        logging.info(f"Successfully loaded {len(rooms)} rooms from DynamoDB")
         return rooms
     except ClientError as err:
         logging.error(f"Failed to load rooms from DynamoDB: {str(err)}")
@@ -296,7 +296,7 @@ def load_archetypes():
         result: dict = dynamo.scan(TableName.ARCHETYPES)  # type: ignore
         items = result.get("items", [])
         archetypes = {"archetypes": {item["ArchetypeName"]: item for item in items}}  # type: ignore
-        print("Archetype data loaded from DynamoDB successfully")
+        logging.info(f"Successfully loaded {len(archetypes.get('archetypes', {}))} archetypes from DynamoDB")
         return archetypes
     except ClientError as err:
         logging.error(f"Failed to load archetypes from DynamoDB: {str(err)}")
@@ -317,7 +317,7 @@ def load_item_prototypes():
         result: dict = dynamo.scan(TableName.PROTOTYPES)  # type: ignore
         items = result.get("items", [])
         prototypes = {"itemPrototypes": items}
-        print("Item prototype data loaded from DynamoDB successfully")
+        logging.info(f"Successfully loaded {len(prototypes.get('itemPrototypes', []))} item prototypes from DynamoDB")
         return prototypes
     except ClientError as err:
         logging.error(f"Failed to load item prototypes from DynamoDB: {str(err)}")
@@ -398,7 +398,7 @@ def store_opponents(opponents_data):
                 ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        print("Opponent data stored in DynamoDB successfully")
+        logging.info(f"Successfully stored {len(opponents_data.get('opponents', []))} opponents in DynamoDB")
     except ClientError as err:
         logging.error(f"Failed to store opponents in DynamoDB: {str(err)}")
         raise
@@ -452,7 +452,7 @@ def store_story(story_data):
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-            print(f"Story '{story['Title']}' stored successfully")
+            logging.info(f"Successfully stored story '{story['Title']}' (ID: {story['StoryID']}) in DynamoDB")
 
         # Store all segments
         segments = story_data.get("segments", [])
@@ -500,7 +500,7 @@ def store_story(story_data):
                 ExpressionAttributeValues=expression_attribute_values,
             )
 
-        print(f"Stored {len(segments)} segments successfully")
+        logging.info(f"Successfully stored {len(segments)} segments for story '{story.get('Title', 'Unknown')}' in DynamoDB")
 
     except ClientError as err:
         logging.error(f"Failed to store story in DynamoDB: {str(err)}")
@@ -521,7 +521,7 @@ def load_opponents():
         result: dict = dynamo.scan(TableName.OPPONENTS)  # type: ignore
         items = result.get("items", [])
         opponents = {"opponents": items}
-        print("Opponent data loaded from DynamoDB successfully")
+        logging.info(f"Successfully loaded {len(opponents.get('opponents', []))} opponents from DynamoDB")
         return opponents
     except ClientError as err:
         logging.error(f"Failed to load opponents from DynamoDB: {str(err)}")
@@ -547,7 +547,7 @@ def load_story():
         segments_result: dict = dynamo.scan(TableName.SEGMENTS)  # type: ignore
         segments = segments_result.get("items", [])
 
-        print("Story data loaded from DynamoDB successfully")
+        logging.info(f"Successfully loaded {len(stories)} stories and {len(segments)} segments from DynamoDB")
         return {"stories": stories, "segments": segments}
     except ClientError as err:
         logging.error(f"Failed to load story data from DynamoDB: {str(err)}")
@@ -783,89 +783,124 @@ def main():
         "-r",
         "--rooms",
         default="../data/test_rooms.json",
-        help="Path to the Rooms JSON file.",
+        help="Path to the Rooms JSON file (default: ../data/test_rooms.json)",
     )
     parser.add_argument(
         "-e",
         "--exits",
         default="../data/test_exits.json",
-        help="Path to the Exits JSON file.",
+        help="Path to the Exits JSON file (default: ../data/test_exits.json)",
     )
     parser.add_argument(
         "-a",
         "--archetypes",
         default="../data/test_archetypes.json",
-        help="Path to the Archetypes JSON file.",
+        help="Path to the Archetypes JSON file (default: ../data/test_archetypes.json)",
     )
     parser.add_argument(
         "-p",
         "--prototypes",
         default="../data/test_prototypes.json",
-        help="Path to the Prototypes JSON file.",
+        help="Path to the Prototypes JSON file (default: ../data/test_prototypes.json)",
     )
     parser.add_argument(
         "-s",
         "--story",
         default="../data/test_story.json",
-        help="Path to the Story JSON file.",
+        help="Path to the Story JSON file (default: ../data/test_story.json)",
     )
     parser.add_argument(
         "-o",
         "--opponents",
         default="../data/test_opponents.json",
-        help="Path to the Opponents JSON file.",
+        help="Path to the Opponents JSON file (default: ../data/test_opponents.json)",
     )
     parser.add_argument("-region", default="us-east-1", help="AWS region for DynamoDB.")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Configure logger for this module
+    logger = logging.getLogger(__name__)
+    
+    logger.info("Starting data loader for Eidolon Engine")
+    logger.info(f"Loading data files from: {os.path.dirname(args.exits)}")
 
+    # Load and store exits
     try:
-        # Load and store exits
         exits_data = load_json(args.exits)
         store_exits(exits_data)
+    except FileNotFoundError:
+        logging.warning(f"Exits file not found: {args.exits}")
+    except Exception as err:
+        logging.error(f"Failed to load/store exits: {err}")
 
-        # Load and store rooms
+    # Load and store rooms
+    try:
         rooms_data = load_json(args.rooms)
         store_rooms(rooms_data)
+    except FileNotFoundError:
+        logging.warning(f"Rooms file not found: {args.rooms}")
+    except Exception as err:
+        logging.error(f"Failed to load/store rooms: {err}")
 
-        # Load and store archetypes
+    # Load and store archetypes
+    try:
         archetypes_data = load_json(args.archetypes)
         store_archetypes(archetypes_data)
+    except FileNotFoundError:
+        logging.warning(f"Archetypes file not found: {args.archetypes}")
+    except Exception as err:
+        logging.error(f"Failed to load/store archetypes: {err}")
 
-        # Load and store item prototypes
+    # Load and store item prototypes
+    try:
         prototypes_data = load_json(args.prototypes)
         store_item_prototypes(prototypes_data)
+    except FileNotFoundError:
+        logging.warning(f"Prototypes file not found: {args.prototypes}")
+    except Exception as err:
+        logging.error(f"Failed to load/store prototypes: {err}")
 
-        # Load and store story
+    # Load and store story
+    try:
         story_data = load_json(args.story)
         store_story(story_data)
+    except FileNotFoundError:
+        logging.warning(f"Story file not found: {args.story}")
+    except Exception as err:
+        logging.error(f"Failed to load/store story: {err}")
 
-        # Load and store opponents
+    # Load and store opponents
+    try:
         opponents_data = load_json(args.opponents)
         store_opponents(opponents_data)
-
-        # Load data from DynamoDB and display
-        loaded_exits = load_exits()
-        display_exits(loaded_exits)
-
-        loaded_rooms = load_rooms()
-        display_rooms(loaded_rooms)
-
-        loaded_archetypes = load_archetypes()
-        display_archetypes(loaded_archetypes)
-
-        loaded_prototypes = load_item_prototypes()
-        display_item_prototypes(loaded_prototypes)
-
-        loaded_story = load_story()
-        display_story(loaded_story)
-
-        loaded_opponents = load_opponents()
-        display_opponents(loaded_opponents)
-
+    except FileNotFoundError:
+        logging.warning(f"Opponents file not found: {args.opponents}")
     except Exception as err:
-        logging.error(f"An unexpected error occurred: {str(err)}")
+        logging.error(f"Failed to load/store opponents: {err}")
+
+    # Load data from DynamoDB and display
+    loaded_exits = load_exits()
+    display_exits(loaded_exits)
+
+    loaded_rooms = load_rooms()
+    display_rooms(loaded_rooms)
+
+    loaded_archetypes = load_archetypes()
+    display_archetypes(loaded_archetypes)
+
+    loaded_prototypes = load_item_prototypes()
+    display_item_prototypes(loaded_prototypes)
+
+    loaded_story = load_story()
+    display_story(loaded_story)
+
+    loaded_opponents = load_opponents()
+    display_opponents(loaded_opponents)
 
 
 if __name__ == "__main__":

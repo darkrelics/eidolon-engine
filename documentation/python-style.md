@@ -217,6 +217,68 @@ def create_character(name: str) -> tuple:
 
 ## Error Handling
 
+### EAFP Principle (Easier to Ask for Forgiveness than Permission)
+
+Python follows the EAFP principle rather than LBYL (Look Before You Leap). Always use try/except blocks instead of checking conditions beforehand:
+
+```python
+# Good - EAFP style (Pythonic)
+try:
+    data = load_json(filename)
+    process_data(data)
+except FileNotFoundError:
+    logger.warning(f"File not found: {filename}")
+except json.JSONDecodeError as err:
+    logger.error(f"Invalid JSON in {filename}: {err}")
+
+# Bad - LBYL style (not Pythonic)
+if os.path.exists(filename):
+    data = load_json(filename)
+    process_data(data)
+else:
+    logger.warning(f"File not found: {filename}")
+```
+
+More examples:
+
+```python
+# Good - try to use the dictionary key
+try:
+    value = config["important_setting"]
+    process_setting(value)
+except KeyError:
+    logger.warning("Using default setting")
+    value = DEFAULT_SETTING
+
+# Bad - check if key exists first
+if "important_setting" in config:
+    value = config["important_setting"]
+    process_setting(value)
+else:
+    logger.warning("Using default setting")
+    value = DEFAULT_SETTING
+
+# Good - try the operation
+try:
+    result = int(user_input)
+except ValueError:
+    logger.error("Invalid number format")
+    return error_response("Please enter a valid number", 400)
+
+# Bad - check if it's numeric first
+if user_input.isdigit():
+    result = int(user_input)
+else:
+    logger.error("Invalid number format")
+    return error_response("Please enter a valid number", 400)
+```
+
+The EAFP principle makes code:
+- More Pythonic and idiomatic
+- Often faster (no redundant checks)
+- More readable (focus on the happy path)
+- More robust (handles edge cases better)
+
 ### Raise Errors Instead of Returning Them
 
 For functions in the eidolon library, raise exceptions rather than returning error values:

@@ -153,7 +153,7 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
         attribute = challenge.get("attribute")
         skill = challenge.get("skill")
         difficulty = challenge.get("difficulty", 8)
-        attempts = challenge.get("attempts", 1)
+        attempts = int(challenge.get("attempts", 1))
 
         # Get character's attribute and skill values
         character_attributes = character.get("Attributes", {})

@@ -11,7 +11,7 @@ class SQSStack(cdk.Stack):
     def __init__(self, scope: Construct, sqs_id: str, config: dict, **kwargs):
         super().__init__(scope, sqs_id, **kwargs)
 
-        game_name = config.get("game_name", "eidolon")
+        game_name = config.get("game_name", "eidolon-engine")
 
         # Create segment processing queue without DLQ
         self.segment_queue = sqs.Queue(

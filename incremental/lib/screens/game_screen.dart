@@ -617,22 +617,8 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
         
         // For mechanical segments still processing, poll more frequently
         if (_currentStoryData != null) {
-          final activeSegmentData = _currentStoryData!['ActiveSegment'] as Map<String, dynamic>?;
-          if (activeSegmentData != null) {
-            final segmentType = activeSegmentData['SegmentType'] as String?;
-            final processingStatus = activeSegmentData['ProcessingStatus'] as String?;
-            
-            if (segmentType == 'mechanical' && processingStatus != 'processed') {
-              // Cancel existing refresh timer
-              _refreshTimer?.cancel();
-              // Poll every 10 seconds for mechanical segment processing
-              _refreshTimer = Timer(const Duration(seconds: 10), () {
-                if (mounted) {
-                  _loadCurrentStory();
-                }
-              });
-            }
-          }
+          // The SegmentProvider handles polling for mechanical segments
+          // No need to implement duplicate polling here
         }
       }
     } catch (e) {

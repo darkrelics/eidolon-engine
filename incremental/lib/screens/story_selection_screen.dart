@@ -187,6 +187,7 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
               }
 
               return ListView.builder(
+                shrinkWrap: true,
                 padding: const EdgeInsets.all(16),
                 itemCount: stories.length,
                 itemBuilder: (context, index) {
