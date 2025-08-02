@@ -428,6 +428,9 @@ class IncrementalDeploymentOrchestrator:
                     # Update CodeBuild project with CloudFront distribution ID
                     print("\n  Updating CodeBuild project with CloudFront distribution ID...")
                     self.update_codebuild_cloudfront_id()
+                    
+                    # Save the distribution ID to config for future use
+                    self.save_cloudfront_distribution_id()
 
                 # Check if we need to update Lambda functions after Application Layer
                 if phase_success and phase["name"] == "Application Layer":
@@ -1537,6 +1540,32 @@ class IncrementalDeploymentOrchestrator:
         except Exception as err:
             print(f"    Error updating bucket policy: {err}")
 
+    def save_cloudfront_distribution_id(self):
+        """Save CloudFront distribution ID to config file."""
+        try:
+            # Get distribution ID from CloudFormation stack outputs
+            cf = self.session.client("cloudformation")
+            stack_name = "cloudfront"
+            response = cf.describe_stacks(StackName=stack_name)
+            outputs = response["Stacks"][0].get("Outputs", [])
+            
+            distribution_id = None
+            for output in outputs:
+                if output["OutputKey"] == "DistributionId":
+                    distribution_id = output["OutputValue"]
+                    break
+            
+            if distribution_id:
+                # Save to config
+                if "CloudFront" not in self.config_manager.config:
+                    self.config_manager.config["CloudFront"] = {}
+                self.config_manager.config["CloudFront"]["DistributionId"] = distribution_id
+                self.config_manager.save_config()
+                print(f"    Saved CloudFront distribution ID to config: {distribution_id}")
+            
+        except Exception as e:
+            print(f"    Could not save distribution ID: {e}")
+    
     def update_codebuild_cloudfront_id(self):
         """Update CodeBuild project environment variable with CloudFront distribution ID."""
         try:

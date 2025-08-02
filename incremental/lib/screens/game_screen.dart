@@ -900,12 +900,19 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      JsonUtils.getFlexibleRequired<String>(
-                        segment,
-                        'Content',
-                        'content',
-                        defaultValue: 'Loading segment content...',
-                      ),
+                      segmentType == 'mechanical' 
+                        ? JsonUtils.getFlexibleRequired<String>(
+                            segment,
+                            'ShortStatus',
+                            'shortStatus',
+                            defaultValue: 'Processing...',
+                          )
+                        : JsonUtils.getFlexibleRequired<String>(
+                            segment,
+                            'Content',
+                            'content',
+                            defaultValue: 'Loading segment content...',
+                          ),
                       style: theme.textTheme.bodyLarge,
                     ),
                     if (JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl') != null) ...[
@@ -1813,6 +1820,9 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
         _showStoryList = false;
         _isStartingStory = false;
       });
+      
+      // Load the full story data immediately
+      await _loadCurrentStory();
 
       // Show success message
       if (mounted) {
