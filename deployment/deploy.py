@@ -384,12 +384,28 @@ class IncrementalDeploymentOrchestrator:
                 for stack in stacks_to_deploy:
                     print(f"\n  Deploying {stack}...")
                     progress_reporter = CDKProgressReporter()
-                    result: dict = self.cdk_api.deploy(
-                        stacks=[stack],  # Deploy one stack at a time
-                        context=context,
-                        require_approval="never",  # User already approved deployment plan
-                        progress_callback=progress_reporter,
-                    )
+                    try:
+                        result: dict = self.cdk_api.deploy(
+                            stacks=[stack],  # Deploy one stack at a time
+                            context=context,
+                            require_approval="never",  # User already approved deployment plan
+                            progress_callback=progress_reporter,
+                        )
+                    except CDKDeploymentError as cdk_err:
+                        # Check for specific CDK errors we can provide better messages for
+                        error_msg = str(cdk_err)
+                        if "cannot be converted into a whole number of minutes" in error_msg:
+                            print("\n[ERROR] EventBridge scheduling error detected!")
+                            print("EventBridge only supports schedules in whole minutes (minimum 1 minute).")
+                            print("The 30-second polling interval needs to be changed to 1 minute.")
+                            print("\nThis has been fixed in the code but requires redeployment.")
+                            print("Please ensure you're using the latest code version.")
+                        elif "ValidationError" in error_msg:
+                            print(f"\n[ERROR] AWS validation error: {error_msg}")
+                            print("This typically indicates a configuration issue with AWS resources.")
+                        else:
+                            print(f"\n[ERROR] CDK deployment failed: {error_msg}")
+                        raise
 
                     if not result["success"]:
                         print(f"\n  [ERROR] Failed to deploy {stack}")

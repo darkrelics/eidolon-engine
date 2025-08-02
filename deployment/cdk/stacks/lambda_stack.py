@@ -583,13 +583,13 @@ class LambdaStack(cdk.Stack):
             function_name="ops-segment-poller",
         )
 
-        # Create EventBridge rule to trigger segment poller every 30 seconds
+        # Create EventBridge rule to trigger segment poller every minute
         self.segment_poller_rule = events.Rule(
             self,
             "segment-poller-rule",
             rule_name="eidolon-segment-poller-rule",
-            description="Triggers segment poller Lambda every 30 seconds",
-            schedule=events.Schedule.rate(cdk.Duration.seconds(30)),
+            description="Triggers segment poller Lambda every minute",
+            schedule=events.Schedule.rate(cdk.Duration.minutes(1)),
         )
 
         # Add Lambda target to the rule

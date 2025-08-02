@@ -276,11 +276,25 @@ class CDKApiIntegration:
             # Monitor output and call progress callback
             deployed_stacks: list = []
             stack_changes: dict = {}  # Track if each stack had changes
+            collected_error_lines: list = []  # Collect error details
+            in_python_error = False
+            
             if process.stdout:
                 for line in iter(process.stdout.readline, ""):
                     line = line.rstrip()
                     if line:
-                        print(line)
+                        # Detect Python traceback start
+                        if "Traceback (most recent call last):" in line:
+                            in_python_error = True
+                            collected_error_lines = [line]
+                        elif in_python_error:
+                            collected_error_lines.append(line)
+                            # Check if we've reached the actual error message
+                            if line.startswith("RuntimeError:") or line.startswith("ValidationError:") or line.startswith("jsii.errors"):
+                                # Don't print the full traceback, just log it
+                                continue
+                        else:
+                            print(line)
 
                         # Parse progress events
                         if progress_callback and callable(progress_callback):
@@ -324,7 +338,23 @@ class CDKApiIntegration:
                     "outputs": outputs,
                 }
             else:
-                raise CDKDeploymentError(f"Deployment failed with exit code {return_code}", {})
+                # Extract meaningful error from collected lines
+                error_message = f"Deployment failed with exit code {return_code}"
+                
+                if collected_error_lines:
+                    # Find the most relevant error message
+                    for line in collected_error_lines:
+                        if "ValidationError:" in line and "cannot be converted into a whole number of minutes" in line:
+                            error_message = "EventBridge validation error: Schedule rate must be in whole minutes (minimum 1 minute)"
+                            break
+                        elif "RuntimeError:" in line or "ValidationError:" in line:
+                            # Extract just the error message part
+                            error_part = line.split(":", 1)[-1].strip()
+                            if error_part:
+                                error_message = error_part
+                            break
+                
+                raise CDKDeploymentError(error_message, {"full_traceback": collected_error_lines})
 
         except subprocess.CalledProcessError as err:
             raise CDKDeploymentError(f"Deployment failed: {err}", {})
