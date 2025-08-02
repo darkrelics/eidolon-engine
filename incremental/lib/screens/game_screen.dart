@@ -462,8 +462,11 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
       curve: Curves.easeInOut,
     ));
     
-    _loadCurrentStory();
-    _startTimers();
+    // Load current story and start timers when widget is created
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCurrentStory();
+      _startTimers();
+    });
   }
 
   @override
