@@ -10,18 +10,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:eidolon_incremental/main.dart';
 
 void main() {
-  testWidgets('Main game screen loads', (WidgetTester tester) async {
+  testWidgets('App loads authentication screen', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const EidolonIncrementalApp());
 
-    // Verify that the main panels are present
-    expect(find.text('Character'), findsOneWidget);
-    expect(find.text('Current Action'), findsOneWidget);
-    expect(find.text('Inventory'), findsOneWidget);
-
-    // Verify placeholder content
-    expect(find.text('Name: Hero'), findsOneWidget);
-    expect(find.text('Class: Warrior'), findsOneWidget);
-    expect(find.text('Level: 1'), findsOneWidget);
+    // Verify that the auth screen is shown
+    expect(find.text('Eidolon Engine'), findsOneWidget);
+    expect(find.text('Incremental'), findsOneWidget);
+    
+    // Verify auth buttons are present
+    expect(find.text('Sign In'), findsOneWidget);
+    expect(find.text('Create Account'), findsOneWidget);
   });
 }

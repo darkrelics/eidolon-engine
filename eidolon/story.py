@@ -1616,6 +1616,43 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
             expression_attribute_names["#room"] = "RoomID"
             expression_attribute_values[":room"] = outcome_effects["room"]
 
+        # Handle wounds from story outcomes
+        if "wounds" in outcome_effects:
+            from eidolon.character import apply_character_updates
+            from eidolon.segment import calculate_heal_time
+            
+            # Add heal times to wounds
+            wounds_with_heal_times = []
+            for wound in outcome_effects["wounds"]:
+                wound_data = wound.copy()
+                if "HealAt" not in wound_data:
+                    damage_type = wound_data.get("DamageType", "lethal")
+                    wound_data["HealAt"] = calculate_heal_time(damage_type)
+                wounds_with_heal_times.append(wound_data)
+            
+            # Apply wounds through character updates
+            try:
+                apply_character_updates(character_id, {"Wounds": wounds_with_heal_times})
+                logger.info(
+                    "Applied story outcome wounds",
+                    extra={
+                        "character_id": character_id,
+                        "wounds_count": len(wounds_with_heal_times),
+                        "wound_types": [w.get("DamageType") for w in wounds_with_heal_times],
+                    },
+                )
+            except Exception as err:
+                logger.error(
+                    "Failed to apply story wounds",
+                    extra={
+                        "character_id": character_id,
+                        "wounds": wounds_with_heal_times,
+                        "error": str(err),
+                    },
+                    exc_info=True,
+                )
+                raise RuntimeError(f"Failed to apply story wounds: {str(err)}")
+
         # TODO: Handle item rewards when inventory system is implemented
         # if "items" in outcome_effects:
         #     # Add items to inventory

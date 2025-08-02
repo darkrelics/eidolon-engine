@@ -778,7 +778,7 @@ def generate_skill_check_events(challenge_results: list) -> list:
 
 def update_active_segment_outcome(active_segment_id: str, outcome: str, results: dict, segment_def=None) -> None:
     """
-    Update active segment with outcome and mark as completed.
+    Update active segment with outcome but keep status as active until timer expires.
 
     Args:
         active_segment_id: Active segment UUID
@@ -786,9 +786,10 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         results: Challenge or combat results
         segment_def: Optional segment definition containing Results narratives
     """
-    update_expression = "SET #status = :status, #outcome = :outcome, ProcessingStatus = :proc_status"
-    expression_names = {"#status": "Status", "#outcome": "Outcome"}
-    expression_values = {":status": "completed", ":outcome": outcome, ":proc_status": "processed"}
+    # Keep status as "active" but mark as processed so poller knows it's ready
+    update_expression = "SET #outcome = :outcome, ProcessingStatus = :proc_status"
+    expression_names = {"#outcome": "Outcome"}
+    expression_values = {":outcome": outcome, ":proc_status": "processed"}
 
     # Add results based on segment type
     if "challengeResults" in results:
@@ -892,6 +893,10 @@ def get_next_segment_and_create(
         # Check if outcome is terminal
         if outcome not in ["death", "failure"]:
             next_segment_id = current_segment.get("NextSegmentID")
+    
+    elif segment_type == "rest":
+        # Rest segments always proceed to NextSegmentID (outcome is always "normal")
+        next_segment_id = current_segment.get("NextSegmentID")
 
     if not next_segment_id:
         return None
@@ -1167,46 +1172,19 @@ def process_segment_completely(
     # Update active segment with outcome
     update_active_segment_outcome(active_segment_id, outcome, results, segment_def)
 
-    # Add segment to story history
-    from eidolon.story import add_segment_to_history
-
-    try:
-        add_segment_to_history(character_id, story_id, segment_id, outcome)
-    except Exception as err:
-        logger.error(
-            "Failed to add segment to history",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "segment_id": segment_id,
-                "error": str(err),
-            },
-            exc_info=True,
-        )
-
-    # Determine next segment or complete story
-    next_active_segment_id = get_next_segment_and_create(character_id, story_id, segment_def, active_segment, outcome)
-
-    if not next_active_segment_id:
-        # No next segment - story is complete
-        complete_story(character_id, story_id, outcome)
-        logger.info(
-            "Story completed",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "outcome": outcome,
-            },
-        )
-    else:
-        logger.info(
-            "Created next segment",
-            extra={"next_active_segment_id": next_active_segment_id},
-        )
+    logger.info(
+        "Segment processed, waiting for timer to expire before advancement",
+        extra={
+            "active_segment_id": active_segment_id,
+            "outcome": outcome,
+            "segment_type": segment_type,
+        },
+    )
 
     return {
         "outcome": outcome,
-        "nextSegment": next_active_segment_id,
+        "nextSegment": None,
+        "processed": True,
     }
 
 
@@ -1819,9 +1797,24 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
     if segment_type == "decision":
         # Use decision to determine next segment
         decision = active_segment.get("Decision")
+        decision_options = segment_def.get("DecisionOptions", {})
+        
         if decision:
-            decision_options = segment_def.get("DecisionOptions", {})
             return decision_options.get(decision)
+        else:
+            # No decision made (timeout) - use default if specified
+            default_decision = segment_def.get("DefaultDecision")
+            if default_decision and default_decision in decision_options:
+                logger.info(
+                    "Using default decision for timeout",
+                    extra={
+                        "segment_id": segment_def.get("SegmentID"),
+                        "default_decision": default_decision,
+                    },
+                )
+                return decision_options.get(default_decision)
+            # Fall back to NextSegmentID if no default specified
+            return segment_def.get("NextSegmentID")
     elif segment_type in ["mechanical", "rest"]:
         # Check if outcome is terminal
         if outcome in ["death", "failure"]:

@@ -424,6 +424,10 @@ class IncrementalDeploymentOrchestrator:
                     # This must run EVERY time to ensure bucket policy is correct
                     print("\n  Ensuring S3 bucket policy is configured for CloudFront...")
                     self.update_s3_bucket_policy_for_cloudfront()
+                    
+                    # Update CodeBuild project with CloudFront distribution ID
+                    print("\n  Updating CodeBuild project with CloudFront distribution ID...")
+                    self.update_codebuild_cloudfront_id()
 
                 # Check if we need to update Lambda functions after Application Layer
                 if phase_success and phase["name"] == "Application Layer":
@@ -1532,6 +1536,90 @@ class IncrementalDeploymentOrchestrator:
                 print(f"    Failed to update bucket policy: {err}")
         except Exception as err:
             print(f"    Error updating bucket policy: {err}")
+
+    def update_codebuild_cloudfront_id(self):
+        """Update CodeBuild project environment variable with CloudFront distribution ID."""
+        try:
+            # Get distribution ID from config or CloudFormation stack
+            distribution_id = self.config_manager.config.get("CloudFront", {}).get("DistributionId", "")
+            if not distribution_id:
+                # Try to get from CloudFormation stack outputs
+                try:
+                    cf = self.session.client("cloudformation")
+                    stack_name = "cloudfront"
+                    response = cf.describe_stacks(StackName=stack_name)
+                    outputs = response["Stacks"][0].get("Outputs", [])
+                    for output in outputs:
+                        if output["OutputKey"] == "DistributionId":
+                            distribution_id = output["OutputValue"]
+                            print(f"    Found distribution ID from stack: {distribution_id}")
+                            break
+                except Exception as e:
+                    print(f"    Could not get distribution ID from stack: {e}")
+            
+            if not distribution_id:
+                print("    CloudFront distribution ID not found, skipping CodeBuild update")
+                return
+
+            # Get CodeBuild client
+            codebuild_client = self.session.client("codebuild")
+            
+            # Update portal build project
+            project_name = "eidolon-portal-build"
+            try:
+                # Get current project configuration
+                response = codebuild_client.batch_get_projects(names=[project_name])
+                if not response.get("projects"):
+                    print(f"    CodeBuild project {project_name} not found")
+                    return
+                
+                project = response["projects"][0]
+                environment = project.get("environment", {})
+                env_vars = environment.get("environmentVariables", [])
+                
+                # Find and update CLOUDFRONT_DISTRIBUTION_ID
+                found = False
+                for var in env_vars:
+                    if var["name"] == "CLOUDFRONT_DISTRIBUTION_ID":
+                        var["value"] = distribution_id
+                        found = True
+                        break
+                
+                if not found:
+                    # Add the environment variable if it doesn't exist
+                    env_vars.append({
+                        "name": "CLOUDFRONT_DISTRIBUTION_ID",
+                        "value": distribution_id,
+                        "type": "PLAINTEXT"
+                    })
+                
+                # Update the project
+                environment["environmentVariables"] = env_vars
+                
+                update_params = {
+                    "name": project_name,
+                    "environment": environment,
+                    "source": project["source"],
+                    "artifacts": project["artifacts"],
+                    "serviceRole": project["serviceRole"]
+                }
+                
+                # Add optional fields if present
+                if "description" in project:
+                    update_params["description"] = project["description"]
+                if "buildBatchConfig" in project:
+                    update_params["buildBatchConfig"] = project["buildBatchConfig"]
+                if "logsConfig" in project:
+                    update_params["logsConfig"] = project["logsConfig"]
+                
+                codebuild_client.update_project(**update_params)
+                print(f"    Updated CodeBuild project {project_name} with CloudFront distribution ID: {distribution_id}")
+                
+            except ClientError as err:
+                print(f"    Failed to update CodeBuild project: {err}")
+                
+        except Exception as err:
+            print(f"    Error updating CodeBuild project: {err}")
 
     def _invalidate_cloudfront_distribution(self):
         """Invalidate CloudFront distribution after builds complete."""

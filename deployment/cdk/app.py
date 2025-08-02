@@ -733,6 +733,9 @@ class EidolonEngineApp:
             "Segments": "segments",
             "ActiveSegments": "active_segments",
             "Opponents": "opponents",
+            "CharacterHistory": "character_history",
+            "StoryHistory": "story_history",
+            "SegmentHistory": "segment_history",
         }
 
         configured_tables = params.get("dynamodb_tables", {})
