@@ -13,6 +13,8 @@ from aws_cdk import aws_s3 as s3
 from botocore.exceptions import ClientError
 from constructs import Construct
 
+from .s3_stack import check_bucket_exists
+
 
 class CloudFrontStack(Stack):
     """CloudFront stack for Eidolon Engine portal distribution."""
@@ -68,6 +70,12 @@ class CloudFrontStack(Stack):
             # Create new distribution
             self.distribution = self.create_distribution(portal_bucket)
             print("Creating new CloudFront distribution")
+            
+            # For new distributions with existing buckets, we need to update the bucket policy
+            # CDK's S3Origin creates an OAI but cannot modify imported bucket policies
+            if check_bucket_exists(portal_bucket.bucket_name, self.region):
+                print("Note: Bucket policy must be updated after CloudFront deployment completes.")
+                print("The deployment process will handle this automatically.")
 
         # Output values
         CfnOutput(

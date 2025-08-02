@@ -51,15 +51,32 @@ class _HomeScreenState extends State<HomeScreen> {
           _characters = characters;
           _isLoading = false;
         });
+        debugPrint('CharacterSelectionScreen: State updated - isLoading: $_isLoading, characters: ${_characters?.length ?? "null"}');
       }
     } catch (e) {
       debugPrint('CharacterSelectionScreen: ERROR loading characters: $e');
       debugPrint('CharacterSelectionScreen: Error type: ${e.runtimeType}');
       if (mounted) {
+        // Extract user-friendly error message
+        String errorMessage = 'Unable to load characters. Please try again.';
+        if (e.toString().contains('Internal server error')) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        } else if (e.toString().contains('Network')) {
+          errorMessage = 'Connection error. Please check your internet connection.';
+        }
+        
         setState(() {
-          _error = e.toString();
+          _error = errorMessage;
           _isLoading = false;
         });
+        
+        // Show immediate error feedback
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     }
   }
@@ -360,6 +377,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildBody() {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    
+    debugPrint('CharacterSelectionScreen: _buildBody - isLoading: $_isLoading, error: $_error, characters: ${_characters?.length ?? "null"}');
 
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -374,11 +393,9 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(Icons.error_outline, size: 64, color: colorScheme.error),
               const SizedBox(height: 16),
-              Text('Error loading characters', style: theme.textTheme.headlineSmall?.copyWith(color: colorScheme.error)),
-              const SizedBox(height: 8),
               Text(
                 _error!,
-                style: TextStyle(color: colorScheme.onSurfaceVariant),
+                style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),

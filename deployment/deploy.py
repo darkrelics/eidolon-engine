@@ -420,11 +420,10 @@ class IncrementalDeploymentOrchestrator:
 
                 # Post-deployment actions for specific phases
                 if phase_success and phase["name"] == "Distribution":
-                    # Always update S3 bucket policy for CloudFront access, even if cloudfront stack wasn't deployed
-                    # This ensures the policy is correct even after manual changes or drift
-                    if self.config_manager.config.get("CloudFront", {}).get("DistributionId"):
-                        print("\n  Ensuring S3 bucket policy is configured for CloudFront...")
-                        self.update_s3_bucket_policy_for_cloudfront()
+                    # Always update S3 bucket policy for CloudFront access
+                    # This must run EVERY time to ensure bucket policy is correct
+                    print("\n  Ensuring S3 bucket policy is configured for CloudFront...")
+                    self.update_s3_bucket_policy_for_cloudfront()
 
                 # Check if we need to update Lambda functions after Application Layer
                 if phase_success and phase["name"] == "Application Layer":
@@ -1349,8 +1348,23 @@ class IncrementalDeploymentOrchestrator:
                 print("    Portal bucket not configured, skipping policy update")
                 return
 
-            # Get distribution ID from config
+            # Get distribution ID from config or CloudFormation stack
             distribution_id = self.config_manager.config.get("CloudFront", {}).get("DistributionId", "")
+            if not distribution_id:
+                # Try to get from CloudFormation stack outputs
+                try:
+                    cf = self.session.client("cloudformation")
+                    stack_name = "cloudfront"
+                    response = cf.describe_stacks(StackName=stack_name)
+                    outputs = response["Stacks"][0].get("Outputs", [])
+                    for output in outputs:
+                        if output["OutputKey"] == "DistributionId":
+                            distribution_id = output["OutputValue"]
+                            print(f"    Found distribution ID from stack: {distribution_id}")
+                            break
+                except Exception as e:
+                    print(f"    Could not get distribution ID from stack: {e}")
+            
             if not distribution_id:
                 print("    CloudFront distribution ID not found, skipping policy update")
                 return
