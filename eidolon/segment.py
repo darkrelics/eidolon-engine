@@ -1206,10 +1206,10 @@ def get_completed_segments(max_segments: int) -> list:
     lookahead_time = current_time + 30
 
     try:
-        # Query using the CompletionTimeIndex GSI
+        # Query using the EndTimeIndex GSI
         items = dynamo.query(
             TableName.ACTIVE_SEGMENTS,
-            IndexName="CompletionTimeIndex",
+            IndexName="EndTimeIndex",
             KeyConditionExpression="#status = :status AND EndTime <= :lookahead_time",
             ExpressionAttributeNames={"#status": "Status"},
             ExpressionAttributeValues={":status": "active", ":lookahead_time": lookahead_time},
