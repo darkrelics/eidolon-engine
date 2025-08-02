@@ -251,7 +251,8 @@ class DynamoDBStack(Stack):
         if logical_id == "active_segments":
             table.add_global_secondary_index(
                 index_name="EndTimeIndex",
-                partition_key=dynamodb.Attribute(name="EndTime", type=dynamodb.AttributeType.NUMBER),
+                partition_key=dynamodb.Attribute(name="Status", type=dynamodb.AttributeType.STRING),
+                sort_key=dynamodb.Attribute(name="EndTime", type=dynamodb.AttributeType.NUMBER),
                 projection_type=dynamodb.ProjectionType.ALL,
             )
             table.add_global_secondary_index(
