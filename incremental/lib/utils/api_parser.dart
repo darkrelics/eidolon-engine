@@ -30,9 +30,13 @@ class ApiParser {
       final charMap = char as Map<String, dynamic>;
       ApiValidation.validateRequiredFields(
         charMap,
-        ['CharacterID', 'CharacterName', 'Dead', 'GameMode'],
+        ['CharacterID', 'CharacterName', 'Dead'],
         'Character',
       );
+      // Default GameMode to 'None' if not provided by API
+      if (!charMap.containsKey('GameMode')) {
+        charMap['GameMode'] = 'None';
+      }
       return charMap;
     }).toList();
   }

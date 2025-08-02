@@ -624,7 +624,7 @@ class EidolonEngineApp:
             lambda_bucket=self.s3_stack.lambda_bucket,
             api_domain=api_domain,
             buildspec_path=buildspec_path,
-            cloudfront_distribution_id="",
+            cloudfront_distribution_id=params.get("cloudfront_distribution_id", ""),
             env=env,
         )
         if self.cognito_stack:
