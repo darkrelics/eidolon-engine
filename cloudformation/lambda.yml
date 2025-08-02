@@ -253,7 +253,6 @@ Resources:
         Variables:
           SEGMENTS_TABLE: segments
           ACTIVE_SEGMENTS_TABLE: active_segments
-          HISTORY_TABLE: history
           MAX_SEGMENTS_PER_POLL: "50"
           SSM_POLLER_STATE_PARAMETER: !Sub "/${GameName}/segment-poller-state"
           SEGMENT_QUEUE_URL: !ImportValue
@@ -281,7 +280,6 @@ Resources:
           SEGMENTS_TABLE: segments
           ACTIVE_SEGMENTS_TABLE: active_segments
           OPPONENTS_TABLE: opponents
-          HISTORY_TABLE: history
           SSM_POLLER_STATE_PARAMETER: !Sub "/${GameName}/segment-poller-state"
       MemorySize: 256
       Timeout: 60
