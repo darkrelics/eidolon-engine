@@ -10,6 +10,8 @@ Handles different segment types appropriately and manages polling state.
 
 import time
 
+from botocore.exceptions import ClientError
+
 from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
 from eidolon.logger import get_logger
 from eidolon.polling import disable_polling_infrastructure, enable_polling_infrastructure, get_polling_state
@@ -59,7 +61,7 @@ def poll_and_process_segments_business_logic() -> dict:
     )
 
     # Categorize segments by their processing needs
-    segments_for_advancement = []  # Recently completed (within 15 seconds)
+    segments_for_advancement = []  # Recently completed (within 30 seconds)
     stuck_mechanical_segments = []  # Mechanical segments stuck >15 minutes
     exhausted_segments = []  # Segments past their time window
 
@@ -288,7 +290,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     """
     Lambda handler to poll for completed segments.
 
-    Triggered by EventBridge every 30 seconds to find segments ready for processing.
+    Triggered by EventBridge every minute to find segments ready for processing.
     Handles different segment types appropriately and manages polling state.
 
     Args:
@@ -331,6 +333,13 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         return build_lambda_response_pascal(200, response_data, event)
 
+    except ClientError as err:
+        logger.error(
+            "AWS service error during segment polling",
+            extra={"error": str(err)},
+            exc_info=True,
+        )
+        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
     except RuntimeError as err:
         logger.error(
             "Failed to poll segments",

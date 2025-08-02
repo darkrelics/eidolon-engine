@@ -1212,7 +1212,7 @@ def process_segment_completely(
 
 def get_completed_segments(max_segments: int) -> list:
     """
-    Query for active segments that have reached their end time.
+    Query for active segments that have reached their end time or will complete soon.
 
     Args:
         max_segments: Maximum number of segments to return
@@ -1224,15 +1224,18 @@ def get_completed_segments(max_segments: int) -> list:
         RuntimeError: If database query fails
     """
     current_time = int(time.time())
+    # Look ahead 30 seconds to catch segments that will complete before next poll
+    lookahead_time = current_time + 30
 
     try:
         # Query using the CompletionTimeIndex GSI
         items = dynamo.query(
             TableName.ACTIVE_SEGMENTS,
             IndexName="CompletionTimeIndex",
-            KeyConditionExpression="#status = :status AND EndTime <= :current_time",
+            KeyConditionExpression="#status = :status AND EndTime <= :lookahead_time",
             ExpressionAttributeNames={"#status": "Status"},
-            ExpressionAttributeValues={":status": "active", ":current_time": current_time},
+            ExpressionAttributeValues={":status": "active", ":lookahead_time": lookahead_time},
+            ScanIndexForward=True,  # Sort by EndTime ascending (oldest first)
             Limit=max_segments,
         )
         return items  # type: ignore
