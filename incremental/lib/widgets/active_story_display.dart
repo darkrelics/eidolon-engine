@@ -398,9 +398,10 @@ class ActiveStoryDisplay extends StatelessWidget {
   String _formatEvent(Map<String, dynamic> event) {
     final eventType = event['eventType'] as String?;
     final data = event['data'] as Map<String, dynamic>?;
+    final description = event['description'] as String?;
     
-    if (eventType == 'narrative' && data != null) {
-      return data['text'] ?? 'Story continues...';
+    if (eventType == 'narrative') {
+      return description ?? data?['text'] ?? 'Story continues...';
     } else if (eventType == 'skillCheck' && data != null) {
       final skill = data['skill'] ?? 'unknown';
       final passed = data['passed'] ?? false;
