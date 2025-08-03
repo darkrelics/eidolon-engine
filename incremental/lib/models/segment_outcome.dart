@@ -37,12 +37,12 @@ class SegmentOutcome {
       resourceChanges: Map<String, int>.from(json['resourceChanges'] ?? {}),
       progressFlags: Map<String, bool>.from(json['progressFlags'] ?? {}),
       skillXPGained: Map<String, double>.from(
-        (json['skillXPGained'] ?? {}).map(
+        (json['SkillXPAwarded'] ?? json['skillXPGained'] ?? {}).map(
           (key, value) => MapEntry(key, (value as num).toDouble()),
         ),
       ),
       attributeXPGained: Map<String, double>.from(
-        (json['attributeXPGained'] ?? {}).map(
+        (json['AttributeXPAwarded'] ?? json['attributeXPGained'] ?? {}).map(
           (key, value) => MapEntry(key, (value as num).toDouble()),
         ),
       ),

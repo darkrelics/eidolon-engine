@@ -147,10 +147,10 @@ def store_archetypes(archetypes_data):
                 logging.error(f"Invalid archetype name '{name}': {err}")
                 continue
 
-            # Convert attributes to lowercase
-            attributes = {k.lower(): v for k, v in archetype.get("Attributes", {}).items()}
-            # Convert skills to lowercase
-            skills = {k.lower(): v for k, v in archetype.get("Skills", {}).items()}
+            # Keep attributes in PascalCase
+            attributes = archetype.get("Attributes", {})
+            # Keep skills in PascalCase
+            skills = archetype.get("Skills", {})
 
             archetype_item = {
                 "ArchetypeName": name,

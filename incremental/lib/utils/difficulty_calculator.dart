@@ -79,23 +79,25 @@ class DifficultyCalculator {
 
   /// Map skills to their governing attributes
   static String _getGoverningAttribute(String skill) {
-    // Based on common MUD skill/attribute pairings
+    // Based on incremental game skill/attribute pairings
     final skillAttributeMap = {
-      'combat': 'strength',
-      'melee': 'strength',
-      'ranged': 'agility',
-      'stealth': 'agility',
-      'dodge': 'agility',
-      'survival': 'endurance',
-      'athletics': 'endurance',
-      'perception': 'intelligence',
-      'lore': 'intelligence',
-      'medicine': 'intelligence',
-      'persuasion': 'presence',
-      'intimidation': 'presence',
-      'deception': 'presence',
+      'Melee': 'Strength',
+      'Brawling': 'Strength',
+      'Archery': 'Agility',
+      'Dodge': 'Agility',
+      'Stealth': 'Agility',
+      'Tumbling': 'Agility',
+      'Parry': 'Endurance',
+      'Climbing': 'Endurance',
+      'Investigation': 'Perception',
+      'Lockpicking': 'Cunning',
+      'Mythos': 'Intelligence',
+      'Arcane': 'Intelligence',
+      'FirstAid': 'Intelligence',
+      'Foraging': 'Perception',
+      'Appraise': 'Intelligence',
     };
 
-    return skillAttributeMap[skill.toLowerCase()] ?? 'intelligence';
+    return skillAttributeMap[skill] ?? 'Intelligence';
   }
 }

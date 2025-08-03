@@ -339,7 +339,7 @@ class CharacterPanel extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 4.0),
               child: _buildAttributeRow(
                 attr,
-                character.attributes[attr.toLowerCase()] ?? 0.0,
+                character.attributes[attr] ?? 0.0,
               ),
             ),
           ),
@@ -435,6 +435,7 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
   Map<String, dynamic>? _storyCompletionData;
   bool _isStartingStory = false;
   bool _isTransitioning = false;
+  List<Map<String, dynamic>> _previousSegments = [];
   
   // Animation controller for timer pulse
   late AnimationController _pulseController;
@@ -501,6 +502,30 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
     );
   }
 
+  Future<void> _loadPreviousSegments() async {
+    final storyData = _currentStoryData;
+    if (storyData == null) return;
+    
+    final story = JsonUtils.getFlexibleMap(storyData, 'Story', 'story');
+    final storyId = story['StoryID'] as String?;
+    if (storyId == null) return;
+    
+    try {
+      final segments = await _apiService.getSegmentHistory(
+        characterId: widget.character.id,
+      );
+      
+      setState(() {
+        _previousSegments = segments
+            .where((s) => s['StoryID'] == storyId)
+            .cast<Map<String, dynamic>>()
+            .toList();
+      });
+    } catch (e) {
+      debugPrint('Failed to load segment history: $e');
+    }
+  }
+
   Future<void> _loadCurrentStory() async {
     setState(() {
       _loadingCurrentStory = true;
@@ -559,6 +584,9 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
           if (currentStory != null) {
             final storyData = JsonUtils.getFlexibleMap(currentStory, 'Story', 'story');
             final segmentData = JsonUtils.getFlexibleMap(currentStory, 'Segment', 'segment');
+            
+            // Load previous segments for this story
+            _loadPreviousSegments();
             final activeSegmentData = currentStory['ActiveSegment'] as Map<String, dynamic>?;
             
             // Check if this is a story completion (no next segment)
@@ -749,15 +777,15 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
 
   Widget _buildActiveStory(ThemeData theme) {
     final storyData = _currentStoryData;
-    final Map<String, dynamic> story = storyData != null 
-        ? JsonUtils.getFlexibleMap(storyData, 'Story', 'story') 
-        : <String, dynamic>{};
-    final Map<String, dynamic> segment = storyData != null 
-        ? JsonUtils.getFlexibleMap(storyData, 'Segment', 'segment') 
-        : <String, dynamic>{};
+    if (storyData == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    final Map<String, dynamic> story = JsonUtils.getFlexibleMap(storyData, 'Story', 'story');
+    final Map<String, dynamic> segment = JsonUtils.getFlexibleMap(storyData, 'Segment', 'segment');
     
     // Check if we have an active segment that's mechanical and processed
-    final activeSegmentData = storyData?['ActiveSegment'] as Map<String, dynamic>?;
+    final activeSegmentData = storyData['ActiveSegment'] as Map<String, dynamic>?;
     ActiveSegment? activeSegment;
     if (activeSegmentData != null) {
       activeSegment = ActiveSegment.fromJson(activeSegmentData);
@@ -954,6 +982,31 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
             _buildChallengeResults(JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults'), theme),
           ],
 
+          // Previous Segments Section
+          if (_previousSegments.isNotEmpty) ...[  
+            const SizedBox(height: 24),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Previous Segments',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ..._previousSegments.reversed.take(5).map((seg) => 
+                      _buildPreviousSegmentCard(theme, seg)
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
           // Action Buttons
           const SizedBox(height: 24),
           Row(
@@ -995,6 +1048,92 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
     );
   }
   
+  Widget _buildPreviousSegmentCard(ThemeData theme, Map<String, dynamic> segment) {
+    final segmentType = segment['SegmentType'] as String? ?? 'unknown';
+    final shortStatus = segment['ShortStatus'] as String? ?? 'Unknown segment';
+    final outcome = segment['Outcome'] as String?;
+    final timestamp = segment['CompletedTime'] as int?;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _getSegmentIcon(segmentType),
+            size: 20,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  shortStatus,
+                  style: theme.textTheme.bodyMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (outcome != null)
+                  Text(
+                    'Outcome: $outcome',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: _getOutcomeColor(outcome),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (timestamp != null)
+            Text(
+              _formatTimestamp(timestamp),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+  
+  Color _getOutcomeColor(String outcome) {
+    switch (outcome.toLowerCase()) {
+      case 'exceptional':
+        return Colors.amber;
+      case 'normal':
+        return Colors.green;
+      case 'minimal':
+        return Colors.blue;
+      case 'failure':
+        return Colors.orange;
+      case 'death':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+  
+  String _formatTimestamp(int timestamp) {
+    final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    
+    if (diff.inMinutes < 1) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else {
+      return '${diff.inDays}d ago';
+    }
+  }
+
   Widget _buildTimerDisplay(ThemeData theme) {
     final minutes = _timeRemaining ~/ 60;
     final seconds = _timeRemaining % 60;

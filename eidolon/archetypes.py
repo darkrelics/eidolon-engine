@@ -41,14 +41,9 @@ def get_all_player_archetypes() -> list:
     for item in items:  # type: ignore
         # Check if Player field exists and is True
         if item.get("Player", False):
-            # Normalize attribute and skill keys to lowercase
+            # Keep attribute and skill keys in PascalCase
             attributes = item.get("Attributes", {})
-            if attributes:
-                attributes = {k.lower(): v for k, v in attributes.items()}
-
             skills = item.get("Skills", {})
-            if skills:
-                skills = {k.lower(): v for k, v in skills.items()}
 
             player_archetypes.append(
                 {

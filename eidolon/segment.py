@@ -289,14 +289,14 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
     # Get character combat stats
     character_attributes = character.get("Attributes", {})
     character_skills = character.get("Skills", {})
-    character_combat = character_attributes.get("combat", 0) + character_skills.get("fighting", 0)
-    character_defense = character_attributes.get("dexterity", 0) + character_skills.get("dodge", 0)
+    character_combat = character_attributes.get("Strength", 0) + character_skills.get("Melee", 0)
+    character_defense = character_attributes.get("Agility", 0) + character_skills.get("Dodge", 0)
 
     # Get opponent combat stats
     opponent_attributes = opponent.get("Attributes", {})
     opponent_skills = opponent.get("Skills", {})
-    opponent_combat = opponent_attributes.get("combat", 0) + opponent_skills.get("fighting", 0)
-    opponent_defense = opponent_attributes.get("dexterity", 0) + opponent_skills.get("dodge", 0)
+    opponent_combat = opponent_attributes.get("Strength", 0) + opponent_skills.get("Melee", 0)
+    opponent_defense = opponent_attributes.get("Agility", 0) + opponent_skills.get("Dodge", 0)
     opponent_health = opponent.get("Health", 5)
 
     # Track combat results
