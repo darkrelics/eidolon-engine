@@ -21,7 +21,7 @@ from deployment_logic import analyze_changes, prompt_missing_parameters
 from health_checks import run_phase_health_check
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from stack_utils import StackOutputHelper
-from state_manager import ConfigurationManager, DeploymentState
+from state_manager import ConfigurationManager, DeploymentState, StateManager
 
 
 class IncrementalDeploymentOrchestrator:
@@ -724,8 +724,29 @@ class IncrementalDeploymentOrchestrator:
                 if result.exists and result.valid:
                     print(f"  [OK] User Pool: {user_pool_id} - OK")
                 else:
-                    print(f"  [ERROR] User Pool: {user_pool_id} - {'Invalid' if result.exists else 'Does not exist'}")
-                    all_valid = False
+                    # Clean up stale Cognito references when resource doesn't exist
+                    if not result.exists:
+                        print(f"  [ERROR] User Pool: {user_pool_id} - Does not exist")
+                        print("  [INFO] Removing stale Cognito configuration...")
+                        
+                        # Remove from config.yml
+                        from state_manager import ConfigurationManager
+                        config_manager = ConfigurationManager()
+                        config_manager.remove_section("Cognito")
+                        
+                        # Remove from deployment state
+                        state_manager = StateManager()
+                        deployment_state = state_manager.get_deployment_state()
+                        if "existing_user_pool_id" in deployment_state:
+                            del deployment_state["existing_user_pool_id"]
+                        if "existing_app_client_id" in deployment_state:
+                            del deployment_state["existing_app_client_id"]
+                        state_manager.save_deployment_state(deployment_state)
+                        
+                        print("  [INFO] Stale Cognito references cleaned up")
+                    else:
+                        print(f"  [ERROR] User Pool: {user_pool_id} - Invalid")
+                        all_valid = False
             else:
                 print("  [MISSING] User Pool: Not configured")
                 all_valid = False
@@ -826,9 +847,17 @@ class IncrementalDeploymentOrchestrator:
                     except ClientError as err:
                         if err.response["Error"]["Code"] == "NoSuchDistribution":
                             print(f"  [MISSING] Distribution: {distribution_id} - Does not exist")
+                            print("  [INFO] Removing stale CloudFront configuration...")
+                            
+                            # Remove from config.yml
+                            from state_manager import ConfigurationManager
+                            config_manager = ConfigurationManager()
+                            config_manager.remove_section("CloudFront")
+                            
+                            print("  [INFO] Stale CloudFront references cleaned up")
                         else:
                             print(f"  [ERROR] Distribution: {distribution_id} - Error: {err}")
-                        all_valid = False
+                            all_valid = False
                 else:
                     print("  [WARNING] Distribution: Not configured")
 
