@@ -339,7 +339,7 @@ class CharacterPanel extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 4.0),
               child: _buildAttributeRow(
                 attr,
-                character.attributes[attr] ?? 0.0,
+                character.attributes[attr.toLowerCase()] ?? 0.0,
               ),
             ),
           ),
@@ -765,8 +765,8 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
     
     final segmentType = JsonUtils.getFlexibleRequired<String>(
       segment,
-      'Type',
-      'type',
+      'SegmentType',
+      'segmentType',
       defaultValue: 'narrative',
     );
     
@@ -909,8 +909,8 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
                           )
                         : JsonUtils.getFlexibleRequired<String>(
                             segment,
-                            'Content',
-                            'content',
+                            'DefaultStatus',
+                            'defaultStatus',
                             defaultValue: 'Loading segment content...',
                           ),
                       style: theme.textTheme.bodyLarge,
@@ -1812,8 +1812,8 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
         widget.character.storyState = {
           'storyId': story.storyID,
           'storyName': story.title,
-          'segmentId': JsonUtils.getFlexible<String>(segment, 'SegmentId', 'segmentId'),
-          'segmentType': JsonUtils.getFlexible<String>(segment, 'Type', 'type'),
+          'segmentId': JsonUtils.getFlexible<String>(segment, 'SegmentID', 'segmentId'),
+          'segmentType': JsonUtils.getFlexible<String>(segment, 'SegmentType', 'segmentType'),
           'segmentName': JsonUtils.getFlexible<String>(segment, 'ShortStatus', 'shortStatus') ?? 'In progress',
           'timeRemaining': JsonUtils.getFlexible<int>(segment, 'TimeRemaining', 'timeRemaining'),
         };

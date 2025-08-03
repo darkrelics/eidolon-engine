@@ -9,7 +9,7 @@ class StoryMetadata {
   final int estimatedDuration;
   final Map<String, dynamic> prerequisites;
   final Map<String, num> difficultyMap;
-  final Map<String, dynamic> rewardTiers;
+  final Map<String, String> rewardTiers;
   final double baseXPMultiplier;
 
   StoryMetadata({
@@ -38,7 +38,8 @@ class StoryMetadata {
       prerequisites: json['Prerequisites'] as Map<String, dynamic>? ?? {},
       difficultyMap: (json['DifficultyMap'] as Map<String, dynamic>? ?? {})
           .map((key, value) => MapEntry(key, (value as num).toDouble())),
-      rewardTiers: json['RewardTiers'] as Map<String, dynamic>? ?? {},
+      rewardTiers: (json['RewardTiers'] as Map<String, dynamic>? ?? {})
+          .map((key, value) => MapEntry(key, value.toString())),
       baseXPMultiplier: (json['BaseXPMultiplier'] as num? ?? 0.5).toDouble(),
     );
   }

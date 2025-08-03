@@ -171,7 +171,7 @@ class PrerequisitesDisplay extends StatelessWidget {
 }
 
 class RewardsPreview extends StatelessWidget {
-  final Map<String, dynamic> rewardTiers;
+  final Map<String, String> rewardTiers;
 
   const RewardsPreview({
     super.key,
@@ -215,7 +215,7 @@ class RewardsPreview extends StatelessWidget {
           const SizedBox(height: 4),
           ...rewardTiers.entries.map((entry) {
             final tier = entry.key;
-            final rewards = entry.value as Map<String, dynamic>;
+            final description = entry.value;
             final tierLabel = _getTierLabel(tier);
             final tierColor = _getTierColor(tier, theme);
 
@@ -233,7 +233,7 @@ class RewardsPreview extends StatelessWidget {
                   ),
                   Expanded(
                     child: Text(
-                      rewards['description'] ?? '',
+                      description,
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
