@@ -8,7 +8,7 @@ Validates character state, creates active segment, and returns first segment det
 """
 
 from eidolon.environment import SEGMENT_QUEUE_URL
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.polling import ensure_polling_enabled
 from eidolon.requests import get_required_field_flexible, parse_json_body
@@ -22,8 +22,6 @@ from eidolon.utilities import (
 )
 from eidolon.validation import validate_uuid
 
-# Configure logging
-logger = get_logger(__name__)
 
 
 def format_start_story_response(active_segment: dict, segment: dict) -> dict:

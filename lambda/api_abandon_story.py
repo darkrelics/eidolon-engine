@@ -8,7 +8,7 @@ Updates character state, marks active segments as abandoned, and updates history
 """
 
 from eidolon.character import get_character, reset_character_game_mode, validate_character_ownership
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.segment import delete_active_segment, record_abandoned_segment_history
@@ -21,7 +21,7 @@ from eidolon.utilities import (
 )
 from eidolon.validation import validate_uuid
 
-logger = get_logger(__name__)
+
 
 
 def abandon_story_business_logic(character_id: str, player_id: str) -> dict:

@@ -15,7 +15,7 @@ from uuid_extension import uuid7
 from eidolon.character import get_character, heal_expired_wounds, validate_character_ownership
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.segment import (
     complete_story,
     create_next_active_segment,
@@ -28,7 +28,7 @@ from eidolon.segment import (
 from eidolon.sqs import send_message
 from eidolon.validation import validate_uuid
 
-logger = get_logger(__name__)
+
 
 
 def get_active_story_segment(character_id: str) -> dict:
@@ -1620,7 +1620,7 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
         if "wounds" in outcome_effects:
             from eidolon.character import apply_character_updates
             from eidolon.segment import calculate_heal_time
-            
+
             # Add heal times to wounds
             wounds_with_heal_times = []
             for wound in outcome_effects["wounds"]:
@@ -1629,7 +1629,7 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
                     damage_type = wound_data.get("DamageType", "lethal")
                     wound_data["HealAt"] = calculate_heal_time(damage_type)
                 wounds_with_heal_times.append(wound_data)
-            
+
             # Apply wounds through character updates
             try:
                 apply_character_updates(character_id, {"Wounds": wounds_with_heal_times})

@@ -14,10 +14,10 @@ from botocore.exceptions import ClientError
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.items import create_items_from_prototypes
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.validation import validate_uuid
 
-logger = get_logger(__name__)
+
 
 
 class CharacterNameFilter:

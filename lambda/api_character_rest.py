@@ -3,7 +3,7 @@
 import time
 
 from eidolon.character import get_character_with_ownership
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_required_field_flexible, parse_json_body
 from eidolon.segment import get_active_segment_info, insert_rest_segment
@@ -14,8 +14,7 @@ from eidolon.utilities import (
     log_lambda_invocation,
 )
 
-# Configure logging
-logger = get_logger(__name__)
+
 
 # Rest segment configuration
 REST_SEGMENT_DURATION = 900  # 15 minutes (time to heal a bashing wound)

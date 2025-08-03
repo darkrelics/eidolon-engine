@@ -7,7 +7,7 @@ Lambda function to submit a decision for a story segment.
 Updates the active segment with the player's choice and returns the next segment.
 """
 
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_required_field_flexible, parse_json_body
 from eidolon.story import submit_decision_for_character
@@ -18,8 +18,6 @@ from eidolon.utilities import (
     log_lambda_invocation,
 )
 
-# Configure logging
-logger = get_logger(__name__)
 
 
 def submit_decision_business_logic(character_id: str, decision_id: str, player_id: str) -> dict:

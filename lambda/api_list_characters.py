@@ -7,7 +7,7 @@ Lambda function to list character names for an authenticated player.
 Returns only character names and death status from the player table.
 """
 
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.player import extract_player_id_from_event, get_formatted_character_list, validate_player_exists
 from eidolon.utilities import (
     build_lambda_response_pascal,
@@ -16,8 +16,6 @@ from eidolon.utilities import (
     log_lambda_invocation,
 )
 
-# Configure logging
-logger = get_logger(__name__)
 
 
 def list_characters_business_logic(player_id: str) -> dict:

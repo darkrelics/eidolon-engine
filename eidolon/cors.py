@@ -5,9 +5,9 @@ Provides centralized CORS configuration and validation for API responses.
 """
 
 from eidolon.environment import ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, CORS_ALLOWED_HEADERS, CORS_ALLOWED_METHODS, CORS_MAX_AGE
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 
-logger = get_logger(__name__)
+
 
 
 class CorsHandler:

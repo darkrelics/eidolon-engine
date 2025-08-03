@@ -31,9 +31,9 @@ from eidolon.environment import (
     STORY_HISTORY_TABLE,
     STORY_TABLE,
 )
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 
-logger = get_logger(__name__)
+
 
 
 class TableName(Enum):

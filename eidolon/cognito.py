@@ -5,9 +5,9 @@ Provides common authentication and authorization helpers for API Gateway
 Lambda functions using Cognito user pools.
 """
 
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 
-logger = get_logger(__name__)
+
 
 
 def extract_player_id(event: dict) -> str:

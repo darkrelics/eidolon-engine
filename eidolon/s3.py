@@ -7,9 +7,9 @@ Provides centralized S3 bucket management and common operations.
 import boto3
 from botocore.exceptions import ClientError
 
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 
-logger = get_logger(__name__)
+
 
 
 def upload_file(bucket_name: str, file_path: str, object_name=None):

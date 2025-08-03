@@ -9,7 +9,7 @@ Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 """
 
 from eidolon.archetypes import get_all_player_archetypes
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.utilities import (
     build_lambda_response_pascal,
     handle_lambda_error_pascal,
@@ -17,8 +17,7 @@ from eidolon.utilities import (
     log_lambda_invocation,
 )
 
-# Configure logging
-logger = get_logger(__name__)
+
 
 # Cache for player archetypes - populated at module load
 try:

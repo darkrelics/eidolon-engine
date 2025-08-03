@@ -8,7 +8,7 @@ Ensures the character belongs to the player before deletion.
 """
 
 from eidolon.character import delete_character, get_character, validate_character_ownership
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.utilities import (
@@ -19,8 +19,7 @@ from eidolon.utilities import (
 )
 from eidolon.validation import validate_uuid
 
-# Configure logging
-logger = get_logger(__name__)
+
 
 
 def handle_character_deletion(player_id: str, character_id: str) -> dict:

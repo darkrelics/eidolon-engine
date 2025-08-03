@@ -9,11 +9,9 @@ import boto3
 from botocore.exceptions import ClientError
 
 from eidolon.environment import EVENTBRIDGE_RULE_NAME, SSM_POLLER_STATE_PARAMETER
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.ssm import get_parameter, put_parameter
 
-# Configure logging
-logger = get_logger(__name__)
 
 # EventBridge client
 events_client = boto3.client("events")

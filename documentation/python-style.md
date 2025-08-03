@@ -18,7 +18,7 @@ Always use explicit imports with `from ... import ...` syntax:
 ```python
 # Good
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
+from eidolon.logger logger
 from botocore.exceptions import ClientError
 
 # Bad
@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
+from eidolon.logger logger
 from eidolon.validation import validate_uuid
 ```
 
@@ -274,6 +274,7 @@ else:
 ```
 
 The EAFP principle makes code:
+
 - More Pythonic and idiomatic
 - Often faster (no redundant checks)
 - More readable (focus on the happy path)
@@ -950,14 +951,11 @@ from datetime import datetime
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
+from eidolon.logger logger
 
 # Constants
 MAX_NAME_LENGTH = 30
 RESERVED_NAMES = ["admin", "system", "gm"]
-
-# Module-level logger
-logger = get_logger(__name__)
 
 # Classes
 class CharacterValidator:

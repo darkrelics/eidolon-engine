@@ -10,7 +10,7 @@ Triggered by SQS to apply character updates and progress stories.
 import json
 
 from eidolon.character import apply_death_or_unconscious_outcome, get_character
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.polling import update_polling_state
 from eidolon.segment import (
     check_active_segments_exist,
@@ -32,8 +32,6 @@ from eidolon.segment import (
 from eidolon.story import apply_combat_rewards, apply_story_outcome_effects, ensure_story_history_exists, update_story_history_xp
 from eidolon.utilities import log_lambda_invocation
 
-# Configure logging
-logger = get_logger(__name__)
 
 
 def advance_story_business_logic(active_segment_id: str) -> dict:
@@ -276,7 +274,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Delete processed segment
     delete_active_segment(active_segment_id)
-    
+
     # Check if any active segments remain after deletion
     # If none remain, signal the poller to check if it should stop
     if next_segment_id is None:  # This story is complete

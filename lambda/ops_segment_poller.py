@@ -13,7 +13,7 @@ import time
 from botocore.exceptions import ClientError
 
 from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.polling import disable_polling_infrastructure, enable_polling_infrastructure, get_polling_state
 from eidolon.segment import (
     check_active_segments_exist,
@@ -24,9 +24,6 @@ from eidolon.segment import (
 )
 from eidolon.sqs import send_message_batch
 from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
-
-# Configure logging
-logger = get_logger(__name__)
 
 
 def poll_and_process_segments_business_logic() -> dict:

@@ -6,12 +6,10 @@ Copyright 2024-2025 Jason E. Robinson
 Lambda function to create a new player record in DynamoDB after user registration.
 """
 
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.player import create_player_record
 from eidolon.utilities import log_lambda_invocation
 
-# Configure logging
-logger = get_logger(__name__)
 
 
 def create_player_business_logic(user_uuid: str, email: str) -> None:

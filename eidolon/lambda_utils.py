@@ -9,9 +9,9 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 
-logger = get_logger(__name__)
+
 
 # Lambda client for invoking functions
 lambda_client = boto3.client("lambda")

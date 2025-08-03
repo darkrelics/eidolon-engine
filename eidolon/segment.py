@@ -15,9 +15,9 @@ from uuid_extension import uuid7
 
 from eidolon.character import heal_expired_wounds
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 
-logger = get_logger(__name__)
+
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES = ["mechanical", "decision", "rest"]
@@ -542,7 +542,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
 
         skill_xp = {}
         attribute_xp = {}
-        
+
         # Constants from experience.md
         base_xp = 0.25  # Base experience per action
         failure_penalty = 0.5  # Failed actions give 50% XP
@@ -552,17 +552,17 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             skill = challenge.get("skill")
             attribute = challenge.get("attribute")
             passed = challenge.get("passed", False)
-            
+
             # Get the best attempt to calculate variance modifier
             best_attempt = None
             for attempt in challenge.get("attempts", []):
                 if best_attempt is None or attempt["sigma"] > best_attempt["sigma"]:
                     best_attempt = attempt
-            
+
             if best_attempt and (skill or attribute):
                 effective_score = best_attempt.get("effectiveScore", 0)
                 difficulty = best_attempt.get("difficulty", 0)
-                
+
                 # Calculate variance modifier based on experience.md formula
                 # ratio = min(E_att, E_def) / max(E_att, E_def)
                 # xp_modifier = ratio^2
@@ -571,18 +571,18 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                     variance_modifier = ratio ** 2
                 else:
                     variance_modifier = 1.0  # Default if can't calculate
-                
+
                 # Calculate base XP with variance modifier
                 xp_amount = base_xp * variance_modifier
-                
+
                 # Apply failure penalty if challenge wasn't passed
                 if not passed:
                     xp_amount *= failure_penalty
-                
+
                 # Award XP to skill (full amount)
                 if skill:
                     skill_xp[skill] = skill_xp.get(skill, 0) + xp_amount
-                    
+
                 # Award XP to attribute (10% of skill XP)
                 if attribute:
                     attr_xp_amount = xp_amount * attribute_xp_ratio
@@ -618,7 +618,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                     },
                     exc_info=True,
                 )
-            
+
             # Also store XP in results for CharacterUpdates (for client display)
             results["xpUpdates"] = xp_updates
 
@@ -663,7 +663,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                     },
                     exc_info=True,
                 )
-            
+
             # Also store wounds in results for CharacterUpdates (for client display)
             results["woundUpdates"] = wound_updates
 
@@ -737,11 +737,11 @@ def extract_character_updates_from_results(results: dict, segment_def: dict, out
         Dict containing all character updates (XP, wounds, combat rewards, story effects)
     """
     updates = {}
-    
+
     # Include XP updates (already applied to DB, needed for client display)
     if "xpUpdates" in results:
         updates.update(results["xpUpdates"])
-    
+
     # Include wound updates (already applied to DB, needed for client display)
     if "woundUpdates" in results:
         updates.update(results["woundUpdates"])
@@ -947,7 +947,7 @@ def get_next_segment_and_create(
         # Check if outcome is terminal
         if outcome not in ["death", "failure"]:
             next_segment_id = current_segment.get("NextSegmentID")
-    
+
     elif segment_type == "rest":
         # Rest segments always proceed to NextSegmentID (outcome is always "normal")
         next_segment_id = current_segment.get("NextSegmentID")
@@ -1852,7 +1852,7 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         # Use decision to determine next segment
         decision = active_segment.get("Decision")
         decision_options = segment_def.get("DecisionOptions", {})
-        
+
         if decision:
             return decision_options.get(decision)
         else:
@@ -2002,14 +2002,14 @@ def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
 def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
     """
     Validate and extract outcome data from segment Results field.
-    
+
     Ensures the Results field and its contents are properly structured,
     providing safe defaults when data is missing or malformed.
-    
+
     Args:
         segment: Segment definition from database
         outcome: Outcome string (e.g., "exceptional", "normal", "failure")
-    
+
     Returns:
         Dict with validated narrative and effects, guaranteed to have:
             - narrative (str): The outcome narrative text
@@ -2017,7 +2017,7 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
     """
     # Get Results field, ensure it's a dict
     results = segment.get("Results")
-    
+
     if results is None:
         logger.warning(
             "Segment has no Results field",
@@ -2033,7 +2033,7 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
                 "effects": {}
             }
         return {"narrative": "", "effects": {}}
-    
+
     if not isinstance(results, dict):
         logger.error(
             "Results field is not a dictionary",
@@ -2043,10 +2043,10 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
             }
         )
         return {"narrative": "", "effects": {}}
-    
+
     # Get outcome-specific result
     outcome_result = results.get(outcome)
-    
+
     if outcome_result is None:
         logger.info(
             "No specific result for outcome",
@@ -2063,7 +2063,7 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
                 "effects": {}
             }
         return {"narrative": "", "effects": {}}
-    
+
     if not isinstance(outcome_result, dict):
         logger.error(
             "Outcome result is not a dictionary",
@@ -2074,7 +2074,7 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
             }
         )
         return {"narrative": "", "effects": {}}
-    
+
     # Validate narrative field
     narrative = outcome_result.get("narrative", "")
     if not isinstance(narrative, str):
@@ -2087,7 +2087,7 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
             }
         )
         narrative = str(narrative) if narrative else ""
-    
+
     # Validate effects field
     effects = outcome_result.get("effects", {})
     if not isinstance(effects, dict):
@@ -2100,7 +2100,7 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
             }
         )
         effects = {}
-    
+
     return {
         "narrative": narrative,
         "effects": effects

@@ -7,9 +7,9 @@ Provides functions for reading and updating SSM parameters.
 import boto3
 from botocore.exceptions import ClientError
 
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 
-logger = get_logger(__name__)
+
 
 # Initialize SSM client
 ssm_client = boto3.client("ssm")

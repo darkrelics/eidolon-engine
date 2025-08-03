@@ -8,9 +8,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH
-from eidolon.logger import get_logger
-
-logger = get_logger(__name__)
+from eidolon.logger import logger
 
 
 def get_all_player_archetypes() -> list:

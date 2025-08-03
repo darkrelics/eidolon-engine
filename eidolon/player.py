@@ -10,9 +10,9 @@ from botocore.exceptions import ClientError
 
 from eidolon.character import delete_character
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 
-logger = get_logger(__name__)
+
 
 
 def create_player_record(user_uuid: str, email: str) -> None:

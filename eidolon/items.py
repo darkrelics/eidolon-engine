@@ -5,9 +5,9 @@ import uuid
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 
-logger = get_logger(__name__)
+
 
 
 def create_items_from_prototypes(prototype_ids: list[str], character_id: str) -> dict[str, str]:

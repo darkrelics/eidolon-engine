@@ -9,9 +9,9 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 
-logger = get_logger(__name__)
+
 
 # Initialize SQS client
 sqs_client = boto3.client("sqs")

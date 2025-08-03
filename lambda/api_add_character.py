@@ -2,7 +2,7 @@
 
 from eidolon.character import character_name_filter, check_character_limit, create_character, get_archetype
 from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_optional_field_flexible, get_required_field_flexible, parse_json_body
 from eidolon.utilities import (
@@ -13,8 +13,8 @@ from eidolon.utilities import (
 )
 from eidolon.validation import validate_character_name
 
-# Configure logging
-logger = get_logger(__name__)
+
+
 
 
 def handle_character_creation(player_id: str, character_name: str, archetype_name: str) -> dict:

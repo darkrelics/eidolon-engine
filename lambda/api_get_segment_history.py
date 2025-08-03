@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.character import get_character, validate_character_ownership
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.utilities import (
@@ -22,7 +22,7 @@ from eidolon.utilities import (
 )
 from eidolon.validation import validate_uuid
 
-logger = get_logger(__name__)
+
 
 
 def get_segment_history_business_logic(character_id: str, player_id: str) -> dict:

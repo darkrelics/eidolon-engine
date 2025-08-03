@@ -8,7 +8,7 @@ Returns stories the character can participate in, checking prerequisites and coo
 """
 
 from eidolon.character import get_character, validate_character_ownership
-from eidolon.logger import get_logger
+from eidolon.logger import logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.story import get_stories_for_character
@@ -20,8 +20,6 @@ from eidolon.utilities import (
 )
 from eidolon.validation import validate_uuid
 
-# Configure logging
-logger = get_logger(__name__)
 
 
 def get_available_stories_business_logic(character_id: str, player_id: str) -> dict:
