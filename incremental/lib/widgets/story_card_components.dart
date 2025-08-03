@@ -120,14 +120,14 @@ class PrerequisitesDisplay extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${skill.substring(0, 1).toUpperCase()}${skill.substring(1)}: ${required.toInt()}',
+                      '${skill.substring(0, 1).toUpperCase()}${skill.substring(1)}: ${required.toStringAsFixed(1)}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: met ? null : theme.colorScheme.error,
                         decoration: met ? null : TextDecoration.lineThrough,
                       ),
                     ),
                     Text(
-                      ' (${current.toInt()})',
+                      ' (${current.toStringAsFixed(1)})',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),

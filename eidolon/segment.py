@@ -542,16 +542,51 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
 
         skill_xp = {}
         attribute_xp = {}
+        
+        # Constants from experience.md
+        base_xp = 0.25  # Base experience per action
+        failure_penalty = 0.5  # Failed actions give 50% XP
+        attribute_xp_ratio = 0.1  # Attributes gain 10% of skill XP
 
         for challenge in challenge_results:
-            if challenge.get("passed"):
-                skill = challenge.get("skill")
-                attribute = challenge.get("attribute")
-
+            skill = challenge.get("skill")
+            attribute = challenge.get("attribute")
+            passed = challenge.get("passed", False)
+            
+            # Get the best attempt to calculate variance modifier
+            best_attempt = None
+            for attempt in challenge.get("attempts", []):
+                if best_attempt is None or attempt["sigma"] > best_attempt["sigma"]:
+                    best_attempt = attempt
+            
+            if best_attempt and (skill or attribute):
+                effective_score = best_attempt.get("effectiveScore", 0)
+                difficulty = best_attempt.get("difficulty", 0)
+                
+                # Calculate variance modifier based on experience.md formula
+                # ratio = min(E_att, E_def) / max(E_att, E_def)
+                # xp_modifier = ratio^2
+                if effective_score > 0 and difficulty > 0:
+                    ratio = min(effective_score, difficulty) / max(effective_score, difficulty)
+                    variance_modifier = ratio ** 2
+                else:
+                    variance_modifier = 1.0  # Default if can't calculate
+                
+                # Calculate base XP with variance modifier
+                xp_amount = base_xp * variance_modifier
+                
+                # Apply failure penalty if challenge wasn't passed
+                if not passed:
+                    xp_amount *= failure_penalty
+                
+                # Award XP to skill (full amount)
                 if skill:
-                    skill_xp[skill] = skill_xp.get(skill, 0) + 0.1
+                    skill_xp[skill] = skill_xp.get(skill, 0) + xp_amount
+                    
+                # Award XP to attribute (10% of skill XP)
                 if attribute:
-                    attribute_xp[attribute] = attribute_xp.get(attribute, 0) + 0.05
+                    attr_xp_amount = xp_amount * attribute_xp_ratio
+                    attribute_xp[attribute] = attribute_xp.get(attribute, 0) + attr_xp_amount
 
         if skill_xp or attribute_xp:
             xp_updates = {}
@@ -560,12 +595,14 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             if attribute_xp:
                 xp_updates["AttributeXP"] = attribute_xp
 
+            # Apply XP immediately to database
             try:
                 character_id = character.get("CharacterID")
                 if character_id:
+                    from eidolon.character import apply_character_updates
                     apply_character_updates(character_id, xp_updates)
                 logger.info(
-                    "Applied skill and attribute XP immediately",
+                    "Applied skill and attribute XP to database",
                     extra={
                         "character_id": character.get("CharacterID"),
                         "skills_updated": len(skill_xp),
@@ -581,6 +618,9 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                     },
                     exc_info=True,
                 )
+            
+            # Also store XP in results for CharacterUpdates (for client display)
+            results["xpUpdates"] = xp_updates
 
     # Process combat if present
     combat_config = segment_def.get("Combat", {})
@@ -596,7 +636,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         results["combatState"] = combat_state
         outcomes.append(combat_outcome)
 
-        # Apply wounds immediately
+        # Apply wounds immediately to database
         player_wounds = combat_state.get("playerWounds", [])
         if player_wounds:
             from eidolon.character import apply_character_updates
@@ -608,7 +648,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 if character_id:
                     apply_character_updates(character_id, wound_updates)
                 logger.info(
-                    "Applied combat wounds immediately",
+                    "Applied combat wounds to database",
                     extra={
                         "character_id": character.get("CharacterID"),
                         "wounds_applied": len(player_wounds),
@@ -623,6 +663,9 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                     },
                     exc_info=True,
                 )
+            
+            # Also store wounds in results for CharacterUpdates (for client display)
+            results["woundUpdates"] = wound_updates
 
     # Determine overall outcome
     if not outcomes:
@@ -677,20 +720,31 @@ def process_rest_segment(segment_def: dict, character: dict) -> tuple:
 
 def extract_character_updates_from_results(results: dict, segment_def: dict, outcome: str) -> dict:
     """
-    Extract deferred rewards to be applied at segment completion.
+    Extract all character updates for storage in ActiveSegments.
 
-    Note: XP and wounds are applied immediately during segment processing.
-    This function only extracts rewards that should be deferred.
+    Note: XP and wounds are applied immediately to the database during segment processing.
+    This function extracts ALL updates (including already-applied XP/wounds) for:
+    1. Client to display progressively over segment duration
+    2. Segment history recording
+    3. Story advancement tracking
 
     Args:
-        results: Results from segment processing
+        results: Results from segment processing (including xpUpdates and woundUpdates)
         segment_def: Segment definition containing outcome effects
         outcome: The calculated outcome (death/failure/minimal/normal/exceptional)
 
     Returns:
-        Dict containing deferred rewards (combat rewards, story effects)
+        Dict containing all character updates (XP, wounds, combat rewards, story effects)
     """
     updates = {}
+    
+    # Include XP updates (already applied to DB, needed for client display)
+    if "xpUpdates" in results:
+        updates.update(results["xpUpdates"])
+    
+    # Include wound updates (already applied to DB, needed for client display)
+    if "woundUpdates" in results:
+        updates.update(results["woundUpdates"])
 
     # Extract combat rewards to be applied later
     if results.get("combatState", {}).get("opponentDefeated"):

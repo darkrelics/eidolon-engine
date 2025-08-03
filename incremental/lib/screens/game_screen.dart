@@ -406,7 +406,7 @@ class CharacterPanel extends StatelessWidget {
   Widget _buildAttributeRow(String name, double value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [Text(name), Text(value.toStringAsFixed(0))],
+      children: [Text(name), Text(value.toStringAsFixed(1))],
     );
   }
 }
