@@ -299,32 +299,40 @@ class ActiveStoryDisplay extends StatelessWidget {
             // Events
             if (clientEvents.isNotEmpty) ...[
               const SizedBox(height: 8),
-              ...clientEvents.take(3).map((event) => 
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        _getEventIcon(event['eventType']),
-                        size: 14,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          _formatEvent(event),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+              ...clientEvents.take(3).map((event) {
+                try {
+                  // Ensure event is a Map
+                  final eventMap = event as Map<String, dynamic>;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          _getEventIcon(eventMap['eventType']),
+                          size: 14,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            _formatEvent(eventMap),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                } catch (e) {
+                  debugPrint('ActiveStoryDisplay: Error processing event: $e');
+                  debugPrint('ActiveStoryDisplay: Event value: $event');
+                  return const SizedBox.shrink();
+                }
+              }),
               if (clientEvents.length > 3)
                 Text(
                   '... and ${clientEvents.length - 3} more events',
@@ -396,21 +404,27 @@ class ActiveStoryDisplay extends StatelessWidget {
   }
 
   String _formatEvent(Map<String, dynamic> event) {
-    final eventType = event['eventType'] as String?;
-    final data = event['data'] as Map<String, dynamic>?;
-    final description = event['description'] as String?;
-    
-    if (eventType == 'narrative') {
-      return description ?? data?['text'] ?? 'Story continues...';
-    } else if (eventType == 'skillCheck' && data != null) {
-      final skill = data['skill'] ?? 'unknown';
-      final passed = data['passed'] ?? false;
-      return 'Skill check: $skill (${passed ? "passed" : "failed"})';
-    } else if (eventType == 'combat' && data != null) {
-      return 'Combat encounter';
+    try {
+      final eventType = event['eventType'] as String?;
+      final data = event['data'] as Map<String, dynamic>?;
+      final description = event['description'] as String?;
+      
+      if (eventType == 'narrative') {
+        return description ?? data?['text'] ?? 'Story continues...';
+      } else if (eventType == 'skillCheck' && data != null) {
+        final skill = data['skill'] ?? 'unknown';
+        final passed = data['passed'] ?? false;
+        return 'Skill check: $skill (${passed ? "passed" : "failed"})';
+      } else if (eventType == 'combat' && data != null) {
+        return 'Combat encounter';
+      }
+      
+      return eventType ?? 'Unknown event';
+    } catch (e) {
+      debugPrint('ActiveStoryDisplay: Error formatting event: $e');
+      debugPrint('ActiveStoryDisplay: Event data: $event');
+      return 'Event processing error';
     }
-    
-    return eventType ?? 'Unknown event';
   }
 
   Color _getOutcomeColor(String outcome) {

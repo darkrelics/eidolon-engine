@@ -11,6 +11,7 @@ from eidolon.character import get_character, validate_character_ownership
 from eidolon.logger import get_logger
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
+from eidolon.segment import validate_segment_outcome_results
 from eidolon.story import get_completed_segment_for_character, get_story_segment
 from eidolon.utilities import (
     build_lambda_response_pascal,
@@ -82,13 +83,12 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         # Get the outcome from the active segment
         outcome = active_segment.get("Outcome", "normal")
 
-        # Get results from segment definition
-        results = segment.get("Results", {})
-        outcome_result = results.get(outcome, {})
+        # Validate and extract outcome results
+        validated_result = validate_segment_outcome_results(segment, outcome)
 
         outcome_data["Outcome"] = outcome
-        outcome_data["Narrative"] = outcome_result.get("narrative", "")
-        outcome_data["Effects"] = outcome_result.get("effects", {})
+        outcome_data["Narrative"] = validated_result["narrative"]
+        outcome_data["Effects"] = validated_result["effects"]
 
         # Add challenge results for mechanical segments
         outcome_data["ChallengeResults"] = active_segment.get("ChallengeResults", [])

@@ -206,13 +206,25 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
   }
 
   Widget _buildEventCard(Map<String, dynamic> event) {
-    final eventType = event['eventType'] as String?;
-    final title = event['title'] as String? ?? 'Event';
-    final description = event['description'] as String? ?? '';
-    final data = event['data'] as Map<String, dynamic>? ?? {};
+    try {
+      final eventType = event['eventType'] as String?;
+      final title = event['title'] as String? ?? 'Event';
+      final description = event['description'] as String? ?? '';
+      
+      // Safely get data field, handling type errors
+      Map<String, dynamic> data = {};
+      try {
+        if (event['data'] != null) {
+          data = event['data'] as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint('MechanicalSegmentDisplay: Error casting event data to Map: $e');
+        debugPrint('MechanicalSegmentDisplay: Event data type: ${event['data'].runtimeType}');
+        debugPrint('MechanicalSegmentDisplay: Event data value: ${event['data']}');
+      }
     
-    IconData icon;
-    Color iconColor;
+      IconData icon;
+      Color iconColor;
     
     switch (eventType) {
       case 'skillCheck':
@@ -288,6 +300,29 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
         ),
       ),
     );
+    } catch (e) {
+      debugPrint('MechanicalSegmentDisplay: Error building event card: $e');
+      debugPrint('MechanicalSegmentDisplay: Event: $event');
+      // Return a simple error card
+      return Card(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Error displaying event',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildSkillCheckDetails(Map<String, dynamic> data) {
@@ -392,15 +427,27 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
             child: ListView.builder(
               itemCount: _currentEventIndex + 1,
               itemBuilder: (context, index) {
-                return AnimatedOpacity(
-                  opacity: index <= _currentEventIndex ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 500),
-                  child: AnimatedSlide(
-                    offset: index == _currentEventIndex ? Offset.zero : const Offset(0, 0.1),
-                    duration: const Duration(milliseconds: 300),
-                    child: _buildEventCard(events[index] as Map<String, dynamic>),
-                  ),
-                );
+                try {
+                  final eventData = events[index];
+                  if (eventData is! Map<String, dynamic>) {
+                    debugPrint('MechanicalSegmentDisplay: Event at index $index is not a Map');
+                    debugPrint('MechanicalSegmentDisplay: Event type: ${eventData.runtimeType}');
+                    return const SizedBox.shrink();
+                  }
+                  
+                  return AnimatedOpacity(
+                    opacity: index <= _currentEventIndex ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 500),
+                    child: AnimatedSlide(
+                      offset: index == _currentEventIndex ? Offset.zero : const Offset(0, 0.1),
+                      duration: const Duration(milliseconds: 300),
+                      child: _buildEventCard(eventData),
+                    ),
+                  );
+                } catch (e) {
+                  debugPrint('MechanicalSegmentDisplay: Error displaying event at index $index: $e');
+                  return const SizedBox.shrink();
+                }
               },
             ),
           ),

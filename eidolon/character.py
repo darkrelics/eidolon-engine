@@ -152,7 +152,7 @@ def get_character(character_id: str) -> dict:
         character_id: Character UUID
 
     Returns:
-        Character dict
+        Character dict with calculated Health field
 
     Raises:
         ValueError: If character ID invalid or not found
@@ -184,6 +184,11 @@ def get_character(character_id: str) -> dict:
             "game_mode": character.get("GameMode"),
         },
     )
+
+    # Calculate current health from MaxHealth and Wounds
+    max_health = character.get("MaxHealth", 10)
+    wounds = character.get("Wounds", [])
+    character["Health"] = max_health - len(wounds)
 
     return character
 
@@ -810,7 +815,6 @@ def build_character_record(
         "Archetype": archetype_name,
         "Attributes": archetype_data.get("Attributes", {}),
         "Skills": archetype_data.get("Skills", {}),
-        "Health": archetype_data.get("Health", DEFAULT_HEALTH),
         "MaxHealth": archetype_data.get("Health", DEFAULT_HEALTH),
         "Essence": archetype_data.get("Essence", DEFAULT_ESSENCE),
         "MaxEssence": archetype_data.get("Essence", DEFAULT_ESSENCE),

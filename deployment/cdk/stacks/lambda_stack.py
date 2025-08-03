@@ -626,6 +626,7 @@ class LambdaStack(cdk.Stack):
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "STORY_HISTORY_TABLE": self.story_history_table,
                 "SEGMENT_HISTORY_TABLE": self.segment_history_table,
+                "SEGMENT_QUEUE_URL": self.segment_queue_url,
             },
             description="Advances stories by applying character updates and progressing to next segments",
             function_name="ops-advance-story",

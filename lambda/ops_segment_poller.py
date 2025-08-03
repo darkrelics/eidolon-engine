@@ -119,7 +119,8 @@ def poll_and_process_segments_business_logic() -> dict:
                     },
                 )
             # Otherwise, it's still processing within normal timeframe - let it continue
-        # Any segment past its end time that isn't processed should be marked exceptional
+        # Any segment past its end time that isn't processed or completed should be marked exceptional
+        # But NOT if it's already processed - those are just waiting for advancement
         elif time_since_end > 0 and processing_status not in ["processed", "completed"]:
             exhausted_segments.append(segment)
             exhausted_count += 1

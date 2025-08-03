@@ -1899,12 +1899,13 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome, CharacterUpdates = :updates",
+            UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome, CharacterUpdates = :updates, RunningFlag = :false",
             ExpressionAttributeNames={"#outcome": "Outcome"},
             ExpressionAttributeValues={
                 ":status": "processed",
                 ":outcome": outcome,
                 ":updates": character_updates,
+                ":false": False,
             },
         )
         logger.info(
@@ -1944,8 +1945,8 @@ def reset_segment_processing_status(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :status",
-            ExpressionAttributeValues={":status": "pending"},
+            UpdateExpression="SET ProcessingStatus = :status, RunningFlag = :false",
+            ExpressionAttributeValues={":status": "pending", ":false": False},
         )
         logger.info("Reset segment processing status to pending", extra={"active_segment_id": active_segment_id})
     except ClientError as err:
@@ -1978,9 +1979,9 @@ def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome",
+            UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome, RunningFlag = :false",
             ExpressionAttributeNames={"#outcome": "Outcome"},
-            ExpressionAttributeValues={":status": "completed", ":outcome": "exceptional"},
+            ExpressionAttributeValues={":status": "completed", ":outcome": "exceptional", ":false": False},
         )
         logger.info(
             "Marked exhausted segment as completed with exceptional outcome", extra={"active_segment_id": active_segment_id}
@@ -1996,3 +1997,111 @@ def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
             exc_info=True,
         )
         raise RuntimeError(f"Failed to mark segment as completed exceptional: {str(err)}")
+
+
+def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
+    """
+    Validate and extract outcome data from segment Results field.
+    
+    Ensures the Results field and its contents are properly structured,
+    providing safe defaults when data is missing or malformed.
+    
+    Args:
+        segment: Segment definition from database
+        outcome: Outcome string (e.g., "exceptional", "normal", "failure")
+    
+    Returns:
+        Dict with validated narrative and effects, guaranteed to have:
+            - narrative (str): The outcome narrative text
+            - effects (dict): Effects to apply (may be empty)
+    """
+    # Get Results field, ensure it's a dict
+    results = segment.get("Results")
+    
+    if results is None:
+        logger.warning(
+            "Segment has no Results field",
+            extra={
+                "segment_id": segment.get("SegmentID"),
+                "story_id": segment.get("StoryID"),
+            }
+        )
+        # Special handling for exceptional outcome (used by poller for timed-out segments)
+        if outcome == "exceptional":
+            return {
+                "narrative": "Your actions exceeded all expectations, achieving extraordinary results.",
+                "effects": {}
+            }
+        return {"narrative": "", "effects": {}}
+    
+    if not isinstance(results, dict):
+        logger.error(
+            "Results field is not a dictionary",
+            extra={
+                "segment_id": segment.get("SegmentID"),
+                "results_type": type(results).__name__,
+            }
+        )
+        return {"narrative": "", "effects": {}}
+    
+    # Get outcome-specific result
+    outcome_result = results.get(outcome)
+    
+    if outcome_result is None:
+        logger.info(
+            "No specific result for outcome",
+            extra={
+                "segment_id": segment.get("SegmentID"),
+                "outcome": outcome,
+                "available_outcomes": list(results.keys()),
+            }
+        )
+        # Provide default for exceptional (safety mechanism for timed-out segments)
+        if outcome == "exceptional":
+            return {
+                "narrative": "Your actions exceeded all expectations, achieving extraordinary results.",
+                "effects": {}
+            }
+        return {"narrative": "", "effects": {}}
+    
+    if not isinstance(outcome_result, dict):
+        logger.error(
+            "Outcome result is not a dictionary",
+            extra={
+                "segment_id": segment.get("SegmentID"),
+                "outcome": outcome,
+                "result_type": type(outcome_result).__name__,
+            }
+        )
+        return {"narrative": "", "effects": {}}
+    
+    # Validate narrative field
+    narrative = outcome_result.get("narrative", "")
+    if not isinstance(narrative, str):
+        logger.warning(
+            "Narrative is not a string",
+            extra={
+                "segment_id": segment.get("SegmentID"),
+                "outcome": outcome,
+                "narrative_type": type(narrative).__name__,
+            }
+        )
+        narrative = str(narrative) if narrative else ""
+    
+    # Validate effects field
+    effects = outcome_result.get("effects", {})
+    if not isinstance(effects, dict):
+        logger.warning(
+            "Effects is not a dictionary",
+            extra={
+                "segment_id": segment.get("SegmentID"),
+                "outcome": outcome,
+                "effects_type": type(effects).__name__,
+            }
+        )
+        effects = {}
+    
+    return {
+        "narrative": narrative,
+        "effects": effects
+    }
