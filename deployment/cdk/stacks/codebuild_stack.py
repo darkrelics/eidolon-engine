@@ -173,8 +173,12 @@ class CodeBuildStack(Stack):
                         f"{self.lambda_bucket.bucket_arn}/api-submit-decision.zip",
                         f"{self.lambda_bucket.bucket_arn}/api-get-segment-outcome.zip",
                         f"{self.lambda_bucket.bucket_arn}/api-abandon-story.zip",
-                        f"{self.lambda_bucket.bucket_arn}/segment-poller.zip",
-                        f"{self.lambda_bucket.bucket_arn}/process-segment.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-get-segment-status.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-get-segment-history.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-character-rest.zip",
+                        f"{self.lambda_bucket.bucket_arn}/ops-segment-poller.zip",
+                        f"{self.lambda_bucket.bucket_arn}/ops-process-segment.zip",
+                        f"{self.lambda_bucket.bucket_arn}/ops-advance-story.zip",
                     ],
                 )
             )

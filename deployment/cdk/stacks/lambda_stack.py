@@ -407,21 +407,29 @@ class LambdaStack(cdk.Stack):
             dependencies_layer,
         )
 
-        # Start Story Lambda
-        self.start_story_function = self.create_lambda_function(
+        # Start Story Lambda - needs SSM/SQS permissions for polling control
+        self.start_story_function = lambda_.Function(
+            self,
             "api-start-story",
-            "api_start_story.lambda_handler",
-            {
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="api_start_story.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-start-story.zip"),
+            layers=[dependencies_layer],
+            role=self.lambda_ssm_sqs_execution_role,  # Needs SSM/SQS for polling control
+            timeout=cdk.Duration.seconds(30),
+            memory_size=128,
+            environment={
                 "CHARACTERS_TABLE": self.characters_table,
                 "STORY_TABLE": self.story_table,
                 "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "STORY_HISTORY_TABLE": self.story_history_table,
                 "SEGMENT_QUEUE_URL": self.segment_queue_url,
+                "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            "Starts a story for a character",
-            dependencies_layer,
+            description="Starts a story for a character",
+            function_name="api-start-story",
         )
 
         # Get Current Story Lambda
