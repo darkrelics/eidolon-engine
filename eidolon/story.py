@@ -12,7 +12,7 @@ from decimal import Decimal
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
-from eidolon.character import get_character, heal_expired_wounds, validate_character_ownership
+from eidolon.character import get_character, heal_expired_wounds, validate_character_ownership, apply_character_updates
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger
@@ -24,6 +24,7 @@ from eidolon.segment import (
     get_segment_definition,
     record_segment_history,
     update_character_active_segment,
+    calculate_heal_time,
 )
 from eidolon.sqs import send_message
 from eidolon.validation import validate_uuid
@@ -67,7 +68,7 @@ def get_active_story_segment(character_id: str) -> dict:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to query active segments: {str(err)}")
+        raise RuntimeError from err
 
     if not items:
         raise ValueError(f"No active story found for character {character_id}")
@@ -107,7 +108,7 @@ def mark_segment_as_abandoned(active_segment_id: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to mark segment as abandoned: {str(err)}")
+        raise RuntimeError(f"Failed to mark segment as abandoned: {str(err)}") from err
 
     logger.info("Marked segment as abandoned", extra={"active_segment_id": active_segment_id})
 
@@ -137,7 +138,7 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
             extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get story history: {str(err)}")
+        raise RuntimeError(f"Failed to get story history: {str(err)}") from err
 
     if history:
         abandoned_count = history.get("AbandonedCount", 0) + 1
@@ -159,7 +160,7 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
                 extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
                 exc_info=True,
             )
-            raise RuntimeError(f"Failed to update story history: {str(err)}")
+            raise RuntimeError(f"Failed to update story history: {str(err)}") from err
 
         logger.info(
             "Updated story history with abandonment",
@@ -209,7 +210,7 @@ def add_story_to_abandoned_list(character_id: str, story_id: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to add story to abandoned list: {str(err)}")
+        raise RuntimeError(f"Failed to add story to abandoned list: {str(err)}") from err
 
     logger.info("Added story to abandoned list", extra={"character_id": character_id, "story_id": story_id})
 
@@ -257,7 +258,7 @@ def get_active_story_segment_with_player_check(character_id: str, player_id: str
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to query active segments: {str(err)}")
+        raise RuntimeError(f"Failed to query active segments: {str(err)}") from err
 
     if not items:
         raise ValueError("No active story found")
@@ -289,7 +290,7 @@ def get_story_metadata(story_id: str) -> dict:
         return story_item
     except ClientError as err:
         logger.error("Failed to get story", extra={"error": str(err), "story_id": story_id}, exc_info=True)
-        raise RuntimeError(f"Failed to get story: {str(err)}")
+        raise RuntimeError(f"Failed to get story: {str(err)}") from err
 
 
 def get_story_segment(story_id: str, segment_id: str) -> dict:
@@ -319,7 +320,7 @@ def get_story_segment(story_id: str, segment_id: str) -> dict:
         return segment
     except ClientError as err:
         logger.error("Failed to get segment", extra={"error": str(err), "segment_id": segment_id}, exc_info=True)
-        raise RuntimeError(f"Failed to get segment: {str(err)}")
+        raise RuntimeError(f"Failed to get segment: {str(err)}") from err
 
 
 def get_completed_segment_for_character(character_id: str, player_id: str, segment_id: str) -> dict:
@@ -370,7 +371,7 @@ def get_completed_segment_for_character(character_id: str, player_id: str, segme
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to query segments: {str(err)}")
+        raise RuntimeError(f"Failed to query segments: {str(err)}") from err
 
     if not items:
         raise ValueError("Completed segment not found")
@@ -413,7 +414,7 @@ def get_story_history(character_id: str, story_id: str) -> dict:
             extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get story history: {str(err)}")
+        raise RuntimeError(f"Failed to get story history: {str(err)}") from err
 
 
 def get_story_cooldown(character_id: str, story_id: str, story_type: str):
@@ -705,7 +706,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to create active segment: {str(err)}")
+        raise RuntimeError(f"Failed to create active segment: {str(err)}") from err
 
     return active_segment
 
@@ -747,7 +748,7 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to create history entry: {str(err)}")
+        raise RuntimeError(f"Failed to create history entry: {str(err)}") from err
 
 
 def start_story_for_character(character_id: str, story_id: str, player_id: str) -> dict:
@@ -850,7 +851,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
                 "Character state changed during story start",
                 extra={"character_id": character_id},
             )
-            raise ValueError("Character state conflict")
+            raise ValueError("Character state conflict") from err
 
         logger.error(
             "Failed to update character state",
@@ -861,7 +862,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update character state: {str(err)}")
+        raise RuntimeError(f"Failed to update character state: {str(err)}") from err
 
     # Create history entry
     story_type = story.get("StoryType", "repeatable")
@@ -962,7 +963,7 @@ def get_active_decision_segment(character_id: str, player_id: str) -> dict:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to query active segments: {str(err)}")
+        raise RuntimeError(f"Failed to query active segments: {str(err)}") from err
 
     if not items:
         logger.warning("No active decision segment found", extra={"character_id": character_id})
@@ -1051,7 +1052,7 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update active segment: {str(err)}")
+        raise RuntimeError(f"Failed to update active segment: {str(err)}") from err
 
 
 def get_next_segment_time(active_segment: dict, decision_id: str) -> int:
@@ -1224,7 +1225,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
                 },
                 exc_info=True,
             )
-            raise RuntimeError(f"Failed to create next segment: {str(err)}")
+            raise RuntimeError(f"Failed to create next segment: {str(err)}") from err
     else:
         # Story complete
         complete_story(character_id, story_id, "normal")
@@ -1383,7 +1384,7 @@ def complete_story_for_character(character_id: str, story_id: str, final_outcome
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to complete story: {str(err)}")
+        raise RuntimeError(f"Failed to complete story: {str(err)}") from err
 
 
 def calculate_story_rewards(story_metadata: dict, outcome: str, segments_completed: int) -> dict:
@@ -1464,9 +1465,6 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                 },
             )
 
-        # TODO: Add items to inventory when item system is implemented
-        # TODO: Add currency when currency system is implemented
-
         logger.info(
             "Applied story rewards",
             extra={
@@ -1486,7 +1484,7 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to apply rewards: {str(err)}")
+        raise RuntimeError(f"Failed to apply rewards: {str(err)}") from err
 
 
 def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
@@ -1517,7 +1515,6 @@ def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
                 },
             )
 
-        # TODO: Process loot table and add items to inventory
         loot_table = opponent_data.get("LootTable", [])
 
         logger.info(
@@ -1539,7 +1536,7 @@ def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to apply combat rewards: {str(err)}")
+        raise RuntimeError(f"Failed to apply combat rewards: {str(err)}") from err
 
 
 def add_segment_to_history(character_id: str, story_id: str, segment_id: str, outcome: str) -> None:
@@ -1591,7 +1588,7 @@ def add_segment_to_history(character_id: str, story_id: str, segment_id: str, ou
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to add segment to history: {str(err)}")
+        raise RuntimeError(f"Failed to add segment to history: {str(err)}") from err
 
 
 def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> None:
@@ -1618,8 +1615,7 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
 
         # Handle wounds from story outcomes
         if "wounds" in outcome_effects:
-            from eidolon.character import apply_character_updates
-            from eidolon.segment import calculate_heal_time
+
 
             # Add heal times to wounds
             wounds_with_heal_times = []
@@ -1651,14 +1647,11 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
                     },
                     exc_info=True,
                 )
-                raise RuntimeError(f"Failed to apply story wounds: {str(err)}")
+                raise RuntimeError(f"Failed to apply story wounds: {str(err)}") from err
 
-        # TODO: Handle item rewards when inventory system is implemented
-        # if "items" in outcome_effects:
-        #     # Add items to inventory
 
         if update_expressions:
-            update_expression = "SET " + ", ".join(update_expressions)
+            update_expression: str = "SET " + ", ".join(update_expressions)
 
             dynamo.update_item(
                 TableName.CHARACTERS,
@@ -1685,7 +1678,7 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to apply outcome effects: {str(err)}")
+        raise RuntimeError(f"Failed to apply outcome effects: {str(err)}") from err
 
 
 def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, attribute_xp: dict) -> None:
@@ -1766,7 +1759,7 @@ def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, at
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update story history XP: {str(err)}")
+        raise RuntimeError(f"Failed to update story history XP: {str(err)}") from err
 
 
 def ensure_story_history_exists(character_id: str, story_id: str, story_title: str) -> None:
@@ -1820,4 +1813,4 @@ def ensure_story_history_exists(character_id: str, story_id: str, story_title: s
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to ensure story history exists: {str(err)}")
+        raise RuntimeError(f"Failed to ensure story history exists: {str(err)}") from err
