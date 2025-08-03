@@ -11,12 +11,6 @@
       "requiredItems": [],
       "requiredRooms": []
     },
-    "DifficultyMap": {
-      "Investigation": 7,
-      "Stealth": 8,
-      "Climbing": 6,
-      "Foraging": 7
-    },
     "RewardTiers": {
       "death": "No rewards - the forest claims another victim",
       "failure": "Minimal rewards - you survive but gain little",
@@ -24,9 +18,8 @@
       "normal": "Good rewards - useful items and solid experience",
       "exceptional": "Excellent rewards - rare items and maximum experience"
     },
-    "BaseXPMultiplier": 0.5,
     "FirstSegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-    "CreatedAt": "2024-01-20T10:00:00Z",
+    "CreatedAt": "2025-07-20T10:00:00Z",
     "Version": 1
   },
   "segments": [
