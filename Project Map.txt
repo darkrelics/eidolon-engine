@@ -378,16 +378,13 @@
 │   │   api_get_current_story.py
 │   │   api_get_segment_outcome.py
 │   │   api_get_stories.py
-│   │   api_list_characters.py
+│   │   api_character_list.py
 │   │   api_start_story.py
 │   │   api_submit_decision.py
 │   │   cognito_delete_player.py
 │   │   cognito_new_player.py
 │   │   ops_process_segment.py
-│   │   ops_segment_poller.py
-│   │
-│   └───__pycache__
-│           api_get_archetypes.cpython-312.pyc
+│   └───ops_segment_poller.py
 │
 ├───portal
 │   │   .flutter-plugins

@@ -34,7 +34,7 @@ These functions handle character operations for both Portal and Incremental inte
 
 #### Implemented Functions:
 
-- `api_list_characters.py` - List all characters for a player
+- `api_character_list.py` - List all characters for a player
 - `api_character_add.py` - Create new character with bloom filter name validation
 - `api_get_character.py` - Get character details including active story segments (enriches inventory with item details)
 - `api_delete_character.py` - Delete a character by ID
@@ -66,7 +66,7 @@ from eidolon.logger logger
 from eidolon.requests import get_query_parameter, get_required_field
 from eidolon.responses import create_response, error_response
 from eidolon.utilities import lambda_response, log_lambda_invocation, handle_preflight, lambda_error
-from eidolon.player import extract_player_id, validate_player_exists
+from eidolon.player import extract_player_id, validate_player
 from eidolon.validation import validate_uuid
 ```
 
@@ -169,7 +169,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Now you can import Lambda functions and shared modules
-from lambda.api_list_characters import lambda_handler
+from lambda.api_character_list import lambda_handler
 from eidolon.utilities import lambda_response
 
 # Create test event
@@ -221,7 +221,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # 4. Validate player exists
     try:
-        if not validate_player_exists(player_id):
+        if not validate_player(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
             return lambda_response(401, {"error": "Unauthorized"}, event)
     except RuntimeError as err:

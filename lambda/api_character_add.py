@@ -5,7 +5,7 @@ from eidolon.character import character_name_filter, check_character_limit, crea
 from eidolon.cors import cors_handler
 from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, validate_player_exists
+from eidolon.player import extract_player_id, validate_player
 from eidolon.requests import get_optional_field_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_character_name
@@ -108,7 +108,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Validate player exists
     try:
-        if not validate_player_exists(player_id):
+        if not validate_player(player_id):
             logger.error(f"Player not found in database: {player_id}")
             return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:

@@ -5,7 +5,7 @@ import time
 from eidolon.character import get_character_with_ownership
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, validate_player_exists
+from eidolon.player import extract_player_id, validate_player
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import get_active_segment_info, insert_rest_segment
 
@@ -131,7 +131,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Validate player exists
     try:
-        if not validate_player_exists(player_id):
+        if not validate_player(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
             return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:

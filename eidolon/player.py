@@ -93,7 +93,7 @@ def extract_player_id(event: dict) -> str:
     return player_id
 
 
-def validate_player_exists(player_id: str) -> bool:
+def validate_player(player_id: str) -> bool:
     """
     Validate that a player exists in the database.
 
@@ -166,7 +166,7 @@ def get_player_characters(player_id: str) -> dict:
         ValueError: If player not found
         RuntimeError: If database query fails
     """
-    player = get_player_data(player_id)
+    player: dict = get_player_data(player_id)
     return player.get("CharacterList", {})
 
 
@@ -195,7 +195,7 @@ def update_player_timestamp(player_id: str, timestamp: str) -> None:
         raise RuntimeError(f"Failed to update player timestamp: {err}") from err
 
 
-def get_formatted_character_list(player_id: str) -> list:
+def get_character_list(player_id: str) -> list:
     """
     Get formatted character list for a player.
 
@@ -209,18 +209,15 @@ def get_formatted_character_list(player_id: str) -> list:
         ValueError: If player not found
         RuntimeError: If database query fails
     """
-    player_data = get_player_data(player_id)
-    character_list = player_data.get("CharacterList", {})
+    player_data: dict = get_player_data(player_id)
+    character_list: dict = player_data.get("CharacterList", {})
 
-    logger.info(
-        "Player data retrieved",
-        extra={"player_id": player_id, "character_count": len(character_list)},
-    )
+    logger.debug(f"Player data retrieved: {player_data}")
 
     # Build character list with proper field names
-    characters = []
+    characters: list = []
     for char_name, char_info in character_list.items():
-        char_data = {
+        char_data: dict = {
             "CharacterName": char_name,
             "CharacterID": char_info.get("UUID", ""),
             "Dead": char_info.get("Dead", False),
@@ -239,14 +236,7 @@ def get_formatted_character_list(player_id: str) -> list:
     # Sort by name for consistent ordering
     characters.sort(key=lambda x: x.get("CharacterName", ""))
 
-    logger.info(
-        "Character list prepared successfully",
-        extra={
-            "player_id": player_id,
-            "character_count": len(characters),
-            "character_names": [c.get("CharacterName", "") for c in characters],
-        },
-    )
+    logger.info("Character list prepared successfully",)
 
     return characters
 
