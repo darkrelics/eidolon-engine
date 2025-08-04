@@ -19,8 +19,7 @@
       "Exceptional": "Excellent rewards - rare items and maximum experience"
     },
     "FirstSegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-    "CreatedAt": "2025-08-03T10:00:00Z",
-    "Version": 1
+    "CreatedAt": "2025-08-03T10:00:00Z"
   },
   "Segments": [
     {
@@ -178,7 +177,8 @@
           "Effects": {
             "Wounds": ["lethal", "bashing"],
             "Room": 5
-          }
+          },
+          "NextSegmentID": null
         },
         "Minimal": {
           "Narrative": "You force your way through, clothes torn and skin scratched, but you emerge on the other side.",
@@ -281,11 +281,7 @@
       "SegmentDuration": 1200,
       "Combat": {
         "OpponentID": "b8c9d0e1-2f3a-4b5c-6d7e8f9a0b1c2d3e",
-        "MaxRounds": 15,
-        "Environment": {
-          "Lighting": "dim",
-          "Terrain": "muddy"
-        }
+        "MaxRounds": 15
       },
       "Results": {
         "Death": {

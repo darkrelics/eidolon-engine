@@ -161,7 +161,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `MaxStack`     | `NUMBER`  |          | Maximum number of items per stack.                            |
 | `Quantity`     | `NUMBER`  |          | Default quantity if stackable.                                |
 | `Wearable`     | `BOOLEAN` |          | Indicates if the item can be worn.                            |
-| `WornOn`       | `LIST`    |          | Body slots where item can be worn (e.g., ["weapon"], ["armor"]). |
+| `WornOn`       | `LIST`    |          | Body slots where item can be worn                             |
 | `Verbs`        | `MAP`     |          | Actions associated with the item (e.g., "Use": "You use..."). |
 | `Overrides`    | `MAP`     |          | Overrides for default behaviors or properties.                |
 | `TraitMods`    | `MAP`     |          | Modifications to character traits when item is used/worn.     |
@@ -220,10 +220,8 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items).      |
 | `DifficultyMap`     | `MAP`    |          | Map of skill checks to base difficulties.   |
 | `RewardTiers`       | `MAP`    |          | Reward descriptions by outcome tier.        |
-| `BaseXPMultiplier`  | `NUMBER` |          | XP multiplier (default 0.5, must be < 1.0). |
 | `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.               |
 | `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.       |
-| `Version`           | `NUMBER` |          | Story version for updates.                  |
 
 **Primary Key:** StoryID (HASH)
 
@@ -239,13 +237,36 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 | `SegmentDuration` | `NUMBER`  |           | Time in seconds for this segment.                                         |
 | `DecisionText`    | `STRING`  |           | For decision segments: the choice presented.                              |
 | `DecisionOptions` | `MAP`     |           | For decision segments: map of option ID to next segment ID.               |
-| `NextSegmentID`   | `STRING`  |           | For mechanical segments: UUID of the next segment.                        |
 | `DefaultDecision` | `STRING`  |           | For decision segments: which option to auto-select.                       |
 | `Challenges`      | `LIST`    |           | For mechanical segments: list of skill/attribute challenges.              |
 | `Combat`          | `MAP`     |           | For mechanical segments: combat configuration (if applicable).            |
+| `Results`         | `MAP`     |           | For mechanical segments: outcome-based results (see structure below).     |
 | `RestSegment`     | `BOOLEAN` |           | Indicates if this is a rest segment.                                      |
 
 **Primary Key:** StoryID (HASH), SegmentID (RANGE)
+
+**Challenges Structure:**
+Each challenge in the Challenges list contains:
+- `Attribute` (STRING): The attribute being tested (e.g., "Perception", "Strength")
+- `Skill` (STRING): The skill being tested (e.g., "Investigation", "Stealth")
+- `Difficulty` (NUMBER): The difficulty rating for the challenge
+- `Attempts` (NUMBER): Maximum number of attempts allowed
+
+**Combat Structure:**
+The Combat map contains:
+- `OpponentID` (STRING): UUID of the opponent from the Opponents table
+- `MaxRounds` (NUMBER): Maximum combat rounds before timeout
+- `Environment` (MAP, optional): Environmental modifiers (e.g., lighting, terrain)
+
+**Results Structure:**
+The Results map contains outcome entries for Death, Failure, Minimal, Normal, and Exceptional. Each outcome contains:
+- `Narrative` (STRING): The narrative text describing this outcome
+- `Effects` (MAP): Changes to apply to the character:
+  - `State` (STRING, optional): Character state change (e.g., "dead")
+  - `Room` (NUMBER, optional): Room ID to move character to
+  - `Wounds` (LIST, optional): List of damage type strings (e.g., ["bashing", "lethal"])
+  - `Items` (LIST, optional): List of item prototype IDs to grant
+- `NextSegmentID` (STRING, nullable): UUID of the next segment, or null to end the story
 
 ## ActiveSegments Table
 
@@ -377,6 +398,9 @@ Each item in the LootTable list is a map with the following fields:
 
 ### Wound Object Structure
 
+Wounds are represented differently depending on context:
+
+#### In Character Table
 The Wound object is stored as a MAP within the Character table's Wounds list. Each wound map represents one point of damage:
 
 | Field        | Type     | Description                                                       |
@@ -384,7 +408,7 @@ The Wound object is stored as a MAP within the Character table's Wounds list. Ea
 | `DamageType` | `STRING` | Type of damage: "bashing", "lethal", or "aggravated"              |
 | `HealAt`     | `STRING` | ISO 8601 timestamp indicating when this wound will naturally heal |
 
-**Example Wounds List:**
+**Example Wounds List in Character:**
 
 ```json
 [
@@ -400,6 +424,22 @@ The Wound object is stored as a MAP within the Character table's Wounds list. Ea
 ```
 
 This character has taken 2 points of damage (2 wounds in the list), so with MaxHealth of 10, their current health would be 8.
+
+#### In Segment Results
+Within the Effects structure of segment Results, wounds are simplified to a list of damage type strings:
+
+**Example Wounds in Segment Effects:**
+
+```json
+{
+  "Effects": {
+    "Wounds": ["bashing", "lethal", "bashing"],
+    "Room": 5
+  }
+}
+```
+
+This indicates the segment will inflict three wounds: two bashing and one lethal. The system will convert these to full wound objects with HealAt timestamps when applying them to the character.
 
 ### CharacterUpdates Structure
 
