@@ -38,7 +38,7 @@ requests==2.32.4
 rich==14.1.0
 six==1.17.0
 sortedcontainers==2.4.0
-tokenize-rt==6.1.0
+tokenize-rt==6.2.0
 toml==0.10.2
 tomli==2.2.1
 urllib3==2.5.0
