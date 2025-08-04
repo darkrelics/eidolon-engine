@@ -13,14 +13,22 @@ from datetime import datetime, timedelta, timezone
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
-from eidolon.character import heal_expired_wounds
+from eidolon.character import heal_expired_wounds, apply_character_updates
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 
+from eidolon.story import (
+    apply_story_rewards,
+    calculate_story_rewards,
+    complete_story_for_character,
+    get_story_history,
+    get_story_metadata,
+)
+
 
 # Valid segment types for the incremental game
-VALID_SEGMENT_TYPES = ["mechanical", "decision", "rest"]
-MECHANICAL_ONLY_TYPES = ["mechanical"]
+VALID_SEGMENT_TYPES: list = ["mechanical", "decision", "rest"]
+MECHANICAL_ONLY_TYPES: list = ["mechanical"]
 
 # Wound healing durations (matching MUD server)
 BASHING_HEAL_TIME = timedelta(minutes=15)
@@ -44,8 +52,8 @@ def calculate_heal_time(damage_type: str) -> str:
         "aggravated": AGGRAVATED_HEAL_TIME,
     }
 
-    heal_delta = heal_times.get(damage_type.lower(), LETHAL_HEAL_TIME)
-    heal_at = datetime.now(timezone.utc) + heal_delta
+    heal_delta: timedelta = heal_times.get(damage_type.lower(), LETHAL_HEAL_TIME)
+    heal_at: datetime = datetime.now(timezone.utc) + heal_delta
     return heal_at.isoformat()
 
 
@@ -111,16 +119,16 @@ def resolve_opposed_check(aggressor: float, defender: float) -> dict:
     min_sig = 0.25  # Minimum variance
 
     # Calculate difference
-    diff = aggressor - defender
+    diff: float = aggressor - defender
 
     # Calculate mean and variance
-    mean = k_shift * diff
-    variance = 1.0 + k_var * math.tanh(diff / 10.0)
+    mean: float = k_shift * diff
+    variance: float = 1.0 + k_var * math.tanh(diff / 10.0)
     variance = max(variance, min_sig)
 
     # Generate outcome using normal distribution
-    sigma = random.gauss(mean, variance)
-    success = sigma >= 0
+    sigma: float = random.gauss(mean, variance)
+    success: bool = sigma >= 0
 
     return {"success": success, "sigma": sigma}
 
@@ -142,7 +150,7 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
         return "normal", []
 
     # Run each challenge using MUD-style mechanics
-    challenge_results = []
+    challenge_results: list = []
     total_sigma = 0.0
     total_attempts = 0
     critical_failures = 0
@@ -165,7 +173,7 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
         effective_score = attribute_value + skill_value
 
         # Run multiple attempts for this challenge
-        challenge_attempts = []
+        challenge_attempts: list = []
         best_sigma = -999
 
         for _ in range(attempts):
@@ -180,12 +188,12 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
 
             # Calculate mean and variance
             mean = k_shift * diff
-            variance = 1.0 + k_var * math.tanh(diff / 10.0)
+            variance: float = 1.0 + k_var * math.tanh(diff / 10.0)
             variance = max(variance, min_sig)
 
             # Generate outcome using normal distribution
-            sigma = random.gauss(mean, variance)
-            success = sigma >= 0
+            sigma: float = random.gauss(mean, variance)
+            success: bool = sigma >= 0
 
             challenge_attempts.append(
                 {
@@ -207,7 +215,7 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
             total_sigma += sigma
 
         # Determine if challenge was passed (best attempt succeeded)
-        passed = best_sigma >= 0
+        passed: bool = best_sigma >= 0
         if passed:
             successes += 1
 
@@ -226,7 +234,7 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
     if total_attempts == 0:
         return "failure", []
 
-    avg_sigma = total_sigma / total_attempts
+    avg_sigma: float = total_sigma / total_attempts
 
     # Map sigma values to story outcomes
     # Critical failures can lead to death
@@ -277,7 +285,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get opponent data: {str(err)}")
+        raise RuntimeError(f"Failed to get opponent data: {str(err)}") from err
 
     # Initialize combat state from active segment or create new
     combat_state = active_segment.get("CombatState", {})
@@ -299,18 +307,18 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
     opponent_health = opponent.get("Health", 5)
 
     # Track combat results
-    combat_log = []
+    combat_log: list = []
 
     # Continue combat from current round
     for round_num in range(current_round, min(current_round + 5, max_rounds)):
-        round_results = {
+        round_results: dict = {
             "round": round_num + 1,
             "playerAttack": None,
             "opponentAttack": None,
         }
 
         # Player attacks opponent using MUD mechanics
-        attack_outcome = resolve_opposed_check(character_combat, opponent_defense)
+        attack_outcome: dict = resolve_opposed_check(character_combat, opponent_defense)
 
         if attack_outcome["success"]:
             # Determine damage based on sigma
@@ -344,7 +352,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             }
 
             # Check if opponent is defeated
-            lethal_wounds = sum(1 for w in opponent_wounds if w.get("DamageType") == "lethal")
+            lethal_wounds: int = sum(1 for w in opponent_wounds if w.get("DamageType") == "lethal")
             if lethal_wounds >= opponent_health or len(opponent_wounds) >= opponent_health * 2:
                 combat_log.append(round_results)
                 return "normal", {
@@ -363,7 +371,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             }
 
         # Opponent attacks player using MUD mechanics
-        defense_outcome = resolve_opposed_check(opponent_combat, character_defense)
+        defense_outcome: dict = resolve_opposed_check(opponent_combat, character_defense)
 
         if defense_outcome["success"]:
             # Determine damage based on sigma
@@ -398,7 +406,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
 
             # Check if player is defeated
             lethal_wounds = sum(1 for w in player_wounds if w.get("DamageType") == "lethal")
-            total_wounds = len(player_wounds)
+            total_wounds:int = len(player_wounds)
 
             if lethal_wounds >= 5:  # 5+ lethal wounds = death
                 combat_log.append(round_results)
@@ -427,11 +435,11 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         combat_log.append(round_results)
 
     # Max rounds reached - determine outcome based on wounds
-    player_total_wounds = len(player_wounds)
-    opponent_total_wounds = len(opponent_wounds)
+    player_total_wounds: int = len(player_wounds)
+    opponent_total_wounds: int = len(opponent_wounds)
 
     # Calculate final rounds (round_num might not be defined if no combat occurred)
-    final_rounds = len(combat_log)
+    final_rounds: int = len(combat_log)
 
     if opponent_total_wounds > player_total_wounds * 2:
         # Player dealt significantly more damage
@@ -499,7 +507,7 @@ def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
                     },
                     exc_info=True,
                 )
-                raise RuntimeError(f"Failed to update decision: {str(err)}")
+                raise RuntimeError(f"Failed to update decision: {str(err)}") from err
         else:
             return "failure"
 
@@ -519,8 +527,8 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     Returns:
         Tuple of (outcome, results)
     """
-    results = {}
-    outcomes = []
+    results: dict = {}
+    outcomes: list = []
 
     # Process skill challenges if present
     challenges = segment_def.get("Challenges", [])
@@ -537,10 +545,9 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         outcomes.append(challenge_outcome)
 
         # Apply skill and attribute XP immediately
-        from eidolon.character import apply_character_updates
 
-        skill_xp = {}
-        attribute_xp = {}
+        skill_xp: dict = {}
+        attribute_xp: dict = {}
 
         # Constants from experience.md
         base_xp = 0.25  # Base experience per action
@@ -553,9 +560,9 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             passed = challenge.get("passed", False)
 
             # Get the best attempt to calculate variance modifier
-            best_attempt = None
+            best_attempt: dict = {}
             for attempt in challenge.get("attempts", []):
-                if best_attempt is None or attempt["sigma"] > best_attempt["sigma"]:
+                if attempt.get("sigma") > best_attempt.get("sigma", -10):
                     best_attempt = attempt
 
             if best_attempt and (skill or attribute):
@@ -598,7 +605,6 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             try:
                 character_id = character.get("CharacterID")
                 if character_id:
-                    from eidolon.character import apply_character_updates
 
                     apply_character_updates(character_id, xp_updates)
                 logger.info(
@@ -639,7 +645,6 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         # Apply wounds immediately to database
         player_wounds = combat_state.get("playerWounds", [])
         if player_wounds:
-            from eidolon.character import apply_character_updates
 
             wound_updates = {"Wounds": player_wounds}
 
@@ -908,7 +913,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update segment outcome: {str(err)}")
+        raise RuntimeError(f"Failed to update segment outcome: {str(err)}") from err
 
 
 def get_next_segment_and_create(
@@ -972,7 +977,7 @@ def get_next_segment_and_create(
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get next segment: {str(err)}")
+        raise RuntimeError(f"Failed to get next segment: {str(err)}") from err
 
     # Create active segment for next segment
     return create_next_active_segment(
@@ -1065,7 +1070,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to create active segment: {str(err)}")
+        raise RuntimeError(f"Failed to create active segment: {str(err)}") from err
 
     return active_segment_id
 
@@ -1079,13 +1084,7 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
         story_id: Story UUID
         outcome: Final outcome
     """
-    from eidolon.story import (
-        apply_story_rewards,
-        calculate_story_rewards,
-        complete_story_for_character,
-        get_story_history,
-        get_story_metadata,
-    )
+
 
     # Complete the story and clean up character state
     complete_story_for_character(character_id, story_id, outcome)
@@ -1114,7 +1113,7 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update history completion: {str(err)}")
+        raise RuntimeError(f"Failed to update history completion: {str(err)}") from err
 
 
 def process_segment_completely(
@@ -1163,7 +1162,7 @@ def process_segment_completely(
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get active segment: {str(err)}")
+        raise RuntimeError(f"Failed to get active segment: {str(err)}") from err
 
     # Get segment definition
     try:
@@ -1178,7 +1177,7 @@ def process_segment_completely(
             extra={"segment_id": segment_id, "error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get segment definition: {str(err)}")
+        raise RuntimeError(f"Failed to get segment definition: {str(err)}") from err
 
     # Get character data
     try:
@@ -1197,7 +1196,7 @@ def process_segment_completely(
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get character: {str(err)}")
+        raise RuntimeError(f"Failed to get character: {str(err)}") from err
 
     # Process segment based on type
     outcome = None
@@ -1277,7 +1276,7 @@ def get_completed_segments(max_segments: int) -> list:
             extra={"error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to query completed segments: {str(err)}")
+        raise RuntimeError(f"Failed to query completed segments: {str(err)}") from err
 
 
 def check_active_segments_exist() -> bool:
@@ -1306,7 +1305,7 @@ def check_active_segments_exist() -> bool:
             extra={"error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to scan active segments: {str(err)}")
+        raise RuntimeError(f"Failed to scan active segments: {str(err)}") from err
 
 
 def delete_active_segment(active_segment_id: str) -> None:
@@ -1378,7 +1377,7 @@ def record_abandoned_segment_history(character_id: str, story_id: str, active_se
         )
     except ClientError as err:
         logger.error("Failed to record segment history", extra={"character_id": character_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to record segment history: {str(err)}")
+        raise RuntimeError(f"Failed to record segment history: {str(err)}") from err
 
 
 def update_character_active_segment(character_id: str, active_segment_id: str) -> None:
@@ -1419,7 +1418,7 @@ def update_character_active_segment(character_id: str, active_segment_id: str) -
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update character active segment: {str(err)}")
+        raise RuntimeError(f"Failed to update character active segment: {str(err)}") from err
 
 
 def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: int = 900, time_remaining: int = 0) -> str:
@@ -1445,7 +1444,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         ValueError: If no suitable segment found or segments not found
         RuntimeError: If database operations fail
     """
-    MIN_TIME_REQUIRED = 30  # Minimum seconds needed to insert rest
+    MIN_TIME_REQUIRED: int = 30  # Minimum seconds needed to insert rest
 
     # Get current segment (A)
     try:
@@ -1462,7 +1461,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get current segment: {str(err)}")
+        raise RuntimeError(f"Failed to get current segment: {str(err)}") from err
 
     # Check if current segment (A) has a next segment (B)
     next_segment_id = current_segment.get("NextSegmentID")
@@ -1504,7 +1503,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
                 },
                 exc_info=True,
             )
-            raise RuntimeError(f"Failed to get next segment: {str(err)}")
+            raise RuntimeError(f"Failed to get next segment: {str(err)}") from err
 
         # Check if B has a next segment (C)
         segment_c_id = next_segment.get("NextSegmentID")
@@ -1590,7 +1589,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         except Exception:
             logger.warning("Failed to rollback rest segment")
 
-        raise RuntimeError(f"Failed to insert rest segment: {str(err)}")
+        raise RuntimeError(f"Failed to insert rest segment: {str(err)}") from err
 
 
 def get_active_segment_info(active_segment_id: str) -> dict:
@@ -1627,7 +1626,7 @@ def get_active_segment_info(active_segment_id: str) -> dict:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get active segment: {str(err)}")
+        raise RuntimeError(f"Failed to get active segment: {str(err)}") from err
 
 
 def claim_segment_for_processing(active_segment_id: str) -> bool:
@@ -1680,7 +1679,7 @@ def claim_segment_for_processing(active_segment_id: str) -> bool:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to claim segment: {str(err)}")
+        raise RuntimeError(f"Failed to claim segment: {str(err)}") from err
 
 
 def record_segment_history(character_id: str, story_id: str, active_segment_id: str, segment_data: dict) -> None:
@@ -1759,7 +1758,7 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to record segment history: {str(err)}")
+        raise RuntimeError(f"Failed to record segment history: {str(err)}") from err
 
 
 def get_active_segment(active_segment_id: str) -> dict:
@@ -1794,7 +1793,7 @@ def get_active_segment(active_segment_id: str) -> dict:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get active segment: {str(err)}")
+        raise RuntimeError(f"Failed to get active segment: {str(err)}") from err
 
 
 def get_segment_definition(story_id: str, segment_id: str) -> dict:
@@ -1831,7 +1830,7 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get segment definition: {str(err)}")
+        raise RuntimeError(f"Failed to get segment definition: {str(err)}") from err
 
 
 def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str) -> object:
@@ -1926,7 +1925,7 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update segment results: {str(err)}")
+        raise RuntimeError(f"Failed to update segment results: {str(err)}") from err
 
 
 def reset_segment_processing_status(active_segment_id: str) -> None:
@@ -1959,7 +1958,7 @@ def reset_segment_processing_status(active_segment_id: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to reset segment processing status: {str(err)}")
+        raise RuntimeError(f"Failed to reset segment processing status: {str(err)}") from err
 
 
 def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
@@ -1996,7 +1995,7 @@ def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to mark segment as completed exceptional: {str(err)}")
+        raise RuntimeError(f"Failed to mark segment as completed exceptional: {str(err)}") from err
 
 
 def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:

@@ -7,8 +7,6 @@ Lambda functions.
 
 import json
 
-from eidolon.logger import logger
-
 
 def parse_json_body(event: dict) -> dict:
     """

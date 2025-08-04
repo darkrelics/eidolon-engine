@@ -2,11 +2,8 @@
 
 import json
 import logging
-import sys
-from datetime import datetime, timezone
-from functools import wraps
 
-from eidolon.environment import AWS_EXECUTION_ENV, LOG_LEVEL, APPLICATION_NAME
+from eidolon.environment import LOG_LEVEL, APPLICATION_NAME
 
 # Initialize logger for the application
 logger = logging.getLogger(APPLICATION_NAME)

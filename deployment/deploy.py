@@ -730,7 +730,6 @@ class IncrementalDeploymentOrchestrator:
                         print("  [INFO] Removing stale Cognito configuration...")
 
                         # Remove from config.yml
-                        from state_manager import ConfigurationManager
 
                         config_manager = ConfigurationManager()
                         config_manager.remove_section("Cognito")
@@ -851,7 +850,7 @@ class IncrementalDeploymentOrchestrator:
                             print("  [INFO] Removing stale CloudFront configuration...")
 
                             # Remove from config.yml
-                            from state_manager import ConfigurationManager
+                            
 
                             config_manager = ConfigurationManager()
                             config_manager.remove_section("CloudFront")

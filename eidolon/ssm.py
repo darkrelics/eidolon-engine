@@ -35,7 +35,7 @@ def get_parameter(parameter_name: str) -> str:
         error_code = err.response.get("Error", {}).get("Code", "Unknown")
         if error_code == "ParameterNotFound":
             logger.error("Parameter not found", extra={"parameter_name": parameter_name})
-            raise ValueError(f"Parameter {parameter_name} not found")
+            raise ValueError(f"Parameter {parameter_name} not found") from err
 
         logger.error(
             "Failed to get parameter",
@@ -46,7 +46,7 @@ def get_parameter(parameter_name: str) -> str:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get parameter: {str(err)}")
+        raise RuntimeError(f"Failed to get parameter: {str(err)}") from err
 
 
 def put_parameter(parameter_name: str, value: str) -> None:
@@ -82,4 +82,4 @@ def put_parameter(parameter_name: str, value: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update parameter: {str(err)}")
+        raise RuntimeError(f"Failed to update parameter: {str(err)}") from err

@@ -4,10 +4,10 @@ Validation utilities for Lambda functions.
 Provides common validation functions for user input.
 """
 
-from re import compile, search
+import re
 
 # Character name validation constants
-NAME_PATTERN = compile(r"^[a-zA-Z'-]+$")
+NAME_PATTERN = re.compile(r"^[a-zA-Z'-]+$")
 MIN_NAME_LENGTH = 4
 MAX_NAME_LENGTH = 20
 
@@ -88,7 +88,7 @@ def validate_email(email: str) -> bool:
     Returns:
         True if valid email format, False otherwise
     """
-    pattern = compile(r"^[\w\.-]+@([\w-]+\.)+[\w-]{2,63}$")
+    pattern = re.compile(r"^[\w\.-]+@([\w-]+\.)+[\w-]{2,63}$")
     return bool(pattern.match(email))
 
 
@@ -102,7 +102,7 @@ def validate_uuid(uuid_value: str) -> bool:
     Returns:
         True if valid UUID format, False otherwise
     """
-    pattern = compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+    pattern = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
     return bool(pattern.match(uuid_value.lower()))
 
 
@@ -192,14 +192,14 @@ def validate_password_strength(password: str) -> None:
     if len(password) < 8:
         raise ValueError("Password must be at least 8 characters long")
 
-    if not search(r"[A-Z]", password):
+    if not re.search(r"[A-Z]", password):
         raise ValueError("Password must contain at least one uppercase letter")
 
-    if not search(r"[a-z]", password):
+    if not re.search(r"[a-z]", password):
         raise ValueError("Password must contain at least one lowercase letter")
 
-    if not search(r"\d", password):
+    if not re.search(r"\d", password):
         raise ValueError("Password must contain at least one number")
 
-    if not search(r"[@$!%*?&]", password):
+    if not re.search(r"[@$!%*?&]", password):
         raise ValueError("Password must contain at least one special character (@$!%*?&)")

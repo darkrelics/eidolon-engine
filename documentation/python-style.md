@@ -369,6 +369,128 @@ except Exception as ex:  # Don't use 'ex'
     logger.error(f"Error: {ex}")
 ```
 
+### Exception Chaining with 'from err'
+
+When re-raising exceptions, always use the `from err` syntax to preserve the exception chain. This maintains the full traceback for debugging while allowing you to provide more context-specific error messages:
+
+```python
+# Good - using 'from err' to chain exceptions
+def get_character(character_id: str) -> dict:
+    """Get character from database."""
+    try:
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+        if not character:
+            raise ValueError(f"Character {character_id} not found")
+        return character
+    except ClientError as err:
+        logger.error("Database query failed", extra={"error": str(err), "character_id": character_id})
+        raise RuntimeError(f"Failed to retrieve character {character_id}") from err
+
+# Good - preserving exception chain across multiple layers
+def process_character_action(character_id: str, action: str) -> dict:
+    """Process an action for a character."""
+    try:
+        character = get_character(character_id)
+        return apply_action(character, action)
+    except RuntimeError as err:
+        # Re-raise with additional context, preserving the chain
+        raise RuntimeError(f"Cannot process action '{action}' for character") from err
+    except ValueError as err:
+        # Convert to more specific error type while preserving chain
+        raise ValueError(f"Invalid character for action '{action}'") from err
+
+# Bad - not using 'from err', loses original exception context
+def get_character(character_id: str) -> dict:
+    try:
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+        return character
+    except ClientError as err:
+        # Wrong - loses the original ClientError traceback
+        raise RuntimeError(f"Failed to retrieve character {character_id}")
+
+# Bad - silently catching and re-raising different exception
+def process_data(data: dict) -> dict:
+    try:
+        return transform_data(data)
+    except KeyError:
+        # Wrong - original KeyError context is lost
+        raise ValueError("Missing required field")
+```
+
+### Exception Handling Responsibility
+
+The function that raises an exception is NOT responsible for handling it. Exception handling is the responsibility of the calling function. This promotes clean separation of concerns:
+
+```python
+# Good - library function raises, caller handles
+# In eidolon/character.py (library)
+def update_character_health(character_id: str, damage: int) -> dict:
+    """
+    Apply damage to character.
+    
+    Raises:
+        ValueError: If character not found or damage invalid
+        RuntimeError: If database operation fails
+    """
+    if damage < 0:
+        raise ValueError(f"Damage cannot be negative: {damage}")
+    
+    try:
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+        if not character:
+            raise ValueError(f"Character {character_id} not found")
+        
+        character["Health"] -= damage
+        dynamo.put_item(TableName.CHARACTERS, character)
+        return character
+    except ClientError as err:
+        raise RuntimeError(f"Failed to update character health") from err
+
+# In Lambda handler (caller)
+def lambda_handler(event: dict, context: object) -> dict:
+    """Lambda handler is responsible for handling exceptions."""
+    try:
+        character_id = event.get("characterId")
+        damage = event.get("damage", 0)
+        
+        # Call library function - it will raise if there's an error
+        updated_character = update_character_health(character_id, damage)
+        return create_response(200, updated_character)
+        
+    except ValueError as err:
+        # Caller handles the ValueError appropriately
+        logger.warning("Invalid request", extra={"error": str(err)})
+        return error_response(str(err), 400)
+    except RuntimeError as err:
+        # Caller handles the RuntimeError appropriately
+        logger.error("Database error", extra={"error": str(err)}, exc_info=True)
+        return error_response("Internal server error", 500)
+
+# Bad - function tries to handle its own exceptions
+def update_character_health(character_id: str, damage: int) -> dict:
+    """Wrong - function shouldn't handle its own exceptions."""
+    try:
+        if damage < 0:
+            # Wrong - returning error instead of raising
+            return {"success": False, "error": "Invalid damage"}
+        
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+        character["Health"] -= damage
+        dynamo.put_item(TableName.CHARACTERS, character)
+        return {"success": True, "character": character}
+    except Exception as err:
+        # Wrong - catching and converting to return value
+        return {"success": False, "error": str(err)}
+```
+
+Benefits of proper exception chaining and handling:
+
+- **Full Tracebacks**: The `from err` syntax preserves the complete exception chain
+- **Better Debugging**: Can trace errors through multiple layers of the application
+- **Clear Responsibilities**: Functions focus on their core logic, not error handling
+- **Flexible Error Handling**: Callers can handle errors appropriately for their context
+- **Proper Logging**: Each layer can add relevant context to error messages
+
 ### Avoid Nested Try/Except Blocks
 
 Do not nest try/except blocks. Instead, use separate functions or sequential try blocks:
