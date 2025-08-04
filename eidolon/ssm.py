@@ -46,7 +46,7 @@ def get_parameter(parameter_name: str) -> str:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get parameter: {str(err)}") from err
+        raise RuntimeError(f"Failed to get parameter: {err}") from err
 
 
 def put_parameter(parameter_name: str, value: str) -> None:
@@ -82,4 +82,4 @@ def put_parameter(parameter_name: str, value: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update parameter: {str(err)}") from err
+        raise RuntimeError(f"Failed to update parameter: {err}") from err

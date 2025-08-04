@@ -11,12 +11,11 @@ compliance by removing all traces of user data.
 import json
 
 from eidolon.logger import logger, log_lambda_statistics
-from eidolon.player import delete_player_data_completely, extract_player_id_from_event
-from eidolon.requests import parse_json_body
-from eidolon.utilities import build_lambda_response_pascal
+from eidolon.player import delete_player_data, extract_player_id
+from eidolon.responses import lambda_response
 
 
-def delete_player_business_logic(player_id: str) -> dict:
+def delete_player(player_id: str) -> dict:
     """
     Business logic for deleting all player data.
 
@@ -31,7 +30,15 @@ def delete_player_business_logic(player_id: str) -> dict:
         RuntimeError: If deletion operations fail
     """
     # Use the eidolon library to orchestrate complete player deletion
-    return delete_player_data_completely(player_id)
+    try:
+        results: dict = delete_player_data(player_id)
+    except ValueError as err:
+        logger.error(f"Invalid player ID: {err}", exc_info=True)
+        return {}
+
+    logger.info(f"Player deletion completed: {player_id} results: {results}")
+
+    return results
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -54,77 +61,69 @@ def lambda_handler(event: dict, context: object) -> dict:
     log_lambda_statistics(event, context)
 
     try:
-        player_id = None
+        player_id = ""
 
         # Extract player ID based on event source
         if "detail" in event and "requestParameters" in event.get("detail", {}):
             # CloudWatch Events from Cognito
-            player_id = event.get("detail", {}).get("requestParameters", {}).get("username")
+            player_id: str = event.get("detail", {}).get("requestParameters", {}).get("username")
         elif "body" in event:
             # API Gateway or direct invocation
-            try:
-                body = parse_json_body(event) if isinstance(event.get("body"), str) else event.get("body", {})
-            except ValueError:
-                body = {}
-            player_id = body.get("player_id") if body else None
+            body: dict = event.get("body", {})
+            player_id = body.get("player_id", "") if body else ""
         elif "player_id" in event:
             # Direct invocation
-            player_id = event.get("player_id")
+            player_id = event.get("player_id", "")
         elif "requestContext" in event and "authorizer" in event.get("requestContext", {}):
             # API Gateway with Cognito authorizer
             try:
-                player_id = extract_player_id_from_event(event)
+                player_id = extract_player_id(event)
             except ValueError:
-                player_id = None
+                player_id = ""
 
         if not player_id:
             logger.error("No player ID provided in request")
             if "requestContext" in event:
-                return build_lambda_response_pascal(400, {"Error": "Player ID required"}, event)
+                return lambda_response(400, {"Error": "Player ID required"}, event)
             return {
                 "statusCode": 400,
                 "body": json.dumps({"Error": "Player ID required"}),
             }
 
-        logger.info("Starting deletion process", extra={"player_id": player_id})
+        logger.debug(f"Starting deletion process: {player_id}")
 
         # Call business logic
-        results = delete_player_business_logic(player_id)
+        results: dict = delete_player(player_id)
 
         # Return appropriate response based on event source
         if "requestContext" in event:
             # API Gateway response format
-            status_code = 200 if not results.get("errors", []) else 207
-            logger.info("Lambda response", extra={"status_code": status_code})
-            return build_lambda_response_pascal(status_code, results, event)
+            status_code: int = 200 if not results.get("errors", []) else 207
+            logger.info(f"Lambda response status_code: {status_code}")
+            return lambda_response(status_code, results, event)
         return results
 
     except ValueError as err:
-        logger.error("Invalid request", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Invalid request: {err}", exc_info=True)
         if "requestContext" in event:
-            return build_lambda_response_pascal(400, {"Error": str(err)}, event)
+            return lambda_response(400, {"Error": "Request Error"}, event)
         return {
             "statusCode": 400,
-            "body": json.dumps({"Error": str(err)}),
+            "body": json.dumps({"Error": "Error in request format"}),
         }
     except RuntimeError as err:
-        logger.error("Deletion operation failed", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Deletion operation failed: {err}", exc_info=True)
         if "requestContext" in event:
-            return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+            return lambda_response(500, {"Error": "Internal server error"}, event)
         return {
             "statusCode": 500,
             "body": json.dumps({"Error": "Internal server error"}),
         }
     except Exception as err:
-        logger.error(
-            "Unexpected error in lambda_handler",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
-        logger.info("Lambda response", extra={"status_code": 500})
+        logger.error(f"Unexpected error in lambda_handler: {err}", exc_info=True)
 
         if "requestContext" in event:
-            return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+            return lambda_response(500, {"Error": "Internal server error"}, event)
         return {
             "statusCode": 500,
             "body": json.dumps({"Error": "Internal server error"}),

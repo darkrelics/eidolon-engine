@@ -7,8 +7,8 @@ while keeping the handler function visible in each Lambda file.
 
 from eidolon.cors import cors_handler
 from eidolon.logger import logger
-from eidolon.player import extract_player_id_from_event, validate_player_exists
-from eidolon.responses import create_response, error_response, error_response_pascal, unauthorized_response
+from eidolon.player import extract_player_id, validate_player_exists
+from eidolon.responses import create_response, error_response, unauthorized_response
 
 
 def handle_preflight_if_options(event: dict) -> dict:
@@ -31,7 +31,7 @@ def extract_and_validate_player_id(event: dict) -> tuple:
     Extract player ID from event and validate it exists in database.
 
     This function combines extraction and validation for backward compatibility.
-    For new code, prefer using extract_player_id_from_event and validate_player_exists separately.
+    For new code, prefer using extract_player_id and validate_player_exists separately.
 
     Args:
         event: Lambda event dict
@@ -43,7 +43,7 @@ def extract_and_validate_player_id(event: dict) -> tuple:
     """
     # Extract player ID from JWT claims
     try:
-        player_id = extract_player_id_from_event(event)
+        player_id = extract_player_id(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)})
         return None, cors_handler.add_cors_headers(unauthorized_response("Unauthorized"), event)
@@ -118,7 +118,7 @@ def handle_lambda_error_pascal(err: Exception, context: object, event: dict, cus
     )
     logger.info("Lambda response", extra={"status_code": 500})
 
-    return cors_handler.add_cors_headers(error_response_pascal("Internal server error", status_code=500), event)
+    return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
 
 
 def build_lambda_response(status_code: int, body: dict, event: dict) -> dict:
@@ -134,32 +134,4 @@ def build_lambda_response(status_code: int, body: dict, event: dict) -> dict:
         Formatted response with CORS headers
     """
     logger.info("Lambda response", extra={"status_code": status_code})
-    return cors_handler.add_cors_headers(create_response(status_code, body), event)
-
-
-def build_lambda_response_pascal(status_code: int, body: dict, event: dict) -> dict:
-    """
-    Build Lambda response with PascalCase field names and CORS headers.
-
-    This function automatically converts error responses to use PascalCase.
-
-    Args:
-        status_code: HTTP status code
-        body: Response body dict
-        event: Lambda event dict
-
-    Returns:
-        Formatted response with CORS headers and PascalCase field names
-    """
-    logger.info("Lambda response", extra={"status_code": status_code})
-
-    # If it's an error response with lowercase "error" key, convert to PascalCase
-    if "error" in body and status_code >= 400:
-
-        error_msg = body.get("error", "")
-        # Remove the error key and treat rest as details
-        details = {k: v for k, v in body.items() if k != "error"}
-        response = error_response_pascal(error_msg, status_code, details if details else None)
-        return cors_handler.add_cors_headers(response, event)
-
     return cors_handler.add_cors_headers(create_response(status_code, body), event)

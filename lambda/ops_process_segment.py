@@ -12,8 +12,9 @@ import json
 
 from eidolon.logger import logger, log_lambda_statistics
 from eidolon.polling import disable_polling_infrastructure
+from eidolon.responses import lambda_response
 from eidolon.segment import check_active_segments_exist, is_mechanical_segment, process_segment_completely
-from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal
+from eidolon.utilities import handle_lambda_error_pascal
 
 
 def validate_segment_for_processing(segment_type: str) -> bool:
@@ -306,7 +307,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             }
 
             logger.info("Lambda response", extra={"status_code": 200})
-            return build_lambda_response_pascal(200, response_data, event)
+            return lambda_response(200, response_data, event)
 
         except ValueError as err:
             logger.error(
@@ -314,13 +315,13 @@ def lambda_handler(event: dict, context: object) -> dict:
                 extra={"error": str(err)},
                 exc_info=True,
             )
-            return build_lambda_response_pascal(400, {"Error": str(err)}, event)
+            return lambda_response(400, {"Error": str(err)}, event)
         except RuntimeError as err:
             logger.error(
                 "Failed to process segment",
                 extra={"error": str(err)},
                 exc_info=True,
             )
-            return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+            return lambda_response(500, {"Error": "Internal server error"}, event)
         except Exception as err:
             return handle_lambda_error_pascal(err, context, event)

@@ -265,7 +265,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 },
                 exc_info=True,
             )
-            raise RuntimeError(f"Failed to create next segment: {str(err)}") from err
+            raise RuntimeError(f"Failed to create next segment: {err}") from err
     else:
         # Story complete
         complete_story(character_id, story_id, outcome)  # type: ignore

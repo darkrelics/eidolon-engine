@@ -8,8 +8,9 @@ Returns only character names and death status from the player table.
 """
 
 from eidolon.logger import logger, log_lambda_statistics
-from eidolon.player import extract_player_id_from_event, get_formatted_character_list, validate_player_exists
-from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, handle_preflight_if_options
+from eidolon.player import extract_player_id, get_formatted_character_list, validate_player_exists
+from eidolon.responses import lambda_response
+from eidolon.utilities import handle_lambda_error_pascal, handle_preflight_if_options
 
 
 def list_characters_business_logic(player_id: str) -> dict:
@@ -56,10 +57,10 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Extract player ID from JWT
     try:
-        player_id = extract_player_id_from_event(event)
+        player_id = extract_player_id(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+        return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
@@ -67,10 +68,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         if not validate_player_exists(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+            return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
         logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
@@ -78,13 +79,13 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         response_data = list_characters_business_logic(player_id)
         logger.info("Lambda response", extra={"status_code": 200})
-        return build_lambda_response_pascal(200, response_data, event)
+        return lambda_response(200, response_data, event)
     except ValueError as err:
         logger.warning(
             "Player not found",
             extra={"player_id": player_id, "error": str(err)},
         )
-        return build_lambda_response_pascal(
+        return lambda_response(
             404,
             {"Error": "Player not found"},
             event,
@@ -95,7 +96,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             extra={"player_id": player_id, "error": str(err)},
             exc_info=True,
         )
-        return build_lambda_response_pascal(
+        return lambda_response(
             500,
             {"Error": "Internal server error"},
             event,

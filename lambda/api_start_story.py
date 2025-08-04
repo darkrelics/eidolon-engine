@@ -9,12 +9,13 @@ Validates character state, creates active segment, and returns first segment det
 
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger, log_lambda_statistics
-from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.player import extract_player_id, validate_player_exists
 from eidolon.polling import ensure_polling_enabled
-from eidolon.requests import get_required_field_flexible, parse_json_body
+from eidolon.requests import get_required_field_flexible
+from eidolon.responses import lambda_response
 from eidolon.sqs import send_message
 from eidolon.story import start_story_for_character
-from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, handle_preflight_if_options
+from eidolon.utilities import handle_lambda_error_pascal, handle_preflight_if_options
 from eidolon.validation import validate_uuid
 
 
@@ -142,10 +143,10 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Extract player ID from JWT
     try:
-        player_id = extract_player_id_from_event(event)
+        player_id = extract_player_id(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+        return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
@@ -153,29 +154,29 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         if not validate_player_exists(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+            return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
         logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
     # Parse request body with flexible field names
     try:
-        body = parse_json_body(event)
+        body: dict = event.get("body", {})
         character_id = get_required_field_flexible(body, "CharacterID", "characterID")
         story_id = get_required_field_flexible(body, "StoryID", "storyID")
     except ValueError as err:
-        return build_lambda_response_pascal(400, {"Error": str(err)}, event)
+        return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
     # Validate UUIDs
     if character_id and not validate_uuid(character_id):  # type: ignore
-        return build_lambda_response_pascal(400, {"Error": "Invalid character ID format"}, event)
+        return lambda_response(400, {"Error": "Invalid character ID format"}, event)
 
     if story_id and not validate_uuid(story_id):  # type: ignore
-        return build_lambda_response_pascal(400, {"Error": "Invalid story ID format"}, event)
+        return lambda_response(400, {"Error": "Invalid story ID format"}, event)
 
     logger.info(
         "Starting story",
@@ -186,7 +187,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         response_data = start_story_business_logic(character_id, story_id, player_id)  # type: ignore
         logger.info("Lambda response", extra={"status_code": 200})
-        return build_lambda_response_pascal(200, response_data, event)
+        return lambda_response(200, response_data, event)
     except ValueError as err:
         logger.warning(
             "Invalid request",
@@ -194,18 +195,18 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         error_msg = str(err)
         if "not found" in error_msg.lower():
-            return build_lambda_response_pascal(404, {"Error": error_msg}, event)
+            return lambda_response(404, {"Error": error_msg}, event)
         elif "already in" in error_msg.lower() and "mode" in error_msg.lower():
-            return build_lambda_response_pascal(409, {"Error": error_msg}, event)
+            return lambda_response(409, {"Error": error_msg}, event)
         elif "not available" in error_msg.lower():
-            return build_lambda_response_pascal(403, {"Error": error_msg}, event)
-        return build_lambda_response_pascal(400, {"Error": error_msg}, event)
+            return lambda_response(403, {"Error": error_msg}, event)
+        return lambda_response(400, {"Error": error_msg}, event)
     except RuntimeError as err:
         logger.error(
             "Failed to start story",
             extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
             exc_info=True,
         )
-        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)

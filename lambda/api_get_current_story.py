@@ -9,15 +9,16 @@ Returns story metadata and segment details for the client to display.
 
 from eidolon.character import get_character, validate_character_ownership
 from eidolon.logger import logger, log_lambda_statistics
-from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.player import extract_player_id, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
+from eidolon.responses import lambda_response
 from eidolon.story import (
     format_story_segment_response,
     get_active_story_segment_with_player_check,
     get_story_metadata,
     get_story_segment,
 )
-from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, handle_preflight_if_options
+from eidolon.utilities import handle_lambda_error_pascal, handle_preflight_if_options
 from eidolon.validation import validate_uuid
 
 
@@ -107,10 +108,10 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     try:
         # Extract player ID from JWT
-        player_id = extract_player_id_from_event(event)
+        player_id = extract_player_id(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+        return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
@@ -118,23 +119,23 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         if not validate_player_exists(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+            return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
         logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
     # Get character ID from query parameters (flexible: CharacterID or characterId)
     character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
     if not character_id:
-        return build_lambda_response_pascal(400, {"Error": "Missing CharacterID parameter"}, event)
+        return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
 
     # Call business logic
     try:
         response_data = get_current_story_business_logic(character_id, player_id)  # type: ignore
         logger.info("Lambda response", extra={"status_code": 200})
-        return build_lambda_response_pascal(200, response_data, event)
+        return lambda_response(200, response_data, event)
     except ValueError as err:
         logger.warning(
             "Invalid request or not found",
@@ -142,16 +143,16 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         error_msg = str(err).lower()
         if "no active story" in error_msg:
-            return build_lambda_response_pascal(404, {"Error": "No active story found"}, event)
+            return lambda_response(404, {"Error": "No active story found"}, event)
         elif "not found" in error_msg:
-            return build_lambda_response_pascal(404, {"Error": "Character not found"}, event)
-        return build_lambda_response_pascal(400, {"Error": str(err)}, event)
+            return lambda_response(404, {"Error": "Character not found"}, event)
+        return lambda_response(400, {"Error": str(err)}, event)
     except RuntimeError as err:
         logger.error(
             "Failed to get current story",
             extra={"character_id": character_id, "error": str(err)},
             exc_info=True,
         )
-        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)

@@ -25,6 +25,7 @@ def create_player_record(user_uuid: str, email: str) -> None:
         ValueError: If user_uuid or email is missing
         RuntimeError: If database operations fail
     """
+
     if not user_uuid or not email:
         raise ValueError("Missing required user attributes (sub or email)")
 
@@ -36,15 +37,13 @@ def create_player_record(user_uuid: str, email: str) -> None:
 
         if existing_player:
             logger.info("Player already exists", extra={"user_id": user_uuid})
-            return
+            raise ValueError(f"Player {user_uuid} already exists")
 
     except ClientError as err:
         logger.error(
-            "Failed to check for existing player",
-            extra={"user_id": user_uuid, "error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
+            f"Failed to check for existing player: user_id {user_uuid} error: {err} error_code: {err.response.get('Error')}"
         )
-        raise RuntimeError(f"Failed to check for existing player: {str(err)}")
+        raise RuntimeError(f"Failed to check for existing player: {err}") from err
 
     # Create new player entry
     timestamp: str = datetime.now(timezone.utc).isoformat()
@@ -61,25 +60,16 @@ def create_player_record(user_uuid: str, email: str) -> None:
     # Write to DynamoDB
     try:
         dynamo.put_item(TableName.PLAYERS, player_item)
-        logger.info(
-            "Created new player record",
-            extra={"email": email, "user_id": user_uuid},
-        )
+        logger.debug(f"Created new player record. PlayerID: {user_uuid}, Email: {email}")
     except ClientError as err:
         logger.error(
-            "Failed to create player record",
-            extra={
-                "email": email,
-                "user_id": user_uuid,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
+            f"Failed to create player record. PlayerID: {user_uuid}, Email: {email}",
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to create player record: {str(err)}")
+        raise RuntimeError(f"Failed to create player record: {err}") from err
 
 
-def extract_player_id_from_event(event: dict) -> str:
+def extract_player_id(event: dict) -> str:
     """
     Extract player ID from Cognito authorizer claims in API Gateway event.
 
@@ -92,14 +82,14 @@ def extract_player_id_from_event(event: dict) -> str:
     Raises:
         ValueError: If player ID is not found in claims (unauthorized)
     """
-    claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    player_id = claims.get("sub")
+    claims: dict = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
+    player_id: str = claims.get("sub", "")
 
     if not player_id:
         logger.warning("No player ID found in request claims")
         raise ValueError("Unauthorized - No player ID in token")
 
-    logger.debug("Extracted player ID from claims", extra={"player_id": player_id})
+    logger.debug(f"Extracted player ID from claims player_id: {player_id}")
     return player_id
 
 
@@ -128,7 +118,7 @@ def validate_player_exists(player_id: str) -> bool:
 
     except ClientError as err:
         logger.error("Failed to validate player existence", extra={"player_id": player_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to validate player: {str(err)}")
+        raise RuntimeError(f"Failed to validate player: {err}") from err
 
 
 def get_player_data(player_id: str) -> dict:
@@ -159,7 +149,7 @@ def get_player_data(player_id: str) -> dict:
 
     except ClientError as err:
         logger.error("Failed to retrieve player data", extra={"player_id": player_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to retrieve player data: {str(err)}")
+        raise RuntimeError(f"Failed to retrieve player data: {err}") from err
 
 
 def get_player_characters(player_id: str) -> dict:
@@ -202,7 +192,7 @@ def update_player_timestamp(player_id: str, timestamp: str) -> None:
 
     except ClientError as err:
         logger.error("Failed to update player timestamp", extra={"player_id": player_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to update player timestamp: {str(err)}")
+        raise RuntimeError(f"Failed to update player timestamp: {err}") from err
 
 
 def get_formatted_character_list(player_id: str) -> list:
@@ -280,7 +270,7 @@ def delete_player_record(player_id: str) -> None:
             extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to delete player record: {str(err)}")
+        raise RuntimeError(f"Failed to delete player record: {err}") from err
 
 
 def delete_all_characters_for_player(player_id: str) -> dict:
@@ -352,7 +342,7 @@ def delete_all_characters_for_player(player_id: str) -> dict:
                         },
                         exc_info=True,
                     )
-                    results["errors"].append(f"Failed to delete character {character_name} ({character_id}): {str(err)}")
+                    results["errors"].append(f"Failed to delete character {character_name} ({character_id}): {err}")
 
         logger.info(
             "Completed deleting all characters",
@@ -366,11 +356,11 @@ def delete_all_characters_for_player(player_id: str) -> dict:
             extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             exc_info=True,
         )
-        results["errors"].append(f"Database error: {str(err)}")
+        results["errors"].append(f"Database error: {err}")
         return results
     except Exception as err:
         logger.error("Error in delete_all_characters", extra={"error": str(err)}, exc_info=True)
-        results["errors"].append(f"General error: {str(err)}")
+        results["errors"].append(f"General error: {err}")
         return results
 
 
@@ -489,7 +479,7 @@ def delete_player_character_history(player_id: str) -> int:
         return deleted_count
 
 
-def delete_player_data_completely(player_id: str) -> dict:
+def delete_player_data(player_id: str) -> dict:
     """
     Delete all player data including characters, items, segments, and history.
 
@@ -534,14 +524,14 @@ def delete_player_data_completely(player_id: str) -> dict:
             "Failed to delete player record",
             extra={"error": str(err), "player_id": player_id},
         )
-        results["errors"].append(f"Player record: {str(err)}")
+        results["errors"].append(f"Player record: {err}")
     except Exception as err:
         logger.error(
             "Unexpected error deleting player record",
             extra={"error": str(err)},
             exc_info=True,
         )
-        results["errors"].append(f"Player record: {str(err)}")
+        results["errors"].append(f"Player record: {err}")
 
     # Delete all characters and their associated data
     try:
@@ -558,7 +548,7 @@ def delete_player_data_completely(player_id: str) -> dict:
             extra={"error": str(err)},
             exc_info=True,
         )
-        results["errors"].append(f"Characters: {str(err)}")
+        results["errors"].append(f"Characters: {err}")
 
     # Delete any remaining active segments
     try:
@@ -572,7 +562,7 @@ def delete_player_data_completely(player_id: str) -> dict:
             extra={"error": str(err)},
             exc_info=True,
         )
-        results["errors"].append(f"Active segments: {str(err)}")
+        results["errors"].append(f"Active segments: {err}")
 
     # Delete character history
     try:
@@ -585,7 +575,7 @@ def delete_player_data_completely(player_id: str) -> dict:
             extra={"error": str(err)},
             exc_info=True,
         )
-        results["errors"].append(f"Character history: {str(err)}")
+        results["errors"].append(f"Character history: {err}")
 
     # Log summary
     logger.info("Deletion complete", extra={"player_id": player_id, "summary": results})

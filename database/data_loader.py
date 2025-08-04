@@ -79,10 +79,10 @@ def store_exits(exits_data):
             )
         logging.info(f"Successfully stored {len(exits_data.get('exits', []))} exits in DynamoDB")
     except ClientError as err:
-        logging.error(f"Failed to store exits in DynamoDB: {str(err)}")
+        logging.error(f"Failed to store exits in DynamoDB: {err}")
         raise
     except Exception as err:
-        logging.error(f"An unexpected error occurred while storing exits: {str(err)}")
+        logging.error(f"An unexpected error occurred while storing exits: {err}")
         raise
 
 
@@ -125,10 +125,10 @@ def store_rooms(rooms_data):
             )
         logging.info(f"Successfully stored {len(rooms_data.get('rooms', []))} rooms in DynamoDB")
     except ClientError as err:
-        logging.error(f"Failed to store rooms in DynamoDB: {str(err)}")
+        logging.error(f"Failed to store rooms in DynamoDB: {err}")
         raise
     except Exception as err:
-        logging.error(f"An unexpected error occurred while storing rooms: {str(err)}")
+        logging.error(f"An unexpected error occurred while storing rooms: {err}")
         raise
 
 
@@ -192,10 +192,10 @@ def store_archetypes(archetypes_data):
             )
         logging.info(f"Successfully stored {len(archetypes_data.get('archetypes', {}))} archetypes in DynamoDB")
     except ClientError as err:
-        logging.error(f"Failed to store archetypes in DynamoDB: {str(err)}")
+        logging.error(f"Failed to store archetypes in DynamoDB: {err}")
         raise
     except Exception as err:
-        logging.error(f"An unexpected error occurred while storing archetypes: {str(err)}")
+        logging.error(f"An unexpected error occurred while storing archetypes: {err}")
         raise
 
 
@@ -236,10 +236,10 @@ def store_item_prototypes(prototypes_data):
             )
         logging.info(f"Successfully stored {len(prototypes_data.get('itemPrototypes', []))} item prototypes in DynamoDB")
     except ClientError as err:
-        logging.error(f"Failed to store item prototypes in DynamoDB: {str(err)}")
+        logging.error(f"Failed to store item prototypes in DynamoDB: {err}")
         raise
     except Exception as err:
-        logging.error(f"An unexpected error occurred while storing item prototypes: {str(err)}")
+        logging.error(f"An unexpected error occurred while storing item prototypes: {err}")
         raise
 
 
@@ -257,10 +257,10 @@ def load_exits():
         logging.info(f"Successfully loaded {len(exits)} exits from DynamoDB")
         return exits
     except ClientError as err:
-        logging.error(f"Failed to load exits from DynamoDB: {str(err)}")
+        logging.error(f"Failed to load exits from DynamoDB: {err}")
         return {}
     except Exception as err:
-        logging.error(f"An unexpected error occurred while loading exits: {str(err)}")
+        logging.error(f"An unexpected error occurred while loading exits: {err}")
         return {}
 
 
@@ -278,10 +278,10 @@ def load_rooms():
         logging.info(f"Successfully loaded {len(rooms)} rooms from DynamoDB")
         return rooms
     except ClientError as err:
-        logging.error(f"Failed to load rooms from DynamoDB: {str(err)}")
+        logging.error(f"Failed to load rooms from DynamoDB: {err}")
         return {}
     except Exception as err:
-        logging.error(f"An unexpected error occurred while loading rooms: {str(err)}")
+        logging.error(f"An unexpected error occurred while loading rooms: {err}")
         return {}
 
 
@@ -299,10 +299,10 @@ def load_archetypes():
         logging.info(f"Successfully loaded {len(archetypes.get('archetypes', {}))} archetypes from DynamoDB")
         return archetypes
     except ClientError as err:
-        logging.error(f"Failed to load archetypes from DynamoDB: {str(err)}")
+        logging.error(f"Failed to load archetypes from DynamoDB: {err}")
         return {}
     except Exception as err:
-        logging.error(f"An unexpected error occurred while loading archetypes: {str(err)}")
+        logging.error(f"An unexpected error occurred while loading archetypes: {err}")
         return {}
 
 
@@ -320,10 +320,10 @@ def load_item_prototypes():
         logging.info(f"Successfully loaded {len(prototypes.get('itemPrototypes', []))} item prototypes from DynamoDB")
         return prototypes
     except ClientError as err:
-        logging.error(f"Failed to load item prototypes from DynamoDB: {str(err)}")
+        logging.error(f"Failed to load item prototypes from DynamoDB: {err}")
         return {}
     except Exception as err:
-        logging.error(f"An unexpected error occurred while loading item prototypes: {str(err)}")
+        logging.error(f"An unexpected error occurred while loading item prototypes: {err}")
         return {}
 
 
@@ -400,10 +400,10 @@ def store_opponents(opponents_data):
             )
         logging.info(f"Successfully stored {len(opponents_data.get('opponents', []))} opponents in DynamoDB")
     except ClientError as err:
-        logging.error(f"Failed to store opponents in DynamoDB: {str(err)}")
+        logging.error(f"Failed to store opponents in DynamoDB: {err}")
         raise
     except Exception as err:
-        logging.error(f"An unexpected error occurred while storing opponents: {str(err)}")
+        logging.error(f"An unexpected error occurred while storing opponents: {err}")
         raise
 
 
@@ -504,10 +504,10 @@ def store_story(story_data):
         logging.info(f"Successfully stored {len(segments)} segments for story '{story.get('Title', 'Unknown')}' in DynamoDB")
 
     except ClientError as err:
-        logging.error(f"Failed to store story in DynamoDB: {str(err)}")
+        logging.error(f"Failed to store story in DynamoDB: {err}")
         raise
     except Exception as err:
-        logging.error(f"An unexpected error occurred while storing story: {str(err)}")
+        logging.error(f"An unexpected error occurred while storing story: {err}")
         raise
 
 
@@ -525,10 +525,10 @@ def load_opponents():
         logging.info(f"Successfully loaded {len(opponents.get('opponents', []))} opponents from DynamoDB")
         return opponents
     except ClientError as err:
-        logging.error(f"Failed to load opponents from DynamoDB: {str(err)}")
+        logging.error(f"Failed to load opponents from DynamoDB: {err}")
         return {}
     except Exception as err:
-        logging.error(f"An unexpected error occurred while loading opponents: {str(err)}")
+        logging.error(f"An unexpected error occurred while loading opponents: {err}")
         return {}
 
 
@@ -551,10 +551,10 @@ def load_story():
         logging.info(f"Successfully loaded {len(stories)} stories and {len(segments)} segments from DynamoDB")
         return {"stories": stories, "segments": segments}
     except ClientError as err:
-        logging.error(f"Failed to load story data from DynamoDB: {str(err)}")
+        logging.error(f"Failed to load story data from DynamoDB: {err}")
         return {}
     except Exception as err:
-        logging.error(f"An unexpected error occurred while loading story: {str(err)}")
+        logging.error(f"An unexpected error occurred while loading story: {err}")
         return {}
 
 

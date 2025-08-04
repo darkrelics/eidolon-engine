@@ -220,13 +220,6 @@ from eidolon.responses import create_response, not_found_response
 
 def lambda_handler(event, context):
     """Standard Lambda handler pattern for all functions."""
-    # Log invocation
-    logger.info("Lambda invoked", extra={
-        "request_id": context.request_id,
-        "function_name": context.function_name,
-        "http_method": event.get('httpMethod'),
-        "path": event.get('path')
-    })
 
     # Handle OPTIONS preflight
     if event.get('httpMethod') == 'OPTIONS':

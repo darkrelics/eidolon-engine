@@ -63,10 +63,10 @@ Lambda functions import shared modules from the `eidolon/` directory:
 from eidolon.cors import cors_handler
 from eidolon.dynamo import dynamo
 from eidolon.logger logger
-from eidolon.requests import get_query_parameter, parse_json_body, get_required_field
+from eidolon.requests import get_query_parameter, get_required_field
 from eidolon.responses import create_response, error_response
 from eidolon.utilities import build_lambda_response, log_lambda_invocation, handle_preflight_if_options, handle_lambda_error
-from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.player import extract_player_id, validate_player_exists
 from eidolon.validation import validate_uuid
 ```
 
@@ -127,7 +127,6 @@ All Lambda functions must follow these parameter standards:
 - **Request Body**: Use for data submission (POST, PUT, PATCH)
 
   - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
-  - Use `parse_json_body()` from `eidolon.requests`
 
 - **Path Parameters**: **NEVER** use for IDs - always use query parameters instead
   - Wrong: `/characters/123`
@@ -214,7 +213,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # 3. Extract and validate authentication
     try:
-        player_id = extract_player_id_from_event(event)
+        player_id = extract_player_id(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)})
         return build_lambda_response(401, {"error": "Unauthorized"}, event)

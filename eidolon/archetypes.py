@@ -32,7 +32,7 @@ def get_all_player_archetypes() -> list:
             extra={"error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to load archetypes: {str(err)}")
+        raise RuntimeError(f"Failed to load archetypes: {err}")
 
     # Filter for player archetypes
     player_archetypes = []

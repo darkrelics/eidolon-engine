@@ -52,7 +52,7 @@ def invoke_lambda_async(function_name: str, payload: dict) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to invoke Lambda function: {str(err)}")
+        raise RuntimeError(f"Failed to invoke Lambda function: {err}")
     except Exception as err:
         logger.error(
             "Unexpected error invoking Lambda function",
@@ -62,7 +62,7 @@ def invoke_lambda_async(function_name: str, payload: dict) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to invoke Lambda function: {str(err)}")
+        raise RuntimeError(f"Failed to invoke Lambda function: {err}")
 
 
 def invoke_process_segment(function_name: str, segment: dict) -> None:

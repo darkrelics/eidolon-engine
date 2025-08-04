@@ -4,11 +4,11 @@ import time
 
 from eidolon.character import get_character_with_ownership
 from eidolon.logger import logger, log_lambda_statistics
-from eidolon.player import extract_player_id_from_event, validate_player_exists
-from eidolon.requests import get_required_field_flexible, parse_json_body
+from eidolon.player import extract_player_id, validate_player_exists
+from eidolon.requests import get_required_field_flexible
+from eidolon.responses import lambda_response
 from eidolon.segment import get_active_segment_info, insert_rest_segment
 from eidolon.utilities import (
-    build_lambda_response_pascal,
     handle_lambda_error_pascal,
     handle_preflight_if_options,
 )
@@ -127,10 +127,10 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Extract player ID from JWT
     try:
-        player_id = extract_player_id_from_event(event)
+        player_id = extract_player_id(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+        return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
@@ -138,18 +138,18 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         if not validate_player_exists(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+            return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
         logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
     # Parse request body
     try:
-        body = parse_json_body(event)
+        body: dict = event.get("body", {})
     except ValueError as err:
-        return build_lambda_response_pascal(400, {"Error": str(err)}, event)
+        return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)
 
@@ -157,7 +157,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         character_id = get_required_field_flexible(body, "CharacterID", "characterId")
     except ValueError as err:
-        return build_lambda_response_pascal(400, {"Error": str(err)}, event)
+        return lambda_response(400, {"Error": str(err)}, event)
 
     logger.info(
         "Character rest request received",
@@ -171,7 +171,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         result = handle_character_rest(player_id, character_id)  # type: ignore
         logger.info("Lambda response", extra={"status_code": 200})
-        return build_lambda_response_pascal(
+        return lambda_response(
             200,
             {
                 "Success": True,
@@ -195,10 +195,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         else:
             status_code = 400
 
-        return build_lambda_response_pascal(status_code, {"Error": error_msg}, event)
+        return lambda_response(status_code, {"Error": error_msg}, event)
     except RuntimeError as err:
         # System errors
         logger.error("Character rest system error", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return handle_lambda_error_pascal(err, context, event)

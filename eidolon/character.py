@@ -139,7 +139,7 @@ def check_character_limit(player_id: str) -> dict:
             "Error checking character limit",
             extra={"error": str(err), "player_id": player_id},
         )
-        raise RuntimeError(f"Database error checking character limit: {str(err)}")
+        raise RuntimeError(f"Database error checking character limit: {err}")
 
 
 def get_character(character_id: str) -> dict:
@@ -172,7 +172,7 @@ def get_character(character_id: str) -> dict:
             "Error retrieving character",
             extra={"error": str(err), "character_id": character_id},
         )
-        raise RuntimeError(f"Failed to retrieve character: {str(err)}")
+        raise RuntimeError(f"Failed to retrieve character: {err}")
 
     logger.info(
         "Character retrieved successfully",
@@ -270,7 +270,7 @@ def reset_character_game_mode(character_id: str) -> None:
 
     except ClientError as err:
         logger.error("Failed to reset character state", extra={"character_id": character_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to reset character state: {str(err)}")
+        raise RuntimeError(f"Failed to reset character state: {err}")
 
 
 def get_active_segment_for_character(character_id: str, player_id: str, segment_type=None) -> dict:
@@ -335,7 +335,7 @@ def get_active_segment_for_character(character_id: str, player_id: str, segment_
             "Error querying active segments",
             extra={"error": str(err), "character_id": character_id},
         )
-        raise RuntimeError(f"Failed to retrieve active segment: {str(err)}")
+        raise RuntimeError(f"Failed to retrieve active segment: {err}")
 
 
 def verify_character_in_game_mode(character: dict, expected_mode: str = "Incremental") -> dict:
@@ -430,7 +430,7 @@ def get_character_by_name(player_id: str, character_name: str) -> dict:
                 "character_name": character_name,
             },
         )
-        raise RuntimeError(f"Failed to retrieve character: {str(err)}")
+        raise RuntimeError(f"Failed to retrieve character: {err}")
 
 
 def remove_character_from_player_list(player_id: str, character_name: str) -> dict:
@@ -473,7 +473,7 @@ def remove_character_from_player_list(player_id: str, character_name: str) -> di
                 "Failed to remove character from player list",
                 extra={"error": str(err), "character_name": character_name},
             )
-            result["error"] = f"Failed to remove character from player list: {str(err)}"
+            result["error"] = f"Failed to remove character from player list: {err}"
 
     return result
 
@@ -517,7 +517,7 @@ def delete_character_items(character: dict) -> dict:
                 "Failed to delete item",
                 extra={"item_id": item_id, "error": str(err)},
             )
-            result["errors"].append(f"Failed to delete item {item_id}: {str(err)}")
+            result["errors"].append(f"Failed to delete item {item_id}: {err}")
 
     return result
 
@@ -559,14 +559,14 @@ def delete_character_active_segments(character_id: str) -> dict:
                         "segment_id": segment["ActiveSegmentID"],
                     },
                 )
-                result["errors"].append(f"Failed to delete active segment {segment['ActiveSegmentID']}: {str(err)}")
+                result["errors"].append(f"Failed to delete active segment {segment['ActiveSegmentID']}: {err}")
 
     except ClientError as err:
         logger.error(
             "Failed to query active segments",
             extra={"error": str(err), "character_id": character_id},
         )
-        result["errors"].append(f"Failed to query active segments: {str(err)}")
+        result["errors"].append(f"Failed to query active segments: {err}")
 
     return result
 
@@ -604,14 +604,14 @@ def delete_character_history(character_id: str) -> dict:
                     "Failed to delete history record",
                     extra={"error": str(err), "story_id": record["StoryID"]},
                 )
-                result["errors"].append(f"Failed to delete history record for story {record['StoryID']}: {str(err)}")
+                result["errors"].append(f"Failed to delete history record for story {record['StoryID']}: {err}")
 
     except ClientError as err:
         logger.error(
             "Failed to query history",
             extra={"error": str(err), "character_id": character_id},
         )
-        result["errors"].append(f"Failed to query history: {str(err)}")
+        result["errors"].append(f"Failed to query history: {err}")
 
     return result
 
@@ -639,7 +639,7 @@ def delete_character_record(character_id: str) -> dict:
             "Failed to delete character",
             extra={"error": str(err), "character_id": character_id},
         )
-        result["error"] = f"Failed to delete character: {str(err)}"
+        result["error"] = f"Failed to delete character: {err}"
 
     return result
 
@@ -675,7 +675,7 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
             "Failed to retrieve character for deletion",
             extra={"error": str(err), "character_id": character_id},
         )
-        results["errors"].append(f"Failed to retrieve character: {str(err)}")
+        results["errors"].append(f"Failed to retrieve character: {err}")
 
     if character:
         # Remove from player list if requested
@@ -779,7 +779,7 @@ def check_character_name_availability(character_name: str) -> bool:
             "Error checking character name availability",
             extra={"error": str(err), "character_name": character_name},
         )
-        raise RuntimeError(f"Failed to check character name availability: {str(err)}")
+        raise RuntimeError(f"Failed to check character name availability: {err}")
 
 
 def build_character_record(
@@ -860,7 +860,7 @@ def create_character_record(character_item: dict) -> bool:
             "Failed to create character record",
             extra={"character_name": character_item.get("CharacterName"), "error": str(err)},
         )
-        raise RuntimeError(f"Failed to create character record: {str(err)}")
+        raise RuntimeError(f"Failed to create character record: {err}")
 
 
 def add_character_to_player_list(player_id: str, character_name: str, character_id: str, timestamp: str) -> bool:
@@ -915,7 +915,7 @@ def add_character_to_player_list(player_id: str, character_name: str, character_
                 "player_id": player_id,
             },
         )
-        raise RuntimeError(f"Failed to add character to player list: {str(err)}")
+        raise RuntimeError(f"Failed to add character to player list: {err}")
 
 
 def rollback_character_creation(character_id: str) -> None:
@@ -1015,7 +1015,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     except RuntimeError as err:
         # Rollback character creation
         rollback_character_creation(character_id)
-        raise RuntimeError(f"Failed to create character: {str(err)}")
+        raise RuntimeError(f"Failed to create character: {err}")
 
     logger.info(
         "Character creation completed successfully",
@@ -1161,7 +1161,7 @@ def heal_expired_wounds(character_id: str) -> dict:
 
     except ClientError as err:
         logger.error("Failed to heal wounds", extra={"character_id": character_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to heal wounds: {str(err)}")
+        raise RuntimeError(f"Failed to heal wounds: {err}")
 
 
 def determine_character_state_from_wounds(max_health: int, wounds: list) -> str:
@@ -1256,7 +1256,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
         logger.error(
             "Failed to apply death/unconscious state", extra={"character_id": character_id, "error": str(err)}, exc_info=True
         )
-        raise RuntimeError(f"Failed to apply death/unconscious state: {str(err)}")
+        raise RuntimeError(f"Failed to apply death/unconscious state: {err}")
 
 
 def apply_character_updates(character_id: str, updates: dict) -> None:
@@ -1354,4 +1354,4 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
                 },
                 exc_info=True,
             )
-            raise RuntimeError(f"Failed to apply character updates: {str(err)}")
+            raise RuntimeError(f"Failed to apply character updates: {err}")

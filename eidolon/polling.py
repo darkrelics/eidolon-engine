@@ -86,7 +86,7 @@ def update_polling_state(state: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update polling state: {str(err)}")
+        raise RuntimeError(f"Failed to update polling state: {err}")
 
 
 def get_polling_state() -> str:
@@ -119,7 +119,7 @@ def get_polling_state() -> str:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get polling state: {str(err)}")
+        raise RuntimeError(f"Failed to get polling state: {err}")
 
 
 def enable_polling_infrastructure() -> None:

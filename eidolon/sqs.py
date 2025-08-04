@@ -59,7 +59,7 @@ def send_message(queue_url: str, message_body: dict, message_attributes=None) ->
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to send message to SQS: {str(err)}") from err
+        raise RuntimeError(f"Failed to send message to SQS: {err}") from err
 
 
 def send_message_batch(queue_url: str, messages: list) -> dict:
@@ -130,4 +130,4 @@ def send_message_batch(queue_url: str, messages: list) -> dict:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to send batch messages to SQS: {str(err)}") from err
+        raise RuntimeError(f"Failed to send batch messages to SQS: {err}") from err

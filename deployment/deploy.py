@@ -850,7 +850,6 @@ class IncrementalDeploymentOrchestrator:
                             print("  [INFO] Removing stale CloudFront configuration...")
 
                             # Remove from config.yml
-                            
 
                             config_manager = ConfigurationManager()
                             config_manager.remove_section("CloudFront")

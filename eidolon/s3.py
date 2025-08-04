@@ -39,7 +39,7 @@ def upload_file(bucket_name: str, file_path: str, object_name=None):
             "Failed to upload file to S3",
             extra={"file_path": file_path, "bucket_name": bucket_name, "object_name": object_name, "error": str(err)},
         )
-        raise RuntimeError(f"Failed to upload file to S3: {str(err)}")
+        raise RuntimeError(f"Failed to upload file to S3: {err}")
 
     logger.info(
         "Successfully uploaded file to S3", extra={"file_path": file_path, "bucket_name": bucket_name, "object_name": object_name}
@@ -74,7 +74,7 @@ def download_file(bucket_name: str, object_name: str, file_path: str):
             "Failed to download file from S3",
             extra={"bucket_name": bucket_name, "object_name": object_name, "file_path": file_path, "error": str(err)},
         )
-        raise RuntimeError(f"Failed to download file from S3: {str(err)}")
+        raise RuntimeError(f"Failed to download file from S3: {err}")
 
     logger.info(
         "Successfully downloaded file from S3",
@@ -105,7 +105,7 @@ def list_files(bucket_name: str, prefix: str = "") -> list:
         response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
     except ClientError as err:
         logger.error("Failed to list files in S3 bucket", extra={"bucket_name": bucket_name, "prefix": prefix, "error": str(err)})
-        raise RuntimeError(f"Failed to list files in S3 bucket: {str(err)}")
+        raise RuntimeError(f"Failed to list files in S3 bucket: {err}")
 
     files = [item.get("Key") for item in response.get("Contents", [])]
 
@@ -136,7 +136,7 @@ def delete_file(bucket_name: str, s3_key: str):
         s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
     except ClientError as err:
         logger.error("Failed to delete file from S3", extra={"bucket_name": bucket_name, "s3_key": s3_key, "error": str(err)})
-        raise RuntimeError(f"Failed to delete file from S3: {str(err)}")
+        raise RuntimeError(f"Failed to delete file from S3: {err}")
 
     logger.info("Successfully deleted file from S3", extra={"bucket_name": bucket_name, "s3_key": s3_key})
 
@@ -171,6 +171,6 @@ def validate_s3_bucket(bucket_name: str):
             logger.error(
                 "Failed to validate S3 bucket", extra={"bucket_name": bucket_name, "error_code": error_code, "error": str(err)}
             )
-            raise RuntimeError(f"Failed to validate S3 bucket: {str(err)}")
+            raise RuntimeError(f"Failed to validate S3 bucket: {err}")
 
     logger.info("Successfully validated S3 bucket", extra={"bucket_name": bucket_name})

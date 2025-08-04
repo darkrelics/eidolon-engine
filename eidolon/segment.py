@@ -285,7 +285,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get opponent data: {str(err)}") from err
+        raise RuntimeError(f"Failed to get opponent data: {err}") from err
 
     # Initialize combat state from active segment or create new
     combat_state = active_segment.get("CombatState", {})
@@ -406,7 +406,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
 
             # Check if player is defeated
             lethal_wounds = sum(1 for w in player_wounds if w.get("DamageType") == "lethal")
-            total_wounds:int = len(player_wounds)
+            total_wounds: int = len(player_wounds)
 
             if lethal_wounds >= 5:  # 5+ lethal wounds = death
                 combat_log.append(round_results)
@@ -507,7 +507,7 @@ def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
                     },
                     exc_info=True,
                 )
-                raise RuntimeError(f"Failed to update decision: {str(err)}") from err
+                raise RuntimeError(f"Failed to update decision: {err}") from err
         else:
             return "failure"
 
@@ -913,7 +913,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update segment outcome: {str(err)}") from err
+        raise RuntimeError(f"Failed to update segment outcome: {err}") from err
 
 
 def get_next_segment_and_create(
@@ -977,7 +977,7 @@ def get_next_segment_and_create(
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get next segment: {str(err)}") from err
+        raise RuntimeError(f"Failed to get next segment: {err}") from err
 
     # Create active segment for next segment
     return create_next_active_segment(
@@ -1070,7 +1070,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to create active segment: {str(err)}") from err
+        raise RuntimeError(f"Failed to create active segment: {err}") from err
 
     return active_segment_id
 
@@ -1084,7 +1084,6 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
         story_id: Story UUID
         outcome: Final outcome
     """
-
 
     # Complete the story and clean up character state
     complete_story_for_character(character_id, story_id, outcome)
@@ -1113,7 +1112,7 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update history completion: {str(err)}") from err
+        raise RuntimeError(f"Failed to update history completion: {err}") from err
 
 
 def process_segment_completely(
@@ -1162,7 +1161,7 @@ def process_segment_completely(
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get active segment: {str(err)}") from err
+        raise RuntimeError(f"Failed to get active segment: {err}") from err
 
     # Get segment definition
     try:
@@ -1177,7 +1176,7 @@ def process_segment_completely(
             extra={"segment_id": segment_id, "error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get segment definition: {str(err)}") from err
+        raise RuntimeError(f"Failed to get segment definition: {err}") from err
 
     # Get character data
     try:
@@ -1196,7 +1195,7 @@ def process_segment_completely(
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get character: {str(err)}") from err
+        raise RuntimeError(f"Failed to get character: {err}") from err
 
     # Process segment based on type
     outcome = None
@@ -1276,7 +1275,7 @@ def get_completed_segments(max_segments: int) -> list:
             extra={"error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to query completed segments: {str(err)}") from err
+        raise RuntimeError(f"Failed to query completed segments: {err}") from err
 
 
 def check_active_segments_exist() -> bool:
@@ -1305,7 +1304,7 @@ def check_active_segments_exist() -> bool:
             extra={"error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to scan active segments: {str(err)}") from err
+        raise RuntimeError(f"Failed to scan active segments: {err}") from err
 
 
 def delete_active_segment(active_segment_id: str) -> None:
@@ -1377,7 +1376,7 @@ def record_abandoned_segment_history(character_id: str, story_id: str, active_se
         )
     except ClientError as err:
         logger.error("Failed to record segment history", extra={"character_id": character_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to record segment history: {str(err)}") from err
+        raise RuntimeError(f"Failed to record segment history: {err}") from err
 
 
 def update_character_active_segment(character_id: str, active_segment_id: str) -> None:
@@ -1418,7 +1417,7 @@ def update_character_active_segment(character_id: str, active_segment_id: str) -
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update character active segment: {str(err)}") from err
+        raise RuntimeError(f"Failed to update character active segment: {err}") from err
 
 
 def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: int = 900, time_remaining: int = 0) -> str:
@@ -1461,7 +1460,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get current segment: {str(err)}") from err
+        raise RuntimeError(f"Failed to get current segment: {err}") from err
 
     # Check if current segment (A) has a next segment (B)
     next_segment_id = current_segment.get("NextSegmentID")
@@ -1503,7 +1502,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
                 },
                 exc_info=True,
             )
-            raise RuntimeError(f"Failed to get next segment: {str(err)}") from err
+            raise RuntimeError(f"Failed to get next segment: {err}") from err
 
         # Check if B has a next segment (C)
         segment_c_id = next_segment.get("NextSegmentID")
@@ -1589,7 +1588,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         except Exception:
             logger.warning("Failed to rollback rest segment")
 
-        raise RuntimeError(f"Failed to insert rest segment: {str(err)}") from err
+        raise RuntimeError(f"Failed to insert rest segment: {err}") from err
 
 
 def get_active_segment_info(active_segment_id: str) -> dict:
@@ -1626,7 +1625,7 @@ def get_active_segment_info(active_segment_id: str) -> dict:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get active segment: {str(err)}") from err
+        raise RuntimeError(f"Failed to get active segment: {err}") from err
 
 
 def claim_segment_for_processing(active_segment_id: str) -> bool:
@@ -1679,7 +1678,7 @@ def claim_segment_for_processing(active_segment_id: str) -> bool:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to claim segment: {str(err)}") from err
+        raise RuntimeError(f"Failed to claim segment: {err}") from err
 
 
 def record_segment_history(character_id: str, story_id: str, active_segment_id: str, segment_data: dict) -> None:
@@ -1758,7 +1757,7 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to record segment history: {str(err)}") from err
+        raise RuntimeError(f"Failed to record segment history: {err}") from err
 
 
 def get_active_segment(active_segment_id: str) -> dict:
@@ -1793,7 +1792,7 @@ def get_active_segment(active_segment_id: str) -> dict:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get active segment: {str(err)}") from err
+        raise RuntimeError(f"Failed to get active segment: {err}") from err
 
 
 def get_segment_definition(story_id: str, segment_id: str) -> dict:
@@ -1830,7 +1829,7 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to get segment definition: {str(err)}") from err
+        raise RuntimeError(f"Failed to get segment definition: {err}") from err
 
 
 def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str) -> object:
@@ -1925,7 +1924,7 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to update segment results: {str(err)}") from err
+        raise RuntimeError(f"Failed to update segment results: {err}") from err
 
 
 def reset_segment_processing_status(active_segment_id: str) -> None:
@@ -1958,7 +1957,7 @@ def reset_segment_processing_status(active_segment_id: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to reset segment processing status: {str(err)}") from err
+        raise RuntimeError(f"Failed to reset segment processing status: {err}") from err
 
 
 def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
@@ -1995,7 +1994,7 @@ def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to mark segment as completed exceptional: {str(err)}") from err
+        raise RuntimeError(f"Failed to mark segment as completed exceptional: {err}") from err
 
 
 def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:

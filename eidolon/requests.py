@@ -5,36 +5,6 @@ Provides common request parsing and validation helpers for API Gateway
 Lambda functions.
 """
 
-import json
-
-
-def parse_json_body(event: dict) -> dict:
-    """
-    Parse JSON body from API Gateway event.
-
-    Args:
-        event: API Gateway Lambda event
-
-    Returns:
-        Parsed JSON body as dict. Empty dict if body is empty.
-
-    Raises:
-        ValueError: If body contains invalid JSON or is not a JSON object
-    """
-    body_content = event.get("body", "")
-
-    # Handle empty body
-    if not body_content:
-        return {}
-
-    try:
-        body = json.loads(body_content)
-        if not isinstance(body, dict):
-            raise ValueError("Request body must be a JSON object")
-        return body
-    except json.JSONDecodeError as err:
-        raise ValueError(f"Invalid JSON in request body: {str(err)}")
-
 
 def get_required_field(body: dict, field: str, field_type: type = str):
     """

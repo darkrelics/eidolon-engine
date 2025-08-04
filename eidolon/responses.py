@@ -7,6 +7,9 @@ Provides consistent response formatting for API Gateway Lambda functions.
 import json
 from decimal import Decimal
 
+from eidolon.logger import logger
+from eidolon.cors import cors_handler
+
 
 def decimal_to_json_serializable(obj):
     """
@@ -60,38 +63,6 @@ def success_response(data=None, status_code: int = 200, headers=None) -> dict:
         "statusCode": status_code,
         "headers": response_headers,
         "body": body,
-    }
-
-
-def error_response(error: str, status_code: int = 400, details=None, headers=None) -> dict:
-    """
-    Create standardized error response for API Gateway.
-
-    Args:
-        error: Error message
-        status_code: HTTP status code (default 400)
-        details: Additional error details
-        headers: Additional headers to include
-
-    Returns:
-        API Gateway response dict
-    """
-    response_headers = {
-        "Content-Type": "application/json",
-    }
-
-    if headers:
-        response_headers.update(headers)
-
-    error_body = {"error": error}
-
-    if details:
-        error_body.update(details)
-
-    return {
-        "statusCode": status_code,
-        "headers": response_headers,
-        "body": json.dumps(error_body),
     }
 
 
@@ -203,7 +174,7 @@ def create_response(status_code: int, body: dict) -> dict:
     }
 
 
-def error_response_pascal(error: str, status_code: int = 400, details=None, headers=None) -> dict:
+def error_response(error: str, status_code: int = 400, details=None, headers=None) -> dict:
     """
     Create standardized error response with PascalCase fields for API Gateway.
 
@@ -216,21 +187,21 @@ def error_response_pascal(error: str, status_code: int = 400, details=None, head
     Returns:
         API Gateway response dict with PascalCase error field
     """
-    response_headers = {
+    response_headers: dict = {
         "Content-Type": "application/json",
     }
 
     if headers:
         response_headers.update(headers)
 
-    error_body = {"Error": error}
+    error_body: dict = {"Error": error}
 
     if details:
         # Convert detail keys to PascalCase
-        pascal_details = {}
+        pascal_details: dict = {}
         for key, value in details.items():
             # Simple conversion: capitalize first letter of each word
-            pascal_key = "".join(word.capitalize() for word in key.split("_"))
+            pascal_key: str = "".join(word.capitalize() for word in key.split("_"))
             pascal_details[pascal_key] = value
         error_body.update(pascal_details)
 
@@ -239,3 +210,29 @@ def error_response_pascal(error: str, status_code: int = 400, details=None, head
         "headers": response_headers,
         "body": json.dumps(error_body),
     }
+
+
+def lambda_response(status_code: int, body: dict, event: dict) -> dict:
+    """
+    Build Lambda response.
+
+    Args:
+        status_code: HTTP status code
+        body: Response body dict
+        event: Lambda event dict
+
+    Returns:
+        Formatted response with CORS headers and PascalCase field names
+    """
+    logger.info("Lambda response", extra={"status_code": status_code})
+
+    # If it's an error response with lowercase "error" key, convert to PascalCase
+    if "error" in body and status_code >= 400:
+
+        error_msg = body.get("error", "")
+        # Remove the error key and treat rest as details
+        details: dict = {k: v for k, v in body.items() if k != "error"}
+        response: dict = error_response(error_msg, status_code, details if details else None)
+        return cors_handler.add_cors_headers(response, event)
+
+    return cors_handler.add_cors_headers(create_response(status_code, body), event)

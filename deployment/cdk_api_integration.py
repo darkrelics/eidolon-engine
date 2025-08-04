@@ -96,7 +96,7 @@ class CDKApiIntegration:
         except Exception as err:
             if isinstance(err, CDKDeploymentError):
                 raise
-            raise CDKDeploymentError(f"Error checking CDK bootstrap: {str(err)}", {}) from err
+            raise CDKDeploymentError(f"Error checking CDK bootstrap: {err}", {}) from err
 
     def _run_cdk_bootstrap(self, account_id: str) -> None:
         """Run CDK bootstrap command."""
@@ -125,7 +125,7 @@ class CDKApiIntegration:
             print("[OK] CDK bootstrap completed successfully")
 
         except subprocess.CalledProcessError as err:
-            raise CDKDeploymentError(f"CDK bootstrap command failed: {str(err)}", {}) from err
+            raise CDKDeploymentError(f"CDK bootstrap command failed: {err}", {}) from err
 
     def _setup_environment(self) -> None:
         """Configure environment for CDK operations."""

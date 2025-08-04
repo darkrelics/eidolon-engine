@@ -20,13 +20,12 @@ def log_lambda_statistics(event, context) -> None:
     """
     # Log basic Lambda function details
     if context:
-        logger.debug(f"Function: {context.function_name}")
+        logger.info(f"Function: {context.function_name}")
         logger.debug(f"Memory: {context.memory_limit_in_mb}")
         logger.debug(f"Time Remaining: {context.get_remaining_time_in_millis()}")
 
     # Log details from the event, particularly for authentication and authorization
     if event:
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-        logger.info(f"Organization: {claims.get('custom:org_key')}")
         logger.info(f"User: {claims.get('cognito:username')}")
         logger.debug(f"Event: {json.dumps(event, indent=2)}")

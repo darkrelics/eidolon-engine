@@ -300,7 +300,7 @@ def get_character(character_id: str) -> dict:
             raise ValueError(f"Character {character_id} not found")
         return character
     except ClientError as err:
-        raise RuntimeError(f"Database error: {str(err)}")
+        raise RuntimeError(f"Database error: {err}")
 
 # Good - in Lambda handler
 def lambda_handler(event: dict, context: object) -> dict:
@@ -358,7 +358,7 @@ try:
     result = dynamo.get_item(...)
 except ClientError as err:
     logger.error("Database operation failed", extra={"error": str(err)})
-    raise RuntimeError(f"Failed to get item: {str(err)}")
+    raise RuntimeError(f"Failed to get item: {err}")
 
 # Bad - using other variable names
 try:
@@ -511,13 +511,13 @@ try:
     data = get_data()
 except ClientError as err:
     logger.error("Database failed", extra={"error": str(err)})
-    raise RuntimeError(f"Failed to get data: {str(err)}")
+    raise RuntimeError(f"Failed to get data: {err}")
 
 try:
     result = process_data(data)
 except ValueError as err:
     logger.error("Processing failed", extra={"error": str(err)})
-    raise RuntimeError(f"Failed to process: {str(err)}")
+    raise RuntimeError(f"Failed to process: {err}")
 
 # Good - separate functions
 def get_and_process_data() -> dict:
@@ -624,7 +624,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         # All code that might raise exceptions goes here
         player_id = extract_player_id(event)
-        body = parse_json_body(event)
+        body: dict = event.get("body", {})
         result = business_logic_function(player_id, body)
         return create_response(200, result)
     except ValueError as err:
@@ -656,7 +656,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id = extract_player_id(event)
 
         # 4. Parse request
-        body = parse_json_body(event)
+        body: dict = event.get("body", {})
 
         # 5. Call business logic
         result = business_logic_function(player_id, body.get("param"))
@@ -967,6 +967,54 @@ logger.error(
 # Bad
 logger.info(f"Character {character_id} created for player {player_id}")
 ```
+
+### Consistent Log Levels in Exception Blocks
+
+Within a single exception block, use only one log level. Don't mix info/warning/error levels in the same except clause. This ensures consistent severity reporting and makes log analysis more effective:
+
+```python
+# Bad - mixing log levels in one exception block
+try:
+    character = get_character(character_id)
+    apply_damage(character, damage)
+except ValueError as err:
+    logger.info("Starting error handling")  # Wrong - unnecessary info log
+    logger.error("Failed to apply damage", extra={"error": str(err)})
+    return error_response(str(err), 400)
+
+# Bad - info log followed by error in same block
+try:
+    result = process_combat(attacker, defender)
+except RuntimeError as err:
+    logger.info("Combat processing failed", extra={"attacker": attacker["Name"]})
+    logger.error("Combat error", extra={"error": str(err)})  # Redundant
+    raise
+
+# Good - single appropriate log level per exception block
+try:
+    character = get_character(character_id)
+    apply_damage(character, damage)
+except ValueError as err:
+    logger.warning("Invalid damage request", extra={"error": str(err), "character_id": character_id})
+    return error_response(str(err), 400)
+except RuntimeError as err:
+    logger.error("Failed to apply damage", extra={"error": str(err)}, exc_info=True)
+    return error_response("Internal server error", 500)
+
+# Good - info logs outside exception handling
+logger.info("Processing combat", extra={"attacker": attacker_id, "defender": defender_id})
+try:
+    result = process_combat(attacker, defender)
+    logger.info("Combat completed", extra={"result": result["outcome"]})
+except RuntimeError as err:
+    logger.error("Combat processing failed", extra={"error": str(err)}, exc_info=True)
+    raise
+```
+
+Choose the appropriate log level based on the exception's severity:
+- `logger.warning`: For expected errors that are handled gracefully (e.g., validation failures)
+- `logger.error`: For unexpected errors or system failures
+- `logger.info`: For normal flow logging, placed outside exception blocks
 
 ## Dictionary Operations
 
