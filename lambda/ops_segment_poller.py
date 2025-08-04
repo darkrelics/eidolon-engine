@@ -15,7 +15,7 @@ from botocore.exceptions import ClientError
 from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.polling import disable_polling_infrastructure, enable_polling_infrastructure, get_polling_state
-from eidolon.responses import lambda_response, lambda_error
+from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import (
     check_active_segments_exist,
     get_completed_segments,

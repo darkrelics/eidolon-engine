@@ -1,12 +1,13 @@
 """Lambda function to add a new character for the incremental game."""
 
-from eidolon.character import character_name_filter, check_character_limit, create_character, get_archetype
+from eidolon.archetypes import get_archetype
+from eidolon.character import character_name_filter, check_character_limit, create_character
 from eidolon.cors import cors_handler
 from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player_exists
-from eidolon.requests import get_optional_field_flexible, get_required_field_flexible
-from eidolon.responses import lambda_response, lambda_error
+from eidolon.requests import get_optional_field_flexible
+from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_character_name
 
 
@@ -38,7 +39,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
         raise ValueError("Character name is not available")
 
     # Check character limit
-    limit_result = check_character_limit(player_id)
+    limit_result: dict = check_character_limit(player_id)
     can_create = limit_result.get("can_create", False)
     current_count = limit_result.get("current_count", 0)
 
@@ -56,7 +57,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
         raise ValueError(f"Character limit reached ({current_count})")
 
     # Validate archetype or use defaults
-    archetype_data = {}
+    archetype_data: dict = {}
 
     if archetype_name:
         # Try to get the archetype data
@@ -74,24 +75,14 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
             archetype_data = {}
             archetype_name = "default"
         else:
-            logger.info(
-                "Archetype found",
-                extra={
-                    "archetype_name": archetype_name,
-                    "has_attributes": bool(archetype_data.get("Attributes")),
-                    "has_skills": bool(archetype_data.get("Skills")),
-                    "health": archetype_data.get("Health"),
-                    "essence": archetype_data.get("Essence"),
-                    "available_stories": archetype_data.get("AvailableStories", []),
-                },
-            )
+            logger.info(f"Archetype {archetype_name} found",)
     else:
         # No archetype provided, use defaults
         logger.info("No archetype specified, using defaults")
         archetype_name = "default"
 
     # Create the character using the eidolon library function
-    result = create_character(player_id, character_name, archetype_name, archetype_data)
+    result: dict = create_character(player_id, character_name, archetype_name, archetype_data)
 
     return {"character_id": result.get("character_id"), "archetype_name": result.get("archetype", "default")}
 
@@ -108,7 +99,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Extract player ID from JWT
     try:
-        player_id = extract_player_id(event)
+        player_id: str = extract_player_id(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
@@ -118,10 +109,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Validate player exists
     try:
         if not validate_player_exists(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id})
+            logger.error(f"Player not found in database: {player_id}")
             return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Failed to validate player: {err}", exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -129,14 +120,15 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Parse request body
     try:
         body: dict = event.get("body", {})
-    except ValueError as err:
-        return lambda_response(400, {"Error": str(err)}, event)
+    except ValueError:
+        return lambda_response(400, {"Error": "Unable Parse Payload"}, event)
     except Exception as err:
+        logger.error(f"Failed to parse request body: {err}", exc_info=True)
         return lambda_error(event, err)
 
     # Extract and validate required fields with flexible casing
     try:
-        character_name = get_required_field_flexible(body, "CharacterName", "characterName")
+        character_name: str = body.get("character_name") or body.get("CharacterName")  # type: ignore
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
 
@@ -153,7 +145,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Call business logic
     try:
-        result = handle_character_creation(player_id, character_name, archetype_name)  # type: ignore
+        result: dict = handle_character_creation(player_id, character_name, archetype_name)  # type: ignore
         logger.info("Lambda response", extra={"status_code": 201})
         return lambda_response(
             201,
@@ -168,7 +160,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     except ValueError as err:
         # Business logic errors (invalid name, limit reached, name taken)
         logger.warning("Character creation validation failed", extra={"error": str(err)})
-        status_code = 409 if str(err) == "Character name is already taken" else 400
+        status_code: int = 409 if str(err) == "Character name is already taken" else 400
         return lambda_response(status_code, {"Error": str(err)}, event)
     except RuntimeError as err:
         # System errors (database failures, etc.)

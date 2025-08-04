@@ -232,49 +232,6 @@ def get_query_parameter_flexible(event: dict, param_pascal: str, param_camel: st
     return value if value else None
 
 
-def get_required_field_flexible(body: dict, field_pascal: str, field_camel: str = "", field_type: type = str):
-    """
-    Extract and validate required field from request body with flexible casing.
-
-    Tries PascalCase first, then camelCase if provided.
-
-    Args:
-        body: Parsed request body
-        field_pascal: Field name in PascalCase (preferred)
-        field_camel: Field name in camelCase (fallback)
-        field_type: Expected type of the field (default: str)
-
-    Returns:
-        Field value of the expected type
-
-    Raises:
-        ValueError: If field is missing, wrong type, or empty string
-    """
-    # Try PascalCase first
-    if field_pascal in body:
-        value = body.get(field_pascal)
-    elif field_camel and field_camel in body:
-        value = body.get(field_camel)
-    else:
-        raise ValueError(f"Missing required field: {field_pascal}")
-
-    # Special handling for strings - strip whitespace
-    if field_type is str:
-        if not isinstance(value, str):
-            raise ValueError(f"Field '{field_pascal}' must be a string")
-        value = value.strip()
-        if not value:
-            raise ValueError(f"Field '{field_pascal}' cannot be empty")
-        return value
-
-    # Type validation for other types
-    if not isinstance(value, field_type):
-        type_name = field_type.__name__
-        raise ValueError(f"Field '{field_pascal}' must be a {type_name}")
-
-    return value
-
-
 def get_optional_field_flexible(body: dict, field_pascal: str, field_camel: str = "", field_type: type = str, default=None):
     """
     Extract optional field from request body with flexible casing.

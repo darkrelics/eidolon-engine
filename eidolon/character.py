@@ -69,40 +69,6 @@ def generate_character_id() -> str:
     return str(uuid.uuid4())
 
 
-def get_archetype(archetype_name: str) -> dict:
-    """
-    Retrieve and validate an archetype from DynamoDB.
-
-    Args:
-        archetype_name: Name of the archetype.
-
-    Returns:
-        Archetype data dict. Empty dict if not found/not player-available.
-    """
-    try:
-        archetype = dynamo.get_item(TableName.ARCHETYPES, {"ArchetypeName": archetype_name})
-
-        if not archetype:
-            logger.warning("Archetype not found", extra={"archetype_name": archetype_name})
-            return {}
-
-        if not archetype.get("Player", False):
-            logger.warning(
-                "Archetype not available to players",
-                extra={"archetype_name": archetype_name},
-            )
-            return {}
-
-        return archetype
-
-    except ClientError as err:
-        logger.error(
-            "Error retrieving archetype",
-            extra={"error": str(err), "archetype_name": archetype_name},
-        )
-        return {}
-
-
 def check_character_limit(player_id: str) -> dict:
     """
     Check if player has reached character limit.
@@ -139,7 +105,7 @@ def check_character_limit(player_id: str) -> dict:
             "Error checking character limit",
             extra={"error": str(err), "player_id": player_id},
         )
-        raise RuntimeError(f"Database error checking character limit: {err}")
+        raise RuntimeError(f"Database error checking character limit: {err}") from err
 
 
 def get_character(character_id: str) -> dict:
@@ -172,7 +138,7 @@ def get_character(character_id: str) -> dict:
             "Error retrieving character",
             extra={"error": str(err), "character_id": character_id},
         )
-        raise RuntimeError(f"Failed to retrieve character: {err}")
+        raise RuntimeError(f"Failed to retrieve character: {err}") from err
 
     logger.info(
         "Character retrieved successfully",
@@ -270,7 +236,7 @@ def reset_character_game_mode(character_id: str) -> None:
 
     except ClientError as err:
         logger.error("Failed to reset character state", extra={"character_id": character_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to reset character state: {err}")
+        raise RuntimeError(f"Failed to reset character state: {err}") from err
 
 
 def get_active_segment_for_character(character_id: str, player_id: str, segment_type=None) -> dict:
@@ -335,7 +301,7 @@ def get_active_segment_for_character(character_id: str, player_id: str, segment_
             "Error querying active segments",
             extra={"error": str(err), "character_id": character_id},
         )
-        raise RuntimeError(f"Failed to retrieve active segment: {err}")
+        raise RuntimeError(f"Failed to retrieve active segment: {err}") from err
 
 
 def verify_character_in_game_mode(character: dict, expected_mode: str = "Incremental") -> dict:
@@ -430,7 +396,7 @@ def get_character_by_name(player_id: str, character_name: str) -> dict:
                 "character_name": character_name,
             },
         )
-        raise RuntimeError(f"Failed to retrieve character: {err}")
+        raise RuntimeError(f"Failed to retrieve character: {err}") from err
 
 
 def remove_character_from_player_list(player_id: str, character_name: str) -> dict:
@@ -779,7 +745,7 @@ def check_character_name_availability(character_name: str) -> bool:
             "Error checking character name availability",
             extra={"error": str(err), "character_name": character_name},
         )
-        raise RuntimeError(f"Failed to check character name availability: {err}")
+        raise RuntimeError(f"Failed to check character name availability: {err}") from err
 
 
 def build_character_record(
@@ -860,7 +826,7 @@ def create_character_record(character_item: dict) -> bool:
             "Failed to create character record",
             extra={"character_name": character_item.get("CharacterName"), "error": str(err)},
         )
-        raise RuntimeError(f"Failed to create character record: {err}")
+        raise RuntimeError(f"Failed to create character record: {err}") from err
 
 
 def add_character_to_player_list(player_id: str, character_name: str, character_id: str, timestamp: str) -> bool:
@@ -915,7 +881,7 @@ def add_character_to_player_list(player_id: str, character_name: str, character_
                 "player_id": player_id,
             },
         )
-        raise RuntimeError(f"Failed to add character to player list: {err}")
+        raise RuntimeError(f"Failed to add character to player list: {err}") from err
 
 
 def rollback_character_creation(character_id: str) -> None:
@@ -1003,9 +969,10 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     # Create character record
     try:
         create_character_record(character_item)
-    except RuntimeError:
+    except RuntimeError as err:
         # Re-raise as character creation failed
-        raise
+        logger.error(f"Failed to create character record: {err}")
+        raise RuntimeError(f"Failed to create character: {err}") from err
 
     # Add to player's character list
     try:
@@ -1015,7 +982,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     except RuntimeError as err:
         # Rollback character creation
         rollback_character_creation(character_id)
-        raise RuntimeError(f"Failed to create character: {err}")
+        raise RuntimeError(f"Failed to create character: {err}") from err
 
     logger.info(
         "Character creation completed successfully",
@@ -1161,7 +1128,7 @@ def heal_expired_wounds(character_id: str) -> dict:
 
     except ClientError as err:
         logger.error("Failed to heal wounds", extra={"character_id": character_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to heal wounds: {err}")
+        raise RuntimeError(f"Failed to heal wounds: {err}") from err
 
 
 def determine_character_state_from_wounds(max_health: int, wounds: list) -> str:
@@ -1256,7 +1223,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
         logger.error(
             "Failed to apply death/unconscious state", extra={"character_id": character_id, "error": str(err)}, exc_info=True
         )
-        raise RuntimeError(f"Failed to apply death/unconscious state: {err}")
+        raise RuntimeError(f"Failed to apply death/unconscious state: {err}") from err
 
 
 def apply_character_updates(character_id: str, updates: dict) -> None:
@@ -1354,4 +1321,4 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
                 },
                 exc_info=True,
             )
-            raise RuntimeError(f"Failed to apply character updates: {err}")
+            raise RuntimeError(f"Failed to apply character updates: {err}") from err

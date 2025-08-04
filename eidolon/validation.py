@@ -8,8 +8,8 @@ import re
 
 # Character name validation constants
 NAME_PATTERN = re.compile(r"^[a-zA-Z'-]+$")
-MIN_NAME_LENGTH = 4
-MAX_NAME_LENGTH = 20
+MIN_NAME_LENGTH: int = 4
+MAX_NAME_LENGTH: int = 20
 
 
 def validate_character_name(name: str) -> None:
@@ -61,19 +61,19 @@ def validate_character_name(name: str) -> None:
         raise ValueError("Short names cannot contain special characters")
 
     # Ensure reasonable letter-to-special-character ratio
-    letter_count = sum(1 for c in name if c.isalpha())
+    letter_count: int = sum(1 for c in name if c.isalpha())
     if letter_count / len(name) < 0.5:
         raise ValueError("Name must be primarily letters")
 
     # Check reserved prefixes
-    name_lower = name.lower()
-    reserved_prefixes = ["gm_", "admin_", "mod_", "system_", "server_", "npc_"]
+    name_lower: str = name.lower()
+    reserved_prefixes: list = ["gm_", "admin_", "mod_", "system_", "server_", "npc_"]
     for prefix in reserved_prefixes:
         if name_lower.startswith(prefix):
             raise ValueError("Name uses reserved prefix")
 
     # Check reserved exact names
-    reserved_names = ["admin", "administrator", "moderator", "gamemaster", "system"]
+    reserved_names: list = ["admin", "administrator", "moderator", "gamemaster", "system"]
     if name_lower in reserved_names:
         raise ValueError("Name is reserved")
 
@@ -170,36 +170,3 @@ def sanitize_string(value: str, max_length=None) -> str:
     value = "".join(char for char in value if ord(char) >= 32 or char in "\n\r\t")
 
     return value
-
-
-def validate_password_strength(password: str) -> None:
-    """
-    Validate password meets security requirements.
-
-    Requirements:
-    - At least 8 characters long
-    - Contains uppercase letter
-    - Contains lowercase letter
-    - Contains number
-    - Contains special character
-
-    Args:
-        password: Password to validate
-
-    Raises:
-        ValueError: If password does not meet security requirements
-    """
-    if len(password) < 8:
-        raise ValueError("Password must be at least 8 characters long")
-
-    if not re.search(r"[A-Z]", password):
-        raise ValueError("Password must contain at least one uppercase letter")
-
-    if not re.search(r"[a-z]", password):
-        raise ValueError("Password must contain at least one lowercase letter")
-
-    if not re.search(r"\d", password):
-        raise ValueError("Password must contain at least one number")
-
-    if not re.search(r"[@$!%*?&]", password):
-        raise ValueError("Password must contain at least one special character (@$!%*?&)")

@@ -299,7 +299,7 @@ class LambdaStack(cdk.Stack):
         # Add Character Lambda
         self.add_character_function = self.create_lambda_function(
             "api-add-character",
-            "api_add_character.lambda_handler",
+            "api_character_add.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,

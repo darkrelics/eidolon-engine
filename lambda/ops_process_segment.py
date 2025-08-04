@@ -12,7 +12,7 @@ import json
 
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.polling import disable_polling_infrastructure
-from eidolon.responses import lambda_response, lambda_error
+from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import check_active_segments_exist, is_mechanical_segment, process_segment_completely
 
 

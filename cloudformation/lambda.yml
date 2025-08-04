@@ -91,7 +91,7 @@ Resources:
     Properties:
       FunctionName: !Sub "${GameName}-api-add-character"
       Runtime: python3.12
-      Handler: api_add_character.lambda_handler
+      Handler: api_character_add.lambda_handler
       Code:
         S3Bucket: !Ref LambdaBucketName
         S3Key: !Ref LambdaZipKey

@@ -12,8 +12,7 @@ from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player_exists
 from eidolon.polling import ensure_polling_enabled
-from eidolon.requests import get_required_field_flexible
-from eidolon.responses import lambda_response, lambda_error
+from eidolon.responses import lambda_error, lambda_response
 from eidolon.sqs import send_message
 from eidolon.story import start_story_for_character
 from eidolon.validation import validate_uuid
@@ -164,8 +163,9 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Parse request body with flexible field names
     try:
         body: dict = event.get("body", {})
-        character_id = get_required_field_flexible(body, "CharacterID", "characterID")
-        story_id = get_required_field_flexible(body, "StoryID", "storyID")
+        character_id: str = body.get("character_id") or body.get("CharacterID")  # type: ignore
+        story_id: str = body.get("story_id") or body.get("StoryID")  # type: ignore
+
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:

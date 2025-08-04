@@ -237,6 +237,7 @@ def lambda_response(status_code: int, body: dict, event: dict) -> dict:
 
     return cors_handler.add_cors_headers(create_response(status_code, body), event)
 
+
 def lambda_error(event: dict, err: Exception) -> dict:
     """
     Handle Lambda function errors with proper logging and CORS response using PascalCase.

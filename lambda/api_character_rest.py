@@ -6,8 +6,7 @@ from eidolon.character import get_character_with_ownership
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player_exists
-from eidolon.requests import get_required_field_flexible
-from eidolon.responses import lambda_response, lambda_error
+from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import get_active_segment_info, insert_rest_segment
 
 # Rest segment configuration
@@ -151,7 +150,8 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Extract and validate required fields
     try:
-        character_id = get_required_field_flexible(body, "CharacterID", "characterId")
+        character_id: str = body.get("character_id") or body.get("CharacterID")  # type: ignore
+
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
 

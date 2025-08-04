@@ -35,7 +35,7 @@ These functions handle character operations for both Portal and Incremental inte
 #### Implemented Functions:
 
 - `api_list_characters.py` - List all characters for a player
-- `api_add_character.py` - Create new character with bloom filter name validation
+- `api_character_add.py` - Create new character with bloom filter name validation
 - `api_get_character.py` - Get character details including active story segments (enriches inventory with item details)
 - `api_delete_character.py` - Delete a character by ID
 - `api_archetypes_get.py` - Get available character archetypes

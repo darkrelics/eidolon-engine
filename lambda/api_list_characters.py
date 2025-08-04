@@ -10,7 +10,7 @@ Returns only character names and death status from the player table.
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, get_formatted_character_list, validate_player_exists
-from eidolon.responses import lambda_response, lambda_error
+from eidolon.responses import lambda_error, lambda_response
 
 
 def list_characters_business_logic(player_id: str) -> dict:

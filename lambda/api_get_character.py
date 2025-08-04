@@ -14,7 +14,7 @@ from eidolon.items import get_inventory_details
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
-from eidolon.responses import lambda_response, lambda_error
+from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_uuid
 
 

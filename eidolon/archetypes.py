@@ -57,3 +57,37 @@ def get_archtypes() -> list:
 
     logger.info(f"Loaded player archetypes {len(player_archetypes)}")
     return player_archetypes
+
+
+def get_archetype(archetype_name: str) -> dict:
+    """
+    Retrieve and validate an archetype from DynamoDB.
+
+    Args:
+        archetype_name: Name of the archetype.
+
+    Returns:
+        Archetype data dict. Empty dict if not found/not player-available.
+    """
+    try:
+        archetype = dynamo.get_item(TableName.ARCHETYPES, {"ArchetypeName": archetype_name})
+
+        if not archetype:
+            logger.warning("Archetype not found", extra={"archetype_name": archetype_name})
+            return {}
+
+        if not archetype.get("Player", False):
+            logger.warning(
+                "Archetype not available to players",
+                extra={"archetype_name": archetype_name},
+            )
+            return {}
+
+        return archetype
+
+    except ClientError as err:
+        logger.error(
+            "Error retrieving archetype",
+            extra={"error": str(err), "archetype_name": archetype_name},
+        )
+        return {}

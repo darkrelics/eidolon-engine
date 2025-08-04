@@ -10,8 +10,7 @@ Updates the active segment with the player's choice and returns the next segment
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player_exists
-from eidolon.requests import get_required_field_flexible
-from eidolon.responses import lambda_response, lambda_error
+from eidolon.responses import lambda_error, lambda_response
 from eidolon.story import submit_decision_for_character
 
 
@@ -77,8 +76,9 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Parse request body with flexible field names
     try:
         body: dict = event.get("body", {})
-        character_id = get_required_field_flexible(body, "CharacterID", "characterID")
-        decision_id = get_required_field_flexible(body, "Decision", "decision")
+        character_id: str = body.get("character_id") or body.get("CharacterID")  # type: ignore
+        decision_id: str = body.get("decision") or body.get("Decision")  # type: ignore
+
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:
