@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
-from eidolon.character import apply_character_updates, heal_expired_wounds
+from eidolon.character import apply_character_updates
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.story import (
@@ -702,7 +702,7 @@ def process_rest_segment(segment_def: dict, character: dict) -> tuple:
     Process a rest segment.
 
     Rest segments are simply time delays that allow natural wound healing
-    to occur via heal_expired_wounds() at the start of the next segment.
+    to occur.
 
     Args:
         segment_def: Segment definition from Segments table
@@ -717,7 +717,6 @@ def process_rest_segment(segment_def: dict, character: dict) -> tuple:
     )
 
     # Rest segments always have normal outcome
-    # Healing happens automatically via heal_expired_wounds() at segment start
     return "normal", {}
 
 
@@ -1001,17 +1000,6 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
     Returns:
         Active segment ID
     """
-    # Heal any expired wounds before creating new segment
-    try:
-        heal_result = heal_expired_wounds(character_id)
-        if heal_result.get("healed_count", 0) > 0:
-            logger.info(
-                "Healed wounds before creating next segment",
-                extra={"character_id": character_id, "healed_count": heal_result["healed_count"]},
-            )
-    except Exception as err:
-        logger.warning("Failed to heal wounds before segment creation", extra={"character_id": character_id, "error": str(err)})
-        # Non-critical - continue with segment creation
 
     segment_id = segment.get("SegmentID")
     segment_type = segment.get("SegmentType", "mechanical")

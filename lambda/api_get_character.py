@@ -7,14 +7,13 @@ Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-from eidolon.character import get_active_segment_for_character, heal_expired_wounds, character_get
+from eidolon.character import get_active_segment_for_character, character_get
 from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float
 from eidolon.items import get_inventory
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.validation import validate_uuid
 
 
 def get_character_logic(character_id: str, player_id: str) -> dict:
@@ -32,24 +31,6 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
             - error: str (if failed)
             - status_code: int (if failed)
     """
-    # Validate character ID format
-    if not character_id:
-        return {"success": False, "error": "Missing required parameter: characterId", "status_code": 400}
-
-    if not validate_uuid(character_id):
-        return {"success": False, "error": "Invalid character ID format", "status_code": 400}
-
-    # Heal expired wounds before getting character data
-    try:
-        heal_result = heal_expired_wounds(character_id)
-        if heal_result.get("healed_count", 0) > 0:
-            logger.info(
-                "Healed wounds before returning character",
-                extra={"character_id": character_id, "healed_count": heal_result["healed_count"]},
-            )
-    except Exception as err:
-        logger.warning("Failed to heal wounds before getting character", extra={"character_id": character_id, "error": str(err)})
-        # Non-critical - continue with character retrieval
 
     # Get character and validate ownership
     try:
@@ -151,7 +132,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Call business logic
     try:
-        result = get_character_logic(character_id, player_id)  # type: ignore
+        result: dict = get_character_logic(character_id, player_id)  # type: ignore
 
         if result.get("success"):
             logger.info("Lambda response", extra={"status_code": 200})

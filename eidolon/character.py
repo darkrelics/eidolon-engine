@@ -9,7 +9,6 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from attr import validate
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
@@ -199,6 +198,56 @@ def character_get(character_id: str, player_id: str) -> dict:
 
     logger.debug(f"Character retrieved successfully: {character_id}")
 
+    # Heal expired wounds
+
+    if character.get("Wounds") and character.get("CharState") != "dead":
+        wounds: list = character.get("Wounds", [])
+        current_time: datetime = datetime.now(timezone.utc)
+
+        remainging_wounds: list = []
+
+        for wound in wounds:
+            heal_at: str = wound.get("HealedAt")
+
+            try:
+                if datetime.fromisoformat(heal_at.replace("Z", "+00:00")) > current_time:
+                    remainging_wounds.append(wound)
+            except AttributeError:
+                continue
+
+        if len(remainging_wounds) < len(wounds):
+            character["Wounds"] = remainging_wounds
+
+            logger.info("It's a mircical!")
+
+            # Update character with healed wounds
+
+            if character.get("CharState", "standing") == "unconscious":
+                character["CharState"] = "standing"
+
+            # Update the character's wounds in the database
+
+            update_expression = "SET Wounds = :wounds, CharState = :state, UpdatedAt = :timestamp"
+            expression_values: dict = {
+                ":wounds": remainging_wounds,
+                ":state": character.get("CharState", "standing"),
+                ":timestamp": datetime.now(timezone.utc).isoformat(),
+                
+            }
+
+            try:
+
+                dynamo.update_item(
+                    TableName.CHARACTERS,
+                    Key={"CharacterID": character_id},
+                    UpdateExpression=update_expression,
+                    ExpressionAttributeValues=expression_values,
+                )
+                logger.info("Updated character wounds after healing")
+            except ClientError as err:
+                logger.error("Failed to update character.")
+                raise RuntimeError(f"Failed to update character wounds: {err}") from err
+            
     # Validate ownership
 
     if character.get("PlayerID") != player_id:
@@ -1002,140 +1051,6 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     )
 
     return {"character_id": character_id, "character_name": character_name, "archetype": archetype_name}
-
-
-def heal_expired_wounds(character_id: str) -> dict:
-    """
-    Check and heal wounds that have passed their recovery timestamp.
-
-    This function removes wounds from the character's wounds list where the HealAt
-    timestamp is in the past. Should be called at the start of every segment.
-    Dead characters do not heal and will return immediately with no changes.
-
-    Args:
-        character_id: Character UUID
-
-    Returns:
-        Dict with:
-            - healed_count: Number of wounds healed
-            - remaining_wounds: List of wounds still active
-            - error: Error message if operation failed
-
-    Raises:
-        ValueError: If character_id is invalid
-        RuntimeError: If database operation fails
-    """
-    if not validate_uuid(character_id):
-        raise ValueError("Invalid character ID format")
-
-    try:
-        # Get character to check wounds
-        character = get_character(character_id)
-
-        # Dead characters don't heal
-        if character.get("CharState") == "dead":
-            logger.info("Character is dead, no healing occurs", extra={"character_id": character_id})
-            return {"healed_count": 0, "remaining_wounds": character.get("Wounds", []), "error": None}
-
-        wounds = character.get("Wounds", [])
-
-        if not wounds:
-            logger.info("No wounds to heal", extra={"character_id": character_id})
-            return {"healed_count": 0, "remaining_wounds": [], "error": None}
-
-        # Current time for comparison
-        current_time = datetime.now(timezone.utc)
-
-        # Separate wounds into healed and remaining
-        remaining_wounds = []
-        healed_wounds = []
-
-        for wound in wounds:
-            heal_at_str = wound.get("HealAt")
-            if not heal_at_str:
-                # Keep wounds without HealAt timestamp
-                remaining_wounds.append(wound)
-                continue
-
-            try:
-                # Parse HealAt timestamp
-                heal_at = datetime.fromisoformat(heal_at_str.replace("Z", "+00:00"))
-
-                if heal_at <= current_time:
-                    # Wound has healed
-                    healed_wounds.append(wound)
-                    logger.debug(
-                        "Wound healed",
-                        extra={
-                            "character_id": character_id,
-                            "damage_type": wound.get("DamageType"),
-                            "heal_at": heal_at_str,
-                        },
-                    )
-                else:
-                    # Wound still active
-                    remaining_wounds.append(wound)
-            except (ValueError, AttributeError) as err:
-                logger.warning(
-                    "Invalid wound HealAt timestamp",
-                    extra={"character_id": character_id, "heal_at": heal_at_str, "error": str(err)},
-                )
-                # Keep wounds with invalid timestamps
-                remaining_wounds.append(wound)
-
-        # Update character if any wounds healed
-        if healed_wounds:
-            update_expression = "SET Wounds = :wounds, UpdatedAt = :timestamp"
-            expression_values = {
-                ":wounds": remaining_wounds,
-                ":timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-
-            # Check for consciousness recovery
-            current_state = character.get("CharState", "standing")
-            if current_state == "unconscious":
-                # Calculate current health after healing
-                max_health = character.get("MaxHealth", 10)
-                current_health = max_health - len(remaining_wounds)
-
-                if current_health > 0:
-                    # Character regains consciousness
-                    update_expression += ", CharState = :state"
-                    expression_values[":state"] = "standing"
-
-                    logger.info(
-                        "Character will regain consciousness",
-                        extra={
-                            "character_id": character_id,
-                            "health": current_health,
-                            "max_health": max_health,
-                            "wounds_remaining": len(remaining_wounds),
-                        },
-                    )
-
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_values,
-            )
-
-            logger.info(
-                "Healed expired wounds",
-                extra={
-                    "character_id": character_id,
-                    "healed_count": len(healed_wounds),
-                    "remaining_count": len(remaining_wounds),
-                    "healed_types": [w.get("DamageType") for w in healed_wounds],
-                    "consciousness_recovered": expression_values.get(":state") == "standing",
-                },
-            )
-
-        return {"healed_count": len(healed_wounds), "remaining_wounds": remaining_wounds, "error": None}
-
-    except ClientError as err:
-        logger.error("Failed to heal wounds", extra={"character_id": character_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to heal wounds: {err}") from err
 
 
 def determine_character_state_from_wounds(max_health: int, wounds: list) -> str:

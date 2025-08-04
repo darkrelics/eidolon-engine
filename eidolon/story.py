@@ -12,7 +12,7 @@ from decimal import Decimal
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
-from eidolon.character import apply_character_updates, heal_expired_wounds, character_get
+from eidolon.character import apply_character_updates, character_get
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger
@@ -767,18 +767,6 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
 
     # Get character and verify ownership
     character: dict = character_get(character_id, player_id)
-
-    # Heal any expired wounds before starting new segment
-    try:
-        heal_result = heal_expired_wounds(character_id)
-        if heal_result.get("healed_count", 0) > 0:
-            logger.info(
-                "Healed wounds before story start",
-                extra={"character_id": character_id, "healed_count": heal_result["healed_count"]},
-            )
-    except Exception as err:
-        logger.warning("Failed to heal wounds before story start", extra={"character_id": character_id, "error": str(err)})
-        # Non-critical - continue with story start
 
     # Check if character is already in a game mode
     game_mode = character.get("GameMode", "None")

@@ -706,7 +706,6 @@ Rest segments provide pacing in stories and allow characters time to recover. Ho
 
 When any new segment is created (mechanical, decision, or rest), the system automatically:
 
-1. Calls `heal_expired_wounds()` to check all wounds
 2. Checks if the character is dead - dead characters do not heal
 3. Removes wounds that have passed their `HealAt` timestamp (for living characters)
 4. Updates the character's Wounds array
@@ -735,7 +734,6 @@ A rest segment in the Segments table:
 
 #### Key Points
 
-- **Healing is universal**: The `heal_expired_wounds()` function runs at the start of ALL segments, not just rest segments
 - **Healing at story start**: Wounds are also healed when starting a new story (in `start_story()`)
 - **Healing on character retrieval**: The `api_get_character` endpoint heals expired wounds before returning character data
 - **Dead characters don't heal**: Characters with `CharState` of "dead" skip healing entirely
