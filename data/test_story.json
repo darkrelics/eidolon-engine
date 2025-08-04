@@ -1,74 +1,81 @@
 {
-  "story": {
+  "Story": {
     "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
     "Title": "The Goblin's Ambush",
     "Description": "A mysterious path through the Vedant Forest leads to an unexpected encounter.",
     "NarrativeText": "You've heard rumors of strange happenings in the Vedant Forest. Local villagers speak of missing travelers and eerie sounds at night. Armed with courage and curiosity, you decide to investigate the old forest path that leads to an abandoned campsite deep in the woods.",
     "StoryType": "repeatable",
-    "EstimatedDuration": 6000,
+    "EstimatedDuration": 7000,
     "Prerequisites": {
-      "minSkills": {},
-      "requiredItems": [],
-      "requiredRooms": []
+      "MinSkills": {},
+      "RequiredItems": [],
+      "RequiredRooms": []
     },
     "RewardTiers": {
-      "death": "No rewards - the forest claims another victim",
-      "failure": "Minimal rewards - you survive but gain little",
-      "minimal": "Basic rewards - some items and experience",
-      "normal": "Good rewards - useful items and solid experience",
-      "exceptional": "Excellent rewards - rare items and maximum experience"
+      "Death": "No rewards - the forest claims another victim",
+      "Failure": "Minimal rewards - you survive but gain little",
+      "Minimal": "Basic rewards - some items and experience",
+      "Normal": "Good rewards - useful items and solid experience",
+      "Exceptional": "Excellent rewards - rare items and maximum experience"
     },
     "FirstSegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-    "CreatedAt": "2025-07-20T10:00:00Z",
+    "CreatedAt": "2025-08-03T10:00:00Z",
     "Version": 1
   },
-  "segments": [
+  "Segments": [
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
       "SegmentType": "mechanical",
       "ShortStatus": "Entering the forest",
       "DefaultStatus": "You are making your way through the dense forest undergrowth",
-      "SegmentDuration": 1200,
-      "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "SegmentDuration": 2400,
       "Challenges": [
         {
-          "attribute": "Perception",
-          "skill": "Investigation",
-          "difficulty": 7,
-          "attempts": 3
+          "Attribute": "Perception",
+          "Skill": "Investigation",
+          "Difficulty": 7,
+          "Attempts": 3
         }
       ],
       "Results": {
-        "death": {
-          "narrative": "Lost in the deepening gloom, you stumble into a ravine. Your cries echo unheard as darkness claims you.",
-          "effects": {
-            "room": 0
-          }
+        "Death": {
+          "Narrative": "Lost in the deepening gloom, you stumble into a ravine. Your cries echo unheard as darkness claims you.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
         },
-        "failure": {
-          "narrative": "The forest proves too dense and disorienting. You retreat to the village, your investigation incomplete.",
-          "effects": {
-            "wounds": [
-              {"DamageType": "bashing", "source": "Exhaustion from wandering lost"}
-            ]
-          }
+        "Failure": {
+          "Narrative": "The forest proves too dense and disorienting. You retreat to your camp, your investigation incomplete.",
+          "Effects": {
+            "Wounds": ["bashing"],
+            "Room": 1
+          },
+          "NextSegmentID": null
         },
-        "minimal": {
-          "narrative": "You push through the undergrowth with difficulty, finding only vague traces of recent activity.",
-          "effects": {
-            "wounds": [
-              {"DamageType": "bashing", "source": "Scratches from thorns"}
-            ]
-          }
+        "Minimal": {
+          "Narrative": "You push through the undergrowth with difficulty, finding only vague traces of recent activity.",
+          "Effects": {
+            "Wounds": ["bashing"],
+            "Room": 2
+          },
+          "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
         },
-        "normal": {
-          "narrative": "Your sharp eyes catch important details - broken branches and faint footprints guide you deeper into the forest.",
-          "effects": {}
+        "Normal": {
+          "Narrative": "Your sharp eyes catch important details - broken branches and faint footprints guide you deeper into the forest.",
+          "Effects": {
+            "Room": 2
+          },
+          "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
         },
-        "exceptional": {
-          "narrative": "Your exceptional perception reveals a hidden trail! Fresh goblin tracks and discarded equipment tell a clear story.",
-          "effects": {}
+        "Exceptional": {
+          "Narrative": "Your exceptional perception reveals a hidden trail! Fresh goblin tracks and discarded equipment tell a clear story.",
+          "Effects": {
+            "Room": 2
+          },
+          "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
         }
       }
     },
@@ -78,13 +85,13 @@
       "SegmentType": "decision",
       "ShortStatus": "Choosing your path",
       "DefaultStatus": "You stand at the fork in the path, considering your options",
-      "SegmentDuration": 1200,
+      "SegmentDuration": 600,
       "DecisionText": "The forest path splits into two directions. To the left, you can hear the sound of running water - likely the babbling brook. To the right, the path seems to lead toward denser vegetation. Which way do you go?",
       "DecisionOptions": {
-        "left": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
-        "right": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a"
+        "Left": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+        "Right": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a"
       },
-      "DefaultDecision": "left"
+      "DefaultDecision": "Right"
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
@@ -93,45 +100,52 @@
       "ShortStatus": "Following the brook",
       "DefaultStatus": "You carefully follow the sound of water through the underbrush",
       "SegmentDuration": 1200,
-      "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
       "Challenges": [
         {
-          "attribute": "Agility",
-          "skill": "Stealth",
-          "difficulty": 8,
-          "attempts": 2
+          "Attribute": "Agility",
+          "Skill": "Stealth",
+          "Difficulty": 8,
+          "Attempts": 2
         }
       ],
       "Results": {
-        "death": {
-          "narrative": "A misstep sends you tumbling into the rushing brook. The current sweeps you away before you can cry out.",
-          "effects": {
-            "room": 0
-          }
+        "Death": {
+          "Narrative": "A misstep sends you tumbling into the rushing brook. The current sweeps you away before you can cry out.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
         },
-        "failure": {
-          "narrative": "Your clumsy movements alert every creature within earshot. You hear goblin war cries approaching rapidly.",
-          "effects": {
-            "wounds": [
-              {"DamageType": "lethal", "source": "Goblin arrow"}
-            ]
-          }
+        "Failure": {
+          "Narrative": "Your clumsy movements alert every creature within earshot. You hear goblin war cries approaching rapidly.",
+          "Effects": {
+            "Wounds": ["lethal"],
+            "Room": 5
+          },
+          "NextSegmentID": null
         },
-        "minimal": {
-          "narrative": "You move quietly enough to avoid immediate danger, though twigs snap underfoot at crucial moments.",
-          "effects": {
-            "wounds": [
-              {"DamageType": "bashing", "source": "Stumbled in the dark"}
-            ]
-          }
+        "Minimal": {
+          "Narrative": "You move quietly enough to avoid immediate danger, though twigs snap underfoot at crucial moments.",
+          "Effects": {
+            "Wounds": ["bashing"],
+            "Room": 5
+          },
+          "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         },
-        "normal": {
-          "narrative": "Your stealthy approach pays off. You spot the goblin encampment ahead without being detected.",
-          "effects": {}
+        "Normal": {
+          "Narrative": "Your stealthy approach pays off. You spot the goblin encampment ahead without being detected.",
+          "Effects": {
+            "Room": 5
+          },
+          "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         },
-        "exceptional": {
-          "narrative": "Like a shadow, you glide through the forest. You're close enough to overhear the goblins' plans!",
-          "effects": {}
+        "Exceptional": {
+          "Narrative": "Like a shadow, you glide through the forest. You're close enough to overhear the goblins' plans!",
+          "Effects": {
+            "Room": 5
+          },
+          "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         }
       }
     },
@@ -142,47 +156,52 @@
       "ShortStatus": "Pushing through the thicket",
       "DefaultStatus": "You struggle against the dense vegetation, thorns catching at your clothing",
       "SegmentDuration": 1200,
-      "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
       "Challenges": [
         {
-          "attribute": "Strength",
-          "skill": "Climbing",
-          "difficulty": 6,
-          "attempts": 3
+          "Attribute": "Strength",
+          "Skill": "Climbing",
+          "Difficulty": 6,
+          "Attempts": 3
         }
       ],
       "Results": {
-        "death": {
-          "narrative": "The thorns prove too much. Poisonous barbs pierce your skin, and fever takes you within moments.",
-          "effects": {
-            "room": 0
+        "Death": {
+          "Narrative": "The thorns prove too much. Poisonous barbs pierce your skin, and fever takes you within moments.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "Bloodied by thorns and exhausted, you're forced to turn back and find another route.",
+          "Effects": {
+            "Wounds": ["lethal", "bashing"],
+            "Room": 5
           }
         },
-        "failure": {
-          "narrative": "Bloodied by thorns and exhausted, you're forced to turn back and find another route.",
-          "effects": {
-            "wounds": [
-              {"DamageType": "lethal", "source": "Deep thorn wounds"},
-              {"DamageType": "bashing", "source": "Exhaustion"}
-            ]
-          }
+        "Minimal": {
+          "Narrative": "You force your way through, clothes torn and skin scratched, but you emerge on the other side.",
+          "Effects": {
+            "Wounds": ["bashing", "bashing"],
+            "Room": 6
+          },
+          "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         },
-        "minimal": {
-          "narrative": "You force your way through, clothes torn and skin scratched, but you emerge on the other side.",
-          "effects": {
-            "wounds": [
-              {"DamageType": "bashing", "source": "Thorn scratches"},
-              {"DamageType": "bashing", "source": "Fatigue"}
-            ]
-          }
+        "Normal": {
+          "Narrative": "With determined effort, you push through the thicket, finding a game trail that eases your passage.",
+          "Effects": {
+            "Room": 6
+          },
+          "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         },
-        "normal": {
-          "narrative": "With determined effort, you push through the thicket, finding a game trail that eases your passage.",
-          "effects": {}
-        },
-        "exceptional": {
-          "narrative": "Your strength makes short work of the obstacles. You even find an old adventurer's pack tangled in the vines!",
-          "effects": {}
+        "Exceptional": {
+          "Narrative": "Your strength makes short work of the obstacles. You even find an old adventurer's pack tangled in the vines!",
+          "Effects": {
+            "Room": 6,
+            "Items": ["a47ac10b-58cc-4372-a567-0e02b2c3d484"]
+          },
+          "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         }
       }
     },
@@ -193,34 +212,49 @@
       "ShortStatus": "Fighting the goblin scout",
       "DefaultStatus": "You are locked in combat with the goblin scout",
       "SegmentDuration": 1200,
-      "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
       "Combat": {
         "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
-        "maxRounds": 12,
-        "environment": {}
+        "MaxRounds": 12,
+        "Environment": {}
       },
       "Results": {
-        "death": {
-          "narrative": "The goblin's blade finds its mark. As your vision fades, you hear its victorious cackling.",
-          "effects": {
-            "room": 0
-          }
+        "Death": {
+          "Narrative": "The goblin's blade finds its mark. As your vision fades, you hear its victorious cackling.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
         },
-        "failure": {
-          "narrative": "Overwhelmed by the goblin's ferocity, you flee deeper into the forest, wounded and disoriented.",
-          "effects": {}
+        "Failure": {
+          "Narrative": "Overwhelmed by the goblin's ferocity, you flee deeper into the forest, wounded and disoriented.",
+          "Effects": {
+            "Room": 7
+          },
+          "NextSegmentID": null
         },
-        "minimal": {
-          "narrative": "You manage to drive off the goblin scout, though not without taking several painful wounds.",
-          "effects": {}
+        "Minimal": {
+          "Narrative": "You manage to drive off the goblin scout, though not without taking several painful wounds.",
+          "Effects": {
+            "Room": 6
+          },
+          "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c"
         },
-        "normal": {
-          "narrative": "After a fierce battle, you defeat the goblin scout. It flees, dropping a small pouch in its haste.",
-          "effects": {}
+        "Normal": {
+          "Narrative": "After a fierce battle, you defeat the goblin scout. It flees, dropping a small pouch in its haste.",
+          "Effects": {
+            "Room": 6,
+            "Items": ["a47ac10b-58cc-4372-a567-0e02b2c3d484"]
+          },
+          "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c"
         },
-        "exceptional": {
-          "narrative": "You dispatch the goblin with masterful combat prowess! It surrenders, revealing the location of its camp.",
-          "effects": {}
+        "Exceptional": {
+          "Narrative": "You dispatch the goblin with masterful combat prowess! It surrenders, revealing the location of its camp.",
+          "Effects": {
+            "Room": 6
+          },
+          "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c"
+
         }
       }
     },
@@ -230,13 +264,13 @@
       "SegmentType": "decision",
       "ShortStatus": "Following the goblin's trail",
       "DefaultStatus": "You study the tracks in the dirt, weighing your options",
-      "SegmentDuration": 1200,
+      "SegmentDuration": 600,
       "DecisionText": "After the encounter with the goblin, you notice tracks leading deeper into the forest. You could follow them to investigate further, or you could take a safer path around through the fern gully. What do you do?",
       "DecisionOptions": {
-        "follow": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
-        "around": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e"
+        "Follow": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+        "Around": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e"
       },
-      "DefaultDecision": "around"
+      "DefaultDecision": "Around"
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
@@ -245,39 +279,51 @@
       "ShortStatus": "Fighting the goblin warrior in the dark",
       "DefaultStatus": "You battle the armored goblin warrior in the dim light and treacherous footing",
       "SegmentDuration": 1200,
-      "NextSegmentID": null,
       "Combat": {
         "OpponentID": "b8c9d0e1-2f3a-4b5c-6d7e8f9a0b1c2d3e",
-        "maxRounds": 15,
-        "environment": {
-          "lighting": "dim",
-          "terrain": "muddy"
+        "MaxRounds": 15,
+        "Environment": {
+          "Lighting": "dim",
+          "Terrain": "muddy"
         }
       },
       "Results": {
-        "death": {
-          "narrative": "The goblin warrior's axe cleaves through your defenses. The last thing you see is its cruel grin.",
-          "effects": {
-            "room": 0
-          }
+        "Death": {
+          "Narrative": "The goblin warrior's axe cleaves through your defenses. The last thing you see is its cruel grin.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
         },
-        "failure": {
-          "narrative": "Battered and bleeding, you barely escape the warrior's fury. The forest offers refuge as you limp away.",
-          "effects": {}
+        "Failure": {
+          "Narrative": "Battered and bleeding, you barely escape the warrior's fury. The forest offers refuge as you limp away.",
+          "Effects": {
+            "Room": 7
+          },
+          "NextSegmentID": null
         },
-        "minimal": {
-          "narrative": "You survive the encounter, though the warrior's skill leaves you badly wounded. It retreats, honor satisfied.",
-          "effects": {}
+        "Minimal": {
+          "Narrative": "You survive the encounter, though the warrior's skill leaves you badly wounded. It retreats, honor satisfied.",
+          "Effects": {
+            "Room": 8
+          },
+          "NextSegmentID": null
         },
-        "normal": {
-          "narrative": "Through skill and determination, you best the goblin warrior. It yields, tossing down its weapon in defeat.",
-          "effects": {}
+        "Normal": {
+          "Narrative": "Through skill and determination, you best the goblin warrior. It yields, tossing down its weapon in defeat.",
+          "Effects": {
+            "Room": 8
+          },
+          "NextSegmentID": null
         },
-        "exceptional": {
-          "narrative": "Your legendary combat display defeats the warrior utterly! You claim its enchanted armor as your prize.",
-          "effects": {
-            "items": ["goblin_warrior_armor"]
-          }
+        "Exceptional": {
+          "Narrative": "Your legendary combat display defeats the warrior utterly! You claim its enchanted armor as your prize.",
+          "Effects": {
+            "Room": 8,
+            "Items": ["c47ac10b-58cc-4372-a567-0e02b2c3d482"]
+          },
+          "NextSegmentID": null
         }
       }
     },
@@ -287,55 +333,60 @@
       "SegmentType": "mechanical",
       "ShortStatus": "Taking the long way around",
       "DefaultStatus": "You navigate carefully through the fern gully, avoiding the goblin patrols",
-      "SegmentDuration": 1200,
-      "NextSegmentID": null,
+      "SegmentDuration": 2400,
       "Challenges": [
         {
-          "attribute": "Endurance",
-          "skill": "Climbing",
-          "difficulty": 6,
-          "attempts": 3
+          "Attribute": "Endurance",
+          "Skill": "Climbing",
+          "Difficulty": 6,
+          "Attempts": 3
         },
         {
-          "attribute": "Intelligence",
-          "skill": "Foraging",
-          "difficulty": 7,
-          "attempts": 2
+          "Attribute": "Intelligence",
+          "Skill": "Foraging",
+          "Difficulty": 7,
+          "Attempts": 2
         }
       ],
       "Results": {
-        "death": {
-          "narrative": "Exhausted and lost, you collapse in the fern gully. The forest creatures find you before help arrives.",
-          "effects": {
-            "room": 0
-          }
+        "Death": {
+          "Narrative": "Exhausted and lost, you collapse in the fern gully. The forest creatures find you before help arrives.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
         },
-        "failure": {
-          "narrative": "The detour proves too challenging. Tired and hungry, you abandon your quest and return to civilization.",
-          "effects": {
-            "wounds": [
-              {"DamageType": "bashing", "source": "Dehydration"},
-              {"DamageType": "bashing", "source": "Hunger"}
-            ]
-          }
+        "Failure": {
+          "Narrative": "The detour proves too challenging. Tired and hungry, you abandon your quest and return to civilization.",
+          "Effects": {
+            "Wounds": ["bashing", "bashing"],
+            "Room": 1
+          },
+          "NextSegmentID": null
         },
-        "minimal": {
-          "narrative": "You navigate the gully successfully, though the journey leaves you weary and your supplies depleted.",
-          "effects": {
-            "wounds": [
-              {"DamageType": "bashing", "source": "Exhaustion from climbing"}
-            ]
-          }
+        "Minimal": {
+          "Narrative": "You navigate the gully successfully, though the journey leaves you weary and your supplies depleted.",
+          "Effects": {
+            "Wounds": ["bashing"],
+            "Room": 9
+          },
+          "NextSegmentID": null
         },
-        "normal": {
-          "narrative": "Your wilderness skills serve you well. You find edible berries and a safe path through the gully.",
-          "effects": {}
+        "Normal": {
+          "Narrative": "Your wilderness skills serve you well. You find edible berries and a safe path through the gully.",
+          "Effects": {
+            "Room": 9
+          },
+          "NextSegmentID": null
         },
-        "exceptional": {
-          "narrative": "Your masterful woodcraft reveals hidden treasures! You discover a cache of supplies left by previous adventurers.",
-          "effects": {
-            "items": ["healing_potion", "trail_rations"]
-          }
+        "Exceptional": {
+          "Narrative": "Your masterful woodcraft reveals hidden treasures! You discover a cache of supplies left by previous adventurers.",
+          "Effects": {
+            "Items": ["947ac10b-58cc-4372-a567-0e02b2c3d485", "f47ac10b-58cc-4372-a567-0e02b2c3d479"],
+            "Room": 9
+          },
+          "NextSegmentID": null
         }
       }
     }

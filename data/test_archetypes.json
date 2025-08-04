@@ -1,6 +1,6 @@
 {
-  "archetypes": {
-    "wizard": {
+  "Archetypes": {
+    "Wizard": {
       "ArchetypeName": "Wizard",
       "Description": "A Wizard!",
       "Health": 8,
@@ -59,7 +59,7 @@
         }
       ]
     },
-    "rogue": {
+    "Rogue": {
       "ArchetypeName": "Rogue",
       "Description": "A Rogue!",
       "Health": 10,
@@ -118,7 +118,7 @@
         }
       ]
     },
-    "warrior": {
+    "Warrior": {
       "ArchetypeName": "Warrior",
       "Description": "A Warrior!",
       "Health": 12,
@@ -177,7 +177,7 @@
         }
       ]
     },
-    "goblin": {
+    "Goblin": {
       "ArchetypeName": "Goblin",
       "Description": "A mischievous goblin creature",
       "Health": 6,

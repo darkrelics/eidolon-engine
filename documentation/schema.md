@@ -150,25 +150,26 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 ## Prototypes Table
 
-| Field         | Type      | Key      | Description                                                   |
-| ------------- | --------- | -------- | ------------------------------------------------------------- |
-| `PrototypeID` | `STRING`  | **HASH** | UUID of the item.                                             |
-| `Name`        | `STRING`  |          | Name of the item.                                             |
-| `Description` | `STRING`  |          | Description of the item.                                      |
-| `Mass`        | `NUMBER`  |          | Weight or mass of the item.                                   |
-| `Value`       | `NUMBER`  |          | Monetary value of the item.                                   |
-| `Stackable`   | `BOOLEAN` |          | Indicates if the item can be stacked.                         |
-| `MaxStack`    | `NUMBER`  |          | Maximum number of items per stack.                            |
-| `Quantity`    | `NUMBER`  |          | Current quantity if stackable.                                |
-| `Wearable`    | `BOOLEAN` |          | Indicates if the item can be worn.                            |
-| `WornOn`      | `STRING`  |          | Body part where the item can be worn (e.g., "head", "feet").  |
-| `Verbs`       | `MAP`     |          | Actions associated with the item (e.g., "eat": "You eat..."). |
-| `Overrides`   | `MAP`     |          | Overrides for default behaviors or properties.                |
-| `TraitMods`   | `MAP`     |          | Modifications to character traits when item is used/worn.     |
-| `Container`   | `BOOLEAN` |          | Indicates if the item can contain other items.                |
-| `Contents`    | `LIST`    |          | List of item UUIDs contained within this item.                |
-| `CanPickUp`   | `BOOLEAN` |          | Indicates if the item can be picked up by players.            |
-| `Metadata`    | `MAP`     |          | Additional custom data related to the item.                   |
+| Field          | Type      | Key      | Description                                                   |
+| -------------- | --------- | -------- | ------------------------------------------------------------- |
+| `PrototypeID`  | `STRING`  | **HASH** | UUID of the item prototype.                                   |
+| `PrototypeName`| `STRING`  |          | Name of the item.                                             |
+| `Description`  | `STRING`  |          | Description of the item.                                      |
+| `Mass`         | `NUMBER`  |          | Weight or mass of the item.                                   |
+| `Value`        | `NUMBER`  |          | Monetary value of the item.                                   |
+| `Stackable`    | `BOOLEAN` |          | Indicates if the item can be stacked.                         |
+| `MaxStack`     | `NUMBER`  |          | Maximum number of items per stack.                            |
+| `Quantity`     | `NUMBER`  |          | Default quantity if stackable.                                |
+| `Wearable`     | `BOOLEAN` |          | Indicates if the item can be worn.                            |
+| `WornOn`       | `LIST`    |          | Body slots where item can be worn (e.g., ["weapon"], ["armor"]). |
+| `Verbs`        | `MAP`     |          | Actions associated with the item (e.g., "Use": "You use..."). |
+| `Overrides`    | `MAP`     |          | Overrides for default behaviors or properties.                |
+| `TraitMods`    | `MAP`     |          | Modifications to character traits when item is used/worn.     |
+| `Container`    | `BOOLEAN` |          | Indicates if the item can contain other items.                |
+| `Contents`     | `LIST`    |          | List of item UUIDs contained within this item.                |
+| `IsWorn`       | `BOOLEAN` |          | Default worn state when item is created.                      |
+| `CanPickUp`    | `BOOLEAN` |          | Indicates if the item can be picked up by players.            |
+| `Metadata`     | `MAP`     |          | Additional custom data related to the item.                   |
 
 **Primary Key:** PrototypeID (HASH)
 
@@ -359,11 +360,16 @@ Records the complete history of each segment played by a character. This table s
 | `Health`        | `NUMBER` |          | Maximum health levels.                            |
 | `WeaponType`    | `STRING` |          | Type of damage dealt (bashing/lethal/aggravated). |
 | `WeaponDamage`  | `NUMBER` |          | Bonus damage from weapon.                         |
-| `LootTable`     | `LIST`   |          | Items and drop chances upon defeat.               |
+| `LootTable`     | `LIST`   |          | List of loot drop objects (see structure below).  |
 | `Tags`          | `LIST`   |          | Categories for filtering and searching.           |
 | `CreatedAt`     | `STRING` |          | ISO timestamp of creation.                        |
 
 **Primary Key:** OpponentID (HASH)
+
+**LootTable Structure:**
+Each item in the LootTable list is a map with the following fields:
+- `ItemID` (STRING): UUID of the item prototype that can drop
+- `Chance` (NUMBER): Drop probability (0.0 to 1.0)
 
 ---
 
