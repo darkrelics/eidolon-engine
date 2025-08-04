@@ -12,7 +12,6 @@ from botocore.exceptions import ClientError
 from eidolon.logger import logger
 
 
-
 # Initialize SQS client
 sqs_client = boto3.client("sqs")
 

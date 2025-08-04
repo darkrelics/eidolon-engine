@@ -8,8 +8,6 @@ from eidolon.environment import ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, CORS_AL
 from eidolon.logger import logger
 
 
-
-
 class CorsHandler:
     """Handles CORS configuration for Lambda functions."""
 

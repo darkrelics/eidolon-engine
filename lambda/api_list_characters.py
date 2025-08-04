@@ -7,15 +7,9 @@ Lambda function to list character names for an authenticated player.
 Returns only character names and death status from the player table.
 """
 
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.player import extract_player_id_from_event, get_formatted_character_list, validate_player_exists
-from eidolon.utilities import (
-    build_lambda_response_pascal,
-    handle_lambda_error_pascal,
-    handle_preflight_if_options,
-    log_lambda_invocation,
-)
-
+from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, handle_preflight_if_options
 
 
 def list_characters_business_logic(player_id: str) -> dict:
@@ -53,7 +47,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             500: Internal error
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Handle preflight
     preflight_response = handle_preflight_if_options(event)

@@ -10,11 +10,10 @@ compliance by removing all traces of user data.
 
 import json
 
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.player import delete_player_data_completely, extract_player_id_from_event
 from eidolon.requests import parse_json_body
-from eidolon.utilities import build_lambda_response_pascal, log_lambda_invocation
-
+from eidolon.utilities import build_lambda_response_pascal
 
 
 def delete_player_business_logic(player_id: str) -> dict:
@@ -52,7 +51,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         Response with deletion summary
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     try:
         player_id = None

@@ -12,6 +12,7 @@ from eidolon.environment import AWS_EXECUTION_ENV, LOG_LEVEL, APPLICATION_NAME
 logger = logging.getLogger(APPLICATION_NAME)
 logger.setLevel(LOG_LEVEL)
 
+
 def log_lambda_statistics(event, context) -> None:
     """
     Logs statistics and details of a Lambda function execution.

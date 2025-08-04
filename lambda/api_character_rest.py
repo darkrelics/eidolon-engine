@@ -3,7 +3,7 @@
 import time
 
 from eidolon.character import get_character_with_ownership
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_required_field_flexible, parse_json_body
 from eidolon.segment import get_active_segment_info, insert_rest_segment
@@ -11,9 +11,7 @@ from eidolon.utilities import (
     build_lambda_response_pascal,
     handle_lambda_error_pascal,
     handle_preflight_if_options,
-    log_lambda_invocation,
 )
-
 
 
 # Rest segment configuration
@@ -120,7 +118,7 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
 def lambda_handler(event: dict, context: object) -> dict:
     """Lambda handler for character rest API."""
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Handle preflight
     preflight_response = handle_preflight_if_options(event)

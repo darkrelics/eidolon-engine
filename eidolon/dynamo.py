@@ -34,8 +34,6 @@ from eidolon.environment import (
 from eidolon.logger import logger
 
 
-
-
 class TableName(Enum):
     """Enum for DynamoDB table names"""
 

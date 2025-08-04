@@ -424,11 +424,11 @@ class IncrementalDeploymentOrchestrator:
                     # This must run EVERY time to ensure bucket policy is correct
                     print("\n  Ensuring S3 bucket policy is configured for CloudFront...")
                     self.update_s3_bucket_policy_for_cloudfront()
-                    
+
                     # Update CodeBuild project with CloudFront distribution ID
                     print("\n  Updating CodeBuild project with CloudFront distribution ID...")
                     self.update_codebuild_cloudfront_id()
-                    
+
                     # Save the distribution ID to config for future use
                     self.save_cloudfront_distribution_id()
 
@@ -728,12 +728,13 @@ class IncrementalDeploymentOrchestrator:
                     if not result.exists:
                         print(f"  [ERROR] User Pool: {user_pool_id} - Does not exist")
                         print("  [INFO] Removing stale Cognito configuration...")
-                        
+
                         # Remove from config.yml
                         from state_manager import ConfigurationManager
+
                         config_manager = ConfigurationManager()
                         config_manager.remove_section("Cognito")
-                        
+
                         # Remove from deployment state
                         state_manager = StateManager()
                         deployment_state = state_manager.get_deployment_state()
@@ -742,7 +743,7 @@ class IncrementalDeploymentOrchestrator:
                         if "existing_app_client_id" in deployment_state:
                             del deployment_state["existing_app_client_id"]
                         state_manager.save_deployment_state(deployment_state)
-                        
+
                         print("  [INFO] Stale Cognito references cleaned up")
                     else:
                         print(f"  [ERROR] User Pool: {user_pool_id} - Invalid")
@@ -848,12 +849,13 @@ class IncrementalDeploymentOrchestrator:
                         if err.response["Error"]["Code"] == "NoSuchDistribution":
                             print(f"  [MISSING] Distribution: {distribution_id} - Does not exist")
                             print("  [INFO] Removing stale CloudFront configuration...")
-                            
+
                             # Remove from config.yml
                             from state_manager import ConfigurationManager
+
                             config_manager = ConfigurationManager()
                             config_manager.remove_section("CloudFront")
-                            
+
                             print("  [INFO] Stale CloudFront references cleaned up")
                         else:
                             print(f"  [ERROR] Distribution: {distribution_id} - Error: {err}")
@@ -1400,7 +1402,7 @@ class IncrementalDeploymentOrchestrator:
                             break
                 except Exception as e:
                     print(f"    Could not get distribution ID from stack: {e}")
-            
+
             if not distribution_id:
                 print("    CloudFront distribution ID not found, skipping policy update")
                 return
@@ -1577,13 +1579,13 @@ class IncrementalDeploymentOrchestrator:
             stack_name = "cloudfront"
             response = cf.describe_stacks(StackName=stack_name)
             outputs = response["Stacks"][0].get("Outputs", [])
-            
+
             distribution_id = None
             for output in outputs:
                 if output["OutputKey"] == "DistributionId":
                     distribution_id = output["OutputValue"]
                     break
-            
+
             if distribution_id:
                 # Save to config
                 if "CloudFront" not in self.config_manager.config:
@@ -1591,10 +1593,10 @@ class IncrementalDeploymentOrchestrator:
                 self.config_manager.config["CloudFront"]["DistributionId"] = distribution_id
                 self.config_manager.save_config()
                 print(f"    Saved CloudFront distribution ID to config: {distribution_id}")
-            
+
         except Exception as e:
             print(f"    Could not save distribution ID: {e}")
-    
+
     def update_codebuild_cloudfront_id(self):
         """Update CodeBuild project environment variable with CloudFront distribution ID."""
         try:
@@ -1614,14 +1616,14 @@ class IncrementalDeploymentOrchestrator:
                             break
                 except Exception as e:
                     print(f"    Could not get distribution ID from stack: {e}")
-            
+
             if not distribution_id:
                 print("    CloudFront distribution ID not found, skipping CodeBuild update")
                 return
 
             # Get CodeBuild client
             codebuild_client = self.session.client("codebuild")
-            
+
             # Update portal build project
             project_name = "eidolon-portal-build"
             try:
@@ -1630,11 +1632,11 @@ class IncrementalDeploymentOrchestrator:
                 if not response.get("projects"):
                     print(f"    CodeBuild project {project_name} not found")
                     return
-                
+
                 project = response["projects"][0]
                 environment = project.get("environment", {})
                 env_vars = environment.get("environmentVariables", [])
-                
+
                 # Find and update CLOUDFRONT_DISTRIBUTION_ID
                 found = False
                 for var in env_vars:
@@ -1642,26 +1644,22 @@ class IncrementalDeploymentOrchestrator:
                         var["value"] = distribution_id
                         found = True
                         break
-                
+
                 if not found:
                     # Add the environment variable if it doesn't exist
-                    env_vars.append({
-                        "name": "CLOUDFRONT_DISTRIBUTION_ID",
-                        "value": distribution_id,
-                        "type": "PLAINTEXT"
-                    })
-                
+                    env_vars.append({"name": "CLOUDFRONT_DISTRIBUTION_ID", "value": distribution_id, "type": "PLAINTEXT"})
+
                 # Update the project
                 environment["environmentVariables"] = env_vars
-                
+
                 update_params = {
                     "name": project_name,
                     "environment": environment,
                     "source": project["source"],
                     "artifacts": project["artifacts"],
-                    "serviceRole": project["serviceRole"]
+                    "serviceRole": project["serviceRole"],
                 }
-                
+
                 # Add optional fields if present
                 if "description" in project:
                     update_params["description"] = project["description"]
@@ -1669,13 +1667,13 @@ class IncrementalDeploymentOrchestrator:
                     update_params["buildBatchConfig"] = project["buildBatchConfig"]
                 if "logsConfig" in project:
                     update_params["logsConfig"] = project["logsConfig"]
-                
+
                 codebuild_client.update_project(**update_params)
                 print(f"    Updated CodeBuild project {project_name} with CloudFront distribution ID: {distribution_id}")
-                
+
             except ClientError as err:
                 print(f"    Failed to update CodeBuild project: {err}")
-                
+
         except Exception as err:
             print(f"    Error updating CodeBuild project: {err}")
 

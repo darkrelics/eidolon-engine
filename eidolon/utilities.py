@@ -11,28 +11,6 @@ from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.responses import create_response, error_response, error_response_pascal, unauthorized_response
 
 
-
-
-def log_lambda_invocation(context: object, event: dict) -> None:
-    """
-    Log Lambda function invocation details.
-
-    Args:
-        context: Lambda context object
-        event: Lambda event dict
-    """
-    if hasattr(context, "aws_request_id"):
-        logger.info(
-            "Lambda invocation",
-            extra={
-                "request_id": context.aws_request_id,  # type: ignore
-                "function_name": getattr(context, "function_name", "unknown"),
-                "http_method": event.get("httpMethod"),
-                "path": event.get("path"),
-            },
-        )
-
-
 def handle_preflight_if_options(event: dict) -> dict:
     """
     Handle CORS preflight request if HTTP method is OPTIONS.

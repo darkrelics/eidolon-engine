@@ -7,17 +7,11 @@ Lambda function to submit a decision for a story segment.
 Updates the active segment with the player's choice and returns the next segment.
 """
 
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_required_field_flexible, parse_json_body
 from eidolon.story import submit_decision_for_character
-from eidolon.utilities import (
-    build_lambda_response_pascal,
-    handle_lambda_error_pascal,
-    handle_preflight_if_options,
-    log_lambda_invocation,
-)
-
+from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, handle_preflight_if_options
 
 
 def submit_decision_business_logic(character_id: str, decision_id: str, player_id: str) -> dict:
@@ -52,7 +46,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         API Gateway Lambda proxy response
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Handle preflight
     preflight_response = handle_preflight_if_options(event)

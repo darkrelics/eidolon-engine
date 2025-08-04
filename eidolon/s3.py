@@ -10,8 +10,6 @@ from botocore.exceptions import ClientError
 from eidolon.logger import logger
 
 
-
-
 def upload_file(bucket_name: str, file_path: str, object_name=None):
     """
     Upload a file to an S3 bucket.

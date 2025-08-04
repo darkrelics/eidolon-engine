@@ -8,20 +8,14 @@ Validates character state, creates active segment, and returns first segment det
 """
 
 from eidolon.environment import SEGMENT_QUEUE_URL
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.polling import ensure_polling_enabled
 from eidolon.requests import get_required_field_flexible, parse_json_body
 from eidolon.sqs import send_message
 from eidolon.story import start_story_for_character
-from eidolon.utilities import (
-    build_lambda_response_pascal,
-    handle_lambda_error_pascal,
-    handle_preflight_if_options,
-    log_lambda_invocation,
-)
+from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, handle_preflight_if_options
 from eidolon.validation import validate_uuid
-
 
 
 def format_start_story_response(active_segment: dict, segment: dict) -> dict:
@@ -139,7 +133,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             - 500: Internal server error
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Handle preflight
     preflight_response = handle_preflight_if_options(event)

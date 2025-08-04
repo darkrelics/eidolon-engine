@@ -70,7 +70,7 @@ class CloudFrontStack(Stack):
             # Create new distribution
             self.distribution = self.create_distribution(portal_bucket)
             print("Creating new CloudFront distribution")
-            
+
             # For new distributions with existing buckets, we need to update the bucket policy
             # CDK's S3Origin creates an OAI but cannot modify imported bucket policies
             if check_bucket_exists(portal_bucket.bucket_name, self.region):

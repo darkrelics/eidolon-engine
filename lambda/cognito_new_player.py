@@ -6,10 +6,8 @@ Copyright 2024-2025 Jason E. Robinson
 Lambda function to create a new player record in DynamoDB after user registration.
 """
 
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.player import create_player_record
-from eidolon.utilities import log_lambda_invocation
-
 
 
 def create_player_business_logic(user_uuid: str, email: str) -> None:
@@ -41,7 +39,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         The original event for Cognito to continue processing
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Log Cognito trigger details
     logger.info(

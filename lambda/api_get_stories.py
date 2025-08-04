@@ -8,18 +8,12 @@ Returns stories the character can participate in, checking prerequisites and coo
 """
 
 from eidolon.character import get_character, validate_character_ownership
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.story import get_stories_for_character
-from eidolon.utilities import (
-    build_lambda_response_pascal,
-    handle_lambda_error_pascal,
-    handle_preflight_if_options,
-    log_lambda_invocation,
-)
+from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, handle_preflight_if_options
 from eidolon.validation import validate_uuid
-
 
 
 def get_available_stories_business_logic(character_id: str, player_id: str) -> dict:
@@ -95,7 +89,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         500: Internal error
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Handle preflight
     preflight_response = handle_preflight_if_options(event)

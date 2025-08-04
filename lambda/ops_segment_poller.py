@@ -13,7 +13,7 @@ import time
 from botocore.exceptions import ClientError
 
 from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.polling import disable_polling_infrastructure, enable_polling_infrastructure, get_polling_state
 from eidolon.segment import (
     check_active_segments_exist,
@@ -23,7 +23,7 @@ from eidolon.segment import (
     reset_segment_processing_status,
 )
 from eidolon.sqs import send_message_batch
-from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
+from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal
 
 
 def poll_and_process_segments_business_logic() -> dict:
@@ -299,7 +299,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         Response with processing summary
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Log event source for EventBridge events
     logger.info(

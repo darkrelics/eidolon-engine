@@ -8,8 +8,6 @@ Lambda functions using Cognito user pools.
 from eidolon.logger import logger
 
 
-
-
 def extract_player_id(event: dict) -> str:
     """
     Extract player ID from Cognito authorizer claims.

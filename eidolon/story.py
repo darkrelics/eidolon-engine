@@ -30,8 +30,6 @@ from eidolon.sqs import send_message
 from eidolon.validation import validate_uuid
 
 
-
-
 def get_active_story_segment(character_id: str) -> dict:
     """
     Get the active story segment for a character.
@@ -1616,7 +1614,6 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
         # Handle wounds from story outcomes
         if "wounds" in outcome_effects:
 
-
             # Add heal times to wounds
             wounds_with_heal_times = []
             for wound in outcome_effects["wounds"]:
@@ -1648,7 +1645,6 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
                     exc_info=True,
                 )
                 raise RuntimeError(f"Failed to apply story wounds: {str(err)}") from err
-
 
         if update_expressions:
             update_expression: str = "SET " + ", ".join(update_expressions)

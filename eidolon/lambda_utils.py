@@ -12,7 +12,6 @@ from botocore.exceptions import ClientError
 from eidolon.logger import logger
 
 
-
 # Lambda client for invoking functions
 lambda_client = boto3.client("lambda")
 

@@ -205,7 +205,7 @@ Each Lambda function must have a Lambda handler which handles the event, calls a
 def lambda_handler(event: dict, context: object) -> dict:
     """Lambda entry point - handles AWS-specific concerns."""
     # 1. Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(context, event)
 
     # 2. Handle CORS preflight
     preflight_response = handle_preflight_if_options(event)
@@ -283,7 +283,7 @@ def business_logic_function(param1: str, param2: str) -> dict:
 
 9. **Architecture Pattern**: Follow the handler/business logic separation pattern described above
 10. **Utility Functions**: Prefer high-level utility functions from `eidolon.utilities`:
-    - `log_lambda_invocation()` - For logging invocations
+    - `log_lambda_statistics()` - For logging invocations
     - `handle_preflight_if_options()` - For CORS preflight handling
     - `build_lambda_response()` - For building responses with CORS
     - `handle_lambda_error()` - For consistent error handling

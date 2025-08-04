@@ -819,14 +819,11 @@ def main():
     parser.add_argument("-region", default="us-east-1", help="AWS region for DynamoDB.")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
     # Configure logger for this module
     logger = logging.getLogger(__name__)
-    
+
     logger.info("Starting data loader for Eidolon Engine")
     logger.info(f"Loading data files from: {os.path.dirname(args.exits)}")
 

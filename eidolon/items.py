@@ -8,8 +8,6 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 
 
-
-
 def create_items_from_prototypes(prototype_ids: list[str], character_id: str) -> dict[str, str]:
     """
     Create item instances from prototype IDs.

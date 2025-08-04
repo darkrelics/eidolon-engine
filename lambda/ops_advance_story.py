@@ -10,7 +10,7 @@ Triggered by SQS to apply character updates and progress stories.
 import json
 
 from eidolon.character import apply_death_or_unconscious_outcome, get_character
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.polling import update_polling_state
 from eidolon.segment import (
     check_active_segments_exist,
@@ -30,8 +30,8 @@ from eidolon.segment import (
     update_segment_processing_status,
 )
 from eidolon.story import apply_combat_rewards, apply_story_outcome_effects, ensure_story_history_exists, update_story_history_xp
-from eidolon.utilities import log_lambda_invocation
-
+from eidolon.environment import SEGMENT_QUEUE_URL
+from eidolon.sqs import send_message
 
 
 def advance_story_business_logic(active_segment_id: str) -> dict:
@@ -238,8 +238,6 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             # Queue mechanical segments for immediate processing
             if next_segment_def.get("SegmentType") == "mechanical":
                 try:
-                    from eidolon.environment import SEGMENT_QUEUE_URL
-                    from eidolon.sqs import send_message
 
                     if SEGMENT_QUEUE_URL:
                         message_body = {
@@ -267,7 +265,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 },
                 exc_info=True,
             )
-            raise RuntimeError(f"Failed to create next segment: {str(err)}")
+            raise RuntimeError(f"Failed to create next segment: {str(err)}") from err
     else:
         # Story complete
         complete_story(character_id, story_id, outcome)  # type: ignore
@@ -313,7 +311,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         SQS batch response with failed message IDs
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Process SQS messages
     batch_item_failures = []

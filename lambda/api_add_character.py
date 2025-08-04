@@ -2,19 +2,15 @@
 
 from eidolon.character import character_name_filter, check_character_limit, create_character, get_archetype
 from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_optional_field_flexible, get_required_field_flexible, parse_json_body
 from eidolon.utilities import (
     build_lambda_response_pascal,
     handle_lambda_error_pascal,
     handle_preflight_if_options,
-    log_lambda_invocation,
 )
 from eidolon.validation import validate_character_name
-
-
-
 
 
 def handle_character_creation(player_id: str, character_name: str, archetype_name: str) -> dict:
@@ -106,7 +102,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
 def lambda_handler(event: dict, context: object) -> dict:
     """Lambda handler for incremental character creation API."""
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Handle preflight
     preflight_response = handle_preflight_if_options(event)

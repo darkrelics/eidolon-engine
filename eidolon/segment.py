@@ -18,7 +18,6 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 
 
-
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES = ["mechanical", "decision", "rest"]
 MECHANICAL_ONLY_TYPES = ["mechanical"]
@@ -568,7 +567,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 # xp_modifier = ratio^2
                 if effective_score > 0 and difficulty > 0:
                     ratio = min(effective_score, difficulty) / max(effective_score, difficulty)
-                    variance_modifier = ratio ** 2
+                    variance_modifier = ratio**2
                 else:
                     variance_modifier = 1.0  # Default if can't calculate
 
@@ -600,6 +599,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 character_id = character.get("CharacterID")
                 if character_id:
                     from eidolon.character import apply_character_updates
+
                     apply_character_updates(character_id, xp_updates)
                 logger.info(
                     "Applied skill and attribute XP to database",
@@ -2024,14 +2024,11 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
             extra={
                 "segment_id": segment.get("SegmentID"),
                 "story_id": segment.get("StoryID"),
-            }
+            },
         )
         # Special handling for exceptional outcome (used by poller for timed-out segments)
         if outcome == "exceptional":
-            return {
-                "narrative": "Your actions exceeded all expectations, achieving extraordinary results.",
-                "effects": {}
-            }
+            return {"narrative": "Your actions exceeded all expectations, achieving extraordinary results.", "effects": {}}
         return {"narrative": "", "effects": {}}
 
     if not isinstance(results, dict):
@@ -2040,7 +2037,7 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
             extra={
                 "segment_id": segment.get("SegmentID"),
                 "results_type": type(results).__name__,
-            }
+            },
         )
         return {"narrative": "", "effects": {}}
 
@@ -2054,14 +2051,11 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
                 "segment_id": segment.get("SegmentID"),
                 "outcome": outcome,
                 "available_outcomes": list(results.keys()),
-            }
+            },
         )
         # Provide default for exceptional (safety mechanism for timed-out segments)
         if outcome == "exceptional":
-            return {
-                "narrative": "Your actions exceeded all expectations, achieving extraordinary results.",
-                "effects": {}
-            }
+            return {"narrative": "Your actions exceeded all expectations, achieving extraordinary results.", "effects": {}}
         return {"narrative": "", "effects": {}}
 
     if not isinstance(outcome_result, dict):
@@ -2071,7 +2065,7 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
                 "segment_id": segment.get("SegmentID"),
                 "outcome": outcome,
                 "result_type": type(outcome_result).__name__,
-            }
+            },
         )
         return {"narrative": "", "effects": {}}
 
@@ -2084,7 +2078,7 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
                 "segment_id": segment.get("SegmentID"),
                 "outcome": outcome,
                 "narrative_type": type(narrative).__name__,
-            }
+            },
         )
         narrative = str(narrative) if narrative else ""
 
@@ -2097,11 +2091,8 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
                 "segment_id": segment.get("SegmentID"),
                 "outcome": outcome,
                 "effects_type": type(effects).__name__,
-            }
+            },
         )
         effects = {}
 
-    return {
-        "narrative": narrative,
-        "effects": effects
-    }
+    return {"narrative": narrative, "effects": effects}

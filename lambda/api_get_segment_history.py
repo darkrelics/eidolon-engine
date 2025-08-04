@@ -11,18 +11,11 @@ from botocore.exceptions import ClientError
 
 from eidolon.character import get_character, validate_character_ownership
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.player import extract_player_id_from_event, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
-from eidolon.utilities import (
-    build_lambda_response_pascal,
-    handle_lambda_error_pascal,
-    handle_preflight_if_options,
-    log_lambda_invocation,
-)
+from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, handle_preflight_if_options
 from eidolon.validation import validate_uuid
-
-
 
 
 def get_segment_history_business_logic(character_id: str, player_id: str) -> dict:
@@ -88,7 +81,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
             },
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to query active segments: {str(err)}")
+        raise RuntimeError(f"Failed to query active segments: {str(err)}") from err
 
     # Format segments for response with all the data Flutter expects
     formatted_segments = []
@@ -172,7 +165,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         500: Internal error
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Handle preflight
     preflight_response = handle_preflight_if_options(event)

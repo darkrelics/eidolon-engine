@@ -18,8 +18,6 @@ from eidolon.logger import logger
 from eidolon.validation import validate_uuid
 
 
-
-
 class CharacterNameFilter:
     """Manages bloom filter for restricted character names."""
 

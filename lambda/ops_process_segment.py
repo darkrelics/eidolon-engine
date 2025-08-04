@@ -10,12 +10,10 @@ Rest and Decision segments are handled directly by the poller.
 
 import json
 
-from eidolon.logger import logger
+from eidolon.logger import logger, log_lambda_statistics
 from eidolon.polling import disable_polling_infrastructure
 from eidolon.segment import check_active_segments_exist, is_mechanical_segment, process_segment_completely
-from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal, log_lambda_invocation
-
-
+from eidolon.utilities import build_lambda_response_pascal, handle_lambda_error_pascal
 
 
 def validate_segment_for_processing(segment_type: str) -> bool:
@@ -178,7 +176,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         For direct: Processing result with outcome
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Check if this is an SQS event
     if "Records" in event:
