@@ -13,10 +13,9 @@ from datetime import datetime, timedelta, timezone
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
-from eidolon.character import heal_expired_wounds, apply_character_updates
+from eidolon.character import apply_character_updates, heal_expired_wounds
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-
 from eidolon.story import (
     apply_story_rewards,
     calculate_story_rewards,
@@ -24,7 +23,6 @@ from eidolon.story import (
     get_story_history,
     get_story_metadata,
 )
-
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES: list = ["mechanical", "decision", "rest"]

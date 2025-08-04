@@ -10,11 +10,10 @@ Rest and Decision segments are handled directly by the poller.
 
 import json
 
-from eidolon.logger import logger, log_lambda_statistics
+from eidolon.logger import log_lambda_statistics, logger
 from eidolon.polling import disable_polling_infrastructure
-from eidolon.responses import lambda_response
+from eidolon.responses import lambda_response, lambda_error
 from eidolon.segment import check_active_segments_exist, is_mechanical_segment, process_segment_completely
-from eidolon.utilities import handle_lambda_error_pascal
 
 
 def validate_segment_for_processing(segment_type: str) -> bool:
@@ -324,4 +323,4 @@ def lambda_handler(event: dict, context: object) -> dict:
             )
             return lambda_response(500, {"Error": "Internal server error"}, event)
         except Exception as err:
-            return handle_lambda_error_pascal(err, context, event)
+            return lambda_error(event, err)

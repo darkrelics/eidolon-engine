@@ -7,10 +7,10 @@ Lambda function to list character names for an authenticated player.
 Returns only character names and death status from the player table.
 """
 
-from eidolon.logger import logger, log_lambda_statistics
+from eidolon.cors import cors_handler
+from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, get_formatted_character_list, validate_player_exists
-from eidolon.responses import lambda_response
-from eidolon.utilities import handle_lambda_error_pascal, handle_preflight_if_options
+from eidolon.responses import lambda_response, lambda_error
 
 
 def list_characters_business_logic(player_id: str) -> dict:
@@ -51,7 +51,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     log_lambda_statistics(event, context)
 
     # Handle preflight
-    preflight_response = handle_preflight_if_options(event)
+    preflight_response: dict = cors_handler.handle_preflight(event)
     if preflight_response:
         return preflight_response
 
@@ -62,7 +62,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Validate player exists
     try:
@@ -73,7 +73,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Call business logic
     try:
@@ -102,4 +102,4 @@ def lambda_handler(event: dict, context: object) -> dict:
             event,
         )
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)

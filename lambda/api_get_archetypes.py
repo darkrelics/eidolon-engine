@@ -8,25 +8,20 @@ The function loads all archetypes on cold start and filters for Player=true.
 Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 """
 
-from eidolon.archetypes import get_all_player_archetypes
-from eidolon.logger import logger, log_lambda_statistics
-from eidolon.responses import lambda_response
-from eidolon.utilities import (
-    handle_lambda_error_pascal,
-    handle_preflight_if_options,
-)
+from eidolon.archetypes import get_archtypes
+from eidolon.cors import cors_handler
+from eidolon.logger import log_lambda_statistics, logger
+from eidolon.responses import lambda_response, lambda_error
 
+archetypes_cache: list = []
 
 # Cache for player archetypes - populated at module load
 try:
     logger.info("Loading player archetypes cache at module initialization")
-    player_archetypes_cache = get_all_player_archetypes()
-    cache_loaded = True
-    logger.info("Player archetypes cache loaded successfully", extra={"count": len(player_archetypes_cache)})
+    archetypes_cache = get_archtypes()
+    logger.info("Player archetypes cache loaded successfully", extra={"count": len(archetypes_cache)})
 except Exception as err:
-    logger.error("Failed to load archetypes cache at module initialization", extra={"error": str(err)}, exc_info=True)
-    player_archetypes_cache = []
-    cache_loaded = False
+    logger.error(f"Failed to load archetypes cache at module initialization: {err}", exc_info=True)
 
 
 def handle_get_archetypes() -> dict:
@@ -45,25 +40,24 @@ def handle_get_archetypes() -> dict:
     Raises:
         RuntimeError: If database operations fail and cache is empty
     """
-    global player_archetypes_cache, cache_loaded
+    global archetypes_cache
 
-    if cache_loaded:
+    if archetypes_cache:
         logger.info("Returning pre-loaded player archetypes cache")
-        return {"success": True, "archetypes": player_archetypes_cache, "count": len(player_archetypes_cache)}
+        return {"success": True, "archetypes": archetypes_cache, "count": len(archetypes_cache)}
 
     # Cache failed to load at module init, try again
     logger.warning("Cache not loaded at module init, attempting to load now")
     try:
-        player_archetypes = get_all_player_archetypes()
+        archetypes: list = get_archtypes()
 
         # Cache the results
-        player_archetypes_cache = player_archetypes
-        cache_loaded = True
+        archetypes_cache: list = archetypes
 
         logger.info("Successfully loaded archetypes cache on demand")
-        return {"success": True, "archetypes": player_archetypes, "count": len(player_archetypes)}
+        return {"success": True, "archetypes": archetypes, "count": len(archetypes)}
     except RuntimeError as err:
-        logger.error("Failed to load archetypes on demand", extra={"error": str(err)})
+        logger.error(f"Failed to load archetypes on demand: {err}")
         raise
 
 
@@ -84,7 +78,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     log_lambda_statistics(event, context)
 
     # Handle preflight
-    preflight_response = handle_preflight_if_options(event)
+    preflight_response: dict = cors_handler.handle_preflight(event)
     if preflight_response:
         return preflight_response
 
@@ -92,7 +86,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Call business logic
     try:
-        result = handle_get_archetypes()
+        result: dict = handle_get_archetypes()
         logger.info("Lambda response", extra={"status_code": 200})
         return lambda_response(
             200,
@@ -107,4 +101,4 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Failed to load archetypes", extra={"error": str(err)}, exc_info=True)
         return lambda_response(500, {"Error": "Failed to load archetypes"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)

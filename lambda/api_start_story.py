@@ -7,15 +7,15 @@ Lambda function to start a story for a character.
 Validates character state, creates active segment, and returns first segment details.
 """
 
+from eidolon.cors import cors_handler
 from eidolon.environment import SEGMENT_QUEUE_URL
-from eidolon.logger import logger, log_lambda_statistics
+from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player_exists
 from eidolon.polling import ensure_polling_enabled
 from eidolon.requests import get_required_field_flexible
-from eidolon.responses import lambda_response
+from eidolon.responses import lambda_response, lambda_error
 from eidolon.sqs import send_message
 from eidolon.story import start_story_for_character
-from eidolon.utilities import handle_lambda_error_pascal, handle_preflight_if_options
 from eidolon.validation import validate_uuid
 
 
@@ -137,7 +137,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     log_lambda_statistics(event, context)
 
     # Handle preflight
-    preflight_response = handle_preflight_if_options(event)
+    preflight_response: dict = cors_handler.handle_preflight(event)
     if preflight_response:
         return preflight_response
 
@@ -148,7 +148,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Validate player exists
     try:
@@ -159,7 +159,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Parse request body with flexible field names
     try:
@@ -169,7 +169,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Validate UUIDs
     if character_id and not validate_uuid(character_id):  # type: ignore
@@ -209,4 +209,4 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)

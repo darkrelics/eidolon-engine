@@ -13,9 +13,9 @@ import time
 from botocore.exceptions import ClientError
 
 from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
-from eidolon.logger import logger, log_lambda_statistics
+from eidolon.logger import log_lambda_statistics, logger
 from eidolon.polling import disable_polling_infrastructure, enable_polling_infrastructure, get_polling_state
-from eidolon.responses import lambda_response
+from eidolon.responses import lambda_response, lambda_error
 from eidolon.segment import (
     check_active_segments_exist,
     get_completed_segments,
@@ -24,7 +24,6 @@ from eidolon.segment import (
     reset_segment_processing_status,
 )
 from eidolon.sqs import send_message_batch
-from eidolon.utilities import handle_lambda_error_pascal
 
 
 def poll_and_process_segments_business_logic() -> dict:
@@ -347,4 +346,4 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)

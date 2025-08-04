@@ -7,8 +7,8 @@ Provides consistent response formatting for API Gateway Lambda functions.
 import json
 from decimal import Decimal
 
-from eidolon.logger import logger
 from eidolon.cors import cors_handler
+from eidolon.logger import logger
 
 
 def decimal_to_json_serializable(obj):
@@ -236,3 +236,23 @@ def lambda_response(status_code: int, body: dict, event: dict) -> dict:
         return cors_handler.add_cors_headers(response, event)
 
     return cors_handler.add_cors_headers(create_response(status_code, body), event)
+
+def lambda_error(event: dict, err: Exception) -> dict:
+    """
+    Handle Lambda function errors with proper logging and CORS response using PascalCase.
+
+    Args:
+        err: Exception that occurred
+        context: Lambda context
+        event: Lambda event dict
+
+    Returns:
+        Error response with CORS headers and PascalCase fields
+    """
+    logger.error(
+        f"Unexpected error in lambda_handler {err}",
+        exc_info=True,
+    )
+    logger.info("Lambda response", extra={"status_code": 500})
+
+    return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

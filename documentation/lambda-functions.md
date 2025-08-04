@@ -65,7 +65,7 @@ from eidolon.dynamo import dynamo
 from eidolon.logger logger
 from eidolon.requests import get_query_parameter, get_required_field
 from eidolon.responses import create_response, error_response
-from eidolon.utilities import build_lambda_response, log_lambda_invocation, handle_preflight_if_options, handle_lambda_error
+from eidolon.utilities import build_lambda_response, log_lambda_invocation, handle_preflight, lambda_error
 from eidolon.player import extract_player_id, validate_player_exists
 from eidolon.validation import validate_uuid
 ```
@@ -207,7 +207,6 @@ def lambda_handler(event: dict, context: object) -> dict:
     log_lambda_statistics(context, event)
 
     # 2. Handle CORS preflight
-    preflight_response = handle_preflight_if_options(event)
     if preflight_response:
         return preflight_response
 
@@ -218,7 +217,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Authentication failed", extra={"error": str(err)})
         return build_lambda_response(401, {"error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return lambda_error(event, err)
 
     # 4. Validate player exists
     try:
@@ -229,7 +228,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Failed to validate player", extra={"error": str(err)})
         return build_lambda_response(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return lambda_error(event, err)
 
     # 5. Parse request parameters
     # 6. Call business logic function
@@ -244,7 +243,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Database error", extra={"error": str(err)})
         return build_lambda_response(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return lambda_error(event, err)
 
 def business_logic_function(param1: str, param2: str) -> dict:
     """Pure business logic - testable and AWS-agnostic."""
@@ -283,9 +282,8 @@ def business_logic_function(param1: str, param2: str) -> dict:
 9. **Architecture Pattern**: Follow the handler/business logic separation pattern described above
 10. **Utility Functions**: Prefer high-level utility functions from `eidolon.utilities`:
     - `log_lambda_statistics()` - For logging invocations
-    - `handle_preflight_if_options()` - For CORS preflight handling
     - `build_lambda_response()` - For building responses with CORS
-    - `handle_lambda_error()` - For consistent error handling
+    - `lambda_error()` - For consistent error handling
 
 ### Critical: Lambda Handler Exception Handling
 
@@ -317,8 +315,8 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     except Exception as err:
         # CRITICAL: Catch ALL exceptions to prevent Lambda failures
-        # Use handle_lambda_error for consistent error handling
-        return handle_lambda_error(err, context, event)
+        # Use lambda_error for consistent error handling
+        return lambda_error(event, err)
 ```
 
 **Why This Matters:**

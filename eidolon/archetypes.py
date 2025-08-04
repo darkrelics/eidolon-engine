@@ -11,7 +11,7 @@ from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH
 from eidolon.logger import logger
 
 
-def get_all_player_archetypes() -> list:
+def get_archtypes() -> list:
     """
     Load all player-available archetypes from DynamoDB.
 
@@ -24,22 +24,17 @@ def get_all_player_archetypes() -> list:
     logger.info("Loading archetypes from DynamoDB")
 
     try:
-        # Scan all archetypes (no pagination needed for < 50 items)
-        items = dynamo.scan_all(TableName.ARCHETYPES)
+        # Scan all archetypes
+        items: list = dynamo.scan_all(TableName.ARCHETYPES)  # type: ignore
     except ClientError as err:
-        logger.error(
-            "Failed to scan archetypes table",
-            extra={"error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to load archetypes: {err}")
+        logger.error(f"Failed to scan archetypes table: {err.response.get('Error', {}).get('Message', 'Unknown error')}")
+        raise RuntimeError(f"Failed to load archetypes: {err}") from err
 
     # Filter for player archetypes
-    player_archetypes = []
+    player_archetypes: list = []
     for item in items:  # type: ignore
         # Check if Player field exists and is True
         if item.get("Player", False):
-            # Keep attribute and skill keys in PascalCase
             attributes = item.get("Attributes", {})
             skills = item.get("Skills", {})
 
@@ -60,5 +55,5 @@ def get_all_player_archetypes() -> list:
     # Sort by archetype name for consistent ordering
     player_archetypes.sort(key=lambda x: x["ArchetypeName"])
 
-    logger.info("Loaded player archetypes", extra={"count": len(player_archetypes)})
+    logger.info(f"Loaded player archetypes {len(player_archetypes)}")
     return player_archetypes

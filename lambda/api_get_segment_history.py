@@ -10,12 +10,12 @@ Returns completed segment results from the character's story history.
 from botocore.exceptions import ClientError
 
 from eidolon.character import get_character, validate_character_ownership
+from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import logger, log_lambda_statistics
+from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player_exists
 from eidolon.requests import get_query_parameter_flexible
-from eidolon.responses import lambda_response
-from eidolon.utilities import handle_lambda_error_pascal, handle_preflight_if_options
+from eidolon.responses import lambda_response, lambda_error
 from eidolon.validation import validate_uuid
 
 
@@ -169,7 +169,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     log_lambda_statistics(event, context)
 
     # Handle preflight
-    preflight_response = handle_preflight_if_options(event)
+    preflight_response: dict = cors_handler.handle_preflight(event)
     if preflight_response:
         return preflight_response
 
@@ -180,7 +180,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Validate player exists
     try:
@@ -191,7 +191,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Get character ID from query parameters (flexible: CharacterID or characterId)
     character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
@@ -219,4 +219,4 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)

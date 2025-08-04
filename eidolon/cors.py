@@ -132,7 +132,10 @@ class CorsHandler:
         Returns:
             Lambda response for preflight request
         """
-        return {"statusCode": 200, "headers": self.get_cors_headers(event), "body": ""}
+        if event.get("httpMethod") == "OPTIONS":
+            return {"statusCode": 200, "headers": self.get_cors_headers(event), "body": ""}
+
+        return {}
 
     def add_cors_headers(self, response: dict, event: dict) -> dict:
         """

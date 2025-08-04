@@ -12,7 +12,6 @@ from eidolon.environment import EVENTBRIDGE_RULE_NAME, SSM_POLLER_STATE_PARAMETE
 from eidolon.logger import logger
 from eidolon.ssm import get_parameter, put_parameter
 
-
 # EventBridge client
 events_client = boto3.client("events")
 

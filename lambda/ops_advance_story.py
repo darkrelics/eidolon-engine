@@ -10,7 +10,8 @@ Triggered by SQS to apply character updates and progress stories.
 import json
 
 from eidolon.character import apply_death_or_unconscious_outcome, get_character
-from eidolon.logger import logger, log_lambda_statistics
+from eidolon.environment import SEGMENT_QUEUE_URL
+from eidolon.logger import log_lambda_statistics, logger
 from eidolon.polling import update_polling_state
 from eidolon.segment import (
     check_active_segments_exist,
@@ -29,9 +30,8 @@ from eidolon.segment import (
     update_character_active_segment,
     update_segment_processing_status,
 )
-from eidolon.story import apply_combat_rewards, apply_story_outcome_effects, ensure_story_history_exists, update_story_history_xp
-from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.sqs import send_message
+from eidolon.story import apply_combat_rewards, apply_story_outcome_effects, ensure_story_history_exists, update_story_history_xp
 
 
 def advance_story_business_logic(active_segment_id: str) -> dict:

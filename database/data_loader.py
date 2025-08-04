@@ -48,7 +48,7 @@ def store_exits(exits_data):
         exits_data (dict): The exits data to store.
     """
     try:
-        for exit_data in exits_data.get("exits", []):
+        for exit_data in exits_data.get("Exits", []):
             exit_item = {
                 "ExitID": exit_data["ExitID"],
                 "Direction": exit_data["Direction"],
@@ -77,7 +77,7 @@ def store_exits(exits_data):
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        logging.info(f"Successfully stored {len(exits_data.get('exits', []))} exits in DynamoDB")
+        logging.info(f"Successfully stored {len(exits_data.get('Exits', []))} exits in DynamoDB")
     except ClientError as err:
         logging.error(f"Failed to store exits in DynamoDB: {err}")
         raise
@@ -94,7 +94,7 @@ def store_rooms(rooms_data):
         rooms_data (dict): The rooms data to store.
     """
     try:
-        for room in rooms_data.get("rooms", []):
+        for room in rooms_data.get("Rooms", []):
             room_item = {
                 "RoomID": room["RoomID"],
                 "Area": room["Area"],
@@ -123,7 +123,7 @@ def store_rooms(rooms_data):
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        logging.info(f"Successfully stored {len(rooms_data.get('rooms', []))} rooms in DynamoDB")
+        logging.info(f"Successfully stored {len(rooms_data.get('Rooms', []))} rooms in DynamoDB")
     except ClientError as err:
         logging.error(f"Failed to store rooms in DynamoDB: {err}")
         raise
@@ -140,7 +140,7 @@ def store_archetypes(archetypes_data):
         archetypes_data (dict): The archetypes data to store.
     """
     try:
-        for name, archetype in archetypes_data.get("archetypes", {}).items():
+        for name, archetype in archetypes_data.get("Archetypes", {}).items():
             try:
                 validate_character_name(name)
             except ValueError as err:
@@ -190,7 +190,7 @@ def store_archetypes(archetypes_data):
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        logging.info(f"Successfully stored {len(archetypes_data.get('archetypes', {}))} archetypes in DynamoDB")
+        logging.info(f"Successfully stored {len(archetypes_data.get('Archetypes', {}))} archetypes in DynamoDB")
     except ClientError as err:
         logging.error(f"Failed to store archetypes in DynamoDB: {err}")
         raise
@@ -207,7 +207,7 @@ def store_item_prototypes(prototypes_data):
         prototypes_data (dict): The item prototypes data to store.
     """
     try:
-        for prototype in prototypes_data.get("itemPrototypes", []):
+        for prototype in prototypes_data.get("ItemPrototypes", []):
             prototype_id = prototype["PrototypeID"]
             prototype_data = prototype.copy()
 
@@ -234,7 +234,7 @@ def store_item_prototypes(prototypes_data):
                 ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        logging.info(f"Successfully stored {len(prototypes_data.get('itemPrototypes', []))} item prototypes in DynamoDB")
+        logging.info(f"Successfully stored {len(prototypes_data.get('ItemPrototypes', []))} item prototypes in DynamoDB")
     except ClientError as err:
         logging.error(f"Failed to store item prototypes in DynamoDB: {err}")
         raise
@@ -295,8 +295,8 @@ def load_archetypes():
     try:
         result: dict = dynamo.scan(TableName.ARCHETYPES)  # type: ignore
         items = result.get("items", [])
-        archetypes = {"archetypes": {item["ArchetypeName"]: item for item in items}}  # type: ignore
-        logging.info(f"Successfully loaded {len(archetypes.get('archetypes', {}))} archetypes from DynamoDB")
+        archetypes = {"Archetypes": {item["ArchetypeName"]: item for item in items}}  # type: ignore
+        logging.info(f"Successfully loaded {len(archetypes.get('Archetypes', {}))} archetypes from DynamoDB")
         return archetypes
     except ClientError as err:
         logging.error(f"Failed to load archetypes from DynamoDB: {err}")
@@ -316,8 +316,8 @@ def load_item_prototypes():
     try:
         result: dict = dynamo.scan(TableName.PROTOTYPES)  # type: ignore
         items = result.get("items", [])
-        prototypes = {"itemPrototypes": items}
-        logging.info(f"Successfully loaded {len(prototypes.get('itemPrototypes', []))} item prototypes from DynamoDB")
+        prototypes = {"ItemPrototypes": items}
+        logging.info(f"Successfully loaded {len(prototypes.get('ItemPrototypes', []))} item prototypes from DynamoDB")
         return prototypes
     except ClientError as err:
         logging.error(f"Failed to load item prototypes from DynamoDB: {err}")
@@ -338,7 +338,7 @@ def store_opponents(opponents_data):
         opponents_data (dict): The opponents data to store.
     """
     try:
-        for opponent in opponents_data.get("opponents", []):
+        for opponent in opponents_data.get("Opponents", []):
             # Check if this is incremental game format (has Attributes/Skills)
             if "Attributes" in opponent and "Skills" in opponent:
                 # Incremental game format
@@ -398,7 +398,7 @@ def store_opponents(opponents_data):
                 ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        logging.info(f"Successfully stored {len(opponents_data.get('opponents', []))} opponents in DynamoDB")
+        logging.info(f"Successfully stored {len(opponents_data.get('Opponents', []))} opponents in DynamoDB")
     except ClientError as err:
         logging.error(f"Failed to store opponents in DynamoDB: {err}")
         raise
@@ -416,7 +416,7 @@ def store_story(story_data):
     """
     try:
         # Store the main story
-        story = story_data.get("story", {})
+        story = story_data.get("Story", {})
         if story:
             story_item = {
                 "StoryID": story["StoryID"],
@@ -455,7 +455,7 @@ def store_story(story_data):
             logging.info(f"Successfully stored story '{story['Title']}' (ID: {story['StoryID']}) in DynamoDB")
 
         # Store all segments
-        segments = story_data.get("segments", [])
+        segments = story_data.get("Segments", [])
         for segment in segments:
             segment_item = {
                 "StoryID": segment["StoryID"],
@@ -472,7 +472,7 @@ def store_story(story_data):
                 segment_item["DecisionOptions"] = segment.get("DecisionOptions", {})
                 segment_item["DefaultDecision"] = segment.get("DefaultDecision", "")
             elif segment["SegmentType"] == "mechanical":
-                segment_item["NextSegmentID"] = segment.get("NextSegmentID")
+                # NextSegmentID is now handled per-result in Results
                 segment_item["Challenges"] = segment.get("Challenges", [])
                 segment_item["Combat"] = segment.get("Combat", {})
                 segment_item["Results"] = segment.get("Results", {})
@@ -521,8 +521,8 @@ def load_opponents():
     try:
         result: dict = dynamo.scan(TableName.OPPONENTS)  # type: ignore
         items = result.get("items", [])
-        opponents = {"opponents": items}
-        logging.info(f"Successfully loaded {len(opponents.get('opponents', []))} opponents from DynamoDB")
+        opponents = {"Opponents": items}
+        logging.info(f"Successfully loaded {len(opponents.get('Opponents', []))} opponents from DynamoDB")
         return opponents
     except ClientError as err:
         logging.error(f"Failed to load opponents from DynamoDB: {err}")
@@ -606,7 +606,7 @@ def display_archetypes(archetypes):
         archetypes (dict): The archetypes data to display.
     """
     print("Archetypes:")
-    for name, archetype in archetypes.get("archetypes", {}).items():
+    for name, archetype in archetypes.get("Archetypes", {}).items():
         print(f"Name: {name}")
         print(f"  Description: {archetype.get('Description', 'No description')}")
         print("  Attributes:")
@@ -642,9 +642,9 @@ def display_item_prototypes(prototypes):
         prototypes (dict): The item prototypes data to display.
     """
     print("Item Prototypes:")
-    for prototype in prototypes.get("itemPrototypes", []):
+    for prototype in prototypes.get("ItemPrototypes", []):
         print(f"ID: {prototype.get('PrototypeID', 'No ID')}")
-        print(f"  Name: {prototype.get('prototype_name', prototype.get('Name', 'No Name'))}")
+        print(f"  Name: {prototype.get('PrototypeName', prototype.get('Name', 'No Name'))}")
         print(f"  Description: {prototype.get('Description', 'No description')}")
         print(f"  Mass: {prototype.get('Mass', 'Unknown')}")
         print(f"  Value: {prototype.get('Value', 'Unknown')}")
@@ -662,7 +662,7 @@ def display_opponents(opponents_data):
         opponents_data (dict): The opponents data to display.
     """
     print("Opponents:")
-    for opponent in opponents_data.get("opponents", []):
+    for opponent in opponents_data.get("Opponents", []):
         print(f"Opponent ID: {opponent.get('OpponentID', 'No ID')}")
         print(f"  Name: {opponent.get('Name', 'No Name')}")
         print(f"  Description: {opponent.get('Description', 'No description')}")
@@ -697,7 +697,7 @@ def display_opponents(opponents_data):
             print("  Loot Table:")
             for loot in loot_table:
                 if isinstance(loot, dict):
-                    print(f"    Item: {loot.get('itemID', 'Unknown')} (chance: {loot.get('chance', 0)})")
+                    print(f"    Item: {loot.get('ItemID', 'Unknown')} (chance: {loot.get('Chance', 0)})")
                 else:
                     # Simple string format
                     print(f"    {loot}")
@@ -758,7 +758,7 @@ def display_story(story_data):
                     print(f"    Challenges: {len(challenges)}")
                 combat = segment.get("Combat", {})
                 if combat:
-                    print(f"    Combat: Opponent ID: {combat.get('OpponentID', 'None')}, Max Rounds: {combat.get('maxRounds', 0)}")
+                    print(f"    Combat: Opponent ID: {combat.get('OpponentID', 'None')}, Max Rounds: {combat.get('MaxRounds', 0)}")
             elif segment.get("SegmentType") == "rest":
                 print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
                 rest_benefit = segment.get("RestBenefit", {})

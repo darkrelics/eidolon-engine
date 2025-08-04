@@ -3,16 +3,12 @@
 import time
 
 from eidolon.character import get_character_with_ownership
-from eidolon.logger import logger, log_lambda_statistics
+from eidolon.cors import cors_handler
+from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player_exists
 from eidolon.requests import get_required_field_flexible
-from eidolon.responses import lambda_response
+from eidolon.responses import lambda_response, lambda_error
 from eidolon.segment import get_active_segment_info, insert_rest_segment
-from eidolon.utilities import (
-    handle_lambda_error_pascal,
-    handle_preflight_if_options,
-)
-
 
 # Rest segment configuration
 REST_SEGMENT_DURATION = 900  # 15 minutes (time to heal a bashing wound)
@@ -121,7 +117,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     log_lambda_statistics(event, context)
 
     # Handle preflight
-    preflight_response = handle_preflight_if_options(event)
+    preflight_response: dict = cors_handler.handle_preflight(event)
     if preflight_response:
         return preflight_response
 
@@ -132,7 +128,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Validate player exists
     try:
@@ -143,7 +139,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Parse request body
     try:
@@ -151,7 +147,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Extract and validate required fields
     try:
@@ -201,4 +197,4 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error("Character rest system error", extra={"error": str(err)}, exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)

@@ -3,7 +3,7 @@
 import json
 import logging
 
-from eidolon.environment import LOG_LEVEL, APPLICATION_NAME
+from eidolon.environment import APPLICATION_NAME, LOG_LEVEL
 
 # Initialize logger for the application
 logger = logging.getLogger(APPLICATION_NAME)

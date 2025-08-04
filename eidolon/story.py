@@ -12,11 +12,12 @@ from decimal import Decimal
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
-from eidolon.character import get_character, heal_expired_wounds, validate_character_ownership, apply_character_updates
+from eidolon.character import apply_character_updates, get_character, heal_expired_wounds, validate_character_ownership
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger
 from eidolon.segment import (
+    calculate_heal_time,
     complete_story,
     create_next_active_segment,
     delete_active_segment,
@@ -24,7 +25,6 @@ from eidolon.segment import (
     get_segment_definition,
     record_segment_history,
     update_character_active_segment,
-    calculate_heal_time,
 )
 from eidolon.sqs import send_message
 from eidolon.validation import validate_uuid
