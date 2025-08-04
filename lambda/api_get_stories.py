@@ -7,14 +7,13 @@ Lambda function to get available stories for a character.
 Returns stories the character can participate in, checking prerequisites and cooldowns.
 """
 
-from eidolon.character import get_character, validate_character_ownership
+from eidolon.character import character_get
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.story import get_stories_for_character
-from eidolon.validation import validate_uuid
 
 
 def get_available_stories_business_logic(character_id: str, player_id: str) -> dict:
@@ -32,13 +31,8 @@ def get_available_stories_business_logic(character_id: str, player_id: str) -> d
         ValueError: If character not found or in invalid state
         RuntimeError: If database operations fail
     """
-    # Validate character ID format
-    if not validate_uuid(character_id):
-        raise ValueError("Invalid character ID format")
-
     # Get character and verify ownership
-    character = get_character(character_id)
-    validate_character_ownership(character, player_id)
+    character: dict = character_get(character_id, player_id)
 
     # Check if character is in a valid state for stories
     game_mode = character.get("GameMode", "None")
@@ -57,7 +51,7 @@ def get_available_stories_business_logic(character_id: str, player_id: str) -> d
     )
 
     # Get story details with prerequisite and cooldown checking
-    stories = get_stories_for_character(character_id, available_story_ids)
+    stories = get_stories_for_character(player_id, character_id, available_story_ids)
 
     # Sort stories by availability and title
     stories.sort(key=lambda s: (not s["Available"], s["Title"]))

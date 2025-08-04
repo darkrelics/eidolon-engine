@@ -12,7 +12,7 @@ from decimal import Decimal
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
-from eidolon.character import apply_character_updates, get_character, heal_expired_wounds, validate_character_ownership
+from eidolon.character import apply_character_updates, heal_expired_wounds, character_get
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger
@@ -27,7 +27,6 @@ from eidolon.segment import (
     update_character_active_segment,
 )
 from eidolon.sqs import send_message
-from eidolon.validation import validate_uuid
 
 
 def get_active_story_segment(character_id: str) -> dict:
@@ -497,7 +496,7 @@ def check_story_prerequisites(character: dict, prerequisites: dict) -> bool:
     return True
 
 
-def get_stories_for_character(character_id: str, available_story_ids: list) -> list:
+def get_stories_for_character(character_id: str, player_id: str, available_story_ids: list) -> list:
     """
     Get story details for a list of story IDs, checking prerequisites and cooldowns.
 
@@ -516,7 +515,7 @@ def get_stories_for_character(character_id: str, available_story_ids: list) -> l
 
     stories = []
 
-    character = get_character(character_id)
+    character = character_get(character_id, player_id)
 
     for story_id in available_story_ids:
         try:
@@ -767,8 +766,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
     """
 
     # Get character and verify ownership
-    character = get_character(character_id)
-    validate_character_ownership(character, player_id)
+    character: dict = character_get(character_id, player_id)
 
     # Heal any expired wounds before starting new segment
     try:
@@ -1113,13 +1111,9 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
         RuntimeError: If database operations fail
     """
 
-    # Validate character ID format
-    if not validate_uuid(character_id):
-        raise ValueError("Invalid character ID format")
-
     # Verify character ownership
-    character = get_character(character_id)
-    validate_character_ownership(character, player_id)
+    # TODO: Read Player Record instead.
+    character_get(character_id, player_id)
 
     logger.info(
         "Submitting decision",

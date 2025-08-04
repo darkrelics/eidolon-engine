@@ -130,7 +130,10 @@ Mechanical segments can contain both skill challenges and combat encounters. Thi
     },
     "exceptional": {
       "narrative": "You dispatch the goblin without a scratch!",
-      "effects": { "room": 7, "items": ["goblin-pouch-001", "rusty-blade-001", "goblin-ear-001"] }
+      "effects": {
+        "room": 7,
+        "items": ["goblin-pouch-001", "rusty-blade-001", "goblin-ear-001"]
+      }
     }
   }
 }
@@ -276,17 +279,6 @@ def validate_uuid(value, field_name):
     )
     if not uuid_pattern.match(value):
         raise ValueError(f"Invalid {field_name} format")
-
-def validate_character_ownership(character_id, player_id):
-    """Verify character belongs to player."""
-    character = get_character(character_id)
-    if not character:
-        return not_found_response("Character")
-
-    if character.get('PlayerID') != player_id:
-        return create_response(403, {"error": "Character not owned by player"})
-
-    return character
 
 def check_game_mode(character, required_mode="None"):
     """Verify character is in correct game mode."""
@@ -720,55 +712,9 @@ When any new segment is created (mechanical, decision, or rest), the system auto
 4. Updates the character's Wounds array
 5. Logs the healing results
 
-```python
-def create_next_active_segment(character_id, player_id, story_id, segment, story_title):
-    """Create an active segment record for the next segment."""
-    # Heal any expired wounds before creating new segment
-    try:
-        heal_result = heal_expired_wounds(character_id)
-        if heal_result.get("healed_count", 0) > 0:
-            logger.info(
-                "Healed wounds before creating next segment",
-                extra={"character_id": character_id, "healed_count": heal_result["healed_count"]}
-            )
-    except Exception as err:
-        logger.warning(
-            "Failed to heal wounds before segment creation",
-            extra={"character_id": character_id, "error": str(err)}
-        )
-        # Non-critical - continue with segment creation
-
-    # Continue with segment creation...
-```
-
 #### Rest Segment Implementation
 
 Rest segments themselves are simple time delays with no challenges or decisions:
-
-```python
-def process_rest_segment(segment_def, character):
-    """
-    Process a rest segment.
-
-    Rest segments are simply time delays that allow natural wound healing
-    to occur via heal_expired_wounds() at the start of the next segment.
-
-    Args:
-        segment_def: Segment definition from Segments table
-        character: Character data
-
-    Returns:
-        Tuple of (outcome, empty dict)
-    """
-    logger.info(
-        "Rest segment completed",
-        extra={"character_id": character.get("CharacterID")},
-    )
-
-    # Rest segments always have normal outcome
-    # Healing happens automatically via heal_expired_wounds() at segment start
-    return "normal", {}
-```
 
 #### Segment Definition Example
 

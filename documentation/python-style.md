@@ -327,7 +327,7 @@ if not character_id:
 try:
     character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
 except ClientError as err:
-    logger.error("Failed to get character", extra={"error": str(err)})
+    logger.error("Failed to get character")
     return error_response("Database error", 500)
 
 if not character:
@@ -357,7 +357,7 @@ All exceptions must use the variable name `err` and it should be explicitly used
 try:
     result = dynamo.get_item(...)
 except ClientError as err:
-    logger.error("Database operation failed", extra={"error": str(err)})
+    logger.error("Database operation failed")
     raise RuntimeError(f"Failed to get item: {err}")
 
 # Bad - using other variable names
@@ -383,7 +383,7 @@ def get_character(character_id: str) -> dict:
             raise ValueError(f"Character {character_id} not found")
         return character
     except ClientError as err:
-        logger.error("Database query failed", extra={"error": str(err), "character_id": character_id})
+        logger.error("Database query failed")
         raise RuntimeError(f"Failed to retrieve character {character_id}") from err
 
 # Good - preserving exception chain across multiple layers
@@ -427,19 +427,19 @@ The function that raises an exception is NOT responsible for handling it. Except
 def update_character_health(character_id: str, damage: int) -> dict:
     """
     Apply damage to character.
-    
+
     Raises:
         ValueError: If character not found or damage invalid
         RuntimeError: If database operation fails
     """
     if damage < 0:
         raise ValueError(f"Damage cannot be negative: {damage}")
-    
+
     try:
         character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
         if not character:
             raise ValueError(f"Character {character_id} not found")
-        
+
         character["Health"] -= damage
         dynamo.put_item(TableName.CHARACTERS, character)
         return character
@@ -452,18 +452,18 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         character_id = event.get("characterId")
         damage = event.get("damage", 0)
-        
+
         # Call library function - it will raise if there's an error
         updated_character = update_character_health(character_id, damage)
         return create_response(200, updated_character)
-        
+
     except ValueError as err:
         # Caller handles the ValueError appropriately
-        logger.warning("Invalid request", extra={"error": str(err)})
+        logger.warning("Invalid request")
         return error_response(str(err), 400)
     except RuntimeError as err:
         # Caller handles the RuntimeError appropriately
-        logger.error("Database error", extra={"error": str(err)}, exc_info=True)
+        logger.error("Database error", exc_info=True)
         return error_response("Internal server error", 500)
 
 # Bad - function tries to handle its own exceptions
@@ -473,7 +473,7 @@ def update_character_health(character_id: str, damage: int) -> dict:
         if damage < 0:
             # Wrong - returning error instead of raising
             return {"success": False, "error": "Invalid damage"}
-        
+
         character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
         character["Health"] -= damage
         dynamo.put_item(TableName.CHARACTERS, character)
@@ -502,21 +502,21 @@ try:
     try:
         result = process_data(data)
     except ValueError as err:
-        logger.error("Processing failed", extra={"error": str(err)})
+        logger.error("Processing failed")
 except ClientError as err:
-    logger.error("Database failed", extra={"error": str(err)})
+    logger.error("Database failed")
 
 # Good - sequential try blocks
 try:
     data = get_data()
 except ClientError as err:
-    logger.error("Database failed", extra={"error": str(err)})
+    logger.error("Database failed")
     raise RuntimeError(f"Failed to get data: {err}")
 
 try:
     result = process_data(data)
 except ValueError as err:
-    logger.error("Processing failed", extra={"error": str(err)})
+    logger.error("Processing failed")
     raise RuntimeError(f"Failed to process: {err}")
 
 # Good - separate functions
@@ -536,13 +536,13 @@ try:
         data = json.load(f)
         process_data(data)
 except FileNotFoundError as err:
-    logger.error("File not found", extra={"filename": filename, "error": str(err)})
+    logger.error("File not found")
     raise ValueError(f"Configuration file {filename} not found")
 except json.JSONDecodeError as err:
-    logger.error("Invalid JSON", extra={"filename": filename, "error": str(err)})
+    logger.error("Invalid JSON")
     raise ValueError(f"Configuration file {filename} contains invalid JSON")
 except KeyError as err:
-    logger.error("Missing required key", extra={"key": str(err), "filename": filename})
+    logger.error("Missing required key")
     raise ValueError(f"Configuration missing required key: {err}")
 
 # Bad - grouping multiple exceptions
@@ -552,7 +552,7 @@ try:
         process_data(data)
 except (FileNotFoundError, json.JSONDecodeError, KeyError) as err:
     # Can't handle each error appropriately
-    logger.error("Error processing file", extra={"error": str(err)})
+    logger.error("Error processing file")
     raise ValueError("Failed to process configuration")
 
 # Bad - catching base Exception
@@ -560,7 +560,7 @@ try:
     process_data(data)
 except Exception as err:
     # Too broad - might catch system errors
-    logger.error("Something went wrong", extra={"error": str(err)})
+    logger.error("Something went wrong")
 ```
 
 This approach ensures:
@@ -629,11 +629,11 @@ def lambda_handler(event: dict, context: object) -> dict:
         return create_response(200, result)
     except ValueError as err:
         # Handle known business logic errors
-        logger.error("Validation error", extra={"error": str(err)})
+        logger.error("Validation error")
         return error_response(str(err), 400)
     except Exception as err:
         # Catch ALL other exceptions to prevent Lambda errors
-        logger.error("Unexpected error", extra={"error": str(err)}, exc_info=True)
+        logger.error("Unexpected error", exc_info=True)
         return error_response("Internal server error", 500)
 ```
 
@@ -667,10 +667,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         else:
             return error_response(result["error"], result["status_code"])
     except ValueError as err:
-        logger.error("Request validation failed", extra={"error": str(err)})
+        logger.error("Request validation failed")
         return error_response(str(err), 400)
     except Exception as err:
-        logger.error("Lambda handler error", extra={"error": str(err)}, exc_info=True)
+        logger.error("Lambda handler error", exc_info=True)
         return error_response("Internal server error", 500)
 
 def business_logic_function(player_id: str, param: str) -> dict:
@@ -943,31 +943,6 @@ class CharacterNotifier:
 
 ## Logging
 
-### Structured Logging
-
-Always use structured logging with the extra parameter:
-
-```python
-# Good
-logger.info(
-    "Character created",
-    extra={
-        "character_id": character_id,
-        "character_name": name,
-        "player_id": player_id
-    }
-)
-
-logger.error(
-    "Failed to create character",
-    extra={"error": str(err), "character_name": name},
-    exc_info=True  # Include traceback for errors
-)
-
-# Bad
-logger.info(f"Character {character_id} created for player {player_id}")
-```
-
 ### Consistent Log Levels in Exception Blocks
 
 Within a single exception block, use only one log level. Don't mix info/warning/error levels in the same except clause. This ensures consistent severity reporting and makes log analysis more effective:
@@ -979,15 +954,15 @@ try:
     apply_damage(character, damage)
 except ValueError as err:
     logger.info("Starting error handling")  # Wrong - unnecessary info log
-    logger.error("Failed to apply damage", extra={"error": str(err)})
+    logger.error("Failed to apply damage")
     return error_response(str(err), 400)
 
 # Bad - info log followed by error in same block
 try:
     result = process_combat(attacker, defender)
 except RuntimeError as err:
-    logger.info("Combat processing failed", extra={"attacker": attacker["Name"]})
-    logger.error("Combat error", extra={"error": str(err)})  # Redundant
+    logger.info("Combat processing failed")
+    logger.error("Combat error")  # Redundant
     raise
 
 # Good - single appropriate log level per exception block
@@ -995,26 +970,28 @@ try:
     character = get_character(character_id)
     apply_damage(character, damage)
 except ValueError as err:
-    logger.warning("Invalid damage request", extra={"error": str(err), "character_id": character_id})
+    logger.warning("Invalid damage request", "character_id": character_id})
     return error_response(str(err), 400)
 except RuntimeError as err:
-    logger.error("Failed to apply damage", extra={"error": str(err)}, exc_info=True)
+    logger.error("Failed to apply damage", exc_info=True)
     return error_response("Internal server error", 500)
 
 # Good - info logs outside exception handling
-logger.info("Processing combat", extra={"attacker": attacker_id, "defender": defender_id})
+logger.info("Processing combat", "defender": defender_id})
 try:
     result = process_combat(attacker, defender)
-    logger.info("Combat completed", extra={"result": result["outcome"]})
+    logger.info("Combat completed")
 except RuntimeError as err:
-    logger.error("Combat processing failed", extra={"error": str(err)}, exc_info=True)
+    logger.error("Combat processing failed", exc_info=True)
     raise
 ```
 
 Choose the appropriate log level based on the exception's severity:
+
 - `logger.warning`: For expected errors that are handled gracefully (e.g., validation failures)
 - `logger.error`: For unexpected errors or system failures
 - `logger.info`: For normal flow logging, placed outside exception blocks
+- `logger.debug`: For detailed debugging information, also outside exception blocks
 
 ## Dictionary Operations
 

@@ -214,7 +214,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)})
+        logger.error("Authentication failed")
         return lambda_response(401, {"error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -222,10 +222,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     # 4. Validate player exists
     try:
         if not validate_player(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id})
+            logger.error("Player not found in database")
             return lambda_response(401, {"error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)})
+        logger.error("Failed to validate player")
         return lambda_response(500, {"error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -237,10 +237,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         result = business_logic_function(param1, param2)
         return lambda_response(200, result, event)
     except ValueError as err:
-        logger.warning("Business logic error", extra={"error": str(err)})
+        logger.warning("Business logic error")
         return lambda_response(400, {"error": str(err)}, event)
     except RuntimeError as err:
-        logger.error("Database error", extra={"error": str(err)})
+        logger.error("Database error")
         return lambda_response(500, {"error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -310,7 +310,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     except ValueError as err:
         # Handle expected business logic errors
-        logger.error("Validation error", extra={"error": str(err)})
+        logger.error("Validation error")
         return lambda_response(400, {"error": str(err)}, event)
 
     except Exception as err:

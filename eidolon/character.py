@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from attr import validate
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
@@ -157,52 +158,58 @@ def get_character(character_id: str) -> dict:
     return character
 
 
-def validate_character_ownership(character: dict, player_id: str) -> None:
-    """
-    Validate that character is owned by player.
-
-    Args:
-        character: Character dict
-        player_id: Player ID for ownership verification
-
-    Raises:
-        ValueError: If character not owned by player
-    """
-    character_owner = character.get("PlayerID")
-    character_id = character.get("CharacterID")
-
-    if character_owner != player_id:
-        logger.warning(
-            "Character ownership mismatch",
-            extra={
-                "character_id": character_id,
-                "player_id": player_id,
-                "character_owner": character_owner,
-            },
-        )
-        raise ValueError("Character not found")  # Generic message for security
-
-
-def get_character_with_ownership(character_id: str, player_id: str) -> dict:
+def character_get(character_id: str, player_id: str) -> dict:
     """
     Get character by ID and verify ownership.
 
-    This function combines get_character and validate_character_ownership
-    for backward compatibility.
+
 
     Args:
         character_id: Character UUID
         player_id: Player ID for ownership verification
 
     Returns:
-        Character dict
+        Character dict with calculated Health field
 
     Raises:
         ValueError: If character ID invalid, not found, or not owned by player
         RuntimeError: If database error occurs
     """
-    character = get_character(character_id)
-    validate_character_ownership(character, player_id)
+    if not validate_uuid(character_id):
+        logger.warning(f"Invalid character ID format: {character_id}")
+        raise ValueError("Invalid character ID format")
+
+    if not validate_uuid(player_id):
+        logger.warning(f"Invalid player ID format: {player_id}")
+        raise ValueError("Invalid player ID format")
+
+    try:
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+
+        if not character:
+            logger.warning("Character not found", extra={"character_id": character_id})
+            raise ValueError("Character not found")
+
+    except ClientError as err:
+        logger.error(
+            "Error retrieving character",
+            extra={"error": str(err), "character_id": character_id},
+        )
+        raise RuntimeError(f"Failed to retrieve character: {err}") from err
+
+    logger.debug(f"Character retrieved successfully: {character_id}")
+
+    # Validate ownership
+
+    if character.get("PlayerID") != player_id:
+        logger.warning(f"Character ownership mismatch: {character_id} not owned by {player_id}")
+        raise ValueError("Character not owned by player")
+
+    # Calculate current health from MaxHealth and Wounds
+    max_health = character.get("MaxHealth", 10)
+    wounds = character.get("Wounds", [])
+    character["Health"] = max_health - len(wounds)
+
     return character
 
 

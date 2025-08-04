@@ -9,14 +9,13 @@ Returns completed segment results from the character's story history.
 
 from botocore.exceptions import ClientError
 
-from eidolon.character import get_character, validate_character_ownership
+from eidolon.character import character_get
 from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.validation import validate_uuid
 
 
 def get_segment_history_business_logic(character_id: str, player_id: str) -> dict:
@@ -34,13 +33,8 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
         ValueError: If character not found or not owned
         RuntimeError: If database operations fail
     """
-    # Validate character ID format
-    if not validate_uuid(character_id):
-        raise ValueError("Invalid character ID format")
-
     # Verify character ownership
-    character = get_character(character_id)
-    validate_character_ownership(character, player_id)
+    character: dict = character_get(character_id, player_id)
 
     # Get current story ID from character
     story_id = character.get("ActiveStoryID")

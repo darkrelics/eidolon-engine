@@ -68,26 +68,23 @@ def get_archetype(archetype_name: str) -> dict:
 
     Returns:
         Archetype data dict. Empty dict if not found/not player-available.
+
+    Raises:
+        RuntimeError: If archetype retrieval fails.
     """
     try:
         archetype = dynamo.get_item(TableName.ARCHETYPES, {"ArchetypeName": archetype_name})
 
         if not archetype:
-            logger.warning("Archetype not found", extra={"archetype_name": archetype_name})
+            logger.warning(f"Archetype: {archetype_name} not found")
             return {}
 
         if not archetype.get("Player", False):
-            logger.warning(
-                "Archetype not available to players",
-                extra={"archetype_name": archetype_name},
-            )
+            logger.info(f"Archetype: {archetype_name} not available to players")
             return {}
 
         return archetype
 
     except ClientError as err:
-        logger.error(
-            "Error retrieving archetype",
-            extra={"error": str(err), "archetype_name": archetype_name},
-        )
-        return {}
+        logger.error(f"Error retrieving archetype: {err}")
+        raise RuntimeError(f"Failed to retrieve archetype: {archetype_name}") from err

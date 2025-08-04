@@ -93,7 +93,7 @@ def create_items_from_prototypes(prototype_ids: list[str], character_id: str) ->
         return {}
 
 
-def get_inventory_details(inventory: dict) -> dict:
+def get_inventory(inventory: dict) -> dict:
     """
     Enrich inventory with item details for display.
 

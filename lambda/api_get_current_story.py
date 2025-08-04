@@ -7,7 +7,7 @@ Lambda function to get the current active story and segment for a character.
 Returns story metadata and segment details for the client to display.
 """
 
-from eidolon.character import get_character, validate_character_ownership
+from eidolon.character import character_get
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
@@ -19,8 +19,6 @@ from eidolon.story import (
     get_story_metadata,
     get_story_segment,
 )
-from eidolon.validation import validate_uuid
-
 
 def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
     """
@@ -37,13 +35,10 @@ def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
         ValueError: If character not found, not owned, or no active story
         RuntimeError: If database operations fail
     """
-    # Validate character ID format
-    if not validate_uuid(character_id):
-        raise ValueError("Invalid character ID format")
 
     # Verify character ownership
-    character = get_character(character_id)
-    validate_character_ownership(character, player_id)
+    # TODO - Read Player Record instead.
+    character: dict = character_get(character_id, player_id)
 
     # Get active segment
     active_segment = get_active_story_segment_with_player_check(character_id, player_id)

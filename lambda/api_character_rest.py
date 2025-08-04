@@ -2,7 +2,7 @@
 
 import time
 
-from eidolon.character import get_character_with_ownership
+from eidolon.character import character_get
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
@@ -28,7 +28,7 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
         RuntimeError: If database operations fail
     """
     # Get and validate character ownership
-    character = get_character_with_ownership(character_id, player_id)
+    character = character_get(character_id, player_id)
 
     # Check game mode
     game_mode = character.get("GameMode", "None")

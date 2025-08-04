@@ -62,7 +62,11 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
     if archetype_name:
         # Try to get the archetype data
         logger.info("Looking up archetype", extra={"archetype_name": archetype_name})
-        archetype_data = get_archetype(archetype_name)
+        try:
+            archetype_data = get_archetype(archetype_name)
+        except RuntimeError as err:
+            logger.error(f"Failed to retrieve archetype: {err}")
+            raise RuntimeError(f"Failed to retrieve archetype: {archetype_name}") from err
         if not archetype_data:
             # Invalid archetype provided, use defaults
             logger.info(

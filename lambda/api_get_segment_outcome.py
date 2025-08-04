@@ -7,7 +7,7 @@ Lambda function to get the outcome of a completed segment.
 Returns the narrative text and any rewards/effects for the outcome.
 """
 
-from eidolon.character import get_character, validate_character_ownership
+from eidolon.character import character_get
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
@@ -15,7 +15,6 @@ from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import validate_segment_outcome_results
 from eidolon.story import get_completed_segment_for_character, get_story_segment
-from eidolon.validation import validate_uuid
 
 
 def get_segment_outcome_business_logic(character_id: str, segment_id: str, player_id: str) -> dict:
@@ -34,16 +33,10 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         ValueError: If character not found, segment not found, or segment not completed
         RuntimeError: If database operations fail
     """
-    # Validate UUID formats
-    if not validate_uuid(character_id):
-        raise ValueError("Invalid character ID format")
-
-    if not validate_uuid(segment_id):
-        raise ValueError("Invalid segment ID format")
 
     # Verify character ownership
-    character = get_character(character_id)
-    validate_character_ownership(character, player_id)
+    # TODO - Read Player Record instead.
+    character: dict = character_get(character_id, player_id)
 
     # Get the completed segment
     active_segment = get_completed_segment_for_character(character_id, player_id, segment_id)

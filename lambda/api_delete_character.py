@@ -7,7 +7,7 @@ Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.
 """
 
-from eidolon.character import delete_character, get_character, validate_character_ownership
+from eidolon.character import delete_character, character_get
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
@@ -38,8 +38,7 @@ def handle_character_deletion(player_id: str, character_id: str) -> dict:
         RuntimeError: If database operations fail
     """
     # Verify ownership
-    character = get_character(character_id)
-    validate_character_ownership(character, player_id)
+    character: dict = character_get(character_id, player_id)
     character_name = character.get("CharacterName", "Unknown")
 
     logger.info(
