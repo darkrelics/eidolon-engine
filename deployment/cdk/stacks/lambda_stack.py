@@ -255,7 +255,7 @@ class LambdaStack(cdk.Stack):
 
         Args:
             function_id: CDK construct ID and function name
-            handler: Lambda handler (e.g., 'api_get_archetypes.lambda_handler')
+            handler: Lambda handler (e.g., 'api_archetypes_get.lambda_handler')
             environment: Environment variables
             description: Function description
             dependencies_layer: Lambda layer for dependencies
@@ -287,7 +287,7 @@ class LambdaStack(cdk.Stack):
         # Get Archetypes Lambda
         self.get_archetypes_function = self.create_lambda_function(
             "api-get-archetypes",
-            "api_get_archetypes.lambda_handler",
+            "api_archetypes_get.lambda_handler",
             {
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,

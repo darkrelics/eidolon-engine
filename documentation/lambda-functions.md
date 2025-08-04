@@ -38,7 +38,7 @@ These functions handle character operations for both Portal and Incremental inte
 - `api_add_character.py` - Create new character with bloom filter name validation
 - `api_get_character.py` - Get character details including active story segments (enriches inventory with item details)
 - `api_delete_character.py` - Delete a character by ID
-- `api_get_archetypes.py` - Get available character archetypes
+- `api_archetypes_get.py` - Get available character archetypes
 
 #### Not Yet Implemented:
 
@@ -65,7 +65,7 @@ from eidolon.dynamo import dynamo
 from eidolon.logger logger
 from eidolon.requests import get_query_parameter, get_required_field
 from eidolon.responses import create_response, error_response
-from eidolon.utilities import build_lambda_response, log_lambda_invocation, handle_preflight, lambda_error
+from eidolon.utilities import lambda_response, log_lambda_invocation, handle_preflight, lambda_error
 from eidolon.player import extract_player_id, validate_player_exists
 from eidolon.validation import validate_uuid
 ```
@@ -170,7 +170,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Now you can import Lambda functions and shared modules
 from lambda.api_list_characters import lambda_handler
-from eidolon.utilities import build_lambda_response
+from eidolon.utilities import lambda_response
 
 # Create test event
 event = {
@@ -215,7 +215,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id = extract_player_id(event)
     except ValueError as err:
         logger.error("Authentication failed", extra={"error": str(err)})
-        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+        return lambda_response(401, {"error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
 
@@ -223,10 +223,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         if not validate_player_exists(player_id):
             logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+            return lambda_response(401, {"error": "Unauthorized"}, event)
     except RuntimeError as err:
         logger.error("Failed to validate player", extra={"error": str(err)})
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return lambda_response(500, {"error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
 
@@ -235,13 +235,13 @@ def lambda_handler(event: dict, context: object) -> dict:
     # 7. Return response
     try:
         result = business_logic_function(param1, param2)
-        return build_lambda_response(200, result, event)
+        return lambda_response(200, result, event)
     except ValueError as err:
         logger.warning("Business logic error", extra={"error": str(err)})
-        return build_lambda_response(400, {"error": str(err)}, event)
+        return lambda_response(400, {"error": str(err)}, event)
     except RuntimeError as err:
         logger.error("Database error", extra={"error": str(err)})
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        return lambda_response(500, {"error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
 
@@ -270,11 +270,11 @@ def business_logic_function(param1: str, param2: str) -> dict:
 5. **Logging**: Use the `log_lambda_invocation` utility for consistent logging
 6. **Environment Variables**: Use environment variables for configuration
 7. **IAM Permissions**: Follow least privilege principle
-8. **Response Format**: Use `build_lambda_response` for consistent responses:
+8. **Response Format**: Use `lambda_response` for consistent responses:
 
    ```python
    # Preferred pattern using utilities
-   return build_lambda_response(200, {"key": "value"}, event)
+   return lambda_response(200, {"key": "value"}, event)
 
    # This handles CORS headers and response formatting automatically
    ```
@@ -282,7 +282,7 @@ def business_logic_function(param1: str, param2: str) -> dict:
 9. **Architecture Pattern**: Follow the handler/business logic separation pattern described above
 10. **Utility Functions**: Prefer high-level utility functions from `eidolon.utilities`:
     - `log_lambda_statistics()` - For logging invocations
-    - `build_lambda_response()` - For building responses with CORS
+    - `lambda_response()` - For building responses with CORS
     - `lambda_error()` - For consistent error handling
 
 ### Critical: Lambda Handler Exception Handling
@@ -306,12 +306,12 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         # Your code here...
 
-        return build_lambda_response(200, {"success": True}, event)
+        return lambda_response(200, {"success": True}, event)
 
     except ValueError as err:
         # Handle expected business logic errors
         logger.error("Validation error", extra={"error": str(err)})
-        return build_lambda_response(400, {"error": str(err)}, event)
+        return lambda_response(400, {"error": str(err)}, event)
 
     except Exception as err:
         # CRITICAL: Catch ALL exceptions to prevent Lambda failures

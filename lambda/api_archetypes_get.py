@@ -19,7 +19,7 @@ archetypes_cache: list = []
 try:
     logger.info("Loading player archetypes cache at module initialization")
     archetypes_cache = get_archtypes()
-    logger.info("Player archetypes cache loaded successfully", extra={"count": len(archetypes_cache)})
+    logger.info(f"Player archetypes cache loaded successfully: count: {len(archetypes_cache)}")
 except Exception as err:
     logger.error(f"Failed to load archetypes cache at module initialization: {err}", exc_info=True)
 

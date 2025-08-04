@@ -72,7 +72,7 @@ Resources:
     Properties:
       FunctionName: !Sub "${GameName}-api-get-archetypes"
       Runtime: python3.12
-      Handler: api_get_archetypes.lambda_handler
+      Handler: api_archetypes_get.lambda_handler
       Code:
         S3Bucket: !Ref LambdaBucketName
         S3Key: !Ref LambdaZipKey

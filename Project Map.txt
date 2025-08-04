@@ -373,7 +373,7 @@
 │   │   api_abandon_story.py
 │   │   api_add_character.py
 │   │   api_delete_character.py
-│   │   api_get_archetypes.py
+│   │   api_archetypes_get.py
 │   │   api_get_character.py
 │   │   api_get_current_story.py
 │   │   api_get_segment_outcome.py
