@@ -51,7 +51,7 @@ def get_available_stories_business_logic(character_id: str, player_id: str) -> d
     )
 
     # Get story details with prerequisite and cooldown checking
-    stories = get_stories_for_character(player_id, character_id, available_story_ids)
+    stories = get_stories_for_character(character_id, player_id, available_story_ids)
 
     # Sort stories by availability and title
     stories.sort(key=lambda s: (not s["Available"], s["Title"]))
