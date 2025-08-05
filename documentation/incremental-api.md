@@ -309,3 +309,194 @@ final result = await apiService.addCharacter(
 | `409` | "Character name is already taken" | Name exists in database |
 | `401` | "Unauthorized" | Invalid or missing JWT token |
 | `500` | "Internal server error" | Database or system failure |
+
+---
+
+### Get Character
+
+Retrieves complete character data including active story and segment information.
+
+**Endpoint:** `GET /character`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `CharacterID` | String | Yes | UUID of the character to retrieve |
+
+**Request:**
+```http
+GET /character?CharacterID=550e8400-e29b-41d4-a716-446655440000 HTTP/1.1
+Authorization: Bearer <jwt-token>
+```
+
+**Response:**
+```json
+{
+  "Character": {
+    "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+    "PlayerID": "123e4567-e89b-12d3-a456-426614174000",
+    "CharacterName": "Aragorn",
+    "GameMode": "Incremental",
+    "RoomID": 100,
+    "Inventory": {
+      "0": "abc123-item-uuid",
+      "1": "def456-item-uuid"
+    },
+    "InventoryDetails": {
+      "0": {
+        "itemId": "abc123-item-uuid",
+        "name": "Leather Backpack",
+        "description": "A sturdy leather backpack",
+        "quantity": 1,
+        "stackable": false,
+        "equipped": true,
+        "mass": 2,
+        "value": 50
+      },
+      "1": {
+        "itemId": "def456-item-uuid",
+        "name": "Iron Sword",
+        "description": "A well-crafted iron sword",
+        "quantity": 1,
+        "stackable": false,
+        "equipped": false,
+        "mass": 3,
+        "value": 100
+      }
+    },
+    "Attributes": {
+      "Strength": 8,
+      "Agility": 5,
+      "Endurance": 7,
+      "Charisma": 6,
+      "Intrigue": 3,
+      "Presence": 7,
+      "Perception": 4,
+      "Intelligence": 4,
+      "Cunning": 3
+    },
+    "Skills": {
+      "Melee": 10,
+      "Parry": 8,
+      "Dodge": 4
+    },
+    "Essence": 3,
+    "MaxHealth": 12,
+    "Wounds": [
+      {
+        "DamageType": "bashing",
+        "HealAt": "2025-01-15T14:30:00Z"
+      }
+    ],
+    "CharState": "standing",
+    "AvailableStories": ["story_1", "story_2"],
+    "AbandonedStories": [],
+    "CompletedStories": ["story_intro"],
+    "ActiveStoryID": "story_current_uuid",
+    "ActiveSegmentID": "segment_current_uuid",
+    "Archetype": "Knight",
+    "MaxEssence": 3,
+    "Resources": {
+      "gold": 150,
+      "supplies": 10
+    },
+    "Progress": {
+      "tutorial_completed": true,
+      "first_boss_defeated": false
+    }
+  },
+  "ActiveStory": {
+    "StoryID": "story_current_uuid",
+    "Title": "The Dark Tower",
+    "Description": "Investigate the mysterious tower",
+    "EstimatedDuration": 1800
+  },
+  "ActiveSegment": {
+    "ActiveSegmentID": "segment_current_uuid",
+    "SegmentID": "segment_def_uuid",
+    "SegmentType": "mechanical",
+    "Status": "active",
+    "StartTime": 1704900000,
+    "EndTime": 1704900300,
+    "Outcome": "normal",
+    "ClientEvents": [
+      {
+        "eventType": "narrative",
+        "title": "Combat Begins",
+        "description": "A goblin jumps out from the shadows!"
+      }
+    ]
+  }
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Character` | Object | Complete character data |
+| `ActiveStory` | Object | Current story details (optional - only if character has active story) |
+| `ActiveSegment` | Object | Current segment details (optional - only if character has active segment) |
+
+**Character Object:**
+
+Contains all character fields as stored in the database, plus:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `InventoryDetails` | Object | Enriched inventory with full item information |
+
+**InventoryDetails Structure:**
+
+Maps inventory slot numbers to detailed item information:
+```json
+{
+  "slotNumber": {
+    "itemId": "UUID",
+    "name": "Item Name",
+    "description": "Item description",
+    "quantity": 1,
+    "stackable": false,
+    "equipped": false,
+    "mass": 1.5,
+    "value": 100
+  }
+}
+```
+
+**Implementation Notes:**
+
+1. **Character Ownership:** The Lambda validates that the requested character belongs to the authenticated player. Attempting to access another player's character returns 404.
+
+2. **Active Story/Segment:** These fields are only included if the character has an active story. If no active story exists:
+   - `ActiveStoryID` and `ActiveSegmentID` in the Character object are set to null
+   - `ActiveStory` and `ActiveSegment` fields are omitted from the response
+
+3. **Inventory Enrichment:** The `InventoryDetails` field provides full item information for UI display without requiring additional API calls. If item lookups fail, the character is still returned without enrichment.
+
+4. **Health Calculation:** Current health is not stored but should be calculated as: `Health = MaxHealth - Wounds.length`
+
+5. **Container Items:** Items stored inside containers (like backpacks) are not shown in the character's inventory. They exist in the container item's Contents array.
+
+**Example Client Code (Dart):**
+```dart
+final character = await apiService.getCharacterById(characterId);
+if (character == null) {
+  // Character not found
+  return;
+}
+// Access character data, active story, etc.
+final currentHealth = character.maxHealth - character.wounds.length;
+```
+
+**Error Responses:**
+
+| Status | Error Message | Cause |
+|--------|---------------|-------|
+| `400` | "Missing CharacterID parameter" | No character ID provided in query string |
+| `401` | "Unauthorized" | Invalid or missing JWT token |
+| `404` | "Character not found" | Character doesn't exist or doesn't belong to player |
+| `500` | "Internal server error" | Database or system failure |

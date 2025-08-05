@@ -40,7 +40,7 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
             return {"success": False, "error": "Character not found", "status_code": 404}
         return {"success": False, "error": str(err), "status_code": 400}
     except RuntimeError as err:
-        logger.error("Failed to get character", extra={"error": str(err), "character_id": character_id})
+        logger.error(f"Failed to get character: {err}")
         return {"success": False, "error": "Failed to retrieve character data", "status_code": 500}
 
     # Check for active segment
@@ -133,10 +133,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
-    # Get character ID from query parameters (flexible: CharacterID or characterId)
-    character_id: str = event.get("queryStringParameters", {}).get("CharacterID") or event.get("queryStringParameters", {}).get(
-        "characterId"
-    )
+    # Get character ID from query parameters
+    character_id: str = event.get("queryStringParameters", {}).get("CharacterID")
 
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
