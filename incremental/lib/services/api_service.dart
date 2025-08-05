@@ -472,9 +472,9 @@ class ApiService {
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final segments = json['Segments'] as List<dynamic>?;
-    return segments?
-        .map((s) => s as Map<String, dynamic>)
-        .toList();
+    return segments
+        ?.map((s) => s as Map<String, dynamic>)
+        .toList() ?? [];
   }
 
   /// Get segment status

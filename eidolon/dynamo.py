@@ -55,7 +55,7 @@ class TableName(Enum):
 
 
 # Map environment variables to table names
-TABLE_ENV_MAP = {
+TABLE_ENV_MAP: dict = {
     TableName.PLAYERS: PLAYERS_TABLE,
     TableName.CHARACTERS: CHARACTERS_TABLE,
     TableName.ARCHETYPES: ARCHETYPES_TABLE,
@@ -290,14 +290,14 @@ class DynamoInterface:
             Item dict with Decimals converted to floats, empty dict if not found
         """
         table = self.get_table(table_enum)
-        logger.debug("DB Interface: Get Item", extra={"table": table_enum.value, "key": key})
+        logger.debug("DB Interface: Get Item", extra={"table": table_enum.value, "Key": key})
 
         try:
             response = table.get_item(Key=key, **kwargs)
         except ClientError as err:
             logger.error(
                 "Error getting item from DynamoDB",
-                extra={"error": str(err), "table": table_enum.value, "key": key},
+                extra={"error": str(err), "table": table_enum.value, "Key": key},
             )
             raise
 
@@ -759,11 +759,6 @@ def clean_value(value: object) -> object:
     elif isinstance(value, list):
         return [clean_value(v) for v in value]
     return value
-
-
-def convert_to_decimal(obj: object) -> object:
-    """Convert float values to Decimal for DynamoDB."""
-    return clean_value(obj)
 
 
 def decimal_to_float(obj: object) -> object:

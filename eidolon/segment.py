@@ -55,19 +55,6 @@ def calculate_heal_time(damage_type: str) -> str:
     return heal_at.isoformat()
 
 
-def validate_segment_type(segment_type: str) -> bool:
-    """
-    Validate that a segment type is recognized.
-
-    Args:
-        segment_type: Type of segment to validate
-
-    Returns:
-        True if segment type is valid, False otherwise
-    """
-    return segment_type.lower() in VALID_SEGMENT_TYPES
-
-
 def is_mechanical_segment(segment_type: str) -> bool:
     """
     Check if a segment type should be processed as mechanical.
@@ -697,7 +684,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     return "normal", results
 
 
-def process_rest_segment(segment_def: dict, character: dict) -> tuple:
+def process_rest_segment(_: dict, character: dict) -> tuple:
     """
     Process a rest segment.
 
@@ -911,79 +898,6 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
             exc_info=True,
         )
         raise RuntimeError(f"Failed to update segment outcome: {err}") from err
-
-
-def get_next_segment_and_create(
-    character_id: str,
-    story_id: str,
-    current_segment: dict,
-    active_segment: dict,
-    outcome: str,
-) -> object:
-    """
-    Determine next segment and create active segment for it.
-
-    Args:
-        character_id: Character UUID
-        story_id: Story UUID
-        current_segment: Current segment definition
-        active_segment: Current active segment
-        outcome: Outcome of current segment
-
-    Returns:
-        Next active segment ID or None
-
-    Raises:
-        RuntimeError: If database operations fail
-    """
-    segment_type = current_segment.get("SegmentType")
-    next_segment_id = None
-
-    if segment_type == "decision":
-        # Get next segment based on decision
-        decision = active_segment.get("Decision")
-        decision_options = current_segment.get("DecisionOptions", {})
-        next_segment_id = decision_options.get(decision)
-
-    elif segment_type == "mechanical":
-        # Check if outcome is terminal
-        if outcome not in ["death", "failure"]:
-            next_segment_id = current_segment.get("NextSegmentID")
-
-    elif segment_type == "rest":
-        # Rest segments always proceed to NextSegmentID (outcome is always "normal")
-        next_segment_id = current_segment.get("NextSegmentID")
-
-    if not next_segment_id:
-        return None
-
-    # Get next segment definition
-    try:
-        next_segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id})
-
-        if not next_segment:
-            logger.error("Next segment not found", extra={"segment_id": next_segment_id})
-            return None
-    except ClientError as err:
-        logger.error(
-            "Failed to get next segment",
-            extra={
-                "segment_id": next_segment_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to get next segment: {err}") from err
-
-    # Create active segment for next segment
-    return create_next_active_segment(
-        character_id,
-        active_segment.get("PlayerID"),  # type: ignore
-        story_id,
-        next_segment,
-        active_segment.get("StoryTitle"),  # type: ignore
-    )
 
 
 def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_title: str) -> str:
@@ -1308,7 +1222,7 @@ def delete_active_segment(active_segment_id: str) -> None:
         raise ValueError("Active segment ID cannot be empty")
 
     try:
-        dynamo.delete_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
+        dynamo.delete_item(TableName.ACTIVE_SEGMENTS, Key={"ActiveSegmentID": active_segment_id})
         logger.info("Deleted active segment", extra={"active_segment_id": active_segment_id})
     except ClientError as err:
         # Log but don't raise - deletion failure is non-critical
@@ -1569,7 +1483,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         )
         # Attempt rollback
         try:
-            dynamo.delete_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": rest_segment_id})
+            dynamo.delete_item(TableName.SEGMENTS, Key={"StoryID": story_id, "SegmentID": rest_segment_id})
             logger.info("Rolled back rest segment creation")
         except Exception:
             logger.warning("Failed to rollback rest segment")

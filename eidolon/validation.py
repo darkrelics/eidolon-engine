@@ -78,20 +78,6 @@ def validate_character_name(name: str) -> None:
         raise ValueError("Name is reserved")
 
 
-def validate_email(email: str) -> bool:
-    """
-    Validate email format.
-
-    Args:
-        email: Email address to validate
-
-    Returns:
-        True if valid email format, False otherwise
-    """
-    pattern = re.compile(r"^[\w\.-]+@([\w-]+\.)+[\w-]{2,63}$")
-    return bool(pattern.match(email))
-
-
 def validate_uuid(uuid_value: str) -> bool:
     """
     Validate UUID format.
@@ -104,69 +90,3 @@ def validate_uuid(uuid_value: str) -> bool:
     """
     pattern = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
     return bool(pattern.match(uuid_value.lower()))
-
-
-def validate_positive_integer(value: int, min_value: int = 1, max_value=None) -> None:
-    """
-    Validate positive integer within range.
-
-    Args:
-        value: Value to validate
-        min_value: Minimum allowed value (default: 1)
-        max_value: Maximum allowed value (optional)
-
-    Raises:
-        ValueError: If value is not a valid positive integer within range
-    """
-    if not isinstance(value, int):
-        raise ValueError("Value must be an integer")
-
-    if value < min_value:
-        raise ValueError(f"Value must be at least {min_value}")
-
-    if max_value is not None and value > max_value:
-        raise ValueError(f"Value must be at most {max_value}")
-
-
-def validate_enum(value: str, allowed_values: list, case_sensitive: bool = True) -> None:
-    """
-    Validate value is in allowed list.
-
-    Args:
-        value: Value to validate
-        allowed_values: List of allowed values
-        case_sensitive: Whether comparison is case-sensitive
-
-    Raises:
-        ValueError: If value is not in allowed list
-    """
-    if not case_sensitive:
-        value = value.lower()
-        allowed_values = [v.lower() for v in allowed_values]
-
-    if value not in allowed_values:
-        raise ValueError(f"Value must be one of: {', '.join(allowed_values)}")
-
-
-def sanitize_string(value: str, max_length=None) -> str:
-    """
-    Sanitize user input string.
-
-    Args:
-        value: String to sanitize
-        max_length: Maximum allowed length
-
-    Returns:
-        Sanitized string
-    """
-    # Strip whitespace
-    value = value.strip()
-
-    # Truncate if needed
-    if max_length and len(value) > max_length:
-        value = value[:max_length]
-
-    # Remove control characters
-    value = "".join(char for char in value if ord(char) >= 32 or char in "\n\r\t")
-
-    return value

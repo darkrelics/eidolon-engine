@@ -58,7 +58,7 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
         logger.error("Error retrieving active story")
 
     if active_story:
-        
+
         try:
             active_segment = character_get_active_segment(character)
             if active_segment:

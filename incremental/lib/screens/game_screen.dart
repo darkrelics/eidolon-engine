@@ -902,7 +902,7 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
                         : segment['DefaultStatus'] as String? ?? 'Loading segment content...',
                       style: theme.textTheme.bodyLarge,
                     ),
-                    if (segment['ImageUrl'] as String? != null) ...[
+                    if (segment['ImageUrl'] != null) ...[
                       const SizedBox(height: 16),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),

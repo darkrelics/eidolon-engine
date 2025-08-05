@@ -326,9 +326,6 @@ def character_get_active_story(character: dict) -> dict:
             return {}
 
 
-
-
-
 def character_get_active_segment(character: dict) -> dict:
     """
     Get active segment for a character.
@@ -428,69 +425,6 @@ def verify_character_in_game_mode(character: dict, expected_mode: str = "Increme
         }
 
     return {"is_valid": True, "error_message": ""}
-
-
-def get_character_by_name(player_id: str, character_name: str) -> dict:
-    """
-    Get character by name for a specific player.
-
-    Args:
-        player_id: Player ID
-        character_name: Character name
-
-    Returns:
-        Character dict
-
-    Raises:
-        ValueError: If player/character not found or data corrupted
-        RuntimeError: If database error occurs
-    """
-    try:
-        player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
-
-        if not player:
-            logger.warning("Player not found", extra={"player_id": player_id})
-            raise ValueError("Player not found")
-
-        character_list = player.get("CharacterList", {})
-        character_info = character_list.get(character_name)
-
-        if not character_info:
-            logger.warning(
-                "Character not found in player list",
-                extra={"player_id": player_id, "character_name": character_name},
-            )
-            raise ValueError("Character not found")
-
-        character_id = character_info.get("UUID")
-        if not character_id:
-            logger.error(
-                "Character UUID missing",
-                extra={"player_id": player_id, "character_name": character_name},
-            )
-            raise ValueError("Character data corrupted")
-
-        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
-
-        if not character:
-            logger.error(
-                "Character not found in characters table",
-                extra={"character_id": character_id, "character_name": character_name},
-            )
-            raise ValueError("Character not found")
-
-        return character
-
-    except ClientError as err:
-        logger.error(
-            "Error retrieving character by name",
-            extra={
-                "error": str(err),
-                "player_id": player_id,
-                "character_name": character_name,
-            },
-        )
-        raise RuntimeError(f"Failed to retrieve character: {err}") from err
 
 
 def remove_character_from_player_list(player_id: str, character_name: str) -> dict:
