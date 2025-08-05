@@ -177,20 +177,69 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 ## Archetypes Table
 
-| Field              | Type     | Key      | Description                                    |
-| ------------------ | -------- | -------- | ---------------------------------------------- |
-| `ArchetypeName`    | `STRING` | **HASH** | Name of the archetype.                         |
-| `Description`      | `STRING` |          | Description of the archetype.                  |
-| `Attributes`       | `MAP`    |          | Default attributes for the archetype.          |
-| `Skills`           | `MAP`    |          | Default skills for the archetype.              |
-| `StartRoom`        | `NUMBER` |          | ID of the starting room for the archetype.     |
-| `StartingItems`    | `LIST`   |          | List of items given at character creation.     |
-| `Health`           | `NUMBER` |          | Starting health points.                        |
-| `Essence`          | `NUMBER` |          | Starting essence points.                       |
-| `Player`           | `BOOL`   |          | Whether this archetype is for players.         |
-| `AvailableStories` | `LIST`   |          | List of story IDs available to this archetype. |
+| Field              | Type            | Key      | Description                                                          |
+| ------------------ | --------------- | -------- | -------------------------------------------------------------------- |
+| `ArchetypeName`    | `STRING`        | **HASH** | Name of the archetype.                                               |
+| `Description`      | `STRING`        |          | Description of the archetype.                                        |
+| `Attributes`       | `MAP`           |          | Default attributes for the archetype (e.g., Strength: 2.0).          |
+| `Skills`           | `MAP`           |          | Default skills for the archetype (e.g., Melee: 1.0).                 |
+| `StartRoom`        | `NUMBER`        |          | ID of the starting room for the archetype.                           |
+| `StartingItems`    | `LIST` of `MAP` |          | List of starting item configurations (see structure below).          |
+| `Health`           | `NUMBER`        |          | Starting health points.                                              |
+| `Essence`          | `NUMBER`        |          | Starting essence points.                                             |
+| `Player`           | `BOOL`          |          | Whether this archetype is for players.                               |
+| `AvailableStories` | `LIST`          |          | List of story IDs available to this archetype.                       |
 
 **Primary Key:** ArchetypeName (HASH)
+
+**StartingItems Structure:**
+
+Each item in the StartingItems list is a map containing:
+
+| Field         | Type      | Description                                                      |
+| ------------- | --------- | ---------------------------------------------------------------- |
+| `PrototypeID` | `STRING`  | UUID of the item prototype to create.                           |
+| `Slot`        | `STRING`  | Equipment slot name if worn (e.g., "back", "weapon", "armor").  |
+| `IsWorn`      | `BOOLEAN` | Whether the item starts equipped.                               |
+| `Container`   | `BOOLEAN` | Whether this item is a container (only first container is used). |
+
+**Implementation Notes:**
+
+1. **Container Logic:** When processing StartingItems, the first item with `Container: true` becomes the primary container. All items with `IsWorn: false` are placed inside this container's Contents array.
+
+2. **Inventory Management:** Only items with `IsWorn: true` and the primary container are added to the character's inventory slots. Non-worn items exist only within the container.
+
+3. **Item Creation:** Items are created in the order they appear in the list. If non-worn items appear before the container in the list, they are collected and added to the container when it is created.
+
+**Example StartingItems:**
+
+```json
+[
+  {
+    "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+    "Slot": "back",
+    "IsWorn": true,
+    "Container": true
+  },
+  {
+    "PrototypeID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+    "Slot": "finger",
+    "IsWorn": true,
+    "Container": false
+  },
+  {
+    "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
+    "Slot": "",
+    "IsWorn": false,
+    "Container": false
+  }
+]
+```
+
+In this example:
+- The backpack (first item) is worn and serves as the container
+- The ring (second item) is worn on the finger slot
+- The third item is not worn and will be placed inside the backpack's Contents
 
 ---
 

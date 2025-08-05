@@ -6,7 +6,6 @@ from eidolon.cors import cors_handler
 from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
-from eidolon.requests import get_optional_field_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_character_name
 
@@ -61,7 +60,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
 
     if archetype_name:
         # Try to get the archetype data
-        logger.info("Looking up archetype", extra={"archetype_name": archetype_name})
+        logger.info(f"Looking up archetype: {archetype_name}")
         try:
             archetype_data = get_archetype(archetype_name)
         except RuntimeError as err:
@@ -69,13 +68,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
             raise RuntimeError(f"Failed to retrieve archetype: {archetype_name}") from err
         if not archetype_data:
             # Invalid archetype provided, use defaults
-            logger.info(
-                "Invalid archetype provided, using defaults",
-                extra={
-                    "requested_archetype": archetype_name,
-                    "player_id": player_id,
-                },
-            )
+            logger.info("Invalid archetype provided, using defaults")
             archetype_data = {}
             archetype_name = "default"
         else:
@@ -132,13 +125,12 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error(f"Failed to parse request body: {err}", exc_info=True)
         return lambda_error(event, err)
 
-    # Extract and validate required fields with flexible casing
-    try:
-        character_name: str = body.get("character_name") or body.get("CharacterName")  # type: ignore
-    except ValueError as err:
-        return lambda_response(400, {"Error": str(err)}, event)
+    # Extract and validate required fields - PascalCase only
+    character_name = body.get("CharacterName")
+    if not character_name:
+        return lambda_response(400, {"Error": "CharacterName is required"}, event)
 
-    archetype_name = get_optional_field_flexible(body, "ArchetypeName", "archetypeName", default="")
+    archetype_name = body.get("ArchetypeName", "")
 
     logger.info(
         "Character creation request received",

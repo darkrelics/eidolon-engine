@@ -40,22 +40,26 @@
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
           "Slot": "back",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": true
         },
         {
           "PrototypeID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
           "Slot": "finger",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
@@ -99,22 +103,26 @@
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
           "Slot": "back",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": true
         },
         {
           "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "Slot": "weapon",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "Slot": "armor",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
@@ -158,22 +166,26 @@
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
           "Slot": "back",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": true
         },
         {
           "PrototypeID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "Slot": "weapon",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "Slot": "armor",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
@@ -217,7 +229,8 @@
         {
           "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "Slot": "weapon",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         }
       ]
     }

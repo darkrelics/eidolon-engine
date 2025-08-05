@@ -61,9 +61,14 @@ paths:
                         Essence: 3
                         StartRoom: 100
                         StartingItems:
-                          - PrototypeID: sword_basic
-                            Slot: "1"
-                            IsWorn: false
+                          - PrototypeID: a47ac10b-58cc-4372-a567-0e02b2c3d484
+                            Slot: "back"
+                            IsWorn: true
+                            Container: true
+                          - PrototypeID: d47ac10b-58cc-4372-a567-0e02b2c3d481
+                            Slot: "weapon"
+                            IsWorn: true
+                            Container: false
                         AvailableStories:
                           - story_knight_honor
                           - story_common_intro
@@ -112,6 +117,77 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 Error: "Player not found"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Characters
+      summary: Create new character
+      description: Creates a new character for the authenticated player. Character names must be unique across all players.
+      operationId: addCharacter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CharacterCreateRequest'
+            examples:
+              wizardCharacter:
+                summary: Create a wizard character
+                value:
+                  CharacterName: Gandalf
+                  ArchetypeName: Wizard
+              defaultArchetype:
+                summary: Create with default archetype
+                value:
+                  CharacterName: Frodo
+                  ArchetypeName: ""
+      responses:
+        '201':
+          description: Character created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CharacterCreateResponse'
+              example:
+                CharacterID: 7ba8c520-a5d2-4e8f-b3c1-9f2e3d4c5b6a
+                CharacterName: Gandalf
+                Archetype: Wizard
+                Message: Character created successfully
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingName:
+                  summary: Missing character name
+                  value:
+                    Error: "CharacterName is required"
+                invalidName:
+                  summary: Invalid character name format
+                  value:
+                    Error: "Character name must be 3-32 characters and contain only letters, spaces, and hyphens"
+                nameNotAvailable:
+                  summary: Name in restricted list
+                  value:
+                    Error: "Character name is not available"
+                limitReached:
+                  summary: Character limit reached
+                  value:
+                    Error: "Character limit reached (10)"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Name already taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                Error: "Character name is already taken"
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -313,21 +389,69 @@ components:
         - PrototypeID
         - Slot
         - IsWorn
+        - Container
       properties:
         PrototypeID:
           type: string
-          description: ID of the item prototype to create
-          pattern: '^[a-z_]+$'
-          example: sword_basic
+          description: UUID of the item prototype to create
+          format: uuid
+          example: a47ac10b-58cc-4372-a567-0e02b2c3d484
         Slot:
           type: string
-          description: Inventory slot where the item is placed
-          pattern: '^[0-9]+$'
-          example: "1"
+          description: Equipment slot name if worn (e.g., "back", "weapon", "armor"). Empty string if not worn.
+          example: "back"
         IsWorn:
           type: boolean
           description: Whether the item starts equipped
-          example: false
+          example: true
+        Container:
+          type: boolean
+          description: Whether this item is a container (only first container is used)
+          example: true
+
+    CharacterCreateRequest:
+      type: object
+      required:
+        - CharacterName
+      properties:
+        CharacterName:
+          type: string
+          description: Desired name for the character
+          pattern: '^[a-zA-Z\s\-]{3,32}$'
+          minLength: 3
+          maxLength: 32
+          example: Gandalf
+        ArchetypeName:
+          type: string
+          description: Archetype to use (defaults to "default" if not specified or invalid)
+          example: Wizard
+          default: ""
+
+    CharacterCreateResponse:
+      type: object
+      required:
+        - CharacterID
+        - CharacterName
+        - Archetype
+        - Message
+      properties:
+        CharacterID:
+          type: string
+          description: Unique identifier (UUID) for the created character
+          format: uuid
+          example: 7ba8c520-a5d2-4e8f-b3c1-9f2e3d4c5b6a
+        CharacterName:
+          type: string
+          description: The character's name as stored
+          example: Gandalf
+        Archetype:
+          type: string
+          description: The archetype that was applied
+          example: Wizard
+        Message:
+          type: string
+          description: Success confirmation message
+          example: Character created successfully
 
   responses:
     Unauthorized:

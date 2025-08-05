@@ -212,3 +212,100 @@ final characters = await apiService.listCharacters();
 | `404` | "Player not found" | Player ID exists in JWT but not in database |
 | `401` | "Unauthorized" | Invalid or missing JWT token |
 | `500` | "Internal server error" | Database connection or query failure |
+
+---
+
+### Add Character
+
+Creates a new character for the authenticated player.
+
+**Endpoint:** `POST /characters`
+
+**Authentication:** Required
+
+**Request:**
+```http
+POST /characters HTTP/1.1
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "CharacterName": "Gandalf",
+  "ArchetypeName": "Wizard"
+}
+```
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `CharacterName` | String | Yes | Desired name for the character (3-32 characters, letters/spaces/hyphens only) |
+| `ArchetypeName` | String | No | Archetype to use (defaults to "default" if not specified or invalid) |
+
+**Response:**
+```json
+{
+  "CharacterID": "7ba8c520-a5d2-4e8f-b3c1-9f2e3d4c5b6a",
+  "CharacterName": "Gandalf", 
+  "Archetype": "Wizard",
+  "Message": "Character created successfully"
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `CharacterID` | String | Unique identifier (UUID) for the created character |
+| `CharacterName` | String | The character's name as stored |
+| `Archetype` | String | The archetype that was applied |
+| `Message` | String | Success confirmation message |
+
+**Implementation Notes:**
+
+1. **Name Validation:** Character names must:
+   - Be 3-32 characters long
+   - Contain only letters, spaces, and hyphens
+   - Not be in the restricted names bloom filter
+   - Not already exist in the database
+
+2. **Character Limit:** Players can create up to the configured maximum (default 10) characters.
+
+3. **Archetype Resolution:**
+   - If no archetype is specified, "default" is used
+   - If an invalid archetype is specified, "default" is used with a log warning
+   - Only player-available archetypes (`Player: true`) can be used
+
+4. **Starting Items:** Based on the archetype's `StartingItems` configuration:
+   - Items are created from prototypes and added to the character's inventory
+   - The first container item becomes the primary container (e.g., backpack)
+   - Worn items (`IsWorn: true`) are equipped automatically
+   - Non-worn items are placed inside the primary container
+
+5. **Initial State:** New characters start with:
+   - Full health (based on archetype)
+   - Full essence (based on archetype)
+   - No wounds
+   - No active story
+   - Archetype-defined attributes and skills
+
+**Example Client Code (Dart):**
+```dart
+final result = await apiService.addCharacter(
+  name: "Gandalf",
+  archetype: "Wizard"
+);
+// Returns map with CharacterID, CharacterName, Archetype, Message
+```
+
+**Error Responses:**
+
+| Status | Error Message | Cause |
+|--------|---------------|-------|
+| `400` | "CharacterName is required" | Missing character name in request |
+| `400` | "Character name must be..." | Name validation failure (length/characters) |
+| `400` | "Character name is not available" | Name is in restricted list |
+| `400` | "Character limit reached (X)" | Player has maximum allowed characters |
+| `409` | "Character name is already taken" | Name exists in database |
+| `401` | "Unauthorized" | Invalid or missing JWT token |
+| `500` | "Internal server error" | Database or system failure |

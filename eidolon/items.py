@@ -8,25 +8,32 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 
 
-def create_items_from_prototypes(prototype_ids: list[str], character_id: str) -> dict[str, str]:
+def create_items_from_prototypes(starting_items: list, character_id: str) -> dict:
     """
-    Create item instances from prototype IDs.
+    Create item instances from starting item definitions.
 
     Args:
-        prototype_ids: List of prototype IDs to instantiate
+        starting_items: List of dicts with PrototypeID, IsWorn, Slot, Container fields
         character_id: Character ID for logging
 
     Returns:
-        Dict mapping slot numbers to item UUIDs
+        Dict mapping slot numbers to item UUIDs (only worn items and containers)
     """
-    if not prototype_ids:
+    if not starting_items:
         return {}
 
     try:
         inventory = {}
         slot_num = 0
+        container_id = None
+        items_for_container = []
 
-        for prototype_id in prototype_ids:
+        # Single pass through all items
+        for item_def in starting_items:
+            prototype_id = item_def.get("PrototypeID")
+            is_worn = item_def.get("IsWorn", False)
+            is_container = item_def.get("Container", False)
+
             # Get prototype data
             prototype = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
 
@@ -56,17 +63,38 @@ def create_items_from_prototypes(prototype_ids: list[str], character_id: str) ->
                 "TraitMods": prototype.get("TraitMods", {}),
                 "Container": prototype.get("Container", False),
                 "Contents": [],
-                "IsWorn": False,
+                "IsWorn": is_worn,
                 "CanPickUp": prototype.get("CanPickUp", True),
                 "Metadata": prototype.get("Metadata", {}),
             }
 
+            # Track first container
+            if is_container and container_id is None:
+                container_id = item_id
+                # Update contents with items collected so far
+                item_data["Contents"] = items_for_container.copy()
+
+            # If not worn and we have a container, add to container list
+            if not is_worn and not is_container and container_id:
+                items_for_container.append(item_id)
+                # Update the container's contents if it already exists
+                dynamo.update_item(
+                    TableName.ITEMS,
+                    Key={"ItemID": container_id},
+                    UpdateExpression="SET Contents = :contents",
+                    ExpressionAttributeValues={":contents": items_for_container},
+                )
+            elif not is_worn and not is_container and not container_id:
+                # No container yet, collect items for later
+                items_for_container.append(item_id)
+
             # Put item in Items table
             dynamo.put_item(TableName.ITEMS, item_data)
 
-            # Add to inventory
-            inventory[str(slot_num)] = item_id
-            slot_num += 1
+            # Add to inventory only if worn or is the container
+            if is_worn or (is_container and item_id == container_id):
+                inventory[str(slot_num)] = item_id
+                slot_num += 1
 
             logger.info(
                 "Created item from prototype",
@@ -75,7 +103,9 @@ def create_items_from_prototypes(prototype_ids: list[str], character_id: str) ->
                     "prototype_id": prototype_id,
                     "item_name": item_data.get("Name"),
                     "character_id": character_id,
-                    "slot": str(slot_num - 1),
+                    "is_worn": is_worn,
+                    "is_container": is_container,
+                    "in_inventory": is_worn or (is_container and item_id == container_id),
                 },
             )
 
@@ -87,7 +117,7 @@ def create_items_from_prototypes(prototype_ids: list[str], character_id: str) ->
             extra={
                 "error": str(err),
                 "character_id": character_id,
-                "prototype_count": len(prototype_ids),
+                "item_count": len(starting_items),
             },
         )
         return {}
