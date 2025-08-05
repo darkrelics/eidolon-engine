@@ -115,7 +115,7 @@ Resources:
     Properties:
       FunctionName: !Sub "${GameName}-api-get-character"
       Runtime: python3.12
-      Handler: api_get_character.lambda_handler
+      Handler: api_character_get.lambda_handler
       Code:
         S3Bucket: !Ref LambdaBucketName
         S3Key: !Ref LambdaZipKey

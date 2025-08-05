@@ -303,7 +303,7 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 **Global Secondary Indexes:**
 
 - **CharacterID-index**: CharacterID - For querying active segments by character
-- **EndTimeIndex**: EndTime - For finding segments ready to process and monitoring upcoming completions
+- **EndTimeIndex**: Status (HASH), EndTime (RANGE) - For finding segments by status and monitoring upcoming completions
 
 ## StoryHistory Table
 

@@ -8,7 +8,7 @@ The function loads all archetypes on cold start and filters for Player=true.
 Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 """
 
-from eidolon.archetypes import get_archtypes
+from eidolon.archetypes import get_archetypes
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.responses import lambda_response, lambda_error
@@ -18,7 +18,7 @@ archetypes_cache: list = []
 # Cache for player archetypes - populated at module load
 try:
     logger.info("Loading player archetypes cache at module initialization")
-    archetypes_cache = get_archtypes()
+    archetypes_cache = get_archetypes()
     logger.info(f"Player archetypes cache loaded successfully: count: {len(archetypes_cache)}")
 except Exception as err:
     logger.error(f"Failed to load archetypes cache at module initialization: {err}", exc_info=True)
@@ -49,7 +49,7 @@ def handle_get_archetypes() -> dict:
     # Cache failed to load at module init, try again
     logger.warning("Cache not loaded at module init, attempting to load now")
     try:
-        archetypes: list = get_archtypes()
+        archetypes: list = get_archetypes()
 
         # Cache the results
         archetypes_cache: list = archetypes

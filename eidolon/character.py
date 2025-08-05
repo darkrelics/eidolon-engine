@@ -232,7 +232,6 @@ def character_get(character_id: str, player_id: str) -> dict:
                 ":wounds": remainging_wounds,
                 ":state": character.get("CharState", "standing"),
                 ":timestamp": datetime.now(timezone.utc).isoformat(),
-                
             }
 
             try:
@@ -247,7 +246,7 @@ def character_get(character_id: str, player_id: str) -> dict:
             except ClientError as err:
                 logger.error("Failed to update character.")
                 raise RuntimeError(f"Failed to update character wounds: {err}") from err
-            
+
     # Validate ownership
 
     if character.get("PlayerID") != player_id:
@@ -295,14 +294,47 @@ def reset_character_game_mode(character_id: str) -> None:
         raise RuntimeError(f"Failed to reset character state: {err}") from err
 
 
-def get_active_segment_for_character(character_id: str, player_id: str, segment_type=None) -> dict:
+def character_get_active_story(character: dict) -> dict:
     """
-    Get active segment for a character with ownership verification.
+    Get active story for a character.
 
     Args:
-        character_id: Character UUID
-        player_id: Player ID for ownership verification
-        segment_type: Optional segment type filter (e.g., "decision")
+        character: Character Record dict
+
+    Returns:
+        Story dict. Empty dict if no active segment found.
+
+    Raises:
+        RuntimeError: If database error occurs
+    """
+    active_story_id: str = character.get("ActiveStoryID")  # type: ignore
+
+    # First try: If character has ActiveSegmentID, use GetItem
+    if active_story_id:
+        try:
+            active_story: dict = dynamo.get_item(TableName.STORY, key={"StoryID": active_story_id})  # type: ignore
+
+            if active_story:
+
+                logger.debug("Active story found via GetItem")
+                return active_story
+            else:
+                logger.warning("Segment found but not valid")
+                return {}
+        except ClientError as err:
+            logger.error(f"Error retrieving story by ID: {err}")
+            return {}
+
+
+
+
+
+def character_get_active_segment(character: dict) -> dict:
+    """
+    Get active segment for a character.
+
+    Args:
+        character: Character Record dict
 
     Returns:
         Active segment dict. Empty dict if no active segment found.
@@ -310,45 +342,51 @@ def get_active_segment_for_character(character_id: str, player_id: str, segment_
     Raises:
         RuntimeError: If database error occurs
     """
+    character_id: str = character.get("CharacterID")  # type: ignore
+    active_segment_id: str = character.get("ActiveSegmentID")  # type: ignore
 
-    query_params = {
+    # First try: If character has ActiveSegmentID, use GetItem
+    if active_segment_id:
+        try:
+            active_segment: dict = dynamo.get_item(TableName.ACTIVE_SEGMENTS, key={"ActiveSegmentID": active_segment_id})  # type: ignore
+
+            if active_segment:
+                # Verify the segment is still active and belongs to this character
+                if active_segment.get("Status") == "active" and active_segment.get("CharacterID") == character_id:
+                    logger.debug("Active segment found via GetItem")
+                    return active_segment
+                else:
+                    logger.warning("Segment found but not valid")
+        except ClientError as err:
+            logger.error(
+                "Error retrieving active segment by ID",
+                extra={"error": str(err), "character_id": character_id, "active_segment_id": active_segment_id},
+            )
+            # Fall through to query approach
+
+    # Second try: Query by CharacterID index
+    query_params: dict = {
         "IndexName": "CharacterID-index",
         "KeyConditionExpression": "CharacterID = :cid",
-        "FilterExpression": "PlayerID = :pid AND #status = :status",
+        "FilterExpression": "#status = :status",
         "ExpressionAttributeNames": {"#status": "Status"},
         "ExpressionAttributeValues": {
             ":cid": character_id,
-            ":pid": player_id,
             ":status": "active",
         },
     }
 
-    if segment_type:
-        query_params["FilterExpression"] += " AND SegmentType = :type"
-        query_params["ExpressionAttributeValues"][":type"] = segment_type
-
     try:
-        items = dynamo.query(TableName.ACTIVE_SEGMENTS, **query_params)
+        items: list = dynamo.query(TableName.ACTIVE_SEGMENTS, **query_params)  # type: ignore
 
         if not items:
-            logger.info(
-                "No active segment found",
-                extra={"character_id": character_id, "segment_type": segment_type},
-            )
+            logger.info("No active segment found via query", extra={"character_id": character_id})
             return {}
 
         # Should only be one active segment per character
         active_segment = items[0]
 
-        logger.info(
-            "Active segment found",
-            extra={
-                "character_id": character_id,
-                "segment_id": active_segment.get("SegmentID"),
-                "segment_type": active_segment.get("SegmentType"),
-                "story_id": active_segment.get("StoryID"),
-            },
-        )
+        logger.info("Active segment found via query")
 
         return active_segment
 

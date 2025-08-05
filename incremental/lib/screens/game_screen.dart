@@ -6,7 +6,6 @@ import '../models/active_segment.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../utils/error_handler.dart';
-import '../utils/json_utils.dart';
 import '../widgets/mechanical_segment_display.dart';
 import '../widgets/outcome_display.dart';
 import '../widgets/story_card_components.dart';
@@ -506,7 +505,7 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
     final storyData = _currentStoryData;
     if (storyData == null) return;
     
-    final story = JsonUtils.getFlexibleMap(storyData, 'Story', 'story');
+    final story = storyData['Story'] as Map<String, dynamic>;
     final storyId = story['StoryID'] as String?;
     if (storyId == null) return;
     
@@ -582,8 +581,8 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
           
           // Update character's story state if we have current story
           if (currentStory != null) {
-            final storyData = JsonUtils.getFlexibleMap(currentStory, 'Story', 'story');
-            final segmentData = JsonUtils.getFlexibleMap(currentStory, 'Segment', 'segment');
+            final storyData = currentStory['Story'] as Map<String, dynamic>;
+            final segmentData = currentStory['Segment'] as Map<String, dynamic>;
             
             // Load previous segments for this story
             _loadPreviousSegments();
@@ -618,25 +617,20 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
               _showingStoryCompletion = false;
               _storyCompletionData = null;
               
-              _timeRemaining = JsonUtils.getFlexibleRequired<int>(
-                segmentData,
-                'TimeRemaining',
-                'timeRemaining',
-                defaultValue: 0,
-              );
+              _timeRemaining = segmentData['TimeRemaining'] as int? ?? 0;
               
-              final shortStatus = JsonUtils.getFlexible<String>(segmentData, 'ShortStatus', 'shortStatus') ?? 'In progress';
+              final shortStatus = segmentData['ShortStatus'] as String? ?? 'In progress';
               final segmentName = shortStatus;
               
               widget.character.storyState = {
-                'storyId': JsonUtils.getFlexible<String>(storyData, 'StoryID', 'storyId'),
-                'storyName': JsonUtils.getFlexible<String>(storyData, 'Title', 'title'),
-                'segmentId': JsonUtils.getFlexible<String>(segmentData, 'SegmentID', 'segmentId'),
-                'segmentType': JsonUtils.getFlexible<String>(segmentData, 'SegmentType', 'segmentType'),
+                'storyId': storyData['StoryID'] as String?,
+                'storyName': storyData['Title'] as String?,
+                'segmentId': segmentData['SegmentID'] as String?,
+                'segmentType': segmentData['SegmentType'] as String?,
                 'segmentName': segmentName,
-                'timeRemaining': JsonUtils.getFlexible<int>(segmentData, 'TimeRemaining', 'timeRemaining'),
-                'totalSegments': JsonUtils.getFlexible<int>(storyData, 'TotalSegments', 'totalSegments'),
-                'currentSegmentIndex': JsonUtils.getFlexible<int>(storyData, 'CurrentSegmentIndex', 'currentSegmentIndex'),
+                'timeRemaining': segmentData['TimeRemaining'] as int?,
+                'totalSegments': storyData['TotalSegments'] as int?,
+                'currentSegmentIndex': storyData['CurrentSegmentIndex'] as int?,
               };
             }
           } else {
@@ -781,8 +775,8 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
       return const Center(child: CircularProgressIndicator());
     }
     
-    final Map<String, dynamic> story = JsonUtils.getFlexibleMap(storyData, 'Story', 'story');
-    final Map<String, dynamic> segment = JsonUtils.getFlexibleMap(storyData, 'Segment', 'segment');
+    final Map<String, dynamic> story = storyData['Story'] as Map<String, dynamic>;
+    final Map<String, dynamic> segment = storyData['Segment'] as Map<String, dynamic>;
     
     // Check if we have an active segment that's mechanical and processed
     final activeSegmentData = storyData['ActiveSegment'] as Map<String, dynamic>?;
@@ -791,26 +785,11 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
       activeSegment = ActiveSegment.fromJson(activeSegmentData);
     }
     
-    final segmentType = JsonUtils.getFlexibleRequired<String>(
-      segment,
-      'SegmentType',
-      'segmentType',
-      defaultValue: 'narrative',
-    );
+    final segmentType = segment['SegmentType'] as String? ?? 'narrative';
     
     // Calculate progress
-    final currentIndex = JsonUtils.getFlexibleRequired<int>(
-      story,
-      'CurrentSegmentIndex',
-      'currentSegmentIndex',
-      defaultValue: 0,
-    );
-    final totalSegments = JsonUtils.getFlexibleRequired<int>(
-      story,
-      'TotalSegments',
-      'totalSegments',
-      defaultValue: 1,
-    );
+    final currentIndex = story['CurrentSegmentIndex'] as int? ?? 0;
+    final totalSegments = story['TotalSegments'] as int? ?? 1;
     final progress = totalSegments > 0 ? (currentIndex + 1) / totalSegments : 0.0;
     
     return SingleChildScrollView(
@@ -828,22 +807,12 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
                     children: [
                       Expanded(
                         child: Text(
-                          JsonUtils.getFlexibleRequired<String>(
-                            story,
-                            'Title',
-                            'title',
-                            defaultValue: 'Unknown Story',
-                          ),
+                          story['Title'] as String? ?? 'Unknown Story',
                           style: theme.textTheme.titleLarge,
                         ),
                       ),
                       _buildStoryTypeChip(
-                        JsonUtils.getFlexibleRequired<String>(
-                          story,
-                          'Type',
-                          'type',
-                          defaultValue: 'unknown',
-                        ),
+                        story['Type'] as String? ?? 'unknown',
                         theme,
                       ),
                     ],
@@ -929,26 +898,16 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
                     const SizedBox(height: 16),
                     Text(
                       segmentType == 'mechanical' 
-                        ? JsonUtils.getFlexibleRequired<String>(
-                            segment,
-                            'ShortStatus',
-                            'shortStatus',
-                            defaultValue: 'Processing...',
-                          )
-                        : JsonUtils.getFlexibleRequired<String>(
-                            segment,
-                            'DefaultStatus',
-                            'defaultStatus',
-                            defaultValue: 'Loading segment content...',
-                          ),
+                        ? segment['ShortStatus'] as String? ?? 'Processing...'
+                        : segment['DefaultStatus'] as String? ?? 'Loading segment content...',
                       style: theme.textTheme.bodyLarge,
                     ),
-                    if (JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl') != null) ...[
+                    if (segment['ImageUrl'] as String? != null) ...[
                       const SizedBox(height: 16),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
-                          JsonUtils.getFlexible<String>(segment, 'ImageUrl', 'imageUrl')!,
+                          segment['ImageUrl'] as String,
                           fit: BoxFit.cover,
                           height: 200,
                           width: double.infinity,
@@ -971,15 +930,15 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
           ],
 
           // Decision Options (if decision segment)
-          if (segmentType == 'decision' && JsonUtils.getFlexible(segment, 'Options', 'options') != null) ...[
+          if (segmentType == 'decision' && segment['Options'] != null) ...[
             const SizedBox(height: 16),
-            _buildDecisionOptions(JsonUtils.getFlexible(segment, 'Options', 'options'), theme),
+            _buildDecisionOptions(segment['Options'], theme),
           ],
 
           // Challenge Results (if mechanical segment with results)
-          if (segmentType == 'mechanical' && JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults') != null) ...[
+          if (segmentType == 'mechanical' && segment['ChallengeResults'] != null) ...[
             const SizedBox(height: 16),
-            _buildChallengeResults(JsonUtils.getFlexible(segment, 'ChallengeResults', 'challengeResults'), theme),
+            _buildChallengeResults(segment['ChallengeResults'], theme),
           ],
 
           // Previous Segments Section
@@ -1298,12 +1257,7 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
               child: OutlinedButton(
                 onPressed: () => _submitDecision(
                   option is Map<String, dynamic>
-                    ? JsonUtils.getFlexibleRequired<String>(
-                        option,
-                        'Id',
-                        'id',
-                        defaultValue: option.toString(),
-                      )
+                    ? option['Id'] as String? ?? option.toString()
                     : option.toString(),
                 ),
                 style: OutlinedButton.styleFrom(
@@ -1311,12 +1265,7 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
                 ),
                 child: Text(
                   option is Map<String, dynamic> 
-                    ? JsonUtils.getFlexibleRequired<String>(
-                        option,
-                        'Text',
-                        'text',
-                        defaultValue: option.toString(),
-                      )
+                    ? option['Text'] as String? ?? option.toString()
                     : option.toString(),
                   textAlign: TextAlign.center,
                 ),
@@ -1398,13 +1347,13 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
     final activeSegmentData = _storyCompletionData!['activeSegment'] as Map<String, dynamic>;
     
     // Extract story info
-    final storyTitle = JsonUtils.getFlexible<String>(storyData, 'Title', 'title') ?? 'Unknown Story';
-    final totalSegments = JsonUtils.getFlexible<int>(storyData, 'TotalSegments', 'totalSegments') ?? 0;
+    final storyTitle = storyData['Title'] as String? ?? 'Unknown Story';
+    final totalSegments = storyData['TotalSegments'] as int? ?? 0;
     
     // Extract outcome info
-    final outcome = JsonUtils.getFlexible<String>(outcomeData, 'Outcome', 'outcome') ?? 'unknown';
-    final narrative = JsonUtils.getFlexible<String>(outcomeData, 'Narrative', 'narrative') ?? '';
-    final effects = JsonUtils.getFlexibleMap(outcomeData, 'Effects', 'effects');
+    final outcome = outcomeData['Outcome'] as String? ?? 'unknown';
+    final narrative = outcomeData['Narrative'] as String? ?? '';
+    final effects = outcomeData['Effects'] as Map<String, dynamic>;
     
     // Extract rewards from character updates
     final characterUpdates = activeSegmentData['CharacterUpdates'] as Map<String, dynamic>?;
@@ -1951,10 +1900,10 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
         widget.character.storyState = {
           'storyId': story.storyID,
           'storyName': story.title,
-          'segmentId': JsonUtils.getFlexible<String>(segment, 'SegmentID', 'segmentId'),
-          'segmentType': JsonUtils.getFlexible<String>(segment, 'SegmentType', 'segmentType'),
-          'segmentName': JsonUtils.getFlexible<String>(segment, 'ShortStatus', 'shortStatus') ?? 'In progress',
-          'timeRemaining': JsonUtils.getFlexible<int>(segment, 'TimeRemaining', 'timeRemaining'),
+          'segmentId': segment['SegmentID'] as String?,
+          'segmentType': segment['SegmentType'] as String?,
+          'segmentName': segment['ShortStatus'] as String? ?? 'In progress',
+          'timeRemaining': segment['TimeRemaining'] as int?,
         };
         _showStoryList = false;
         _isStartingStory = false;

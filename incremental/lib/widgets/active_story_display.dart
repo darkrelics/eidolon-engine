@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/active_segment.dart';
-import '../utils/json_utils.dart';
 
 class ActiveStoryDisplay extends StatelessWidget {
   final Map<String, dynamic> story;
@@ -245,17 +244,11 @@ class ActiveStoryDisplay extends StatelessWidget {
   }
 
   Widget _buildPreviousSegmentCard(ThemeData theme, Map<String, dynamic> segment) {
-    final segmentType = JsonUtils.getFlexible<String>(
-      segment, 'SegmentType', 'segmentType'
-    ) ?? 'narrative';
+    final segmentType = segment['SegmentType'] as String? ?? 'narrative';
     
-    final shortStatus = JsonUtils.getFlexible<String>(
-      segment, 'ShortStatus', 'shortStatus'
-    ) ?? 'Unknown segment';
+    final shortStatus = segment['ShortStatus'] as String? ?? 'Unknown segment';
     
-    final outcome = JsonUtils.getFlexible<String>(
-      segment, 'Outcome', 'outcome'
-    );
+    final outcome = segment['Outcome'] as String?;
     
     final clientEvents = segment['ClientEvents'] as List<dynamic>? ?? [];
 

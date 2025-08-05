@@ -7,7 +7,7 @@ Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-from eidolon.character import get_active_segment_for_character, character_get
+from eidolon.character import character_get_active_segment, character_get, character_get_active_story
 from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float
 from eidolon.items import get_inventory
@@ -43,29 +43,36 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
         logger.error("Failed to get character", extra={"error": str(err), "character_id": character_id})
         return {"success": False, "error": "Failed to retrieve character data", "status_code": 500}
 
-    # Check for active segments using eidolon library
-    active_segment = {}
+    # Check for active segment
+    active_story: dict = {}
+    active_segment: dict = {}
     try:
-        active_segment = get_active_segment_for_character(character_id, player_id)
-        if active_segment:
-            logger.info(
-                "Active segment found for character",
-                extra={
-                    "character_id": character_id,
-                    "segment_type": active_segment.get("SegmentType"),
-                    "story_id": active_segment.get("StoryID"),
-                },
-            )
+        active_story = character_get_active_story(character)
+        if active_story:
+            logger.info("Active story found for character")
+        else:
+            logger.info("No active story found for character")
+            character["ActiveStoryID"] = None
+            character["ActiveSegmentID"] = None
     except RuntimeError as err:
-        logger.error(
-            "Error retrieving active segments",
-            extra={
-                "error": str(err),
-                "character_id": character_id,
-            },
-        )
-        # Continue without active segment data - not critical for response
+        logger.error("Error retrieving active story")
 
+    if active_story:
+        
+        try:
+            active_segment = character_get_active_segment(character)
+            if active_segment:
+                logger.info("Active segment found for character")
+        except RuntimeError as err:
+            logger.error("Error retrieving active segments")
+            # Continue without active segment data - not critical for response
+
+        if active_segment:
+            character["ActiveSegmentID"] = active_segment.get("ActiveSegmentID")
+        else:
+            character["ActiveStoryID"] = None
+            active_story = {}
+            character["ActiveSegmentID"] = None
     # Note: Attributes and skills maintain their original casing from the database
     # The Flutter client handles any casing differences flexibly
 
@@ -77,7 +84,9 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
     # Build response data with PascalCase keys
     response_data = {"Character": decimal_to_float(character)}
 
-    # Add active segment if found
+    # Add story if found
+    if active_story:
+        response_data["ActiveStory"] = decimal_to_float(active_story)
     if active_segment:
         response_data["ActiveSegment"] = decimal_to_float(active_segment)
 
@@ -105,7 +114,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Extract player ID from JWT
     try:
-        player_id = extract_player_id(event)
+        player_id: str = extract_player_id(event)
     except ValueError as err:
         logger.warning(f"Authentication failed: {err}", exc_info=False)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
@@ -125,14 +134,16 @@ def lambda_handler(event: dict, context: object) -> dict:
         return lambda_error(event, err)
 
     # Get character ID from query parameters (flexible: CharacterID or characterId)
-    character_id: str = event.get("queryStringParameters", {}).get("CharacterID") or event.get("queryStringParameters", {}).get("characterId")
+    character_id: str = event.get("queryStringParameters", {}).get("CharacterID") or event.get("queryStringParameters", {}).get(
+        "characterId"
+    )
 
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
 
     # Call business logic
     try:
-        result: dict = get_character_logic(character_id, player_id)  # type: ignore
+        result: dict = get_character_logic(character_id, player_id)
 
         if result.get("success"):
             logger.info("Lambda response", extra={"status_code": 200})

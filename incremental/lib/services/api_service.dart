@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import '../models/character.dart';
 import '../models/segment_outcome.dart';
 import '../models/story.dart';
-import '../utils/json_utils.dart';
 import '../utils/api_parser.dart';
 import '../utils/api_validation.dart';
 import 'auth_service.dart';
@@ -138,13 +137,24 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final characterData = JsonUtils.getFlexibleMap(json, 'Character', 'character');
+    final characterData = json['Character'] as Map<String, dynamic>;
     
-    // Check if there's an active segment and add it to story state
-    final activeSegment = JsonUtils.getFlexibleMap(json, 'ActiveSegment', 'activeSegment');
-    if (activeSegment.isNotEmpty) {
-      characterData['StoryState'] = activeSegment;
+    // Check if there's an active story and segment
+    final activeStory = json['ActiveStory'] as Map<String, dynamic>?;
+    final activeSegment = json['ActiveSegment'] as Map<String, dynamic>?;
+    
+    // Build story state with both story and segment data
+    if (activeStory != null && activeSegment != null) {
+      characterData['StoryState'] = {
+        'Story': activeStory,
+        'ActiveSegment': activeSegment,
+      };
+      debugPrint('ApiService: Found active story: ${activeStory['Title']}');
       debugPrint('ApiService: Found active segment: ${activeSegment['SegmentType']}');
+    } else if (activeSegment != null) {
+      // Fallback for backward compatibility
+      characterData['StoryState'] = activeSegment;
+      debugPrint('ApiService: Found active segment (no story): ${activeSegment['SegmentType']}');
     }
     
     return Character.fromJson(characterData);
@@ -229,7 +239,7 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return JsonUtils.getFlexibleMap(json, 'Segment', 'segment');
+    return json['Segment'] as Map<String, dynamic>;
   }
 
   /// Submit a decision for a story segment
@@ -311,7 +321,7 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final outcomeData = JsonUtils.getFlexibleMap(json, 'Outcome', 'outcome');
+    final outcomeData = json['Outcome'] as Map<String, dynamic>;
     return SegmentOutcome.fromJson(outcomeData);
   }
 
@@ -376,11 +386,7 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final stories = JsonUtils.getFlexibleList<dynamic>(
-      json,
-      'Stories',
-      'stories',
-    );
+    final stories = json['Stories'] as List<dynamic>;
     return stories
         .map((s) => StoryMetadata.fromJson(s as Map<String, dynamic>))
         .toList();
@@ -433,11 +439,7 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final archetypes = JsonUtils.getFlexibleList<dynamic>(
-      json,
-      'Archetypes',
-      'archetypes',
-    )
+    final archetypes = (json['Archetypes'] as List<dynamic>)
         .map((a) => ArchetypeInfo.fromJson(a as Map<String, dynamic>))
         .toList();
 
@@ -469,12 +471,8 @@ class ApiService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final segments = JsonUtils.getFlexibleList<dynamic>(
-      json,
-      'Segments',
-      'segments',
-    );
-    return segments
+    final segments = json['Segments'] as List<dynamic>?;
+    return segments?
         .map((s) => s as Map<String, dynamic>)
         .toList();
   }

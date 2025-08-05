@@ -20,6 +20,7 @@ from eidolon.story import (
     get_story_segment,
 )
 
+
 def get_current_story_business_logic(character_id: str, player_id: str) -> dict:
     """
     Business logic for getting current active story and segment.

@@ -236,7 +236,9 @@ def get_character_list(player_id: str) -> list:
     # Sort by name for consistent ordering
     characters.sort(key=lambda x: x.get("CharacterName", ""))
 
-    logger.info("Character list prepared successfully",)
+    logger.info(
+        "Character list prepared successfully",
+    )
 
     return characters
 

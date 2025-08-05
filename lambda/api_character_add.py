@@ -79,7 +79,9 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
             archetype_data = {}
             archetype_name = "default"
         else:
-            logger.info(f"Archetype {archetype_name} found",)
+            logger.info(
+                f"Archetype {archetype_name} found",
+            )
     else:
         # No archetype provided, use defaults
         logger.info("No archetype specified, using defaults")

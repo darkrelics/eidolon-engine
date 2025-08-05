@@ -11,7 +11,7 @@ from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH
 from eidolon.logger import logger
 
 
-def get_archtypes() -> list:
+def get_archetypes() -> list:
     """
     Load all player-available archetypes from DynamoDB.
 
