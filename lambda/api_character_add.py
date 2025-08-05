@@ -42,15 +42,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
     can_create = limit_result.get("can_create", False)
     current_count = limit_result.get("current_count", 0)
 
-    logger.info(
-        "Character limit check",
-        extra={
-            "player_id": player_id,
-            "current_count": current_count,
-            "can_create": can_create,
-            "max_allowed": MAX_CHARACTERS_PER_PLAYER,
-        },
-    )
+    logger.info(f"Character limit check for {player_id}")
 
     if not can_create:
         raise ValueError(f"Character limit reached ({current_count})")
@@ -100,7 +92,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id: str = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Authentication failed Error: {err}", exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -132,19 +124,12 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     archetype_name = body.get("ArchetypeName", "")
 
-    logger.info(
-        "Character creation request received",
-        extra={
-            "player_id": player_id,
-            "character_name": character_name,
-            "archetype_name": archetype_name or "default",
-        },
-    )
+    logger.info(f"Character creation request received for {character_name}")
 
     # Call business logic
     try:
         result: dict = handle_character_creation(player_id, character_name, archetype_name)  # type: ignore
-        logger.info("Lambda response", extra={"status_code": 201})
+        logger.info(f"Lambda response for status 201")
         return lambda_response(
             201,
             {
@@ -157,12 +142,12 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
     except ValueError as err:
         # Business logic errors (invalid name, limit reached, name taken)
-        logger.warning("Character creation validation failed", extra={"error": str(err)})
+        logger.warning(f"Character creation validation failed Error: {err}")
         status_code: int = 409 if str(err) == "Character name is already taken" else 400
         return lambda_response(status_code, {"Error": str(err)}, event)
     except RuntimeError as err:
         # System errors (database failures, etc.)
-        logger.error("Character creation system error", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Character creation system error Error: {err}", exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)

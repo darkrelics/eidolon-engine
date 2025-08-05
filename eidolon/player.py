@@ -30,13 +30,13 @@ def create_player_record(user_uuid: str, email: str) -> None:
         raise ValueError("Missing required user attributes (sub or email)")
 
     # Check if player already exists
-    logger.debug("Checking for existing player", extra={"user_id": user_uuid})
+    logger.debug(f"Checking for existing player for {user_uuid}")
 
     try:
         existing_player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": user_uuid})
 
         if existing_player:
-            logger.info("Player already exists", extra={"user_id": user_uuid})
+            logger.info(f"Player already exists for {user_uuid}")
             raise ValueError(f"Player {user_uuid} already exists")
 
     except ClientError as err:
@@ -110,14 +110,14 @@ def validate_player(player_id: str) -> bool:
         player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
 
         if not player:
-            logger.warning("Player not found in database", extra={"player_id": player_id})
+            logger.warning(f"Player not found in database for {player_id}")
             return False
 
-        logger.debug("Player validation successful", extra={"player_id": player_id})
+        logger.debug(f"Player validation successful for {player_id}")
         return True
 
     except ClientError as err:
-        logger.error("Failed to validate player existence", extra={"player_id": player_id, "error": str(err)}, exc_info=True)
+        logger.error(f"Failed to validate player existence for {player_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to validate player: {err}") from err
 
 
@@ -139,16 +139,14 @@ def get_player_data(player_id: str) -> dict:
         player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
 
         if not player:
-            logger.warning("Player not found", extra={"player_id": player_id})
+            logger.warning(f"Player not found for {player_id}")
             raise ValueError(f"Player {player_id} not found")
 
-        logger.info(
-            "Player data retrieved", extra={"player_id": player_id, "character_count": len(player.get("CharacterList", {}))}
-        )
+        logger.info(f"Player data retrieved for {player_id}")
         return player
 
     except ClientError as err:
-        logger.error("Failed to retrieve player data", extra={"player_id": player_id, "error": str(err)}, exc_info=True)
+        logger.error(f"Failed to retrieve player data for {player_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to retrieve player data: {err}") from err
 
 
@@ -188,10 +186,10 @@ def update_player_timestamp(player_id: str, timestamp: str) -> None:
             UpdateExpression="SET UpdatedAt = :timestamp",
             ExpressionAttributeValues={":timestamp": timestamp},
         )
-        logger.debug("Updated player timestamp", extra={"player_id": player_id})
+        logger.debug(f"Updated player timestamp for {player_id}")
 
     except ClientError as err:
-        logger.error("Failed to update player timestamp", extra={"player_id": player_id, "error": str(err)}, exc_info=True)
+        logger.error(f"Failed to update player timestamp for {player_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update player timestamp: {err}") from err
 
 
@@ -224,14 +222,7 @@ def get_character_list(player_id: str) -> list:
         }
         characters.append(char_data)
 
-        logger.debug(
-            "Processing character",
-            extra={
-                "character_name": char_name,
-                "character_id": char_data.get("CharacterID"),
-                "is_dead": char_data.get("Dead"),
-            },
-        )
+        logger.debug(f"Processing character for {char_name}")
 
     # Sort by name for consistent ordering
     characters.sort(key=lambda x: x.get("CharacterName", ""))
@@ -255,13 +246,9 @@ def delete_player_record(player_id: str) -> None:
     """
     try:
         dynamo.delete_item(TableName.PLAYERS, Key={"PlayerID": player_id})
-        logger.info("Deleted player record", extra={"player_id": player_id})
+        logger.info(f"Deleted player record for {player_id}")
     except ClientError as err:
-        logger.error(
-            "Failed to delete player record",
-            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
+        logger.error(f"Failed to delete player record for {player_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to delete player record: {err}") from err
 
 
@@ -291,10 +278,7 @@ def delete_all_characters_for_player(player_id: str) -> dict:
         player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
 
         if not player:
-            logger.warning(
-                "Player not found for character deletion",
-                extra={"player_id": player_id},
-            )
+            logger.warning(f"Player not found for character deletion for {player_id}")
             return results
 
         character_list = player.get("CharacterList", {})
@@ -315,43 +299,20 @@ def delete_all_characters_for_player(player_id: str) -> dict:
                     if deletion_result.get("errors"):
                         results["errors"].extend(deletion_result.get("errors", []))
 
-                    logger.info(
-                        "Processed character deletion",
-                        extra={
-                            "character_name": character_name,
-                            "character_id": character_id,
-                            "game_mode": character_info.get("GameMode", "Unknown"),
-                            "deletion_result": deletion_result,
-                        },
-                    )
+                    logger.info(f"Processed character deletion for {character_name}")
                 except Exception as err:
-                    logger.error(
-                        "Failed to delete character",
-                        extra={
-                            "error": str(err),
-                            "character_id": character_id,
-                            "character_name": character_name,
-                        },
-                        exc_info=True,
-                    )
+                    logger.error(f"Failed to delete character for {character_name} Error: {err}", exc_info=True)
                     results["errors"].append(f"Failed to delete character {character_name} ({character_id}): {err}")
 
-        logger.info(
-            "Completed deleting all characters",
-            extra={"player_id": player_id, "results": results},
-        )
+        logger.info(f"Completed deleting all characters for {player_id}")
         return results
 
     except ClientError as err:
-        logger.error(
-            "Database error in delete_all_characters",
-            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
+        logger.error(f"Database error in delete_all_characters for {player_id} Error: {err}", exc_info=True)
         results["errors"].append(f"Database error: {err}")
         return results
     except Exception as err:
-        logger.error("Error in delete_all_characters", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Error in delete_all_characters Error: {err}", exc_info=True)
         results["errors"].append(f"General error: {err}")
         return results
 
@@ -385,29 +346,15 @@ def delete_player_active_segments(player_id: str) -> int:
                 )
                 deleted_count += 1
             except ClientError as err:
-                logger.error(
-                    "Failed to delete active segment",
-                    extra={
-                        "error": str(err),
-                        "segment_id": item.get("ActiveSegmentID"),
-                        "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-                    },
-                )
+                logger.error(f"Failed to delete active segment for {item.get('ActiveSegmentID')} Error: {err}")
 
-        logger.info(
-            "Deleted active segments",
-            extra={"player_id": player_id, "count": deleted_count},
-        )
+        logger.info(f"Deleted active segments for {player_id}")
         return deleted_count
     except ClientError as err:
-        logger.error(
-            "Error querying active segments",
-            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
+        logger.error(f"Error querying active segments for {player_id} Error: {err}", exc_info=True)
         return deleted_count
     except Exception as err:
-        logger.error("Error deleting active segments", extra={"error": str(err), "player_id": player_id}, exc_info=True)
+        logger.error(f"Error deleting active segments for {player_id} Error: {err}", exc_info=True)
         return deleted_count
 
 
@@ -440,34 +387,16 @@ def delete_player_character_history(player_id: str) -> int:
                 )
                 deleted_count += 1
             except ClientError as err:
-                logger.error(
-                    "Failed to delete history record",
-                    extra={
-                        "error": str(err),
-                        "timestamp": item.get("Timestamp"),
-                        "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-                    },
-                )
+                logger.error(f"Failed to delete history record for {item.get('Timestamp')} Error: {err}")
 
-        logger.info(
-            "Deleted history records",
-            extra={"count": deleted_count, "player_id": player_id},
-        )
+        logger.info(f"Deleted history records for {player_id}")
         return deleted_count
 
     except ClientError as err:
-        logger.error(
-            "Error querying character history",
-            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
+        logger.error(f"Error querying character history for {player_id} Error: {err}", exc_info=True)
         return deleted_count
     except Exception as err:
-        logger.error(
-            "Error in delete_character_history",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
+        logger.error(f"Error in delete_character_history Error: {err}", exc_info=True)
         return deleted_count
 
 
@@ -490,7 +419,7 @@ def delete_player_data(player_id: str) -> dict:
     if not player_id:
         raise ValueError("Player ID cannot be empty")
 
-    logger.info("Starting deletion process", extra={"player_id": player_id})
+    logger.info(f"Starting deletion process for {player_id}")
 
     # Track deletion results
     results: dict = {
@@ -512,17 +441,10 @@ def delete_player_data(player_id: str) -> dict:
         delete_player_record(player_id)
         results["deletions"]["player_record"] = True
     except RuntimeError as err:
-        logger.error(
-            "Failed to delete player record",
-            extra={"error": str(err), "player_id": player_id},
-        )
+        logger.error(f"Failed to delete player record for {player_id} Error: {err}")
         results["errors"].append(f"Player record: {err}")
     except Exception as err:
-        logger.error(
-            "Unexpected error deleting player record",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
+        logger.error(f"Unexpected error deleting player record Error: {err}", exc_info=True)
         results["errors"].append(f"Player record: {err}")
 
     # Delete all characters and their associated data
@@ -535,11 +457,7 @@ def delete_player_data(player_id: str) -> dict:
         if char_deletion_results.get("errors"):
             results["errors"].extend(char_deletion_results.get("errors", []))
     except Exception as err:
-        logger.error(
-            "Unexpected error deleting characters",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
+        logger.error(f"Unexpected error deleting characters Error: {err}", exc_info=True)
         results["errors"].append(f"Characters: {err}")
 
     # Delete any remaining active segments
@@ -549,11 +467,7 @@ def delete_player_data(player_id: str) -> dict:
         additional_segments = delete_player_active_segments(player_id)
         results["deletions"]["active_segments"] += additional_segments
     except Exception as err:
-        logger.error(
-            "Unexpected error deleting active segments",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
+        logger.error(f"Unexpected error deleting active segments Error: {err}", exc_info=True)
         results["errors"].append(f"Active segments: {err}")
 
     # Delete character history
@@ -562,14 +476,10 @@ def delete_player_data(player_id: str) -> dict:
         additional_history = delete_player_character_history(player_id)
         results["deletions"]["character_history"] = additional_history
     except Exception as err:
-        logger.error(
-            "Unexpected error deleting character history",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
+        logger.error(f"Unexpected error deleting character history Error: {err}", exc_info=True)
         results["errors"].append(f"Character history: {err}")
 
     # Log summary
-    logger.info("Deletion complete", extra={"player_id": player_id, "summary": results})
+    logger.info(f"Deletion complete for {player_id}")
 
     return results

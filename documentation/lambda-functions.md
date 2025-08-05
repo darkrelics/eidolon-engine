@@ -299,10 +299,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     """
     try:
         # All Lambda logic goes inside this try block
-        logger.info("Lambda invoked", extra={
-            "request_id": context.request_id,
-            "function_name": context.function_name
-        })
+        logger.info("Lambda invoked")
 
         # Your code here...
 

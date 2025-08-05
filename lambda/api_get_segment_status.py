@@ -64,15 +64,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         response["CombatState"] = active_segment.get("CombatState")
         response["HealingApplied"] = active_segment.get("HealingApplied")
 
-    logger.info(
-        "Segment status retrieved",
-        extra={
-            "character_id": character_id,
-            "active_segment_id": active_segment.get("ActiveSegmentID"),
-            "is_complete": is_complete,
-            "time_remaining": time_remaining,
-        },
-    )
+    logger.info(f"Segment status retrieved for {character_id}")
 
     return response
 
@@ -106,7 +98,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Extract player ID from JWT
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Authentication failed Error: {err}", exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -114,10 +106,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Validate player exists
     try:
         if not validate_player(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id}, exc_info=True)
+            logger.error(f"Player not found in database for {player_id}", exc_info=True)
             return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -130,13 +122,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         response_data = get_segment_status_business_logic(character_id, player_id)  # type: ignore
-        logger.info("Lambda response", extra={"status_code": 200})
+        logger.info(f"Lambda response")
         return lambda_response(200, response_data, event)
     except ValueError as err:
-        logger.warning(
-            "Invalid request or not found",
-            extra={"character_id": character_id, "error": str(err)},
-        )
+        logger.warning(f"Invalid request or not found for {character_id} Error: {err}")
         error_msg = str(err).lower()
         if "no active" in error_msg:
             return lambda_response(404, {"Error": "No active segment found"}, event)
@@ -145,8 +134,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         return lambda_response(400, {"Error": str(err)}, event)
     except RuntimeError as err:
         logger.error(
-            "Failed to get segment status",
-            extra={"character_id": character_id, "error": str(err)},
+            f"Failed to get segment status for {character_id} Error: {err}",
             exc_info=True,
         )
         return lambda_response(500, {"Error": "Internal server error"}, event)

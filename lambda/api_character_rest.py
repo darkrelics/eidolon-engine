@@ -33,25 +33,19 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
     # Check game mode
     game_mode = character.get("GameMode", "None")
     if game_mode != "Incremental":
-        logger.warning(
-            "Character not in Incremental mode",
-            extra={"character_id": character_id, "game_mode": game_mode},
-        )
+        logger.warning(f"Character not in Incremental mode for {character_id}")
         raise ValueError(f"Character is in {game_mode} mode, must be in Incremental mode")
 
     # Check if character has active story
     active_story_id = character.get("ActiveStoryID")
     if not active_story_id:
-        logger.warning("Character has no active story", extra={"character_id": character_id})
+        logger.warning(f"Character has no active story for {character_id}")
         raise ValueError("No active story")
 
     # Get active segment - character MUST have one to insert rest
     active_segment_id = character.get("ActiveSegmentID")
     if not active_segment_id:
-        logger.warning(
-            "Character has no active segment",
-            extra={"character_id": character_id},
-        )
+        logger.warning(f"Character has no active segment for {character_id}")
         raise ValueError("Character must have an active segment to rest")
 
     # Get active segment info to find current segment ID
@@ -61,9 +55,7 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
         if not current_segment_id:
             raise ValueError("Active segment missing SegmentID")
     except (ValueError, RuntimeError) as err:
-        logger.error(
-            "Failed to get active segment info", extra={"active_segment_id": active_segment_id, "error": str(err)}, exc_info=True
-        )
+        logger.error(f"Failed to get active segment info for {active_segment_id} Error: {err}", exc_info=True)
         raise
 
     # Calculate time remaining on current segment
@@ -71,15 +63,7 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
     end_time = active_segment.get("EndTime", 0)
     time_remaining = max(0, end_time - current_time)
 
-    logger.info(
-        "Current segment timing",
-        extra={
-            "current_segment_id": current_segment_id,
-            "end_time": end_time,
-            "current_time": current_time,
-            "time_remaining": time_remaining,
-        },
-    )
+    logger.info(f"Current segment timing for {current_segment_id}")
 
     # Insert rest segment into story flow
     try:
@@ -90,22 +74,10 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
             time_remaining=time_remaining,
         )
     except (ValueError, RuntimeError) as err:
-        logger.error(
-            "Failed to insert rest segment",
-            extra={"story_id": active_story_id, "current_segment_id": current_segment_id, "error": str(err)},
-            exc_info=True,
-        )
+        logger.error(f"Failed to insert rest segment for {active_story_id} Error: {err}", exc_info=True)
         raise
 
-    logger.info(
-        "Rest segment inserted successfully",
-        extra={
-            "character_id": character_id,
-            "rest_segment_id": rest_segment_id,
-            "inserted_after": current_segment_id,
-            "wounds": len(character.get("Wounds", [])),
-        },
-    )
+    logger.info(f"Rest segment inserted successfully for {character_id}")
 
     return {"rest_segment_id": rest_segment_id, "current_segment_id": current_segment_id, "active_segment_id": active_segment_id}
 
@@ -124,7 +96,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Authentication failed Error: {err}", exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -132,10 +104,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Validate player exists
     try:
         if not validate_player(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id})
+            logger.error(f"Player not found in database for {player_id}")
             return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -155,18 +127,12 @@ def lambda_handler(event: dict, context: object) -> dict:
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
 
-    logger.info(
-        "Character rest request received",
-        extra={
-            "player_id": player_id,
-            "character_id": character_id,
-        },
-    )
+    logger.info(f"Character rest request received for {character_id}")
 
     # Call business logic
     try:
         result = handle_character_rest(player_id, character_id)  # type: ignore
-        logger.info("Lambda response", extra={"status_code": 200})
+        logger.info(f"Lambda response for status 200")
         return lambda_response(
             200,
             {
@@ -179,7 +145,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
     except ValueError as err:
         # Business logic errors
-        logger.warning("Character rest validation failed", extra={"error": str(err)})
+        logger.warning(f"Character rest validation failed Error: {err}")
         error_msg = str(err)
 
         # Check for specific error cases
@@ -194,7 +160,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         return lambda_response(status_code, {"Error": error_msg}, event)
     except RuntimeError as err:
         # System errors
-        logger.error("Character rest system error", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Character rest system error Error: {err}", exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)

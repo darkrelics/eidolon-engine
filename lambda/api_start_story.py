@@ -63,15 +63,10 @@ def queue_mechanical_segment_for_processing(active_segment: dict) -> None:
 
     try:
         send_message(SEGMENT_QUEUE_URL, message_body)
-        logger.info(
-            "Queued mechanical segment for processing", extra={"active_segment_id": active_segment.get("ActiveSegmentID", "")}
-        )
+        logger.info(f"Queued mechanical segment for processing for {active_segment.get('ActiveSegmentID', '')}")
     except RuntimeError as err:
         # Non-critical failure - log but don't block story start
-        logger.warning(
-            "Failed to queue segment for processing",
-            extra={"active_segment_id": active_segment.get("ActiveSegmentID", ""), "error": str(err)},
-        )
+        logger.warning(f"Failed to queue segment for processing for {active_segment.get('ActiveSegmentID', '')} Error: {err}")
 
 
 def start_story_business_logic(character_id: str, story_id: str, player_id: str) -> dict:
@@ -144,7 +139,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Authentication failed Error: {err}", exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -152,10 +147,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Validate player exists
     try:
         if not validate_player(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id})
+            logger.error(f"Player not found in database for {player_id}")
             return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -178,21 +173,15 @@ def lambda_handler(event: dict, context: object) -> dict:
     if story_id and not validate_uuid(story_id):  # type: ignore
         return lambda_response(400, {"Error": "Invalid story ID format"}, event)
 
-    logger.info(
-        "Starting story",
-        extra={"character_id": character_id, "story_id": story_id},
-    )
+    logger.info(f"Starting story for {character_id}")
 
     # Call business logic
     try:
         response_data = start_story_business_logic(character_id, story_id, player_id)  # type: ignore
-        logger.info("Lambda response", extra={"status_code": 200})
+        logger.info(f"Lambda response")
         return lambda_response(200, response_data, event)
     except ValueError as err:
-        logger.warning(
-            "Invalid request",
-            extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
-        )
+        logger.warning(f"Invalid request for {character_id} Error: {err}")
         error_msg = str(err)
         if "not found" in error_msg.lower():
             return lambda_response(404, {"Error": error_msg}, event)
@@ -203,8 +192,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         return lambda_response(400, {"Error": error_msg}, event)
     except RuntimeError as err:
         logger.error(
-            "Failed to start story",
-            extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
+            f"Failed to start story for {character_id} Error: {err}",
             exc_info=True,
         )
         return lambda_response(500, {"Error": "Internal server error"}, event)

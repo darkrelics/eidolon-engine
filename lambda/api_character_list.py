@@ -62,7 +62,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id: str = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Authentication failed Error: {err}", exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -70,10 +70,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Validate player exists
     try:
         if not validate_player(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id})
+            logger.error(f"Player not found in database for {player_id}")
             return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -81,24 +81,17 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         response_data: dict = list_characters(player_id)
-        logger.info("Lambda response", extra={"status_code": 200})
+        logger.info(f"Lambda response for status 200")
         return lambda_response(200, response_data, event)
     except ValueError as err:
-        logger.warning(
-            "Player not found",
-            extra={"player_id": player_id, "error": str(err)},
-        )
+        logger.warning(f"Player not found for {player_id} Error: {err}")
         return lambda_response(
             404,
             {"Error": "Player not found"},
             event,
         )
     except RuntimeError as err:
-        logger.error(
-            "Failed to list characters",
-            extra={"player_id": player_id, "error": str(err)},
-            exc_info=True,
-        )
+        logger.error(f"Failed to list characters for {player_id} Error: {err}", exc_info=True)
         return lambda_response(
             500,
             {"Error": "Internal server error"},

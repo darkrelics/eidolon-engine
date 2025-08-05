@@ -250,10 +250,7 @@ def lambda_handler(event, context):
         )
 
         # Return response
-        logger.info("Request completed", extra={
-            "status_code": result['status_code'],
-            "character_id": character_id
-        })
+        logger.info("Request completed")
 
         return create_response(
             result['status_code'],
@@ -1141,7 +1138,7 @@ def handle_errors(func):
         try:
             return func(event, context)
         except IncrementalError as e:
-            logger.warning(f"Business error: {e}", extra=e.details)
+            logger.warning(f"Business error: {err}")
             return create_response(e.status_code, {
                 "error": str(e),
                 **e.details

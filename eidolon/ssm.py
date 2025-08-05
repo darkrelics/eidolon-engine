@@ -33,18 +33,10 @@ def get_parameter(parameter_name: str) -> str:
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "Unknown")
         if error_code == "ParameterNotFound":
-            logger.error("Parameter not found", extra={"parameter_name": parameter_name})
+            logger.error(f"Parameter not found for {parameter_name}")
             raise ValueError(f"Parameter {parameter_name} not found") from err
 
-        logger.error(
-            "Failed to get parameter",
-            extra={
-                "parameter_name": parameter_name,
-                "error": str(err),
-                "error_code": error_code,
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to get parameter for {parameter_name} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get parameter: {err}") from err
 
 
@@ -66,19 +58,7 @@ def put_parameter(parameter_name: str, value: str) -> None:
             Type="String",
             Overwrite=True,
         )
-        logger.info(
-            "Parameter updated successfully",
-            extra={"parameter_name": parameter_name, "value": value},
-        )
+        logger.info(f"Parameter updated successfully for {parameter_name}")
     except ClientError as err:
-        logger.error(
-            "Failed to update parameter",
-            extra={
-                "parameter_name": parameter_name,
-                "value": value,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to update parameter for {parameter_name} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update parameter: {err}") from err

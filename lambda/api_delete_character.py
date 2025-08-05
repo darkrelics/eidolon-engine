@@ -41,27 +41,12 @@ def handle_character_deletion(player_id: str, character_id: str) -> dict:
     character: dict = character_get(character_id, player_id)
     character_name = character.get("CharacterName", "Unknown")
 
-    logger.info(
-        "Character ownership verified, proceeding with deletion",
-        extra={
-            "character_id": character_id,
-            "character_name": character_name,
-            "player_id": player_id,
-        },
-    )
+    logger.info(f"Character ownership verified, proceeding with deletion for {character_id}")
 
     # Delete the character
     deletion_result = delete_character(character_id, remove_from_player_list=True)
 
-    logger.info(
-        "Character deletion completed",
-        extra={
-            "character_name": character_name,
-            "character_id": character_id,
-            "player_id": player_id,
-            "results": deletion_result,
-        },
-    )
+    logger.info(f"Character deletion completed for {character_id}")
 
     # Check if deletion was successful
     if not deletion_result.get("character_deleted", False):
@@ -97,7 +82,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Authentication failed Error: {err}", exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -105,10 +90,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Validate player exists
     try:
         if not validate_player(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id})
+            logger.error(f"Player not found in database for {player_id}")
             return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -125,7 +110,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         result = handle_character_deletion(player_id, character_id)  # type: ignore
-        logger.info("Lambda response", extra={"status_code": 200})
+        logger.info(f"Lambda response")
         return lambda_response(
             200,
             {
@@ -140,10 +125,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
     except ValueError as err:
         # Character not found or not owned by player
-        logger.warning(
-            "Character deletion validation failed",
-            extra={"character_id": character_id, "player_id": player_id, "error": str(err)},
-        )
+        logger.warning(f"Character deletion validation failed for {character_id} Error: {err}")
         error_msg = str(err).lower()
         if "not found" in error_msg:
             return lambda_response(404, {"Error": "Character not found"}, event)
@@ -154,8 +136,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     except RuntimeError as err:
         # Database or deletion failures
         logger.error(
-            "Character deletion system error",
-            extra={"character_id": character_id, "error": str(err)},
+            f"Character deletion system error for {character_id} Error: {err}",
             exc_info=True,
         )
         return lambda_response(500, {"Error": "Internal server error"}, event)

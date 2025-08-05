@@ -57,24 +57,11 @@ def process_segment_business_logic(
     """
     # Validate segment type
     if not validate_segment_for_processing(segment_type):
-        logger.warning(
-            "Invalid segment type for mechanical processing",
-            extra={
-                "segment_type": segment_type,
-                "active_segment_id": active_segment_id,
-            },
-        )
+        logger.warning(f"Invalid segment type for mechanical processing for {active_segment_id}")
         raise ValueError(f"Segment type '{segment_type}' should not be processed by this handler")
 
     # Log processing details
-    logger.info(
-        "Processing mechanical segment",
-        extra={
-            "active_segment_id": active_segment_id,
-            "segment_type": segment_type,
-            "character_id": character_id,
-        },
-    )
+    logger.info(f"Processing mechanical segment for {active_segment_id}")
 
     # Use the eidolon library to process the segment
     return process_segment_completely(active_segment_id, character_id, story_id, segment_id, segment_type)
@@ -94,7 +81,7 @@ def process_segments_batch(segments: list) -> dict:
     success_count = 0
     failure_count = 0
 
-    logger.info("Processing segment batch", extra={"batch_size": len(segments)})
+    logger.info(f"Processing segment batch for {len(segments)}")
 
     for segment_data in segments:
         try:
@@ -104,13 +91,7 @@ def process_segments_batch(segments: list) -> dict:
             segment_id = segment_data.get("SegmentID")
             segment_type = segment_data.get("SegmentType")
 
-            logger.info(
-                "Processing segment in batch",
-                extra={
-                    "active_segment_id": active_segment_id,
-                    "segment_type": segment_type,
-                },
-            )
+            logger.info(f"Processing segment in batch for {active_segment_id}")
 
             result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)
 
@@ -126,11 +107,7 @@ def process_segments_batch(segments: list) -> dict:
 
         except Exception as err:
             logger.error(
-                "Failed to process segment in batch",
-                extra={
-                    "active_segment_id": segment_data.get("ActiveSegmentID"),
-                    "error": str(err),
-                },
+                f"Failed to process segment in batch for {segment_data.get('ActiveSegmentID')} Error: {err}",
                 exc_info=True,
             )
             results.append(
@@ -142,14 +119,7 @@ def process_segments_batch(segments: list) -> dict:
             )
             failure_count += 1
 
-    logger.info(
-        "Batch processing completed",
-        extra={
-            "batch_size": len(segments),
-            "success_count": success_count,
-            "failure_count": failure_count,
-        },
-    )
+    logger.info(f"Batch processing completed for {len(segments)}")
 
     return {
         "Message": "Batch processing completed",
@@ -202,26 +172,12 @@ def lambda_handler(event: dict, context: object) -> dict:
 
                 # Validate segment type
                 if not validate_segment_for_processing(segment_type):
-                    logger.warning(
-                        "Skipping non-mechanical segment from SQS",
-                        extra={
-                            "message_id": record.get("messageId"),
-                            "segment_type": segment_type,
-                            "active_segment_id": active_segment_id,
-                        },
-                    )
+                    logger.warning(f"Skipping non-mechanical segment from SQS for {active_segment_id}")
                     # Don't fail the message, just skip it
                     success_count += 1
                     continue
 
-                logger.info(
-                    "Processing SQS message",
-                    extra={
-                        "message_id": record.get("messageId"),
-                        "active_segment_id": active_segment_id,
-                        "segment_type": segment_type,
-                    },
-                )
+                logger.info(f"Processing SQS message for {active_segment_id}")
 
                 # Process the segment
                 result = process_segment_business_logic(
@@ -245,11 +201,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
             except Exception as err:
                 logger.error(
-                    "Failed to process SQS message",
-                    extra={
-                        "message_id": record.get("messageId"),
-                        "error": str(err),
-                    },
+                    f"Failed to process SQS message Error: {err}",
                     exc_info=True,
                 )
                 failure_count += 1
@@ -257,13 +209,7 @@ def lambda_handler(event: dict, context: object) -> dict:
                 batch_item_failures.append({"itemIdentifier": record.get("messageId", "unknown")})
 
         # Return response for SQS batch processing
-        logger.info(
-            "SQS batch processing completed",
-            extra={
-                "success_count": success_count,
-                "failure_count": failure_count,
-            },
-        )
+        logger.info(f"SQS batch processing completed")
 
         return {"batchItemFailures": batch_item_failures}
 
@@ -288,13 +234,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             if not segment_type:
                 raise ValueError("SegmentType is required")
 
-            logger.info(
-                "Processing single segment (direct invocation)",
-                extra={
-                    "active_segment_id": active_segment_id,
-                    "segment_type": segment_type,
-                },
-            )
+            logger.info(f"Processing single segment (direct invocation) for {active_segment_id}")
 
             # Call business logic
             result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)
@@ -305,20 +245,18 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "NextSegment": result.get("nextSegment"),
             }
 
-            logger.info("Lambda response", extra={"status_code": 200})
+            logger.info(f"Lambda response")
             return lambda_response(200, response_data, event)
 
         except ValueError as err:
             logger.error(
-                "Invalid request",
-                extra={"error": str(err)},
+                f"Invalid request Error: {err}",
                 exc_info=True,
             )
             return lambda_response(400, {"Error": str(err)}, event)
         except RuntimeError as err:
             logger.error(
-                "Failed to process segment",
-                extra={"error": str(err)},
+                f"Failed to process segment Error: {err}",
                 exc_info=True,
             )
             return lambda_response(500, {"Error": "Internal server error"}, event)

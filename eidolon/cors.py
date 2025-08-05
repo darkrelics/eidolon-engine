@@ -94,7 +94,7 @@ class CorsHandler:
             return self.allowed_origins[0], self.allow_credentials
 
         # Multiple origins configured but request origin not allowed
-        logger.warning("Origin not in allowed list", extra={"origin": origin, "allowed_origins": self.allowed_origins})
+        logger.warning(f"Origin not in allowed list for {origin}")
         return None, False
 
     def get_cors_headers(self, event: dict) -> dict:

@@ -100,14 +100,7 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         outcome_data["Narrative"] = ""
         outcome_data["Effects"] = {}
 
-    logger.info(
-        "Segment outcome retrieved successfully",
-        extra={
-            "active_segment_id": active_segment_id,
-            "segment_type": segment_type,
-            "outcome": outcome_data.get("Outcome"),
-        },
-    )
+    logger.info(f"Segment outcome retrieved successfully for {active_segment_id}")
 
     return outcome_data
 
@@ -140,7 +133,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Authentication failed Error: {err}", exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -148,10 +141,10 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Validate player exists
     try:
         if not validate_player(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id}, exc_info=True)
+            logger.error(f"Player not found in database for {player_id}", exc_info=True)
             return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -189,14 +182,11 @@ def lambda_handler(event: dict, context: object) -> dict:
         if "CombatState" in outcome_data:
             response_data["CombatState"] = outcome_data["CombatState"]
 
-        logger.info("Lambda response", extra={"status_code": 200})
+        logger.info(f"Lambda response")
         return lambda_response(200, response_data, event)
 
     except ValueError as err:
-        logger.warning(
-            "Invalid request",
-            extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
-        )
+        logger.warning(f"Invalid request for {character_id} Error: {err}")
         error_msg = str(err)
         if "not found" in error_msg.lower():
             return lambda_response(
@@ -217,8 +207,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
     except RuntimeError as err:
         logger.error(
-            "Failed to get segment outcome",
-            extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
+            f"Failed to get segment outcome for {character_id} Error: {err}",
             exc_info=True,
         )
         return lambda_response(

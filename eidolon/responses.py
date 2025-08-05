@@ -148,7 +148,7 @@ def lambda_response(status_code: int, body: dict, event: dict) -> dict:
     Returns:
         Formatted response with CORS headers and PascalCase field names
     """
-    logger.info("Lambda response", extra={"status_code": status_code})
+    logger.info(f"Lambda response for status {status_code}")
 
     # If it's an error response with lowercase "error" key, convert to PascalCase
     if "error" in body and status_code >= 400:
@@ -178,6 +178,6 @@ def lambda_error(event: dict, err: Exception) -> dict:
         f"Unexpected error in lambda_handler {err}",
         exc_info=True,
     )
-    logger.info("Lambda response", extra={"status_code": 500})
+    logger.info(f"Lambda response for status 500")
 
     return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

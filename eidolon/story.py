@@ -56,15 +56,7 @@ def get_active_story_segment(character_id: str) -> dict:
             ExpressionAttributeValues={":cid": character_id, ":status": "active"},
         )
     except ClientError as err:
-        logger.error(
-            "Failed to query active segments",
-            extra={
-                "character_id": character_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to query active segments for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError from err
 
     if not items:
@@ -96,18 +88,10 @@ def mark_segment_as_abandoned(active_segment_id: str) -> None:
             ExpressionAttributeValues={":status": "abandoned"},
         )
     except ClientError as err:
-        logger.error(
-            "Failed to mark segment as abandoned",
-            extra={
-                "active_segment_id": active_segment_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to mark segment as abandoned for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to mark segment as abandoned: {err}") from err
 
-    logger.info("Marked segment as abandoned", extra={"active_segment_id": active_segment_id})
+    logger.info(f"Marked segment as abandoned for {active_segment_id}")
 
 
 def record_story_abandonment(character_id: str, story_id: str) -> None:
@@ -130,11 +114,7 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
     try:
         history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryID": story_id})
     except ClientError as err:
-        logger.error(
-            "Failed to get story history",
-            extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
-            exc_info=True,
-        )
+        logger.error(f"Failed to get story history for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get story history: {err}") from err
 
     if history:
@@ -152,21 +132,10 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
                 },
             )
         except ClientError as err:
-            logger.error(
-                "Failed to update story history",
-                extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
-                exc_info=True,
-            )
+            logger.error(f"Failed to update story history for {character_id} Error: {err}", exc_info=True)
             raise RuntimeError(f"Failed to update story history: {err}") from err
 
-        logger.info(
-            "Updated story history with abandonment",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "abandoned_count": abandoned_count,
-            },
-        )
+        logger.info(f"Updated story history with abandonment for {character_id}")
 
 
 def add_story_to_abandoned_list(character_id: str, story_id: str) -> None:
@@ -197,19 +166,10 @@ def add_story_to_abandoned_list(character_id: str, story_id: str) -> None:
             ExpressionAttributeValues={":story": {story_id}},
         )
     except ClientError as err:
-        logger.error(
-            "Failed to add story to abandoned list",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to add story to abandoned list for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to add story to abandoned list: {err}") from err
 
-    logger.info("Added story to abandoned list", extra={"character_id": character_id, "story_id": story_id})
+    logger.info(f"Added story to abandoned list for {character_id}")
 
 
 def get_active_story_segment_with_player_check(character_id: str, player_id: str) -> dict:
@@ -246,15 +206,7 @@ def get_active_story_segment_with_player_check(character_id: str, player_id: str
             },
         )
     except ClientError as err:
-        logger.error(
-            "Failed to query active segments",
-            extra={
-                "character_id": character_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to query active segments for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to query active segments: {err}") from err
 
     if not items:
@@ -286,7 +238,7 @@ def get_story_metadata(story_id: str) -> dict:
             raise ValueError("Story not found")
         return story_item
     except ClientError as err:
-        logger.error("Failed to get story", extra={"error": str(err), "story_id": story_id}, exc_info=True)
+        logger.error(f"Failed to get story for {story_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get story: {err}") from err
 
 
@@ -316,7 +268,7 @@ def get_story_segment(story_id: str, segment_id: str) -> dict:
             raise ValueError("Segment not found")
         return segment
     except ClientError as err:
-        logger.error("Failed to get segment", extra={"error": str(err), "segment_id": segment_id}, exc_info=True)
+        logger.error(f"Failed to get segment for {segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get segment: {err}") from err
 
 
@@ -358,16 +310,7 @@ def get_completed_segment_for_character(character_id: str, player_id: str, segme
             },
         )
     except ClientError as err:
-        logger.error(
-            "Failed to query active segments",
-            extra={
-                "error": str(err),
-                "character_id": character_id,
-                "segment_id": segment_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to query active segments for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to query segments: {err}") from err
 
     if not items:
@@ -406,11 +349,7 @@ def get_story_history(character_id: str, story_id: str) -> dict:
         history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryID": story_id})
         return history or {}
     except ClientError as err:
-        logger.error(
-            "Failed to get story history",
-            extra={"character_id": character_id, "story_id": story_id, "error": str(err)},
-            exc_info=True,
-        )
+        logger.error(f"Failed to get story history for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get story history: {err}") from err
 
 
@@ -461,7 +400,7 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
             return 0  # Completed on a previous day
 
     except Exception as err:
-        logger.error("Error checking story cooldown", extra={"error": str(err)})
+        logger.error(f"Error checking story cooldown Error: {err}")
         return 0
 
 
@@ -549,24 +488,13 @@ def get_stories_for_character(character_id: str, player_id: str, available_story
             }
 
             stories.append(formatted_story)
-            logger.debug(
-                "Story processed",
-                extra={
-                    "story_id": story_id,
-                    "story_type": story_type,
-                    "available": formatted_story.get("Available"),
-                    "cooldown": cooldown,
-                },
-            )
+            logger.debug(f"Story processed for {story_id}")
 
         except ValueError:
-            logger.warning("Story not found", extra={"story_id": story_id})
+            logger.warning(f"Story not found for {story_id}")
             continue
         except RuntimeError as err:
-            logger.error(
-                "Error loading story",
-                extra={"story_id": story_id, "error": str(err)},
-            )
+            logger.error(f"Error loading story for {story_id} Error: {err}")
             continue
 
     return stories
@@ -608,7 +536,7 @@ def get_story_and_first_segment(story_id: str) -> tuple:
     # Get first segment
     first_segment_id = story.get("FirstSegmentID")
     if not first_segment_id:
-        logger.error("Story has no first segment", extra={"story_id": story_id})
+        logger.error(f"Story has no first segment for {story_id}")
         raise ValueError("Story configuration error")
 
     first_segment = get_story_segment(story_id, first_segment_id)
@@ -678,9 +606,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
                     if opponent:
                         opponent_health = opponent.get("Health", 5)
                 except Exception as err:
-                    logger.warning(
-                        "Failed to load opponent for combat state init", extra={"opponent_id": opponent_id, "error": str(err)}
-                    )
+                    logger.warning(f"Failed to load opponent for combat state init for {opponent_id} Error: {err}")
 
             active_segment["CombatState"] = {
                 "round": 0,
@@ -694,15 +620,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
     try:
         dynamo.put_item(TableName.ACTIVE_SEGMENTS, active_segment)
     except ClientError as err:
-        logger.error(
-            "Failed to create active segment",
-            extra={
-                "active_segment_id": active_segment_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to create active segment for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to create active segment: {err}") from err
 
     return active_segment
@@ -735,16 +653,7 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
         # Put item (will overwrite if exists - handles retries)
         dynamo.put_item(TableName.STORY_HISTORY, history_entry)
     except ClientError as err:
-        logger.error(
-            "Failed to create history entry",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to create history entry for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to create history entry: {err}") from err
 
 
@@ -771,10 +680,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
     # Check if character is already in a game mode
     game_mode = character.get("GameMode", "None")
     if game_mode != "None":
-        logger.warning(
-            "Character already in game mode",
-            extra={"character_id": character_id, "game_mode": game_mode},
-        )
+        logger.warning(f"Character already in game mode for {character_id}")
         raise ValueError(f"Character is currently in {game_mode} mode")
 
     # Validate story is available
@@ -822,45 +728,20 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
                 Key={"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
             )
         except Exception as rollback_err:
-            logger.error(
-                "Failed to rollback active segment",
-                extra={
-                    "active_segment_id": active_segment.get("ActiveSegmentID"),
-                    "error": str(rollback_err),
-                },
-            )
+            logger.error(f"Failed to rollback active segment for {active_segment.get('ActiveSegmentID')} Error: {rollback_err}")
 
         if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning(
-                "Character state changed during story start",
-                extra={"character_id": character_id},
-            )
+            logger.warning(f"Character state changed during story start for {character_id}")
             raise ValueError("Character state conflict") from err
 
-        logger.error(
-            "Failed to update character state",
-            extra={
-                "character_id": character_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update character state: {err}") from err
 
     # Create history entry
     story_type = story.get("StoryType", "repeatable")
     create_story_history_entry(character_id, story_id, story_title, story_type)
 
-    logger.info(
-        "Story started successfully",
-        extra={
-            "character_id": character_id,
-            "story_id": story_id,
-            "active_segment_id": active_segment.get("ActiveSegmentID"),
-            "segment_type": first_segment.get("SegmentType"),
-        },
-    )
+    logger.info(f"Story started successfully for {character_id}")
 
     return {"active_segment": active_segment, "segment": first_segment, "story": story}
 
@@ -938,32 +819,18 @@ def get_active_decision_segment(character_id: str, player_id: str) -> dict:
             },
         )
     except ClientError as err:
-        logger.error(
-            "Failed to query active segments",
-            extra={
-                "error": str(err),
-                "character_id": character_id,
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to query active segments for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to query active segments: {err}") from err
 
     if not items:
-        logger.warning("No active decision segment found", extra={"character_id": character_id})
+        logger.warning(f"No active decision segment found for {character_id}")
         raise ValueError("No active decision segment found")
 
     active_segment = items[0]
 
     # Extra validation checks (should already be verified by query)
     if active_segment.get("PlayerID") != player_id:
-        logger.warning(
-            "Active segment ownership mismatch",
-            extra={
-                "active_segment_id": active_segment.get("ActiveSegmentID"),
-                "player_id": player_id,
-            },
-        )
+        logger.warning(f"Active segment ownership mismatch for {active_segment.get('ActiveSegmentID')}")
         raise ValueError("Active segment not found")
 
     return active_segment
@@ -986,13 +853,7 @@ def validate_decision_option(active_segment: dict, decision_id: str) -> None:
 
     # Check if decision was already made
     if active_segment.get("Decision"):
-        logger.warning(
-            "Decision already submitted",
-            extra={
-                "active_segment_id": active_segment.get("ActiveSegmentID"),
-                "existing_decision": active_segment.get("Decision"),
-            },
-        )
+        logger.warning(f"Decision already submitted for {active_segment.get('ActiveSegmentID')}")
         raise ValueError("Decision already submitted")
 
 
@@ -1027,15 +888,7 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
 
         return updated_segment
     except ClientError as err:
-        logger.error(
-            "Failed to update active segment",
-            extra={
-                "active_segment_id": active_segment_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to update active segment for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update active segment: {err}") from err
 
 
@@ -1070,14 +923,7 @@ def get_next_segment_time(active_segment: dict, decision_id: str) -> int:
         return int(time.time()) + duration
 
     except (ValueError, RuntimeError) as err:
-        logger.error(
-            "Failed to get next segment",
-            extra={
-                "story_id": active_segment.get("StoryID", ""),
-                "segment_id": next_segment_id,
-                "error": str(err),
-            },
-        )
+        logger.error(f"Failed to get next segment for {next_segment_id} Error: {err}")
         # Continue without next segment time
         return 0
 
@@ -1103,10 +949,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     # TODO: Read Player Record instead.
     character_get(character_id, player_id)
 
-    logger.info(
-        "Submitting decision",
-        extra={"character_id": character_id, "decision": decision_id},
-    )
+    logger.info(f"Submitting decision for {character_id}")
 
     # Get active segment for character and verify ownership
     active_segment = get_active_decision_segment(character_id, player_id)
@@ -1166,15 +1009,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
             next_segment_time = int(time.time()) + next_segment_def.get("SegmentDuration", 60)
             response_data["NextSegmentTime"] = next_segment_time
 
-            logger.info(
-                "Advanced to next segment after decision",
-                extra={
-                    "character_id": character_id,
-                    "next_segment_id": next_segment_id,
-                    "next_active_segment_id": next_active_segment_id,
-                    "segment_type": next_segment_def.get("SegmentType"),
-                },
-            )
+            logger.info(f"Advanced to next segment after decision for {character_id}")
 
             # Queue mechanical segments for immediate processing
             if next_segment_def.get("SegmentType") == "mechanical":
@@ -1188,46 +1023,22 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
                             "SegmentType": "mechanical",
                         }
                         send_message(SEGMENT_QUEUE_URL, message_body)
-                        logger.info(
-                            "Queued next mechanical segment for processing", extra={"active_segment_id": next_active_segment_id}
-                        )
+                        logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
                 except Exception as err:
                     # Non-critical - segment will be picked up by poller
-                    logger.warning(
-                        "Failed to queue mechanical segment", extra={"active_segment_id": next_active_segment_id, "error": str(err)}
-                    )
+                    logger.warning(f"Failed to queue mechanical segment for {next_active_segment_id} Error: {err}")
         except Exception as err:
-            logger.error(
-                "Failed to create next segment after decision",
-                extra={
-                    "next_segment_id": next_segment_id,
-                    "error": str(err),
-                },
-                exc_info=True,
-            )
+            logger.error(f"Failed to create next segment after decision for {next_segment_id} Error: {err}", exc_info=True)
             raise RuntimeError(f"Failed to create next segment: {err}") from err
     else:
         # Story complete
         complete_story(character_id, story_id, "normal")
-        logger.info(
-            "Story completed after decision",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-            },
-        )
+        logger.info(f"Story completed after decision for {character_id}")
 
     # Delete processed segment
     delete_active_segment(active_segment_id)
 
-    logger.info(
-        "Decision submitted and story advanced",
-        extra={
-            "active_segment_id": active_segment_id,
-            "decision_id": decision_id,
-            "advanced_to_next": next_segment_id is not None,
-        },
-    )
+    logger.info(f"Decision submitted and story advanced for {active_segment_id}")
 
     return response_data
 
@@ -1305,10 +1116,7 @@ def format_story_segment_response(active_segment: dict, story_metadata: dict, se
 
     else:
         # Unknown segment type - add minimal data
-        logger.warning(
-            "Unknown segment type",
-            extra={"segment_type": segment_type, "segment_id": active_segment.get("SegmentID")},
-        )
+        logger.warning(f"Unknown segment type for {active_segment.get('SegmentID')}")
         response["Segment"]["Description"] = segment_data.get("Description", segment_data.get("Narrative", ""))
 
     return response
@@ -1346,24 +1154,9 @@ def complete_story_for_character(character_id: str, story_id: str, final_outcome
             },
         )
 
-        logger.info(
-            "Story completed",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "outcome": final_outcome,
-            },
-        )
+        logger.info(f"Story completed for {character_id}")
     except ClientError as err:
-        logger.error(
-            "Failed to complete story",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "error": str(err),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to complete story for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to complete story: {err}") from err
 
 
@@ -1445,25 +1238,9 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                 },
             )
 
-        logger.info(
-            "Applied story rewards",
-            extra={
-                "character_id": character_id,
-                "xp": rewards.get("xp", 0),
-                "items": rewards.get("items", []),
-                "currency": rewards.get("currency", 0),
-            },
-        )
+        logger.info(f"Applied story rewards for {character_id}")
     except ClientError as err:
-        logger.error(
-            "Failed to apply rewards",
-            extra={
-                "character_id": character_id,
-                "rewards": rewards,
-                "error": str(err),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to apply rewards for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply rewards: {err}") from err
 
 
@@ -1497,25 +1274,9 @@ def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
 
         loot_table = opponent_data.get("LootTable", [])
 
-        logger.info(
-            "Applied combat rewards",
-            extra={
-                "character_id": character_id,
-                "opponent": opponent_data.get("Name", "Unknown"),
-                "xp": xp_reward,
-                "potential_loot": loot_table,
-            },
-        )
+        logger.info(f"Applied combat rewards for {character_id}")
     except ClientError as err:
-        logger.error(
-            "Failed to apply combat rewards",
-            extra={
-                "character_id": character_id,
-                "opponent_id": opponent_data.get("OpponentID"),
-                "error": str(err),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to apply combat rewards for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply combat rewards: {err}") from err
 
 
@@ -1548,26 +1309,9 @@ def add_segment_to_history(character_id: str, story_id: str, segment_id: str, ou
             },
         )
 
-        logger.info(
-            "Added segment to history",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "segment_id": segment_id,
-                "outcome": outcome,
-            },
-        )
+        logger.info(f"Added segment to history for {character_id}")
     except ClientError as err:
-        logger.error(
-            "Failed to add segment to history",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "segment_id": segment_id,
-                "error": str(err),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to add segment to history for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to add segment to history: {err}") from err
 
 
@@ -1608,24 +1352,9 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
             # Apply wounds through character updates
             try:
                 apply_character_updates(character_id, {"Wounds": wounds_with_heal_times})
-                logger.info(
-                    "Applied story outcome wounds",
-                    extra={
-                        "character_id": character_id,
-                        "wounds_count": len(wounds_with_heal_times),
-                        "wound_types": [w.get("DamageType") for w in wounds_with_heal_times],
-                    },
-                )
+                logger.info(f"Applied story outcome wounds for {character_id}")
             except Exception as err:
-                logger.error(
-                    "Failed to apply story wounds",
-                    extra={
-                        "character_id": character_id,
-                        "wounds": wounds_with_heal_times,
-                        "error": str(err),
-                    },
-                    exc_info=True,
-                )
+                logger.error(f"Failed to apply story wounds for {character_id} Error: {err}", exc_info=True)
                 raise RuntimeError(f"Failed to apply story wounds: {err}") from err
 
         if update_expressions:
@@ -1639,23 +1368,9 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
                 ExpressionAttributeValues=expression_attribute_values,
             )
 
-            logger.info(
-                "Applied story outcome effects",
-                extra={
-                    "character_id": character_id,
-                    "effects": outcome_effects,
-                },
-            )
+            logger.info(f"Applied story outcome effects for {character_id}")
     except ClientError as err:
-        logger.error(
-            "Failed to apply outcome effects",
-            extra={
-                "character_id": character_id,
-                "effects": outcome_effects,
-                "error": str(err),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to apply outcome effects for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply outcome effects: {err}") from err
 
 
@@ -1717,26 +1432,9 @@ def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, at
             ExpressionAttributeValues=expression_values,
         )
 
-        logger.info(
-            "Updated story history with XP",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "skill_xp_count": len(skill_xp),
-                "attribute_xp_count": len(attribute_xp),
-            },
-        )
+        logger.info(f"Updated story history with XP for {character_id}")
     except ClientError as err:
-        logger.error(
-            "Failed to update story history XP",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to update story history XP for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update story history XP: {err}") from err
 
 
@@ -1773,22 +1471,7 @@ def ensure_story_history_exists(character_id: str, story_id: str, story_title: s
                     "SegmentCount": 0,
                 },
             )
-            logger.info(
-                "Created story history record",
-                extra={
-                    "character_id": character_id,
-                    "story_id": story_id,
-                },
-            )
+            logger.info(f"Created story history record for {character_id}")
     except ClientError as err:
-        logger.error(
-            "Failed to ensure story history exists",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
+        logger.error(f"Failed to ensure story history exists for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to ensure story history exists: {err}") from err

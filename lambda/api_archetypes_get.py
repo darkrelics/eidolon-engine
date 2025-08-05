@@ -87,7 +87,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         result: dict = handle_get_archetypes()
-        logger.info("Lambda response", extra={"status_code": 200})
+        logger.info(f"Lambda response for status 200")
         return lambda_response(
             200,
             {
@@ -98,7 +98,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         )
     except RuntimeError as err:
         # Database or system failures
-        logger.error("Failed to load archetypes", extra={"error": str(err)}, exc_info=True)
+        logger.error(f"Failed to load archetypes Error: {err}", exc_info=True)
         return lambda_response(500, {"Error": "Failed to load archetypes"}, event)
     except Exception as err:
         return lambda_error(event, err)

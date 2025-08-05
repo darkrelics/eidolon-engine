@@ -38,10 +38,7 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
             prototype = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
 
             if not prototype:
-                logger.warning(
-                    "Prototype not found",
-                    extra={"prototype_id": prototype_id, "character_id": character_id},
-                )
+                logger.warning(f"Prototype not found for {prototype_id}")
                 continue
 
             # Create new item from prototype
@@ -96,30 +93,12 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
                 inventory[str(slot_num)] = item_id
                 slot_num += 1
 
-            logger.info(
-                "Created item from prototype",
-                extra={
-                    "item_id": item_id,
-                    "prototype_id": prototype_id,
-                    "item_name": item_data.get("Name"),
-                    "character_id": character_id,
-                    "is_worn": is_worn,
-                    "is_container": is_container,
-                    "in_inventory": is_worn or (is_container and item_id == container_id),
-                },
-            )
+            logger.info(f"Created item from prototype for {character_id}")
 
         return inventory
 
     except Exception as err:
-        logger.error(
-            "Error creating items from prototypes",
-            extra={
-                "error": str(err),
-                "character_id": character_id,
-                "item_count": len(starting_items),
-            },
-        )
+        logger.error(f"Error creating items from prototypes for {character_id} Error: {err}")
         return {}
 
 
@@ -159,7 +138,7 @@ def get_inventory(inventory: dict) -> dict:
                     "value": item.get("Value", 0),
                 }
             else:
-                logger.warning("Item not found in inventory", extra={"item_id": item_id, "slot": slot})
+                logger.warning(f"Item not found in inventory for {item_id}")
                 enriched_inventory[slot] = {
                     "itemId": item_id,
                     "name": "Missing Item",
@@ -168,7 +147,7 @@ def get_inventory(inventory: dict) -> dict:
                 }
 
         except ClientError as err:
-            logger.error("Failed to get item details", extra={"item_id": item_id, "slot": slot, "error": str(err)})
+            logger.error(f"Failed to get item details for {item_id} Error: {err}")
             enriched_inventory[slot] = {
                 "itemId": item_id,
                 "name": "Error Loading Item",

@@ -646,7 +646,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     """Lambda entry point - handles AWS-specific concerns only."""
     try:
         # 1. Log invocation
-        logger.info("Lambda invocation", extra={...})
+        logger.info("Lambda invocation")
 
         # 2. Handle CORS preflight
         if event.get("httpMethod") == "OPTIONS":

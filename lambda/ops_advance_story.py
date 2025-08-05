@@ -62,16 +62,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     segment_type = active_segment.get("SegmentType")
     outcome = active_segment.get("Outcome", "normal")
 
-    logger.info(
-        "Advancing story",
-        extra={
-            "active_segment_id": active_segment_id,
-            "character_id": character_id,
-            "story_id": story_id,
-            "segment_type": segment_type,
-            "outcome": outcome,
-        },
-    )
+    logger.info(f"Advancing story for {character_id}")
 
     # Ensure story history exists
     story_title = active_segment.get("StoryTitle", "Unknown Story")
@@ -80,13 +71,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     # Process simple segments if not already processed
     processing_status = active_segment.get("ProcessingStatus")
     if is_simple_segment(segment_type) and processing_status != "processed":  # type: ignore
-        logger.info(
-            "Processing simple segment",
-            extra={
-                "active_segment_id": active_segment_id,
-                "segment_type": segment_type,
-            },
-        )
+        logger.info(f"Processing simple segment for {active_segment_id}")
 
         # Get segment definition
         segment_def = get_segment_definition(story_id, segment_id)  # type: ignore
@@ -121,14 +106,9 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             # Apply death or unconscious state based on wounds
             new_character_state = apply_death_or_unconscious_outcome(character_id, outcome, wounds)
 
-            logger.info(
-                "Applied character state change for death outcome",
-                extra={"character_id": character_id, "new_state": new_character_state, "wound_count": len(wounds)},
-            )
+            logger.info(f"Applied character state change for death outcome for {character_id}")
         except Exception as err:
-            logger.error(
-                "Failed to apply death/unconscious state", extra={"character_id": character_id, "error": str(err)}, exc_info=True
-            )
+            logger.error(f"Failed to apply death/unconscious state for {character_id} Error: {err}", exc_info=True)
 
     # Apply deferred rewards (combat rewards and story outcome effects)
     character_updates = active_segment.get("CharacterUpdates", {})
@@ -141,15 +121,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 try:
                     apply_combat_rewards(character_id, opponent_data)
                 except Exception as err:
-                    logger.error(
-                        "Failed to apply combat rewards",
-                        extra={
-                            "character_id": character_id,
-                            "opponent_id": combat_rewards.get("opponentId"),
-                            "error": str(err),
-                        },
-                        exc_info=True,
-                    )
+                    logger.error(f"Failed to apply combat rewards for {character_id} Error: {err}", exc_info=True)
 
         # Apply story outcome effects if present
         story_effects = character_updates.get("StoryEffects", {})
@@ -157,15 +129,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             try:
                 apply_story_outcome_effects(character_id, story_effects)
             except Exception as err:
-                logger.error(
-                    "Failed to apply story outcome effects",
-                    extra={
-                        "character_id": character_id,
-                        "effects": story_effects,
-                        "error": str(err),
-                    },
-                    exc_info=True,
-                )
+                logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
 
     # Record segment history
     record_segment_history(character_id, story_id, active_segment_id, active_segment)  # type: ignore
@@ -193,16 +157,9 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             # Override next segment to be the rest segment
             next_segment_id = rest_segment_id
 
-            logger.info(
-                "Inserted rest segment for unconscious character",
-                extra={"character_id": character_id, "rest_segment_id": rest_segment_id, "story_id": story_id},
-            )
+            logger.info(f"Inserted rest segment for unconscious character for {character_id}")
         except Exception as err:
-            logger.error(
-                "Failed to insert rest segment for unconscious character",
-                extra={"character_id": character_id, "error": str(err)},
-                exc_info=True,
-            )
+            logger.error(f"Failed to insert rest segment for unconscious character for {character_id} Error: {err}", exc_info=True)
             # Fall back to normal next segment determination
             next_segment_id = determine_next_segment(segment_def, active_segment, outcome)
     else:
@@ -225,15 +182,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             # Update character with new active segment
             update_character_active_segment(character_id, next_active_segment_id)  # type: ignore
 
-            logger.info(
-                "Created next segment",
-                extra={
-                    "character_id": character_id,
-                    "next_segment_id": next_segment_id,
-                    "next_active_segment_id": next_active_segment_id,
-                    "segment_type": next_segment_def.get("SegmentType"),
-                },
-            )
+            logger.info(f"Created next segment for {character_id}")
 
             # Queue mechanical segments for immediate processing
             if next_segment_def.get("SegmentType") == "mechanical":
@@ -248,23 +197,12 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                             "SegmentType": "mechanical",
                         }
                         send_message(SEGMENT_QUEUE_URL, message_body)
-                        logger.info(
-                            "Queued next mechanical segment for processing", extra={"active_segment_id": next_active_segment_id}
-                        )
+                        logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
                 except Exception as err:
                     # Non-critical - segment will be picked up by poller
-                    logger.warning(
-                        "Failed to queue mechanical segment", extra={"active_segment_id": next_active_segment_id, "error": str(err)}
-                    )
+                    logger.warning(f"Failed to queue mechanical segment for {next_active_segment_id} Error: {err}")
         except Exception as err:
-            logger.error(
-                "Failed to create next segment",
-                extra={
-                    "next_segment_id": next_segment_id,
-                    "error": str(err),
-                },
-                exc_info=True,
-            )
+            logger.error(f"Failed to create next segment for {next_segment_id} Error: {err}", exc_info=True)
             raise RuntimeError(f"Failed to create next segment: {err}") from err
     else:
         # Story complete
@@ -283,10 +221,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 logger.info("No active segments remaining, signaled poller to stop")
         except Exception as err:
             # Non-critical - poller will detect empty table on next run
-            logger.warning(
-                "Failed to check/update polling state after story completion",
-                extra={"error": str(err)},
-            )
+            logger.warning(f"Failed to check/update polling state after story completion Error: {err}")
 
     return {
         "success": True,
@@ -329,62 +264,28 @@ def lambda_handler(event: dict, context: object) -> dict:
             if not active_segment_id:
                 raise ValueError("Missing ActiveSegmentID in message")
 
-            logger.info(
-                "Processing segment advancement",
-                extra={
-                    "message_id": message_id,
-                    "active_segment_id": active_segment_id,
-                },
-            )
+            logger.info(f"Processing segment advancement for {active_segment_id}")
 
             # Process the segment
             result = advance_story_business_logic(active_segment_id)
 
             if result.get("success"):
                 success_count += 1
-                logger.info(
-                    "Segment advancement complete",
-                    extra={
-                        "message_id": message_id,
-                        "active_segment_id": active_segment_id,
-                        "skipped": result.get("skipped", False),
-                        "story_complete": result.get("story_complete", False),
-                    },
-                )
+                logger.info(f"Segment advancement complete for {active_segment_id}")
             else:
                 raise RuntimeError("Segment advancement failed")
 
         except ValueError as err:
-            logger.error(
-                "Invalid message format",
-                extra={
-                    "message_id": message_id,
-                    "error": str(err),
-                },
-            )
+            logger.error(f"Invalid message format for {message_id} Error: {err}")
             failure_count += 1
             # Don't retry invalid messages
 
         except Exception as err:
-            logger.error(
-                "Failed to process message",
-                extra={
-                    "message_id": message_id,
-                    "error": str(err),
-                },
-                exc_info=True,
-            )
+            logger.error(f"Failed to process message for {message_id} Error: {err}", exc_info=True)
             failure_count += 1
             # Add to batch failures for retry
             batch_item_failures.append({"itemIdentifier": message_id})
 
-    logger.info(
-        "Batch processing complete",
-        extra={
-            "success_count": success_count,
-            "failure_count": failure_count,
-            "retry_count": len(batch_item_failures),
-        },
-    )
+    logger.info(f"Batch processing complete")
 
     return {"batchItemFailures": batch_item_failures}
