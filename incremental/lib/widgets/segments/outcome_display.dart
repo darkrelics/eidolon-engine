@@ -301,13 +301,15 @@ class _RewardsSection extends StatelessWidget {
             alignment: WrapAlignment.center,
             spacing: 12,
             runSpacing: 8,
-            children: rewards.entries.map((entry) {
+            children: rewards.entries.toList().asMap().entries.map((entry) {
+              final index = entry.key;
+              final rewardEntry = entry.value;
               return _RewardChip(
-                type: entry.key,
-                value: entry.value,
+                type: rewardEntry.key,
+                value: rewardEntry.value,
               ).animate()
-                .fadeIn(delay: Duration(milliseconds: 100 * rewards.keys.toList().indexOf(entry.key)))
-                .scale(delay: Duration(milliseconds: 100 * rewards.keys.toList().indexOf(entry.key)));
+                .fadeIn(delay: Duration(milliseconds: 100 * index))
+                .scale(delay: Duration(milliseconds: 100 * index));
             }).toList(),
           ),
         ],

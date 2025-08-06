@@ -8,10 +8,14 @@ class CacheService {
   static const String _cachePrefix = 'cache_';
   static const String _timestampPrefix = 'cache_ts_';
   static const Duration _defaultTTL = Duration(minutes: 5);
+  static const Duration _defaultCleanupThreshold = Duration(hours: 24);
 
   late SharedPreferences _prefs;
   final Map<String, dynamic> _memoryCache = {};
   final Map<String, DateTime> _memoryCacheTimestamps = {};
+  
+  /// Configurable cleanup threshold for expired cache entries
+  Duration _cleanupThreshold = _defaultCleanupThreshold;
 
   static final CacheService _instance = CacheService._internal();
   factory CacheService() => _instance;
@@ -21,6 +25,14 @@ class CacheService {
     _prefs = await SharedPreferences.getInstance();
     await _cleanExpiredCache();
   }
+  
+  /// Set the cleanup threshold for expired cache entries
+  void setCleanupThreshold(Duration threshold) {
+    _cleanupThreshold = threshold;
+  }
+  
+  /// Get the current cleanup threshold
+  Duration get cleanupThreshold => _cleanupThreshold;
 
   /// Store data in cache with optional TTL
   Future<void> set(
@@ -124,8 +136,8 @@ class CacheService {
         final timestampString = _prefs.getString(key);
         if (timestampString != null) {
           final timestamp = DateTime.parse(timestampString);
-          // Remove entries older than 24 hours
-          if (now.difference(timestamp).inHours > 24) {
+          // Remove entries older than cleanup threshold
+          if (now.difference(timestamp) > _cleanupThreshold) {
             final cacheKey = key.replaceFirst(_timestampPrefix, '');
             await remove(cacheKey);
           }

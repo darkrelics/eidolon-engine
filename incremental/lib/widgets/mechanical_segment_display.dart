@@ -205,23 +205,29 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
     return 'You have completed this segment of your journey.';
   }
 
+  Map<String, dynamic> _extractEventData(dynamic eventData) {
+    if (eventData == null) {
+      return {};
+    }
+    
+    try {
+      return eventData as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('MechanicalSegmentDisplay: Error casting event data to Map: $e');
+      debugPrint('MechanicalSegmentDisplay: Event data type: ${eventData.runtimeType}');
+      debugPrint('MechanicalSegmentDisplay: Event data value: $eventData');
+      return {};
+    }
+  }
+
   Widget _buildEventCard(Map<String, dynamic> event) {
     try {
       final eventType = event['eventType'] as String?;
       final title = event['title'] as String? ?? 'Event';
       final description = event['description'] as String? ?? '';
       
-      // Safely get data field, handling type errors
-      Map<String, dynamic> data = {};
-      try {
-        if (event['data'] != null) {
-          data = event['data'] as Map<String, dynamic>;
-        }
-      } catch (e) {
-        debugPrint('MechanicalSegmentDisplay: Error casting event data to Map: $e');
-        debugPrint('MechanicalSegmentDisplay: Event data type: ${event['data'].runtimeType}');
-        debugPrint('MechanicalSegmentDisplay: Event data value: ${event['data']}');
-      }
+      // Extract data using separate method
+      final data = _extractEventData(event['data']);
     
       IconData icon;
       Color iconColor;
