@@ -452,13 +452,13 @@ def get_stories_for_character(character_id: str, player_id: str, available_story
     if not available_story_ids:
         return []
 
-    stories = []
+    stories: list = []
 
-    character = character_get(character_id, player_id)
+    character: dict = character_get(character_id, player_id)
 
     for story_id in available_story_ids:
         try:
-            story_data = get_story_metadata(story_id)
+            story_data: dict = get_story_metadata(story_id)
 
             # Check prerequisites
             prerequisites = story_data.get("Prerequisites", {})
@@ -473,7 +473,7 @@ def get_stories_for_character(character_id: str, player_id: str, available_story
                 continue
 
             # Format story for response with PascalCase
-            formatted_story = {
+            formatted_story: dict = {
                 "StoryID": story_id,
                 "Title": story_data.get("Title", "Unknown Story"),
                 "Description": story_data.get("Description", ""),

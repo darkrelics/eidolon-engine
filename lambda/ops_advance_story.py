@@ -286,6 +286,4 @@ def lambda_handler(event: dict, context: object) -> dict:
             # Add to batch failures for retry
             batch_item_failures.append({"itemIdentifier": message_id})
 
-    logger.info(f"Batch processing complete")
-
     return {"batchItemFailures": batch_item_failures}
