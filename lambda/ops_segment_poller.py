@@ -48,8 +48,6 @@ def poll_and_process_segments_business_logic() -> dict:
     # Get completed segments (including stuck segments 15+ minutes past EndTime)
     completed_segments = get_completed_segments(MAX_SEGMENTS_PER_POLL)
 
-    logger.info(f"Segment polling check")
-
     # Categorize segments by their processing needs
     segments_for_advancement = []  # Recently completed (within 30 seconds)
     stuck_mechanical_segments = []  # Mechanical segments stuck >15 minutes
@@ -164,7 +162,6 @@ def poll_and_process_segments_business_logic() -> dict:
 
             if messages:
                 result = send_message_batch(SEGMENT_QUEUE_URL, messages)
-                logger.info(f"Retried stuck mechanical segments")
 
     # 3. Mark exhausted segments as done and send to advancement
     if exhausted_segments:
@@ -212,8 +209,6 @@ def poll_and_process_segments_business_logic() -> dict:
                 disable_polling_infrastructure()
                 logger.info("Poller state changed from run to stop - no active segments")
 
-    logger.info(f"Segment polling completed")
-
     return {
         "SegmentsFound": len(completed_segments),
         "MechanicalCount": mechanical_count,
@@ -245,9 +240,6 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Log invocation
     log_lambda_statistics(event, context)
 
-    # Log event source for EventBridge events
-    logger.info(f"EventBridge trigger")
-
     try:
         # Run polling logic
         result = poll_and_process_segments_business_logic()
@@ -258,7 +250,6 @@ def lambda_handler(event: dict, context: object) -> dict:
             **result,
         }
 
-        logger.info(f"Lambda response")
         return lambda_response(200, response_data, event)
 
     except ClientError as err:

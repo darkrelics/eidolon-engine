@@ -144,7 +144,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         result: dict = get_character_logic(character_id, player_id)
 
         if result.get("success"):
-            logger.info(f"Lambda response for status 200")
+            logger.info("Lambda response for status 200")
             return lambda_response(200, result.get("data", {}), event)
         else:
             # Log the error if it's a server error

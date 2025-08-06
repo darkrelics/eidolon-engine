@@ -87,7 +87,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         result: dict = handle_get_archetypes()
-        logger.info(f"Lambda response for status 200")
+        logger.info("Lambda response for status 200")
         return lambda_response(
             200,
             {

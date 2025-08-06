@@ -178,7 +178,6 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         response_data = start_story_business_logic(character_id, story_id, player_id)  # type: ignore
-        logger.info(f"Lambda response")
         return lambda_response(200, response_data, event)
     except ValueError as err:
         logger.warning(f"Invalid request for {character_id} Error: {err}")

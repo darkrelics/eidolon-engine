@@ -132,7 +132,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         result = handle_character_rest(player_id, character_id)  # type: ignore
-        logger.info(f"Lambda response for status 200")
+        logger.info("Lambda response for status 200")
         return lambda_response(
             200,
             {

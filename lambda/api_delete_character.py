@@ -109,8 +109,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Call business logic
     try:
-        result = handle_character_deletion(player_id, character_id)  # type: ignore
-        logger.info(f"Lambda response")
+        result: dict = handle_character_deletion(player_id, character_id)  # type: ignore
         return lambda_response(
             200,
             {

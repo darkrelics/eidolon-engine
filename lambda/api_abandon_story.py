@@ -140,8 +140,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         logger.info(f"Abandoning story for {character_id}")
-        result = abandon_story_business_logic(character_id, player_id)
-        logger.info(f"Lambda response for status 200")
+        result: dict = abandon_story_business_logic(character_id, player_id)
+        logger.info("Lambda response for status 200")
         return lambda_response(200, result, event)
     except ValueError as err:
         logger.warning(f"Business logic error Error: {err}")

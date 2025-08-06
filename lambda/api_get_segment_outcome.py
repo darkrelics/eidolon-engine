@@ -182,7 +182,6 @@ def lambda_handler(event: dict, context: object) -> dict:
         if "CombatState" in outcome_data:
             response_data["CombatState"] = outcome_data["CombatState"]
 
-        logger.info(f"Lambda response")
         return lambda_response(200, response_data, event)
 
     except ValueError as err:

@@ -208,9 +208,6 @@ def lambda_handler(event: dict, context: object) -> dict:
                 # Add to batch item failures for SQS retry
                 batch_item_failures.append({"itemIdentifier": record.get("messageId", "unknown")})
 
-        # Return response for SQS batch processing
-        logger.info(f"SQS batch processing completed")
-
         return {"batchItemFailures": batch_item_failures}
 
     # Legacy direct invocation support (for testing)
@@ -245,7 +242,6 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "NextSegment": result.get("nextSegment"),
             }
 
-            logger.info(f"Lambda response")
             return lambda_response(200, response_data, event)
 
         except ValueError as err:

@@ -3,7 +3,6 @@
 from eidolon.archetypes import get_archetype
 from eidolon.character import character_name_filter, check_character_limit, create_character
 from eidolon.cors import cors_handler
-from eidolon.environment import MAX_CHARACTERS_PER_PLAYER
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
 from eidolon.responses import lambda_error, lambda_response
@@ -129,7 +128,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         result: dict = handle_character_creation(player_id, character_name, archetype_name)  # type: ignore
-        logger.info(f"Lambda response for status 201")
+        logger.info("Lambda response for status 201")
         return lambda_response(
             201,
             {
