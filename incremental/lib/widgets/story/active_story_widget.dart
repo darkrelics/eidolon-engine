@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/character.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../dialogs/decision_dialog.dart';
+import '../unified/decision_widget.dart';
 import '../segments/mechanical_progress.dart';
 import '../segments/outcome_display.dart';
 
@@ -664,12 +664,14 @@ class _DecisionButton extends StatelessWidget {
       elevation: 2,
       child: InkWell(
         onTap: onSelect != null ? () async {
-          final confirmed = await DecisionConfirmationDialog.show(
+          final selectedChoice = await DecisionWidget.showDialog(
             context: context,
-            choice: choice,
+            choices: {choiceId: choice},
+            title: 'Confirm Your Choice',
+            showDifficulty: true,
           );
-          if (confirmed) {
-            onSelect!(choiceId);
+          if (selectedChoice != null) {
+            onSelect!(selectedChoice);
           }
         } : null,
         borderRadius: BorderRadius.circular(12),
