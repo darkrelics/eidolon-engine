@@ -7,7 +7,7 @@ Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.
 """
 
-from eidolon.character import delete_character, character_get
+from eidolon.character import character_get, delete_character
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id

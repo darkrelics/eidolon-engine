@@ -7,7 +7,7 @@ Lambda function to abandon an active story.
 Updates character state, marks active segments as abandoned, and updates history.
 """
 
-from eidolon.character import reset_character_game_mode, character_get
+from eidolon.character import character_get, reset_character_game_mode
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player

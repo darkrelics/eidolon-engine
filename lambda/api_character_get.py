@@ -7,7 +7,7 @@ Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-from eidolon.character import character_get_active_segment, character_get, character_get_active_story
+from eidolon.character import character_get, character_get_active_segment, character_get_active_story
 from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float
 from eidolon.items import get_inventory
@@ -55,7 +55,7 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
             logger.info("No active story found for character")
             character["ActiveStoryID"] = None
             character["ActiveSegmentID"] = None
-    except RuntimeError as err:
+    except RuntimeError:
         logger.error("Error retrieving active story")
 
     if active_story:
@@ -64,7 +64,7 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
             active_segment = character_get_active_segment(character)
             if active_segment:
                 logger.info("Active segment found for character")
-        except RuntimeError as err:
+        except RuntimeError:
             logger.error("Error retrieving active segments")
             # Continue without active segment data - not critical for response
 

@@ -102,7 +102,7 @@ class ExponentialBackoff:
 
             while not success and count <= self.retry_count:
                 if count > 0:
-                    logger.info(f"DynamoDB exponential backoff retry")
+                    logger.info("DynamoDB exponential backoff retry")
 
                 try:
                     response = func(*args, **kwargs)
@@ -123,7 +123,7 @@ class ExponentialBackoff:
                         "RequestLimitExceeded",
                         "InternalServerError",
                     ]:
-                        logger.info(f"DynamoDB throttling error, retrying")
+                        logger.info("DynamoDB throttling error, retrying")
                         sleep(2 ** (count - 1) / 10)
                         count += 1
                     else:
@@ -138,7 +138,7 @@ class ExponentialBackoff:
                     raise
 
             if not success:
-                logger.error(f"DynamoDB retry count exceeded")
+                logger.error("DynamoDB retry count exceeded")
                 raise RuntimeError(f"Number of retries exceeded for {func.__name__}")
 
             return response
@@ -187,9 +187,9 @@ class DynamoInterface:
             failed = [t.value for t, status in self._connection_status.items() if not status]
 
             if connected:
-                logger.info(f"Connected to DynamoDB tables")
+                logger.info("Connected to DynamoDB tables")
             if failed:
-                logger.error(f"Failed to connect to DynamoDB tables")
+                logger.error("Failed to connect to DynamoDB tables")
 
     def _connect_table(self, table_enum: TableName) -> bool:
         """
@@ -267,12 +267,12 @@ class DynamoInterface:
 
         item = response.get("Item", {})
         if not item:
-            logger.debug(f"DB Interface: Get Item: No item found")
+            logger.debug("DB Interface: Get Item: No item found")
             return {}
 
         # Convert Decimal to float for JSON compatibility
         result = decimal_to_float(item)
-        logger.debug(f"DB Interface: Get Item: Return")
+        logger.debug("DB Interface: Get Item: Return")
         return result  # type: ignore
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
@@ -333,7 +333,7 @@ class DynamoInterface:
             logger.error(f"Error updating item in DynamoDB for {table_enum.value} Error: {err}")
             raise
 
-        logger.debug(f"DB Interface: Update Item: Response")
+        logger.debug("DB Interface: Update Item: Response")
         return response
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
@@ -360,7 +360,7 @@ class DynamoInterface:
             logger.error(f"Error deleting item from DynamoDB for {table_enum.value} Error: {err}")
             raise
 
-        logger.debug(f"DB Interface: Delete Item: Response")
+        logger.debug("DB Interface: Delete Item: Response")
         return response
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)

@@ -178,6 +178,6 @@ def lambda_error(event: dict, err: Exception) -> dict:
         f"Unexpected error in lambda_handler {err}",
         exc_info=True,
     )
-    logger.info(f"Lambda response for status 500")
+    logger.info("Lambda response for status 500")
 
     return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)

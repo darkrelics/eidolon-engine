@@ -80,7 +80,7 @@ def get_polling_state() -> str:
         return state
     except ValueError:
         # Parameter doesn't exist, create it with default value
-        logger.info(f"Polling state parameter not found, creating with default")
+        logger.info("Polling state parameter not found, creating with default")
         update_polling_state("run")
         return "run"
     except Exception as err:
