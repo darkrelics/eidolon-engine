@@ -278,45 +278,118 @@ Full MUD wound implementation:
 
 ### 7.1 Flutter Architecture
 
-The Flutter client integrates into the existing portal application as a separate module for incremental gameplay. The architecture follows Flutter best practices with screens handling UI presentation, services managing API communication, models defining data structures, and providers coordinating state management. This modular approach allows the incremental game to share authentication, character selection, and common UI components with the MUD client while maintaining its own distinct gameplay screens. The incremental module can be enabled or disabled through feature flags without affecting the core portal functionality.
+The Flutter client follows a restructured architecture that prioritizes user experience and efficient resource usage. The application flow moves from authentication through character selection to a unified game screen with persistent character and inventory panels. The architecture emphasizes responsive design with desktop-first considerations while maintaining mobile compatibility.
 
 ```
-portal/lib/
-├── screens/incremental/
-│   ├── story_selection_screen.dart
-│   ├── active_story_screen.dart
-│   └── story_history_screen.dart
+incremental/lib/
+├── screens/
+│   ├── login_screen.dart
+│   ├── registration_screen.dart
+│   ├── password_reset_screen.dart
+│   ├── character_screen.dart      # Character management (create/delete/select)
+│   ├── game_screen.dart           # Three-panel responsive layout
+│   └── account_settings_screen.dart
+├── widgets/
+│   ├── game/
+│   │   ├── character_panel.dart   # Left panel - always visible
+│   │   ├── inventory_panel.dart   # Right panel - always visible
+│   │   └── story_panel.dart       # Center panel - dynamic content
+│   ├── story/
+│   │   ├── active_story_widget.dart    # Active story with segments
+│   │   ├── available_stories_widget.dart # Story selection cards
+│   │   └── story_history_widget.dart   # Completed stories (chronological)
+│   └── shared/
+│       ├── loading_dialog.dart    # "Entering game" confirmation
+│       └── responsive_layout.dart # Breakpoint handling
 ├── services/
-│   └── incremental_service.dart
-├── models/incremental/
+│   ├── api_service.dart
+│   └── auth_service.dart
+├── models/
+│   ├── character.dart
 │   ├── story.dart
-│   ├── segment.dart
-│   └── active_segment.dart
+│   ├── active_segment.dart
+│   └── segment_outcome.dart
 └── providers/
-    └── incremental_provider.dart
+    ├── auth_provider.dart
+    ├── character_provider.dart
+    └── segment_provider.dart
 ```
 
-### 7.2 State Management
+### 7.2 User Interface Flow
 
-Using Provider pattern:
+**Navigation Flow:**
+1. **Authentication** → Login/Registration screens
+2. **Character Screen** → Select, create, or delete characters
+3. **Loading Dialog** → "Entering game" confirmation reduces perceived load time
+4. **Game Screen** → Three-panel layout with persistent character/inventory
 
-- IncrementalProvider manages active story state
-- Polling based on segment end time
-- Local countdown calculation
-- Automatic state refresh on completion
+**Responsive Design Breakpoints:**
+- **Desktop** (≥1200px): Three-column layout `[Character | Story | Inventory]`
+- **Tablet** (≥768px): Collapsible sidebars with story focus
+- **Mobile** (<768px): Tab/drawer navigation for panels
 
-### 7.3 Polling Strategy
+**Story Panel States:**
+- **Active Story**: Story card, rest/abandon buttons, current segment, segment history
+- **No Active Story**: Available stories grid (default view)
+- **History View**: Chronologically ordered completed stories (most recent first)
 
-The client implements an intelligent polling strategy that balances server load with user experience. During most of a segment's duration, the client polls every 30 seconds to check for early completion or status updates. As the segment approaches its scheduled end time, the polling frequency increases progressively: at 5 minutes remaining it polls every 10 seconds, and in the final 30 seconds it polls every second. This graduated approach ensures players see immediate updates when segments complete while minimizing unnecessary API calls during the waiting period. The polling system also handles edge cases like network disconnections by resuming from the last known state.
+### 7.3 State Management
+
+The application uses Provider pattern with focused state management:
+
+- **AuthProvider**: Authentication state and session management
+- **CharacterProvider**: Character data caching and updates
+- **SegmentProvider**: Active segment state and polling coordination
+
+Character and inventory panels maintain static display with cached data, while only the story panel shows loading states. This approach prevents layout shifts and provides a stable user experience.
+
+### 7.4 Polling Strategy
+
+The client implements a sophisticated polling strategy optimized for server efficiency and gameplay experience:
+
+**Initial Load:**
+- Get character data before transitioning to game screen
+- Cache character data with 5-minute validity
+
+**Active Story Polling:**
+- **Initial Check**: Poll 1 minute after game screen loads
+- **Decision Segments**: Prompt for player input, no polling
+- **Rest Segments**: Continue immediately to next segment
+- **Mechanical Segments**: 
+  - Begin processing result display
+  - Poll once per minute until completion
+  - Segments can last from minutes to 24 hours
+- **Segment Completion**: Automatically load next segment
+
+**Timer-Driven Approach:**
+- Use segment end times to schedule polls
+- Reduce server load by 95% compared to constant polling
+- Maintain responsiveness for player actions
 
 ```dart
-// Start aggressive polling 30 seconds before completion
-if (timeRemaining <= 30) {
-    pollInterval = Duration(seconds: 1);
-} else if (timeRemaining <= 300) {
-    pollInterval = Duration(seconds: 10);
-} else {
-    pollInterval = Duration(seconds: 30);
+class PollingManager {
+  Timer? _pollTimer;
+  
+  void scheduleNextPoll(ActiveSegment segment) {
+    _pollTimer?.cancel();
+    
+    if (segment.segmentType == 'decision') {
+      // No polling needed - wait for user input
+      return;
+    }
+    
+    if (segment.segmentType == 'rest') {
+      // Process immediately
+      processNextSegment();
+      return;
+    }
+    
+    // Mechanical segment - poll every minute
+    _pollTimer = Timer.periodic(
+      Duration(minutes: 1),
+      (_) => checkSegmentStatus(),
+    );
+  }
 }
 ```
 

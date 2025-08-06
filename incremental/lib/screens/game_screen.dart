@@ -9,6 +9,7 @@ import '../utils/error_handler.dart';
 import '../widgets/mechanical_segment_display.dart';
 import '../widgets/outcome_display.dart';
 import '../widgets/story_card_components.dart';
+import '../widgets/shared/breadcrumb.dart';
 import '../utils/difficulty_calculator.dart';
 
 class GameScreen extends StatefulWidget {
@@ -40,15 +41,29 @@ class _GameScreenState extends State<GameScreen> {
     debugPrint(
       'GameScreen: didChangeDependencies called, args type: ${args.runtimeType}',
     );
-    debugPrint('GameScreen: args: $args');
-    if (args is CharacterInfo && args != _characterInfo) {
+    
+    // Handle both Character and CharacterInfo types
+    if (args is Character) {
+      debugPrint('GameScreen: Got full Character - name: ${args.name}, id: ${args.id}');
+      if (_character?.id != args.id) {
+        _character = args;
+        _characterInfo = CharacterInfo(
+          name: args.name,
+          id: args.id,
+          dead: args.health <= 0,
+        );
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } else if (args is CharacterInfo && args != _characterInfo) {
       debugPrint(
         'GameScreen: Got CharacterInfo - name: ${args.name}, id: ${args.id}',
       );
       _characterInfo = args;
       _selectAndLoadCharacter();
     } else {
-      debugPrint('GameScreen: No valid CharacterInfo in arguments');
+      debugPrint('GameScreen: No valid character data in arguments');
     }
   }
 
@@ -134,7 +149,28 @@ class _GameScreenState extends State<GameScreen> {
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text(_characterInfo?.name ?? 'Eidolon Incremental'),
+        title: ResponsiveBreadcrumb(
+          items: [
+            BreadcrumbItem(
+              label: 'Characters',
+              icon: Icons.people,
+              onTap: () {
+                Navigator.pushReplacementNamed(context, '/character-selection');
+              },
+            ),
+            if (_characterInfo != null)
+              BreadcrumbItem(
+                label: _characterInfo!.name,
+                icon: Icons.person,
+              ),
+            if (_character?.storyState != null && 
+                _character!.storyState!['Story'] != null)
+              BreadcrumbItem(
+                label: _character!.storyState!['Story']['Title'] ?? 'Story',
+                icon: Icons.auto_stories,
+              ),
+          ],
+        ),
         leading: IconButton(
           icon: const Icon(Icons.chevron_left),
           onPressed: () {
@@ -555,7 +591,7 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
       
       // Update the widget's character with fresh data
       widget.character.storyState = refreshedCharacter.storyState;
-      widget.character.availableStoriesDetails = refreshedCharacter.availableStoriesDetails;
+      // Note: availableStoriesDetails is final, so we can't update it directly
       
       // Build currentStory format from character data for compatibility
       Map<String, dynamic>? currentStory;
@@ -721,11 +757,11 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
       });
       debugPrint('GameScreen: Using ${widget.character.availableStoriesDetails!.length} available stories from character data');
     } else {
-      // Fall back to separate API call if needed
+      // No stories available - set empty list
       setState(() {
-        _storiesFuture = _apiService.getStories(widget.character.id);
+        _storiesFuture = Future.value(<StoryMetadata>[]);
       });
-      debugPrint('GameScreen: Loading stories via separate API call');
+      debugPrint('GameScreen: No available stories found');
     }
   }
 

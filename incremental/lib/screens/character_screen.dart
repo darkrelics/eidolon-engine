@@ -9,15 +9,16 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../utils/error_handler.dart';
+import '../widgets/shared/loading_dialog.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class CharacterScreen extends StatefulWidget {
+  const CharacterScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<CharacterScreen> createState() => _CharacterScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _CharacterScreenState extends State<CharacterScreen> {
   late ApiService _apiService;
   List<CharacterInfo>? _characters;
   bool _isLoading = true;
@@ -26,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    debugPrint('HomeScreen: initState called');
+    debugPrint('CharacterScreen: initState called');
     _initializeApiService();
     _loadCharacters();
   }
@@ -37,25 +38,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadCharacters() async {
     try {
-      debugPrint('CharacterSelectionScreen: Loading characters...');
+      debugPrint('CharacterScreen: Loading characters...');
       setState(() {
         _isLoading = true;
         _error = null;
       });
 
       final characters = await _apiService.listCharacters();
-      debugPrint('CharacterSelectionScreen: Loaded ${characters.length} characters');
+      debugPrint('CharacterScreen: Loaded ${characters.length} characters');
 
       if (mounted) {
         setState(() {
           _characters = characters;
           _isLoading = false;
         });
-        debugPrint('CharacterSelectionScreen: State updated - isLoading: $_isLoading, characters: ${_characters?.length ?? "null"}');
+        debugPrint('CharacterScreen: State updated - isLoading: $_isLoading, characters: ${_characters?.length ?? "null"}');
       }
     } catch (e) {
-      debugPrint('CharacterSelectionScreen: ERROR loading characters: $e');
-      debugPrint('CharacterSelectionScreen: Error type: ${e.runtimeType}');
+      debugPrint('CharacterScreen: ERROR loading characters: $e');
+      debugPrint('CharacterScreen: Error type: ${e.runtimeType}');
       if (mounted) {
         // Extract user-friendly error message
         String errorMessage = 'Unable to load characters. Please try again.';
@@ -237,18 +238,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _createCharacter(String name, String archetype) async {
     try {
-      debugPrint('CharacterSelectionScreen: _createCharacter called with name: $name, archetype: $archetype');
+      debugPrint('CharacterScreen: _createCharacter called with name: $name, archetype: $archetype');
 
       setState(() {
         _isLoading = true;
       });
 
-      debugPrint('CharacterSelectionScreen: Calling API to add character...');
+      debugPrint('CharacterScreen: Calling API to add character...');
       final result = await _apiService.addCharacter(name: name, archetype: archetype);
       final characterId = result['CharacterID'] ?? '';
       final createdName = result['CharacterName'] ?? name;
       final createdArchetype = result['Archetype'] ?? archetype;
-      debugPrint('CharacterSelectionScreen: Character created with ID: $characterId');
+      debugPrint('CharacterScreen: Character created with ID: $characterId');
 
       if (mounted) {
         String message = 'Created character: $createdName';
@@ -264,11 +265,11 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       // Reload characters
-      debugPrint('CharacterSelectionScreen: Reloading characters...');
+      debugPrint('CharacterScreen: Reloading characters...');
       await _loadCharacters();
     } catch (e, stackTrace) {
-      debugPrint('CharacterSelectionScreen: Error creating character: $e');
-      debugPrint('CharacterSelectionScreen: Stack trace: $stackTrace');
+      debugPrint('CharacterScreen: Error creating character: $e');
+      debugPrint('CharacterScreen: Stack trace: $stackTrace');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -314,6 +315,49 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (confirmed ?? false) {
       await _deleteCharacter(character);
+    }
+  }
+
+  Future<void> _showEnterGameDialog(CharacterInfo character) async {
+    // Show loading dialog
+    LoadingDialog.show(
+      context: context,
+      title: 'Entering Game',
+      message: 'Loading ${character.name}...',
+      subtitle: 'Preparing your adventure',
+      barrierDismissible: false,
+    );
+
+    try {
+      // Pre-load character data
+      final fullCharacter = await _apiService.getCharacterById(character.id);
+      
+      if (!mounted) return;
+      
+      // Close the loading dialog
+      LoadingDialog.hide(context);
+      
+      // Navigate to game screen with pre-loaded character data
+      Navigator.pushReplacementNamed(
+        context,
+        '/game',
+        arguments: fullCharacter ?? character,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      
+      // Close the loading dialog
+      LoadingDialog.hide(context);
+      
+      // Show error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ErrorHandler.getUserFriendlyMessage(e, context: 'loading character'),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
     }
   }
 
@@ -378,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     
-    debugPrint('CharacterSelectionScreen: _buildBody - isLoading: $_isLoading, error: $_error, characters: ${_characters?.length ?? "null"}');
+    debugPrint('CharacterScreen: _buildBody - isLoading: $_isLoading, error: $_error, characters: ${_characters?.length ?? "null"}');
 
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -452,14 +496,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: character.dead
                         ? null
                         : () {
-                            debugPrint('CharacterSelectionScreen: Character tapped - ${character.name} (${character.id})');
-                            debugPrint('CharacterSelectionScreen: Navigating to /game with character data');
-                            try {
-                              Navigator.pushReplacementNamed(context, '/game', arguments: character);
-                              debugPrint('CharacterSelectionScreen: Navigation call completed');
-                            } catch (e) {
-                              debugPrint('CharacterSelectionScreen: Navigation error: $e');
-                            }
+                            debugPrint('CharacterScreen: Character tapped - ${character.name} (${character.id})');
+                            debugPrint('CharacterScreen: Showing loading dialog for character selection');
+                            _showEnterGameDialog(character);
                           },
                     child: ListTile(
                       leading: Icon(
