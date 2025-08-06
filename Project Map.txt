@@ -372,7 +372,7 @@
 ├───lambda
 │   │   api_abandon_story.py
 │   │   api_character_add.py
-│   │   api_delete_character.py
+│   │   api_character_delete.py
 │   │   api_archetypes_get.py
 │   │   api_get_character.py
 │   │   api_get_current_story.py

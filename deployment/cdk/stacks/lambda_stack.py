@@ -343,8 +343,8 @@ class LambdaStack(cdk.Stack):
 
         # Delete Character Lambda
         self.delete_character_function = self.create_lambda_function(
-            "api-delete-character",
-            "api_delete_character.lambda_handler",
+            "api-character-delete",
+            "api_character_delete.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,

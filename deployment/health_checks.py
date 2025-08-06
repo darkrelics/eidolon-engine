@@ -202,7 +202,7 @@ def run_phase_health_check(session: boto3.Session, phase_name: str, deployed_sta
                 "api-add-character",
                 "api-get-character",
                 "api-list-characters",
-                "api-delete-character",
+                "api-character-delete",
                 "cognito-new-player",
                 "cognito-delete-player",
             ]

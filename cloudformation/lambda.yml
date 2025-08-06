@@ -152,9 +152,9 @@ Resources:
   DeleteCharacterFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub "${GameName}-api-delete-character"
+      FunctionName: !Sub "${GameName}-api-character-delete"
       Runtime: python3.12
-      Handler: api_delete_character.lambda_handler
+      Handler: api_character_delete.lambda_handler
       Code:
         S3Bucket: !Ref LambdaBucketName
         S3Key: !Ref LambdaZipKey

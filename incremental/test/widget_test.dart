@@ -15,11 +15,11 @@ void main() {
     await tester.pumpWidget(const EidolonIncrementalApp());
 
     // Verify that the auth screen is shown
-    expect(find.text('Eidolon Engine'), findsOneWidget);
-    expect(find.text('Incremental'), findsOneWidget);
+    expect(find.text('Eidolon Incremental'), findsOneWidget);
+    expect(find.text('Sign in to continue'), findsOneWidget);
     
-    // Verify auth buttons are present
-    expect(find.text('Sign In'), findsOneWidget);
-    expect(find.text('Create Account'), findsOneWidget);
+    // Verify auth fields and buttons are present
+    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
   });
 }

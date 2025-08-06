@@ -546,7 +546,7 @@ class IncrementalDeploymentOrchestrator:
         expected_artifacts: list = [
             "lambda-layer/lambda-layer.zip",  # CodeBuild artifacts path
             "api-add-character.zip",
-            "api-delete-character.zip",
+            "api-character-delete.zip",
             "api-get-archetypes.zip",
             "api-get-character.zip",
             "api-list-characters.zip",
