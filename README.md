@@ -11,7 +11,6 @@
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white)
 
-
 # Eidolon Engine
 
 A multi-mode game engine supporting both incremental RPG and MUD (Multi-User Dungeon) gameplay through a unified AWS backend.

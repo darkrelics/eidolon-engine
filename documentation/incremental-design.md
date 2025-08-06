@@ -318,17 +318,20 @@ incremental/lib/
 ### 7.2 User Interface Flow
 
 **Navigation Flow:**
+
 1. **Authentication** → Login/Registration screens
 2. **Character Screen** → Select, create, or delete characters
 3. **Loading Dialog** → "Entering game" confirmation reduces perceived load time
 4. **Game Screen** → Three-panel layout with persistent character/inventory
 
 **Responsive Design Breakpoints:**
+
 - **Desktop** (≥1200px): Three-column layout `[Character | Story | Inventory]`
 - **Tablet** (≥768px): Collapsible sidebars with story focus
 - **Mobile** (<768px): Tab/drawer navigation for panels
 
 **Story Panel States:**
+
 - **Active Story**: Story card, rest/abandon buttons, current segment, segment history
 - **No Active Story**: Available stories grid (default view)
 - **History View**: Chronologically ordered completed stories (most recent first)
@@ -348,20 +351,23 @@ Character and inventory panels maintain static display with cached data, while o
 The client implements a sophisticated polling strategy optimized for server efficiency and gameplay experience:
 
 **Initial Load:**
+
 - Get character data before transitioning to game screen
 - Cache character data with 5-minute validity
 
 **Active Story Polling:**
+
 - **Initial Check**: Poll 1 minute after game screen loads
 - **Decision Segments**: Prompt for player input, no polling
 - **Rest Segments**: Continue immediately to next segment
-- **Mechanical Segments**: 
+- **Mechanical Segments**:
   - Begin processing result display
   - Poll once per minute until completion
   - Segments can last from minutes to 24 hours
 - **Segment Completion**: Automatically load next segment
 
 **Timer-Driven Approach:**
+
 - Use segment end times to schedule polls
 - Reduce server load by 95% compared to constant polling
 - Maintain responsiveness for player actions
@@ -369,21 +375,21 @@ The client implements a sophisticated polling strategy optimized for server effi
 ```dart
 class PollingManager {
   Timer? _pollTimer;
-  
+
   void scheduleNextPoll(ActiveSegment segment) {
     _pollTimer?.cancel();
-    
+
     if (segment.segmentType == 'decision') {
       // No polling needed - wait for user input
       return;
     }
-    
+
     if (segment.segmentType == 'rest') {
       // Process immediately
       processNextSegment();
       return;
     }
-    
+
     // Mechanical segment - poll every minute
     _pollTimer = Timer.periodic(
       Duration(minutes: 1),

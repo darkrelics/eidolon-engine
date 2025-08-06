@@ -15,10 +15,13 @@ Authorization: Bearer <jwt-token>
 ## Common Response Formats
 
 ### Success Response
+
 All successful responses return HTTP 200 with JSON data using PascalCase keys.
 
 ### Error Response
+
 Error responses include an `Error` field with a descriptive message:
+
 ```json
 {
   "Error": "Error description"
@@ -26,6 +29,7 @@ Error responses include an `Error` field with a descriptive message:
 ```
 
 Common HTTP status codes:
+
 - `401` - Unauthorized (invalid or missing JWT token)
 - `404` - Resource not found
 - `500` - Internal server error
@@ -43,12 +47,14 @@ Retrieves all player-available archetypes for character creation.
 **Authentication:** Required
 
 **Request:**
+
 ```http
 GET /archetypes HTTP/1.1
 Authorization: Bearer <jwt-token>
 ```
 
 **Response:**
+
 ```json
 {
   "Archetypes": [
@@ -90,32 +96,32 @@ Authorization: Bearer <jwt-token>
 
 **Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `Archetypes` | Array | List of available player archetypes |
-| `Count` | Integer | Total number of archetypes returned |
+| Field        | Type    | Description                         |
+| ------------ | ------- | ----------------------------------- |
+| `Archetypes` | Array   | List of available player archetypes |
+| `Count`      | Integer | Total number of archetypes returned |
 
 **Archetype Object:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `ArchetypeName` | String | Unique identifier and display name for the archetype |
-| `Description` | String | Flavor text describing the archetype |
-| `Attributes` | Object | Map of attribute names to their starting values |
-| `Skills` | Object | Map of skill names to their starting values |
-| `Health` | Integer | Starting maximum health points |
-| `Essence` | Integer | Starting maximum essence (mana) points |
-| `StartRoom` | Integer | Room ID where new characters of this archetype begin |
-| `StartingItems` | Array | List of items the character starts with |
-| `AvailableStories` | Array | List of story IDs available to this archetype |
+| Field              | Type    | Description                                          |
+| ------------------ | ------- | ---------------------------------------------------- |
+| `ArchetypeName`    | String  | Unique identifier and display name for the archetype |
+| `Description`      | String  | Flavor text describing the archetype                 |
+| `Attributes`       | Object  | Map of attribute names to their starting values      |
+| `Skills`           | Object  | Map of skill names to their starting values          |
+| `Health`           | Integer | Starting maximum health points                       |
+| `Essence`          | Integer | Starting maximum essence (mana) points               |
+| `StartRoom`        | Integer | Room ID where new characters of this archetype begin |
+| `StartingItems`    | Array   | List of items the character starts with              |
+| `AvailableStories` | Array   | List of story IDs available to this archetype        |
 
 **Starting Item Object:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `PrototypeID` | String | ID of the item prototype to create |
-| `Slot` | String | Inventory slot where the item is placed |
-| `IsWorn` | Boolean | Whether the item starts equipped |
+| Field         | Type    | Description                             |
+| ------------- | ------- | --------------------------------------- |
+| `PrototypeID` | String  | ID of the item prototype to create      |
+| `Slot`        | String  | Inventory slot where the item is placed |
+| `IsWorn`      | Boolean | Whether the item starts equipped        |
 
 **Implementation Notes:**
 
@@ -128,6 +134,7 @@ Authorization: Bearer <jwt-token>
 4. **Client Usage:** The Flutter client uses a subset of the returned fields, ignoring `StartRoom`, `StartingItems`, and `AvailableStories` in its `ArchetypeInfo` model.
 
 **Example Client Code (Dart):**
+
 ```dart
 final response = await apiService.getArchetypes();
 // Returns List<ArchetypeInfo> with name, description, attributes, skills, health, essence
@@ -135,10 +142,10 @@ final response = await apiService.getArchetypes();
 
 **Error Responses:**
 
-| Status | Error Message | Cause |
-|--------|---------------|-------|
-| `500` | "Failed to load archetypes" | Database connection or query failure |
-| `401` | "Unauthorized" | Invalid or missing JWT token |
+| Status | Error Message               | Cause                                |
+| ------ | --------------------------- | ------------------------------------ |
+| `500`  | "Failed to load archetypes" | Database connection or query failure |
+| `401`  | "Unauthorized"              | Invalid or missing JWT token         |
 
 ---
 
@@ -151,12 +158,14 @@ Retrieves a list of all characters belonging to the authenticated player.
 **Authentication:** Required
 
 **Request:**
+
 ```http
 GET /characters HTTP/1.1
 Authorization: Bearer <jwt-token>
 ```
 
 **Response:**
+
 ```json
 {
   "Characters": [
@@ -176,17 +185,17 @@ Authorization: Bearer <jwt-token>
 
 **Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field        | Type  | Description                            |
+| ------------ | ----- | -------------------------------------- |
 | `Characters` | Array | List of characters owned by the player |
 
 **Character Object:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `CharacterName` | String | Display name of the character |
-| `CharacterID` | String | Unique identifier (UUID) for the character |
-| `Dead` | Boolean | Whether the character has died |
+| Field           | Type    | Description                                |
+| --------------- | ------- | ------------------------------------------ |
+| `CharacterName` | String  | Display name of the character              |
+| `CharacterID`   | String  | Unique identifier (UUID) for the character |
+| `Dead`          | Boolean | Whether the character has died             |
 
 **Implementation Notes:**
 
@@ -199,6 +208,7 @@ Authorization: Bearer <jwt-token>
 4. **Client Handling:** The Flutter client adds a default `GameMode: 'None'` if not provided by the API for defensive programming.
 
 **Example Client Code (Dart):**
+
 ```dart
 final characters = await apiService.listCharacters();
 // Returns List<CharacterInfo> with name, id, dead status
@@ -207,11 +217,11 @@ final characters = await apiService.listCharacters();
 
 **Error Responses:**
 
-| Status | Error Message | Cause |
-|--------|---------------|-------|
-| `404` | "Player not found" | Player ID exists in JWT but not in database |
-| `401` | "Unauthorized" | Invalid or missing JWT token |
-| `500` | "Internal server error" | Database connection or query failure |
+| Status | Error Message           | Cause                                       |
+| ------ | ----------------------- | ------------------------------------------- |
+| `404`  | "Player not found"      | Player ID exists in JWT but not in database |
+| `401`  | "Unauthorized"          | Invalid or missing JWT token                |
+| `500`  | "Internal server error" | Database connection or query failure        |
 
 ---
 
@@ -224,6 +234,7 @@ Creates a new character for the authenticated player.
 **Authentication:** Required
 
 **Request:**
+
 ```http
 POST /characters HTTP/1.1
 Authorization: Bearer <jwt-token>
@@ -237,16 +248,17 @@ Content-Type: application/json
 
 **Request Body:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `CharacterName` | String | Yes | Desired name for the character (3-32 characters, letters/spaces/hyphens only) |
-| `ArchetypeName` | String | No | Archetype to use (defaults to "default" if not specified or invalid) |
+| Field           | Type   | Required | Description                                                                   |
+| --------------- | ------ | -------- | ----------------------------------------------------------------------------- |
+| `CharacterName` | String | Yes      | Desired name for the character (3-32 characters, letters/spaces/hyphens only) |
+| `ArchetypeName` | String | No       | Archetype to use (defaults to "default" if not specified or invalid)          |
 
 **Response:**
+
 ```json
 {
   "CharacterID": "7ba8c520-a5d2-4e8f-b3c1-9f2e3d4c5b6a",
-  "CharacterName": "Gandalf", 
+  "CharacterName": "Gandalf",
   "Archetype": "Wizard",
   "Message": "Character created successfully"
 }
@@ -254,12 +266,12 @@ Content-Type: application/json
 
 **Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `CharacterID` | String | Unique identifier (UUID) for the created character |
-| `CharacterName` | String | The character's name as stored |
-| `Archetype` | String | The archetype that was applied |
-| `Message` | String | Success confirmation message |
+| Field           | Type   | Description                                        |
+| --------------- | ------ | -------------------------------------------------- |
+| `CharacterID`   | String | Unique identifier (UUID) for the created character |
+| `CharacterName` | String | The character's name as stored                     |
+| `Archetype`     | String | The archetype that was applied                     |
+| `Message`       | String | Success confirmation message                       |
 
 **Implementation Notes:**
 
@@ -290,6 +302,7 @@ Content-Type: application/json
    - Archetype-defined attributes and skills
 
 **Example Client Code (Dart):**
+
 ```dart
 final result = await apiService.addCharacter(
   name: "Gandalf",
@@ -300,15 +313,15 @@ final result = await apiService.addCharacter(
 
 **Error Responses:**
 
-| Status | Error Message | Cause |
-|--------|---------------|-------|
-| `400` | "CharacterName is required" | Missing character name in request |
-| `400` | "Character name must be..." | Name validation failure (length/characters) |
-| `400` | "Character name is not available" | Name is in restricted list |
-| `400` | "Character limit reached (X)" | Player has maximum allowed characters |
-| `409` | "Character name is already taken" | Name exists in database |
-| `401` | "Unauthorized" | Invalid or missing JWT token |
-| `500` | "Internal server error" | Database or system failure |
+| Status | Error Message                     | Cause                                       |
+| ------ | --------------------------------- | ------------------------------------------- |
+| `400`  | "CharacterName is required"       | Missing character name in request           |
+| `400`  | "Character name must be..."       | Name validation failure (length/characters) |
+| `400`  | "Character name is not available" | Name is in restricted list                  |
+| `400`  | "Character limit reached (X)"     | Player has maximum allowed characters       |
+| `409`  | "Character name is already taken" | Name exists in database                     |
+| `401`  | "Unauthorized"                    | Invalid or missing JWT token                |
+| `500`  | "Internal server error"           | Database or system failure                  |
 
 ---
 
@@ -322,17 +335,19 @@ Retrieves complete character data including active story and segment information
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `CharacterID` | String | Yes | UUID of the character to retrieve |
+| Parameter     | Type   | Required | Description                       |
+| ------------- | ------ | -------- | --------------------------------- |
+| `CharacterID` | String | Yes      | UUID of the character to retrieve |
 
 **Request:**
+
 ```http
 GET /character?CharacterID=550e8400-e29b-41d4-a716-446655440000 HTTP/1.1
 Authorization: Bearer <jwt-token>
 ```
 
 **Response:**
+
 ```json
 {
   "Character": {
@@ -435,24 +450,25 @@ Authorization: Bearer <jwt-token>
 
 **Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `Character` | Object | Complete character data |
-| `ActiveStory` | Object | Current story details (optional - only present if character has active story) |
-| `ActiveSegment` | Object | Current segment details (optional - only present if character has active segment) |
-| `AvailableStories` | Array | List of available stories (optional - only present if no active story and stories are available) |
+| Field              | Type   | Description                                                                                      |
+| ------------------ | ------ | ------------------------------------------------------------------------------------------------ |
+| `Character`        | Object | Complete character data                                                                          |
+| `ActiveStory`      | Object | Current story details (optional - only present if character has active story)                    |
+| `ActiveSegment`    | Object | Current segment details (optional - only present if character has active segment)                |
+| `AvailableStories` | Array  | List of available stories (optional - only present if no active story and stories are available) |
 
 **Character Object:**
 
 Contains all character fields as stored in the database, plus:
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field              | Type   | Description                                   |
+| ------------------ | ------ | --------------------------------------------- |
 | `InventoryDetails` | Object | Enriched inventory with full item information |
 
 **InventoryDetails Structure:**
 
 Maps inventory slot numbers to detailed item information:
+
 ```json
 {
   "slotNumber": {
@@ -486,6 +502,7 @@ Maps inventory slot numbers to detailed item information:
 6. **Container Items:** Items stored inside containers (like backpacks) are not shown in the character's inventory. They exist in the container item's Contents array.
 
 **Example Client Code (Dart):**
+
 ```dart
 final character = await apiService.getCharacterById(characterId);
 if (character == null) {
@@ -498,9 +515,9 @@ final currentHealth = character.maxHealth - character.wounds.length;
 
 **Error Responses:**
 
-| Status | Error Message | Cause |
-|--------|---------------|-------|
-| `400` | "Missing CharacterID parameter" | No character ID provided in query string |
-| `401` | "Unauthorized" | Invalid or missing JWT token |
-| `404` | "Character not found" | Character doesn't exist or doesn't belong to player |
-| `500` | "Internal server error" | Database or system failure |
+| Status | Error Message                   | Cause                                               |
+| ------ | ------------------------------- | --------------------------------------------------- |
+| `400`  | "Missing CharacterID parameter" | No character ID provided in query string            |
+| `401`  | "Unauthorized"                  | Invalid or missing JWT token                        |
+| `404`  | "Character not found"           | Character doesn't exist or doesn't belong to player |
+| `500`  | "Internal server error"         | Database or system failure                          |

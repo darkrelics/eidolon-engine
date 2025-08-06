@@ -150,26 +150,26 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 ## Prototypes Table
 
-| Field          | Type      | Key      | Description                                                   |
-| -------------- | --------- | -------- | ------------------------------------------------------------- |
-| `PrototypeID`  | `STRING`  | **HASH** | UUID of the item prototype.                                   |
-| `PrototypeName`| `STRING`  |          | Name of the item.                                             |
-| `Description`  | `STRING`  |          | Description of the item.                                      |
-| `Mass`         | `NUMBER`  |          | Weight or mass of the item.                                   |
-| `Value`        | `NUMBER`  |          | Monetary value of the item.                                   |
-| `Stackable`    | `BOOLEAN` |          | Indicates if the item can be stacked.                         |
-| `MaxStack`     | `NUMBER`  |          | Maximum number of items per stack.                            |
-| `Quantity`     | `NUMBER`  |          | Default quantity if stackable.                                |
-| `Wearable`     | `BOOLEAN` |          | Indicates if the item can be worn.                            |
-| `WornOn`       | `LIST`    |          | Body slots where item can be worn                             |
-| `Verbs`        | `MAP`     |          | Actions associated with the item (e.g., "Use": "You use..."). |
-| `Overrides`    | `MAP`     |          | Overrides for default behaviors or properties.                |
-| `TraitMods`    | `MAP`     |          | Modifications to character traits when item is used/worn.     |
-| `Container`    | `BOOLEAN` |          | Indicates if the item can contain other items.                |
-| `Contents`     | `LIST`    |          | List of item UUIDs contained within this item.                |
-| `IsWorn`       | `BOOLEAN` |          | Default worn state when item is created.                      |
-| `CanPickUp`    | `BOOLEAN` |          | Indicates if the item can be picked up by players.            |
-| `Metadata`     | `MAP`     |          | Additional custom data related to the item.                   |
+| Field           | Type      | Key      | Description                                                   |
+| --------------- | --------- | -------- | ------------------------------------------------------------- |
+| `PrototypeID`   | `STRING`  | **HASH** | UUID of the item prototype.                                   |
+| `PrototypeName` | `STRING`  |          | Name of the item.                                             |
+| `Description`   | `STRING`  |          | Description of the item.                                      |
+| `Mass`          | `NUMBER`  |          | Weight or mass of the item.                                   |
+| `Value`         | `NUMBER`  |          | Monetary value of the item.                                   |
+| `Stackable`     | `BOOLEAN` |          | Indicates if the item can be stacked.                         |
+| `MaxStack`      | `NUMBER`  |          | Maximum number of items per stack.                            |
+| `Quantity`      | `NUMBER`  |          | Default quantity if stackable.                                |
+| `Wearable`      | `BOOLEAN` |          | Indicates if the item can be worn.                            |
+| `WornOn`        | `LIST`    |          | Body slots where item can be worn                             |
+| `Verbs`         | `MAP`     |          | Actions associated with the item (e.g., "Use": "You use..."). |
+| `Overrides`     | `MAP`     |          | Overrides for default behaviors or properties.                |
+| `TraitMods`     | `MAP`     |          | Modifications to character traits when item is used/worn.     |
+| `Container`     | `BOOLEAN` |          | Indicates if the item can contain other items.                |
+| `Contents`      | `LIST`    |          | List of item UUIDs contained within this item.                |
+| `IsWorn`        | `BOOLEAN` |          | Default worn state when item is created.                      |
+| `CanPickUp`     | `BOOLEAN` |          | Indicates if the item can be picked up by players.            |
+| `Metadata`      | `MAP`     |          | Additional custom data related to the item.                   |
 
 **Primary Key:** PrototypeID (HASH)
 
@@ -177,18 +177,18 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 ## Archetypes Table
 
-| Field              | Type            | Key      | Description                                                          |
-| ------------------ | --------------- | -------- | -------------------------------------------------------------------- |
-| `ArchetypeName`    | `STRING`        | **HASH** | Name of the archetype.                                               |
-| `Description`      | `STRING`        |          | Description of the archetype.                                        |
-| `Attributes`       | `MAP`           |          | Default attributes for the archetype (e.g., Strength: 2.0).          |
-| `Skills`           | `MAP`           |          | Default skills for the archetype (e.g., Melee: 1.0).                 |
-| `StartRoom`        | `NUMBER`        |          | ID of the starting room for the archetype.                           |
-| `StartingItems`    | `LIST` of `MAP` |          | List of starting item configurations (see structure below).          |
-| `Health`           | `NUMBER`        |          | Starting health points.                                              |
-| `Essence`          | `NUMBER`        |          | Starting essence points.                                             |
-| `Player`           | `BOOL`          |          | Whether this archetype is for players.                               |
-| `AvailableStories` | `LIST`          |          | List of story IDs available to this archetype.                       |
+| Field              | Type            | Key      | Description                                                 |
+| ------------------ | --------------- | -------- | ----------------------------------------------------------- |
+| `ArchetypeName`    | `STRING`        | **HASH** | Name of the archetype.                                      |
+| `Description`      | `STRING`        |          | Description of the archetype.                               |
+| `Attributes`       | `MAP`           |          | Default attributes for the archetype (e.g., Strength: 2.0). |
+| `Skills`           | `MAP`           |          | Default skills for the archetype (e.g., Melee: 1.0).        |
+| `StartRoom`        | `NUMBER`        |          | ID of the starting room for the archetype.                  |
+| `StartingItems`    | `LIST` of `MAP` |          | List of starting item configurations (see structure below). |
+| `Health`           | `NUMBER`        |          | Starting health points.                                     |
+| `Essence`          | `NUMBER`        |          | Starting essence points.                                    |
+| `Player`           | `BOOL`          |          | Whether this archetype is for players.                      |
+| `AvailableStories` | `LIST`          |          | List of story IDs available to this archetype.              |
 
 **Primary Key:** ArchetypeName (HASH)
 
@@ -198,9 +198,9 @@ Each item in the StartingItems list is a map containing:
 
 | Field         | Type      | Description                                                      |
 | ------------- | --------- | ---------------------------------------------------------------- |
-| `PrototypeID` | `STRING`  | UUID of the item prototype to create.                           |
-| `Slot`        | `STRING`  | Equipment slot name if worn (e.g., "back", "weapon", "armor").  |
-| `IsWorn`      | `BOOLEAN` | Whether the item starts equipped.                               |
+| `PrototypeID` | `STRING`  | UUID of the item prototype to create.                            |
+| `Slot`        | `STRING`  | Equipment slot name if worn (e.g., "back", "weapon", "armor").   |
+| `IsWorn`      | `BOOLEAN` | Whether the item starts equipped.                                |
 | `Container`   | `BOOLEAN` | Whether this item is a container (only first container is used). |
 
 **Implementation Notes:**
@@ -237,6 +237,7 @@ Each item in the StartingItems list is a map containing:
 ```
 
 In this example:
+
 - The backpack (first item) is worn and serves as the container
 - The ring (second item) is worn on the finger slot
 - The third item is not worn and will be placed inside the backpack's Contents
@@ -258,19 +259,19 @@ In this example:
 
 ## Story Table
 
-| Field               | Type     | Key      | Description                                 |
-| ------------------- | -------- | -------- | ------------------------------------------- |
-| `StoryID`           | `STRING` | **HASH** | UUID of the story.                          |
-| `Title`             | `STRING` |          | Display title of the story.                 |
-| `Description`       | `STRING` |          | Brief description of the story.             |
-| `NarrativeText`     | `STRING` |          | Full narrative text introducing the story.  |
-| `StoryType`         | `STRING` |          | Type: one-time, daily, or repeatable.       |
-| `EstimatedDuration` | `NUMBER` |          | Estimated completion time in seconds.       |
-| `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items).      |
-| `DifficultyMap`     | `MAP`    |          | Map of skill checks to base difficulties.   |
-| `RewardTiers`       | `MAP`    |          | Reward descriptions by outcome tier.        |
-| `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.               |
-| `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.       |
+| Field               | Type     | Key      | Description                                |
+| ------------------- | -------- | -------- | ------------------------------------------ |
+| `StoryID`           | `STRING` | **HASH** | UUID of the story.                         |
+| `Title`             | `STRING` |          | Display title of the story.                |
+| `Description`       | `STRING` |          | Brief description of the story.            |
+| `NarrativeText`     | `STRING` |          | Full narrative text introducing the story. |
+| `StoryType`         | `STRING` |          | Type: one-time, daily, or repeatable.      |
+| `EstimatedDuration` | `NUMBER` |          | Estimated completion time in seconds.      |
+| `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items).     |
+| `DifficultyMap`     | `MAP`    |          | Map of skill checks to base difficulties.  |
+| `RewardTiers`       | `MAP`    |          | Reward descriptions by outcome tier.       |
+| `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.              |
+| `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.      |
 
 **Primary Key:** StoryID (HASH)
 
@@ -296,6 +297,7 @@ In this example:
 
 **Challenges Structure:**
 Each challenge in the Challenges list contains:
+
 - `Attribute` (STRING): The attribute being tested (e.g., "Perception", "Strength")
 - `Skill` (STRING): The skill being tested (e.g., "Investigation", "Stealth")
 - `Difficulty` (NUMBER): The difficulty rating for the challenge
@@ -303,12 +305,14 @@ Each challenge in the Challenges list contains:
 
 **Combat Structure:**
 The Combat map contains:
+
 - `OpponentID` (STRING): UUID of the opponent from the Opponents table
 - `MaxRounds` (NUMBER): Maximum combat rounds before timeout
 - `Environment` (MAP, optional): Environmental modifiers (e.g., lighting, terrain)
 
 **Results Structure:**
 The Results map contains outcome entries for Death, Failure, Minimal, Normal, and Exceptional. Each outcome contains:
+
 - `Narrative` (STRING): The narrative text describing this outcome
 - `Effects` (MAP): Changes to apply to the character:
   - `State` (STRING, optional): Character state change (e.g., "dead")
@@ -438,6 +442,7 @@ Records the complete history of each segment played by a character. This table s
 
 **LootTable Structure:**
 Each item in the LootTable list is a map with the following fields:
+
 - `ItemID` (STRING): UUID of the item prototype that can drop
 - `Chance` (NUMBER): Drop probability (0.0 to 1.0)
 
@@ -450,6 +455,7 @@ Each item in the LootTable list is a map with the following fields:
 Wounds are represented differently depending on context:
 
 #### In Character Table
+
 The Wound object is stored as a MAP within the Character table's Wounds list. Each wound map represents one point of damage:
 
 | Field        | Type     | Description                                                       |
@@ -475,6 +481,7 @@ The Wound object is stored as a MAP within the Character table's Wounds list. Ea
 This character has taken 2 points of damage (2 wounds in the list), so with MaxHealth of 10, their current health would be 8.
 
 #### In Segment Results
+
 Within the Effects structure of segment Results, wounds are simplified to a list of damage type strings:
 
 **Example Wounds in Segment Effects:**

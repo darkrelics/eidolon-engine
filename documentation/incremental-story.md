@@ -15,6 +15,7 @@ The Eidolon Engine's incremental game mode features a story-driven progression s
 ## Schema Elements
 
 ### Story Table
+
 The Story table contains prototype definitions for all available stories:
 
 - **StoryID** (HASH): UUID of the story
@@ -25,6 +26,7 @@ The Story table contains prototype definitions for all available stories:
 - **BaseXPMultiplier**: XP modifier (default 0.5, must be < 1.0)
 
 ### Segments Table
+
 The Segments table contains prototype definitions for all story segments:
 
 - **StoryID** (HASH): Parent story UUID
@@ -37,6 +39,7 @@ The Segments table contains prototype definitions for all story segments:
 - **Combat**: Combat configuration if applicable
 
 ### ActiveSegments Table
+
 The ActiveSegments table tracks currently running segment instances:
 
 - **ActiveSegmentID** (HASH): Instance UUID
@@ -49,6 +52,7 @@ The ActiveSegments table tracks currently running segment instances:
 - **Outcome**: death/failure/minimal/normal/exceptional
 
 ### StoryHistory Table
+
 Records completed story attempts:
 
 - **CharacterID** (HASH): Character UUID
@@ -58,6 +62,7 @@ Records completed story attempts:
 - **XPEarned**: Total XP from all segments
 
 ### SegmentHistory Table
+
 Archives completed segment instances:
 
 - **CharacterID** (HASH): Character UUID
@@ -68,6 +73,7 @@ Archives completed segment instances:
 ## Story State Machine
 
 ### States
+
 Stories exist in one of these states relative to a character:
 
 1. **Available**: Listed in character's AvailableStories array
@@ -138,6 +144,7 @@ Active → Abandoned
 ## Segment State Machine
 
 ### Processing Status States
+
 Segments progress through these ProcessingStatus values:
 
 1. **pending**: Initial state, awaiting processing
@@ -146,6 +153,7 @@ Segments progress through these ProcessingStatus values:
 4. **completed**: Timer expired, ready for advancement
 
 ### RunningFlag States
+
 The RunningFlag provides concurrency control:
 
 - **false**: Segment available for processing
@@ -200,18 +208,21 @@ completed/false → [deleted]
 ### Segment Types and Processing
 
 #### Mechanical Segments
+
 - Contain skill challenges and/or combat
 - Processed by ops-process-segment via SQS
 - XP and wounds applied during processing
 - Outcomes: death/failure/minimal/normal/exceptional
 
 #### Decision Segments
+
 - Present choices to player
 - No processing needed (outcome predetermined)
 - Player submits via api-submit-decision
 - Timeout uses DefaultDecision if specified
 
 #### Rest Segments
+
 - Provide healing over time
 - Heal wounds based on type (bashing: 15min, lethal: 6hr, aggravated: 7d)
 - Always have "normal" outcome
@@ -252,6 +263,7 @@ completed/false → [deleted]
 ### API Layer Functions
 
 **api-start-story**:
+
 - Validates prerequisites and character state
 - Creates first ActiveSegment
 - Updates character to active game mode
@@ -259,16 +271,19 @@ completed/false → [deleted]
 - Enables polling infrastructure
 
 **api-submit-decision**:
+
 - Records player choice in Decision field
 - Sets DecisionMadeAt timestamp
 - Returns confirmation to client
 
 **api-get-segment-outcome**:
+
 - Retrieves completed segment results
 - Returns narrative and effects
 - Used by client after segment timer expires
 
 **api-abandon-story**:
+
 - Marks story as abandoned
 - Clears character active state
 - Records in StoryHistory
@@ -276,6 +291,7 @@ completed/false → [deleted]
 ### Processing Layer Functions
 
 **ops-segment-poller** (EventBridge every minute):
+
 - Queries segments with EndTime <= now + 30s
 - Categorizes segments (ready/stuck/exhausted)
 - Sends mechanical segments to processing queue
@@ -283,6 +299,7 @@ completed/false → [deleted]
 - Manages polling infrastructure state
 
 **ops-process-segment** (SQS triggered):
+
 - Claims segment with RunningFlag
 - Processes mechanical challenges
 - Simulates combat rounds
@@ -290,6 +307,7 @@ completed/false → [deleted]
 - Updates segment with results
 
 **ops-advance-story** (SQS triggered):
+
 - Claims segment for advancement
 - Processes simple segments if needed
 - Applies all CharacterUpdates
@@ -301,11 +319,13 @@ completed/false → [deleted]
 ### Queue Architecture
 
 **SEGMENT_QUEUE_URL**:
+
 - Feeds ops-process-segment
 - Handles mechanical segments only
 - Provides retry with exponential backoff
 
 **STORY_ADVANCEMENT_QUEUE_URL**:
+
 - Feeds ops-advance-story
 - Handles all segment types
 - Ensures ordered story progression
@@ -313,11 +333,13 @@ completed/false → [deleted]
 ### Polling Infrastructure
 
 **SSM Parameter** (SSM_POLLER_STATE_PARAMETER):
+
 - Stores polling state: "run" or "stop"
 - Checked by poller each invocation
 - Updated based on active segment presence
 
 **EventBridge Rule** (eidolon-segment-poller-rule):
+
 - Triggers ops-segment-poller every minute
 - Enabled when segments exist
 - Disabled when no active segments
@@ -325,16 +347,19 @@ completed/false → [deleted]
 ## Error Recovery and Edge Cases
 
 ### Timeout Recovery
+
 - Segments past EndTime marked "exceptional"
 - Gives players best possible outcome
 - Prevents indefinite waiting
 
 ### Stuck Segment Recovery
+
 - Mechanical segments stuck >15 minutes get retried
 - RunningFlag reset to allow reprocessing
 - Maximum 3 retry attempts
 
 ### Concurrent Processing Prevention
+
 - RunningFlag prevents duplicate processing
 - Atomic DynamoDB operations ensure consistency
 - SQS provides at-least-once delivery
@@ -342,16 +367,19 @@ completed/false → [deleted]
 ### Failure Modes
 
 **Processing Failure**:
+
 - Segment remains in processing state
 - Poller eventually marks as exceptional
 - Player protected from system errors
 
 **Queue Message Loss**:
+
 - Poller re-queues unprocessed segments
 - Idempotent processing prevents issues
 - History tables provide audit trail
 
 **Lambda Timeout**:
+
 - RunningFlag remains set
 - Poller detects stuck segment
 - Automatic retry after 15 minutes

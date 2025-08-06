@@ -8,7 +8,7 @@ info:
     email: contact@darkrelics.net
   license:
     name: Proprietary
-    
+
 servers:
   - url: https://api.darkrelics.net/incremental
     description: Production server
@@ -30,12 +30,12 @@ paths:
       description: Retrieves all player-available archetypes for character creation. Results are cached at the Lambda level for performance.
       operationId: getArchetypes
       responses:
-        '200':
+        "200":
           description: Successfully retrieved archetypes
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ArchetypesResponse'
+                $ref: "#/components/schemas/ArchetypesResponse"
               examples:
                 knightExample:
                   summary: Example with Knight archetype
@@ -73,10 +73,10 @@ paths:
                           - story_knight_honor
                           - story_common_intro
                     Count: 1
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /characters:
     get:
@@ -86,12 +86,12 @@ paths:
       description: Retrieves a list of all characters belonging to the authenticated player. Returns minimal information suitable for character selection.
       operationId: listCharacters
       responses:
-        '200':
+        "200":
           description: Successfully retrieved character list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CharacterListResponse'
+                $ref: "#/components/schemas/CharacterListResponse"
               examples:
                 multipleCharacters:
                   summary: Player with multiple characters
@@ -107,18 +107,18 @@ paths:
                   summary: New player with no characters
                   value:
                     Characters: []
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
           description: Player not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
               example:
                 Error: "Player not found"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
     post:
       tags:
@@ -131,7 +131,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CharacterCreateRequest'
+              $ref: "#/components/schemas/CharacterCreateRequest"
             examples:
               wizardCharacter:
                 summary: Create a wizard character
@@ -144,23 +144,23 @@ paths:
                   CharacterName: Frodo
                   ArchetypeName: ""
       responses:
-        '201':
+        "201":
           description: Character created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CharacterCreateResponse'
+                $ref: "#/components/schemas/CharacterCreateResponse"
               example:
                 CharacterID: 7ba8c520-a5d2-4e8f-b3c1-9f2e3d4c5b6a
                 CharacterName: Gandalf
                 Archetype: Wizard
                 Message: Character created successfully
-        '400':
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
               examples:
                 missingName:
                   summary: Missing character name
@@ -178,18 +178,18 @@ paths:
                   summary: Character limit reached
                   value:
                     Error: "Character limit reached (10)"
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
           description: Name already taken
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
               example:
                 Error: "Character name is already taken"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /character:
     get:
@@ -208,12 +208,12 @@ paths:
           description: UUID of the character to retrieve
           example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        '200':
+        "200":
           description: Successfully retrieved character
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CharacterDetailResponse'
+                $ref: "#/components/schemas/CharacterDetailResponse"
               examples:
                 withActiveStory:
                   summary: Character with active story
@@ -303,26 +303,26 @@ paths:
                         EstimatedDuration: 1800
                         Prerequisites:
                           CompletedStories: ["story_1"]
-        '400':
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
               example:
                 Error: "Missing CharacterID parameter"
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
           description: Character not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
               example:
                 Error: "Character not found"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
 components:
   securitySchemes:
@@ -353,7 +353,7 @@ components:
           type: array
           description: List of available player archetypes
           items:
-            $ref: '#/components/schemas/Archetype'
+            $ref: "#/components/schemas/Archetype"
         Count:
           type: integer
           description: Total number of archetypes returned
@@ -369,7 +369,7 @@ components:
           type: array
           description: List of characters owned by the player
           items:
-            $ref: '#/components/schemas/CharacterInfo'
+            $ref: "#/components/schemas/CharacterInfo"
 
     CharacterInfo:
       type: object
@@ -419,9 +419,9 @@ components:
           example: A stalwart defender skilled in combat and honor
           maxLength: 500
         Attributes:
-          $ref: '#/components/schemas/AttributeMap'
+          $ref: "#/components/schemas/AttributeMap"
         Skills:
-          $ref: '#/components/schemas/SkillMap'
+          $ref: "#/components/schemas/SkillMap"
         Health:
           type: integer
           description: Starting maximum health points
@@ -443,13 +443,13 @@ components:
           type: array
           description: List of items the character starts with
           items:
-            $ref: '#/components/schemas/StartingItem'
+            $ref: "#/components/schemas/StartingItem"
         AvailableStories:
           type: array
           description: List of story IDs available to this archetype
           items:
             type: string
-            pattern: '^story_[a-z_]+$'
+            pattern: "^story_[a-z_]+$"
             example: story_knight_honor
 
     AttributeMap:
@@ -592,17 +592,17 @@ components:
         - Character
       properties:
         Character:
-          $ref: '#/components/schemas/Character'
+          $ref: "#/components/schemas/Character"
         ActiveStory:
-          $ref: '#/components/schemas/ActiveStory'
+          $ref: "#/components/schemas/ActiveStory"
           description: Current story details (only present if character has active story)
         ActiveSegment:
-          $ref: '#/components/schemas/ActiveSegment'
+          $ref: "#/components/schemas/ActiveSegment"
           description: Current segment details (only present if character has active segment)
         AvailableStories:
           type: array
           items:
-            $ref: '#/components/schemas/AvailableStory'
+            $ref: "#/components/schemas/AvailableStory"
           description: List of available stories (only present if no active story and stories are available)
 
     Character:
@@ -654,12 +654,12 @@ components:
         InventoryDetails:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/ItemDetail'
+            $ref: "#/components/schemas/ItemDetail"
           description: Enriched inventory with full item information
         Attributes:
-          $ref: '#/components/schemas/AttributeMap'
+          $ref: "#/components/schemas/AttributeMap"
         Skills:
-          $ref: '#/components/schemas/SkillMap'
+          $ref: "#/components/schemas/SkillMap"
         MaxHealth:
           type: integer
           minimum: 1
@@ -675,7 +675,7 @@ components:
         Wounds:
           type: array
           items:
-            $ref: '#/components/schemas/Wound'
+            $ref: "#/components/schemas/Wound"
           description: List of current wounds
         CharState:
           type: string
@@ -915,15 +915,15 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             Error: "Unauthorized"
-    
+
     InternalServerError:
       description: Internal server error
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             Error: "Failed to load archetypes"
