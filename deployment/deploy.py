@@ -19,6 +19,7 @@ from config_updater import ConfigurationUpdater
 from config_validator import validate_deployment_config
 from deployment_logic import analyze_changes, prompt_missing_parameters
 from health_checks import run_phase_health_check
+from log_cleanup import LogGroupCleanup
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from stack_utils import StackOutputHelper
 from state_manager import ConfigurationManager, DeploymentState, StateManager
@@ -268,8 +269,11 @@ class IncrementalDeploymentOrchestrator:
             print(f"\nUnchanged stacks: {len(plan['unchanged_stacks'])}")
 
         if not auto_approve:
-            response = input("\nProceed with deployment? [y/N]: ").strip().lower()
-            if response != "y":
+            response = input("\nProceed with deployment? [Y/n]: ").strip().lower()
+            if response not in ["n", "no"]:
+                # Default to yes - proceed unless explicitly declined
+                pass
+            else:
                 print("Deployment cancelled.")
                 return False
 
@@ -376,6 +380,13 @@ class IncrementalDeploymentOrchestrator:
                 print(f"\nDeploying stacks: {', '.join(stacks_to_deploy)}")
 
                 # Pre-deployment actions for specific phases
+                # Clean up orphaned Lambda log groups before Application Layer deployment
+                if phase["name"] == "Application Layer":
+                    print("\nPreparing for Lambda deployment...")
+                    log_cleanup = LogGroupCleanup(self.session)
+                    if not log_cleanup.clean_before_deployment():
+                        print("[WARNING] Log cleanup encountered issues, continuing with deployment")
+                
                 # S3 buckets are now all managed by the S3 stack
 
                 # Deploy stacks serially for safety
@@ -474,8 +485,11 @@ class IncrementalDeploymentOrchestrator:
                         print(f"\n[WARNING] Health checks failed for {phase['name']}")
                         print("Review the issues above and fix if needed before continuing.")
                         if not auto_approve:
-                            response = input("\nContinue with deployment anyway? [y/N]: ").strip().lower()
-                            if response != "y":
+                            response = input("\nContinue with deployment anyway? [Y/n]: ").strip().lower()
+                            if response not in ["n", "no"]:
+                                # Default to yes - continue unless explicitly declined
+                                pass
+                            else:
                                 print("Deployment stopped due to health check failures.")
                                 all_succeeded = False
                                 break
