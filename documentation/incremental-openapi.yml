@@ -214,51 +214,95 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CharacterDetailResponse'
-              example:
-                Character:
-                  CharacterID: 550e8400-e29b-41d4-a716-446655440000
-                  PlayerID: 123e4567-e89b-12d3-a456-426614174000
-                  CharacterName: Aragorn
-                  GameMode: Incremental
-                  RoomID: 100
-                  Inventory:
-                    "0": abc123-item-uuid
-                    "1": def456-item-uuid
-                  InventoryDetails:
-                    "0":
-                      itemId: abc123-item-uuid
-                      name: Leather Backpack
-                      description: A sturdy leather backpack
-                      quantity: 1
-                      stackable: false
-                      equipped: true
-                      mass: 2
-                      value: 50
-                  Attributes:
-                    Strength: 8
-                    Agility: 5
-                    Endurance: 7
-                  Skills:
-                    Melee: 10
-                    Parry: 8
-                  MaxHealth: 12
-                  Wounds:
-                    - DamageType: bashing
-                      HealAt: "2025-01-15T14:30:00Z"
-                  ActiveStoryID: story_current_uuid
-                  ActiveSegmentID: segment_current_uuid
-                ActiveStory:
-                  StoryID: story_current_uuid
-                  Title: The Dark Tower
-                  Description: Investigate the mysterious tower
-                  EstimatedDuration: 1800
-                ActiveSegment:
-                  ActiveSegmentID: segment_current_uuid
-                  SegmentID: segment_def_uuid
-                  SegmentType: mechanical
-                  Status: active
-                  StartTime: 1704900000
-                  EndTime: 1704900300
+              examples:
+                withActiveStory:
+                  summary: Character with active story
+                  value:
+                    Character:
+                      CharacterID: 550e8400-e29b-41d4-a716-446655440000
+                      PlayerID: 123e4567-e89b-12d3-a456-426614174000
+                      CharacterName: Aragorn
+                      GameMode: Incremental
+                      RoomID: 100
+                      Inventory:
+                        "0": abc123-item-uuid
+                        "1": def456-item-uuid
+                      InventoryDetails:
+                        "0":
+                          itemId: abc123-item-uuid
+                          name: Leather Backpack
+                          description: A sturdy leather backpack
+                          quantity: 1
+                          stackable: false
+                          equipped: true
+                          mass: 2
+                          value: 50
+                      Attributes:
+                        Strength: 8
+                        Agility: 5
+                        Endurance: 7
+                      Skills:
+                        Melee: 10
+                        Parry: 8
+                      MaxHealth: 12
+                      Wounds:
+                        - DamageType: bashing
+                          HealAt: "2025-01-15T14:30:00Z"
+                      ActiveStoryID: story_current_uuid
+                      ActiveSegmentID: segment_current_uuid
+                    ActiveStory:
+                      StoryID: story_current_uuid
+                      Title: The Dark Tower
+                      Description: Investigate the mysterious tower
+                      EstimatedDuration: 1800
+                    ActiveSegment:
+                      ActiveSegmentID: segment_current_uuid
+                      SegmentID: segment_def_uuid
+                      SegmentType: mechanical
+                      Status: active
+                      StartTime: 1704900000
+                      EndTime: 1704900300
+                withoutActiveStory:
+                  summary: Character without active story (shows available stories)
+                  value:
+                    Character:
+                      CharacterID: 550e8400-e29b-41d4-a716-446655440000
+                      PlayerID: 123e4567-e89b-12d3-a456-426614174000
+                      CharacterName: Aragorn
+                      GameMode: None
+                      RoomID: 100
+                      Inventory:
+                        "0": abc123-item-uuid
+                      Attributes:
+                        Strength: 8
+                        Agility: 5
+                        Endurance: 7
+                      Skills:
+                        Melee: 10
+                        Parry: 8
+                      MaxHealth: 12
+                      Wounds: []
+                      ActiveStoryID: null
+                      ActiveSegmentID: null
+                      AvailableStories: ["story_1", "story_2"]
+                    AvailableStories:
+                      - StoryID: story_1
+                        Title: "The Beginning"
+                        Description: "Start your journey"
+                        Type: once
+                        Available: true
+                        CooldownRemaining: 0
+                        EstimatedDuration: 600
+                        Prerequisites: {}
+                      - StoryID: story_2
+                        Title: "Daily Challenge"
+                        Description: "Test your skills"
+                        Type: daily
+                        Available: false
+                        CooldownRemaining: 3600
+                        EstimatedDuration: 1800
+                        Prerequisites:
+                          CompletedStories: ["story_1"]
         '400':
           description: Bad request
           content:
@@ -555,6 +599,11 @@ components:
         ActiveSegment:
           $ref: '#/components/schemas/ActiveSegment'
           description: Current segment details (only present if character has active segment)
+        AvailableStories:
+          type: array
+          items:
+            $ref: '#/components/schemas/AvailableStory'
+          description: List of available stories (only present if no active story and stories are available)
 
     Character:
       type: object
@@ -799,6 +848,66 @@ components:
               description:
                 type: string
           description: Events to display to client
+
+    AvailableStory:
+      type: object
+      required:
+        - StoryID
+        - Title
+        - Description
+        - Type
+        - Available
+        - CooldownRemaining
+        - EstimatedDuration
+        - Prerequisites
+      properties:
+        StoryID:
+          type: string
+          description: Unique identifier of the story
+          example: story_knight_honor
+        Title:
+          type: string
+          description: Display title of the story
+          example: "A Knight's Honor"
+        Description:
+          type: string
+          description: Brief description of the story
+          example: "Test your honor in a challenging quest"
+        Type:
+          type: string
+          enum: [repeatable, daily, once]
+          description: Story availability type
+          example: daily
+        Available:
+          type: boolean
+          description: Whether the story can be started now
+          example: true
+        CooldownRemaining:
+          type: integer
+          minimum: 0
+          description: Seconds until story becomes available (0 if available)
+          example: 0
+        EstimatedDuration:
+          type: integer
+          description: Estimated completion time in seconds
+          example: 1800
+        Prerequisites:
+          type: object
+          description: Prerequisites that must be met to access this story
+          properties:
+            CompletedStories:
+              type: array
+              items:
+                type: string
+              description: Story IDs that must be completed first
+            MinLevel:
+              type: integer
+              description: Minimum character level required
+            Resources:
+              type: object
+              additionalProperties:
+                type: integer
+              description: Required resources to start
 
   responses:
     Unauthorized:

@@ -466,6 +466,21 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadCurrentStory();
       _startTimers();
+      
+      // If no active story, automatically show available stories
+      if (widget.character.storyState == null && 
+          widget.character.availableStoriesDetails != null &&
+          widget.character.availableStoriesDetails!.isNotEmpty) {
+        setState(() {
+          _showStoryList = true;
+          _storiesFuture = Future.value(
+            widget.character.availableStoriesDetails!
+                .map((story) => StoryMetadata.fromJson(story))
+                .toList(),
+          );
+        });
+        debugPrint('GameScreen: Auto-showing available stories (no active story)');
+      }
     });
   }
 
@@ -531,9 +546,37 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
     });
 
     try {
-      var currentStory = await _apiService.getCurrentStory(
-        characterId: widget.character.id,
-      );
+      // Use getCharacterById to refresh all data including story state
+      final refreshedCharacter = await _apiService.getCharacterById(widget.character.id);
+      
+      if (refreshedCharacter == null) {
+        throw Exception('Character not found');
+      }
+      
+      // Update the widget's character with fresh data
+      widget.character.storyState = refreshedCharacter.storyState;
+      widget.character.availableStoriesDetails = refreshedCharacter.availableStoriesDetails;
+      
+      // Build currentStory format from character data for compatibility
+      Map<String, dynamic>? currentStory;
+      if (refreshedCharacter.storyState != null) {
+        final storyState = refreshedCharacter.storyState!;
+        
+        // Handle both new format (with Story and ActiveSegment) and old format
+        if (storyState.containsKey('Story') && storyState.containsKey('ActiveSegment')) {
+          currentStory = {
+            'Story': storyState['Story'],
+            'ActiveSegment': storyState['ActiveSegment'],
+            'Segment': storyState['ActiveSegment'], // For backward compatibility
+          };
+        } else {
+          // Old format - just segment data
+          currentStory = {
+            'ActiveSegment': storyState,
+            'Segment': storyState,
+          };
+        }
+      }
       
       // Check if we have a mechanical segment that needs history data
       if (currentStory != null) {
@@ -666,9 +709,24 @@ class _ActionPanelState extends State<ActionPanel> with TickerProviderStateMixin
   }
 
   void _loadStories() {
-    setState(() {
-      _storiesFuture = _apiService.getStories(widget.character.id);
-    });
+    // Check if character already has available stories details from the API
+    if (widget.character.availableStoriesDetails != null) {
+      // Use the stories already provided with the character data
+      setState(() {
+        _storiesFuture = Future.value(
+          widget.character.availableStoriesDetails!
+              .map((story) => StoryMetadata.fromJson(story))
+              .toList(),
+        );
+      });
+      debugPrint('GameScreen: Using ${widget.character.availableStoriesDetails!.length} available stories from character data');
+    } else {
+      // Fall back to separate API call if needed
+      setState(() {
+        _storiesFuture = _apiService.getStories(widget.character.id);
+      });
+      debugPrint('GameScreen: Loading stories via separate API call');
+    }
   }
 
   @override

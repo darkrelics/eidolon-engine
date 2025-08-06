@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/character.dart';
 import '../models/segment_outcome.dart';
-import '../models/story.dart';
 import '../utils/api_parser.dart';
 import '../utils/api_validation.dart';
 import 'auth_service.dart';
@@ -142,6 +141,7 @@ class ApiService {
     // Check if there's an active story and segment
     final activeStory = json['ActiveStory'] as Map<String, dynamic>?;
     final activeSegment = json['ActiveSegment'] as Map<String, dynamic>?;
+    final availableStories = json['AvailableStories'] as List<dynamic>?;
     
     // Build story state with both story and segment data
     if (activeStory != null && activeSegment != null) {
@@ -155,6 +155,12 @@ class ApiService {
       // Fallback for backward compatibility
       characterData['StoryState'] = activeSegment;
       debugPrint('ApiService: Found active segment (no story): ${activeSegment['SegmentType']}');
+    }
+    
+    // If no active story but available stories are provided, add them to character data
+    if (availableStories != null && activeStory == null) {
+      characterData['AvailableStoriesDetails'] = availableStories;
+      debugPrint('ApiService: Found ${availableStories.length} available stories from character response');
     }
     
     return Character.fromJson(characterData);
@@ -368,56 +374,6 @@ class ApiService {
     return json;
   }
 
-  /// Get available stories for a character
-  Future<List<StoryMetadata>> getStories(String characterId) async {
-    debugPrint('ApiService: Getting stories for character: $characterId');
-    final headers = await _getHeaders();
-    final response = await _httpClient.get(
-      Uri.parse('$baseUrl/stories?CharacterID=$characterId'),
-      headers: headers,
-    );
-
-    debugPrint('ApiService: Get stories response status: ${response.statusCode}');
-    debugPrint('ApiService: Get stories response body: ${response.body}');
-
-    if (response.statusCode != 200) {
-      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(errorBody['Error'] ?? errorBody['error'] ?? 'Failed to get stories');
-    }
-
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final stories = json['Stories'] as List<dynamic>;
-    return stories
-        .map((s) => StoryMetadata.fromJson(s as Map<String, dynamic>))
-        .toList();
-  }
-
-  /// Get current active story for a character
-  Future<Map<String, dynamic>?> getCurrentStory({
-    required String characterId,
-  }) async {
-    debugPrint('ApiService: Getting current story for character: $characterId');
-    final headers = await _getHeaders();
-    final response = await _httpClient.get(
-      Uri.parse('$baseUrl/stories/current?CharacterID=$characterId'),
-      headers: headers,
-    );
-
-    debugPrint('ApiService: Get current story response status: ${response.statusCode}');
-    debugPrint('ApiService: Get current story response body: ${response.body}');
-
-    if (response.statusCode == 404) {
-      // No active story
-      return null;
-    }
-
-    if (response.statusCode != 200) {
-      throw Exception('Failed to get current story: ${response.body}');
-    }
-
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return json;
-  }
 
   /// Get available archetypes
   Future<List<ArchetypeInfo>> getArchetypes() async {

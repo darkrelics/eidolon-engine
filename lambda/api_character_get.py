@@ -98,10 +98,10 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
         logger.info(f"Available stories for character for {character_id}")
 
         # Get story details with prerequisite and cooldown checking
-        stories: list = get_stories_for_character(character_id, player_id, available_story_ids)  
+        stories: list = get_stories_for_character(character_id, player_id, available_story_ids)
 
         # Sort stories by availability and title
-        stories.sort(key=lambda s: (not s["Available"], s["Title"]))                  
+        stories.sort(key=lambda s: (not s["Available"], s["Title"]))
 
         logger.info(f"Stories retrieved successfully for {character_id}")
 

@@ -23,6 +23,7 @@ class Character {
   final List<String> availableStories;
   final List<String> abandonedStories;
   final List<String> completedStories;
+  final List<Map<String, dynamic>>? availableStoriesDetails; // Full story metadata when no active story
 
   Character({
     required this.id,
@@ -45,6 +46,7 @@ class Character {
     this.availableStories = const [],
     this.abandonedStories = const [],
     this.completedStories = const [],
+    this.availableStoriesDetails,
   });
 
   /// Parse a map of dynamic values to doubles
@@ -111,6 +113,11 @@ class Character {
       completedStories: (json['CompletedStories'] as List? ?? [])
           .map((storyId) => storyId as String)
           .toList(),
+      availableStoriesDetails: json['AvailableStoriesDetails'] != null
+          ? (json['AvailableStoriesDetails'] as List)
+              .map((story) => story as Map<String, dynamic>)
+              .toList()
+          : null,
     );
   }
 
@@ -136,6 +143,8 @@ class Character {
       'AvailableStories': availableStories,
       'AbandonedStories': abandonedStories,
       'CompletedStories': completedStories,
+      if (availableStoriesDetails != null)
+        'AvailableStoriesDetails': availableStoriesDetails,
     };
   }
 
@@ -154,6 +163,7 @@ class Character {
     List<String>? availableStories,
     List<String>? abandonedStories,
     List<String>? completedStories,
+    List<Map<String, dynamic>>? availableStoriesDetails,
   }) {
     return Character(
       id: id,
@@ -176,6 +186,7 @@ class Character {
       availableStories: availableStories ?? this.availableStories,
       abandonedStories: abandonedStories ?? this.abandonedStories,
       completedStories: completedStories ?? this.completedStories,
+      availableStoriesDetails: availableStoriesDetails ?? this.availableStoriesDetails,
     );
   }
 

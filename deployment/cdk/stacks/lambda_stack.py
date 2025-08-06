@@ -393,20 +393,6 @@ class LambdaStack(cdk.Stack):
         Args:
             dependencies_layer: Lambda layer
         """
-        # Get Stories Lambda
-        self.get_stories_function = self.create_lambda_function(
-            "api-get-stories",
-            "api_get_stories.lambda_handler",
-            {
-                "CHARACTERS_TABLE": self.characters_table,
-                "STORY_TABLE": self.story_table,
-                "STORY_HISTORY_TABLE": self.story_history_table,
-                "ALLOWED_ORIGINS": self.cors_origins_str,
-            },
-            "Returns available stories for a character",
-            dependencies_layer,
-        )
-
         # Start Story Lambda - needs SSM/SQS permissions for polling control
         self.start_story_function = lambda_.Function(
             self,
@@ -430,20 +416,6 @@ class LambdaStack(cdk.Stack):
             },
             description="Starts a story for a character",
             function_name="api-start-story",
-        )
-
-        # Get Current Story Lambda
-        self.get_current_story_function = self.create_lambda_function(
-            "api-get-current-story",
-            "api_get_current_story.lambda_handler",
-            {
-                "SEGMENTS_TABLE": self.segments_table,
-                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "STORY_TABLE": self.story_table,
-                "ALLOWED_ORIGINS": self.cors_origins_str,
-            },
-            "Gets current active story and segment for a character",
-            dependencies_layer,
         )
 
         # Submit Decision Lambda
@@ -710,14 +682,6 @@ class LambdaStack(cdk.Stack):
         # Stories endpoints
         stories_resource = self.api.root.add_resource("stories")
 
-        # GET /stories?characterId=xxx - Get available stories for character
-        stories_resource.add_method(
-            "GET",
-            apigateway.LambdaIntegration(self.get_stories_function),  # type: ignore
-            authorizer=self.cognito_authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
-        )
-
         # Nested resources under /stories
         start_resource = stories_resource.add_resource("start")
 
@@ -725,15 +689,6 @@ class LambdaStack(cdk.Stack):
         start_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.start_story_function),  # type: ignore
-            authorizer=self.cognito_authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
-        )
-
-        # GET /stories/current - Get current active story
-        current_resource = stories_resource.add_resource("current")
-        current_resource.add_method(
-            "GET",
-            apigateway.LambdaIntegration(self.get_current_story_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
@@ -796,12 +751,10 @@ class LambdaStack(cdk.Stack):
             ("delete-character-logs", self.delete_character_function),
             ("cognito-new-player-logs", self.cognito_new_player_function),
             ("cognito-delete-player-logs", self.cognito_delete_player_function),
-            ("get-stories-logs", self.get_stories_function),
             ("start-story-logs", self.start_story_function),
             ("submit-decision-logs", self.submit_decision_function),
             ("get-segment-outcome-logs", self.get_segment_outcome_function),
             ("abandon-story-logs", self.abandon_story_function),
-            ("get-current-story-logs", self.get_current_story_function),
             ("get-segment-status-logs", self.get_segment_status_function),
             ("get-segment-history-logs", self.get_segment_history_function),
             ("character-rest-logs", self.character_rest_function),

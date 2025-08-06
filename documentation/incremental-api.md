@@ -438,8 +438,9 @@ Authorization: Bearer <jwt-token>
 | Field | Type | Description |
 |-------|------|-------------|
 | `Character` | Object | Complete character data |
-| `ActiveStory` | Object | Current story details (optional - only if character has active story) |
-| `ActiveSegment` | Object | Current segment details (optional - only if character has active segment) |
+| `ActiveStory` | Object | Current story details (optional - only present if character has active story) |
+| `ActiveSegment` | Object | Current segment details (optional - only present if character has active segment) |
+| `AvailableStories` | Array | List of available stories (optional - only present if no active story and stories are available) |
 
 **Character Object:**
 
@@ -471,15 +472,18 @@ Maps inventory slot numbers to detailed item information:
 
 1. **Character Ownership:** The Lambda validates that the requested character belongs to the authenticated player. Attempting to access another player's character returns 404.
 
-2. **Active Story/Segment:** These fields are only included if the character has an active story. If no active story exists:
-   - `ActiveStoryID` and `ActiveSegmentID` in the Character object are set to null
-   - `ActiveStory` and `ActiveSegment` fields are omitted from the response
+2. **Response Field Behavior:** The response dynamically includes different fields based on the character's state:
+   - **With active story:** Includes `ActiveStory` and `ActiveSegment` objects (if present), does NOT include `AvailableStories`
+   - **Without active story:** Does NOT include `ActiveStory` or `ActiveSegment`, but includes `AvailableStories` array if any stories are available
+   - Fields are completely omitted from the response rather than being set to null
 
-3. **Inventory Enrichment:** The `InventoryDetails` field provides full item information for UI display without requiring additional API calls. If item lookups fail, the character is still returned without enrichment.
+3. **Available Stories:** When the character doesn't have an active story, the `AvailableStories` field is automatically populated with story details including availability status, cooldown information, prerequisites, and metadata. This eliminates the need for a separate API call to get available stories.
 
-4. **Health Calculation:** Current health is not stored but should be calculated as: `Health = MaxHealth - Wounds.length`
+4. **Inventory Enrichment:** The `InventoryDetails` field provides full item information for UI display without requiring additional API calls. If item lookups fail, the character is still returned without enrichment.
 
-5. **Container Items:** Items stored inside containers (like backpacks) are not shown in the character's inventory. They exist in the container item's Contents array.
+5. **Health Calculation:** Current health is not stored but should be calculated as: `Health = MaxHealth - Wounds.length`
+
+6. **Container Items:** Items stored inside containers (like backpacks) are not shown in the character's inventory. They exist in the container item's Contents array.
 
 **Example Client Code (Dart):**
 ```dart
