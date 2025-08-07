@@ -309,8 +309,6 @@ def create_character_record(character_item: dict) -> bool:
         raise RuntimeError(f"Failed to create character record: {err}") from err
 
 
-
-
 def rollback_character_creation(character_id: str) -> None:
     """
     Attempt to rollback a failed character creation.
