@@ -14,7 +14,6 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.items import create_items_from_prototypes
 from eidolon.logger import logger
-from eidolon.mechanics import determine_character_state_from_wounds
 from eidolon.player_character import add_character_to_player_list
 from eidolon.validation import validate_uuid
 

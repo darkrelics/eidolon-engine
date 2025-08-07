@@ -32,7 +32,7 @@ from eidolon.segment import (
     update_segment_processing_status,
 )
 from eidolon.sqs import send_message
-from eidolon.story import apply_combat_rewards, ensure_story_history_exists, update_story_history_xp, complete_story
+from eidolon.story import apply_combat_rewards, complete_story, ensure_story_history_exists, update_story_history_xp
 
 
 def advance_story_business_logic(active_segment_id: str) -> dict:

@@ -12,12 +12,12 @@ from decimal import Decimal
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
+from eidolon.character_segment import update_character_active_segment
+from eidolon.character_story import get_story_history
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
-from eidolon.character_segment import update_character_active_segment
-from eidolon.character_story import get_story_history
 from eidolon.segment import (
     create_next_active_segment,
     delete_active_segment,

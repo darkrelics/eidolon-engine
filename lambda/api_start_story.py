@@ -9,17 +9,17 @@ Validates character state, creates active segment, and returns first segment det
 
 from botocore.exceptions import ClientError
 
+from eidolon.character_data import character_get
 from eidolon.cors import cors_handler
+from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
 from eidolon.polling import ensure_polling_enabled
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.sqs import send_message
-from eidolon.story import create_story_history_entry, validate_story_available, get_story_and_first_segment, create_active_segment
+from eidolon.story import create_active_segment, create_story_history_entry, get_story_and_first_segment, validate_story_available
 from eidolon.validation import validate_uuid
-from eidolon.character_data import character_get
-from eidolon.dynamo import dynamo, TableName
 
 
 def format_start_story_response(active_segment: dict, segment: dict) -> dict:

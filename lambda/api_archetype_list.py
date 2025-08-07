@@ -11,7 +11,7 @@ Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 from eidolon.archetypes import get_archetypes
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.responses import lambda_response, lambda_error
+from eidolon.responses import lambda_error, lambda_response
 
 archetypes_cache = []
 
