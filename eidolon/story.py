@@ -12,19 +12,18 @@ from decimal import Decimal
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
-from eidolon.character import apply_character_updates, character_get
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger
+from eidolon.player import verify_character_ownership
+from eidolon.character_segment import update_character_active_segment
+from eidolon.character_story import get_story_history
 from eidolon.segment import (
-    calculate_heal_time,
-    complete_story,
     create_next_active_segment,
     delete_active_segment,
     determine_next_segment,
     get_segment_definition,
     record_segment_history,
-    update_character_active_segment,
 )
 from eidolon.sqs import send_message
 
@@ -213,33 +212,6 @@ def get_active_story_segment_with_player_check(character_id: str, player_id: str
         raise ValueError("No active story found")
 
     return items[0]
-
-
-def get_story_metadata(story_id: str) -> dict:
-    """
-    Get story metadata from the STORY table.
-
-    Args:
-        story_id: Story UUID
-
-    Returns:
-        Story metadata dict
-
-    Raises:
-        ValueError: If story not found
-        RuntimeError: If database query fails
-    """
-    if not story_id:
-        raise ValueError("Story ID cannot be empty")
-
-    try:
-        story_item = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
-        if not story_item:
-            raise ValueError("Story not found")
-        return story_item
-    except ClientError as err:
-        logger.error(f"Failed to get story for {story_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to get story: {err}") from err
 
 
 def get_story_segment(story_id: str, segment_id: str) -> dict:
@@ -435,71 +407,6 @@ def check_story_prerequisites(character: dict, prerequisites: dict) -> bool:
     return True
 
 
-def get_stories_for_character(character_id: str, player_id: str, available_story_ids: list) -> list:
-    """
-    Get story details for a list of story IDs, checking prerequisites and cooldowns.
-
-    Args:
-        character_id: Character UUID
-        available_story_ids: List of story IDs available to the character
-
-    Returns:
-        List of story data dicts with availability information
-
-    Raises:
-        RuntimeError: If database operations fail
-    """
-    if not available_story_ids:
-        return []
-
-    stories: list = []
-
-    character: dict = character_get(character_id, player_id)
-
-    for story_id in available_story_ids:
-        try:
-            story_data: dict = get_story_metadata(story_id)
-
-            # Check prerequisites
-            prerequisites = story_data.get("Prerequisites", {})
-            if not check_story_prerequisites(character, prerequisites):
-                continue
-
-            # Check cooldown
-            story_type = story_data.get("StoryType", "repeatable")
-            cooldown = get_story_cooldown(character_id, story_id, story_type)
-
-            if cooldown == -1:  # Permanently unavailable
-                continue
-
-            # Format story for response with PascalCase
-            formatted_story: dict = {
-                "StoryID": story_id,
-                "Title": story_data.get("Title", "Unknown Story"),
-                "Description": story_data.get("Description", ""),
-                "Type": story_type,
-                "Available": cooldown == 0,
-                "CooldownRemaining": max(0, cooldown) if cooldown is not None else 0,
-                "EstimatedDuration": int(story_data.get("EstimatedDuration", 0)),
-                "Prerequisites": prerequisites,
-                "DifficultyMap": story_data.get("DifficultyMap", {}),
-                "RewardTiers": story_data.get("RewardTiers", {}),
-                "BaseXPMultiplier": float(story_data.get("BaseXPMultiplier", 0.5)),
-            }
-
-            stories.append(formatted_story)
-            logger.debug(f"Story processed for {story_id}")
-
-        except ValueError:
-            logger.warning(f"Story not found for {story_id}")
-            continue
-        except RuntimeError as err:
-            logger.error(f"Error loading story for {story_id} Error: {err}")
-            continue
-
-    return stories
-
-
 def validate_story_available(character: dict, story_id: str) -> None:
     """
     Validate that the story is available to the character.
@@ -531,7 +438,13 @@ def get_story_and_first_segment(story_id: str) -> tuple:
         RuntimeError: If database operations fail
     """
     # Get story metadata
-    story = get_story_metadata(story_id)
+    try:
+        story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
+        if not story:
+            raise ValueError("Story not found")
+    except ClientError as err:
+        logger.error(f"Failed to get story for {story_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to get story: {err}") from err
 
     # Get first segment
     first_segment_id = story.get("FirstSegmentID")
@@ -655,95 +568,6 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
     except ClientError as err:
         logger.error(f"Failed to create history entry for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to create history entry: {err}") from err
-
-
-def start_story_for_character(character_id: str, story_id: str, player_id: str) -> dict:
-    """
-    Start a story for a character with atomic state updates.
-
-    Args:
-        character_id: Character UUID
-        story_id: Story UUID
-        player_id: Player UUID
-
-    Returns:
-        Dict with active_segment data
-
-    Raises:
-        ValueError: If validation fails
-        RuntimeError: If database operations fail
-    """
-
-    # Get character and verify ownership
-    character: dict = character_get(character_id, player_id)
-
-    # Check if character is already in a game mode
-    game_mode = character.get("GameMode", "None")
-    if game_mode != "None":
-        logger.warning(f"Character already in game mode for {character_id}")
-        raise ValueError(f"Character is currently in {game_mode} mode")
-
-    # Validate story is available
-    validate_story_available(character, story_id)
-
-    # Get story and first segment
-    story, first_segment = get_story_and_first_segment(story_id)
-
-    # Create active segment first to get the segment ID
-    story_title = story.get("Title", "Unknown Story")
-    active_segment = create_active_segment(character_id, player_id, story_id, story_title, first_segment)
-
-    # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID and remove from available list
-    try:
-        # Build update expression to set GameMode and remove from AvailableStories
-        available_stories = character.get("AvailableStories", [])
-        if story_id in available_stories:
-            story_index = available_stories.index(story_id)
-            update_expression = (
-                "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id "
-                f"REMOVE AvailableStories[{story_index}]"
-            )
-        else:
-            # Story not in list anymore (race condition), just update the mode
-            update_expression = "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
-
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression=update_expression,
-            ExpressionAttributeValues={
-                ":mode": "Incremental",
-                ":none": "None",
-                ":story_id": story_id,
-                ":segment_id": active_segment.get("ActiveSegmentID"),
-            },
-            ConditionExpression="GameMode = :none",
-        )
-
-    except ClientError as err:
-        # Rollback: Delete the active segment we just created
-        try:
-            dynamo.delete_item(
-                TableName.ACTIVE_SEGMENTS,
-                Key={"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
-            )
-        except Exception as rollback_err:
-            logger.error(f"Failed to rollback active segment for {active_segment.get('ActiveSegmentID')} Error: {rollback_err}")
-
-        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning(f"Character state changed during story start for {character_id}")
-            raise ValueError("Character state conflict") from err
-
-        logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to update character state: {err}") from err
-
-    # Create history entry
-    story_type = story.get("StoryType", "repeatable")
-    create_story_history_entry(character_id, story_id, story_title, story_type)
-
-    logger.info(f"Story started successfully for {character_id}")
-
-    return {"active_segment": active_segment, "segment": first_segment, "story": story}
 
 
 def format_segment_response(segment: dict, active_segment: dict) -> dict:
@@ -945,9 +769,9 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
         RuntimeError: If database operations fail
     """
 
-    # Verify character ownership
-    # TODO: Read Player Record instead.
-    character_get(character_id, player_id)
+    # Verify character ownership using player record
+    if not verify_character_ownership(character_id, player_id):
+        raise ValueError("Character not owned by player")
 
     logger.info(f"Submitting decision for {character_id}")
 
@@ -1160,6 +984,39 @@ def complete_story_for_character(character_id: str, story_id: str, final_outcome
         raise RuntimeError(f"Failed to complete story: {err}") from err
 
 
+def complete_story(character_id: str, story_id: str, outcome: str) -> None:
+    """
+    Complete the story, apply rewards, and update character state.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        outcome: Final outcome
+    """
+
+    # Complete the story and clean up character state
+    complete_story_for_character(character_id, story_id, outcome)
+
+    # Get story metadata for reward calculation
+    try:
+        story_metadata = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
+        if not story_metadata:
+            raise ValueError("Story not found")
+    except ClientError as err:
+        logger.error(f"Failed to get story for {story_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to get story: {err}") from err
+
+    history = get_story_history(character_id, story_id)
+
+    # Count completed segments from history
+    segments_completed = len(history.get("SegmentHistory", []))
+
+    # Calculate and apply rewards
+    rewards = calculate_story_rewards(story_metadata, outcome, segments_completed)
+    if rewards.get("xp", 0) > 0 or rewards.get("items") or rewards.get("currency", 0) > 0:
+        apply_story_rewards(character_id, rewards)
+
+
 def calculate_story_rewards(story_metadata: dict, outcome: str, segments_completed: int) -> dict:
     """
     Calculate rewards based on story outcome and segments completed.
@@ -1313,65 +1170,6 @@ def add_segment_to_history(character_id: str, story_id: str, segment_id: str, ou
     except ClientError as err:
         logger.error(f"Failed to add segment to history for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to add segment to history: {err}") from err
-
-
-def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> None:
-    """
-    Apply story outcome effects like room changes and item rewards.
-
-    Args:
-        character_id: Character UUID
-        outcome_effects: Dict containing room changes, items, etc.
-
-    Raises:
-        RuntimeError: If database operations fail
-    """
-    try:
-        update_expressions = []
-        expression_attribute_names = {}
-        expression_attribute_values = {}
-
-        # Handle room change
-        if "room" in outcome_effects:
-            update_expressions.append("#room = :room")
-            expression_attribute_names["#room"] = "RoomID"
-            expression_attribute_values[":room"] = outcome_effects["room"]
-
-        # Handle wounds from story outcomes
-        if "wounds" in outcome_effects:
-
-            # Add heal times to wounds
-            wounds_with_heal_times = []
-            for wound in outcome_effects["wounds"]:
-                wound_data = wound.copy()
-                if "HealAt" not in wound_data:
-                    damage_type = wound_data.get("DamageType", "lethal")
-                    wound_data["HealAt"] = calculate_heal_time(damage_type)
-                wounds_with_heal_times.append(wound_data)
-
-            # Apply wounds through character updates
-            try:
-                apply_character_updates(character_id, {"Wounds": wounds_with_heal_times})
-                logger.info(f"Applied story outcome wounds for {character_id}")
-            except Exception as err:
-                logger.error(f"Failed to apply story wounds for {character_id} Error: {err}", exc_info=True)
-                raise RuntimeError(f"Failed to apply story wounds: {err}") from err
-
-        if update_expressions:
-            update_expression: str = "SET " + ", ".join(update_expressions)
-
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeNames=expression_attribute_names,
-                ExpressionAttributeValues=expression_attribute_values,
-            )
-
-            logger.info(f"Applied story outcome effects for {character_id}")
-    except ClientError as err:
-        logger.error(f"Failed to apply outcome effects for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to apply outcome effects: {err}") from err
 
 
 def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, attribute_xp: dict) -> None:

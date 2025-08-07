@@ -8,9 +8,9 @@ from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
-from eidolon.character import delete_character
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
+from eidolon.player_character import delete_character
 
 
 def create_player_record(user_uuid: str, email: str) -> None:
@@ -232,6 +232,47 @@ def get_character_list(player_id: str) -> list:
     )
 
     return characters
+
+
+def verify_character_ownership(character_id: str, player_id: str) -> bool:
+    """
+    Verify that a character belongs to a player by checking the player record.
+
+    This is more efficient than fetching the full character record since the
+    player record is smaller and the players table is accessed less frequently.
+
+    Args:
+        character_id: Character UUID to verify
+        player_id: Cognito user ID (player UUID)
+
+    Returns:
+        True if the character belongs to the player, False otherwise
+
+    Raises:
+        ValueError: If player not found
+        RuntimeError: If database query fails
+    """
+    try:
+        player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
+
+        if not player:
+            logger.warning(f"Player not found for ownership check: {player_id}")
+            raise ValueError(f"Player {player_id} not found")
+
+        # Check if character_id exists in player's character list
+        character_list = player.get("CharacterList", {})
+
+        for char_name, char_info in character_list.items():
+            if char_info.get("UUID") == character_id:
+                logger.debug(f"Character ownership verified: {character_id} belongs to {player_id}")
+                return True
+
+        logger.warning(f"Character ownership failed: {character_id} not owned by {player_id}")
+        return False
+
+    except ClientError as err:
+        logger.error(f"Failed to verify character ownership for {character_id}, {player_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to verify character ownership: {err}") from err
 
 
 def delete_player_record(player_id: str) -> None:

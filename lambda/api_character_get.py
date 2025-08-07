@@ -7,14 +7,15 @@ Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-from eidolon.character import character_get, character_get_active_segment, character_get_active_story
+from eidolon.character_data import character_get
+from eidolon.character_segment import character_get_active_segment
+from eidolon.character_story import character_get_active_story, get_stories
 from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float
 from eidolon.items import get_inventory
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.story import get_stories_for_character
 
 
 def get_character_logic(character_id: str, player_id: str) -> dict:
@@ -98,7 +99,7 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
         logger.info(f"Available stories for character for {character_id}")
 
         # Get story details with prerequisite and cooldown checking
-        stories: list = get_stories_for_character(character_id, player_id, available_story_ids)
+        stories: list = get_stories(character_id, player_id, available_story_ids)
 
         # Sort stories by availability and title
         stories.sort(key=lambda s: (not s["Available"], s["Title"]))

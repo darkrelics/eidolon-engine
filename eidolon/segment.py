@@ -8,51 +8,19 @@ decision, and rest segments.
 import math
 import random
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
-from eidolon.character import apply_character_updates
+from eidolon.character_data import apply_character_updates
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-from eidolon.story import (
-    apply_story_rewards,
-    calculate_story_rewards,
-    complete_story_for_character,
-    get_story_history,
-    get_story_metadata,
-)
+from eidolon.mechanics import calculate_heal_time, resolve_opposed_check
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES: list = ["mechanical", "decision", "rest"]
 MECHANICAL_ONLY_TYPES: list = ["mechanical"]
-
-# Wound healing durations (matching MUD server)
-BASHING_HEAL_TIME = timedelta(minutes=15)
-LETHAL_HEAL_TIME = timedelta(hours=6)
-AGGRAVATED_HEAL_TIME = timedelta(days=7)
-
-
-def calculate_heal_time(damage_type: str) -> str:
-    """
-    Calculate when a wound will heal based on damage type.
-
-    Args:
-        damage_type: Type of damage (bashing, lethal, aggravated)
-
-    Returns:
-        ISO 8601 timestamp string for when the wound will heal
-    """
-    heal_times = {
-        "bashing": BASHING_HEAL_TIME,
-        "lethal": LETHAL_HEAL_TIME,
-        "aggravated": AGGRAVATED_HEAL_TIME,
-    }
-
-    heal_delta: timedelta = heal_times.get(damage_type.lower(), LETHAL_HEAL_TIME)
-    heal_at: datetime = datetime.now(timezone.utc) + heal_delta
-    return heal_at.isoformat()
 
 
 def is_mechanical_segment(segment_type: str) -> bool:
@@ -85,37 +53,6 @@ def is_simple_segment(segment_type: str) -> bool:
         True if segment can be processed directly
     """
     return segment_type.lower() in ["rest", "decision"]
-
-
-def resolve_opposed_check(aggressor: float, defender: float) -> dict:
-    """
-    Resolve an opposed check using MUD mechanics.
-
-    Args:
-        aggressor: Aggressor's rating
-        defender: Defender's rating
-
-    Returns:
-        Dictionary with success (bool) and sigma (float)
-    """
-    # Constants from MUD mechanics
-    k_shift = 0.20  # How much rating difference matters
-    k_var = 0.35  # Variance scaling
-    min_sig = 0.25  # Minimum variance
-
-    # Calculate difference
-    diff: float = aggressor - defender
-
-    # Calculate mean and variance
-    mean: float = k_shift * diff
-    variance: float = 1.0 + k_var * math.tanh(diff / 10.0)
-    variance = max(variance, min_sig)
-
-    # Generate outcome using normal distribution
-    sigma: float = random.gauss(mean, variance)
-    success: bool = sigma >= 0
-
-    return {"success": success, "sigma": sigma}
 
 
 def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
@@ -894,37 +831,6 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
     return active_segment_id
 
 
-def complete_story(character_id: str, story_id: str, outcome: str) -> None:
-    """
-    Complete the story, apply rewards, and update character state.
-
-    Args:
-        character_id: Character UUID
-        story_id: Story UUID
-        outcome: Final outcome
-    """
-
-    # Complete the story and clean up character state
-    complete_story_for_character(character_id, story_id, outcome)
-
-    # Get story metadata for reward calculation
-    try:
-        story_metadata = get_story_metadata(story_id)
-        history = get_story_history(character_id, story_id)
-
-        # Count completed segments from history
-        segments_completed = len(history.get("SegmentHistory", []))
-
-        # Calculate and apply rewards
-        rewards = calculate_story_rewards(story_metadata, outcome, segments_completed)
-        if rewards.get("xp", 0) > 0 or rewards.get("items") or rewards.get("currency", 0) > 0:
-            apply_story_rewards(character_id, rewards)
-
-    except Exception as err:
-        logger.error(f"Failed to apply story rewards for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to update history completion: {err}") from err
-
-
 def process_segment_completely(
     active_segment_id: str,
     character_id: str,
@@ -1139,36 +1045,6 @@ def record_abandoned_segment_history(character_id: str, story_id: str, active_se
     except ClientError as err:
         logger.error(f"Failed to record segment history for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to record segment history: {err}") from err
-
-
-def update_character_active_segment(character_id: str, active_segment_id: str) -> None:
-    """
-    Update character's ActiveSegmentID field.
-
-    Args:
-        character_id: Character UUID
-        active_segment_id: Active segment UUID to set
-
-    Raises:
-        ValueError: If character_id or active_segment_id is empty
-        RuntimeError: If database update fails
-    """
-    if not character_id:
-        raise ValueError("Character ID cannot be empty")
-    if not active_segment_id:
-        raise ValueError("Active segment ID cannot be empty")
-
-    try:
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression="SET ActiveSegmentID = :segment_id",
-            ExpressionAttributeValues={":segment_id": active_segment_id},
-        )
-        logger.info(f"Updated character active segment for {character_id}")
-    except ClientError as err:
-        logger.error(f"Failed to update character active segment for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to update character active segment: {err}") from err
 
 
 def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: int = 900, time_remaining: int = 0) -> str:

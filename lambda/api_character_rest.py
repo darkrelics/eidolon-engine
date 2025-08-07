@@ -2,7 +2,7 @@
 
 import time
 
-from eidolon.character import character_get
+from eidolon.character_data import character_get
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player

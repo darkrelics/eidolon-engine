@@ -9,11 +9,11 @@ Returns completed segment results from the character's story history.
 
 from botocore.exceptions import ClientError
 
-from eidolon.character import character_get
+from eidolon.character_data import character_get
 from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, validate_player
+from eidolon.player import extract_player_id, validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 
@@ -33,7 +33,11 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
         ValueError: If character not found or not owned
         RuntimeError: If database operations fail
     """
-    # Verify character ownership
+    # Verify character ownership using player record
+    if not verify_character_ownership(character_id, player_id):
+        raise ValueError("Character not owned by player")
+
+    # Get character data to find active story
     character: dict = character_get(character_id, player_id)
 
     # Get current story ID from character

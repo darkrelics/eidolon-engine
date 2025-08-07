@@ -13,7 +13,7 @@ from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.responses import lambda_response, lambda_error
 
-archetypes_cache: list = []
+archetypes_cache = []
 
 # Cache for player archetypes - populated at module load
 try:
@@ -52,7 +52,7 @@ def handle_get_archetypes() -> dict:
         archetypes: list = get_archetypes()
 
         # Cache the results
-        archetypes_cache: list = archetypes
+        archetypes_cache = archetypes
 
         logger.info("Successfully loaded archetypes cache on demand")
         return {"success": True, "archetypes": archetypes, "count": len(archetypes)}

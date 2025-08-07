@@ -7,6 +7,8 @@ Lambda function to start a story for a character.
 Validates character state, creates active segment, and returns first segment details.
 """
 
+from botocore.exceptions import ClientError
+
 from eidolon.cors import cors_handler
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
@@ -14,8 +16,10 @@ from eidolon.player import extract_player_id, validate_player
 from eidolon.polling import ensure_polling_enabled
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.sqs import send_message
-from eidolon.story import start_story_for_character
+from eidolon.story import create_story_history_entry, validate_story_available, get_story_and_first_segment, create_active_segment
 from eidolon.validation import validate_uuid
+from eidolon.character_data import character_get
+from eidolon.dynamo import dynamo, TableName
 
 
 def format_start_story_response(active_segment: dict, segment: dict) -> dict:
@@ -100,6 +104,95 @@ def start_story_business_logic(character_id: str, story_id: str, player_id: str)
 
     # Format response
     return format_start_story_response(active_segment, segment)
+
+
+def start_story_for_character(character_id: str, story_id: str, player_id: str) -> dict:
+    """
+    Start a story for a character with atomic state updates.
+
+    Args:
+        character_id: Character UUID
+        story_id: Story UUID
+        player_id: Player UUID
+
+    Returns:
+        Dict with active_segment data
+
+    Raises:
+        ValueError: If validation fails
+        RuntimeError: If database operations fail
+    """
+
+    # Get character and verify ownership
+    character: dict = character_get(character_id, player_id)
+
+    # Check if character is already in a game mode
+    game_mode = character.get("GameMode", "None")
+    if game_mode != "None":
+        logger.warning(f"Character already in game mode for {character_id}")
+        raise ValueError(f"Character is currently in {game_mode} mode")
+
+    # Validate story is available
+    validate_story_available(character, story_id)
+
+    # Get story and first segment
+    story, first_segment = get_story_and_first_segment(story_id)
+
+    # Create active segment first to get the segment ID
+    story_title = story.get("Title", "Unknown Story")
+    active_segment = create_active_segment(character_id, player_id, story_id, story_title, first_segment)
+
+    # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID and remove from available list
+    try:
+        # Build update expression to set GameMode and remove from AvailableStories
+        available_stories = character.get("AvailableStories", [])
+        if story_id in available_stories:
+            story_index = available_stories.index(story_id)
+            update_expression = (
+                "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id "
+                f"REMOVE AvailableStories[{story_index}]"
+            )
+        else:
+            # Story not in list anymore (race condition), just update the mode
+            update_expression = "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
+
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeValues={
+                ":mode": "Incremental",
+                ":none": "None",
+                ":story_id": story_id,
+                ":segment_id": active_segment.get("ActiveSegmentID"),
+            },
+            ConditionExpression="GameMode = :none",
+        )
+
+    except ClientError as err:
+        # Rollback: Delete the active segment we just created
+        try:
+            dynamo.delete_item(
+                TableName.ACTIVE_SEGMENTS,
+                Key={"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
+            )
+        except Exception as rollback_err:
+            logger.error(f"Failed to rollback active segment for {active_segment.get('ActiveSegmentID')} Error: {rollback_err}")
+
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.warning(f"Character state changed during story start for {character_id}")
+            raise ValueError("Character state conflict") from err
+
+        logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to update character state: {err}") from err
+
+    # Create history entry
+    story_type = story.get("StoryType", "repeatable")
+    create_story_history_entry(character_id, story_id, story_title, story_type)
+
+    logger.info(f"Story started successfully for {character_id}")
+
+    return {"active_segment": active_segment, "segment": first_segment, "story": story}
 
 
 def lambda_handler(event: dict, context: object) -> dict:

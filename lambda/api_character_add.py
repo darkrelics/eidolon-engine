@@ -1,7 +1,10 @@
 """Lambda function to add a new character for the incremental game."""
 
+import json
+
 from eidolon.archetypes import get_archetype
-from eidolon.character import character_name_filter, check_character_limit, create_character
+from eidolon.bloom import character_name_filter
+from eidolon.character_data import check_character_limit, create_character
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id, validate_player
@@ -110,6 +113,11 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Parse request body
     try:
         body: dict = event.get("body", {})
+        if isinstance(body, str):
+            body = json.loads(body)
+    except json.JSONDecodeError:
+        logger.error(f"Failed to parse request body as JSON: Body: {event.get('body')}", exc_info=False)
+        return lambda_response(400, {"Error": "Invalid JSON format"}, event)
     except ValueError:
         return lambda_response(400, {"Error": "Unable Parse Payload"}, event)
     except Exception as err:

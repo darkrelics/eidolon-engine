@@ -386,7 +386,7 @@ class IncrementalDeploymentOrchestrator:
                     log_cleanup = LogGroupCleanup(self.session)
                     if not log_cleanup.clean_before_deployment():
                         print("[WARNING] Log cleanup encountered issues, continuing with deployment")
-                
+
                 # S3 buckets are now all managed by the S3 stack
 
                 # Deploy stacks serially for safety
@@ -452,7 +452,7 @@ class IncrementalDeploymentOrchestrator:
                     # This ensures Lambda functions use the latest code from S3 that was
                     # built during the CodeBuild phase
                     print("\n  Updating Lambda functions with latest code...")
-                    
+
                     # Get Lambda bucket name
                     lambda_bucket = plan["parameters"].get("lambda_bucket_name")
                     if not lambda_bucket:
@@ -1270,7 +1270,7 @@ class IncrementalDeploymentOrchestrator:
                 # This handles both exact matches and handler-based matches
                 function_mapping = {}
                 unmatched_artifacts = []
-                
+
                 for artifact in lambda_artifacts:
                     # Remove .zip extension to get function name
                     # e.g., "api-archetype-list.zip" -> "api-archetype-list"
@@ -1283,7 +1283,7 @@ class IncrementalDeploymentOrchestrator:
                             function_mapping[artifact] = func["FunctionName"]
                             matched = True
                             break
-                    
+
                     # If no exact match, try to match by handler module name
                     if not matched:
                         # Convert hyphen to underscore for handler matching
@@ -1296,7 +1296,7 @@ class IncrementalDeploymentOrchestrator:
                                 print(f"    [INFO] Matched {artifact} to {func['FunctionName']} via handler")
                                 matched = True
                                 break
-                    
+
                     if not matched:
                         unmatched_artifacts.append(artifact)
 

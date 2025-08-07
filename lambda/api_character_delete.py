@@ -7,7 +7,8 @@ Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.
 """
 
-from eidolon.character import character_get, delete_character
+from eidolon.character_data import character_get
+from eidolon.player_character import delete_character
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import extract_player_id
@@ -90,7 +91,6 @@ def lambda_handler(event: dict, context: object) -> dict:
     character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
-
 
     # Call business logic
     try:
