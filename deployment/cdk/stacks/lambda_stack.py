@@ -284,21 +284,21 @@ class LambdaStack(cdk.Stack):
         Args:
             dependencies_layer: Lambda layer
         """
-        # Get Archetypes Lambda
-        self.get_archetypes_function = self.create_lambda_function(
-            "api-get-archetypes",
-            "api_archetypes_get.lambda_handler",
+        # List Archetypes Lambda
+        self.list_archetypes_function = self.create_lambda_function(
+            "api-archetype-list",
+            "api_archetype_list.lambda_handler",
             {
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            "Returns available archetypes",
+            "Lists available archetypes",
             dependencies_layer,
         )
 
         # Add Character Lambda
         self.add_character_function = self.create_lambda_function(
-            "api-add-character",
+            "api-character-add",
             "api_character_add.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
@@ -315,7 +315,7 @@ class LambdaStack(cdk.Stack):
 
         # Get Character Lambda
         self.get_character_function = self.create_lambda_function(
-            "api-get-character",
+            "api-character-get",
             "api_character_get.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
@@ -330,7 +330,7 @@ class LambdaStack(cdk.Stack):
 
         # List Characters Lambda
         self.list_characters_function = self.create_lambda_function(
-            "api-list-characters",
+            "api-character-list",
             "api_character_list.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
@@ -744,7 +744,7 @@ class LambdaStack(cdk.Stack):
     def create_log_groups(self) -> None:
         """Create CloudWatch log groups for all Lambda functions."""
         log_configs: list = [
-            ("get-archetypes-logs", self.get_archetypes_function),
+            ("list-archetypes-logs", self.list_archetypes_function),
             ("add-character-logs", self.add_character_function),
             ("get-character-logs", self.get_character_function),
             ("list-characters-logs", self.list_characters_function),

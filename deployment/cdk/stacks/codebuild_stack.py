@@ -160,12 +160,12 @@ class CodeBuildStack(Stack):
                 iam.PolicyStatement(
                     actions=["s3:PutObject"],
                     resources=[
-                        f"{self.lambda_bucket.bucket_arn}/cognito-new-player.zip",
-                        f"{self.lambda_bucket.bucket_arn}/cognito-delete-player.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-get-archetypes.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-add-character.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-get-character.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-list-characters.zip",
+                        f"{self.lambda_bucket.bucket_arn}/cognito-player-new.zip",
+                        f"{self.lambda_bucket.bucket_arn}/cognito-player-delete.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-archetype-list.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-character-add.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-character-get.zip",
+                        f"{self.lambda_bucket.bucket_arn}/api-character-list.zip",
                         f"{self.lambda_bucket.bucket_arn}/api-character-delete.zip",
                         f"{self.lambda_bucket.bucket_arn}/api-get-stories.zip",
                         f"{self.lambda_bucket.bucket_arn}/api-start-story.zip",

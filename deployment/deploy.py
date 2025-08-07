@@ -448,32 +448,23 @@ class IncrementalDeploymentOrchestrator:
                     # Configure Cognito triggers via boto3
                     self.configure_cognito_triggers()
 
-                    # Check if any Lambda stack reported no changes
-                    lambda_stacks: list = ["lambda", "base-lambda"]
-                    needs_lambda_update = False
+                    # Always update Lambda functions after Application Layer deployment
+                    # This ensures Lambda functions use the latest code from S3 that was
+                    # built during the CodeBuild phase
+                    print("\n  Updating Lambda functions with latest code...")
+                    
+                    # Get Lambda bucket name
+                    lambda_bucket = plan["parameters"].get("lambda_bucket_name")
+                    if not lambda_bucket:
+                        # Try to construct it
+                        game_name = plan["parameters"].get("game_name", "eidolon-engine")
+                        account_id = self.aws_factory.get_account_id()
+                        lambda_bucket: str = f"{game_name}-lambda-{account_id}"
 
-                    for stack in lambda_stacks:
-                        if stack in stack_results:
-                            stack_changes = stack_results[stack].get("stack_changes", {})
-                            # If this specific stack had no changes, we need to update
-                            if stack in stack_changes and not stack_changes[stack]:
-                                needs_lambda_update = True
-                                print(f"\n  Note: {stack} had no changes, Lambda update required")
-                                break
-
-                    if needs_lambda_update:
-                        # Get Lambda bucket name
-                        lambda_bucket = plan["parameters"].get("lambda_bucket_name")
-                        if not lambda_bucket:
-                            # Try to construct it
-                            game_name = plan["parameters"].get("game_name", "eidolon-engine")
-                            account_id = self.aws_factory.get_account_id()
-                            lambda_bucket: str = f"{game_name}-lambda-{account_id}"
-
-                        if lambda_bucket:
-                            self._update_lambda_functions_from_s3(lambda_bucket)
-                        else:
-                            print("  [WARNING] Could not determine Lambda bucket name for updates")
+                    if lambda_bucket:
+                        self._update_lambda_functions_from_s3(lambda_bucket)
+                    else:
+                        print("  [WARNING] Could not determine Lambda bucket name for updates")
 
                 if result["success"]:
                     print(f"\n[SUCCESS] Phase {i} ({phase['name']}) completed successfully!")
@@ -559,11 +550,11 @@ class IncrementalDeploymentOrchestrator:
         # Expected artifacts
         expected_artifacts: list = [
             "lambda-layer/lambda-layer.zip",  # CodeBuild artifacts path
-            "api-add-character.zip",
+            "api-character-add.zip",
             "api-character-delete.zip",
-            "api-get-archetypes.zip",
-            "api-get-character.zip",
-            "api-list-characters.zip",
+            "api-archetype-list.zip",
+            "api-character-get.zip",
+            "api-character-list.zip",
             "api-get-stories.zip",
             "api-start-story.zip",
             "api-get-current-story.zip",
@@ -576,8 +567,8 @@ class IncrementalDeploymentOrchestrator:
             "ops-segment-poller.zip",
             "ops-process-segment.zip",
             "ops-advance-story.zip",
-            "cognito-new-player.zip",
-            "cognito-delete-player.zip",
+            "cognito-player-new.zip",
+            "cognito-player-delete.zip",
         ]
 
         print("\nValidating Lambda build artifacts...")
