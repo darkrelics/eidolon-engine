@@ -381,11 +381,16 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('GameScreen: Building with character: ${_character?.name}, loading: $_isLoading, error: $_error');
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final deviceType = ResponsiveLayout.getDeviceType(context);
 
     return ErrorBoundary(
+      onError: (details) {
+        debugPrint('GameScreen: ErrorBoundary caught error in GameScreen');
+        debugPrint('GameScreen: Error details: ${details.exception}');
+      },
       child: GameKeyboardShortcuts(
         onRefresh: _loadCharacterData,
         onEscape: () {

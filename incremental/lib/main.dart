@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/registration_screen.dart';
 import 'screens/password_reset_screen.dart';
@@ -10,12 +13,33 @@ import 'screens/character_screen.dart';
 import 'screens/game_screen.dart';
 
 void main() {
-  runApp(
-    MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => AuthProvider())],
-      child: const EidolonIncrementalApp(),
-    ),
-  );
+  // Set up global error handlers
+  FlutterError.onError = (FlutterErrorDetails details) {
+    debugPrint('========== FLUTTER ERROR ==========');
+    debugPrint('Error: ${details.exception}');
+    debugPrint('Stack trace:\n${details.stack}');
+    debugPrint('Library: ${details.library}');
+    debugPrint('===================================');
+    FlutterError.presentError(details);
+  };
+  
+  // Catch async errors
+  runZonedGuarded(() {
+    runApp(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ],
+        child: const EidolonIncrementalApp(),
+      ),
+    );
+  }, (error, stack) {
+    debugPrint('========== ASYNC ERROR ==========');
+    debugPrint('Error: $error');
+    debugPrint('Stack trace:\n$stack');
+    debugPrint('=================================');
+  });
 }
 
 class EidolonIncrementalApp extends StatelessWidget {
@@ -23,26 +47,25 @@ class EidolonIncrementalApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Eidolon Incremental',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      home: const AuthWrapper(),
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const RegistrationScreen(),
-        '/forgot-password': (context) => const PasswordResetScreen(),
-        '/password-reset-confirm': (context) =>
-            const PasswordResetConfirmScreen(),
-        '/account-settings': (context) => const AccountSettingsScreen(),
-        '/character-selection': (context) => const CharacterScreen(),
-        '/game': (context) => const GameScreen(),
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) {
+        return MaterialApp(
+          title: 'Eidolon Incremental',
+          theme: AppTheme.lightTheme(),
+          darkTheme: AppTheme.darkTheme(),
+          themeMode: themeProvider.themeMode,
+          home: const AuthWrapper(),
+          routes: {
+            '/login': (context) => const LoginScreen(),
+            '/register': (context) => const RegistrationScreen(),
+            '/forgot-password': (context) => const PasswordResetScreen(),
+            '/password-reset-confirm': (context) =>
+                const PasswordResetConfirmScreen(),
+            '/account-settings': (context) => const AccountSettingsScreen(),
+            '/character-selection': (context) => const CharacterScreen(),
+            '/game': (context) => const GameScreen(),
+          },
+        );
       },
     );
   }

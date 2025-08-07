@@ -146,7 +146,9 @@ class ThemeModeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('ThemeModeSelector: Building widget');
     final themeProvider = ThemeProvider.of(context);
+    debugPrint('ThemeModeSelector: Successfully got ThemeProvider');
     final theme = Theme.of(context);
     
     return PopupMenuButton<ThemeMode>(
