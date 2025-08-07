@@ -32,9 +32,31 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
   }
 
   void _loadStories() {
-    setState(() {
-      _storiesFuture = _apiService.getStories(widget.character.id);
-    });
+    // Check if character already has available stories details
+    if (widget.character.availableStoriesDetails != null) {
+      setState(() {
+        _storiesFuture = Future.value(
+          widget.character.availableStoriesDetails!
+              .map((story) => StoryMetadata.fromJson(story))
+              .toList(),
+        );
+      });
+    } else {
+      // Fallback: fetch fresh character data to get stories
+      setState(() {
+        _storiesFuture = _apiService.getCharacterById(widget.character.id).then((character) {
+          if (character == null) {
+            throw Exception('Character not found');
+          }
+          if (character.availableStoriesDetails != null) {
+            return character.availableStoriesDetails!
+                .map((story) => StoryMetadata.fromJson(story))
+                .toList();
+          }
+          return <StoryMetadata>[];
+        });
+      });
+    }
   }
 
   Future<void> _startStory(StoryMetadata story) async {

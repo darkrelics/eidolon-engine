@@ -42,7 +42,7 @@ def handle_client_errors(operation_name="operation", default_return=None):
 
                 return default_return
             except Exception as err:
-                print(f"[ERROR] {operation_name}: Unexpected error - {str(err)}")
+                print(f"[ERROR] {operation_name}: Unexpected error - {err}")
                 return default_return
 
         return wrapper

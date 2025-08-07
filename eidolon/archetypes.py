@@ -8,12 +8,10 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH
-from eidolon.logger import get_logger
-
-logger = get_logger(__name__)
+from eidolon.logger import logger
 
 
-def get_all_player_archetypes() -> list:
+def get_archetypes() -> list:
     """
     Load all player-available archetypes from DynamoDB.
 
@@ -26,29 +24,19 @@ def get_all_player_archetypes() -> list:
     logger.info("Loading archetypes from DynamoDB")
 
     try:
-        # Scan all archetypes (no pagination needed for < 50 items)
-        items = dynamo.scan_all(TableName.ARCHETYPES)
+        # Scan all archetypes
+        items: list = dynamo.scan_all(TableName.ARCHETYPES)  # type: ignore
     except ClientError as err:
-        logger.error(
-            "Failed to scan archetypes table",
-            extra={"error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to load archetypes: {str(err)}")
+        logger.error(f"Failed to scan archetypes table: {err.response.get('Error', {}).get('Message', 'Unknown error')}")
+        raise RuntimeError(f"Failed to load archetypes: {err}") from err
 
     # Filter for player archetypes
-    player_archetypes = []
+    player_archetypes: list = []
     for item in items:  # type: ignore
         # Check if Player field exists and is True
         if item.get("Player", False):
-            # Normalize attribute and skill keys to lowercase
             attributes = item.get("Attributes", {})
-            if attributes:
-                attributes = {k.lower(): v for k, v in attributes.items()}
-
             skills = item.get("Skills", {})
-            if skills:
-                skills = {k.lower(): v for k, v in skills.items()}
 
             player_archetypes.append(
                 {
@@ -67,5 +55,36 @@ def get_all_player_archetypes() -> list:
     # Sort by archetype name for consistent ordering
     player_archetypes.sort(key=lambda x: x["ArchetypeName"])
 
-    logger.info("Loaded player archetypes", extra={"count": len(player_archetypes)})
+    logger.info(f"Loaded player archetypes {len(player_archetypes)}")
     return player_archetypes
+
+
+def get_archetype(archetype_name: str) -> dict:
+    """
+    Retrieve and validate an archetype from DynamoDB.
+
+    Args:
+        archetype_name: Name of the archetype.
+
+    Returns:
+        Archetype data dict. Empty dict if not found/not player-available.
+
+    Raises:
+        RuntimeError: If archetype retrieval fails.
+    """
+    try:
+        archetype = dynamo.get_item(TableName.ARCHETYPES, {"ArchetypeName": archetype_name})
+
+        if not archetype:
+            logger.warning(f"Archetype: {archetype_name} not found")
+            return {}
+
+        if not archetype.get("Player", False):
+            logger.info(f"Archetype: {archetype_name} not available to players")
+            return {}
+
+        return archetype
+
+    except ClientError as err:
+        logger.error(f"Error retrieving archetype: {err}")
+        raise RuntimeError(f"Failed to retrieve archetype: {archetype_name}") from err

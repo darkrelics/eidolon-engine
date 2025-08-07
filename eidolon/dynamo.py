@@ -31,9 +31,7 @@ from eidolon.environment import (
     STORY_HISTORY_TABLE,
     STORY_TABLE,
 )
-from eidolon.logger import get_logger
-
-logger = get_logger(__name__)
+from eidolon.logger import logger
 
 
 class TableName(Enum):
@@ -57,7 +55,7 @@ class TableName(Enum):
 
 
 # Map environment variables to table names
-TABLE_ENV_MAP = {
+TABLE_ENV_MAP: dict = {
     TableName.PLAYERS: PLAYERS_TABLE,
     TableName.CHARACTERS: CHARACTERS_TABLE,
     TableName.ARCHETYPES: ARCHETYPES_TABLE,
@@ -104,26 +102,17 @@ class ExponentialBackoff:
 
             while not success and count <= self.retry_count:
                 if count > 0:
-                    logger.info(
-                        "DynamoDB exponential backoff retry",
-                        extra={"count": count, "function": func.__name__},
-                    )
+                    logger.info("DynamoDB exponential backoff retry")
 
                 try:
                     response = func(*args, **kwargs)
                     success = True
                 except self.expected_errors as err:
-                    logger.info(
-                        "DynamoDB expected error, retrying",
-                        extra={"error": str(err), "count": count},
-                    )
+                    logger.info(f"DynamoDB expected error, retrying Error: {err}")
                     sleep(2 ** (count - 1) / 10)
                     count += 1
                 except tuple(self.expected_error_factory.RETRY_ERRORS) as err:
-                    logger.info(
-                        "DynamoDB retry error",
-                        extra={"error": str(err), "count": count},
-                    )
+                    logger.info(f"DynamoDB retry error Error: {err}")
                     sleep(2 ** (count - 1) / 10)
                     count += 1
                 except ClientError as err:
@@ -134,36 +123,22 @@ class ExponentialBackoff:
                         "RequestLimitExceeded",
                         "InternalServerError",
                     ]:
-                        logger.info(
-                            "DynamoDB throttling error, retrying",
-                            extra={"error_code": error_code, "count": count},
-                        )
+                        logger.info("DynamoDB throttling error, retrying")
                         sleep(2 ** (count - 1) / 10)
                         count += 1
                     else:
                         # Non-retryable client error
-                        logger.error(
-                            "DynamoDB non-retryable client error",
-                            extra={"error": str(err)},
-                            exc_info=True,
-                        )
+                        logger.error(f"DynamoDB non-retryable client error Error: {err}", exc_info=True)
                         raise
                 except TypeError as err:
-                    logger.error("DynamoDB type error", extra={"error": str(err)}, exc_info=True)
+                    logger.error(f"DynamoDB type error Error: {err}", exc_info=True)
                     raise
                 except Exception as err:
-                    logger.error(
-                        "DynamoDB unexpected error, cannot retry",
-                        extra={"error": str(err), "function": func.__name__},
-                        exc_info=True,
-                    )
+                    logger.error(f"DynamoDB unexpected error, cannot retry Error: {err}", exc_info=True)
                     raise
 
             if not success:
-                logger.error(
-                    "DynamoDB retry count exceeded",
-                    extra={"count": count, "function": func.__name__},
-                )
+                logger.error("DynamoDB retry count exceeded")
                 raise RuntimeError(f"Number of retries exceeded for {func.__name__}")
 
             return response
@@ -212,9 +187,9 @@ class DynamoInterface:
             failed = [t.value for t, status in self._connection_status.items() if not status]
 
             if connected:
-                logger.info("Connected to DynamoDB tables", extra={"tables": connected})
+                logger.info("Connected to DynamoDB tables")
             if failed:
-                logger.error("Failed to connect to DynamoDB tables", extra={"tables": failed})
+                logger.error("Failed to connect to DynamoDB tables")
 
     def _connect_table(self, table_enum: TableName) -> bool:
         """
@@ -229,10 +204,7 @@ class DynamoInterface:
         try:
             table_name = TABLE_ENV_MAP.get(table_enum)
             if not table_name:
-                logger.error(
-                    "No environment variable mapping for table",
-                    extra={"table": table_enum.value},
-                )
+                logger.error(f"No environment variable mapping for table {table_enum.value}")
                 self._connection_status[table_enum] = False
                 return False
 
@@ -242,18 +214,11 @@ class DynamoInterface:
 
             self._tables[table_enum] = table
             self._connection_status[table_enum] = True
-            logger.debug("Connected to table", extra={"table_name": table_name})
+            logger.debug(f"Connected to table {table_name}")
             return True
 
         except Exception as err:
-            logger.error(
-                "Failed to connect to table",
-                extra={
-                    "table": table_enum.value,
-                    "error": str(err),
-                    "table_name": TABLE_ENV_MAP.get(table_enum),
-                },
-            )
+            logger.error(f"Failed to connect to table {table_enum.value} Error: {err}")
             self._connection_status[table_enum] = False
             return False
 
@@ -292,25 +257,22 @@ class DynamoInterface:
             Item dict with Decimals converted to floats, empty dict if not found
         """
         table = self.get_table(table_enum)
-        logger.debug("DB Interface: Get Item", extra={"table": table_enum.value, "key": key})
+        logger.debug(f"DB Interface: Get Item for {table_enum.value}")
 
         try:
             response = table.get_item(Key=key, **kwargs)
         except ClientError as err:
-            logger.error(
-                "Error getting item from DynamoDB",
-                extra={"error": str(err), "table": table_enum.value, "key": key},
-            )
+            logger.error(f"Error getting item from DynamoDB for {table_enum.value} Error: {err}")
             raise
 
         item = response.get("Item", {})
         if not item:
-            logger.debug("DB Interface: Get Item: No item found", extra={"key": key})
+            logger.debug("DB Interface: Get Item: No item found")
             return {}
 
         # Convert Decimal to float for JSON compatibility
         result = decimal_to_float(item)
-        logger.debug("DB Interface: Get Item: Return", extra={"result": result})
+        logger.debug("DB Interface: Get Item: Return")
         return result  # type: ignore
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
@@ -327,7 +289,7 @@ class DynamoInterface:
             ClientError: If DynamoDB operation fails
         """
         table = self.get_table(table_enum)
-        logger.debug("DB Interface: Put Item", extra={"table": table_enum.value, "item": item})
+        logger.debug(f"DB Interface: Put Item for {table_enum.value}")
 
         # Clean values for DynamoDB
         cleaned_item = clean_value(item)
@@ -335,10 +297,7 @@ class DynamoInterface:
         try:
             table.put_item(Item=cleaned_item, **kwargs)
         except ClientError as err:
-            logger.error(
-                "Error putting item to DynamoDB",
-                extra={"error": str(err), "table": table_enum.value},
-            )
+            logger.error(f"Error putting item to DynamoDB for {table_enum.value} Error: {err}")
             raise
 
         logger.debug("DB Interface: Put Item: Success")
@@ -359,10 +318,7 @@ class DynamoInterface:
             ClientError: If DynamoDB operation fails
         """
         table = self.get_table(table_enum)
-        logger.debug(
-            "DB Interface: Update Item",
-            extra={"table": table_enum.value, "arguments": kwargs},
-        )
+        logger.debug(f"DB Interface: Update Item for {table_enum.value}")
 
         # Clean expression attribute values if present
         if "ExpressionAttributeValues" in kwargs:
@@ -372,26 +328,12 @@ class DynamoInterface:
             response = table.update_item(**kwargs)
         except ClientError as err:
             if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-                logger.error(
-                    "Condition check failed",
-                    extra={
-                        "error": str(err),
-                        "table": table_enum.value,
-                        "key": kwargs.get("Key"),
-                    },
-                )
+                logger.error(f"Condition check failed for {table_enum.value} Error: {err}")
                 raise
-            logger.error(
-                "Error updating item in DynamoDB",
-                extra={
-                    "error": str(err),
-                    "table": table_enum.value,
-                    "key": kwargs.get("Key"),
-                },
-            )
+            logger.error(f"Error updating item in DynamoDB for {table_enum.value} Error: {err}")
             raise
 
-        logger.debug("DB Interface: Update Item: Response", extra={"response": response})
+        logger.debug("DB Interface: Update Item: Response")
         return response
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
@@ -410,25 +352,15 @@ class DynamoInterface:
             ClientError: If DynamoDB operation fails
         """
         table = self.get_table(table_enum)
-        logger.debug(
-            "DB Interface: Delete Item",
-            extra={"table": table_enum.value, "arguments": kwargs},
-        )
+        logger.debug(f"DB Interface: Delete Item for {table_enum.value}")
 
         try:
             response = table.delete_item(**kwargs)
         except ClientError as err:
-            logger.error(
-                "Error deleting item from DynamoDB",
-                extra={
-                    "error": str(err),
-                    "table": table_enum.value,
-                    "key": kwargs.get("Key"),
-                },
-            )
+            logger.error(f"Error deleting item from DynamoDB for {table_enum.value} Error: {err}")
             raise
 
-        logger.debug("DB Interface: Delete Item: Response", extra={"response": response})
+        logger.debug("DB Interface: Delete Item: Response")
         return response
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
@@ -447,20 +379,14 @@ class DynamoInterface:
             ClientError: If DynamoDB operation fails
         """
         table = self.get_table(table_enum)
-        logger.debug(
-            "DB Interface: Query",
-            extra={"table": table_enum.value, "arguments": kwargs},
-        )
+        logger.debug(f"DB Interface: Query for {table_enum.value}")
 
         items = []
 
         try:
             response = table.query(**kwargs)
         except ClientError as err:
-            logger.error(
-                "Error querying DynamoDB",
-                extra={"error": str(err), "table": table_enum.value},
-            )
+            logger.error(f"Error querying DynamoDB for {table_enum.value} Error: {err}")
             raise
 
         items.extend(response.get("Items", []))
@@ -473,17 +399,14 @@ class DynamoInterface:
             try:
                 response = table.query(**kwargs)
             except ClientError as err:
-                logger.error(
-                    "Error querying DynamoDB during pagination",
-                    extra={"error": str(err), "table": table_enum.value},
-                )
+                logger.error(f"Error querying DynamoDB during pagination for {table_enum.value} Error: {err}")
                 raise
 
             items.extend(response.get("Items", []))
 
         # Convert Decimal to float for JSON compatibility
         results = [decimal_to_float(item) for item in items]
-        logger.debug("DB Interface: Query: Found items", extra={"count": len(results)})
+        logger.debug(f"DB Interface: Query: Found {len(results)} items")
         return results
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
@@ -505,15 +428,12 @@ class DynamoInterface:
             ClientError: If DynamoDB operation fails
         """
         table = self.get_table(table_enum)
-        logger.debug("DB Interface: Scan", extra={"table": table_enum.value, "arguments": kwargs})
+        logger.debug(f"DB Interface: Scan for {table_enum.value}")
 
         try:
             response = table.scan(**kwargs)
         except ClientError as err:
-            logger.error(
-                "Error scanning DynamoDB",
-                extra={"error": str(err), "table": table_enum.value},
-            )
+            logger.error(f"Error scanning DynamoDB for {table_enum.value} Error: {err}")
             raise
 
         items = response.get("Items", [])
@@ -523,7 +443,7 @@ class DynamoInterface:
         # Convert Decimal to float for JSON compatibility
         results = [decimal_to_float(item) for item in items]
 
-        logger.info("DB Interface: Scan: Records Collected", extra={"count": count})
+        logger.info(f"DB Interface: Scan: Records Collected {count}")
         return {
             "items": results,
             "last_evaluated_key": last_evaluated_key,
@@ -546,15 +466,12 @@ class DynamoInterface:
             ClientError: If DynamoDB operation fails
         """
         table = self.get_table(table_enum)
-        logger.debug("DB Interface: Scan All", extra={"table": table_enum.value, "arguments": kwargs})
+        logger.debug(f"DB Interface: Scan All for {table_enum.value}")
 
         try:
             response = table.scan(**kwargs)
         except ClientError as err:
-            logger.error(
-                "Error scanning DynamoDB",
-                extra={"error": str(err), "table": table_enum.value},
-            )
+            logger.error(f"Error scanning DynamoDB for {table_enum.value} Error: {err}")
             raise
 
         items = response.get("Items", [])
@@ -563,7 +480,7 @@ class DynamoInterface:
         # Convert Decimal to float for JSON compatibility
         results = [decimal_to_float(item) for item in items]
 
-        logger.info("DB Interface: Scan All: Records Collected", extra={"count": count})
+        logger.info(f"DB Interface: Scan All: Records Collected {count}")
         return results
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
@@ -598,10 +515,7 @@ class DynamoInterface:
             try:
                 response = self._resource.batch_get_items(RequestItems=request)  # type: ignore
             except ClientError as err:
-                logger.error(
-                    "Error in batch get operation",
-                    extra={"error": str(err), "table": table_enum.value},
-                )
+                logger.error(f"Error in batch get operation for {table_enum.value} Error: {err}")
                 raise
 
             items = response.get("Responses", {}).get(table_name, [])
@@ -633,16 +547,10 @@ class DynamoInterface:
                         elif operation == "delete":
                             batch.delete_item(Key=item)
                     except Exception as err:
-                        logger.warning(
-                            "Failed to process individual item in batch",
-                            extra={"operation": operation, "error": str(err)},
-                        )
+                        logger.warning(f"Failed to process individual item in batch for {operation} Error: {err}")
                         failed_items.append(item)
         except Exception as err:
-            logger.error(
-                "Error creating batch writer",
-                extra={"error": str(err), "table": table_enum.value},
-            )
+            logger.error(f"Error creating batch writer for {table_enum.value} Error: {err}")
             raise
 
         return failed_items
@@ -681,10 +589,7 @@ class DynamoInterface:
         kwargs["IndexName"] = index_name
         kwargs["KeyConditionExpression"] = key_condition_expression
 
-        logger.debug(
-            "DB Interface: GSI Query",
-            extra={"table": table_enum.value, "index": index_name},
-        )
+        logger.debug(f"DB Interface: GSI Query for {table_enum.value}")
 
         # Use the existing query method
         return self.query(table_enum, **kwargs)  # type: ignore
@@ -737,14 +642,7 @@ class DynamoInterface:
         if condition_expression:
             update_params["ConditionExpression"] = condition_expression
 
-        logger.debug(
-            "DB Interface: Update Fields",
-            extra={
-                "table": table_enum.value,
-                "key": key,
-                "fields": list(updates.keys()),
-            },
-        )
+        logger.debug(f"DB Interface: Update Fields for {table_enum.value}")
 
         # Use the existing update_item method
         return self.update_item(table_enum, **update_params)  # type: ignore
@@ -761,11 +659,6 @@ def clean_value(value: object) -> object:
     elif isinstance(value, list):
         return [clean_value(v) for v in value]
     return value
-
-
-def convert_to_decimal(obj: object) -> object:
-    """Convert float values to Decimal for DynamoDB."""
-    return clean_value(obj)
 
 
 def decimal_to_float(obj: object) -> object:

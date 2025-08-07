@@ -7,21 +7,13 @@ Lambda function to get the outcome of a completed segment.
 Returns the narrative text and any rewards/effects for the outcome.
 """
 
-from eidolon.character import get_character, validate_character_ownership
-from eidolon.logger import get_logger
-from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.cors import cors_handler
+from eidolon.logger import log_lambda_statistics, logger
+from eidolon.player import extract_player_id, validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
+from eidolon.responses import lambda_error, lambda_response
+from eidolon.segment import validate_segment_outcome_results
 from eidolon.story import get_completed_segment_for_character, get_story_segment
-from eidolon.utilities import (
-    build_lambda_response_pascal,
-    handle_lambda_error_pascal,
-    handle_preflight_if_options,
-    log_lambda_invocation,
-)
-from eidolon.validation import validate_uuid
-
-# Configure logging
-logger = get_logger(__name__)
 
 
 def get_segment_outcome_business_logic(character_id: str, segment_id: str, player_id: str) -> dict:
@@ -40,16 +32,10 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         ValueError: If character not found, segment not found, or segment not completed
         RuntimeError: If database operations fail
     """
-    # Validate UUID formats
-    if not validate_uuid(character_id):
-        raise ValueError("Invalid character ID format")
 
-    if not validate_uuid(segment_id):
-        raise ValueError("Invalid segment ID format")
-
-    # Verify character ownership
-    character = get_character(character_id)
-    validate_character_ownership(character, player_id)
+    # Verify character ownership using player record
+    if not verify_character_ownership(character_id, player_id):
+        raise ValueError("Character not owned by player")
 
     # Get the completed segment
     active_segment = get_completed_segment_for_character(character_id, player_id, segment_id)
@@ -82,13 +68,12 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         # Get the outcome from the active segment
         outcome = active_segment.get("Outcome", "normal")
 
-        # Get results from segment definition
-        results = segment.get("Results", {})
-        outcome_result = results.get(outcome, {})
+        # Validate and extract outcome results
+        validated_result = validate_segment_outcome_results(segment, outcome)
 
         outcome_data["Outcome"] = outcome
-        outcome_data["Narrative"] = outcome_result.get("narrative", "")
-        outcome_data["Effects"] = outcome_result.get("effects", {})
+        outcome_data["Narrative"] = validated_result["narrative"]
+        outcome_data["Effects"] = validated_result["effects"]
 
         # Add challenge results for mechanical segments
         outcome_data["ChallengeResults"] = active_segment.get("ChallengeResults", [])
@@ -114,14 +99,7 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         outcome_data["Narrative"] = ""
         outcome_data["Effects"] = {}
 
-    logger.info(
-        "Segment outcome retrieved successfully",
-        extra={
-            "active_segment_id": active_segment_id,
-            "segment_type": segment_type,
-            "outcome": outcome_data.get("Outcome"),
-        },
-    )
+    logger.info(f"Segment outcome retrieved successfully for {active_segment_id}")
 
     return outcome_data
 
@@ -143,41 +121,41 @@ def lambda_handler(event: dict, context: object) -> dict:
         500: Internal error
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Handle preflight
-    preflight_response = handle_preflight_if_options(event)
+    preflight_response: dict = cors_handler.handle_preflight(event)
     if preflight_response:
         return preflight_response
 
     # Extract player ID from JWT
     try:
-        player_id = extract_player_id_from_event(event)
+        player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+        logger.error(f"Authentication failed Error: {err}", exc_info=True)
+        return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Validate player exists
     try:
-        if not validate_player_exists(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id}, exc_info=True)
-            return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+        if not validate_player(player_id):
+            logger.error(f"Player not found in database for {player_id}", exc_info=True)
+            return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Get parameters from query (flexible: PascalCase or camelCase)
     character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
     if not character_id:
-        return build_lambda_response_pascal(400, {"Error": "Missing CharacterID parameter"}, event)
+        return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
 
     segment_id = get_query_parameter_flexible(event, "SegmentID", "segmentId")
     if not segment_id:
-        return build_lambda_response_pascal(400, {"Error": "Missing SegmentID parameter"}, event)
+        return lambda_response(400, {"Error": "Missing SegmentID parameter"}, event)
 
     # Call business logic
     try:
@@ -203,43 +181,38 @@ def lambda_handler(event: dict, context: object) -> dict:
         if "CombatState" in outcome_data:
             response_data["CombatState"] = outcome_data["CombatState"]
 
-        logger.info("Lambda response", extra={"status_code": 200})
-        return build_lambda_response_pascal(200, response_data, event)
+        return lambda_response(200, response_data, event)
 
     except ValueError as err:
-        logger.warning(
-            "Invalid request",
-            extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
-        )
+        logger.warning(f"Invalid request for {character_id} Error: {err}")
         error_msg = str(err)
         if "not found" in error_msg.lower():
-            return build_lambda_response_pascal(
+            return lambda_response(
                 404,
                 {"Error": error_msg},
                 event,
             )
         elif "not yet completed" in error_msg.lower():
-            return build_lambda_response_pascal(
+            return lambda_response(
                 409,
                 {"Error": error_msg},
                 event,
             )
-        return build_lambda_response_pascal(
+        return lambda_response(
             400,
             {"Error": error_msg},
             event,
         )
     except RuntimeError as err:
         logger.error(
-            "Failed to get segment outcome",
-            extra={"character_id": character_id, "segment_id": segment_id, "error": str(err)},
+            f"Failed to get segment outcome for {character_id} Error: {err}",
             exc_info=True,
         )
-        return build_lambda_response_pascal(
+        return lambda_response(
             500,
             {"Error": "Internal server error"},
             event,
         )
 
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)

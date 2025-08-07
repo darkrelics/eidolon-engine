@@ -1,6 +1,6 @@
 {
-  "archetypes": {
-    "wizard": {
+  "Archetypes": {
+    "Wizard": {
       "ArchetypeName": "Wizard",
       "Description": "A Wizard!",
       "Health": 8,
@@ -40,26 +40,30 @@
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
           "Slot": "back",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": true
         },
         {
           "PrototypeID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
           "Slot": "finger",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
-    "rogue": {
+    "Rogue": {
       "ArchetypeName": "Rogue",
       "Description": "A Rogue!",
       "Health": 10,
@@ -99,26 +103,30 @@
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
           "Slot": "back",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": true
         },
         {
           "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "Slot": "weapon",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "Slot": "armor",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
-    "warrior": {
+    "Warrior": {
       "ArchetypeName": "Warrior",
       "Description": "A Warrior!",
       "Health": 12,
@@ -158,26 +166,30 @@
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
           "Slot": "back",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": true
         },
         {
           "PrototypeID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "Slot": "weapon",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "Slot": "armor",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
-    "goblin": {
+    "Goblin": {
       "ArchetypeName": "Goblin",
       "Description": "A mischievous goblin creature",
       "Health": 6,
@@ -217,7 +229,8 @@
         {
           "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "Slot": "weapon",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         }
       ]
     }

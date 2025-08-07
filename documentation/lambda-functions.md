@@ -34,11 +34,11 @@ These functions handle character operations for both Portal and Incremental inte
 
 #### Implemented Functions:
 
-- `api_list_characters.py` - List all characters for a player
-- `api_add_character.py` - Create new character with bloom filter name validation
+- `api_character_list.py` - List all characters for a player
+- `api_character_add.py` - Create new character with bloom filter name validation
 - `api_get_character.py` - Get character details including active story segments (enriches inventory with item details)
-- `api_delete_character.py` - Delete a character by ID
-- `api_get_archetypes.py` - Get available character archetypes
+- `api_character_delete.py` - Delete a character by ID
+- `api_archetypes_get.py` - Get available character archetypes
 
 #### Not Yet Implemented:
 
@@ -62,11 +62,11 @@ Lambda functions import shared modules from the `eidolon/` directory:
 ```python
 from eidolon.cors import cors_handler
 from eidolon.dynamo import dynamo
-from eidolon.logger import get_logger
-from eidolon.requests import get_query_parameter, parse_json_body, get_required_field
+from eidolon.logger logger
+from eidolon.requests import get_query_parameter, get_required_field
 from eidolon.responses import create_response, error_response
-from eidolon.utilities import build_lambda_response, log_lambda_invocation, handle_preflight_if_options, handle_lambda_error
-from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.utilities import lambda_response, log_lambda_invocation, handle_preflight, lambda_error
+from eidolon.player import extract_player_id, validate_player
 from eidolon.validation import validate_uuid
 ```
 
@@ -126,7 +126,6 @@ All Lambda functions must follow these parameter standards:
   - Use `get_query_parameter()` from `eidolon.requests`
 - **Request Body**: Use for data submission (POST, PUT, PATCH)
   - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
-  - Use `parse_json_body()` from `eidolon.requests`
 
 - **Path Parameters**: **NEVER** use for IDs - always use query parameters instead
   - Wrong: `/characters/123`
@@ -167,8 +166,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Now you can import Lambda functions and shared modules
-from lambda.api_list_characters import lambda_handler
-from eidolon.utilities import build_lambda_response
+from lambda.api_character_list import lambda_handler
+from eidolon.utilities import lambda_response
 
 # Create test event
 event = {
@@ -202,47 +201,46 @@ Each Lambda function must have a Lambda handler which handles the event, calls a
 def lambda_handler(event: dict, context: object) -> dict:
     """Lambda entry point - handles AWS-specific concerns."""
     # 1. Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(context, event)
 
     # 2. Handle CORS preflight
-    preflight_response = handle_preflight_if_options(event)
     if preflight_response:
         return preflight_response
 
     # 3. Extract and validate authentication
     try:
-        player_id = extract_player_id_from_event(event)
+        player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)})
-        return build_lambda_response(401, {"error": "Unauthorized"}, event)
+        logger.error("Authentication failed")
+        return lambda_response(401, {"error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return lambda_error(event, err)
 
     # 4. Validate player exists
     try:
-        if not validate_player_exists(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id})
-            return build_lambda_response(401, {"error": "Unauthorized"}, event)
+        if not validate_player(player_id):
+            logger.error("Player not found in database")
+            return lambda_response(401, {"error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)})
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        logger.error("Failed to validate player")
+        return lambda_response(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return lambda_error(event, err)
 
     # 5. Parse request parameters
     # 6. Call business logic function
     # 7. Return response
     try:
         result = business_logic_function(param1, param2)
-        return build_lambda_response(200, result, event)
+        return lambda_response(200, result, event)
     except ValueError as err:
-        logger.warning("Business logic error", extra={"error": str(err)})
-        return build_lambda_response(400, {"error": str(err)}, event)
+        logger.warning("Business logic error")
+        return lambda_response(400, {"error": str(err)}, event)
     except RuntimeError as err:
-        logger.error("Database error", extra={"error": str(err)})
-        return build_lambda_response(500, {"error": "Internal server error"}, event)
+        logger.error("Database error")
+        return lambda_response(500, {"error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error(err, context, event)
+        return lambda_error(event, err)
 
 def business_logic_function(param1: str, param2: str) -> dict:
     """Pure business logic - testable and AWS-agnostic."""
@@ -269,21 +267,20 @@ def business_logic_function(param1: str, param2: str) -> dict:
 5. **Logging**: Use the `log_lambda_invocation` utility for consistent logging
 6. **Environment Variables**: Use environment variables for configuration
 7. **IAM Permissions**: Follow least privilege principle
-8. **Response Format**: Use `build_lambda_response` for consistent responses:
+8. **Response Format**: Use `lambda_response` for consistent responses:
 
    ```python
    # Preferred pattern using utilities
-   return build_lambda_response(200, {"key": "value"}, event)
+   return lambda_response(200, {"key": "value"}, event)
 
    # This handles CORS headers and response formatting automatically
    ```
 
 9. **Architecture Pattern**: Follow the handler/business logic separation pattern described above
 10. **Utility Functions**: Prefer high-level utility functions from `eidolon.utilities`:
-    - `log_lambda_invocation()` - For logging invocations
-    - `handle_preflight_if_options()` - For CORS preflight handling
-    - `build_lambda_response()` - For building responses with CORS
-    - `handle_lambda_error()` - For consistent error handling
+    - `log_lambda_statistics()` - For logging invocations
+    - `lambda_response()` - For building responses with CORS
+    - `lambda_error()` - For consistent error handling
 
 ### Critical: Lambda Handler Exception Handling
 
@@ -299,24 +296,21 @@ def lambda_handler(event: dict, context: object) -> dict:
     """
     try:
         # All Lambda logic goes inside this try block
-        logger.info("Lambda invoked", extra={
-            "request_id": context.request_id,
-            "function_name": context.function_name
-        })
+        logger.info("Lambda invoked")
 
         # Your code here...
 
-        return build_lambda_response(200, {"success": True}, event)
+        return lambda_response(200, {"success": True}, event)
 
     except ValueError as err:
         # Handle expected business logic errors
-        logger.error("Validation error", extra={"error": str(err)})
-        return build_lambda_response(400, {"error": str(err)}, event)
+        logger.error("Validation error")
+        return lambda_response(400, {"error": str(err)}, event)
 
     except Exception as err:
         # CRITICAL: Catch ALL exceptions to prevent Lambda failures
-        # Use handle_lambda_error for consistent error handling
-        return handle_lambda_error(err, context, event)
+        # Use lambda_error for consistent error handling
+        return lambda_error(event, err)
 ```
 
 **Why This Matters:**

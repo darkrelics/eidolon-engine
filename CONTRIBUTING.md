@@ -210,7 +210,6 @@ Understand where your code belongs:
   - Frontend code must match backend parameter expectations
   - Use standard utility functions from `eidolon.requests`:
     - `get_query_parameter()` for query parameters
-    - `parse_json_body()` for request body parsing
 
 ## Common Patterns
 

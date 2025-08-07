@@ -30,8 +30,8 @@ phases:
               cp -r eidolon "build_temp/$func_name/"
             fi
 
-            # Include bloom filter data for api_add_character
-            if [ "$func_name" = "api_add_character" ]; then
+            # Include bloom filter data for api_character_add
+            if [ "$func_name" = "api_character_add" ]; then
               cp lambda/character_name_filter.pkl "build_temp/$func_name/"
             fi
 

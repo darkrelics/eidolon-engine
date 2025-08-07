@@ -18,7 +18,7 @@ Always use explicit imports with `from ... import ...` syntax:
 ```python
 # Good
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
+from eidolon.logger logger
 from botocore.exceptions import ClientError
 
 # Bad
@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
+from eidolon.logger logger
 from eidolon.validation import validate_uuid
 ```
 
@@ -217,6 +217,69 @@ def create_character(name: str) -> tuple:
 
 ## Error Handling
 
+### EAFP Principle (Easier to Ask for Forgiveness than Permission)
+
+Python follows the EAFP principle rather than LBYL (Look Before You Leap). Always use try/except blocks instead of checking conditions beforehand:
+
+```python
+# Good - EAFP style (Pythonic)
+try:
+    data = load_json(filename)
+    process_data(data)
+except FileNotFoundError:
+    logger.warning(f"File not found: {filename}")
+except json.JSONDecodeError as err:
+    logger.error(f"Invalid JSON in {filename}: {err}")
+
+# Bad - LBYL style (not Pythonic)
+if os.path.exists(filename):
+    data = load_json(filename)
+    process_data(data)
+else:
+    logger.warning(f"File not found: {filename}")
+```
+
+More examples:
+
+```python
+# Good - try to use the dictionary key
+try:
+    value = config["important_setting"]
+    process_setting(value)
+except KeyError:
+    logger.warning("Using default setting")
+    value = DEFAULT_SETTING
+
+# Bad - check if key exists first
+if "important_setting" in config:
+    value = config["important_setting"]
+    process_setting(value)
+else:
+    logger.warning("Using default setting")
+    value = DEFAULT_SETTING
+
+# Good - try the operation
+try:
+    result = int(user_input)
+except ValueError:
+    logger.error("Invalid number format")
+    return error_response("Please enter a valid number", 400)
+
+# Bad - check if it's numeric first
+if user_input.isdigit():
+    result = int(user_input)
+else:
+    logger.error("Invalid number format")
+    return error_response("Please enter a valid number", 400)
+```
+
+The EAFP principle makes code:
+
+- More Pythonic and idiomatic
+- Often faster (no redundant checks)
+- More readable (focus on the happy path)
+- More robust (handles edge cases better)
+
 ### Raise Errors Instead of Returning Them
 
 For functions in the eidolon library, raise exceptions rather than returning error values:
@@ -237,7 +300,7 @@ def get_character(character_id: str) -> dict:
             raise ValueError(f"Character {character_id} not found")
         return character
     except ClientError as err:
-        raise RuntimeError(f"Database error: {str(err)}")
+        raise RuntimeError(f"Database error: {err}")
 
 # Good - in Lambda handler
 def lambda_handler(event: dict, context: object) -> dict:
@@ -264,7 +327,7 @@ if not character_id:
 try:
     character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
 except ClientError as err:
-    logger.error("Failed to get character", extra={"error": str(err)})
+    logger.error("Failed to get character")
     return error_response("Database error", 500)
 
 if not character:
@@ -294,8 +357,8 @@ All exceptions must use the variable name `err` and it should be explicitly used
 try:
     result = dynamo.get_item(...)
 except ClientError as err:
-    logger.error("Database operation failed", extra={"error": str(err)})
-    raise RuntimeError(f"Failed to get item: {str(err)}")
+    logger.error("Database operation failed")
+    raise RuntimeError(f"Failed to get item: {err}")
 
 # Bad - using other variable names
 try:
@@ -305,6 +368,128 @@ except ClientError as e:  # Don't use 'e'
 except Exception as ex:  # Don't use 'ex'
     logger.error(f"Error: {ex}")
 ```
+
+### Exception Chaining with 'from err'
+
+When re-raising exceptions, always use the `from err` syntax to preserve the exception chain. This maintains the full traceback for debugging while allowing you to provide more context-specific error messages:
+
+```python
+# Good - using 'from err' to chain exceptions
+def get_character(character_id: str) -> dict:
+    """Get character from database."""
+    try:
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+        if not character:
+            raise ValueError(f"Character {character_id} not found")
+        return character
+    except ClientError as err:
+        logger.error("Database query failed")
+        raise RuntimeError(f"Failed to retrieve character {character_id}") from err
+
+# Good - preserving exception chain across multiple layers
+def process_character_action(character_id: str, action: str) -> dict:
+    """Process an action for a character."""
+    try:
+        character = get_character(character_id)
+        return apply_action(character, action)
+    except RuntimeError as err:
+        # Re-raise with additional context, preserving the chain
+        raise RuntimeError(f"Cannot process action '{action}' for character") from err
+    except ValueError as err:
+        # Convert to more specific error type while preserving chain
+        raise ValueError(f"Invalid character for action '{action}'") from err
+
+# Bad - not using 'from err', loses original exception context
+def get_character(character_id: str) -> dict:
+    try:
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+        return character
+    except ClientError as err:
+        # Wrong - loses the original ClientError traceback
+        raise RuntimeError(f"Failed to retrieve character {character_id}")
+
+# Bad - silently catching and re-raising different exception
+def process_data(data: dict) -> dict:
+    try:
+        return transform_data(data)
+    except KeyError:
+        # Wrong - original KeyError context is lost
+        raise ValueError("Missing required field")
+```
+
+### Exception Handling Responsibility
+
+The function that raises an exception is NOT responsible for handling it. Exception handling is the responsibility of the calling function. This promotes clean separation of concerns:
+
+```python
+# Good - library function raises, caller handles
+# In eidolon/character.py (library)
+def update_character_health(character_id: str, damage: int) -> dict:
+    """
+    Apply damage to character.
+
+    Raises:
+        ValueError: If character not found or damage invalid
+        RuntimeError: If database operation fails
+    """
+    if damage < 0:
+        raise ValueError(f"Damage cannot be negative: {damage}")
+
+    try:
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+        if not character:
+            raise ValueError(f"Character {character_id} not found")
+
+        character["Health"] -= damage
+        dynamo.put_item(TableName.CHARACTERS, character)
+        return character
+    except ClientError as err:
+        raise RuntimeError(f"Failed to update character health") from err
+
+# In Lambda handler (caller)
+def lambda_handler(event: dict, context: object) -> dict:
+    """Lambda handler is responsible for handling exceptions."""
+    try:
+        character_id = event.get("characterId")
+        damage = event.get("damage", 0)
+
+        # Call library function - it will raise if there's an error
+        updated_character = update_character_health(character_id, damage)
+        return create_response(200, updated_character)
+
+    except ValueError as err:
+        # Caller handles the ValueError appropriately
+        logger.warning("Invalid request")
+        return error_response(str(err), 400)
+    except RuntimeError as err:
+        # Caller handles the RuntimeError appropriately
+        logger.error("Database error", exc_info=True)
+        return error_response("Internal server error", 500)
+
+# Bad - function tries to handle its own exceptions
+def update_character_health(character_id: str, damage: int) -> dict:
+    """Wrong - function shouldn't handle its own exceptions."""
+    try:
+        if damage < 0:
+            # Wrong - returning error instead of raising
+            return {"success": False, "error": "Invalid damage"}
+
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+        character["Health"] -= damage
+        dynamo.put_item(TableName.CHARACTERS, character)
+        return {"success": True, "character": character}
+    except Exception as err:
+        # Wrong - catching and converting to return value
+        return {"success": False, "error": str(err)}
+```
+
+Benefits of proper exception chaining and handling:
+
+- **Full Tracebacks**: The `from err` syntax preserves the complete exception chain
+- **Better Debugging**: Can trace errors through multiple layers of the application
+- **Clear Responsibilities**: Functions focus on their core logic, not error handling
+- **Flexible Error Handling**: Callers can handle errors appropriately for their context
+- **Proper Logging**: Each layer can add relevant context to error messages
 
 ### Avoid Nested Try/Except Blocks
 
@@ -317,22 +502,22 @@ try:
     try:
         result = process_data(data)
     except ValueError as err:
-        logger.error("Processing failed", extra={"error": str(err)})
+        logger.error("Processing failed")
 except ClientError as err:
-    logger.error("Database failed", extra={"error": str(err)})
+    logger.error("Database failed")
 
 # Good - sequential try blocks
 try:
     data = get_data()
 except ClientError as err:
-    logger.error("Database failed", extra={"error": str(err)})
-    raise RuntimeError(f"Failed to get data: {str(err)}")
+    logger.error("Database failed")
+    raise RuntimeError(f"Failed to get data: {err}")
 
 try:
     result = process_data(data)
 except ValueError as err:
-    logger.error("Processing failed", extra={"error": str(err)})
-    raise RuntimeError(f"Failed to process: {str(err)}")
+    logger.error("Processing failed")
+    raise RuntimeError(f"Failed to process: {err}")
 
 # Good - separate functions
 def get_and_process_data() -> dict:
@@ -351,13 +536,13 @@ try:
         data = json.load(f)
         process_data(data)
 except FileNotFoundError as err:
-    logger.error("File not found", extra={"filename": filename, "error": str(err)})
+    logger.error("File not found")
     raise ValueError(f"Configuration file {filename} not found")
 except json.JSONDecodeError as err:
-    logger.error("Invalid JSON", extra={"filename": filename, "error": str(err)})
+    logger.error("Invalid JSON")
     raise ValueError(f"Configuration file {filename} contains invalid JSON")
 except KeyError as err:
-    logger.error("Missing required key", extra={"key": str(err), "filename": filename})
+    logger.error("Missing required key")
     raise ValueError(f"Configuration missing required key: {err}")
 
 # Bad - grouping multiple exceptions
@@ -367,7 +552,7 @@ try:
         process_data(data)
 except (FileNotFoundError, json.JSONDecodeError, KeyError) as err:
     # Can't handle each error appropriately
-    logger.error("Error processing file", extra={"error": str(err)})
+    logger.error("Error processing file")
     raise ValueError("Failed to process configuration")
 
 # Bad - catching base Exception
@@ -375,7 +560,7 @@ try:
     process_data(data)
 except Exception as err:
     # Too broad - might catch system errors
-    logger.error("Something went wrong", extra={"error": str(err)})
+    logger.error("Something went wrong")
 ```
 
 This approach ensures:
@@ -439,16 +624,16 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         # All code that might raise exceptions goes here
         player_id = extract_player_id(event)
-        body = parse_json_body(event)
+        body: dict = event.get("body", {})
         result = business_logic_function(player_id, body)
         return create_response(200, result)
     except ValueError as err:
         # Handle known business logic errors
-        logger.error("Validation error", extra={"error": str(err)})
+        logger.error("Validation error")
         return error_response(str(err), 400)
     except Exception as err:
         # Catch ALL other exceptions to prevent Lambda errors
-        logger.error("Unexpected error", extra={"error": str(err)}, exc_info=True)
+        logger.error("Unexpected error", exc_info=True)
         return error_response("Internal server error", 500)
 ```
 
@@ -461,7 +646,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     """Lambda entry point - handles AWS-specific concerns only."""
     try:
         # 1. Log invocation
-        logger.info("Lambda invocation", extra={...})
+        logger.info("Lambda invocation")
 
         # 2. Handle CORS preflight
         if event.get("httpMethod") == "OPTIONS":
@@ -471,7 +656,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         player_id = extract_player_id(event)
 
         # 4. Parse request
-        body = parse_json_body(event)
+        body: dict = event.get("body", {})
 
         # 5. Call business logic
         result = business_logic_function(player_id, body.get("param"))
@@ -482,10 +667,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         else:
             return error_response(result["error"], result["status_code"])
     except ValueError as err:
-        logger.error("Request validation failed", extra={"error": str(err)})
+        logger.error("Request validation failed")
         return error_response(str(err), 400)
     except Exception as err:
-        logger.error("Lambda handler error", extra={"error": str(err)}, exc_info=True)
+        logger.error("Lambda handler error", exc_info=True)
         return error_response("Internal server error", 500)
 
 def business_logic_function(player_id: str, param: str) -> dict:
@@ -758,30 +943,55 @@ class CharacterNotifier:
 
 ## Logging
 
-### Structured Logging
+### Consistent Log Levels in Exception Blocks
 
-Always use structured logging with the extra parameter:
+Within a single exception block, use only one log level. Don't mix info/warning/error levels in the same except clause. This ensures consistent severity reporting and makes log analysis more effective:
 
 ```python
-# Good
-logger.info(
-    "Character created",
-    extra={
-        "character_id": character_id,
-        "character_name": name,
-        "player_id": player_id
-    }
-)
+# Bad - mixing log levels in one exception block
+try:
+    character = get_character(character_id)
+    apply_damage(character, damage)
+except ValueError as err:
+    logger.info("Starting error handling")  # Wrong - unnecessary info log
+    logger.error("Failed to apply damage")
+    return error_response(str(err), 400)
 
-logger.error(
-    "Failed to create character",
-    extra={"error": str(err), "character_name": name},
-    exc_info=True  # Include traceback for errors
-)
+# Bad - info log followed by error in same block
+try:
+    result = process_combat(attacker, defender)
+except RuntimeError as err:
+    logger.info("Combat processing failed")
+    logger.error("Combat error")  # Redundant
+    raise
 
-# Bad
-logger.info(f"Character {character_id} created for player {player_id}")
+# Good - single appropriate log level per exception block
+try:
+    character = get_character(character_id)
+    apply_damage(character, damage)
+except ValueError as err:
+    logger.warning("Invalid damage request", "character_id": character_id})
+    return error_response(str(err), 400)
+except RuntimeError as err:
+    logger.error("Failed to apply damage", exc_info=True)
+    return error_response("Internal server error", 500)
+
+# Good - info logs outside exception handling
+logger.info("Processing combat", "defender": defender_id})
+try:
+    result = process_combat(attacker, defender)
+    logger.info("Combat completed")
+except RuntimeError as err:
+    logger.error("Combat processing failed", exc_info=True)
+    raise
 ```
+
+Choose the appropriate log level based on the exception's severity:
+
+- `logger.warning`: For expected errors that are handled gracefully (e.g., validation failures)
+- `logger.error`: For unexpected errors or system failures
+- `logger.info`: For normal flow logging, placed outside exception blocks
+- `logger.debug`: For detailed debugging information, also outside exception blocks
 
 ## Dictionary Operations
 
@@ -888,14 +1098,11 @@ from datetime import datetime
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
+from eidolon.logger logger
 
 # Constants
 MAX_NAME_LENGTH = 30
 RESERVED_NAMES = ["admin", "system", "gm"]
-
-# Module-level logger
-logger = get_logger(__name__)
 
 # Classes
 class CharacterValidator:

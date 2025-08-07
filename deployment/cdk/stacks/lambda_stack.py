@@ -255,7 +255,7 @@ class LambdaStack(cdk.Stack):
 
         Args:
             function_id: CDK construct ID and function name
-            handler: Lambda handler (e.g., 'api_get_archetypes.lambda_handler')
+            handler: Lambda handler (e.g., 'api_archetypes_get.lambda_handler')
             environment: Environment variables
             description: Function description
             dependencies_layer: Lambda layer for dependencies
@@ -284,22 +284,22 @@ class LambdaStack(cdk.Stack):
         Args:
             dependencies_layer: Lambda layer
         """
-        # Get Archetypes Lambda
-        self.get_archetypes_function = self.create_lambda_function(
-            "api-get-archetypes",
-            "api_get_archetypes.lambda_handler",
+        # List Archetypes Lambda
+        self.list_archetypes_function = self.create_lambda_function(
+            "api-archetype-list",
+            "api_archetype_list.lambda_handler",
             {
                 "ARCHETYPES_TABLE": self.archetypes_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            "Returns available archetypes",
+            "Lists available archetypes",
             dependencies_layer,
         )
 
         # Add Character Lambda
         self.add_character_function = self.create_lambda_function(
-            "api-add-character",
-            "api_add_character.lambda_handler",
+            "api-character-add",
+            "api_character_add.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -315,8 +315,8 @@ class LambdaStack(cdk.Stack):
 
         # Get Character Lambda
         self.get_character_function = self.create_lambda_function(
-            "api-get-character",
-            "api_get_character.lambda_handler",
+            "api-character-get",
+            "api_character_get.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -330,8 +330,8 @@ class LambdaStack(cdk.Stack):
 
         # List Characters Lambda
         self.list_characters_function = self.create_lambda_function(
-            "api-list-characters",
-            "api_list_characters.lambda_handler",
+            "api-character-list",
+            "api_character_list.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -343,8 +343,8 @@ class LambdaStack(cdk.Stack):
 
         # Delete Character Lambda
         self.delete_character_function = self.create_lambda_function(
-            "api-delete-character",
-            "api_delete_character.lambda_handler",
+            "api-character-delete",
+            "api_character_delete.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -365,8 +365,8 @@ class LambdaStack(cdk.Stack):
         """
         # New Player Trigger Lambda
         self.cognito_new_player_function = self.create_lambda_function(
-            "cognito-new-player",
-            "cognito_new_player.lambda_handler",
+            "cognito-player-new",
+            "cognito_player_new.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
             },
@@ -376,8 +376,8 @@ class LambdaStack(cdk.Stack):
 
         # Delete Player Trigger Lambda
         self.cognito_delete_player_function = self.create_lambda_function(
-            "cognito-delete-player",
-            "cognito_delete_player.lambda_handler",
+            "cognito-player-delete",
+            "cognito_player_delete.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -393,49 +393,29 @@ class LambdaStack(cdk.Stack):
         Args:
             dependencies_layer: Lambda layer
         """
-        # Get Stories Lambda
-        self.get_stories_function = self.create_lambda_function(
-            "api-get-stories",
-            "api_get_stories.lambda_handler",
-            {
-                "CHARACTERS_TABLE": self.characters_table,
-                "STORY_TABLE": self.story_table,
-                "STORY_HISTORY_TABLE": self.story_history_table,
-                "ALLOWED_ORIGINS": self.cors_origins_str,
-            },
-            "Returns available stories for a character",
-            dependencies_layer,
-        )
-
-        # Start Story Lambda
-        self.start_story_function = self.create_lambda_function(
+        # Start Story Lambda - needs SSM/SQS permissions for polling control
+        self.start_story_function = lambda_.Function(
+            self,
             "api-start-story",
-            "api_start_story.lambda_handler",
-            {
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="api_start_story.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-start-story.zip"),
+            layers=[dependencies_layer],
+            role=self.lambda_ssm_sqs_execution_role,  # Needs SSM/SQS for polling control
+            timeout=cdk.Duration.seconds(30),
+            memory_size=128,
+            environment={
                 "CHARACTERS_TABLE": self.characters_table,
                 "STORY_TABLE": self.story_table,
                 "SEGMENTS_TABLE": self.segments_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "STORY_HISTORY_TABLE": self.story_history_table,
                 "SEGMENT_QUEUE_URL": self.segment_queue_url,
+                "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
-            "Starts a story for a character",
-            dependencies_layer,
-        )
-
-        # Get Current Story Lambda
-        self.get_current_story_function = self.create_lambda_function(
-            "api-get-current-story",
-            "api_get_current_story.lambda_handler",
-            {
-                "SEGMENTS_TABLE": self.segments_table,
-                "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
-                "STORY_TABLE": self.story_table,
-                "ALLOWED_ORIGINS": self.cors_origins_str,
-            },
-            "Gets current active story and segment for a character",
-            dependencies_layer,
+            description="Starts a story for a character",
+            function_name="api-start-story",
         )
 
         # Submit Decision Lambda
@@ -583,13 +563,13 @@ class LambdaStack(cdk.Stack):
             function_name="ops-segment-poller",
         )
 
-        # Create EventBridge rule to trigger segment poller every 30 seconds
+        # Create EventBridge rule to trigger segment poller every minute
         self.segment_poller_rule = events.Rule(
             self,
             "segment-poller-rule",
             rule_name="eidolon-segment-poller-rule",
-            description="Triggers segment poller Lambda every 30 seconds",
-            schedule=events.Schedule.rate(cdk.Duration.seconds(30)),
+            description="Triggers segment poller Lambda every minute",
+            schedule=events.Schedule.rate(cdk.Duration.minutes(1)),
         )
 
         # Add Lambda target to the rule
@@ -618,6 +598,7 @@ class LambdaStack(cdk.Stack):
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "STORY_HISTORY_TABLE": self.story_history_table,
                 "SEGMENT_HISTORY_TABLE": self.segment_history_table,
+                "SEGMENT_QUEUE_URL": self.segment_queue_url,
             },
             description="Advances stories by applying character updates and progressing to next segments",
             function_name="ops-advance-story",
@@ -646,7 +627,7 @@ class LambdaStack(cdk.Stack):
         archetypes_resource = self.api.root.add_resource("archetypes")
         archetypes_resource.add_method(
             "GET",
-            apigateway.LambdaIntegration(self.get_archetypes_function),  # type: ignore
+            apigateway.LambdaIntegration(self.list_archetypes_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
@@ -701,14 +682,6 @@ class LambdaStack(cdk.Stack):
         # Stories endpoints
         stories_resource = self.api.root.add_resource("stories")
 
-        # GET /stories?characterId=xxx - Get available stories for character
-        stories_resource.add_method(
-            "GET",
-            apigateway.LambdaIntegration(self.get_stories_function),  # type: ignore
-            authorizer=self.cognito_authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
-        )
-
         # Nested resources under /stories
         start_resource = stories_resource.add_resource("start")
 
@@ -716,15 +689,6 @@ class LambdaStack(cdk.Stack):
         start_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.start_story_function),  # type: ignore
-            authorizer=self.cognito_authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
-        )
-
-        # GET /stories/current - Get current active story
-        current_resource = stories_resource.add_resource("current")
-        current_resource.add_method(
-            "GET",
-            apigateway.LambdaIntegration(self.get_current_story_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
@@ -780,19 +744,17 @@ class LambdaStack(cdk.Stack):
     def create_log_groups(self) -> None:
         """Create CloudWatch log groups for all Lambda functions."""
         log_configs: list = [
-            ("get-archetypes-logs", self.get_archetypes_function),
+            ("list-archetypes-logs", self.list_archetypes_function),
             ("add-character-logs", self.add_character_function),
             ("get-character-logs", self.get_character_function),
             ("list-characters-logs", self.list_characters_function),
             ("delete-character-logs", self.delete_character_function),
             ("cognito-new-player-logs", self.cognito_new_player_function),
             ("cognito-delete-player-logs", self.cognito_delete_player_function),
-            ("get-stories-logs", self.get_stories_function),
             ("start-story-logs", self.start_story_function),
             ("submit-decision-logs", self.submit_decision_function),
             ("get-segment-outcome-logs", self.get_segment_outcome_function),
             ("abandon-story-logs", self.abandon_story_function),
-            ("get-current-story-logs", self.get_current_story_function),
             ("get-segment-status-logs", self.get_segment_status_function),
             ("get-segment-history-logs", self.get_segment_history_function),
             ("character-rest-logs", self.character_rest_function),

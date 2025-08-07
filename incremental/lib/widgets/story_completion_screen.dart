@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import '../providers/segment_provider.dart';
+import '../models/story.dart';
 
 class StoryCompletionScreen extends StatefulWidget {
   final String characterId;
@@ -69,8 +70,18 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
       final apiService = context.read<ApiService>();
       final segmentProvider = context.read<SegmentProvider>();
       
-      // Get available stories
-      final stories = await apiService.getStories(widget.characterId);
+      // Get available stories from character data
+      final character = await apiService.getCharacterById(widget.characterId);
+      if (character == null) {
+        throw Exception('Character not found');
+      }
+      
+      List<StoryMetadata> stories = [];
+      if (character.availableStoriesDetails != null) {
+        stories = character.availableStoriesDetails!
+            .map((story) => StoryMetadata.fromJson(story))
+            .toList();
+      }
       
       if (stories.isEmpty) {
         throw Exception('No stories available');

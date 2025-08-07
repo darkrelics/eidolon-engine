@@ -7,9 +7,7 @@ Provides centralized S3 bucket management and common operations.
 import boto3
 from botocore.exceptions import ClientError
 
-from eidolon.logger import get_logger
-
-logger = get_logger(__name__)
+from eidolon.logger import logger
 
 
 def upload_file(bucket_name: str, file_path: str, object_name=None):
@@ -37,15 +35,10 @@ def upload_file(bucket_name: str, file_path: str, object_name=None):
     try:
         s3_client.upload_file(file_path, bucket_name, object_name)
     except ClientError as err:
-        logger.error(
-            "Failed to upload file to S3",
-            extra={"file_path": file_path, "bucket_name": bucket_name, "object_name": object_name, "error": str(err)},
-        )
-        raise RuntimeError(f"Failed to upload file to S3: {str(err)}")
+        logger.error(f"Failed to upload file to S3 for {file_path} Error: {err}")
+        raise RuntimeError(f"Failed to upload file to S3: {err}") from err
 
-    logger.info(
-        "Successfully uploaded file to S3", extra={"file_path": file_path, "bucket_name": bucket_name, "object_name": object_name}
-    )
+    logger.info(f"Successfully uploaded file to S3 for {file_path}")
 
 
 def download_file(bucket_name: str, object_name: str, file_path: str):
@@ -72,16 +65,10 @@ def download_file(bucket_name: str, object_name: str, file_path: str):
     try:
         s3_client.download_file(bucket_name, object_name, file_path)
     except ClientError as err:
-        logger.error(
-            "Failed to download file from S3",
-            extra={"bucket_name": bucket_name, "object_name": object_name, "file_path": file_path, "error": str(err)},
-        )
-        raise RuntimeError(f"Failed to download file from S3: {str(err)}")
+        logger.error(f"Failed to download file from S3 for {file_path} Error: {err}")
+        raise RuntimeError(f"Failed to download file from S3: {err}") from err
 
-    logger.info(
-        "Successfully downloaded file from S3",
-        extra={"bucket_name": bucket_name, "object_name": object_name, "file_path": file_path},
-    )
+    logger.info(f"Successfully downloaded file from S3 for {file_path}")
 
 
 def list_files(bucket_name: str, prefix: str = "") -> list:
@@ -106,12 +93,12 @@ def list_files(bucket_name: str, prefix: str = "") -> list:
     try:
         response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
     except ClientError as err:
-        logger.error("Failed to list files in S3 bucket", extra={"bucket_name": bucket_name, "prefix": prefix, "error": str(err)})
-        raise RuntimeError(f"Failed to list files in S3 bucket: {str(err)}")
+        logger.error(f"Failed to list files in S3 bucket for {bucket_name} Error: {err}")
+        raise RuntimeError(f"Failed to list files in S3 bucket: {err}") from err
 
     files = [item.get("Key") for item in response.get("Contents", [])]
 
-    logger.info("Listed files in S3 bucket", extra={"bucket_name": bucket_name, "prefix": prefix, "file_count": len(files)})
+    logger.info(f"Listed files in S3 bucket for {bucket_name}")
 
     return files
 
@@ -137,10 +124,10 @@ def delete_file(bucket_name: str, s3_key: str):
     try:
         s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
     except ClientError as err:
-        logger.error("Failed to delete file from S3", extra={"bucket_name": bucket_name, "s3_key": s3_key, "error": str(err)})
-        raise RuntimeError(f"Failed to delete file from S3: {str(err)}")
+        logger.error(f"Failed to delete file from S3 for {s3_key} Error: {err}")
+        raise RuntimeError(f"Failed to delete file from S3: {err}") from err
 
-    logger.info("Successfully deleted file from S3", extra={"bucket_name": bucket_name, "s3_key": s3_key})
+    logger.info(f"Successfully deleted file from S3 for {s3_key}")
 
 
 def validate_s3_bucket(bucket_name: str):
@@ -164,15 +151,13 @@ def validate_s3_bucket(bucket_name: str):
         error_code = err.response.get("Error", {}).get("Code", "")
 
         if error_code == "NoSuchBucket":
-            logger.error("S3 bucket does not exist", extra={"bucket_name": bucket_name})
-            raise ValueError(f"S3 bucket does not exist: {bucket_name}")
+            logger.error(f"S3 bucket does not exist for {bucket_name}")
+            raise ValueError(f"S3 bucket does not exist: {bucket_name}") from err
         elif error_code == "AccessDenied":
-            logger.error("Access denied to S3 bucket", extra={"bucket_name": bucket_name})
-            raise RuntimeError(f"Access denied to S3 bucket: {bucket_name}")
+            logger.error(f"Access denied to S3 bucket for {bucket_name}")
+            raise RuntimeError(f"Access denied to S3 bucket: {bucket_name}") from err
         else:
-            logger.error(
-                "Failed to validate S3 bucket", extra={"bucket_name": bucket_name, "error_code": error_code, "error": str(err)}
-            )
-            raise RuntimeError(f"Failed to validate S3 bucket: {str(err)}")
+            logger.error(f"Failed to validate S3 bucket for {bucket_name} Error: {err}")
+            raise RuntimeError(f"Failed to validate S3 bucket: {err}") from err
 
-    logger.info("Successfully validated S3 bucket", extra={"bucket_name": bucket_name})
+    logger.info(f"Successfully validated S3 bucket for {bucket_name}")

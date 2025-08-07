@@ -25,20 +25,25 @@ class SegmentProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
       
-      // Get current story
-      final storyData = await _apiService.getCurrentStory(
-        characterId: characterId,
-      );
+      // Use getCharacterById to get all data including story state
+      final character = await _apiService.getCharacterById(characterId);
       
-      if (storyData == null) {
+      if (character == null || character.storyState == null) {
         _currentSegment = null;
         _isLoading = false;
         notifyListeners();
         return;
       }
       
-      // Extract active segment data
-      final segmentData = storyData['ActiveSegment'] as Map<String, dynamic>?;
+      // Extract active segment data from character's story state
+      Map<String, dynamic>? segmentData;
+      if (character.storyState!.containsKey('ActiveSegment')) {
+        segmentData = character.storyState!['ActiveSegment'] as Map<String, dynamic>?;
+      } else {
+        // Fallback for old format where storyState is the segment itself
+        segmentData = character.storyState;
+      }
+      
       if (segmentData == null) {
         _currentSegment = null;
         _isLoading = false;

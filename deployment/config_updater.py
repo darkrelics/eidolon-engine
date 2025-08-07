@@ -41,13 +41,15 @@ class ConfigurationUpdater:
 
     def _update_cognito_config(self, outputs: dict):
         """Update Cognito configuration section."""
-        config_data = {
-            "UserPoolId": outputs.get("UserPoolId", ""),
-            "UserPoolClientId": outputs.get("AppClientId", ""),
-            "UserPoolDomain": outputs.get("UserPoolDomain", ""),
-            "UserPoolArn": outputs.get("UserPoolArn", ""),
-        }
-        self.config_manager.update_section("Cognito", config_data)
+        # Only create Cognito section if we have actual values
+        if outputs.get("UserPoolId"):
+            config_data = {
+                "UserPoolId": outputs.get("UserPoolId", ""),
+                "UserPoolClientId": outputs.get("AppClientId", ""),
+                "UserPoolDomain": outputs.get("UserPoolDomain", ""),
+                "UserPoolArn": outputs.get("UserPoolArn", ""),
+            }
+            self.config_manager.update_section("Cognito", config_data)
 
     def _update_dynamodb_config(self, outputs: dict):
         """Update DynamoDB configuration section."""
@@ -93,12 +95,14 @@ class ConfigurationUpdater:
 
     def _update_cloudfront_config(self, outputs: dict):
         """Update CloudFront configuration section."""
-        config_data = {
-            "DistributionId": outputs.get("DistributionId", ""),
-            "DomainName": outputs.get("DistributionDomainName", ""),
-            "PortalUrl": outputs.get("PortalUrl", ""),
-        }
-        self.config_manager.update_section("CloudFront", config_data)
+        # Only create CloudFront section if we have actual values
+        if outputs.get("DistributionId"):
+            config_data = {
+                "DistributionId": outputs.get("DistributionId", ""),
+                "DomainName": outputs.get("DistributionDomainName", ""),
+                "PortalUrl": outputs.get("PortalUrl", ""),
+            }
+            self.config_manager.update_section("CloudFront", config_data)
 
     def _update_codebuild_config(self, outputs: dict):
         """Update CodeBuild configuration section."""

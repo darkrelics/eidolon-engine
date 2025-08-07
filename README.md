@@ -11,9 +11,6 @@
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white)
 
-![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
-![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)
-
 # Eidolon Engine
 
 A multi-mode game engine supporting both incremental RPG and MUD (Multi-User Dungeon) gameplay through a unified AWS backend.
@@ -36,7 +33,6 @@ The system uses AWS Lambda functions as the primary backend, with different fron
 - Timer-based incremental gameplay mechanics
 - Real-time MUD interactions via SSH
 - Persistent game state across sessions
-- Lua scripting for game content
 
 ### Technical Features
 
@@ -73,7 +69,7 @@ The engine uses a modern cloud-native architecture with a unified backend servin
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.12
 - Go 1.24+ (for MUD server)
 - Flutter 3.32+ (for web interfaces)
 - AWS CLI configured with appropriate credentials
@@ -109,11 +105,11 @@ The engine uses a modern cloud-native architecture with a unified backend servin
 
 Comprehensive documentation is available in the `/documentation` directory:
 
-- [Architecture Overview](documentation/architecture/overview.md)
-- [Deployment Guide](documentation/deployment/deployment-guide.md)
-- [Game Design](documentation/game-design/)
-- [API Reference](documentation/api/lambda-functions.md)
-- [Development Setup](documentation/development/local-setup.md)
+- [Deployment Design](documentation/deployment-design.md) - Architecture and infrastructure design
+- [Deployment Guide](documentation/deployment.md) - Step-by-step deployment instructions
+- [Incremental Game Design](documentation/incremental-design.md) - Game system design
+- [Game Mechanics](documentation/mechanics.md) - Core gameplay mechanics
+- [API Reference](documentation/lambda-functions.md) - Lambda function specifications
 
 ## Project Structure
 
@@ -132,7 +128,12 @@ eidolon-engine/
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and coding standards.
+### Style Guides
+
+- [Python Style Guide](documentation/python-style.md) - Python coding standards
+- [Flutter Style Guide](documentation/flutter-style.md) - Flutter/Dart conventions
+- [AWS Style Guide](documentation/aws-style.md) - Infrastructure patterns
+- [Documentation Style Guide](documentation/style-guide.md) - Writing standards
 
 ### Running Locally
 
@@ -161,15 +162,6 @@ The engine supports three deployment configurations, all using the same unified 
 3. **Hybrid Mode**: Deploys the incremental UI while supporting both game types
 
 All modes share the same Lambda functions and DynamoDB tables. The character GameMode field ensures a character can only be active in one mode at a time, preventing concurrent access issues.
-
-## Contributing
-
-Contributions are welcome. Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
-
-- Code style and standards
-- Testing requirements
-- Pull request process
-- Issue reporting
 
 ## License
 

@@ -29,25 +29,25 @@ class SegmentOutcome {
 
   factory SegmentOutcome.fromJson(Map<String, dynamic> json) {
     return SegmentOutcome(
-      segmentId: json['segmentId'] as String,
-      success: json['success'] as bool,
-      criticalSuccess: json['criticalSuccess'] as bool? ?? false,
-      criticalFailure: json['criticalFailure'] as bool? ?? false,
-      outcomeText: json['outcomeText'] as String,
-      resourceChanges: Map<String, int>.from(json['resourceChanges'] ?? {}),
-      progressFlags: Map<String, bool>.from(json['progressFlags'] ?? {}),
+      segmentId: json['SegmentID'] as String,
+      success: json['Success'] as bool,
+      criticalSuccess: json['CriticalSuccess'] as bool? ?? false,
+      criticalFailure: json['CriticalFailure'] as bool? ?? false,
+      outcomeText: json['OutcomeText'] as String,
+      resourceChanges: Map<String, int>.from(json['ResourceChanges'] ?? {}),
+      progressFlags: Map<String, bool>.from(json['ProgressFlags'] ?? {}),
       skillXPGained: Map<String, double>.from(
-        (json['skillXPGained'] ?? {}).map(
+        (json['SkillXPAwarded'] ?? {}).map(
           (key, value) => MapEntry(key, (value as num).toDouble()),
         ),
       ),
       attributeXPGained: Map<String, double>.from(
-        (json['attributeXPGained'] ?? {}).map(
+        (json['AttributeXPAwarded'] ?? {}).map(
           (key, value) => MapEntry(key, (value as num).toDouble()),
         ),
       ),
       updatedCharacter: Character.fromJson(
-        json['updatedCharacter'] as Map<String, dynamic>,
+        json['UpdatedCharacter'] as Map<String, dynamic>,
       ),
     );
   }

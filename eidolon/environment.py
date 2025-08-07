@@ -9,6 +9,8 @@ Centralizes all environment variable access with defaults.
 
 import os
 
+APPLICATION_NAME = os.environ.get("APPLICATION_NAME", "eidolon-engine")
+
 # DynamoDB Table Names
 PLAYERS_TABLE = os.environ.get("PLAYERS_TABLE", "players")
 CHARACTERS_TABLE = os.environ.get("CHARACTERS_TABLE", "characters")
@@ -18,7 +20,6 @@ PROTOTYPES_TABLE = os.environ.get("PROTOTYPES_TABLE", "prototypes")
 STORY_TABLE = os.environ.get("STORY_TABLE", "story")
 SEGMENTS_TABLE = os.environ.get("SEGMENTS_TABLE", "segments")
 ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
-HISTORY_TABLE = os.environ.get("HISTORY_TABLE", "history")
 CHARACTER_HISTORY_TABLE = os.environ.get("CHARACTER_HISTORY_TABLE", "character_history")
 STORY_HISTORY_TABLE = os.environ.get("STORY_HISTORY_TABLE", "story_history")
 SEGMENT_HISTORY_TABLE = os.environ.get("SEGMENT_HISTORY_TABLE", "segment_history")

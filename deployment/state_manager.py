@@ -11,6 +11,38 @@ from pathlib import Path
 import yaml
 
 
+class StateManager:
+    """Manages deployment state persistence and retrieval."""
+
+    def __init__(self, state_file: str = ".deployment_state.json"):
+        """Initialize state manager.
+
+        Args:
+            state_file: Path to deployment state file
+        """
+        self.state_file = Path(state_file)
+
+    def get_deployment_state(self) -> dict:
+        """Load deployment state from file.
+
+        Returns:
+            Deployment state dictionary
+        """
+        if self.state_file.exists():
+            with open(self.state_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return {}
+
+    def save_deployment_state(self, state: dict) -> None:
+        """Save deployment state to file.
+
+        Args:
+            state: Deployment state dictionary to save
+        """
+        with open(self.state_file, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2, default=str)
+
+
 class DeploymentState:
     """Represents the current state of deployed infrastructure."""
 
@@ -187,6 +219,16 @@ class ConfigurationManager:
             Section configuration or empty dict
         """
         return self.config.get(section, {})
+
+    def remove_section(self, section: str) -> None:
+        """Remove a configuration section.
+
+        Args:
+            section: Configuration section name to remove
+        """
+        if section in self.config:
+            del self.config[section]
+            self.save_config()
 
     def exists(self) -> bool:
         """Check if configuration file exists."""

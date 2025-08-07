@@ -624,7 +624,7 @@ class EidolonEngineApp:
             lambda_bucket=self.s3_stack.lambda_bucket,
             api_domain=api_domain,
             buildspec_path=buildspec_path,
-            cloudfront_distribution_id="",
+            cloudfront_distribution_id=params.get("cloudfront_distribution_id", ""),
             env=env,
         )
         if self.cognito_stack:
@@ -661,7 +661,6 @@ class EidolonEngineApp:
                 "story_table": unified_tables.get("Story", ""),
                 "segments_table": unified_tables.get("Segments", ""),
                 "active_segments_table": unified_tables.get("ActiveSegments", ""),
-                "history_table": unified_tables.get("History", ""),
                 "opponents_table": unified_tables.get("Opponents", ""),
                 "cognito_user_pool_arn": (
                     self.cognito_stack.user_pool.user_pool_arn
@@ -734,7 +733,9 @@ class EidolonEngineApp:
             "Segments": "segments",
             "ActiveSegments": "active_segments",
             "Opponents": "opponents",
-            "History": "history",
+            "CharacterHistory": "character_history",
+            "StoryHistory": "story_history",
+            "SegmentHistory": "segment_history",
         }
 
         configured_tables = params.get("dynamodb_tables", {})

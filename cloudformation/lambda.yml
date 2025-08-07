@@ -72,7 +72,7 @@ Resources:
     Properties:
       FunctionName: !Sub "${GameName}-api-get-archetypes"
       Runtime: python3.12
-      Handler: api_get_archetypes.lambda_handler
+      Handler: api_archetypes_get.lambda_handler
       Code:
         S3Bucket: !Ref LambdaBucketName
         S3Key: !Ref LambdaZipKey
@@ -91,7 +91,7 @@ Resources:
     Properties:
       FunctionName: !Sub "${GameName}-api-add-character"
       Runtime: python3.12
-      Handler: api_add_character.lambda_handler
+      Handler: api_character_add.lambda_handler
       Code:
         S3Bucket: !Ref LambdaBucketName
         S3Key: !Ref LambdaZipKey
@@ -115,7 +115,7 @@ Resources:
     Properties:
       FunctionName: !Sub "${GameName}-api-get-character"
       Runtime: python3.12
-      Handler: api_get_character.lambda_handler
+      Handler: api_character_get.lambda_handler
       Code:
         S3Bucket: !Ref LambdaBucketName
         S3Key: !Ref LambdaZipKey
@@ -135,7 +135,7 @@ Resources:
     Properties:
       FunctionName: !Sub "${GameName}-api-list-characters"
       Runtime: python3.12
-      Handler: api_list_characters.lambda_handler
+      Handler: api_character_list.lambda_handler
       Code:
         S3Bucket: !Ref LambdaBucketName
         S3Key: !Ref LambdaZipKey
@@ -152,9 +152,9 @@ Resources:
   DeleteCharacterFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub "${GameName}-api-delete-character"
+      FunctionName: !Sub "${GameName}-api-character-delete"
       Runtime: python3.12
-      Handler: api_delete_character.lambda_handler
+      Handler: api_character_delete.lambda_handler
       Code:
         S3Bucket: !Ref LambdaBucketName
         S3Key: !Ref LambdaZipKey
@@ -253,7 +253,6 @@ Resources:
         Variables:
           SEGMENTS_TABLE: segments
           ACTIVE_SEGMENTS_TABLE: active_segments
-          HISTORY_TABLE: history
           MAX_SEGMENTS_PER_POLL: "50"
           SSM_POLLER_STATE_PARAMETER: !Sub "/${GameName}/segment-poller-state"
           SEGMENT_QUEUE_URL: !ImportValue
@@ -281,7 +280,6 @@ Resources:
           SEGMENTS_TABLE: segments
           ACTIVE_SEGMENTS_TABLE: active_segments
           OPPONENTS_TABLE: opponents
-          HISTORY_TABLE: history
           SSM_POLLER_STATE_PARAMETER: !Sub "/${GameName}/segment-poller-state"
       MemorySize: 256
       Timeout: 60

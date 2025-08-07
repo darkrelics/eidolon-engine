@@ -120,14 +120,14 @@ class PrerequisitesDisplay extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${skill.substring(0, 1).toUpperCase()}${skill.substring(1)}: ${required.toInt()}',
+                      '${skill.substring(0, 1).toUpperCase()}${skill.substring(1)}: ${required.toStringAsFixed(1)}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: met ? null : theme.colorScheme.error,
                         decoration: met ? null : TextDecoration.lineThrough,
                       ),
                     ),
                     Text(
-                      ' (${current.toInt()})',
+                      ' (${current.toStringAsFixed(1)})',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -171,7 +171,7 @@ class PrerequisitesDisplay extends StatelessWidget {
 }
 
 class RewardsPreview extends StatelessWidget {
-  final Map<String, dynamic> rewardTiers;
+  final Map<String, String> rewardTiers;
 
   const RewardsPreview({
     super.key,
@@ -185,6 +185,22 @@ class RewardsPreview extends StatelessWidget {
     if (rewardTiers.isEmpty) {
       return const SizedBox.shrink();
     }
+
+    // Define the order for reward tiers from best to worst
+    final tierOrder = ['Exceptional', 'Excellent', 'Good', 'Normal', 'Basic', 'Minimal', 'Failure', 'Death'];
+    
+    // Sort the reward tiers according to the defined order
+    final sortedEntries = rewardTiers.entries.toList()
+      ..sort((a, b) {
+        final aIndex = tierOrder.indexWhere((t) => t.toLowerCase() == a.key.toLowerCase());
+        final bIndex = tierOrder.indexWhere((t) => t.toLowerCase() == b.key.toLowerCase());
+        
+        // If not found in order list, put at the end
+        final aOrder = aIndex == -1 ? tierOrder.length : aIndex;
+        final bOrder = bIndex == -1 ? tierOrder.length : bIndex;
+        
+        return aOrder.compareTo(bOrder);
+      });
 
     return Container(
       padding: const EdgeInsets.all(8),
@@ -213,9 +229,9 @@ class RewardsPreview extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          ...rewardTiers.entries.map((entry) {
+          ...sortedEntries.map((entry) {
             final tier = entry.key;
-            final rewards = entry.value as Map<String, dynamic>;
+            final description = entry.value;
             final tierLabel = _getTierLabel(tier);
             final tierColor = _getTierColor(tier, theme);
 
@@ -233,7 +249,7 @@ class RewardsPreview extends StatelessWidget {
                   ),
                   Expanded(
                     child: Text(
-                      rewards['description'] ?? '',
+                      description,
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
@@ -250,10 +266,20 @@ class RewardsPreview extends StatelessWidget {
     switch (tier.toLowerCase()) {
       case 'exceptional':
         return '★★★';
+      case 'excellent':
+        return '★★★';
+      case 'good':
+        return '★★';
       case 'normal':
         return '★★';
+      case 'basic':
+        return '★';
       case 'minimal':
         return '★';
+      case 'failure':
+        return 'Failure';
+      case 'death':
+        return 'Death';
       default:
         return tier.substring(0, 1).toUpperCase() + tier.substring(1);
     }
@@ -263,10 +289,20 @@ class RewardsPreview extends StatelessWidget {
     switch (tier.toLowerCase()) {
       case 'exceptional':
         return Colors.amber;
+      case 'excellent':
+        return Colors.amber;
+      case 'good':
+        return theme.colorScheme.secondary;
       case 'normal':
         return theme.colorScheme.secondary;
+      case 'basic':
+        return theme.colorScheme.onSurfaceVariant;
       case 'minimal':
         return theme.colorScheme.onSurfaceVariant;
+      case 'failure':
+        return Colors.orange;
+      case 'death':
+        return Colors.red;
       default:
         return theme.colorScheme.onSurface;
     }

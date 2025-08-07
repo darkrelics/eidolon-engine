@@ -8,11 +8,9 @@ from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
-from eidolon.character import delete_character
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
-
-logger = get_logger(__name__)
+from eidolon.logger import logger
+from eidolon.player_character import delete_character
 
 
 def create_player_record(user_uuid: str, email: str) -> None:
@@ -27,26 +25,25 @@ def create_player_record(user_uuid: str, email: str) -> None:
         ValueError: If user_uuid or email is missing
         RuntimeError: If database operations fail
     """
+
     if not user_uuid or not email:
         raise ValueError("Missing required user attributes (sub or email)")
 
     # Check if player already exists
-    logger.debug("Checking for existing player", extra={"user_id": user_uuid})
+    logger.debug(f"Checking for existing player for {user_uuid}")
 
     try:
         existing_player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": user_uuid})
 
         if existing_player:
-            logger.info("Player already exists", extra={"user_id": user_uuid})
-            return
+            logger.info(f"Player already exists for {user_uuid}")
+            raise ValueError(f"Player {user_uuid} already exists")
 
     except ClientError as err:
         logger.error(
-            "Failed to check for existing player",
-            extra={"user_id": user_uuid, "error": str(err), "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
+            f"Failed to check for existing player: user_id {user_uuid} error: {err} error_code: {err.response.get('Error')}"
         )
-        raise RuntimeError(f"Failed to check for existing player: {str(err)}")
+        raise RuntimeError(f"Failed to check for existing player: {err}") from err
 
     # Create new player entry
     timestamp: str = datetime.now(timezone.utc).isoformat()
@@ -63,25 +60,16 @@ def create_player_record(user_uuid: str, email: str) -> None:
     # Write to DynamoDB
     try:
         dynamo.put_item(TableName.PLAYERS, player_item)
-        logger.info(
-            "Created new player record",
-            extra={"email": email, "user_id": user_uuid},
-        )
+        logger.debug(f"Created new player record. PlayerID: {user_uuid}, Email: {email}")
     except ClientError as err:
         logger.error(
-            "Failed to create player record",
-            extra={
-                "email": email,
-                "user_id": user_uuid,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
+            f"Failed to create player record. PlayerID: {user_uuid}, Email: {email}",
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to create player record: {str(err)}")
+        raise RuntimeError(f"Failed to create player record: {err}") from err
 
 
-def extract_player_id_from_event(event: dict) -> str:
+def extract_player_id(event: dict) -> str:
     """
     Extract player ID from Cognito authorizer claims in API Gateway event.
 
@@ -94,18 +82,18 @@ def extract_player_id_from_event(event: dict) -> str:
     Raises:
         ValueError: If player ID is not found in claims (unauthorized)
     """
-    claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    player_id = claims.get("sub")
+    claims: dict = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
+    player_id: str = claims.get("sub", "")
 
     if not player_id:
         logger.warning("No player ID found in request claims")
         raise ValueError("Unauthorized - No player ID in token")
 
-    logger.debug("Extracted player ID from claims", extra={"player_id": player_id})
+    logger.debug(f"Extracted player ID from claims player_id: {player_id}")
     return player_id
 
 
-def validate_player_exists(player_id: str) -> bool:
+def validate_player(player_id: str) -> bool:
     """
     Validate that a player exists in the database.
 
@@ -122,15 +110,15 @@ def validate_player_exists(player_id: str) -> bool:
         player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
 
         if not player:
-            logger.warning("Player not found in database", extra={"player_id": player_id})
+            logger.warning(f"Player not found in database for {player_id}")
             return False
 
-        logger.debug("Player validation successful", extra={"player_id": player_id})
+        logger.debug(f"Player validation successful for {player_id}")
         return True
 
     except ClientError as err:
-        logger.error("Failed to validate player existence", extra={"player_id": player_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to validate player: {str(err)}")
+        logger.error(f"Failed to validate player existence for {player_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to validate player: {err}") from err
 
 
 def get_player_data(player_id: str) -> dict:
@@ -151,17 +139,15 @@ def get_player_data(player_id: str) -> dict:
         player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
 
         if not player:
-            logger.warning("Player not found", extra={"player_id": player_id})
+            logger.warning(f"Player not found for {player_id}")
             raise ValueError(f"Player {player_id} not found")
 
-        logger.info(
-            "Player data retrieved", extra={"player_id": player_id, "character_count": len(player.get("CharacterList", {}))}
-        )
+        logger.info(f"Player data retrieved for {player_id}")
         return player
 
     except ClientError as err:
-        logger.error("Failed to retrieve player data", extra={"player_id": player_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to retrieve player data: {str(err)}")
+        logger.error(f"Failed to retrieve player data for {player_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to retrieve player data: {err}") from err
 
 
 def get_player_characters(player_id: str) -> dict:
@@ -178,7 +164,7 @@ def get_player_characters(player_id: str) -> dict:
         ValueError: If player not found
         RuntimeError: If database query fails
     """
-    player = get_player_data(player_id)
+    player: dict = get_player_data(player_id)
     return player.get("CharacterList", {})
 
 
@@ -200,14 +186,14 @@ def update_player_timestamp(player_id: str, timestamp: str) -> None:
             UpdateExpression="SET UpdatedAt = :timestamp",
             ExpressionAttributeValues={":timestamp": timestamp},
         )
-        logger.debug("Updated player timestamp", extra={"player_id": player_id})
+        logger.debug(f"Updated player timestamp for {player_id}")
 
     except ClientError as err:
-        logger.error("Failed to update player timestamp", extra={"player_id": player_id, "error": str(err)}, exc_info=True)
-        raise RuntimeError(f"Failed to update player timestamp: {str(err)}")
+        logger.error(f"Failed to update player timestamp for {player_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to update player timestamp: {err}") from err
 
 
-def get_formatted_character_list(player_id: str) -> list:
+def get_character_list(player_id: str) -> list:
     """
     Get formatted character list for a player.
 
@@ -221,46 +207,72 @@ def get_formatted_character_list(player_id: str) -> list:
         ValueError: If player not found
         RuntimeError: If database query fails
     """
-    player_data = get_player_data(player_id)
-    character_list = player_data.get("CharacterList", {})
+    player_data: dict = get_player_data(player_id)
+    character_list: dict = player_data.get("CharacterList", {})
 
-    logger.info(
-        "Player data retrieved",
-        extra={"player_id": player_id, "character_count": len(character_list)},
-    )
+    logger.debug(f"Player data retrieved: {player_data}")
 
     # Build character list with proper field names
-    characters = []
+    characters: list = []
     for char_name, char_info in character_list.items():
-        char_data = {
+        char_data: dict = {
             "CharacterName": char_name,
             "CharacterID": char_info.get("UUID", ""),
             "Dead": char_info.get("Dead", False),
         }
         characters.append(char_data)
 
-        logger.debug(
-            "Processing character",
-            extra={
-                "character_name": char_name,
-                "character_id": char_data.get("CharacterID"),
-                "is_dead": char_data.get("Dead"),
-            },
-        )
+        logger.debug(f"Processing character for {char_name}")
 
     # Sort by name for consistent ordering
     characters.sort(key=lambda x: x.get("CharacterName", ""))
 
     logger.info(
         "Character list prepared successfully",
-        extra={
-            "player_id": player_id,
-            "character_count": len(characters),
-            "character_names": [c.get("CharacterName", "") for c in characters],
-        },
     )
 
     return characters
+
+
+def verify_character_ownership(character_id: str, player_id: str) -> bool:
+    """
+    Verify that a character belongs to a player by checking the player record.
+
+    This is more efficient than fetching the full character record since the
+    player record is smaller and the players table is accessed less frequently.
+
+    Args:
+        character_id: Character UUID to verify
+        player_id: Cognito user ID (player UUID)
+
+    Returns:
+        True if the character belongs to the player, False otherwise
+
+    Raises:
+        ValueError: If player not found
+        RuntimeError: If database query fails
+    """
+    try:
+        player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
+
+        if not player:
+            logger.warning(f"Player not found for ownership check: {player_id}")
+            raise ValueError(f"Player {player_id} not found")
+
+        # Check if character_id exists in player's character list
+        character_list = player.get("CharacterList", {})
+
+        for char_name, char_info in character_list.items():
+            if char_info.get("UUID") == character_id:
+                logger.debug(f"Character ownership verified: {character_id} belongs to {player_id}")
+                return True
+
+        logger.warning(f"Character ownership failed: {character_id} not owned by {player_id}")
+        return False
+
+    except ClientError as err:
+        logger.error(f"Failed to verify character ownership for {character_id}, {player_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to verify character ownership: {err}") from err
 
 
 def delete_player_record(player_id: str) -> None:
@@ -275,14 +287,10 @@ def delete_player_record(player_id: str) -> None:
     """
     try:
         dynamo.delete_item(TableName.PLAYERS, Key={"PlayerID": player_id})
-        logger.info("Deleted player record", extra={"player_id": player_id})
+        logger.info(f"Deleted player record for {player_id}")
     except ClientError as err:
-        logger.error(
-            "Failed to delete player record",
-            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to delete player record: {str(err)}")
+        logger.error(f"Failed to delete player record for {player_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to delete player record: {err}") from err
 
 
 def delete_all_characters_for_player(player_id: str) -> dict:
@@ -311,10 +319,7 @@ def delete_all_characters_for_player(player_id: str) -> dict:
         player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
 
         if not player:
-            logger.warning(
-                "Player not found for character deletion",
-                extra={"player_id": player_id},
-            )
+            logger.warning(f"Player not found for character deletion for {player_id}")
             return results
 
         character_list = player.get("CharacterList", {})
@@ -335,44 +340,21 @@ def delete_all_characters_for_player(player_id: str) -> dict:
                     if deletion_result.get("errors"):
                         results["errors"].extend(deletion_result.get("errors", []))
 
-                    logger.info(
-                        "Processed character deletion",
-                        extra={
-                            "character_name": character_name,
-                            "character_id": character_id,
-                            "game_mode": character_info.get("GameMode", "Unknown"),
-                            "deletion_result": deletion_result,
-                        },
-                    )
+                    logger.info(f"Processed character deletion for {character_name}")
                 except Exception as err:
-                    logger.error(
-                        "Failed to delete character",
-                        extra={
-                            "error": str(err),
-                            "character_id": character_id,
-                            "character_name": character_name,
-                        },
-                        exc_info=True,
-                    )
-                    results["errors"].append(f"Failed to delete character {character_name} ({character_id}): {str(err)}")
+                    logger.error(f"Failed to delete character for {character_name} Error: {err}", exc_info=True)
+                    results["errors"].append(f"Failed to delete character {character_name} ({character_id}): {err}")
 
-        logger.info(
-            "Completed deleting all characters",
-            extra={"player_id": player_id, "results": results},
-        )
+        logger.info(f"Completed deleting all characters for {player_id}")
         return results
 
     except ClientError as err:
-        logger.error(
-            "Database error in delete_all_characters",
-            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
-        results["errors"].append(f"Database error: {str(err)}")
+        logger.error(f"Database error in delete_all_characters for {player_id} Error: {err}", exc_info=True)
+        results["errors"].append(f"Database error: {err}")
         return results
     except Exception as err:
-        logger.error("Error in delete_all_characters", extra={"error": str(err)}, exc_info=True)
-        results["errors"].append(f"General error: {str(err)}")
+        logger.error(f"Error in delete_all_characters Error: {err}", exc_info=True)
+        results["errors"].append(f"General error: {err}")
         return results
 
 
@@ -405,29 +387,15 @@ def delete_player_active_segments(player_id: str) -> int:
                 )
                 deleted_count += 1
             except ClientError as err:
-                logger.error(
-                    "Failed to delete active segment",
-                    extra={
-                        "error": str(err),
-                        "segment_id": item.get("ActiveSegmentID"),
-                        "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-                    },
-                )
+                logger.error(f"Failed to delete active segment for {item.get('ActiveSegmentID')} Error: {err}")
 
-        logger.info(
-            "Deleted active segments",
-            extra={"player_id": player_id, "count": deleted_count},
-        )
+        logger.info(f"Deleted active segments for {player_id}")
         return deleted_count
     except ClientError as err:
-        logger.error(
-            "Error querying active segments",
-            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
+        logger.error(f"Error querying active segments for {player_id} Error: {err}", exc_info=True)
         return deleted_count
     except Exception as err:
-        logger.error("Error deleting active segments", extra={"error": str(err), "player_id": player_id}, exc_info=True)
+        logger.error(f"Error deleting active segments for {player_id} Error: {err}", exc_info=True)
         return deleted_count
 
 
@@ -460,38 +428,20 @@ def delete_player_character_history(player_id: str) -> int:
                 )
                 deleted_count += 1
             except ClientError as err:
-                logger.error(
-                    "Failed to delete history record",
-                    extra={
-                        "error": str(err),
-                        "timestamp": item.get("Timestamp"),
-                        "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-                    },
-                )
+                logger.error(f"Failed to delete history record for {item.get('Timestamp')} Error: {err}")
 
-        logger.info(
-            "Deleted history records",
-            extra={"count": deleted_count, "player_id": player_id},
-        )
+        logger.info(f"Deleted history records for {player_id}")
         return deleted_count
 
     except ClientError as err:
-        logger.error(
-            "Error querying character history",
-            extra={"error": str(err), "player_id": player_id, "error_code": err.response.get("Error", {}).get("Code", "Unknown")},
-            exc_info=True,
-        )
+        logger.error(f"Error querying character history for {player_id} Error: {err}", exc_info=True)
         return deleted_count
     except Exception as err:
-        logger.error(
-            "Error in delete_character_history",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
+        logger.error(f"Error in delete_character_history Error: {err}", exc_info=True)
         return deleted_count
 
 
-def delete_player_data_completely(player_id: str) -> dict:
+def delete_player_data(player_id: str) -> dict:
     """
     Delete all player data including characters, items, segments, and history.
 
@@ -510,7 +460,7 @@ def delete_player_data_completely(player_id: str) -> dict:
     if not player_id:
         raise ValueError("Player ID cannot be empty")
 
-    logger.info("Starting deletion process", extra={"player_id": player_id})
+    logger.info(f"Starting deletion process for {player_id}")
 
     # Track deletion results
     results: dict = {
@@ -532,18 +482,11 @@ def delete_player_data_completely(player_id: str) -> dict:
         delete_player_record(player_id)
         results["deletions"]["player_record"] = True
     except RuntimeError as err:
-        logger.error(
-            "Failed to delete player record",
-            extra={"error": str(err), "player_id": player_id},
-        )
-        results["errors"].append(f"Player record: {str(err)}")
+        logger.error(f"Failed to delete player record for {player_id} Error: {err}")
+        results["errors"].append(f"Player record: {err}")
     except Exception as err:
-        logger.error(
-            "Unexpected error deleting player record",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
-        results["errors"].append(f"Player record: {str(err)}")
+        logger.error(f"Unexpected error deleting player record Error: {err}", exc_info=True)
+        results["errors"].append(f"Player record: {err}")
 
     # Delete all characters and their associated data
     try:
@@ -555,12 +498,8 @@ def delete_player_data_completely(player_id: str) -> dict:
         if char_deletion_results.get("errors"):
             results["errors"].extend(char_deletion_results.get("errors", []))
     except Exception as err:
-        logger.error(
-            "Unexpected error deleting characters",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
-        results["errors"].append(f"Characters: {str(err)}")
+        logger.error(f"Unexpected error deleting characters Error: {err}", exc_info=True)
+        results["errors"].append(f"Characters: {err}")
 
     # Delete any remaining active segments
     try:
@@ -569,12 +508,8 @@ def delete_player_data_completely(player_id: str) -> dict:
         additional_segments = delete_player_active_segments(player_id)
         results["deletions"]["active_segments"] += additional_segments
     except Exception as err:
-        logger.error(
-            "Unexpected error deleting active segments",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
-        results["errors"].append(f"Active segments: {str(err)}")
+        logger.error(f"Unexpected error deleting active segments Error: {err}", exc_info=True)
+        results["errors"].append(f"Active segments: {err}")
 
     # Delete character history
     try:
@@ -582,14 +517,10 @@ def delete_player_data_completely(player_id: str) -> dict:
         additional_history = delete_player_character_history(player_id)
         results["deletions"]["character_history"] = additional_history
     except Exception as err:
-        logger.error(
-            "Unexpected error deleting character history",
-            extra={"error": str(err)},
-            exc_info=True,
-        )
-        results["errors"].append(f"Character history: {str(err)}")
+        logger.error(f"Unexpected error deleting character history Error: {err}", exc_info=True)
+        results["errors"].append(f"Character history: {err}")
 
     # Log summary
-    logger.info("Deletion complete", extra={"player_id": player_id, "summary": results})
+    logger.info(f"Deletion complete for {player_id}")
 
     return results

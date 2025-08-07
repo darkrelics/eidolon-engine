@@ -9,9 +9,7 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 
-from eidolon.logger import get_logger
-
-logger = get_logger(__name__)
+from eidolon.logger import logger
 
 # Initialize SQS client
 sqs_client = boto3.client("sqs")
@@ -44,23 +42,12 @@ def send_message(queue_url: str, message_body: dict, message_attributes=None) ->
         response = sqs_client.send_message(**params)
 
         message_id = response.get("MessageId")
-        logger.debug(
-            "Message sent to SQS",
-            extra={"queue_url": queue_url, "message_id": message_id},
-        )
+        logger.debug(f"Message sent to SQS for {queue_url}")
         return message_id
 
     except ClientError as err:
-        logger.error(
-            "Failed to send message to SQS",
-            extra={
-                "queue_url": queue_url,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to send message to SQS: {str(err)}")
+        logger.error(f"Failed to send message to SQS for {queue_url} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to send message to SQS: {err}") from err
 
 
 def send_message_batch(queue_url: str, messages: list) -> dict:
@@ -101,34 +88,12 @@ def send_message_batch(queue_url: str, messages: list) -> dict:
             failed += len(response.get("Failed", []))
 
             if response.get("Failed"):
-                logger.warning(
-                    "Some messages failed to send",
-                    extra={
-                        "queue_url": queue_url,
-                        "failed_messages": response.get("Failed"),
-                    },
-                )
+                logger.warning(f"Some messages failed to send for {queue_url}")
 
-        logger.info(
-            "Batch messages sent to SQS",
-            extra={
-                "queue_url": queue_url,
-                "successful": successful,
-                "failed": failed,
-                "total": len(messages),
-            },
-        )
+        logger.info(f"Batch messages sent to SQS for {queue_url}")
 
         return {"successful": successful, "failed": failed}
 
     except ClientError as err:
-        logger.error(
-            "Failed to send batch messages to SQS",
-            extra={
-                "queue_url": queue_url,
-                "error": str(err),
-                "error_code": err.response.get("Error", {}).get("Code", "Unknown"),
-            },
-            exc_info=True,
-        )
-        raise RuntimeError(f"Failed to send batch messages to SQS: {str(err)}")
+        logger.error(f"Failed to send batch messages to SQS for {queue_url} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to send batch messages to SQS: {err}") from err

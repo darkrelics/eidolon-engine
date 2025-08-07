@@ -5,9 +5,7 @@ Provides centralized CORS configuration and validation for API responses.
 """
 
 from eidolon.environment import ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, CORS_ALLOWED_HEADERS, CORS_ALLOWED_METHODS, CORS_MAX_AGE
-from eidolon.logger import get_logger
-
-logger = get_logger(__name__)
+from eidolon.logger import logger
 
 
 class CorsHandler:
@@ -96,7 +94,7 @@ class CorsHandler:
             return self.allowed_origins[0], self.allow_credentials
 
         # Multiple origins configured but request origin not allowed
-        logger.warning("Origin not in allowed list", extra={"origin": origin, "allowed_origins": self.allowed_origins})
+        logger.warning(f"Origin not in allowed list for {origin}")
         return None, False
 
     def get_cors_headers(self, event: dict) -> dict:
@@ -134,7 +132,10 @@ class CorsHandler:
         Returns:
             Lambda response for preflight request
         """
-        return {"statusCode": 200, "headers": self.get_cors_headers(event), "body": ""}
+        if event.get("httpMethod") == "OPTIONS":
+            return {"statusCode": 200, "headers": self.get_cors_headers(event), "body": ""}
+
+        return {}
 
     def add_cors_headers(self, response: dict, event: dict) -> dict:
         """

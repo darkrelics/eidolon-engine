@@ -198,13 +198,13 @@ def run_phase_health_check(session: boto3.Session, phase_name: str, deployed_sta
         # Check Lambda functions if lambda stack was deployed
         if "lambda" in deployed_stacks:
             function_names = [
-                "api-get-archetypes",
-                "api-add-character",
-                "api-get-character",
-                "api-list-characters",
-                "api-delete-character",
-                "cognito-new-player",
-                "cognito-delete-player",
+                "api-archetype-list",
+                "api-character-add",
+                "api-character-get",
+                "api-character-list",
+                "api-character-delete",
+                "cognito-player-new",
+                "cognito-player-delete",
             ]
             result = check_lambda_functions_health(session, function_names)
             if not result["healthy"]:

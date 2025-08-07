@@ -9,20 +9,13 @@ Returns completed segment results from the character's story history.
 
 from botocore.exceptions import ClientError
 
-from eidolon.character import get_character, validate_character_ownership
+from eidolon.character_data import character_get
+from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import get_logger
-from eidolon.player import extract_player_id_from_event, validate_player_exists
+from eidolon.logger import log_lambda_statistics, logger
+from eidolon.player import extract_player_id, validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
-from eidolon.utilities import (
-    build_lambda_response_pascal,
-    handle_lambda_error_pascal,
-    handle_preflight_if_options,
-    log_lambda_invocation,
-)
-from eidolon.validation import validate_uuid
-
-logger = get_logger(__name__)
+from eidolon.responses import lambda_error, lambda_response
 
 
 def get_segment_history_business_logic(character_id: str, player_id: str) -> dict:
@@ -40,22 +33,18 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
         ValueError: If character not found or not owned
         RuntimeError: If database operations fail
     """
-    # Validate character ID format
-    if not validate_uuid(character_id):
-        raise ValueError("Invalid character ID format")
+    # Verify character ownership using player record
+    if not verify_character_ownership(character_id, player_id):
+        raise ValueError("Character not owned by player")
 
-    # Verify character ownership
-    character = get_character(character_id)
-    validate_character_ownership(character, player_id)
+    # Get character data to find active story
+    character: dict = character_get(character_id, player_id)
 
     # Get current story ID from character
     story_id = character.get("ActiveStoryID")
     if not story_id:
         # No active story, return empty history
-        logger.info(
-            "No active story for character",
-            extra={"character_id": character_id},
-        )
+        logger.info(f"No active story for character for {character_id}")
         return {
             "CharacterID": character_id,
             "StoryID": None,
@@ -80,15 +69,10 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
         )
     except ClientError as err:
         logger.error(
-            "Failed to query active segments",
-            extra={
-                "character_id": character_id,
-                "story_id": story_id,
-                "error": str(err),
-            },
+            f"Failed to query active segments for {character_id} Error: {err}",
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to query active segments: {str(err)}")
+        raise RuntimeError(f"Failed to query active segments: {err}") from err
 
     # Format segments for response with all the data Flutter expects
     formatted_segments = []
@@ -142,14 +126,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
         "Segments": formatted_segments,
     }
 
-    logger.info(
-        "Segment history retrieved",
-        extra={
-            "character_id": character_id,
-            "story_id": story_id,
-            "segment_count": len(formatted_segments),
-        },
-    )
+    logger.info(f"Segment history retrieved for {character_id}")
 
     return response
 
@@ -172,57 +149,52 @@ def lambda_handler(event: dict, context: object) -> dict:
         500: Internal error
     """
     # Log invocation
-    log_lambda_invocation(context, event)
+    log_lambda_statistics(event, context)
 
     # Handle preflight
-    preflight_response = handle_preflight_if_options(event)
+    preflight_response: dict = cors_handler.handle_preflight(event)
     if preflight_response:
         return preflight_response
 
     try:
         # Extract player ID from JWT
-        player_id = extract_player_id_from_event(event)
+        player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+        logger.error(f"Authentication failed Error: {err}", exc_info=True)
+        return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Validate player exists
     try:
-        if not validate_player_exists(player_id):
-            logger.error("Player not found in database", extra={"player_id": player_id}, exc_info=True)
-            return build_lambda_response_pascal(401, {"Error": "Unauthorized"}, event)
+        if not validate_player(player_id):
+            logger.error(f"Player not found in database for {player_id}", exc_info=True)
+            return lambda_response(401, {"Error": "Unauthorized"}, event)
     except RuntimeError as err:
-        logger.error("Failed to validate player", extra={"error": str(err)}, exc_info=True)
-        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)
 
     # Get character ID from query parameters (flexible: CharacterID or characterId)
     character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
     if not character_id:
-        return build_lambda_response_pascal(400, {"Error": "Missing CharacterID parameter"}, event)
+        return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
 
     # Call business logic
     try:
         response_data = get_segment_history_business_logic(character_id, player_id)  # type: ignore
-        logger.info("Lambda response", extra={"status_code": 200})
-        return build_lambda_response_pascal(200, response_data, event)
+        return lambda_response(200, response_data, event)
     except ValueError as err:
-        logger.warning(
-            "Invalid request",
-            extra={"character_id": character_id, "error": str(err)},
-        )
+        logger.warning(f"Invalid request for {character_id} Error: {err}")
         if "not found" in str(err).lower():
-            return build_lambda_response_pascal(404, {"Error": "Character not found"}, event)
-        return build_lambda_response_pascal(400, {"Error": str(err)}, event)
+            return lambda_response(404, {"Error": "Character not found"}, event)
+        return lambda_response(400, {"Error": str(err)}, event)
     except RuntimeError as err:
         logger.error(
-            "Failed to get segment history",
-            extra={"character_id": character_id, "error": str(err)},
+            f"Failed to get segment history for {character_id} Error: {err}",
             exc_info=True,
         )
-        return build_lambda_response_pascal(500, {"Error": "Internal server error"}, event)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
-        return handle_lambda_error_pascal(err, context, event)
+        return lambda_error(event, err)

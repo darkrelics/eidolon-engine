@@ -4,19 +4,16 @@ import 'dart:convert';
 import '../models/character.dart';
 import '../models/active_segment.dart';
 import '../models/segment_outcome.dart';
+import 'base_provider.dart';
 
 /// Provider for character state management
 /// All progression happens server-side, this only manages display state
-class CharacterProvider extends ChangeNotifier {
+class CharacterProvider extends BaseProvider {
   Character? _character;
   ActiveSegment? _activeSegment;
-  bool _isLoading = false;
-  String? _error;
 
   Character? get character => _character;
   ActiveSegment? get activeSegment => _activeSegment;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
   bool get hasCharacter => _character != null;
 
   final SharedPreferences _prefs;
@@ -54,31 +51,28 @@ class CharacterProvider extends ChangeNotifier {
 
   /// Update character from server response
   Future<void> updateCharacter(Character newCharacter) async {
-    _character = newCharacter;
-    _error = null;
-
-    // Save to storage
-    await _prefs.setString(_characterKey, jsonEncode(newCharacter.toJson()));
-
-    notifyListeners();
+    await executeAsyncVoid(() async {
+      _character = newCharacter;
+      // Save to storage
+      await _prefs.setString(_characterKey, jsonEncode(newCharacter.toJson()));
+    }, showLoading: false);
   }
 
   /// Set active segment when starting
   Future<void> setActiveSegment(ActiveSegment segment) async {
-    _activeSegment = segment;
-    _error = null;
-
-    // Save to storage
-    await _prefs.setString(_activeSegmentKey, jsonEncode(segment));
-
-    notifyListeners();
+    await executeAsyncVoid(() async {
+      _activeSegment = segment;
+      // Save to storage
+      await _prefs.setString(_activeSegmentKey, jsonEncode(segment));
+    }, showLoading: false);
   }
 
   /// Clear active segment when completed
   Future<void> clearActiveSegment() async {
-    _activeSegment = null;
-    await _prefs.remove(_activeSegmentKey);
-    notifyListeners();
+    await executeAsyncVoid(() async {
+      _activeSegment = null;
+      await _prefs.remove(_activeSegmentKey);
+    }, showLoading: false);
   }
 
   /// Apply outcome from server
@@ -97,27 +91,12 @@ class CharacterProvider extends ChangeNotifier {
 
   /// Clear all character data
   Future<void> clearCharacter() async {
-    _character = null;
-    _activeSegment = null;
-    _error = null;
-
-    await _prefs.remove(_characterKey);
-    await _prefs.remove(_activeSegmentKey);
-
-    notifyListeners();
-  }
-
-  /// Set loading state
-  void setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
-  }
-
-  /// Set error state
-  void setError(String? error) {
-    _error = error;
-    _isLoading = false;
-    notifyListeners();
+    await executeAsyncVoid(() async {
+      _character = null;
+      _activeSegment = null;
+      await _prefs.remove(_characterKey);
+      await _prefs.remove(_activeSegmentKey);
+    }, showLoading: false);
   }
 
   /// Get display-friendly skill score

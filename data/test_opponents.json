@@ -1,5 +1,5 @@
 {
-  "opponents": [
+  "Opponents": [
     {
       "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
       "Name": "Goblin Scout",
@@ -14,12 +14,12 @@
       "WeaponDamage": 2,
       "LootTable": [
         {
-          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "chance": 0.5
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.5
         },
         {
-          "itemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
-          "chance": 0.3
+          "ItemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
+          "Chance": 0.3
         }
       ],
       "Tags": ["goblinoid", "forest", "weak"],
@@ -39,16 +39,16 @@
       "WeaponDamage": 3,
       "LootTable": [
         {
-          "itemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
-          "chance": 0.4
+          "ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "Chance": 0.4
         },
         {
-          "itemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "chance": 0.3
+          "ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "Chance": 0.3
         },
         {
-          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "chance": 0.7
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.7
         }
       ],
       "Tags": ["goblinoid", "forest", "medium"],
@@ -68,16 +68,16 @@
       "WeaponDamage": 2,
       "LootTable": [
         {
-          "itemID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
-          "chance": 0.3
+          "ItemID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
+          "Chance": 0.3
         },
         {
-          "itemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
-          "chance": 0.2
+          "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "Chance": 0.2
         },
         {
-          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "chance": 0.8
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.8
         }
       ],
       "Tags": ["goblinoid", "forest", "magic", "medium"],
@@ -97,16 +97,16 @@
       "WeaponDamage": 3,
       "LootTable": [
         {
-          "itemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
-          "chance": 0.5
+          "ItemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
+          "Chance": 0.5
         },
         {
-          "itemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
-          "chance": 0.3
+          "ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "Chance": 0.3
         },
         {
-          "itemID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
-          "chance": 0.2
+          "ItemID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Chance": 0.2
         }
       ],
       "Tags": ["human", "forest", "ranged", "medium"],
@@ -158,8 +158,8 @@
       "WeaponDamage": 2,
       "LootTable": [
         {
-          "itemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "chance": 0.2
+          "ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "Chance": 0.2
         }
       ],
       "Tags": ["undead", "dungeon", "weak"],
@@ -195,12 +195,12 @@
       "WeaponDamage": 3,
       "LootTable": [
         {
-          "itemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
-          "chance": 0.3
+          "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "Chance": 0.3
         },
         {
-          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "chance": 0.6
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.6
         }
       ],
       "Tags": ["undead", "dungeon", "vampire", "strong"],
@@ -220,12 +220,12 @@
       "WeaponDamage": 5,
       "LootTable": [
         {
-          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "chance": 0.8
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.8
         },
         {
-          "itemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
-          "chance": 0.4
+          "ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "Chance": 0.4
         }
       ],
       "Tags": ["monster", "dungeon", "regenerating", "strong"],
@@ -261,16 +261,16 @@
       "WeaponDamage": 4,
       "LootTable": [
         {
-          "itemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "chance": 0.4
+          "ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "Chance": 0.4
         },
         {
-          "itemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
-          "chance": 0.5
+          "ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "Chance": 0.5
         },
         {
-          "itemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
-          "chance": 0.7
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.7
         }
       ],
       "Tags": ["orc", "mountain", "strong"],
@@ -290,12 +290,12 @@
       "WeaponDamage": 3,
       "LootTable": [
         {
-          "itemID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
-          "chance": 0.5
+          "ItemID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
+          "Chance": 0.5
         },
         {
-          "itemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
-          "chance": 0.3
+          "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "Chance": 0.3
         }
       ],
       "Tags": ["human", "magic", "cultist", "medium"],
@@ -315,8 +315,8 @@
       "WeaponDamage": 4,
       "LootTable": [
         {
-          "itemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
-          "chance": 0.4
+          "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "Chance": 0.4
         }
       ],
       "Tags": ["construct", "dungeon", "slow", "strong"],

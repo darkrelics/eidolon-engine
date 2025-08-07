@@ -50,7 +50,6 @@ DynamoDB:
     Segments: segments
     ActiveSegments: active_segments
     Opponents: opponents
-    History: history
     CharacterHistory: character_history
     StoryHistory: story_history
     SegmentHistory: segment_history

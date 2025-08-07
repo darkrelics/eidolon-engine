@@ -122,13 +122,6 @@ class DynamoDBStack(Stack):
             },
             {"name": "opponents", "pk": "OpponentID", "pk_type": "S", "sk": ""},
             {
-                "name": "history",
-                "pk": "CharacterID",
-                "pk_type": "S",
-                "sk": "StoryID",
-                "sk_type": "S",
-            },
-            {
                 "name": "story_history",
                 "pk": "CharacterID",
                 "pk_type": "S",
@@ -207,9 +200,11 @@ class DynamoDBStack(Stack):
                 self.tables[config_name] = table
 
             # Output table name
+            # Convert snake_case to PascalCase for output name
+            output_name = "".join(word.capitalize() for word in config_name.split("_"))
             CfnOutput(
                 self,
-                f"{config_name.capitalize()}TableName",
+                f"{output_name}TableName",
                 value=table.table_name,
                 description=f"DynamoDB table name for {config_name}",
             )
@@ -256,7 +251,8 @@ class DynamoDBStack(Stack):
         if logical_id == "active_segments":
             table.add_global_secondary_index(
                 index_name="EndTimeIndex",
-                partition_key=dynamodb.Attribute(name="EndTime", type=dynamodb.AttributeType.NUMBER),
+                partition_key=dynamodb.Attribute(name="Status", type=dynamodb.AttributeType.STRING),
+                sort_key=dynamodb.Attribute(name="EndTime", type=dynamodb.AttributeType.NUMBER),
                 projection_type=dynamodb.ProjectionType.ALL,
             )
             table.add_global_secondary_index(
@@ -295,6 +291,7 @@ class DynamoDBStack(Stack):
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
                     actions=[
+                        "dynamodb:DescribeTable",
                         "dynamodb:GetItem",
                         "dynamodb:PutItem",
                         "dynamodb:UpdateItem",

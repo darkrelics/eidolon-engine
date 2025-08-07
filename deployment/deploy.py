@@ -19,9 +19,10 @@ from config_updater import ConfigurationUpdater
 from config_validator import validate_deployment_config
 from deployment_logic import analyze_changes, prompt_missing_parameters
 from health_checks import run_phase_health_check
+from log_cleanup import LogGroupCleanup
 from resource_validator import ResourceValidatorFactory, generate_drift_report
 from stack_utils import StackOutputHelper
-from state_manager import ConfigurationManager, DeploymentState
+from state_manager import ConfigurationManager, DeploymentState, StateManager
 
 
 class IncrementalDeploymentOrchestrator:
@@ -268,8 +269,11 @@ class IncrementalDeploymentOrchestrator:
             print(f"\nUnchanged stacks: {len(plan['unchanged_stacks'])}")
 
         if not auto_approve:
-            response = input("\nProceed with deployment? [y/N]: ").strip().lower()
-            if response != "y":
+            response = input("\nProceed with deployment? [Y/n]: ").strip().lower()
+            if response not in ["n", "no"]:
+                # Default to yes - proceed unless explicitly declined
+                pass
+            else:
                 print("Deployment cancelled.")
                 return False
 
@@ -376,6 +380,13 @@ class IncrementalDeploymentOrchestrator:
                 print(f"\nDeploying stacks: {', '.join(stacks_to_deploy)}")
 
                 # Pre-deployment actions for specific phases
+                # Clean up orphaned Lambda log groups before Application Layer deployment
+                if phase["name"] == "Application Layer":
+                    print("\nPreparing for Lambda deployment...")
+                    log_cleanup = LogGroupCleanup(self.session)
+                    if not log_cleanup.clean_before_deployment():
+                        print("[WARNING] Log cleanup encountered issues, continuing with deployment")
+
                 # S3 buckets are now all managed by the S3 stack
 
                 # Deploy stacks serially for safety
@@ -384,12 +395,28 @@ class IncrementalDeploymentOrchestrator:
                 for stack in stacks_to_deploy:
                     print(f"\n  Deploying {stack}...")
                     progress_reporter = CDKProgressReporter()
-                    result: dict = self.cdk_api.deploy(
-                        stacks=[stack],  # Deploy one stack at a time
-                        context=context,
-                        require_approval="never",  # User already approved deployment plan
-                        progress_callback=progress_reporter,
-                    )
+                    try:
+                        result: dict = self.cdk_api.deploy(
+                            stacks=[stack],  # Deploy one stack at a time
+                            context=context,
+                            require_approval="never",  # User already approved deployment plan
+                            progress_callback=progress_reporter,
+                        )
+                    except CDKDeploymentError as cdk_err:
+                        # Check for specific CDK errors we can provide better messages for
+                        error_msg = str(cdk_err)
+                        if "cannot be converted into a whole number of minutes" in error_msg:
+                            print("\n[ERROR] EventBridge scheduling error detected!")
+                            print("EventBridge only supports schedules in whole minutes (minimum 1 minute).")
+                            print("The 30-second polling interval needs to be changed to 1 minute.")
+                            print("\nThis has been fixed in the code but requires redeployment.")
+                            print("Please ensure you're using the latest code version.")
+                        elif "ValidationError" in error_msg:
+                            print(f"\n[ERROR] AWS validation error: {error_msg}")
+                            print("This typically indicates a configuration issue with AWS resources.")
+                        else:
+                            print(f"\n[ERROR] CDK deployment failed: {error_msg}")
+                        raise
 
                     if not result["success"]:
                         print(f"\n  [ERROR] Failed to deploy {stack}")
@@ -404,43 +431,40 @@ class IncrementalDeploymentOrchestrator:
 
                 # Post-deployment actions for specific phases
                 if phase_success and phase["name"] == "Distribution":
-                    # Always update S3 bucket policy for CloudFront access, even if cloudfront stack wasn't deployed
-                    # This ensures the policy is correct even after manual changes or drift
-                    if self.config_manager.config.get("CloudFront", {}).get("DistributionId"):
-                        print("\n  Ensuring S3 bucket policy is configured for CloudFront...")
-                        self.update_s3_bucket_policy_for_cloudfront()
+                    # Always update S3 bucket policy for CloudFront access
+                    # This must run EVERY time to ensure bucket policy is correct
+                    print("\n  Ensuring S3 bucket policy is configured for CloudFront...")
+                    self.update_s3_bucket_policy_for_cloudfront()
+
+                    # Update CodeBuild project with CloudFront distribution ID
+                    print("\n  Updating CodeBuild project with CloudFront distribution ID...")
+                    self.update_codebuild_cloudfront_id()
+
+                    # Save the distribution ID to config for future use
+                    self.save_cloudfront_distribution_id()
 
                 # Check if we need to update Lambda functions after Application Layer
                 if phase_success and phase["name"] == "Application Layer":
                     # Configure Cognito triggers via boto3
                     self.configure_cognito_triggers()
 
-                    # Check if any Lambda stack reported no changes
-                    lambda_stacks: list = ["lambda", "base-lambda"]
-                    needs_lambda_update = False
+                    # Always update Lambda functions after Application Layer deployment
+                    # This ensures Lambda functions use the latest code from S3 that was
+                    # built during the CodeBuild phase
+                    print("\n  Updating Lambda functions with latest code...")
 
-                    for stack in lambda_stacks:
-                        if stack in stack_results:
-                            stack_changes = stack_results[stack].get("stack_changes", {})
-                            # If this specific stack had no changes, we need to update
-                            if stack in stack_changes and not stack_changes[stack]:
-                                needs_lambda_update = True
-                                print(f"\n  Note: {stack} had no changes, Lambda update required")
-                                break
+                    # Get Lambda bucket name
+                    lambda_bucket = plan["parameters"].get("lambda_bucket_name")
+                    if not lambda_bucket:
+                        # Try to construct it
+                        game_name = plan["parameters"].get("game_name", "eidolon-engine")
+                        account_id = self.aws_factory.get_account_id()
+                        lambda_bucket: str = f"{game_name}-lambda-{account_id}"
 
-                    if needs_lambda_update:
-                        # Get Lambda bucket name
-                        lambda_bucket = plan["parameters"].get("lambda_bucket_name")
-                        if not lambda_bucket:
-                            # Try to construct it
-                            game_name = plan["parameters"].get("game_name", "eidolon-engine")
-                            account_id = self.aws_factory.get_account_id()
-                            lambda_bucket: str = f"{game_name}-lambda-{account_id}"
-
-                        if lambda_bucket:
-                            self._update_lambda_functions_from_s3(lambda_bucket)
-                        else:
-                            print("  [WARNING] Could not determine Lambda bucket name for updates")
+                    if lambda_bucket:
+                        self._update_lambda_functions_from_s3(lambda_bucket)
+                    else:
+                        print("  [WARNING] Could not determine Lambda bucket name for updates")
 
                 if result["success"]:
                     print(f"\n[SUCCESS] Phase {i} ({phase['name']}) completed successfully!")
@@ -452,8 +476,11 @@ class IncrementalDeploymentOrchestrator:
                         print(f"\n[WARNING] Health checks failed for {phase['name']}")
                         print("Review the issues above and fix if needed before continuing.")
                         if not auto_approve:
-                            response = input("\nContinue with deployment anyway? [y/N]: ").strip().lower()
-                            if response != "y":
+                            response = input("\nContinue with deployment anyway? [Y/n]: ").strip().lower()
+                            if response not in ["n", "no"]:
+                                # Default to yes - continue unless explicitly declined
+                                pass
+                            else:
                                 print("Deployment stopped due to health check failures.")
                                 all_succeeded = False
                                 break
@@ -523,21 +550,23 @@ class IncrementalDeploymentOrchestrator:
         # Expected artifacts
         expected_artifacts: list = [
             "lambda-layer/lambda-layer.zip",  # CodeBuild artifacts path
-            "api-add-character.zip",
-            "api-delete-character.zip",
-            "api-get-archetypes.zip",
-            "api-get-character.zip",
-            "api-list-characters.zip",
-            "api-get-stories.zip",
+            "api-character-add.zip",
+            "api-character-delete.zip",
+            "api-archetype-list.zip",
+            "api-character-get.zip",
+            "api-character-list.zip",
             "api-start-story.zip",
-            "api-get-current-story.zip",
             "api-submit-decision.zip",
             "api-get-segment-outcome.zip",
             "api-abandon-story.zip",
-            "segment-poller.zip",
-            "process-segment.zip",
-            "cognito-new-player.zip",
-            "cognito-delete-player.zip",
+            "api-get-segment-status.zip",
+            "api-get-segment-history.zip",
+            "api-character-rest.zip",
+            "ops-segment-poller.zip",
+            "ops-process-segment.zip",
+            "ops-advance-story.zip",
+            "cognito-player-new.zip",
+            "cognito-player-delete.zip",
         ]
 
         print("\nValidating Lambda build artifacts...")
@@ -698,8 +727,29 @@ class IncrementalDeploymentOrchestrator:
                 if result.exists and result.valid:
                     print(f"  [OK] User Pool: {user_pool_id} - OK")
                 else:
-                    print(f"  [ERROR] User Pool: {user_pool_id} - {'Invalid' if result.exists else 'Does not exist'}")
-                    all_valid = False
+                    # Clean up stale Cognito references when resource doesn't exist
+                    if not result.exists:
+                        print(f"  [ERROR] User Pool: {user_pool_id} - Does not exist")
+                        print("  [INFO] Removing stale Cognito configuration...")
+
+                        # Remove from config.yml
+
+                        config_manager = ConfigurationManager()
+                        config_manager.remove_section("Cognito")
+
+                        # Remove from deployment state
+                        state_manager = StateManager()
+                        deployment_state = state_manager.get_deployment_state()
+                        if "existing_user_pool_id" in deployment_state:
+                            del deployment_state["existing_user_pool_id"]
+                        if "existing_app_client_id" in deployment_state:
+                            del deployment_state["existing_app_client_id"]
+                        state_manager.save_deployment_state(deployment_state)
+
+                        print("  [INFO] Stale Cognito references cleaned up")
+                    else:
+                        print(f"  [ERROR] User Pool: {user_pool_id} - Invalid")
+                        all_valid = False
             else:
                 print("  [MISSING] User Pool: Not configured")
                 all_valid = False
@@ -800,9 +850,17 @@ class IncrementalDeploymentOrchestrator:
                     except ClientError as err:
                         if err.response["Error"]["Code"] == "NoSuchDistribution":
                             print(f"  [MISSING] Distribution: {distribution_id} - Does not exist")
+                            print("  [INFO] Removing stale CloudFront configuration...")
+
+                            # Remove from config.yml
+
+                            config_manager = ConfigurationManager()
+                            config_manager.remove_section("CloudFront")
+
+                            print("  [INFO] Stale CloudFront references cleaned up")
                         else:
                             print(f"  [ERROR] Distribution: {distribution_id} - Error: {err}")
-                        all_valid = False
+                            all_valid = False
                 else:
                     print("  [WARNING] Distribution: Not configured")
 
@@ -1209,17 +1267,42 @@ class IncrementalDeploymentOrchestrator:
                     all_functions.extend(page["Functions"])
 
                 # Create a mapping from artifact name to actual function name
+                # This handles both exact matches and handler-based matches
                 function_mapping = {}
+                unmatched_artifacts = []
+
                 for artifact in lambda_artifacts:
                     # Remove .zip extension to get function name
-                    # e.g., "api-get-archetypes.zip" -> "api-get-archetypes"
+                    # e.g., "api-archetype-list.zip" -> "api-archetype-list"
                     expected_name = artifact.replace(".zip", "")
+                    matched = False
 
-                    # Check if this exact function exists
+                    # First, check if this exact function exists
                     for func in all_functions:
                         if func["FunctionName"] == expected_name:
                             function_mapping[artifact] = func["FunctionName"]
+                            matched = True
                             break
+
+                    # If no exact match, try to match by handler module name
+                    if not matched:
+                        # Convert hyphen to underscore for handler matching
+                        # e.g., "api-archetype-list" -> "api_archetype_list"
+                        handler_module = expected_name.replace("-", "_")
+                        for func in all_functions:
+                            # Check if the handler starts with our module name
+                            if func.get("Handler", "").startswith(f"{handler_module}."):
+                                function_mapping[artifact] = func["FunctionName"]
+                                print(f"    [INFO] Matched {artifact} to {func['FunctionName']} via handler")
+                                matched = True
+                                break
+
+                    if not matched:
+                        unmatched_artifacts.append(artifact)
+
+                # Report unmatched artifacts
+                if unmatched_artifacts:
+                    print(f"    [WARNING] Could not find Lambda functions for: {', '.join(unmatched_artifacts)}")
 
                 if not function_mapping:
                     print("    [WARNING] No matching Lambda functions found")
@@ -1227,18 +1310,26 @@ class IncrementalDeploymentOrchestrator:
 
                 # Update the functions we found
                 updated_count = 0
+                failed_count = 0
                 for artifact, func_name in function_mapping.items():
                     try:
                         # Update function code
                         lambda_client.update_function_code(FunctionName=func_name, S3Bucket=lambda_bucket, S3Key=artifact)
-                        print(f"    [OK] Updated {func_name}")
+                        print(f"    [OK] Updated {func_name} with {artifact}")
                         updated_count += 1
                     except ClientError as err:
-                        print(f"    [FAILED] Failed to update {func_name}: {err}")
+                        if "ResourceNotFoundException" in str(err):
+                            print(f"    [SKIP] Function {func_name} no longer exists")
+                        else:
+                            print(f"    [FAILED] Failed to update {func_name}: {err}")
+                            failed_count += 1
                     except Exception as err:
                         print(f"    [ERROR] Error updating {func_name}: {err}")
+                        failed_count += 1
 
                 print(f"    Successfully updated {updated_count} Lambda function(s)")
+                if failed_count > 0:
+                    print(f"    Failed to update {failed_count} Lambda function(s)")
 
             except Exception as err:
                 print(f"    [ERROR] Error listing Lambda functions: {err}")
@@ -1329,8 +1420,23 @@ class IncrementalDeploymentOrchestrator:
                 print("    Portal bucket not configured, skipping policy update")
                 return
 
-            # Get distribution ID from config
+            # Get distribution ID from config or CloudFormation stack
             distribution_id = self.config_manager.config.get("CloudFront", {}).get("DistributionId", "")
+            if not distribution_id:
+                # Try to get from CloudFormation stack outputs
+                try:
+                    cf = self.session.client("cloudformation")
+                    stack_name = "cloudfront"
+                    response = cf.describe_stacks(StackName=stack_name)
+                    outputs = response["Stacks"][0].get("Outputs", [])
+                    for output in outputs:
+                        if output["OutputKey"] == "DistributionId":
+                            distribution_id = output["OutputValue"]
+                            print(f"    Found distribution ID from stack: {distribution_id}")
+                            break
+                except Exception as e:
+                    print(f"    Could not get distribution ID from stack: {e}")
+
             if not distribution_id:
                 print("    CloudFront distribution ID not found, skipping policy update")
                 return
@@ -1498,6 +1604,112 @@ class IncrementalDeploymentOrchestrator:
                 print(f"    Failed to update bucket policy: {err}")
         except Exception as err:
             print(f"    Error updating bucket policy: {err}")
+
+    def save_cloudfront_distribution_id(self):
+        """Save CloudFront distribution ID to config file."""
+        try:
+            # Get distribution ID from CloudFormation stack outputs
+            cf = self.session.client("cloudformation")
+            stack_name = "cloudfront"
+            response = cf.describe_stacks(StackName=stack_name)
+            outputs = response["Stacks"][0].get("Outputs", [])
+
+            distribution_id = None
+            for output in outputs:
+                if output["OutputKey"] == "DistributionId":
+                    distribution_id = output["OutputValue"]
+                    break
+
+            if distribution_id:
+                # Save to config
+                if "CloudFront" not in self.config_manager.config:
+                    self.config_manager.config["CloudFront"] = {}
+                self.config_manager.config["CloudFront"]["DistributionId"] = distribution_id
+                self.config_manager.save_config()
+                print(f"    Saved CloudFront distribution ID to config: {distribution_id}")
+
+        except Exception as e:
+            print(f"    Could not save distribution ID: {e}")
+
+    def update_codebuild_cloudfront_id(self):
+        """Update CodeBuild project environment variable with CloudFront distribution ID."""
+        try:
+            # Get distribution ID from config or CloudFormation stack
+            distribution_id = self.config_manager.config.get("CloudFront", {}).get("DistributionId", "")
+            if not distribution_id:
+                # Try to get from CloudFormation stack outputs
+                try:
+                    cf = self.session.client("cloudformation")
+                    stack_name = "cloudfront"
+                    response = cf.describe_stacks(StackName=stack_name)
+                    outputs = response["Stacks"][0].get("Outputs", [])
+                    for output in outputs:
+                        if output["OutputKey"] == "DistributionId":
+                            distribution_id = output["OutputValue"]
+                            print(f"    Found distribution ID from stack: {distribution_id}")
+                            break
+                except Exception as e:
+                    print(f"    Could not get distribution ID from stack: {e}")
+
+            if not distribution_id:
+                print("    CloudFront distribution ID not found, skipping CodeBuild update")
+                return
+
+            # Get CodeBuild client
+            codebuild_client = self.session.client("codebuild")
+
+            # Update portal build project
+            project_name = "eidolon-portal-build"
+            try:
+                # Get current project configuration
+                response = codebuild_client.batch_get_projects(names=[project_name])
+                if not response.get("projects"):
+                    print(f"    CodeBuild project {project_name} not found")
+                    return
+
+                project = response["projects"][0]
+                environment = project.get("environment", {})
+                env_vars = environment.get("environmentVariables", [])
+
+                # Find and update CLOUDFRONT_DISTRIBUTION_ID
+                found = False
+                for var in env_vars:
+                    if var["name"] == "CLOUDFRONT_DISTRIBUTION_ID":
+                        var["value"] = distribution_id
+                        found = True
+                        break
+
+                if not found:
+                    # Add the environment variable if it doesn't exist
+                    env_vars.append({"name": "CLOUDFRONT_DISTRIBUTION_ID", "value": distribution_id, "type": "PLAINTEXT"})
+
+                # Update the project
+                environment["environmentVariables"] = env_vars
+
+                update_params = {
+                    "name": project_name,
+                    "environment": environment,
+                    "source": project["source"],
+                    "artifacts": project["artifacts"],
+                    "serviceRole": project["serviceRole"],
+                }
+
+                # Add optional fields if present
+                if "description" in project:
+                    update_params["description"] = project["description"]
+                if "buildBatchConfig" in project:
+                    update_params["buildBatchConfig"] = project["buildBatchConfig"]
+                if "logsConfig" in project:
+                    update_params["logsConfig"] = project["logsConfig"]
+
+                codebuild_client.update_project(**update_params)
+                print(f"    Updated CodeBuild project {project_name} with CloudFront distribution ID: {distribution_id}")
+
+            except ClientError as err:
+                print(f"    Failed to update CodeBuild project: {err}")
+
+        except Exception as err:
+            print(f"    Error updating CodeBuild project: {err}")
 
     def _invalidate_cloudfront_distribution(self):
         """Invalidate CloudFront distribution after builds complete."""
