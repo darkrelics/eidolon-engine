@@ -298,33 +298,6 @@ def get_completed_segment_for_character(character_id: str, player_id: str, segme
     return active_segment
 
 
-def get_story_history(character_id: str, story_id: str) -> dict:
-    """
-    Get story history for a character.
-
-    Args:
-        character_id: Character UUID
-        story_id: Story UUID
-
-    Returns:
-        History record dict or empty dict if not found
-
-    Raises:
-        RuntimeError: If database query fails
-    """
-    if not character_id:
-        raise ValueError("Character ID cannot be empty")
-    if not story_id:
-        raise ValueError("Story ID cannot be empty")
-
-    try:
-        history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryID": story_id})
-        return history or {}
-    except ClientError as err:
-        logger.error(f"Failed to get story history for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to get story history: {err}") from err
-
-
 def get_story_cooldown(character_id: str, story_id: str, story_type: str):
     """
     Calculate cooldown remaining for a story based on its type and last completion.
@@ -1129,7 +1102,7 @@ def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
                 },
             )
 
-        loot_table = opponent_data.get("LootTable", [])
+        _ = opponent_data.get("LootTable", [])
 
         logger.info(f"Applied combat rewards for {character_id}")
     except ClientError as err:
