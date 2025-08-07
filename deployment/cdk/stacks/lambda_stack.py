@@ -365,8 +365,8 @@ class LambdaStack(cdk.Stack):
         """
         # New Player Trigger Lambda
         self.cognito_new_player_function = self.create_lambda_function(
-            "cognito-new-player",
-            "cognito_new_player.lambda_handler",
+            "cognito-player-new",
+            "cognito_player_new.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
             },
@@ -376,8 +376,8 @@ class LambdaStack(cdk.Stack):
 
         # Delete Player Trigger Lambda
         self.cognito_delete_player_function = self.create_lambda_function(
-            "cognito-delete-player",
-            "cognito_delete_player.lambda_handler",
+            "cognito-player-delete",
+            "cognito_player_delete.lambda_handler",
             {
                 "PLAYERS_TABLE": self.players_table,
                 "CHARACTERS_TABLE": self.characters_table,
@@ -627,7 +627,7 @@ class LambdaStack(cdk.Stack):
         archetypes_resource = self.api.root.add_resource("archetypes")
         archetypes_resource.add_method(
             "GET",
-            apigateway.LambdaIntegration(self.get_archetypes_function),  # type: ignore
+            apigateway.LambdaIntegration(self.list_archetypes_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )

@@ -555,9 +555,7 @@ class IncrementalDeploymentOrchestrator:
             "api-archetype-list.zip",
             "api-character-get.zip",
             "api-character-list.zip",
-            "api-get-stories.zip",
             "api-start-story.zip",
-            "api-get-current-story.zip",
             "api-submit-decision.zip",
             "api-get-segment-outcome.zip",
             "api-abandon-story.zip",
@@ -1269,17 +1267,42 @@ class IncrementalDeploymentOrchestrator:
                     all_functions.extend(page["Functions"])
 
                 # Create a mapping from artifact name to actual function name
+                # This handles both exact matches and handler-based matches
                 function_mapping = {}
+                unmatched_artifacts = []
+                
                 for artifact in lambda_artifacts:
                     # Remove .zip extension to get function name
-                    # e.g., "api-get-archetypes.zip" -> "api-get-archetypes"
+                    # e.g., "api-archetype-list.zip" -> "api-archetype-list"
                     expected_name = artifact.replace(".zip", "")
+                    matched = False
 
-                    # Check if this exact function exists
+                    # First, check if this exact function exists
                     for func in all_functions:
                         if func["FunctionName"] == expected_name:
                             function_mapping[artifact] = func["FunctionName"]
+                            matched = True
                             break
+                    
+                    # If no exact match, try to match by handler module name
+                    if not matched:
+                        # Convert hyphen to underscore for handler matching
+                        # e.g., "api-archetype-list" -> "api_archetype_list"
+                        handler_module = expected_name.replace("-", "_")
+                        for func in all_functions:
+                            # Check if the handler starts with our module name
+                            if func.get("Handler", "").startswith(f"{handler_module}."):
+                                function_mapping[artifact] = func["FunctionName"]
+                                print(f"    [INFO] Matched {artifact} to {func['FunctionName']} via handler")
+                                matched = True
+                                break
+                    
+                    if not matched:
+                        unmatched_artifacts.append(artifact)
+
+                # Report unmatched artifacts
+                if unmatched_artifacts:
+                    print(f"    [WARNING] Could not find Lambda functions for: {', '.join(unmatched_artifacts)}")
 
                 if not function_mapping:
                     print("    [WARNING] No matching Lambda functions found")
@@ -1287,18 +1310,26 @@ class IncrementalDeploymentOrchestrator:
 
                 # Update the functions we found
                 updated_count = 0
+                failed_count = 0
                 for artifact, func_name in function_mapping.items():
                     try:
                         # Update function code
                         lambda_client.update_function_code(FunctionName=func_name, S3Bucket=lambda_bucket, S3Key=artifact)
-                        print(f"    [OK] Updated {func_name}")
+                        print(f"    [OK] Updated {func_name} with {artifact}")
                         updated_count += 1
                     except ClientError as err:
-                        print(f"    [FAILED] Failed to update {func_name}: {err}")
+                        if "ResourceNotFoundException" in str(err):
+                            print(f"    [SKIP] Function {func_name} no longer exists")
+                        else:
+                            print(f"    [FAILED] Failed to update {func_name}: {err}")
+                            failed_count += 1
                     except Exception as err:
                         print(f"    [ERROR] Error updating {func_name}: {err}")
+                        failed_count += 1
 
                 print(f"    Successfully updated {updated_count} Lambda function(s)")
+                if failed_count > 0:
+                    print(f"    Failed to update {failed_count} Lambda function(s)")
 
             except Exception as err:
                 print(f"    [ERROR] Error listing Lambda functions: {err}")

@@ -17,6 +17,10 @@ class CognitoTriggerStack(cdk.Stack):
         lambda_id,
         lambda_bucket: s3.IBucket,
         players_table: str,
+        characters_table: str,
+        items_table: str,
+        active_segments_table: str,
+        story_history_table: str,
         cognito_user_pool_arn: str,
         dependencies_layer: lambda_.ILayerVersion,
         allowed_cors_origins: list[str],
@@ -35,6 +39,12 @@ class CognitoTriggerStack(cdk.Stack):
             **kwargs: Additional stack properties
         """
         super().__init__(scope, lambda_id, **kwargs)
+
+        # Store table names
+        self.characters_table = characters_table
+        self.items_table = items_table
+        self.active_segments_table = active_segments_table
+        self.story_history_table = story_history_table
 
         # Store CORS origins for Lambda environment
         self.cors_origins_str = ",".join(allowed_cors_origins) if allowed_cors_origins else "*"
@@ -62,7 +72,7 @@ class CognitoTriggerStack(cdk.Stack):
         # Create Cognito new player Lambda function
         self.cognito_new_player_function = lambda_.Function(
             self,
-            "cognito-new-player",
+            "cognito-player-new",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="cognito_player_new.lambda_handler",
             code=lambda_.Code.from_bucket(lambda_bucket, "cognito-player-new.zip"),
@@ -90,6 +100,42 @@ class CognitoTriggerStack(cdk.Stack):
             self,
             "cognito-trigger-logs",
             log_group_name=f"/aws/lambda/{self.cognito_new_player_function.function_name}",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+        )
+
+        # Create Cognito delete player Lambda function
+        self.cognito_delete_player_function = lambda_.Function(
+            self,
+            "cognito-player-delete",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="cognito_player_delete.lambda_handler",
+            code=lambda_.Code.from_bucket(lambda_bucket, "cognito-player-delete.zip"),
+            layers=[dependencies_layer],
+            role=cognito_lambda_role,  # type: ignore
+            timeout=cdk.Duration.seconds(30),
+            memory_size=128,
+            environment={
+                "players_table": players_table,
+                "characters_table": self.characters_table,
+                "items_table": self.items_table,
+                "active_segments_table": self.active_segments_table,
+                "story_history_table": self.story_history_table,
+                "ALLOWED_ORIGINS": self.cors_origins_str,
+            },
+            description="Deletes player data when Cognito user is deleted",
+        )
+
+        # Grant Cognito permission to invoke the delete Lambda function
+        self.cognito_delete_player_function.grant_invoke(
+            iam.ServicePrincipal("cognito-idp.amazonaws.com", conditions=cognito_source_condition)
+        )
+
+        # Create CloudWatch log group for delete function
+        logs.LogGroup(
+            self,
+            "cognito-delete-trigger-logs",
+            log_group_name=f"/aws/lambda/{self.cognito_delete_player_function.function_name}",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
