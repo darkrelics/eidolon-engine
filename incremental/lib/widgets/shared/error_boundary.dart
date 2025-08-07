@@ -28,7 +28,12 @@ class _ErrorBoundaryState extends State<ErrorBoundary> {
   }
 
   void _setupErrorHandling() {
+    // Handle Flutter framework errors
     FlutterError.onError = (FlutterErrorDetails details) {
+      // Always log the error to console for debugging
+      debugPrint('ErrorBoundary caught Flutter error: ${details.exception}');
+      debugPrint('Stack trace: ${details.stack}');
+      
       if (mounted) {
         setState(() {
           _errorDetails = details;
@@ -40,6 +45,24 @@ class _ErrorBoundaryState extends State<ErrorBoundary> {
       if (kDebugMode) {
         FlutterError.presentError(details);
       }
+    };
+    
+    // Handle async errors not caught by Flutter framework
+    PlatformDispatcher.instance.onError = (error, stack) {
+      debugPrint('ErrorBoundary caught async error: $error');
+      debugPrint('Async stack trace: $stack');
+      
+      if (mounted) {
+        setState(() {
+          _errorDetails = FlutterErrorDetails(
+            exception: error,
+            stack: stack,
+            library: 'Async error',
+            context: ErrorDescription('Uncaught async error'),
+          );
+        });
+      }
+      return true; // Handled
     };
   }
 
