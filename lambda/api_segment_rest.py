@@ -3,9 +3,10 @@
 import time
 
 from eidolon.character_data import character_get
+from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, validate_player
+from eidolon.player import validate_player
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import get_active_segment_info, insert_rest_segment
 

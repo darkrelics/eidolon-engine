@@ -10,8 +10,9 @@ compliance by removing all traces of user data.
 
 import json
 
+from eidolon.cognito import extract_player_id
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import delete_player_data, extract_player_id
+from eidolon.player import delete_player_data
 from eidolon.responses import lambda_response
 
 

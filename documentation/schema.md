@@ -58,7 +58,8 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 **Global Secondary Index:**
 
-- **CharacterNameIndex**: CharacterName - For ensuring unique character names across all players
+- **CharacterNameIndex**: CharacterName (HASH) - For ensuring unique character names across all players
+  - Projection Type: KEYS_ONLY (only includes keys for name uniqueness checks)
 
 **Health Calculation:**
 
@@ -355,8 +356,10 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 
 **Global Secondary Indexes:**
 
-- **CharacterID-index**: CharacterID - For querying active segments by character
+- **CharacterID-index**: CharacterID (HASH) - For querying active segments by character
+  - Projection Type: ALL (includes all attributes for complete segment data retrieval)
 - **EndTimeIndex**: Status (HASH), EndTime (RANGE) - For finding segments by status and monitoring upcoming completions
+  - Projection Type: ALL (includes all attributes for segment processing)
 
 ## StoryHistory Table
 

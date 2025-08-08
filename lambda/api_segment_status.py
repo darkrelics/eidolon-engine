@@ -9,9 +9,10 @@ Returns segment completion status and any available results.
 
 import time
 
+from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, validate_player, verify_character_ownership
+from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.story import get_active_story_segment_with_player_check

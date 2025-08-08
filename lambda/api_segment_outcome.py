@@ -7,9 +7,10 @@ Lambda function to get the outcome of a completed segment.
 Returns the narrative text and any rewards/effects for the outcome.
 """
 
+from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, validate_player, verify_character_ownership
+from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import validate_segment_outcome_results

@@ -10,11 +10,12 @@ Validates character state, creates active segment, and returns first segment det
 from botocore.exceptions import ClientError
 
 from eidolon.character_data import character_get
+from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, validate_player
+from eidolon.player import validate_player
 from eidolon.polling import ensure_polling_enabled
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.sqs import send_message

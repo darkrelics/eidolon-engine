@@ -145,7 +145,6 @@ Since all characters exist in the shared characters table, name uniqueness is en
    - Filter loaded from character_name_filter.pkl at Lambda startup
 4. **Uniqueness Check**:
    - Query CharacterNameIndex GSI to check if name already exists
-   - Uses query_by_gsi function for efficient lookup
 5. **Character Creation**:
    - If all checks pass, character record created in characters table
    - No conditional expressions needed as uniqueness already verified

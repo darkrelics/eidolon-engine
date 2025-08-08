@@ -97,13 +97,16 @@ All tables are shared between MUD and Incremental game modes:
 - `PROTOTYPES_TABLE` - Item prototypes
 - `MOTD_TABLE` - Messages of the day
 
-Tables being added for Incremental features:
+Tables for Incremental features:
 
 - `STORY_TABLE` - Story metadata (table name: story)
-- `ACTIVE_SEGMENTS_TABLE` - Active story segments (table not yet created in DynamoDB stack)
-- `CHARACTER_HISTORY_TABLE` - Story completion tracking (table not yet created in DynamoDB stack)
+- `SEGMENTS_TABLE` - Story segment definitions (table name: segments)
+- `ACTIVE_SEGMENTS_TABLE` - Active story segment instances (table name: active_segments)
+- `STORY_HISTORY_TABLE` - Story completion tracking (table name: story_history)
+- `SEGMENT_HISTORY_TABLE` - Segment completion history (table name: segment_history)
+- `OPPONENTS_TABLE` - Combat opponent definitions (table name: opponents)
 
-Note: The `ACTIVE_SEGMENTS_TABLE` and `CHARACTER_HISTORY_TABLE` are referenced in existing Lambda functions but the corresponding tables need to be added to the DynamoDB stack configuration.
+All tables are fully implemented in the DynamoDB stack configuration.
 
 ### Character Configuration
 

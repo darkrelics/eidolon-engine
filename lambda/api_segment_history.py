@@ -10,10 +10,11 @@ Returns completed segment results from the character's story history.
 from botocore.exceptions import ClientError
 
 from eidolon.character_data import character_get
+from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, validate_player, verify_character_ownership
+from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 

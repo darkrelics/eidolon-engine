@@ -30,7 +30,6 @@ TABLE_NAMES = {
     "segments": TableName.SEGMENTS,
     "active_segments": TableName.ACTIVE_SEGMENTS,
     "opponents": TableName.OPPONENTS,
-    "character_history": TableName.CHARACTER_HISTORY,
     "story_history": TableName.STORY_HISTORY,
     "segment_history": TableName.SEGMENT_HISTORY,
 }
