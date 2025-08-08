@@ -396,10 +396,10 @@ class LambdaStack(cdk.Stack):
         # Start Story Lambda - needs SSM/SQS permissions for polling control
         self.start_story_function = lambda_.Function(
             self,
-            "api-start-story",
+            "api-story-start",
             runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="api_start_story.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-start-story.zip"),
+            handler="api_story_start.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-story-start.zip"),
             layers=[dependencies_layer],
             role=self.lambda_ssm_sqs_execution_role,  # Needs SSM/SQS for polling control
             timeout=cdk.Duration.seconds(30),
@@ -415,13 +415,13 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Starts a story for a character",
-            function_name="api-start-story",
+            function_name="api-story-start",
         )
 
         # Submit Decision Lambda
         self.submit_decision_function = self.create_lambda_function(
-            "api-submit-decision",
-            "api_submit_decision.lambda_handler",
+            "api-segment-decision",
+            "api_segment_decision.lambda_handler",
             {
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "SEGMENTS_TABLE": self.segments_table,
@@ -433,8 +433,8 @@ class LambdaStack(cdk.Stack):
 
         # Get Segment Outcome Lambda
         self.get_segment_outcome_function = self.create_lambda_function(
-            "api-get-segment-outcome",
-            "api_get_segment_outcome.lambda_handler",
+            "api-segment-outcome",
+            "api_segment_outcome.lambda_handler",
             {
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "SEGMENTS_TABLE": self.segments_table,
@@ -447,8 +447,8 @@ class LambdaStack(cdk.Stack):
 
         # Abandon Story Lambda
         self.abandon_story_function = self.create_lambda_function(
-            "api-abandon-story",
-            "api_abandon_story.lambda_handler",
+            "api-story-abandon",
+            "api_story_abandon.lambda_handler",
             {
                 "CHARACTERS_TABLE": self.characters_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
@@ -461,8 +461,8 @@ class LambdaStack(cdk.Stack):
 
         # Get Segment Status Lambda
         self.get_segment_status_function = self.create_lambda_function(
-            "api-get-segment-status",
-            "api_get_segment_status.lambda_handler",
+            "api-segment-status",
+            "api_segment_status.lambda_handler",
             {
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
@@ -473,8 +473,8 @@ class LambdaStack(cdk.Stack):
 
         # Get Segment History Lambda
         self.get_segment_history_function = self.create_lambda_function(
-            "api-get-segment-history",
-            "api_get_segment_history.lambda_handler",
+            "api-segment-history",
+            "api_segment_history.lambda_handler",
             {
                 "SEGMENT_HISTORY_TABLE": self.segment_history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
@@ -485,8 +485,8 @@ class LambdaStack(cdk.Stack):
 
         # Character Rest Lambda
         self.character_rest_function = self.create_lambda_function(
-            "api-character-rest",
-            "api_character_rest.lambda_handler",
+            "api-segment-rest",
+            "api_segment_rest.lambda_handler",
             {
                 "CHARACTERS_TABLE": self.characters_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
@@ -501,10 +501,10 @@ class LambdaStack(cdk.Stack):
         # Process Segment Lambda (backend) - Now processes from SQS
         self.process_segment_function = lambda_.Function(
             self,
-            "ops-process-segment",
+            "ops-segment-process",
             runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="ops_process_segment.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-process-segment.zip"),
+            handler="ops_segment_process.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-segment-process.zip"),
             layers=[dependencies_layer],
             role=self.lambda_ssm_sqs_execution_role,
             timeout=cdk.Duration.seconds(60),
@@ -519,7 +519,7 @@ class LambdaStack(cdk.Stack):
                 "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
             },
             description="Processes completed segments and determines outcomes",
-            function_name="ops-process-segment",
+            function_name="ops-segment-process",
             reserved_concurrent_executions=5,
         )
 
@@ -583,10 +583,10 @@ class LambdaStack(cdk.Stack):
         # Advance Story Lambda (backend) - Processes incremental updates from SQS
         self.advance_story_function = lambda_.Function(
             self,
-            "ops-advance-story",
+            "ops-story-advance",
             runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="ops_advance_story.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-advance-story.zip"),
+            handler="ops_story_advance.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-story-advance.zip"),
             layers=[dependencies_layer],
             role=self.lambda_ssm_sqs_execution_role,
             timeout=cdk.Duration.seconds(60),
@@ -601,7 +601,7 @@ class LambdaStack(cdk.Stack):
                 "SEGMENT_QUEUE_URL": self.segment_queue_url,
             },
             description="Advances stories by applying character updates and progressing to next segments",
-            function_name="ops-advance-story",
+            function_name="ops-story-advance",
             reserved_concurrent_executions=5,
         )
 
@@ -632,27 +632,25 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # Characters endpoints
-        characters_resource = self.api.root.add_resource("characters")
+        # Character endpoints
+        character_resource = self.api.root.add_resource("character")
 
-        # POST /characters - Add new character
-        characters_resource.add_method(
+        # POST /character - Add new character
+        character_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.add_character_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # GET /characters - List all characters
-        characters_resource.add_method(
+        # GET /character/list - List all characters
+        list_resource = character_resource.add_resource("list")
+        list_resource.add_method(
             "GET",
             apigateway.LambdaIntegration(self.list_characters_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
-
-        # Single character resource (using query parameters)
-        character_resource = self.api.root.add_resource("character")
 
         # GET /character?characterId=xxx - Get specific character
         character_resource.add_method(
@@ -666,15 +664,6 @@ class LambdaStack(cdk.Stack):
         character_resource.add_method(
             "DELETE",
             apigateway.LambdaIntegration(self.delete_character_function),  # type: ignore
-            authorizer=self.cognito_authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
-        )
-
-        # POST /character/rest - Initiate rest for healing
-        rest_resource = character_resource.add_resource("rest")
-        rest_resource.add_method(
-            "POST",
-            apigateway.LambdaIntegration(self.character_rest_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
@@ -741,6 +730,15 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
+        # POST /segments/rest - Initiate rest for healing
+        rest_resource = segments_resource.add_resource("rest")
+        rest_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.character_rest_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
     def create_log_groups(self) -> None:
         """Create CloudWatch log groups for all Lambda functions."""
         log_configs: list = [
@@ -751,16 +749,16 @@ class LambdaStack(cdk.Stack):
             ("delete-character-logs", self.delete_character_function),
             ("cognito-new-player-logs", self.cognito_new_player_function),
             ("cognito-delete-player-logs", self.cognito_delete_player_function),
-            ("start-story-logs", self.start_story_function),
-            ("submit-decision-logs", self.submit_decision_function),
-            ("get-segment-outcome-logs", self.get_segment_outcome_function),
-            ("abandon-story-logs", self.abandon_story_function),
-            ("get-segment-status-logs", self.get_segment_status_function),
-            ("get-segment-history-logs", self.get_segment_history_function),
-            ("character-rest-logs", self.character_rest_function),
+            ("story-start-logs", self.start_story_function),
+            ("segment-decision-logs", self.submit_decision_function),
+            ("segment-outcome-logs", self.get_segment_outcome_function),
+            ("story-abandon-logs", self.abandon_story_function),
+            ("segment-status-logs", self.get_segment_status_function),
+            ("segment-history-logs", self.get_segment_history_function),
+            ("segment-rest-logs", self.character_rest_function),
             ("ops-segment-poller-logs", self.segment_poller_function),
-            ("ops-process-segment-logs", self.process_segment_function),
-            ("ops-advance-story-logs", self.advance_story_function),
+            ("ops-segment-process-logs", self.process_segment_function),
+            ("ops-story-advance-logs", self.advance_story_function),
         ]
 
         for log_id, function in log_configs:
@@ -799,9 +797,16 @@ class LambdaStack(cdk.Stack):
 
         cdk.CfnOutput(
             self,
-            "CharactersEndpoint",
-            value=self.api.url_for_path("/characters"),
-            description="API endpoint for characters",
+            "CharacterEndpoint",
+            value=self.api.url_for_path("/character"),
+            description="API endpoint for character operations",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "CharacterListEndpoint",
+            value=self.api.url_for_path("/character/list"),
+            description="API endpoint for listing characters",
         )
 
         cdk.CfnOutput(

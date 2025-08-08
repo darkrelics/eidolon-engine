@@ -86,7 +86,7 @@ Stories exist in one of these states relative to a character:
 ```
 Available → Active
   Trigger: POST /stories/start
-  Lambda: api-start-story
+  Lambda: api-story-start
   Actions:
     - Create ActiveSegment record for first segment
     - Set character GameMode = "Incremental"
@@ -97,7 +97,7 @@ Available → Active
 
 Active → Completed
   Trigger: Final segment completes with non-terminal outcome
-  Lambda: ops-advance-story
+  Lambda: ops-story-advance
   Actions:
     - Apply final character updates and rewards
     - Move StoryID to CompletedStories
@@ -108,7 +108,7 @@ Active → Completed
 
 Active → Abandoned
   Trigger: POST /stories/abandon OR death/failure outcome
-  Lambda: api-abandon-story OR ops-advance-story
+  Lambda: api-story-abandon OR ops-story-advance
   Actions:
     - Move StoryID to AbandonedStories
     - Clear ActiveStoryID and ActiveSegmentID
@@ -125,7 +125,7 @@ Active → Abandoned
    - Added to character's AvailableStories list
 
 2. **Activation**:
-   - Player selects story via api-start-story
+   - Player selects story via api-story-start
    - First segment copied from Segments table
    - ActiveSegment instance created with calculated outcomes
    - Character state atomically updated
@@ -136,7 +136,7 @@ Active → Abandoned
    - Story remains active until terminal outcome or completion
 
 4. **Completion**:
-   - Final segment processed by ops-advance-story
+   - Final segment processed by ops-story-advance
    - All rewards and effects applied
    - Story moved to history tables
    - Character returned to idle state
@@ -164,7 +164,7 @@ The RunningFlag provides concurrency control:
 ```
 Created → pending/false
   Trigger: Story start or previous segment advancement
-  Lambda: api-start-story OR ops-advance-story
+  Lambda: api-story-start OR ops-story-advance
   Actions:
     - Create ActiveSegment record
     - Calculate all outcomes immediately
@@ -173,7 +173,7 @@ Created → pending/false
 
 pending/false → processing/true (Mechanical only)
   Trigger: ops-segment-poller finds segment ready
-  Lambda: ops-process-segment (via SQS)
+  Lambda: ops-segment-process (via SQS)
   Actions:
     - Claim segment with RunningFlag
     - Process challenges and combat
@@ -182,7 +182,7 @@ pending/false → processing/true (Mechanical only)
 
 processing/true → processed/false
   Trigger: Processing completes
-  Lambda: ops-process-segment
+  Lambda: ops-segment-process
   Actions:
     - Update segment with results
     - Clear RunningFlag
@@ -197,7 +197,7 @@ processed/false → completed/false
 
 completed/false → [deleted]
   Trigger: Story advancement
-  Lambda: ops-advance-story
+  Lambda: ops-story-advance
   Actions:
     - Apply CharacterUpdates
     - Create next segment or complete story
@@ -210,7 +210,7 @@ completed/false → [deleted]
 #### Mechanical Segments
 
 - Contain skill challenges and/or combat
-- Processed by ops-process-segment via SQS
+- Processed by ops-segment-process via SQS
 - XP and wounds applied during processing
 - Outcomes: death/failure/minimal/normal/exceptional
 
@@ -218,15 +218,21 @@ completed/false → [deleted]
 
 - Present choices to player
 - No processing needed (outcome predetermined)
-- Player submits via api-submit-decision
+- Player submits via api-segment-decision
 - Timeout uses DefaultDecision if specified
 
 #### Rest Segments
 
-- Provide healing over time
+Rest segments are special healing segments that allow characters to recover from wounds between story adventures. Unlike regular story segments, rest segments:
+
+- Are initiated by the player via POST /segments/rest endpoint (handled by **api-segment-rest**)
+- Provide healing over time based on wound severity
 - Heal wounds based on type (bashing: 15min, lethal: 6hr, aggravated: 7d)
-- Always have "normal" outcome
-- No special processing required
+- Always have "normal" outcome with no decision points
+- No special processing required - healing is automatic
+- Can be initiated when character is not in an active story
+- Create a temporary ActiveSegment that manages the healing process
+- Character remains in "rest" mode until segment completion
 
 ### Segment Lifecycle
 
@@ -238,7 +244,7 @@ completed/false → [deleted]
 
 2. **Processing** (mechanical only):
    - Poller detects segment ready for processing
-   - Queued to SQS for ops-process-segment
+   - Queued to SQS for ops-segment-process
    - Challenges evaluated, combat simulated
    - XP and wounds applied to character
 
@@ -249,7 +255,7 @@ completed/false → [deleted]
 
 4. **Advancement**:
    - Poller detects EndTime reached
-   - Queued to SQS for ops-advance-story
+   - Queued to SQS for ops-story-advance
    - Character updates applied
    - Next segment created or story completed
 
@@ -262,7 +268,7 @@ completed/false → [deleted]
 
 ### API Layer Functions
 
-**api-start-story**:
+**api-story-start**:
 
 - Validates prerequisites and character state
 - Creates first ActiveSegment
@@ -270,23 +276,32 @@ completed/false → [deleted]
 - Queues mechanical segments
 - Enables polling infrastructure
 
-**api-submit-decision**:
+**api-segment-decision**:
 
 - Records player choice in Decision field
 - Sets DecisionMadeAt timestamp
 - Returns confirmation to client
 
-**api-get-segment-outcome**:
+**api-segment-outcome**:
 
 - Retrieves completed segment results
 - Returns narrative and effects
 - Used by client after segment timer expires
 
-**api-abandon-story**:
+**api-story-abandon**:
 
 - Marks story as abandoned
 - Clears character active state
 - Records in StoryHistory
+
+**api-segment-rest**:
+
+- Initiates healing rest for wounded characters
+- Creates a special rest segment with calculated healing times
+- Validates character is not in an active story
+- Sets character GameMode to "Incremental" during rest
+- Healing duration based on wound severity (bashing/lethal/aggravated)
+- Automatically heals wounds when segment completes
 
 ### Processing Layer Functions
 
@@ -298,7 +313,7 @@ completed/false → [deleted]
 - Sends completed segments to advancement queue
 - Manages polling infrastructure state
 
-**ops-process-segment** (SQS triggered):
+**ops-segment-process** (SQS triggered):
 
 - Claims segment with RunningFlag
 - Processes mechanical challenges
@@ -306,7 +321,7 @@ completed/false → [deleted]
 - Applies XP and wounds
 - Updates segment with results
 
-**ops-advance-story** (SQS triggered):
+**ops-story-advance** (SQS triggered):
 
 - Claims segment for advancement
 - Processes simple segments if needed
@@ -320,13 +335,13 @@ completed/false → [deleted]
 
 **SEGMENT_QUEUE_URL**:
 
-- Feeds ops-process-segment
+- Feeds ops-segment-process
 - Handles mechanical segments only
 - Provides retry with exponential backoff
 
 **STORY_ADVANCEMENT_QUEUE_URL**:
 
-- Feeds ops-advance-story
+- Feeds ops-story-advance
 - Handles all segment types
 - Ensures ordered story progression
 
