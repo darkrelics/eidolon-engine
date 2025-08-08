@@ -78,7 +78,7 @@ class S3Stack(Stack):
         self.scripts_bucket = self.get_or_create_bucket(
             "scripts-bucket",
             scripts_bucket_name or "darkrelics-scripts",
-            public_read=True,
+            public_read=False,  # Use CloudFront OAI for access instead
         )
 
         # Handle lambda bucket
@@ -155,10 +155,11 @@ class S3Stack(Stack):
             return bucket
         else:
             # Create new bucket with desired configuration
+            # Always use RETAIN to prevent accidental data loss
             bucket_props: dict = {
                 "bucket_name": bucket_name,
-                "removal_policy": RemovalPolicy.DESTROY,
-                "auto_delete_objects": True,
+                "removal_policy": RemovalPolicy.RETAIN,
+                "auto_delete_objects": False,  # Never auto-delete bucket contents
             }
 
             if website_config:

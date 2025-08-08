@@ -175,7 +175,6 @@ Avoid transactions for:
 - Maximum 4MB total transaction size
 - All items must be in same AWS Region
 - Cannot target same item multiple times
-- Cannot use with Global Secondary Indexes
 - Consumes 2x the standard read/write capacity
 
 ##### Implementation Guidelines

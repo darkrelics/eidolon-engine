@@ -102,7 +102,7 @@ This document defines the functional and non-functional requirements for the Inc
 
 **NFR-002**: API response time SHALL be less than 2 seconds.
 
-**NFR-003**: Segment processing SHALL complete within 30 seconds.
+**NFR-003**: Segment processing SHALL complete promptly (target under 1 minute per poll cycle).
 
 **NFR-004**: UI updates SHALL reflect state changes within 1 second of polling.
 

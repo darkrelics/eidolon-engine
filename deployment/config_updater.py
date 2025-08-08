@@ -134,7 +134,7 @@ class ConfigurationUpdater:
         Args:
             game_name: Name of the game
         """
-        self.config_manager.update_section("Game", {"name": game_name})
+        self.config_manager.update_section("Game", {"Name": game_name})
 
     def save_configuration(self) -> str:
         """Save the configuration and return the file path.

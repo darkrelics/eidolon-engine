@@ -166,13 +166,8 @@ def run_phase_health_check(session: boto3.Session, phase_name: str, deployed_sta
     if phase_name == "Foundation":
         # Check DynamoDB tables if dynamodb stack was deployed
         if "dynamodb" in deployed_stacks:
-            table_names = [
-                config.get("players_table", "players"),
-                config.get("characters_table", "characters"),
-                config.get("archetypes_table", "archetypes"),
-                config.get("rooms_table", "rooms"),
-                config.get("items_table", "items"),
-            ]
+            # DynamoDB tables are always lowercase in this system
+            table_names = ["players", "characters", "archetypes", "rooms", "items"]
             result = check_dynamodb_tables_health(session, table_names)
             if not result["healthy"]:
                 print("    [ERROR] DynamoDB tables unhealthy:")

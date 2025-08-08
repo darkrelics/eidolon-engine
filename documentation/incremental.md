@@ -39,7 +39,7 @@ The incremental module serves as:
 - **Serverless Architecture**: AWS Lambda functions handle all game logic
 - **Flutter Web Client**: Responsive interface for story progression
 - **Shared Infrastructure**: Uses existing DynamoDB tables, Cognito auth, and API Gateway
-- **Event-Driven Processing**: 30-second polling system with SQS reliability
+- **Event-Driven Processing**: 1-minute polling system with SQS reliability
 - **Cost Efficient**: ~$235-335/month for 10,000 concurrent users
 
 ## Documentation

@@ -146,11 +146,9 @@ API:
   Subdomain: api # api.darkrelics.net
 
 # CORS configuration for API Gateway
-CORS:
-  AllowedOrigins: [] # Populated automatically based on deployment mode
-  # For MUD mode: adds portal domain
-  # For Incremental/Hybrid: adds incremental domain
-  # Custom domains can be added manually after deployment
+allowed_cors_origins: [] # Optional list; when empty, API preflight defaults to "*" without credentials
+  # When set, API Gateway preflight uses this explicit list and allows credentials
+  # ALLOWED_ORIGINS env var is passed to Lambdas as a comma-separated string
 
 CloudFront:
   distribution_id: E1234567890ABC
@@ -190,7 +188,7 @@ All AWS resources use simple, unprefixed names for clarity:
 | S3 Buckets              | Various patterns                  | `eidolon-portal`, `{game}-lambda-{account}`                                                          |
 | CloudWatch Log Group    | `/aws/eidolon/server`             | `/aws/eidolon/server`                                                                                |
 | Cognito User Pool       | `eidolon-users`                   | `eidolon-users`                                                                                      |
-| CodeBuild Project       | `eidolon-codebuild`               | `eidolon-codebuild`                                                                                  |
+| CodeBuild Project       | static name per project           | e.g., `eidolon-portal-build`, `eidolon-lambda-build`                                                 |
 | CloudFront Distribution | `eidolon-distribution`            | `eidolon-distribution`                                                                               |
 | IAM Role                | `{game}-server-execution-role`    | `eidolon-engine-server-execution-role`                                                               |
 | IAM Policies            | `eidolon-{game}-{service}-access` | `eidolon-eidolon-engine-dynamodb-access`                                                             |
@@ -346,6 +344,17 @@ When CloudFront is configured, the build process automatically:
 - No manual cache clearing required
 
 The invalidation only runs if a CloudFront distribution ID is available.
+
+### Parameters and Secrets
+
+- Application code may read SSM Parameter Store at runtime for configuration/secrets.
+- CloudFormation/CDK templates do not set secret values; populate them post-deployment.
+- In this environment, using clear-text parameters for non-sensitive values is acceptable.
+
+### CodeBuild Project Names
+
+- CodeBuild projects use static names (e.g., `eidolon-portal-build`, `eidolon-lambda-build`).
+- Names are not dynamically generated per environment.
 
 ### Manual Portal Deployment
 

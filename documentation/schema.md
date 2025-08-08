@@ -7,7 +7,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 - Front-loaded processing: All outcomes are calculated when segments start, not when they end
 - Shared tables: Both game modes use the same character, item, and room data
 - Mode exclusivity: GameMode field ensures characters can only be active in one mode at a time
-- Event-driven advancement: 30-second polling system processes completed segments
+- Event-driven advancement: 1-minute polling system processes completed segments
 
 ## Player Table
 

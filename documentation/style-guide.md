@@ -156,7 +156,7 @@ Provide practical details for developers:
 ### Version Control
 
 - Make atomic commits: One logical change per commit
-- Write clear commit messages: "Update polling interval to 30 seconds"
+- Write clear commit messages: "Update polling interval to 1 minute"
 - Update related documents together
 - Remove outdated information rather than marking as outdated
 

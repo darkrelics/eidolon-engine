@@ -25,7 +25,7 @@ These examples show the complete JSON structure of database records as they appe
 
 This complete example shows how segment processing results are stored, including pre-calculated outcomes, client events for progressive display, and character updates that will be applied when the segment completes.
 
-**Important**: ActiveSegmentID must be generated using UUIDv7 to ensure proper time-based ordering and efficient querying. UUIDv7 includes a timestamp component that aids in chronological sorting and partition distribution.
+**Important**: ActiveSegmentID must be generated using UUIDv7 to ensure proper time-based ordering and efficient querying. In Python 3.12, use the repo's uuid helper (uuid_extension.uuid7); native uuidv7 will be adopted when upgrading to Python 3.14.
 
 ```json
 {
@@ -174,11 +174,11 @@ DynamoDB transactions ensure atomic updates across multiple tables when starting
 This transaction atomically updates the character's game mode and creates the active segment record, ensuring data consistency even if failures occur during the story start process.
 
 ```python
-import uuid_utils  # Use uuid-utils library for UUIDv7 generation
+from uuid_extension import uuid7  # Repo-provided helper for UUIDv7-like IDs
 
 def start_story_transaction(character_id, story_id, segment_data):
     # Generate UUIDv7 for the active segment
-    segment_data['ActiveSegmentID'] = str(uuid_utils.uuid7())
+    segment_data['ActiveSegmentID'] = str(uuid7())
 
     return {
         'TransactItems': [
@@ -749,7 +749,7 @@ The EventBridge-triggered polling function discovers segments ready for processi
 
 ```python
 def segment_poller_handler(event, context):
-    """EventBridge-triggered polling function."""
+    """EventBridge-triggered polling function (runs every minute)."""
     # Check SSM parameter
     ssm = boto3.client('ssm')
     param = ssm.get_parameter(Name='/eidolon/segment-poller-state')

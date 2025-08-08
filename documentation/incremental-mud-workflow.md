@@ -184,7 +184,7 @@ The Incremental mode maintains sophisticated state tracking:
 
 **Polling System:**
 
-- 30-second EventBridge polling for segment completion
+- 1-minute EventBridge polling for segment completion
 - SSM parameter `/eidolon/segment-poller-state` controls polling
 - Automatic enable when stories start, disable when none active
 - Stuck segment recovery after 15 minutes

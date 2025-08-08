@@ -33,7 +33,7 @@ The system uses a front-loaded processing model where all outcomes are calculate
 
 1. **Segment Creation**: When a story starts or advances, outcomes are immediately calculated
 2. **Timer Management**: Segments have start/end times for client countdown display
-3. **Polling System**: EventBridge triggers every 30 seconds to find completed segments
+3. **Polling System**: EventBridge triggers every minute to find completed segments
 4. **Dual Queue Processing**:
    - Segment Processing Queue: Mechanical segments processed immediately when created
    - Story Advancement Queue: All segments processed when timer expires
@@ -194,7 +194,7 @@ Avoid transactions for high-frequency operations:
 ### 5.2 Segment Processing Flow
 
 ```
-1. EventBridge: Trigger ops_segment_poller every 30 seconds
+1. EventBridge: Trigger ops_segment_poller every minute
 2. Poller: Query EndTimeIndex for expired segments
 3. Poller: Send ALL segments to Story Advancement Queue
 4. SQS: Trigger ops_advance_story for each message
@@ -405,7 +405,7 @@ class PollingManager {
 
 - **Lambda**: Python 3.12 runtime with eidolon library
 - **DynamoDB**: Pay-per-request pricing
-- **EventBridge**: Single rule, 30-second schedule
+- **EventBridge**: Single rule, 1-minute schedule
 - **SQS**: Two standard queues:
   - Segment Processing Queue: For immediate mechanical segment processing
   - Story Advancement Queue: For all segment advancement when timers expire

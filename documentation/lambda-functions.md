@@ -337,7 +337,7 @@ The `api_get_character.py` function applies several transformations for client c
 
 ### JSON Field Naming Convention
 
-All JSON responses use PascalCase for field names to maintain consistency with DynamoDB field names:
+All JSON responses use PascalCase for field names to maintain consistency with DynamoDB field names. Flexible casing is not supported.
 
 - Database field: `CharacterName`
 - API response: `CharacterName` (not transformed)

@@ -808,7 +808,7 @@ class IncrementalDeploymentOrchestrator:
         print("\nChecking IAM resources...")
 
         # Check IAM role
-        game_name = config.get("Game", {}).get("name", "eidolon-engine")
+        game_name = config.get("Game", {}).get("Name", "eidolon-engine")
         role_name = f"{game_name}-server-execution-role"
 
         validator = ResourceValidatorFactory.create_validator("iam_role", self.session)

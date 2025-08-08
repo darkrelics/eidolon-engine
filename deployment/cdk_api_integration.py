@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import boto3
+from botocore.exceptions import ClientError
 
 
 class CDKDeploymentError(Exception):
@@ -42,15 +43,15 @@ class CDKApiIntegration:
         self.profile: str = profile
         self.region: str = region or os.environ.get("AWS_REGION", "us-east-1")
 
-        # Set up environment
-        self._setup_environment()
-
-        # Initialize AWS clients
+        # Initialize AWS clients first (needed by _setup_environment)
         session_args: dict = {"region_name": self.region}
         if self.profile:
             session_args["profile_name"] = self.profile
         self.session = boto3.Session(**session_args)
         self.cfn_client = self.session.client("cloudformation")
+
+        # Set up environment (now that session is available)
+        self._setup_environment()
 
         # Check CDK installation
         if not check_cdk_installed():
@@ -141,8 +142,11 @@ class CDKApiIntegration:
         try:
             account = self.session.client("sts").get_caller_identity().get("Account", "")
             os.environ["CDK_DEFAULT_ACCOUNT"] = account
-        except Exception:
-            pass
+        except ClientError as err:
+            print(f"[WARNING] Unable to get AWS account ID: {err}")
+            # CDK can sometimes work without this, so we don't fail here
+        except Exception as err:
+            print(f"[WARNING] Unexpected error getting AWS account: {err}")
 
         # Add CDK app directory to Python path
         if str(self.cdk_dir) not in sys.path:

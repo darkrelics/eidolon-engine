@@ -117,9 +117,9 @@ Located in `eidolon/requests.py`:
 
 ### Updating Frontend Code
 
-1. Replace `JsonUtils.getFlexible()` with `ApiParser` methods
+1. Replace `JsonUtils.getFlexible()` with strict parsing using PascalCase keys (e.g., ApiParser or direct key access)
 2. Add try-catch blocks for `ValidationException`
-3. Ensure all API calls use PascalCase field names
+3. Ensure all API requests use PascalCase field names
 
 ### Updating Backend Code
 

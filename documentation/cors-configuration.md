@@ -28,11 +28,11 @@ The CDK deployment automatically allows CORS from:
 
 ### 2. Additional Origins Configuration
 
-If you need to add additional origins beyond the automatic configuration, you can use the `CORS.AllowedOrigins` field in your config.yml:
+If you need to add additional origins beyond the automatic configuration, set `allowed_cors_origins` in your config.yml:
 
 ```yaml
 CORS:
-  AllowedOrigins:
+allowed_cors_origins:
     - https://additional.domain.com
 ```
 
@@ -50,7 +50,7 @@ CORS:
 ## Technical Implementation
 
 1. **CDK Integration**: The CDK app derives CORS origins from CloudFront distributions and domain configuration
-2. **Environment Variables**: Origins are passed to Lambda functions via `ALLOWED_ORIGINS` environment variable
+2. **Environment Variables**: Origins are passed to Lambda functions via the `ALLOWED_ORIGINS` environment variable (a comma-separated list). When an explicit list is configured, API Gateway preflight enables `Access-Control-Allow-Credentials`.
 3. **Lambda Handler**: The `eidolon/cors.py` module validates request origins against the allowed list
 4. **API Gateway**: Configured to handle preflight OPTIONS requests
 
@@ -88,7 +88,7 @@ Note: Changes to CloudFront distributions or domain configuration in `config.yml
 2. Verify Lambda environment variables:
 
    ```bash
-   aws lambda get-function-configuration --function-name mud-list-characters | grep ALLOWED_ORIGINS
+  aws lambda get-function-configuration --function-name api-character-list | grep ALLOWED_ORIGINS
    ```
 
 3. Check CloudFront is forwarding the Origin header
@@ -127,11 +127,11 @@ curl https://mud-api.yourdomain.com/characters \
 
 To add custom CORS origins beyond the automatic CloudFront/domain configuration:
 
-1. Add them to the `CORS.AllowedOrigins` field in `config.yml`:
+1. Add them to the `allowed_cors_origins` field in `config.yml`:
 
    ```yaml
    CORS:
-     AllowedOrigins:
+  allowed_cors_origins:
        - https://custom.domain.com
        - https://another.domain.com
    ```
