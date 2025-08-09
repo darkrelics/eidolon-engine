@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from eidolon.schema import normalize_segment_definition
 
 
-def validate_mechanical_segment(segment: dict, segment_id: str) -> list:
+def validate_mechanical_segment(segment: dict):
     """Validate a mechanical segment structure."""
     errors = []
     warnings = []
@@ -76,7 +76,7 @@ def validate_mechanical_segment(segment: dict, segment_id: str) -> list:
     return errors, warnings
 
 
-def validate_decision_segment(segment: dict, segment_id: str) -> list:
+def validate_decision_segment(segment: dict):
     """Validate a decision segment structure."""
     errors = []
     warnings = []
@@ -97,7 +97,7 @@ def validate_decision_segment(segment: dict, segment_id: str) -> list:
     return errors, warnings
 
 
-def validate_rest_segment(segment: dict, segment_id: str) -> list:
+def validate_rest_segment(segment: dict):
     """Validate a rest segment structure."""
     errors = []
     warnings = []
@@ -159,11 +159,11 @@ def validate_story_content(story_file: Path) -> bool:
         warnings = []
 
         if segment_type == "mechanical":
-            errors, warnings = validate_mechanical_segment(normalized, segment_id)
+            errors, warnings = validate_mechanical_segment(normalized)
         elif segment_type == "decision":
-            errors, warnings = validate_decision_segment(normalized, segment_id)
+            errors, warnings = validate_decision_segment(normalized)
         elif segment_type == "rest":
-            errors, warnings = validate_rest_segment(normalized, segment_id)
+            errors, warnings = validate_rest_segment(normalized)
         else:
             errors.append(f"  - Unknown segment type: {segment_type}")
 
@@ -193,9 +193,8 @@ def validate_story_content(story_file: Path) -> bool:
     if total_errors == 0:
         print("\nVALIDATION PASSED")
         return True
-    else:
-        print("\nVALIDATION FAILED")
-        return False
+    print("\nVALIDATION FAILED")
+    return False
 
 
 def main():

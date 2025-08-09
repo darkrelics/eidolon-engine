@@ -8,9 +8,9 @@ Ensures the character belongs to the player before deletion.
 """
 
 from eidolon.character_data import character_get
+from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.cognito import extract_player_id
 from eidolon.player_character import delete_character
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response

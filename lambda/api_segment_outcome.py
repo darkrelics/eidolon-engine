@@ -9,14 +9,14 @@ Returns the narrative text and any rewards/effects for the outcome.
 
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.segment import validate_segment_outcome_results
 from eidolon.schema import normalize_segment_definition
+from eidolon.segment import validate_segment_outcome_results
 from eidolon.story import get_completed_segment_for_character, get_story_segment
-from eidolon.dynamo import TableName, dynamo
 
 
 def get_last_segment_history_record(character_id: str, segment_id: str, player_id: str) -> dict | None:

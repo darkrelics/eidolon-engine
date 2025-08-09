@@ -551,10 +551,10 @@ class S3BucketValidator(ResourceValidator):
         return {
             "bucket_name": bucket_name,
             "region": bucket_region,
-            "versioning": self._get_versioning_status(bucket_name),
-            "public_access_block": self._get_public_access_block(bucket_name),
-            "website_enabled": self._is_website_enabled(bucket_name),
-            "cors_enabled": self._has_cors_configuration(bucket_name),
+            "versioning": self._get_versioning_status(bucket_name),  # type: ignore
+            "public_access_block": self._get_public_access_block(bucket_name),  # type: ignore
+            "website_enabled": self._is_website_enabled(bucket_name),  # type: ignore
+            "cors_enabled": self._has_cors_configuration(bucket_name),  # type: ignore
         }
 
     def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:

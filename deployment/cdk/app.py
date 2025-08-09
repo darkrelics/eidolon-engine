@@ -8,7 +8,6 @@ and Incremental deployments.
 import json
 import os
 import sys
-from datetime import datetime, timedelta
 from pathlib import Path
 
 # Add parent directory to path to import shared modules
@@ -16,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import aws_cdk as cdk
 import yaml
-from state_manager import ConfigurationManager, DeploymentState
 from stacks.base_lambda_stack import BaseLambdaStack
 from stacks.cloudfront_stack import CloudFrontStack
 from stacks.cloudwatch_stack import CloudWatchStack
@@ -28,6 +26,7 @@ from stacks.lambda_stack import LambdaStack
 from stacks.s3_stack import S3Stack
 from stacks.sqs_stack import SQSStack
 from stacks.ssm_stack import SSMStack
+from state_manager import ConfigurationManager, DeploymentState
 
 
 def load_json_file(file_path: Path) -> dict:

@@ -11,7 +11,6 @@ from math import ceil
 from time import sleep
 
 from boto3 import resource
-from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from eidolon.environment import (

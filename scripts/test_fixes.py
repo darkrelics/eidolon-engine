@@ -216,9 +216,8 @@ def main():
     if all_passed:
         print("ALL CRITICAL FIXES VERIFIED")
         return 0
-    else:
-        print("SOME FIXES NEED ATTENTION")
-        return 1
+    print("SOME FIXES NEED ATTENTION")
+    return 1
 
 
 if __name__ == "__main__":

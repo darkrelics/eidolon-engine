@@ -1,7 +1,5 @@
 """AWS CloudFront stack for Eidolon Engine portal distribution."""
 
-import json
-
 import boto3
 from aws_cdk import CfnOutput, Duration, Stack
 from aws_cdk import aws_certificatemanager as acm
@@ -11,10 +9,10 @@ from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as targets
 from aws_cdk import aws_s3 as s3
 from botocore.exceptions import ClientError
+from cloudfront_policy import ensure_bucket_policy_for_cloudfront
 from constructs import Construct
 
 from .s3_stack import check_bucket_exists
-from cloudfront_policy import ensure_bucket_policy_for_cloudfront
 
 
 class CloudFrontStack(Stack):

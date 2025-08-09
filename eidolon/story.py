@@ -18,6 +18,7 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
+from eidolon.schema import normalize_segment_definition
 from eidolon.segment import (
     create_next_active_segment,
     delete_active_segment,
@@ -25,7 +26,6 @@ from eidolon.segment import (
     get_segment_definition,
     record_segment_history,
 )
-from eidolon.schema import normalize_segment_definition
 from eidolon.sqs import send_message
 
 

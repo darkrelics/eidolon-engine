@@ -7,21 +7,18 @@ This module centralizes the logic to:
 It is safe to call repeatedly; it will only update the policy when required.
 """
 
-from __future__ import annotations
-
 import json
-from typing import Optional
 
 import boto3
 from botocore.exceptions import ClientError
 
 
-def _get_distribution_config(cf_client, distribution_id: str) -> tuple[dict, str]:
+def _get_distribution_config(cf_client, distribution_id: str):
     resp = cf_client.get_distribution(Id=distribution_id)
     return resp["Distribution"]["DistributionConfig"], resp["ETag"]
 
 
-def _extract_oai_id_from_distribution_config(dist_config: dict) -> Optional[str]:
+def _extract_oai_id_from_distribution_config(dist_config: dict) -> str | None:
     origins = dist_config.get("Origins", {}).get("Items", [])
     if not origins:
         return None
@@ -38,8 +35,8 @@ def ensure_bucket_policy_for_cloudfront(
     *,
     bucket_name: str,
     distribution_id: str,
-    session: Optional[boto3.session.Session] = None,
-    region: Optional[str] = None,
+    session=None,
+    region: str | None = None,
 ) -> bool:
     """Ensure the S3 bucket policy allows the CloudFront distribution's OAI to read objects.
 
@@ -53,7 +50,7 @@ def ensure_bucket_policy_for_cloudfront(
         True if policy is correctly configured (updated or already correct). False if a non-fatal issue occurred.
     """
     try:
-        sess = session or boto3.session.Session()
+        sess = session or boto3.session.Session()  # type: ignore
         cf_client = sess.client("cloudfront", region_name="us-east-1")
         s3_client = sess.client("s3", region_name=region)
 

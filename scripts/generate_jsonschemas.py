@@ -6,9 +6,9 @@ Run:
   python scripts/generate_jsonschemas.py
 """
 
-from pathlib import Path
-import sys
 import json
+import sys
+from pathlib import Path
 
 # Ensure local package is importable when run from repo root/CI
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +19,7 @@ import eidolon.models as _eid_models  # type: ignore
 
 
 def write_schema(model, out_dir: Path, name: str) -> None:
+    """Write a Pydantic model's JSON schema to a file."""
     # Emit schema using field aliases (PascalCase) to match API payloads
     schema = model.model_json_schema(by_alias=True)
     out = out_dir / f"{name}.schema.json"
@@ -26,6 +27,7 @@ def write_schema(model, out_dir: Path, name: str) -> None:
 
 
 def main() -> int:
+    """Generate JSON schemas from Pydantic models."""
     repo_root = Path(__file__).resolve().parents[1]
     out_dir = repo_root / "incremental" / "schemas"
     out_dir.mkdir(parents=True, exist_ok=True)

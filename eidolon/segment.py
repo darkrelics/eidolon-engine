@@ -18,14 +18,9 @@ from uuid_extension import uuid7
 from eidolon.character_data import apply_character_updates
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-from eidolon.schema import normalize_segment_definition
-from eidolon.models import (
-    StorySegment,
-    ChallengeResultModel,
-    CombatStateModel,
-    ClientEvent,
-)
 from eidolon.mechanics import calculate_heal_time, resolve_opposed_check
+from eidolon.models import ChallengeResultModel, ClientEvent, CombatStateModel, StorySegment
+from eidolon.schema import normalize_segment_definition
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES: list = ["mechanical", "decision", "rest"]
