@@ -17,9 +17,10 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
+from eidolon.api_models import SegmentHistoryItem, SegmentHistoryResponse
 
 
-def get_segment_history_business_logic(character_id: str, player_id: str) -> dict:
+def get_segment_history_business_logic(character_id: str, player_id: str) -> SegmentHistoryResponse:
     """
     Business logic for retrieving segment history.
 
@@ -46,11 +47,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
     if not story_id:
         # No active story, return empty history
         logger.info(f"No active story for character for {character_id}")
-        return {
-            "CharacterID": character_id,
-            "StoryID": None,
-            "Segments": [],
-        }
+        return SegmentHistoryResponse(character_id=character_id, story_id=None, segments=[])
 
     # Query completed segments from ActiveSegments table
     # This gives us the full segment data including ClientEvents, CharacterUpdates, etc.
@@ -76,9 +73,9 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
         raise RuntimeError(f"Failed to query active segments: {err}") from err
 
     # Format segments for response with all the data Flutter expects
-    formatted_segments = []
+    formatted_segments: list[SegmentHistoryItem] = []
     for segment in segments or []:
-        formatted_segment = {
+        formatted_segment_dict = {
             "ActiveSegmentID": segment.get("ActiveSegmentID"),
             "SegmentID": segment.get("SegmentID"),
             "SegmentType": segment.get("SegmentType"),
@@ -90,42 +87,37 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
 
         # Add enriched data that Flutter needs
         if segment.get("Outcome"):
-            formatted_segment["Outcome"] = segment.get("Outcome")
+            formatted_segment_dict["Outcome"] = segment.get("Outcome")
 
         if segment.get("ClientEvents"):
-            formatted_segment["ClientEvents"] = segment.get("ClientEvents")
+            formatted_segment_dict["ClientEvents"] = segment.get("ClientEvents")
 
         if segment.get("CharacterUpdates"):
-            formatted_segment["CharacterUpdates"] = segment.get("CharacterUpdates")
+            formatted_segment_dict["CharacterUpdates"] = segment.get("CharacterUpdates")
 
         if segment.get("Decision"):
-            formatted_segment["Decision"] = segment.get("Decision")
+            formatted_segment_dict["Decision"] = segment.get("Decision")
 
         if segment.get("ChallengeResults"):
-            formatted_segment["ChallengeResults"] = segment.get("ChallengeResults")
+            formatted_segment_dict["ChallengeResults"] = segment.get("ChallengeResults")
 
         if segment.get("SkillXPAwarded"):
-            formatted_segment["SkillXPAwarded"] = segment.get("SkillXPAwarded")
+            formatted_segment_dict["SkillXPAwarded"] = segment.get("SkillXPAwarded")
 
         if segment.get("AttributeXPAwarded"):
-            formatted_segment["AttributeXPAwarded"] = segment.get("AttributeXPAwarded")
+            formatted_segment_dict["AttributeXPAwarded"] = segment.get("AttributeXPAwarded")
 
         if segment.get("CombatState"):
-            formatted_segment["CombatState"] = segment.get("CombatState")
+            formatted_segment_dict["CombatState"] = segment.get("CombatState")
 
         if segment.get("NextSegmentID"):
-            formatted_segment["NextSegmentID"] = segment.get("NextSegmentID")
-
-        formatted_segments.append(formatted_segment)
+            formatted_segment_dict["NextSegmentID"] = segment.get("NextSegmentID")
+        formatted_segments.append(SegmentHistoryItem.model_validate(formatted_segment_dict))
 
     # Sort by start time, newest first
     formatted_segments.sort(key=lambda x: x.get("StartTime", 0), reverse=True)
 
-    response = {
-        "CharacterID": character_id,
-        "StoryID": story_id,
-        "Segments": formatted_segments,
-    }
+    response = SegmentHistoryResponse(character_id=character_id, story_id=story_id, segments=formatted_segments)
 
     logger.info(f"Segment history retrieved for {character_id}")
 

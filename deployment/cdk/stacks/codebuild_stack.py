@@ -159,25 +159,7 @@ class CodeBuildStack(Stack):
             self.lambda_functions_project.add_to_role_policy(
                 iam.PolicyStatement(
                     actions=["s3:PutObject"],
-                    resources=[
-                        f"{self.lambda_bucket.bucket_arn}/cognito-player-new.zip",
-                        f"{self.lambda_bucket.bucket_arn}/cognito-player-delete.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-archetype-list.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-character-add.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-character-get.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-character-list.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-character-delete.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-start-story.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-submit-decision.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-get-segment-outcome.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-abandon-story.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-get-segment-status.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-get-segment-history.zip",
-                        f"{self.lambda_bucket.bucket_arn}/api-character-rest.zip",
-                        f"{self.lambda_bucket.bucket_arn}/ops-segment-poller.zip",
-                        f"{self.lambda_bucket.bucket_arn}/ops-process-segment.zip",
-                        f"{self.lambda_bucket.bucket_arn}/ops-advance-story.zip",
-                    ],
+                    resources=[f"{self.lambda_bucket.bucket_arn}/*"],
                 )
             )
 

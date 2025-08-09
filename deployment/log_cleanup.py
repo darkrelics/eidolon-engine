@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Clean up CloudWatch log groups for Lambda functions before deployment."""
 
 import boto3

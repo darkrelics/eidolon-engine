@@ -4,6 +4,8 @@ This module provides validators for individual AWS resources to detect
 configuration drift and validate resource states against desired configurations.
 """
 
+from collections import Counter
+
 import boto3
 from botocore.exceptions import ClientError
 
@@ -120,6 +122,12 @@ class ResourceValidator:
 
         Default implementation returns True. Override if needed.
         """
+        # Avoid unused-argument warnings in default implementation
+        try:
+            # simply reference/delete to satisfy linters
+            del resource_data
+        except Exception:
+            pass
         return True
 
     def validate_configuration(self, result: ValidationResult, expected_config: dict):
@@ -127,7 +135,69 @@ class ResourceValidator:
 
         Subclasses should implement specific validation logic.
         """
-        pass
+        # Provide a sensible default: treat expected_config as a subset that must
+        # be present in actual_config. Extra fields in actual are allowed.
+        # Record all mismatches as drift with precise paths.
+        if not expected_config:
+            return
+
+        differences = []
+
+        def normalize(value):
+            """Produce a hashable, comparable representation for nested values."""
+            if isinstance(value, dict):
+                return (
+                    "dict",
+                    tuple(sorted((k, normalize(v)) for k, v in value.items())),
+                )
+            if isinstance(value, list):
+                return (
+                    "list",
+                    tuple(sorted((normalize(v) for v in value))),
+                )
+            return value
+
+        def compare(exp, act, path: str = ""):
+            # Missing actual value entirely
+            if act is None:
+                differences.append(f"Missing value at {path or 'root'}")
+                return
+
+            # Dict: ensure all expected keys exist and match recursively
+            if isinstance(exp, dict):
+                if not isinstance(act, dict):
+                    differences.append(f"Type mismatch at {path or 'root'}: expected dict, got {type(act).__name__}")
+                    return
+                for k, v in exp.items():
+                    sub_path = f"{path}.{k}" if path else k
+                    if k not in act:
+                        differences.append(f"Missing key at {sub_path}")
+                        continue
+                    compare(v, act.get(k), sub_path)
+                return
+
+            # List: ensure each expected element appears in actual (multiset subset)
+            if isinstance(exp, list):
+                if not isinstance(act, list):
+                    differences.append(f"Type mismatch at {path or 'root'}: expected list, got {type(act).__name__}")
+                    return
+                exp_counts = Counter(normalize(e) for e in exp)
+                act_counts = Counter(normalize(a) for a in act)
+                for item, cnt in exp_counts.items():
+                    if act_counts.get(item, 0) < cnt:
+                        differences.append(f"List at {path or 'root'} missing {cnt - act_counts.get(item, 0)} expected item(s)")
+                return
+
+            # Scalar: direct equality
+            if exp != act:
+                differences.append(f"Value mismatch at {path or 'root'}: expected {exp!r}, got {act!r}")
+
+        compare(expected_config, result.actual_config)
+
+        if differences:
+            result.drift_detected = True
+            for msg in differences:
+                result.add_message(msg)
 
     def handle_client_error(self, result: ValidationResult, err: ClientError, resource_id: str):
         """Handle ClientError exceptions.
@@ -365,34 +435,47 @@ class CodeBuildValidator(ResourceValidator):
         """Initialize CodeBuild validator."""
         super().__init__(session, "codebuild", "codebuild_project")
 
+    def get_resource_description(self, resource_id: str):
+        """Retrieve the CodeBuild project description or None if missing."""
+        try:
+            response = self.client.batch_get_projects(names=[resource_id])
+            projects = response.get("projects", [])
+            if not projects:
+                return None
+            return projects[0]
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code")
+            if error_code == "ResourceNotFoundException":
+                return None
+            raise
+
+    def extract_actual_config(self, resource_data: dict) -> dict:
+        return {
+            "project_name": resource_data.get("name"),
+            "source_type": resource_data.get("source", {}).get("type"),
+            "environment": {
+                "compute_type": resource_data.get("environment", {}).get("computeType"),
+                "image": resource_data.get("environment", {}).get("image"),
+                "type": resource_data.get("environment", {}).get("type"),
+            },
+            "service_role": resource_data.get("serviceRole"),
+        }
+
     def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate a CodeBuild project."""
         result = ValidationResult(resource_id, "codebuild_project")
         result.expected_config = expected_config
 
         try:
-            # Get project description
-            response = self.client.batch_get_projects(names=[resource_id])
-
-            if not response.get("projects", []):
+            project = self.get_resource_description(resource_id)
+            if not project:
                 result.exists = False
                 result.add_message(f"CodeBuild project {resource_id} does not exist")
                 return result
-
-            project = response.get("projects", [{}])[0]
             result.exists = True
 
             # Extract actual configuration
-            result.actual_config = {
-                "project_name": project.get("name"),
-                "source_type": project.get("source", {}).get("type"),
-                "environment": {
-                    "compute_type": project.get("environment", {}).get("computeType"),
-                    "image": project.get("environment", {}).get("image"),
-                    "type": project.get("environment", {}).get("type"),
-                },
-                "service_role": project.get("serviceRole"),
-            }
+            result.actual_config = self.extract_actual_config(project)
 
             # Validate source configuration
             if expected_config.get("source_type"):
@@ -450,35 +533,52 @@ class S3BucketValidator(ResourceValidator):
         super().__init__(session, "s3", "s3_bucket")
         self.region = session.region_name
 
+    def get_resource_description(self, resource_id: str):
+        """Return a minimal descriptor if bucket exists, else None."""
+        try:
+            self.client.head_bucket(Bucket=resource_id)
+            return {"bucket": resource_id}
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code")
+            if error_code in ["NoSuchBucket", "404"]:
+                return None
+            raise
+
+    def extract_actual_config(self, resource_data: dict) -> dict:
+        bucket_name = resource_data.get("bucket")
+        location_response = self.client.get_bucket_location(Bucket=bucket_name)
+        bucket_region = location_response.get("LocationConstraint") or "us-east-1"
+        return {
+            "bucket_name": bucket_name,
+            "region": bucket_region,
+            "versioning": self._get_versioning_status(bucket_name),
+            "public_access_block": self._get_public_access_block(bucket_name),
+            "website_enabled": self._is_website_enabled(bucket_name),
+            "cors_enabled": self._has_cors_configuration(bucket_name),
+        }
+
     def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate an S3 bucket configuration."""
         result = ValidationResult(resource_id, "s3_bucket")
         result.expected_config = expected_config
 
         try:
-            # Check if bucket exists
-            self.client.head_bucket(Bucket=resource_id)
+            descriptor = self.get_resource_description(resource_id)
+            if not descriptor:
+                result.exists = False
+                result.add_message(f"Bucket {resource_id} does not exist")
+                return result
             result.exists = True
-
-            # Get bucket location
-            location_response = self.client.get_bucket_location(Bucket=resource_id)
-            bucket_region = location_response.get("LocationConstraint") or "us-east-1"
+            actual = self.extract_actual_config(descriptor)
 
             # Extract actual configuration
-            result.actual_config = {
-                "bucket_name": resource_id,
-                "region": bucket_region,
-                "versioning": self._get_versioning_status(resource_id),
-                "public_access_block": self._get_public_access_block(resource_id),
-                "website_enabled": self._is_website_enabled(resource_id),
-                "cors_enabled": self._has_cors_configuration(resource_id),
-            }
+            result.actual_config = actual
 
             # Validate region
             if expected_config.get("region"):
-                if bucket_region != expected_config.get("region"):
+                if actual.get("region") != expected_config.get("region"):
                     result.drift_detected = True
-                    result.add_message(f"Region mismatch: expected {expected_config.get('region')}, got {bucket_region}")
+                    result.add_message(f"Region mismatch: expected {expected_config.get('region')}, got {actual.get('region')}")
 
             # Validate versioning
             if "versioning" in expected_config:
@@ -608,6 +708,43 @@ class IAMValidator(ResourceValidator):
         """Initialize IAM validator."""
         super().__init__(session, "iam", "iam_resource")
         # Client is already created by parent class
+
+    def get_resource_description(self, resource_id: str):
+        """Fetch role by name, or local policy by name. Return structured info or None."""
+        # Try role first
+        try:
+            response = self.client.get_role(RoleName=resource_id)
+            return {"type": "role", "role": response.get("Role", {})}
+        except ClientError as err:
+            if err.response.get("Error", {}).get("Code") != "NoSuchEntity":
+                # Unexpected error
+                raise
+        # Try local managed policy by name
+        paginator = self.client.get_paginator("list_policies")
+        for page in paginator.paginate(Scope="Local"):
+            for policy in page.get("Policies", []):
+                if policy.get("PolicyName") == resource_id:
+                    return {"type": "policy", "policy": policy}
+        return None
+
+    def extract_actual_config(self, resource_data: dict) -> dict:
+        if resource_data.get("type") == "role":
+            role = resource_data.get("role", {})
+            role_name = role.get("RoleName")
+            return {
+                "role_name": role_name,
+                "arn": role.get("Arn"),
+                "assume_role_policy": role.get("AssumeRolePolicyDocument", {}),
+                "attached_policies": self._get_attached_policies(role_name) if role_name else [],
+            }
+        if resource_data.get("type") == "policy":
+            policy = resource_data.get("policy", {})
+            return {
+                "policy_name": policy.get("PolicyName"),
+                "arn": policy.get("Arn"),
+                "attachment_count": policy.get("AttachmentCount", 0),
+            }
+        return {}
 
     def validate(self, resource_id: str, expected_config: dict) -> ValidationResult:
         """Validate an IAM role or policy."""
@@ -770,6 +907,12 @@ def validate_stack_resources(session: boto3.Session, stack_name: str, expected_r
         Dictionary of resource ID to ValidationResult
     """
     results = {}
+
+    # stack_name is not used presently but kept for future filtering/logging
+    try:
+        del stack_name
+    except Exception:
+        pass
 
     for resource_id, resource_config in expected_resources.items():
         resource_type = resource_config.get("type")

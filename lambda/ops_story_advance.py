@@ -33,6 +33,7 @@ from eidolon.segment import (
 )
 from eidolon.sqs import send_message
 from eidolon.story import apply_combat_rewards, complete_story, ensure_story_history_exists, update_story_history_xp
+from eidolon.validation_messages import validate_advancement_message
 
 
 def advance_story_business_logic(active_segment_id: str) -> dict:
@@ -253,6 +254,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     batch_item_failures = []
     success_count = 0
     failure_count = 0
+    invalid_count = 0
 
     for record in event.get("Records", []):
         message_id = record.get("messageId", "unknown")
@@ -260,10 +262,18 @@ def lambda_handler(event: dict, context: object) -> dict:
         try:
             # Parse message body
             message_body = json.loads(record.get("body", "{}"))
-            active_segment_id = message_body.get("ActiveSegmentID")
 
-            if not active_segment_id:
-                raise ValueError("Missing ActiveSegmentID in message")
+            # Validate message schema
+            try:
+                validated_msg = validate_advancement_message(message_body)
+            except ValueError as validation_err:
+                # Invalid message - log and don't retry
+                logger.error(f"Invalid message schema for messageId={message_id}: {validation_err}")
+                invalid_count += 1
+                # Don't add to batch_item_failures - invalid messages should not be retried
+                continue
+
+            active_segment_id = validated_msg["ActiveSegmentID"]
 
             logger.info(f"Processing segment advancement for {active_segment_id}")
 
@@ -276,15 +286,16 @@ def lambda_handler(event: dict, context: object) -> dict:
             else:
                 raise RuntimeError("Segment advancement failed")
 
-        except ValueError as err:
-            logger.error(f"Invalid message format for {message_id} Error: {err}")
-            failure_count += 1
-            # Don't retry invalid messages
-
         except Exception as err:
             logger.error(f"Failed to process message for {message_id} Error: {err}", exc_info=True)
             failure_count += 1
             # Add to batch failures for retry
             batch_item_failures.append({"itemIdentifier": message_id})
+
+    # Log summary
+    if invalid_count > 0:
+        logger.warning(f"Batch processing summary: Success={success_count}, Failed={failure_count}, Invalid={invalid_count}")
+    else:
+        logger.info(f"Batch processing summary: Success={success_count}, Failed={failure_count}")
 
     return {"batchItemFailures": batch_item_failures}

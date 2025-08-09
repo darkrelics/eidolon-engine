@@ -5,7 +5,6 @@ allowing for selective updates without full redeployment.
 """
 
 import argparse
-import json
 import os
 import sys
 import time
@@ -555,16 +554,16 @@ class IncrementalDeploymentOrchestrator:
             "api-archetype-list.zip",
             "api-character-get.zip",
             "api-character-list.zip",
-            "api-start-story.zip",
-            "api-submit-decision.zip",
-            "api-get-segment-outcome.zip",
-            "api-abandon-story.zip",
-            "api-get-segment-status.zip",
-            "api-get-segment-history.zip",
-            "api-character-rest.zip",
+            "api-story-start.zip",
+            "api-segment-decision.zip",
+            "api-segment-outcome.zip",
+            "api-story-abandon.zip",
+            "api-segment-status.zip",
+            "api-segment-history.zip",
+            "api-segment-rest.zip",
             "ops-segment-poller.zip",
-            "ops-process-segment.zip",
-            "ops-advance-story.zip",
+            "ops-segment-process.zip",
+            "ops-story-advance.zip",
             "cognito-player-new.zip",
             "cognito-player-delete.zip",
         ]
@@ -1407,203 +1406,82 @@ class IncrementalDeploymentOrchestrator:
             print("    Settings will need to be configured manually")
 
     def update_s3_bucket_policy_for_cloudfront(self):
-        """Update S3 bucket policy to allow CloudFront access."""
-        print("\n  Updating CloudFront configuration and S3 bucket policy...")
+        """Ensure the portal bucket policy allows CloudFront via shared helper, avoiding duplication.
 
-        # Initialize variables outside try block
-        bucket_name = ""
+        Rules:
+        - Only fetch CloudFront distribution ID if it's missing in config.
+        - If the bucket is CDK-managed and the distribution/OAI is already set by CDK, skip rewriting the policy.
+        - For imported buckets, call a shared helper to ensure policy without recreating OAI logic here.
+        """
+        print("\n  Ensuring CloudFront access to the portal S3 bucket...")
 
-        try:
-            # Get bucket name from config
-            bucket_name = self.config_manager.config.get("S3", {}).get("PortalBucket", "")
-            if not bucket_name:
-                print("    Portal bucket not configured, skipping policy update")
-                return
+        # Lazy import to avoid circular deps and keep this module light
+        from cloudfront_policy import ensure_bucket_policy_for_cloudfront
 
-            # Get distribution ID from config or CloudFormation stack
-            distribution_id = self.config_manager.config.get("CloudFront", {}).get("DistributionId", "")
-            if not distribution_id:
-                # Try to get from CloudFormation stack outputs
-                try:
-                    cf = self.session.client("cloudformation")
-                    stack_name = "cloudfront"
-                    response = cf.describe_stacks(StackName=stack_name)
-                    outputs = response["Stacks"][0].get("Outputs", [])
-                    for output in outputs:
-                        if output["OutputKey"] == "DistributionId":
-                            distribution_id = output["OutputValue"]
-                            print(f"    Found distribution ID from stack: {distribution_id}")
-                            break
-                except Exception as e:
-                    print(f"    Could not get distribution ID from stack: {e}")
+        bucket_name = self.config_manager.config.get("S3", {}).get("PortalBucket", "")
+        if not bucket_name:
+            print("    Portal bucket not configured, skipping policy update")
+            return
 
-            if not distribution_id:
-                print("    CloudFront distribution ID not found, skipping policy update")
-                return
-
-            # Account ID would be used here if needed for bucket policies
-
-            # Get CloudFront client
-            cf_client = self.session.client("cloudfront", region_name="us-east-1")
-            s3_client = self.session.client("s3")
-
-            # Get current distribution configuration
-            print("    Checking CloudFront distribution configuration...")
-            dist_response = cf_client.get_distribution(Id=distribution_id)
-            dist_config = dist_response["Distribution"]["DistributionConfig"]
-            etag = dist_response["ETag"]
-
-            # Track if we need to update the distribution
-            needs_distribution_update = False
-            # Check if OAI already exists in the distribution
-            oai_id = None
-            origin_to_update = None
-            print(f"    Looking for origin matching bucket: {bucket_name}")
-            for i, origin in enumerate(dist_config["Origins"]["Items"]):
-                # Check if this is the S3 origin for our bucket
-                # CDK might create it with various domain patterns
-                domain_name = origin["DomainName"]
-                print(f"      Checking origin {i}: {domain_name}")
-                if (
-                    domain_name.startswith(f"{bucket_name}.s3")
-                    or domain_name == f"{bucket_name}.s3.amazonaws.com"
-                    or domain_name.startswith(f"{bucket_name}.s3-")
-                ):
-                    origin_to_update = i
-                    print(f"      Found matching origin at index {i}")
-                    # Check if it has S3OriginConfig (it might be a CustomOriginConfig)
-                    if "S3OriginConfig" in origin:
-                        oai_config = origin["S3OriginConfig"]
-                        oai_value = oai_config.get("OriginAccessIdentity", "")
-                        if oai_value:
-                            # Extract OAI ID from the full path
-                            oai_id = oai_value.split("/")[-1]
-                            print(f"      Origin already has OAI: {oai_id}")
-                        else:
-                            print("      Origin has S3OriginConfig but no OAI")
-                            needs_distribution_update = True
-                    else:
-                        # Origin exists but doesn't have S3OriginConfig - needs to be converted
-                        print(f"      Origin lacks S3OriginConfig, has: {list(origin.keys())}")
-                        needs_distribution_update = True
-                    break
-            if origin_to_update is None:
-                print(f"    WARNING: No origin found for bucket {bucket_name}")
-                print("    Available origins:")
-                for i, origin in enumerate(dist_config["Origins"]["Items"]):
-                    print(f"      {i}: {origin['DomainName']}")
-
-            # Create OAI if it doesn't exist
-            if not oai_id:
-                print("    Creating Origin Access Identity...")
-                try:
-                    oai_response = cf_client.create_cloud_front_origin_access_identity(
-                        CloudFrontOriginAccessIdentityConfig={
-                            "CallerReference": f"eidolon-portal-oai-{distribution_id}",
-                            "Comment": "OAI for Eidolon portal S3 access",
-                        }
-                    )
-                    oai_id = oai_response["CloudFrontOriginAccessIdentity"]["Id"]
-                    print(f"    Created OAI: {oai_id}")
-                    needs_distribution_update = True
-                except ClientError as err:
-                    if err.response.get("Error", {}).get("Code") == "CloudFrontOriginAccessIdentityAlreadyExists":
-                        # OAI with this caller reference already exists, try to find it
-                        print("    OAI already exists, searching for existing OAI...")
-                        paginator = cf_client.get_paginator("list_cloud_front_origin_access_identities")
-                        for page in paginator.paginate():
-                            for item in page.get("CloudFrontOriginAccessIdentityList", {}).get("Items", []):
-                                if item.get("Comment") == "OAI for Eidolon portal S3 access":
-                                    oai_id = item.get("Id")
-                                    print(f"    Found existing OAI: {oai_id}")
-                                    needs_distribution_update = True
-                                    break
-                            if oai_id:
-                                break
-                        if not oai_id:
-                            print("    ERROR: Could not find existing OAI")
-                            print(f"    Please manually check CloudFront OAIs for: {distribution_id}")
-                            return
-                    else:
-                        print(f"    ERROR: Failed to create OAI: {err}")
-                        return
-
-            # Update distribution to use the OAI if needed
-            if needs_distribution_update and origin_to_update is not None and oai_id:
-                print("    Updating CloudFront distribution to use OAI...")
-                # Remove CustomOriginConfig if it exists
-                if "CustomOriginConfig" in dist_config["Origins"]["Items"][origin_to_update]:
-                    del dist_config["Origins"]["Items"][origin_to_update]["CustomOriginConfig"]
-                # Set S3OriginConfig with OAI
-                dist_config["Origins"]["Items"][origin_to_update]["S3OriginConfig"] = {
-                    "OriginAccessIdentity": f"origin-access-identity/cloudfront/{oai_id}"
-                }
-
-                # Update the distribution
-                try:
-                    cf_client.update_distribution(DistributionConfig=dist_config, Id=distribution_id, IfMatch=etag)
-                    print("    Updated CloudFront distribution to use OAI")
-                except Exception as err:
-                    print(f"    Failed to update distribution: {err}")
-                    print("      Continuing with bucket policy update...")
-            else:
-                if oai_id:
-                    print(f"    Found existing OAI: {oai_id}")
-
-            # Wait a moment for distribution update to propagate if we just updated it
-            if needs_distribution_update:
-                print("    Waiting for distribution update to propagate...")
-
-                time.sleep(5)
-
-            # Always replace S3 bucket policy with the correct one
-            print("\n    Replacing S3 bucket policy...")
-            print(f"    Distribution ID: {distribution_id}")
-            print(f"    OAI ID: {oai_id if oai_id else 'None'}")
-
-            # Delete existing bucket policy first to ensure clean state
+        # Prefer ID from config; fetch from stack outputs only if missing
+        distribution_id = self.config_manager.config.get("CloudFront", {}).get("DistributionId", "")
+        if not distribution_id:
             try:
-                s3_client.delete_bucket_policy(Bucket=bucket_name)
-                print("    Deleted existing bucket policy")
-            except ClientError as err:
-                if err.response.get("Error", {}).get("Code") != "NoSuchBucketPolicy":
-                    print(f"    Note: Could not delete existing policy: {err}")
-            # Only create and apply new policy if we have an OAI
-            if oai_id:
-                # Create policy statements
-                statements = [
-                    {
-                        "Sid": "AllowCloudFrontOAI",
-                        "Effect": "Allow",
-                        "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
-                        "Action": "s3:GetObject",
-                        "Resource": f"arn:aws:s3:::{bucket_name}/*",
-                    }
-                ]
+                cf = self.session.client("cloudformation")
+                response = cf.describe_stacks(StackName="cloudfront")
+                for output in response["Stacks"][0].get("Outputs", []):
+                    if output["OutputKey"] == "DistributionId":
+                        distribution_id = output["OutputValue"]
+                        print(f"    Found distribution ID from stack: {distribution_id}")
+                        break
+            except Exception as e:
+                print(f"    Could not get distribution ID from stack: {e}")
 
-                # Create the complete policy
-                policy: dict = {"Version": "2012-10-17", "Statement": statements}
+        if not distribution_id:
+            print("    CloudFront distribution ID not found, skipping policy update")
+            return
 
-                # Apply the policy
-                s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
-                print("    Applied new bucket policy")
-            else:
-                print("    WARNING: No OAI found - bucket will not be accessible via CloudFront!")
-                print("    The CloudFront distribution may need to be reconfigured")
+        # If bucket was created/managed by CDK and the distribution uses OAI, CDK path already enforced access.
+        # Detect: check CloudFormation 's3' stack resources for a managed bucket, and verify distribution has OAI on the portal origin.
+        try:
+            cfn = self.session.client("cloudformation")
+            managed = False
+            try:
+                res = cfn.list_stack_resources(StackName="s3")
+                for summ in res.get("StackResourceSummaries", []):
+                    if summ.get("ResourceType") == "AWS::S3::Bucket" and summ.get("PhysicalResourceId") == bucket_name:
+                        managed = True
+                        break
+            except Exception:
+                managed = False
 
-            print(f"    Updated bucket policy for {bucket_name}")
-            print(f"      - CloudFront distribution {distribution_id} now has access")
-            if oai_id:
-                print(f"      - OAI {oai_id} also has access")
+            has_oai = False
+            cf_client = self.session.client("cloudfront", region_name="us-east-1")
+            dist = cf_client.get_distribution(Id=distribution_id)["Distribution"]["DistributionConfig"]
+            for origin in dist.get("Origins", {}).get("Items", []):
+                domain = origin.get("DomainName", "")
+                if bucket_name in domain and origin.get("S3OriginConfig", {}).get("OriginAccessIdentity"):
+                    has_oai = True
+                    break
 
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code == "NoSuchBucket":
-                print(f"    Bucket {bucket_name} not found")
-            else:
-                print(f"    Failed to update bucket policy: {err}")
-        except Exception as err:
-            print(f"    Error updating bucket policy: {err}")
+            if managed and has_oai:
+                print("    Bucket is CDK-managed and distribution OAI is configured; skipping policy rewrite")
+                return
+        except Exception:
+            # Non-fatal; fall through to helper
+            pass
+
+        # For imported buckets or when policy might be missing, ensure access via shared helper.
+        updated = ensure_bucket_policy_for_cloudfront(
+            bucket_name=bucket_name,
+            distribution_id=distribution_id,
+            session=self.session,
+            region=self.region,
+        )
+        if updated:
+            print(f"    Bucket policy verified/updated for {bucket_name}")
+        else:
+            print("    Bucket policy may require manual verification")
 
     def save_cloudfront_distribution_id(self):
         """Save CloudFront distribution ID to config file."""

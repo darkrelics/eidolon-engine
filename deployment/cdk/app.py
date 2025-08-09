@@ -441,7 +441,7 @@ class EidolonEngineApp:
             "story_history_table": "story_history",
             "segment_history_table": "segment_history",
         }
-        
+
         self.lambda_stack = LambdaStack(
             self.app,
             "lambda",
@@ -468,7 +468,7 @@ class EidolonEngineApp:
             domain_name=params["domain_name"],
             hosted_zone_id=params["hosted_zone_id"],
             portal_bucket=self.s3_stack.portal_bucket,
-            api_gateway_url=self.lambda_stack.api.url if hasattr(self.lambda_stack, 'api') else "",
+            api_gateway_url=self.lambda_stack.api.url if hasattr(self.lambda_stack, "api") else "",
             distribution_id=params.get("cloudfront_distribution_id"),
         )
 

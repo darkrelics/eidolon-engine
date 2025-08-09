@@ -5,6 +5,8 @@ Provides functions for processing story segments including mechanical,
 decision, and rest segments.
 """
 
+# pylint: disable=too-many-lines
+
 import math
 import random
 import time
@@ -16,11 +18,140 @@ from uuid_extension import uuid7
 from eidolon.character_data import apply_character_updates
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
+from eidolon.schema import normalize_segment_definition
+from eidolon.models import (
+    StorySegment,
+    ChallengeResultModel,
+    CombatStateModel,
+    ClientEvent,
+)
 from eidolon.mechanics import calculate_heal_time, resolve_opposed_check
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES: list = ["mechanical", "decision", "rest"]
 MECHANICAL_ONLY_TYPES: list = ["mechanical"]
+
+
+def _to_pascal_key(key: str) -> str:
+    """Convert lowerCamelCase/snake-case to PascalCase; preserve OpponentID/ID."""
+    if not isinstance(key, str):
+        return key
+    kl = key.replace("-", "_").lower()
+    if kl in ("opponentid", "opponent_id"):
+        return "OpponentID"
+    if kl == "id":
+        return "ID"
+    parts = [p for p in key.replace("-", "_").split("_") if p]
+    return "".join(p[:1].upper() + p[1:] for p in parts)
+
+
+def _challenge_results_to_pascal(ch_results: list) -> list:
+    """Convert challenge results to PascalCase, preferring Pydantic when available."""
+    out: list = []
+    for ch in ch_results or []:
+        if not isinstance(ch, dict):
+            continue
+        try:
+            model = ChallengeResultModel.model_validate(ch)
+            out.append(model.model_dump(by_alias=True, exclude_none=True))
+            continue
+        except Exception:
+            # Fall back to manual conversion if validation fails
+            pass
+
+        item = {
+            "Attribute": ch.get("Attribute", ch.get("attribute")),
+            "Skill": ch.get("Skill", ch.get("skill")),
+            "Difficulty": ch.get("Difficulty", ch.get("difficulty")),
+            "BestSigma": ch.get("BestSigma", ch.get("bestSigma")),
+            "Passed": ch.get("Passed", ch.get("passed")),
+        }
+        attempts = []
+        for at in ch.get("Attempts", ch.get("attempts", [])):
+            attempts.append(
+                {
+                    "EffectiveScore": at.get("EffectiveScore", at.get("effectiveScore")),
+                    "Difficulty": at.get("Difficulty", at.get("difficulty")),
+                    "Sigma": at.get("Sigma", at.get("sigma")),
+                    "Success": at.get("Success", at.get("success")),
+                }
+            )
+        item["Attempts"] = attempts
+        out.append(item)
+    return out
+
+
+def _combat_state_to_pascal(state: dict) -> dict:
+    """Convert combat state to PascalCase, preferring Pydantic when available."""
+    if not isinstance(state, dict):
+        return {}
+    try:
+        model = CombatStateModel.model_validate(state)
+        return model.model_dump(by_alias=True, exclude_none=True)
+    except Exception:
+        # Fall through to manual conversion
+        pass
+    pas = {
+        "Round": state.get("Round", state.get("round", state.get("rounds", 0))),
+        "PlayerWounds": state.get("PlayerWounds", state.get("playerWounds", [])),
+        "OpponentWounds": state.get("OpponentWounds", state.get("opponentWounds", [])),
+        "OpponentHealth": state.get("OpponentHealth", state.get("opponentHealth")),
+        "OpponentID": state.get("OpponentID", state.get("opponentId")),
+    }
+    log = state.get("CombatLog") or state.get("combatLog") or []
+    pc_log = []
+    for entry in log:
+        if not isinstance(entry, dict):
+            continue
+        pe = {"Round": entry.get("Round", entry.get("round"))}
+        pa = entry.get("PlayerAttack") or entry.get("playerAttack")
+        if isinstance(pa, dict):
+            pe["PlayerAttack"] = {
+                "Hit": pa.get("Hit", pa.get("hit")),
+                "Sigma": pa.get("Sigma", pa.get("sigma")),
+                "Damage": pa.get("Damage", pa.get("damage")),
+                "DamageType": pa.get("DamageType", pa.get("damageType")),
+            }
+        oa = entry.get("OpponentAttack") or entry.get("opponentAttack")
+        if isinstance(oa, dict):
+            pe["OpponentAttack"] = {
+                "Hit": oa.get("Hit", oa.get("hit")),
+                "Sigma": oa.get("Sigma", oa.get("sigma")),
+                "Damage": oa.get("Damage", oa.get("damage")),
+                "DamageType": oa.get("DamageType", oa.get("damageType")),
+            }
+        pc_log.append(pe)
+    if pc_log:
+        pas["CombatLog"] = pc_log
+    return pas
+
+
+def _events_to_pascal(events: list) -> list:
+    """Convert client events to PascalCase, preferring Pydantic when available."""
+    out = []
+    for ev in events or []:
+        if not isinstance(ev, dict):
+            continue
+        try:
+            model = ClientEvent.model_validate(ev)
+            out.append(model.model_dump(by_alias=True, exclude_none=True))
+            continue
+        except Exception:
+            # Fall back to manual conversion
+            pass
+        pe = {
+            "EventType": ev.get("EventType", ev.get("eventType")),
+            "Title": ev.get("Title", ev.get("title")),
+            "Description": ev.get("Description", ev.get("description")),
+        }
+        data = ev.get("Data", ev.get("data", {}))
+        if isinstance(data, dict):
+            pdata = {}
+            for k, v in data.items():
+                pdata[_to_pascal_key(k)] = v
+            pe["Data"] = pdata
+        out.append(pe)
+    return out
 
 
 def is_mechanical_segment(segment_type: str) -> bool:
@@ -79,17 +210,38 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
     successes = 0
 
     for challenge in challenges:
-        attribute = challenge.get("attribute")
-        skill = challenge.get("skill")
-        difficulty = challenge.get("difficulty", 8)
-        attempts = int(challenge.get("attempts", 1))
+        # Accept both lowercase and PascalCase keys for compatibility
+        attribute = challenge.get("attribute") or challenge.get("Attribute")
+        skill = challenge.get("skill") or challenge.get("Skill")
+        difficulty = challenge.get("difficulty") or challenge.get("Difficulty") or 8
+        attempts = int(challenge.get("attempts") or challenge.get("Attempts") or 1)
 
         # Get character's attribute and skill values
         character_attributes = character.get("Attributes", {})
         character_skills = character.get("Skills", {})
 
-        attribute_value = character_attributes.get(attribute, 0) if attribute else 0
-        skill_value = character_skills.get(skill, 0) if skill else 0
+        # Try multiple casings for attribute/skill names for compatibility
+        if attribute:
+            # Try exact match, then capitalized, then uppercase
+            attribute_value = (
+                character_attributes.get(attribute, 0)
+                or character_attributes.get(attribute.capitalize(), 0)
+                or character_attributes.get(attribute.upper(), 0)
+                or 0
+            )
+        else:
+            attribute_value = 0
+
+        if skill:
+            # Try exact match, then capitalized, then uppercase
+            skill_value = (
+                character_skills.get(skill, 0)
+                or character_skills.get(skill.capitalize(), 0)
+                or character_skills.get(skill.upper(), 0)
+                or 0
+            )
+        else:
+            skill_value = 0
 
         # Combined effective score
         effective_score = attribute_value + skill_value
@@ -187,8 +339,9 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         Tuple of (outcome, combat_state)
     """
     combat_config = segment_def.get("Combat", {})
-    opponent_id = combat_config.get("OpponentID")
-    max_rounds = combat_config.get("maxRounds", 10)
+    # Accept both PascalCase and camelCase for compatibility
+    opponent_id = combat_config.get("OpponentID") or combat_config.get("opponentId")
+    max_rounds = combat_config.get("MaxRounds") or combat_config.get("maxRounds") or 10
 
     # Get opponent data
     try:
@@ -203,9 +356,10 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
 
     # Initialize combat state from active segment or create new
     combat_state = active_segment.get("CombatState", {})
-    player_wounds = combat_state.get("playerWounds", [])
-    opponent_wounds = combat_state.get("opponentWounds", [])
-    current_round = combat_state.get("round", 0)
+    # Tolerate both PascalCase and camelCase
+    player_wounds = combat_state.get("PlayerWounds", combat_state.get("playerWounds", []))
+    opponent_wounds = combat_state.get("OpponentWounds", combat_state.get("opponentWounds", []))
+    current_round = combat_state.get("Round", combat_state.get("round", 0))
 
     # Get character combat stats
     character_attributes = character.get("Attributes", {})
@@ -650,18 +804,18 @@ def generate_combat_client_events(combat_state: dict) -> list:
     events = []
 
     # Only generate structural combat data - narrative comes from Results
-    for round_data in combat_state.get("combatLog", []):
-        round_num = round_data.get("round", 0)
+    for round_data in combat_state.get("combatLog", combat_state.get("CombatLog", [])):
+        round_num = round_data.get("round", round_data.get("Round", 0))
 
         # Player attack event
-        player_attack = round_data.get("playerAttack")
+        player_attack = round_data.get("playerAttack", round_data.get("PlayerAttack"))
         if player_attack:
             event = {"eventType": "combatAttack", "data": player_attack}
             event["data"]["round"] = round_num
             events.append(event)
 
         # Opponent attack event
-        opponent_attack = round_data.get("opponentAttack")
+        opponent_attack = round_data.get("opponentAttack", round_data.get("OpponentAttack"))
         if opponent_attack:
             event = {"eventType": "combatDefense", "data": opponent_attack}
             event["data"]["round"] = round_num
@@ -701,6 +855,11 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         results: Challenge or combat results
         segment_def: Optional segment definition containing Results narratives
     """
+    # Ensure outcome is populated to support pre-completion outcome reads
+    if not outcome:
+        logger.warning(f"No outcome computed for {active_segment_id}; defaulting to 'normal'")
+        outcome = "normal"
+
     # Keep status as "active" but mark as processed so poller knows it's ready
     update_expression = "SET #outcome = :outcome, ProcessingStatus = :proc_status"
     expression_names = {"#outcome": "Outcome"}
@@ -709,10 +868,11 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
     # Add results based on segment type
     if "challengeResults" in results:
         update_expression += ", ChallengeResults = :results"
-        expression_values[":results"] = results["challengeResults"]
+    # Use simple converter for stability; Pydantic models available in eidolon.models
+    expression_values[":results"] = _challenge_results_to_pascal(results["challengeResults"])  # type: ignore
     if "combatState" in results:
         update_expression += ", CombatState = :state"
-        expression_values[":state"] = results["combatState"]
+    expression_values[":state"] = _combat_state_to_pascal(results["combatState"])  # type: ignore
 
     # Extract and add deferred rewards
     if segment_def:
@@ -724,18 +884,24 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
     # Generate client events including narrative
     client_events = []
 
-    # Add outcome narrative as the first event if available
-    if segment_def and "Results" in segment_def:
-        outcome_results = segment_def.get("Results", {}).get(outcome, {})
-        if "narrative" in outcome_results:
-            client_events.append(
-                {
-                    "eventType": "narrative",
-                    "title": "Story Progress",
-                    "description": outcome_results["narrative"],
-                    "data": {"outcome": outcome},
-                }
-            )
+    # Add outcome narrative as the first event if available using the validator
+    if segment_def:
+        try:
+            # Use the validator to get narrative and effects with proper casing
+            outcome_data = validate_segment_outcome_results(segment_def, outcome)
+            narrative = outcome_data.get("Narrative", "")
+
+            if narrative:  # Add narrative event if non-empty
+                client_events.append(
+                    {
+                        "eventType": "narrative",
+                        "title": "Story Progress",
+                        "description": narrative,
+                        "data": {"outcome": outcome},
+                    }
+                )
+        except Exception as err:
+            logger.warning(f"Failed to get narrative for outcome {outcome}: {err}")
 
     # Add skill check events if present
     if "challengeResults" in results:
@@ -749,7 +915,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
 
     if client_events:
         update_expression += ", ClientEvents = :events"
-        expression_values[":events"] = client_events  # type: ignore
+        expression_values[":events"] = _events_to_pascal(client_events)  # type: ignore
 
     try:
         dynamo.update_item(
@@ -762,6 +928,15 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
     except ClientError as err:
         logger.error(f"Failed to update segment outcome for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update segment outcome: {err}") from err
+
+
+# Backward-compatible shorter aliases per style guidance
+def update_segment_outcome(active_segment_id: str, outcome: str, results: dict, segment_def=None) -> None:
+    return update_active_segment_outcome(active_segment_id, outcome, results, segment_def)
+
+
+def process_mech_segment(segment_def: dict, character: dict, active_segment: dict) -> tuple:
+    return process_mechanical_segment(segment_def, character, active_segment)
 
 
 def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_title: str) -> str:
@@ -814,11 +989,22 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         # If combat is configured, set up combat state
         combat_config = segment.get("Combat", {})
         if combat_config:
+            # Accept both PascalCase and camelCase for compatibility
+            opponent_id = combat_config.get("OpponentID") or combat_config.get("opponentId")
+            opponent_health = None
+            if opponent_id:
+                try:
+                    opponent = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+                    if opponent:
+                        opponent_health = opponent.get("Health")
+                except Exception as err:
+                    logger.warning(f"Failed to load opponent for combat state init for {opponent_id} Error: {err}")
             active_segment["CombatState"] = {
-                "round": 0,
-                "playerWounds": [],
-                "opponentHealth": None,
-                "opponentId": combat_config.get("OpponentID"),
+                "Round": 0,
+                "PlayerWounds": [],
+                "OpponentWounds": [],
+                "OpponentHealth": opponent_health,
+                "OpponentID": opponent_id,
             }
 
     # Store in DynamoDB
@@ -1070,7 +1256,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         ValueError: If no suitable segment found or segments not found
         RuntimeError: If database operations fail
     """
-    MIN_TIME_REQUIRED: int = 30  # Minimum seconds needed to insert rest
+    min_time_required: int = 30  # Minimum seconds needed to insert rest
 
     # Get current segment (A)
     try:
@@ -1089,7 +1275,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         raise ValueError("Cannot insert rest segment - current segment is the last in the story")
 
     # Determine where to insert rest
-    if time_remaining >= MIN_TIME_REQUIRED:
+    if time_remaining >= min_time_required:
         # Enough time on A - insert between A and B
         segment_to_update_id = current_segment_id
         original_next_segment_id = next_segment_id
@@ -1337,7 +1523,15 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
         )
         if not segment_def:
             raise ValueError(f"Segment definition not found: {segment_id}")
-        return segment_def
+        # Normalize mixed-case inputs from content or tools
+        normalized = normalize_segment_definition(segment_def)
+        # Validate and return canonical PascalCase dict (tolerant fallback)
+        try:
+            _model = StorySegment.model_validate(normalized)
+            return _model.model_dump(by_alias=True, exclude_none=True)
+        except Exception:
+            # Fall back to normalized dict when validation fails (tolerant)
+            return normalized
     except ClientError as err:
         logger.error(f"Failed to get segment definition for {segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get segment definition: {err}") from err
@@ -1356,33 +1550,62 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         Next segment ID or None if story ends
     """
     segment_type = segment_def.get("SegmentType")
+    segment_id = segment_def.get("SegmentID", "unknown")
+    active_segment_id = active_segment.get("ActiveSegmentID", "unknown")
 
     if segment_type == "decision":
         # Use decision to determine next segment
         decision = active_segment.get("Decision")
         decision_options = segment_def.get("DecisionOptions", {})
 
-        if decision:
-            return decision_options.get(decision)
+        if decision and decision in decision_options:
+            next_segment_id = decision_options.get(decision)
+            logger.info(f"Selected decision branch for {active_segment_id}: decision={decision}, next={next_segment_id}")
+            return next_segment_id
         else:
             # No decision made (timeout) - use default if specified
             default_decision = segment_def.get("DefaultDecision")
             if default_decision and default_decision in decision_options:
-                logger.info(f"Using default decision for timeout for {segment_def.get('SegmentID')}")
-                return decision_options.get(default_decision)
+                next_segment_id = decision_options.get(default_decision)
+                logger.info(f"Using default decision for {active_segment_id}: default={default_decision}, next={next_segment_id}")
+                return next_segment_id
             # Fall back to NextSegmentID if no default specified
-            return segment_def.get("NextSegmentID")
-    elif segment_type in ["mechanical", "rest"]:
-        # Check if outcome is terminal
-        if outcome in ["death", "failure"]:
-            # Some outcomes end the story
-            results = segment_def.get("Results", {})
-            outcome_result = results.get(outcome, {})
-            if outcome_result.get("terminal", False):
-                return None
-        # Otherwise continue to next segment
-        return segment_def.get("NextSegmentID")
+            fallback = segment_def.get("NextSegmentID")
+            if not decision:
+                logger.warning(f"No decision made for {active_segment_id}, no default available, using fallback: {fallback}")
+            return fallback
 
+    elif segment_type in ["mechanical", "rest"]:
+        # Normalize outcome to lowercase for consistent lookup
+        outcome_key = str(outcome).lower() if outcome else "normal"
+
+        # Get results dict (should have lowercase keys after normalization)
+        results = segment_def.get("Results", {})
+        if not isinstance(results, dict):
+            logger.warning(f"Results is not a dict for {segment_id}, treating as no branching")
+            results = {}
+
+        # Check for per-outcome NextSegmentID
+        if outcome_key in results:
+            outcome_result = results[outcome_key]
+            if isinstance(outcome_result, dict) and "NextSegmentID" in outcome_result:
+                # Explicitly provided per-outcome next segment (None means terminal)
+                next_segment_id = outcome_result["NextSegmentID"]
+                logger.info(f"Using per-outcome branch for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
+                return next_segment_id
+
+        # Fall back to segment-level NextSegmentID
+        fallback = segment_def.get("NextSegmentID")
+
+        # Log warning if no next segment for non-terminal outcomes
+        if fallback is None and outcome_key not in ["death", "failure"]:
+            logger.warning(f"No next segment found for {active_segment_id} with outcome '{outcome_key}' - story will terminate")
+        elif fallback is not None:
+            logger.info(f"Using segment-level NextSegmentID for {active_segment_id}: outcome={outcome_key}, next={fallback}")
+
+        return fallback
+
+    # Unknown segment type - use segment-level NextSegmentID
     return segment_def.get("NextSegmentID")
 
 
@@ -1398,6 +1621,11 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
     Raises:
         RuntimeError: If database operation fails
     """
+    # Ensure outcome is populated to support pre-completion outcome reads
+    if not outcome:
+        logger.warning(f"No outcome computed for {active_segment_id}; defaulting to 'normal'")
+        outcome = "normal"
+
     try:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
@@ -1481,9 +1709,9 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
         outcome: Outcome string (e.g., "exceptional", "normal", "failure")
 
     Returns:
-        Dict with validated narrative and effects, guaranteed to have:
-            - narrative (str): The outcome narrative text
-            - effects (dict): Effects to apply (may be empty)
+        Dict with validated narrative and effects, guaranteed to have PascalCase keys:
+            - Narrative (str): The outcome narrative text
+            - Effects (dict): Effects to apply (may be empty)
     """
     # Get Results field, ensure it's a dict
     results = segment.get("Results")
@@ -1492,37 +1720,38 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
         logger.warning(f"Segment has no Results field for {segment.get('SegmentID')}")
         # Special handling for exceptional outcome (used by poller for timed-out segments)
         if outcome == "exceptional":
-            return {"narrative": "Your actions exceeded all expectations, achieving extraordinary results.", "effects": {}}
-        return {"narrative": "", "effects": {}}
+            return {"Narrative": "Your actions exceeded all expectations, achieving extraordinary results.", "Effects": {}}
+        return {"Narrative": "", "Effects": {}}
 
     if not isinstance(results, dict):
         logger.error(f"Results field is not a dictionary for {segment.get('SegmentID')}")
-        return {"narrative": "", "effects": {}}
+        return {"Narrative": "", "Effects": {}}
 
-    # Get outcome-specific result
-    outcome_result = results.get(outcome)
+    # Get outcome-specific result using lowercase keys (after normalization)
+    outcome_key = str(outcome).lower() if outcome else "normal"
+    outcome_result = results.get(outcome_key)
 
     if outcome_result is None:
         logger.info(f"No specific result for outcome for {segment.get('SegmentID')}")
         # Provide default for exceptional (safety mechanism for timed-out segments)
         if outcome == "exceptional":
-            return {"narrative": "Your actions exceeded all expectations, achieving extraordinary results.", "effects": {}}
-        return {"narrative": "", "effects": {}}
+            return {"Narrative": "Your actions exceeded all expectations, achieving extraordinary results.", "Effects": {}}
+        return {"Narrative": "", "Effects": {}}
 
     if not isinstance(outcome_result, dict):
         logger.error(f"Outcome result is not a dictionary for {segment.get('SegmentID')}")
-        return {"narrative": "", "effects": {}}
+        return {"Narrative": "", "Effects": {}}
 
     # Validate narrative field
-    narrative = outcome_result.get("narrative", "")
+    narrative = outcome_result.get("Narrative", "")
     if not isinstance(narrative, str):
         logger.warning(f"Narrative is not a string for {segment.get('SegmentID')}")
-        narrative = str(narrative) if narrative else ""
+    narrative = str(narrative) if narrative else ""
 
     # Validate effects field
-    effects = outcome_result.get("effects", {})
+    effects = outcome_result.get("Effects", {})
     if not isinstance(effects, dict):
         logger.warning(f"Effects is not a dictionary for {segment.get('SegmentID')}")
         effects = {}
 
-    return {"narrative": narrative, "effects": effects}
+    return {"Narrative": narrative, "Effects": effects}

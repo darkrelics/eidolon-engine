@@ -33,7 +33,7 @@ If you need to add additional origins beyond the automatic configuration, set `a
 ```yaml
 CORS:
 allowed_cors_origins:
-    - https://additional.domain.com
+  - https://additional.domain.com
 ```
 
 ### 3. Manual Override (Not Currently Implemented)
@@ -88,7 +88,7 @@ Note: Changes to CloudFront distributions or domain configuration in `config.yml
 2. Verify Lambda environment variables:
 
    ```bash
-  aws lambda get-function-configuration --function-name api-character-list | grep ALLOWED_ORIGINS
+   aws lambda get-function-configuration --function-name api-character-list | grep ALLOWED_ORIGINS
    ```
 
 3. Check CloudFront is forwarding the Origin header
@@ -131,9 +131,9 @@ To add custom CORS origins beyond the automatic CloudFront/domain configuration:
 
    ```yaml
    CORS:
-  allowed_cors_origins:
-       - https://custom.domain.com
-       - https://another.domain.com
+   allowed_cors_origins:
+     - https://custom.domain.com
+     - https://another.domain.com
    ```
 
 2. Deploy the changes:

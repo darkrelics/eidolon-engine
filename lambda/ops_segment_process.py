@@ -14,6 +14,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.polling import disable_polling_infrastructure
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import check_active_segments_exist, is_mechanical_segment, process_segment_completely
+from eidolon.validation_messages import validate_processing_message
 
 
 def validate_segment_for_processing(segment_type: str) -> bool:
@@ -153,26 +154,36 @@ def lambda_handler(event: dict, context: object) -> dict:
         # SQS batch event
         success_count = 0
         failure_count = 0
+        invalid_count = 0
         batch_item_failures = []
 
         for record in event.get("Records", []):
+            message_id = record.get("messageId", "unknown")
+
             try:
                 # Parse message body
                 message_body = json.loads(record.get("body", "{}"))
 
-                # Extract segment data
-                active_segment_id = message_body.get("ActiveSegmentID", "")
-                character_id = message_body.get("CharacterID")
-                story_id = message_body.get("StoryID")
-                segment_id = message_body.get("SegmentID")
-                segment_type = message_body.get("SegmentType")
+                # Validate message schema
+                try:
+                    validated_msg = validate_processing_message(message_body)
+                except ValueError as validation_err:
+                    # Invalid message - log and don't retry
+                    logger.error(f"Invalid message schema for messageId={message_id}: {validation_err}")
+                    invalid_count += 1
+                    # Don't add to batch_item_failures - invalid messages should not be retried
+                    continue
 
-                if not all([active_segment_id, character_id, story_id, segment_id, segment_type]):
-                    raise ValueError("Missing required segment data")
+                # Extract validated segment data
+                active_segment_id = validated_msg["ActiveSegmentID"]
+                character_id = validated_msg["CharacterID"]
+                story_id = validated_msg["StoryID"]
+                segment_id = validated_msg["SegmentID"]
+                segment_type = validated_msg["SegmentType"]
 
-                # Validate segment type
+                # Check if segment type should be processed by this handler
                 if not validate_segment_for_processing(segment_type):
-                    logger.warning(f"Skipping non-mechanical segment from SQS for {active_segment_id}")
+                    logger.info(f"Skipping non-mechanical segment from SQS for {active_segment_id}: type={segment_type}")
                     # Don't fail the message, just skip it
                     success_count += 1
                     continue
@@ -206,7 +217,13 @@ def lambda_handler(event: dict, context: object) -> dict:
                 )
                 failure_count += 1
                 # Add to batch item failures for SQS retry
-                batch_item_failures.append({"itemIdentifier": record.get("messageId", "unknown")})
+                batch_item_failures.append({"itemIdentifier": message_id})
+
+        # Log summary
+        if invalid_count > 0:
+            logger.warning(f"Batch processing summary: Success={success_count}, Failed={failure_count}, Invalid={invalid_count}")
+        else:
+            logger.info(f"Batch processing summary: Success={success_count}, Failed={failure_count}")
 
         return {"batchItemFailures": batch_item_failures}
 

@@ -16,9 +16,10 @@ from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.story import get_active_story_segment_with_player_check
+from eidolon.api_models import SegmentStatusResponse
 
 
-def get_segment_status_business_logic(character_id: str, player_id: str) -> dict:
+def get_segment_status_business_logic(character_id: str, player_id: str) -> SegmentStatusResponse:
     """
     Business logic for getting segment status.
 
@@ -66,7 +67,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
 
     logger.info(f"Segment status retrieved for {character_id}")
 
-    return response
+    return SegmentStatusResponse.model_validate(response)
 
 
 def lambda_handler(event: dict, context: object) -> dict:

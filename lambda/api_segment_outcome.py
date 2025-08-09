@@ -3,7 +3,7 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason E. Robinson
 
-Lambda function to get the outcome of a completed segment.
+Lambda function to get the outcome of a completed or processed segment.
 Returns the narrative text and any rewards/effects for the outcome.
 """
 
@@ -14,12 +14,53 @@ from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import validate_segment_outcome_results
+from eidolon.schema import normalize_segment_definition
 from eidolon.story import get_completed_segment_for_character, get_story_segment
+from eidolon.dynamo import TableName, dynamo
+
+
+def get_last_segment_history_record(character_id: str, segment_id: str, player_id: str) -> dict | None:
+    """
+    Fetch the latest segment_history record for a character and segment.
+
+    Args:
+        character_id: Character UUID
+        segment_id: Segment UUID
+        player_id: Player ID for verification
+
+    Returns:
+        The most recent matching history record or None if not found
+    """
+    try:
+        items = dynamo.query(
+            TableName.SEGMENT_HISTORY,
+            KeyConditionExpression="CharacterID = :cid",
+            ExpressionAttributeValues={":cid": character_id},
+        )
+    except Exception as err:
+        logger.error(f"Failed to query segment history for {character_id} Error: {err}", exc_info=True)
+        return None
+
+    if not items:
+        return None
+
+    # Filter to this segment and player, then pick the latest by CompletedAt (fallback EndTime)
+    candidates = [it for it in items if it.get("SegmentID") == segment_id and it.get("PlayerID") == player_id]
+    if not candidates:
+        return None
+
+    def sort_key(it: dict):
+        completed = it.get("CompletedAt") or ""
+        end_time = it.get("EndTime") or 0
+        # Prioritize presence of CompletedAt, then lexicographic timestamp, else EndTime numeric
+        return (1, completed) if completed else (0, end_time)
+
+    return max(candidates, key=sort_key)
 
 
 def get_segment_outcome_business_logic(character_id: str, segment_id: str, player_id: str) -> dict:
     """
-    Business logic for getting the outcome of a completed segment.
+    Business logic for getting the outcome of a completed or processed segment.
 
     Args:
         character_id: Character UUID
@@ -38,19 +79,33 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
     if not verify_character_ownership(character_id, player_id):
         raise ValueError("Character not owned by player")
 
-    # Get the completed segment
-    active_segment = get_completed_segment_for_character(character_id, player_id, segment_id)
+    # Get the segment; accepts either completed or processed (pre-completion outcomes allowed)
+    try:
+        active_segment = get_completed_segment_for_character(character_id, player_id, segment_id)
+    except ValueError as err:
+        # If the active record no longer exists, fall back to the latest segment_history record
+        if "not found" in str(err).lower():
+            history = get_last_segment_history_record(character_id, segment_id, player_id)
+            if not history:
+                raise
+            # Use history record as the source for outcome fields
+            active_segment = history
+        else:
+            raise
     active_segment_id = active_segment.get("ActiveSegmentID")
     segment_type = active_segment.get("SegmentType")
     story_id = active_segment.get("StoryID")
 
     # Get segment definition from Segments table
     segment = get_story_segment(story_id, segment_id)  # type: ignore
+    # Normalize defensively
+    segment = normalize_segment_definition(segment)
 
     # Build outcome data based on segment type
     outcome_data = {
         "SegmentType": segment_type,
-        "Status": "completed",  # We already verified it's completed
+        # Reflect actual status (may be "active" when ProcessingStatus="processed")
+        "Status": active_segment.get("Status", "completed"),
     }
 
     if segment_type == "decision":
@@ -73,17 +128,42 @@ def get_segment_outcome_business_logic(character_id: str, segment_id: str, playe
         validated_result = validate_segment_outcome_results(segment, outcome)
 
         outcome_data["Outcome"] = outcome
-        outcome_data["Narrative"] = validated_result["narrative"]
-        outcome_data["Effects"] = validated_result["effects"]
+        outcome_data["Narrative"] = validated_result["Narrative"]
+
+        # Effects should already be PascalCase keys (Room, Items, Wounds)
+        internal_effects = validated_result.get("Effects", {}) or {}
+        outcome_data["Effects"] = internal_effects if isinstance(internal_effects, dict) else {}
 
         # Add challenge results for mechanical segments
         outcome_data["ChallengeResults"] = active_segment.get("ChallengeResults", [])
+
         # Add combat state if present
         if active_segment.get("CombatState"):
             outcome_data["CombatState"] = active_segment.get("CombatState", {})
 
-        # Get next segment for non-terminal outcomes
-        if outcome not in ["death", "failure"]:
+        # Get next segment, prioritizing per-outcome NextSegmentID (PascalCase outcomes)
+        results = segment.get("Results", {}) or {}
+        next_by_outcome = None
+        per_outcome_present = False
+        if isinstance(results, dict):
+            outcome_map = {
+                "death": "Death",
+                "failure": "Failure",
+                "minimal": "Minimal",
+                "normal": "Normal",
+                "exceptional": "Exceptional",
+            }
+            outcome_key = outcome_map.get(str(outcome).lower())
+            if outcome_key and isinstance(results.get(outcome_key), dict):
+                outcome_block = results.get(outcome_key, {})
+                if isinstance(outcome_block, dict) and "NextSegmentID" in outcome_block:
+                    per_outcome_present = True
+                    next_by_outcome = outcome_block.get("NextSegmentID")
+
+        # Use per-outcome value if present (even when None => terminal). Only fall back if absent.
+        if per_outcome_present:
+            outcome_data["NextSegmentID"] = next_by_outcome
+        elif "NextSegmentID" in segment:
             outcome_data["NextSegmentID"] = segment.get("NextSegmentID")
 
     elif segment_type == "rest":
