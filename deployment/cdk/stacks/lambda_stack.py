@@ -396,10 +396,10 @@ class LambdaStack(cdk.Stack):
         # Start Story Lambda - needs SSM/SQS permissions for polling control
         self.start_story_function = lambda_.Function(
             self,
-            "api-start-story",
+            "api-story-start",
             runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="api_start_story.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-start-story.zip"),
+            handler="api_story_start.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "api-story-start.zip"),
             layers=[dependencies_layer],
             role=self.lambda_ssm_sqs_execution_role,  # Needs SSM/SQS for polling control
             timeout=cdk.Duration.seconds(30),
@@ -415,13 +415,13 @@ class LambdaStack(cdk.Stack):
                 "ALLOWED_ORIGINS": self.cors_origins_str,
             },
             description="Starts a story for a character",
-            function_name="api-start-story",
+            function_name="api-story-start",
         )
 
         # Submit Decision Lambda
         self.submit_decision_function = self.create_lambda_function(
-            "api-submit-decision",
-            "api_submit_decision.lambda_handler",
+            "api-segment-decision",
+            "api_segment_decision.lambda_handler",
             {
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "SEGMENTS_TABLE": self.segments_table,
@@ -433,8 +433,8 @@ class LambdaStack(cdk.Stack):
 
         # Get Segment Outcome Lambda
         self.get_segment_outcome_function = self.create_lambda_function(
-            "api-get-segment-outcome",
-            "api_get_segment_outcome.lambda_handler",
+            "api-segment-outcome",
+            "api_segment_outcome.lambda_handler",
             {
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "SEGMENTS_TABLE": self.segments_table,
@@ -447,8 +447,8 @@ class LambdaStack(cdk.Stack):
 
         # Abandon Story Lambda
         self.abandon_story_function = self.create_lambda_function(
-            "api-abandon-story",
-            "api_abandon_story.lambda_handler",
+            "api-story-abandon",
+            "api_story_abandon.lambda_handler",
             {
                 "CHARACTERS_TABLE": self.characters_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
@@ -461,8 +461,8 @@ class LambdaStack(cdk.Stack):
 
         # Get Segment Status Lambda
         self.get_segment_status_function = self.create_lambda_function(
-            "api-get-segment-status",
-            "api_get_segment_status.lambda_handler",
+            "api-segment-status",
+            "api_segment_status.lambda_handler",
             {
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
@@ -473,8 +473,8 @@ class LambdaStack(cdk.Stack):
 
         # Get Segment History Lambda
         self.get_segment_history_function = self.create_lambda_function(
-            "api-get-segment-history",
-            "api_get_segment_history.lambda_handler",
+            "api-segment-history",
+            "api_segment_history.lambda_handler",
             {
                 "SEGMENT_HISTORY_TABLE": self.segment_history_table,
                 "ALLOWED_ORIGINS": self.cors_origins_str,
@@ -485,8 +485,8 @@ class LambdaStack(cdk.Stack):
 
         # Character Rest Lambda
         self.character_rest_function = self.create_lambda_function(
-            "api-character-rest",
-            "api_character_rest.lambda_handler",
+            "api-segment-rest",
+            "api_segment_rest.lambda_handler",
             {
                 "CHARACTERS_TABLE": self.characters_table,
                 "ACTIVE_SEGMENTS_TABLE": self.active_segments_table,
@@ -501,10 +501,10 @@ class LambdaStack(cdk.Stack):
         # Process Segment Lambda (backend) - Now processes from SQS
         self.process_segment_function = lambda_.Function(
             self,
-            "ops-process-segment",
+            "ops-segment-process",
             runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="ops_process_segment.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-process-segment.zip"),
+            handler="ops_segment_process.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-segment-process.zip"),
             layers=[dependencies_layer],
             role=self.lambda_ssm_sqs_execution_role,
             timeout=cdk.Duration.seconds(60),
@@ -519,7 +519,7 @@ class LambdaStack(cdk.Stack):
                 "SSM_POLLER_STATE_PARAMETER": self.ssm_poller_state_parameter_name,
             },
             description="Processes completed segments and determines outcomes",
-            function_name="ops-process-segment",
+            function_name="ops-segment-process",
             reserved_concurrent_executions=5,
         )
 
@@ -583,10 +583,10 @@ class LambdaStack(cdk.Stack):
         # Advance Story Lambda (backend) - Processes incremental updates from SQS
         self.advance_story_function = lambda_.Function(
             self,
-            "ops-advance-story",
+            "ops-story-advance",
             runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="ops_advance_story.lambda_handler",
-            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-advance-story.zip"),
+            handler="ops_story_advance.lambda_handler",
+            code=lambda_.Code.from_bucket(self.lambda_bucket, "ops-story-advance.zip"),
             layers=[dependencies_layer],
             role=self.lambda_ssm_sqs_execution_role,
             timeout=cdk.Duration.seconds(60),
@@ -601,7 +601,7 @@ class LambdaStack(cdk.Stack):
                 "SEGMENT_QUEUE_URL": self.segment_queue_url,
             },
             description="Advances stories by applying character updates and progressing to next segments",
-            function_name="ops-advance-story",
+            function_name="ops-story-advance",
             reserved_concurrent_executions=5,
         )
 
@@ -623,38 +623,23 @@ class LambdaStack(cdk.Stack):
 
     def configure_api_routes(self) -> None:
         """Configure API Gateway routes and methods."""
-        # Archetypes endpoint
-        archetypes_resource = self.api.root.add_resource("archetypes")
-        archetypes_resource.add_method(
+        archetype_resource = self.api.root.add_resource("archetype")
+        archetype_resource.add_method(
             "GET",
             apigateway.LambdaIntegration(self.list_archetypes_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # Characters endpoints
-        characters_resource = self.api.root.add_resource("characters")
+        character_resource = self.api.root.add_resource("character")
 
-        # POST /characters - Add new character
-        characters_resource.add_method(
+        character_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.add_character_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # GET /characters - List all characters
-        characters_resource.add_method(
-            "GET",
-            apigateway.LambdaIntegration(self.list_characters_function),  # type: ignore
-            authorizer=self.cognito_authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
-        )
-
-        # Single character resource (using query parameters)
-        character_resource = self.api.root.add_resource("character")
-
-        # GET /character?characterId=xxx - Get specific character
         character_resource.add_method(
             "GET",
             apigateway.LambdaIntegration(self.get_character_function),  # type: ignore
@@ -662,7 +647,6 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # DELETE /character?characterId=xxx - Delete specific character
         character_resource.add_method(
             "DELETE",
             apigateway.LambdaIntegration(self.delete_character_function),  # type: ignore
@@ -670,22 +654,17 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # POST /character/rest - Initiate rest for healing
-        rest_resource = character_resource.add_resource("rest")
-        rest_resource.add_method(
-            "POST",
-            apigateway.LambdaIntegration(self.character_rest_function),  # type: ignore
+        list_resource = character_resource.add_resource("list")
+        list_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.list_characters_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # Stories endpoints
-        stories_resource = self.api.root.add_resource("stories")
+        story_resource = self.api.root.add_resource("story")
 
-        # Nested resources under /stories
-        start_resource = stories_resource.add_resource("start")
-
-        # POST /stories/start - Start a story
+        start_resource = story_resource.add_resource("start")
         start_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.start_story_function),  # type: ignore
@@ -693,29 +672,7 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # Segments endpoints
-        segments_resource = self.api.root.add_resource("segments")
-
-        # POST /segments/decision - Submit a decision
-        decision_resource = segments_resource.add_resource("decision")
-        decision_resource.add_method(
-            "POST",
-            apigateway.LambdaIntegration(self.submit_decision_function),  # type: ignore
-            authorizer=self.cognito_authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
-        )
-
-        # GET /segments/outcome - Get segment outcome
-        outcome_resource = segments_resource.add_resource("outcome")
-        outcome_resource.add_method(
-            "GET",
-            apigateway.LambdaIntegration(self.get_segment_outcome_function),  # type: ignore
-            authorizer=self.cognito_authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
-        )
-
-        # POST /stories/abandon - Abandon active story
-        abandon_resource = stories_resource.add_resource("abandon")
+        abandon_resource = story_resource.add_resource("abandon")
         abandon_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.abandon_story_function),  # type: ignore
@@ -723,8 +680,25 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # GET /segments/status - Get segment status
-        status_resource = segments_resource.add_resource("status")
+        segment_resource = self.api.root.add_resource("segment")
+
+        decision_resource = segment_resource.add_resource("decision")
+        decision_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.submit_decision_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        outcome_resource = segment_resource.add_resource("outcome")
+        outcome_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.get_segment_outcome_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        status_resource = segment_resource.add_resource("status")
         status_resource.add_method(
             "GET",
             apigateway.LambdaIntegration(self.get_segment_status_function),  # type: ignore
@@ -732,11 +706,18 @@ class LambdaStack(cdk.Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
-        # GET /segments/history - Get segment history
-        history_resource = segments_resource.add_resource("history")
+        history_resource = segment_resource.add_resource("history")
         history_resource.add_method(
             "GET",
             apigateway.LambdaIntegration(self.get_segment_history_function),  # type: ignore
+            authorizer=self.cognito_authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        rest_resource = segment_resource.add_resource("rest")
+        rest_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.character_rest_function),  # type: ignore
             authorizer=self.cognito_authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
@@ -792,21 +773,28 @@ class LambdaStack(cdk.Stack):
 
         cdk.CfnOutput(
             self,
-            "ArchetypesEndpoint",
-            value=self.api.url_for_path("/archetypes"),
-            description="API endpoint for archetypes",
+            "ArchetypeEndpoint",
+            value=self.api.url_for_path("/archetype"),
+            description="API endpoint for archetype",
         )
 
         cdk.CfnOutput(
             self,
-            "CharactersEndpoint",
-            value=self.api.url_for_path("/characters"),
-            description="API endpoint for characters",
+            "CharacterEndpoint",
+            value=self.api.url_for_path("/character"),
+            description="API endpoint for character",
         )
 
         cdk.CfnOutput(
             self,
-            "StoriesEndpoint",
-            value=self.api.url_for_path("/stories"),
-            description="API endpoint for stories",
+            "StoryEndpoint",
+            value=self.api.url_for_path("/story"),
+            description="API endpoint for story",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "SegmentEndpoint",
+            value=self.api.url_for_path("/segment"),
+            description="API endpoint for segment",
         )

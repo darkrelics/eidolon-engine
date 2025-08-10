@@ -42,14 +42,14 @@ Common HTTP status codes:
 
 Retrieves all player-available archetypes for character creation.
 
-**Endpoint:** `GET /archetypes`
+**Endpoint:** `GET /archetype`
 
 **Authentication:** Required
 
 **Request:**
 
 ```http
-GET /archetypes HTTP/1.1
+GET /archetype HTTP/1.1
 Authorization: Bearer <jwt-token>
 ```
 
@@ -153,14 +153,14 @@ final response = await apiService.getArchetypes();
 
 Retrieves a list of all characters belonging to the authenticated player.
 
-**Endpoint:** `GET /characters`
+**Endpoint:** `GET /character/list`
 
 **Authentication:** Required
 
 **Request:**
 
 ```http
-GET /characters HTTP/1.1
+GET /character/list HTTP/1.1
 Authorization: Bearer <jwt-token>
 ```
 
@@ -229,14 +229,14 @@ final characters = await apiService.listCharacters();
 
 Creates a new character for the authenticated player.
 
-**Endpoint:** `POST /characters`
+**Endpoint:** `POST /character`
 
 **Authentication:** Required
 
 **Request:**
 
 ```http
-POST /characters HTTP/1.1
+POST /character HTTP/1.1
 Authorization: Bearer <jwt-token>
 Content-Type: application/json
 
@@ -521,3 +521,385 @@ final currentHealth = character.maxHealth - character.wounds.length;
 | `401`  | "Unauthorized"                  | Invalid or missing JWT token                        |
 | `404`  | "Character not found"           | Character doesn't exist or doesn't belong to player |
 | `500`  | "Internal server error"         | Database or system failure                          |
+
+---
+
+### Delete Character
+
+Deletes a character belonging to the authenticated player.
+
+**Endpoint:** `DELETE /character`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+| Parameter     | Type   | Required | Description                       |
+| ------------- | ------ | -------- | --------------------------------- |
+| `CharacterID` | String | Yes      | UUID of the character to delete |
+
+**Request:**
+
+```http
+DELETE /character?CharacterID=550e8400-e29b-41d4-a716-446655440000 HTTP/1.1
+Authorization: Bearer <jwt-token>
+```
+
+**Response:**
+
+```json
+{
+  "Message": "Character deleted successfully"
+}
+```
+
+**Error Responses:**
+
+| Status | Error Message                   | Cause                                               |
+| ------ | ------------------------------- | --------------------------------------------------- |
+| `400`  | "Missing CharacterID parameter" | No character ID provided in query string            |
+| `401`  | "Unauthorized"                  | Invalid or missing JWT token                        |
+| `404`  | "Character not found"           | Character doesn't exist or doesn't belong to player |
+| `500`  | "Internal server error"         | Database or system failure                          |
+
+---
+
+### Start Story
+
+Starts a new story for the specified character.
+
+**Endpoint:** `POST /story/start`
+
+**Authentication:** Required
+
+**Request:**
+
+```http
+POST /story/start HTTP/1.1
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+  "StoryID": "story_knight_honor"
+}
+```
+
+**Request Body:**
+
+| Field         | Type   | Required | Description                         |
+| ------------- | ------ | -------- | ----------------------------------- |
+| `CharacterID` | String | Yes      | UUID of the character               |
+| `StoryID`     | String | Yes      | ID of the story to start            |
+
+**Response:**
+
+```json
+{
+  "Segment": {
+    "ActiveSegmentID": "segment_uuid",
+    "SegmentID": "segment_def_uuid",
+    "SegmentType": "narrative",
+    "Status": "active",
+    "StartTime": 1704900000,
+    "EndTime": 1704900300,
+    "ClientEvents": [
+      {
+        "eventType": "narrative",
+        "title": "Story Begins",
+        "description": "Your journey starts here..."
+      }
+    ]
+  }
+}
+```
+
+**Error Responses:**
+
+| Status | Error Message                     | Cause                              |
+| ------ | --------------------------------- | ---------------------------------- |
+| `403`  | "Story not available"             | Story not available to character   |
+| `409`  | "Character is already in a story" | Character has an active story      |
+| `401`  | "Unauthorized"                    | Invalid or missing JWT token       |
+| `500`  | "Internal server error"           | Database or system failure         |
+
+---
+
+### Abandon Story
+
+Abandons the current active story for a character.
+
+**Endpoint:** `POST /story/abandon`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+| Parameter     | Type   | Required | Description                       |
+| ------------- | ------ | -------- | --------------------------------- |
+| `CharacterID` | String | Yes      | UUID of the character             |
+
+**Request:**
+
+```http
+POST /story/abandon?CharacterID=550e8400-e29b-41d4-a716-446655440000 HTTP/1.1
+Authorization: Bearer <jwt-token>
+```
+
+**Response:**
+
+```json
+{
+  "Message": "Story abandoned successfully"
+}
+```
+
+**Error Responses:**
+
+| Status | Error Message           | Cause                          |
+| ------ | ----------------------- | ------------------------------ |
+| `400`  | "No active story found" | Character has no active story  |
+| `401`  | "Unauthorized"          | Invalid or missing JWT token   |
+| `500`  | "Internal server error" | Database or system failure     |
+
+---
+
+### Submit Segment Decision
+
+Submits a player decision for the current active segment.
+
+**Endpoint:** `POST /segment/decision`
+
+**Authentication:** Required
+
+**Request:**
+
+```http
+POST /segment/decision HTTP/1.1
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+  "Decision": "fight"
+}
+```
+
+**Request Body:**
+
+| Field         | Type   | Required | Description                         |
+| ------------- | ------ | -------- | ----------------------------------- |
+| `CharacterID` | String | Yes      | UUID of the character               |
+| `Decision`    | String | Yes      | Player's decision for the segment   |
+
+**Response:**
+
+```json
+{
+  "Message": "Decision submitted successfully"
+}
+```
+
+**Error Responses:**
+
+| Status | Error Message              | Cause                          |
+| ------ | -------------------------- | ------------------------------ |
+| `404`  | "Segment not found"        | No active segment found        |
+| `409`  | "Decision already submitted" | Decision was already made     |
+| `401`  | "Unauthorized"             | Invalid or missing JWT token   |
+| `500`  | "Internal server error"    | Database or system failure     |
+
+---
+
+### Get Segment Outcome
+
+Retrieves the outcome of a completed segment.
+
+**Endpoint:** `GET /segment/outcome`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+| Parameter     | Type   | Required | Description                       |
+| ------------- | ------ | -------- | --------------------------------- |
+| `CharacterID` | String | Yes      | UUID of the character             |
+| `SegmentID`   | String | Yes      | UUID of the segment               |
+
+**Request:**
+
+```http
+GET /segment/outcome?CharacterID=550e8400-e29b-41d4-a716-446655440000&SegmentID=segment_uuid HTTP/1.1
+Authorization: Bearer <jwt-token>
+```
+
+**Response:**
+
+```json
+{
+  "Outcome": {
+    "Result": "success",
+    "Rewards": {
+      "gold": 50,
+      "experience": 100
+    },
+    "Consequences": {
+      "wounds": 1
+    },
+    "NextSegment": "segment_next_uuid"
+  }
+}
+```
+
+**Error Responses:**
+
+| Status | Error Message              | Cause                          |
+| ------ | -------------------------- | ------------------------------ |
+| `404`  | "Segment not found"        | Segment doesn't exist          |
+| `409`  | "Segment not yet completed" | Segment is still processing    |
+| `401`  | "Unauthorized"             | Invalid or missing JWT token   |
+| `500`  | "Internal server error"    | Database or system failure     |
+
+---
+
+### Get Segment Status
+
+Gets the current status of an active segment.
+
+**Endpoint:** `GET /segment/status`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+| Parameter     | Type   | Required | Description                       |
+| ------------- | ------ | -------- | --------------------------------- |
+| `CharacterID` | String | Yes      | UUID of the character             |
+
+**Request:**
+
+```http
+GET /segment/status?CharacterID=550e8400-e29b-41d4-a716-446655440000 HTTP/1.1
+Authorization: Bearer <jwt-token>
+```
+
+**Response:**
+
+```json
+{
+  "Status": "active",
+  "TimeRemaining": 120,
+  "DecisionSubmitted": false
+}
+```
+
+**Error Responses:**
+
+| Status | Error Message           | Cause                          |
+| ------ | ----------------------- | ------------------------------ |
+| `404`  | "No active segment found" | No active segment exists      |
+| `401`  | "Unauthorized"          | Invalid or missing JWT token   |
+| `500`  | "Internal server error" | Database or system failure     |
+
+---
+
+### Get Segment History
+
+Retrieves historical segment data for a character.
+
+**Endpoint:** `GET /segment/history`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+| Parameter     | Type   | Required | Description                       |
+| ------------- | ------ | -------- | --------------------------------- |
+| `CharacterID` | String | Yes      | UUID of the character             |
+
+**Request:**
+
+```http
+GET /segment/history?CharacterID=550e8400-e29b-41d4-a716-446655440000 HTTP/1.1
+Authorization: Bearer <jwt-token>
+```
+
+**Response:**
+
+```json
+{
+  "Segments": [
+    {
+      "SegmentID": "segment_uuid_1",
+      "CompletedAt": "2025-01-15T14:30:00Z",
+      "Outcome": "success",
+      "StoryID": "story_uuid"
+    },
+    {
+      "SegmentID": "segment_uuid_2",
+      "CompletedAt": "2025-01-15T14:35:00Z",
+      "Outcome": "failure",
+      "StoryID": "story_uuid"
+    }
+  ]
+}
+```
+
+**Error Responses:**
+
+| Status | Error Message           | Cause                          |
+| ------ | ----------------------- | ------------------------------ |
+| `404`  | "No history found"      | No segment history exists      |
+| `401`  | "Unauthorized"          | Invalid or missing JWT token   |
+| `500`  | "Internal server error" | Database or system failure     |
+
+---
+
+### Character Rest
+
+Initiates a rest segment for character healing.
+
+**Endpoint:** `POST /segment/rest`
+
+**Authentication:** Required
+
+**Request:**
+
+```http
+POST /segment/rest HTTP/1.1
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Request Body:**
+
+| Field         | Type   | Required | Description                         |
+| ------------- | ------ | -------- | ----------------------------------- |
+| `CharacterID` | String | Yes      | UUID of the character               |
+
+**Response:**
+
+```json
+{
+  "Segment": {
+    "ActiveSegmentID": "rest_segment_uuid",
+    "SegmentType": "rest",
+    "Status": "active",
+    "StartTime": 1704900000,
+    "EndTime": 1704903600,
+    "HealingAmount": 2
+  }
+}
+```
+
+**Error Responses:**
+
+| Status | Error Message                     | Cause                              |
+| ------ | --------------------------------- | ---------------------------------- |
+| `409`  | "Character is already in a segment" | Character has an active segment   |
+| `401`  | "Unauthorized"                    | Invalid or missing JWT token       |
+| `500`  | "Internal server error"           | Database or system failure         |

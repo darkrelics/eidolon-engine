@@ -26,7 +26,7 @@ tags:
     description: Segment processing and polling operations
 
 paths:
-  /archetypes:
+  /archetype:
     get:
       tags:
         - Archetypes
@@ -82,7 +82,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /characters:
+  /character/list:
     get:
       tags:
         - Characters
@@ -124,6 +124,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /character:
     post:
       tags:
         - Characters
@@ -195,7 +196,6 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /character:
     get:
       tags:
         - Characters
@@ -360,26 +360,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /character/list:
-    get:
-      tags:
-        - Characters
-      summary: List player characters (deployed route)
-      description: Retrieves a list of characters for the authenticated player.
-      operationId: listCharactersDeployed
-      responses:
-        "200":
-          description: Successfully retrieved character list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CharacterListResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-
-  /stories/start:
+  /story/start:
     post:
       tags:
         - Stories
@@ -435,7 +416,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /stories/abandon:
+  /story/abandon:
     post:
       tags:
         - Stories
@@ -467,7 +448,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /segments/decision:
+  /segment/decision:
     post:
       tags:
         - Segments
@@ -517,7 +498,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /segments/outcome:
+  /segment/outcome:
     get:
       tags:
         - Segments
@@ -566,7 +547,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /segments/status:
+  /segment/status:
     get:
       tags:
         - Segments
@@ -604,7 +585,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /segments/history:
+  /segment/history:
     get:
       tags:
         - Segments
@@ -636,7 +617,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /segments/rest:
+  /segment/rest:
     post:
       tags:
         - Segments
@@ -939,6 +920,16 @@ components:
           type: string
           description: Success confirmation message
           example: Character created successfully
+
+    CharacterDeleteResponse:
+      type: object
+      required:
+        - Message
+      properties:
+        Message:
+          type: string
+          description: Success confirmation message
+          example: Character deleted successfully
 
     CharacterDetailResponse:
       type: object
