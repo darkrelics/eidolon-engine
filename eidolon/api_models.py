@@ -8,12 +8,7 @@ API wire contracts explicit.
 
 from pydantic import Field
 
-from .models import (
-    BaseEidolonModel,
-    ChallengeResultModel,
-    ClientEvent,
-    CombatStateModel,
-)
+from .models import BaseEidolonModel, ChallengeResultModel, ClientEvent, CombatStateModel
 
 
 class SegmentStatusResponse(BaseEidolonModel):

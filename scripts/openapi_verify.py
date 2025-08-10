@@ -23,6 +23,7 @@ FLUTTER_API = REPO_ROOT / "incremental" / "lib" / "services" / "api_service.dart
 
 
 def load_spec_paths(spec_path: Path) -> set[str]:
+    """Load API paths from OpenAPI specification."""
     with spec_path.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     paths = data.get("paths", {}) or {}
@@ -78,6 +79,7 @@ def parse_cdk_routes(cdk_path: Path) -> dict[str, set[str]]:
 
 
 def parse_flutter_paths(api_path: Path) -> set[str]:
+    """Parse Flutter API service to extract API paths."""
     text = api_path.read_text(encoding="utf-8")
     # Find Uri.parse('$baseUrl/<path>') occurrences
     # Handles both single-quoted and double-quoted, and string interpolation
@@ -94,6 +96,7 @@ def parse_flutter_paths(api_path: Path) -> set[str]:
 
 
 def main() -> int:
+    """Check OpenAPI spec consistency with CDK and Flutter code."""
     missing_from_spec: list[str] = []
     extra_in_spec: list[str] = []
 

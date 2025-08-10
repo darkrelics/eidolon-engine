@@ -10,7 +10,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from eidolon.validation_messages import validate_processing_message, validate_advancement_message
+from eidolon.validation_messages import validate_advancement_message, validate_processing_message
 
 
 def test_valid_processing_message():
@@ -222,9 +222,8 @@ def main():
     if all_passed:
         print("ALL TESTS PASSED")
         return 0
-    else:
-        print("SOME TESTS FAILED")
-        return 1
+    print("SOME TESTS FAILED")
+    return 1
 
 
 if __name__ == "__main__":

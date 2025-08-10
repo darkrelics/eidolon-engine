@@ -9,6 +9,7 @@ Returns completed segment results from the character's story history.
 
 from botocore.exceptions import ClientError
 
+from eidolon.api_models import SegmentHistoryItem, SegmentHistoryResponse
 from eidolon.character_data import character_get
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
@@ -17,7 +18,6 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.api_models import SegmentHistoryItem, SegmentHistoryResponse
 
 
 def get_segment_history_business_logic(character_id: str, player_id: str) -> SegmentHistoryResponse:
@@ -47,7 +47,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
     if not story_id:
         # No active story, return empty history
         logger.info(f"No active story for character for {character_id}")
-        return SegmentHistoryResponse(character_id=character_id, story_id=None, segments=[])
+        return SegmentHistoryResponse(CharacterID=character_id, StoryID=None, Segments=[])
 
     # Query completed segments from ActiveSegments table
     # This gives us the full segment data including ClientEvents, CharacterUpdates, etc.
@@ -115,9 +115,9 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
         formatted_segments.append(SegmentHistoryItem.model_validate(formatted_segment_dict))
 
     # Sort by start time, newest first
-    formatted_segments.sort(key=lambda x: x.get("StartTime", 0), reverse=True)
+    formatted_segments.sort(key=lambda x: x.start_time or 0, reverse=True)
 
-    response = SegmentHistoryResponse(character_id=character_id, story_id=story_id, segments=formatted_segments)
+    response = SegmentHistoryResponse(CharacterID=character_id, StoryID=story_id, Segments=formatted_segments)
 
     logger.info(f"Segment history retrieved for {character_id}")
 
@@ -177,7 +177,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         response_data = get_segment_history_business_logic(character_id, player_id)  # type: ignore
-        return lambda_response(200, response_data, event)
+        return lambda_response(200, response_data.model_dump(by_alias=True), event)
     except ValueError as err:
         logger.warning(f"Invalid request for {character_id} Error: {err}")
         if "not found" in str(err).lower():
