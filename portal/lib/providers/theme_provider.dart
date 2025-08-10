@@ -128,13 +128,13 @@ class ThemeProvider extends ChangeNotifier {
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        labelStyle: TextStyle(color: darkTextSecondary),
-        floatingLabelStyle: TextStyle(color: accentPurple),
+        labelStyle: const TextStyle(color: darkTextSecondary),
+        floatingLabelStyle: const TextStyle(color: accentPurple),
         hintStyle: TextStyle(color: darkTextSecondary.withValues(alpha: 0.7)),
-        enabledBorder: UnderlineInputBorder(
+        enabledBorder: const UnderlineInputBorder(
           borderSide: BorderSide(color: darkDivider),
         ),
-        focusedBorder: UnderlineInputBorder(
+        focusedBorder: const UnderlineInputBorder(
           borderSide: BorderSide(color: accentPurple),
         ),
         errorBorder: const UnderlineInputBorder(
@@ -145,14 +145,14 @@ class ThemeProvider extends ChangeNotifier {
         ),
         filled: true,
         fillColor: darkSurface.withValues(alpha: 0.5),
-      )
+      ),
       textTheme: Typography.material2021().white.copyWith(
-        bodyLarge: TextStyle(color: darkTextPrimary),
-        bodyMedium: TextStyle(color: darkTextPrimary),
-        titleLarge: TextStyle(color: darkTextPrimary),
-        titleMedium: TextStyle(color: darkTextPrimary),
-        titleSmall: TextStyle(color: darkTextPrimary),
-        labelLarge: TextStyle(color: darkTextPrimary),
+        bodyLarge: const TextStyle(color: darkTextPrimary),
+        bodyMedium: const TextStyle(color: darkTextPrimary),
+        titleLarge: const TextStyle(color: darkTextPrimary),
+        titleMedium: const TextStyle(color: darkTextPrimary),
+        titleSmall: const TextStyle(color: darkTextPrimary),
+        labelLarge: const TextStyle(color: darkTextPrimary),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -173,32 +173,32 @@ class ThemeProvider extends ChangeNotifier {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: accentPurple,
-          side: BorderSide(color: accentPurple),
+          side: const BorderSide(color: accentPurple),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: darkBackground,
         foregroundColor: darkTextPrimary,
         elevation: 0,
       ),
-      progressIndicatorTheme: ProgressIndicatorThemeData(
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: accentPurple,
       ),
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(foregroundColor: darkTextPrimary),
       ),
-      floatingActionButtonTheme: FloatingActionButtonThemeData(
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: accentPurple,
         foregroundColor: Colors.white,
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: darkSurface,
-        contentTextStyle: TextStyle(color: darkTextPrimary),
+        contentTextStyle: const TextStyle(color: darkTextPrimary),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         behavior: SnackBarBehavior.floating,
       ),
-      dividerTheme: DividerThemeData(
+      dividerTheme: const DividerThemeData(
         color: darkDivider,
         thickness: 1,
       ),
@@ -249,17 +249,17 @@ class ThemeProvider extends ChangeNotifier {
         color: lightSurface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: lightDivider),
+          side: const BorderSide(color: lightDivider),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        labelStyle: TextStyle(color: lightTextSecondary),
-        floatingLabelStyle: TextStyle(color: primaryBlue),
+        labelStyle: const TextStyle(color: lightTextSecondary),
+        floatingLabelStyle: const TextStyle(color: primaryBlue),
         hintStyle: TextStyle(color: lightTextSecondary.withValues(alpha: 0.7)),
-        enabledBorder: UnderlineInputBorder(
+        enabledBorder: const UnderlineInputBorder(
           borderSide: BorderSide(color: lightDivider),
         ),
-        focusedBorder: UnderlineInputBorder(
+        focusedBorder: const UnderlineInputBorder(
           borderSide: BorderSide(color: primaryBlue),
         ),
         errorBorder: const UnderlineInputBorder(
@@ -272,12 +272,12 @@ class ThemeProvider extends ChangeNotifier {
         fillColor: lightSurface.withValues(alpha: 0.05),
       ),
       textTheme: Typography.material2021().black.copyWith(
-        bodyLarge: TextStyle(color: lightTextPrimary),
-        bodyMedium: TextStyle(color: lightTextPrimary),
-        titleLarge: TextStyle(color: lightTextPrimary),
-        titleMedium: TextStyle(color: lightTextPrimary),
-        titleSmall: TextStyle(color: lightTextPrimary),
-        labelLarge: TextStyle(color: lightTextPrimary),
+        bodyLarge: const TextStyle(color: lightTextPrimary),
+        bodyMedium: const TextStyle(color: lightTextPrimary),
+        titleLarge: const TextStyle(color: lightTextPrimary),
+        titleMedium: const TextStyle(color: lightTextPrimary),
+        titleSmall: const TextStyle(color: lightTextPrimary),
+        labelLarge: const TextStyle(color: lightTextPrimary),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -298,32 +298,32 @@ class ThemeProvider extends ChangeNotifier {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: primaryBlue,
-          side: BorderSide(color: primaryBlue),
+          side: const BorderSide(color: primaryBlue),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: lightBackground,
         foregroundColor: lightTextPrimary,
         elevation: 0,
       ),
-      progressIndicatorTheme: ProgressIndicatorThemeData(
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: primaryBlue,
       ),
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(foregroundColor: lightTextPrimary),
       ),
-      floatingActionButtonTheme: FloatingActionButtonThemeData(
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: primaryBlue,
         foregroundColor: Colors.white,
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: lightSurface,
-        contentTextStyle: TextStyle(color: lightTextPrimary),
+        contentTextStyle: const TextStyle(color: lightTextPrimary),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         behavior: SnackBarBehavior.floating,
       ),
-      dividerTheme: DividerThemeData(
+      dividerTheme: const DividerThemeData(
         color: lightDivider,
         thickness: 1,
       ),
