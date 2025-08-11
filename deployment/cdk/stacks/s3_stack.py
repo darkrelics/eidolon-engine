@@ -78,7 +78,7 @@ class S3Stack(Stack):
         self.scripts_bucket = self.get_or_create_bucket(
             "scripts-bucket",
             scripts_bucket_name or "darkrelics-scripts",
-            public_read=True,
+            public_read=False,  # Block all public access per security requirements
         )
 
         # Handle lambda bucket
@@ -165,14 +165,17 @@ class S3Stack(Stack):
                 bucket_props["website_index_document"] = website_config.get("index_document", "index.html")
                 bucket_props["website_error_document"] = website_config.get("error_document", "error.html")
 
+            # Always block public access for security
+            bucket_props["block_public_access"] = s3.BlockPublicAccess(
+                block_public_acls=True,
+                block_public_policy=True,
+                ignore_public_acls=True,
+                restrict_public_buckets=True,
+            )
+            
             if public_read:
-                bucket_props["public_read_access"] = True
-                bucket_props["block_public_access"] = s3.BlockPublicAccess(
-                    block_public_acls=False,
-                    block_public_policy=False,
-                    ignore_public_acls=False,
-                    restrict_public_buckets=False,
-                )
+                # Log warning but still block public access
+                print(f"WARNING: public_read requested for {bucket_name} but blocked for security")
 
             bucket = s3.Bucket(self, logical_id, **bucket_props)
             print(f"Creating new S3 bucket: {bucket_name}")

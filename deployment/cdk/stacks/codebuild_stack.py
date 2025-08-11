@@ -94,14 +94,19 @@ class CodeBuildStack(Stack):
         # Grant CodeBuild permissions to write to S3
         self.portal_bucket.grant_read_write(self.build_project)
 
-        # Grant CodeBuild permissions to create CloudFront invalidations if distribution ID is provided
+        # Grant CodeBuild permissions to create CloudFront invalidations
+        # Use specific distribution ARN if provided, otherwise use wildcard
         if cloudfront_distribution_id:
-            self.build_project.add_to_role_policy(
-                iam.PolicyStatement(
-                    actions=["cloudfront:CreateInvalidation"],
-                    resources=[f"arn:aws:cloudfront::{self.account}:distribution/{cloudfront_distribution_id}"],
-                )
+            cloudfront_resource = f"arn:aws:cloudfront::{self.account}:distribution/{cloudfront_distribution_id}"
+        else:
+            cloudfront_resource = "*"
+            
+        self.build_project.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["cloudfront:CreateInvalidation"],
+                resources=[cloudfront_resource],
             )
+        )
 
         # Create Lambda layer build project if lambda bucket is provided
         if lambda_bucket:
