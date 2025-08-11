@@ -4,14 +4,23 @@
 
 Complete replacement of the existing monolithic deployment system with a clean, modular architecture focused on simplicity and maintainability.
 
-## Status: DynamoDB Stack Complete (Phase 1)
+## Status: DynamoDB Stack Complete (Phase 1) - Enhanced
 
 ### Completed Work
 - Core infrastructure modules (config.py, state.py, dynamodb_tables.py)
 - DynamoDB CDK stack with 14 tables and IAM policy
-- Deployment orchestrator (deploy.py)
+- Deployment orchestrator (deploy.py) with proper error handling and validation
 - CDK application entry point (app.py)
 - Documentation updates
+- Path handling fixes for cross-platform compatibility
+- Account ID caching to prevent redundant API calls
+- Flexible policy validation for future expansion
+- Refactored deploy.py with clean separation of concerns
+- DeploymentParams dataclass for parameter management
+- CDK bootstrap verification
+- Table status validation with retry logic
+- Config template auto-copy functionality
+- Enhanced error output capturing both stdout and stderr
 
 ### Lessons Learned
 1. **No Over-Engineering**: Avoided unnecessary abstractions (no factories, no complex class hierarchies)
@@ -21,6 +30,18 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 5. **Simple Naming**: Fixed table names without prefixes, single IAM policy with clear name
 6. **Professional Output**: Use [OK], [MISSING] instead of emoji characters
 7. **Proper Module Naming**: Use specific names (dynamodb_tables.py) instead of generic (constants.py)
+8. **Path Handling**: Use pathlib.Path consistently for POSIX-style cross-platform compatibility
+9. **Caching**: Use @functools.cache decorator for AWS account ID to avoid redundant API calls
+10. **Flexible Validation**: Design validation functions to handle lists/multiple resources for easy expansion
+11. **CDK v2 GSI Handling**: CDK automatically manages attribute definitions for GSI keys - no manual definition needed
+12. **Import Organization**: Run scripts from their directory rather than manipulating sys.path
+13. **Main Function Clarity**: Main should only orchestrate, not implement - separate functions for verify, input, deploy, validate, and update
+14. **Parameter Management**: Use dataclasses for deployment parameters (region, account_id)
+15. **User Input Collection**: Dedicated function for collecting user input with defaults
+16. **Race Condition Handling**: Check table status, not just existence - retry if CREATING
+17. **No Dynamic Imports**: All imports at module level for clarity
+18. **Config Templates**: Auto-copy config.template.yml to config.yml if missing
+19. **CDK Subprocess Reality**: CDK requires subprocess invocation - accepted as necessary
 
 ## Current System Issues
 
@@ -232,6 +253,22 @@ Game:
   }
 }
 ```
+
+## Remaining Issues to Address
+
+### Resolved Issues
+1. ~~CDK Bootstrap Check~~ ✓ Implemented
+2. ~~Error Output~~ ✓ Capturing both stdout and stderr
+3. ~~State File Safety~~ - Not implementing
+4. ~~Table Status Validation~~ ✓ Retry logic implemented
+5. **Region Validation**: Validate AWS region before attempting deployment - PENDING
+6. **Progress Indication**: Add progress feedback during long CDK operations - PENDING  
+7. ~~Config Path Validation~~ ✓ Auto-creates from template
+
+### Additional Considerations
+- **Subprocess Dependency**: CDK requires subprocess invocation - Accepted as necessary
+- **Hardcoded Table List**: Table names duplicated between dynamodb_tables.py and validate_tables()
+- **Limited Retry Logic**: Only one 10-second retry for CREATING tables
 
 ## Implementation Phases
 

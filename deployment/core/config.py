@@ -16,7 +16,7 @@ class Config:
     # Table name mappings (logical to physical)
     dynamodb_tables: dict = field(default_factory=dict)
     
-    def save(self, path: str = "config.yml") -> None:
+    def save(self, path: str) -> None:
         """Save operational configuration to config.yml."""
         config_path = Path(path)
         
@@ -35,14 +35,26 @@ class Config:
             yaml.dump(existing_config, f, default_flow_style=False, sort_keys=False)
     
     @classmethod
-    def load(cls, path: str = "config.yml") -> "Config":
-        """Load configuration from config.yml if it exists."""
+    def load(cls, path: str) -> "Config":
+        """Load configuration from config.yml, creating from template if needed."""
         config_path = Path(path)
         instance = cls()
         
+        # If config.yml doesn't exist, copy from template
         if not config_path.exists():
-            return instance
+            template_path = config_path.parent / "config.template.yml"
+            if template_path.exists():
+                print(f"Creating config.yml from template...")
+                with open(template_path, "r") as template_file:
+                    template_data = template_file.read()
+                with open(config_path, "w") as config_file:
+                    config_file.write(template_data)
+                print(f"Config file created at {config_path}")
+            else:
+                # No template, return defaults
+                return instance
         
+        # Load the config file
         with open(config_path, "r") as f:
             data = yaml.safe_load(f) or {}
         

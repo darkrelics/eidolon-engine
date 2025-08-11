@@ -28,7 +28,7 @@ class CDKState:
         }
         self.last_updated = datetime.now().isoformat()
     
-    def save(self, path: str = ".cdk-state.json") -> None:
+    def save(self, path: str) -> None:
         """Save state to JSON file."""
         state_path = Path(path)
         state_data = {
@@ -41,7 +41,7 @@ class CDKState:
             json.dump(state_data, f, indent=2)
     
     @classmethod
-    def load(cls, path: str = ".cdk-state.json") -> "CDKState":
+    def load(cls, path: str) -> "CDKState":
         """Load state from JSON file if it exists."""
         state_path = Path(path)
         instance = cls()
