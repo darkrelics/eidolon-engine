@@ -233,7 +233,7 @@ class LambdaStack(cdk.Stack):
 
         # Create all Lambda functions
         self.create_character_management_functions(dependencies_layer)
-        self.create_cognito_trigger_functions(dependencies_layer)
+        # Note: Cognito trigger functions are created in a separate stack to avoid circular dependencies
         self.create_incremental_story_functions(dependencies_layer)
 
         # Configure API routes
@@ -357,35 +357,6 @@ class LambdaStack(cdk.Stack):
             dependencies_layer,
         )
 
-    def create_cognito_trigger_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
-        """Create Lambda functions for Cognito triggers.
-
-        Args:
-            dependencies_layer: Lambda layer
-        """
-        # New Player Trigger Lambda
-        self.cognito_new_player_function = self.create_lambda_function(
-            "cognito-player-new",
-            "cognito_player_new.lambda_handler",
-            {
-                "PLAYERS_TABLE": self.players_table,
-            },
-            "Creates new player entry when user signs up",
-            dependencies_layer,
-        )
-
-        # Delete Player Trigger Lambda
-        self.cognito_delete_player_function = self.create_lambda_function(
-            "cognito-player-delete",
-            "cognito_player_delete.lambda_handler",
-            {
-                "PLAYERS_TABLE": self.players_table,
-                "CHARACTERS_TABLE": self.characters_table,
-                "ITEMS_TABLE": self.items_table,
-            },
-            "Cleans up player data when user account is deleted",
-            dependencies_layer,
-        )
 
     def create_incremental_story_functions(self, dependencies_layer: lambda_.ILayerVersion) -> None:
         """Create Lambda functions for incremental story management.

@@ -13,11 +13,14 @@ from pathlib import Path
 
 import aws_cdk as cdk
 import yaml
+from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_iam as iam
 from stacks.base_lambda_stack import BaseLambdaStack
 from stacks.cloudfront_stack import CloudFrontStack
 from stacks.cloudwatch_stack import CloudWatchStack
 from stacks.codebuild_stack import CodeBuildStack
 from stacks.cognito_stack import CognitoStack
+from stacks.cognito_trigger_stack import CognitoTriggerStack
 from stacks.dynamodb_stack import DynamoDBStack
 from stacks.iam_stack import IAMStack
 from stacks.lambda_stack import LambdaStack
@@ -520,6 +523,9 @@ class EidolonEngineApp:
 
         # Create application stacks (Lambda, API Gateway)
         self.create_application_stacks(env, params)
+        
+        # Create Cognito trigger stack (separate to avoid circular dependencies)
+        self.create_cognito_triggers(env, params)
 
         # Create distribution layer (CloudFront)
         self.create_distribution_layer(env, params)
@@ -712,6 +718,41 @@ class EidolonEngineApp:
             env=env,
         )
         self.cloudfront_stack.add_dependency(self.s3_stack)
+    
+    def create_cognito_triggers(self, env: cdk.Environment, params: dict) -> None:
+        """Create Cognito trigger Lambda functions in a separate stack."""
+        if not self.cognito_stack:
+            return
+            
+        # Get unified table names
+        unified_tables: dict = self.get_unified_table_names(params)
+        
+        # Create the Cognito trigger stack
+        self.cognito_trigger_stack = CognitoTriggerStack(
+            self.app,
+            "cognito-triggers",
+            lambda_bucket=self.s3_stack.lambda_bucket,
+            players_table=unified_tables.get("Players", "players"),
+            characters_table=unified_tables.get("Characters", "characters"),
+            items_table=unified_tables.get("Items", "items"),
+            active_segments_table=unified_tables.get("ActiveSegments", "active_segments"),
+            story_history_table=unified_tables.get("StoryHistory", "story_history"),
+            cognito_user_pool_arn=self.cognito_stack.user_pool.user_pool_arn,
+            dependencies_layer=self.base_lambda_stack.dependencies_layer,
+            allowed_cors_origins=[],
+            env=env,
+        )
+        
+        # Add dependencies
+        self.cognito_trigger_stack.add_dependency(self.base_lambda_stack)
+        self.cognito_trigger_stack.add_dependency(self.dynamodb_stack)
+        self.cognito_trigger_stack.add_dependency(self.s3_stack)
+        
+        # Now connect the trigger to Cognito
+        self.cognito_stack.user_pool.add_trigger(
+            cognito.UserPoolOperation.POST_CONFIRMATION,
+            self.cognito_trigger_stack.cognito_new_player_function
+        )
 
     def get_unified_table_names(self, params: dict) -> dict:
         """Get unified table names for all deployment modes.
