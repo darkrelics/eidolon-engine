@@ -59,8 +59,8 @@ class Config:
             data = yaml.safe_load(f) or {}
         
         if "AWS" in data:
-            instance.region = data["AWS"].get("Region", instance.region)
+            instance.region = data.get("AWS", {}).get("Region", instance.region)
         if "DynamoDB" in data:
-            instance.dynamodb_tables = data["DynamoDB"].get("Tables", {})
+            instance.dynamodb_tables = data.get("DynamoDB", {}).get("Tables", {})
         
         return instance

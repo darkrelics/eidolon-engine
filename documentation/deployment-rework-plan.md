@@ -4,7 +4,7 @@
 
 Complete replacement of the existing monolithic deployment system with a clean, modular architecture focused on simplicity and maintainability.
 
-## Status: DynamoDB Stack Complete (Phase 1) - Enhanced
+## Status: DynamoDB Stack Complete (Phase 1) - Enhanced with Import Support
 
 ### Completed Work
 - Core infrastructure modules (config.py, state.py, dynamodb_tables.py)
@@ -21,6 +21,10 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 - Table status validation with retry logic
 - Config template auto-copy functionality
 - Enhanced error output capturing both stdout and stderr
+- **Table import support** - Import existing tables from CDK context or AWS
+- **Schema validation** - Validate existing tables match expected schema
+- **CfnDeletionPolicy.RETAIN** - Prevent accidental data loss during stack updates
+- **Safe dictionary access** - Replaced all square bracket access with .get() method
 
 ### Lessons Learned
 1. **No Over-Engineering**: Avoided unnecessary abstractions (no factories, no complex class hierarchies)
@@ -42,6 +46,11 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 17. **No Dynamic Imports**: All imports at module level for clarity
 18. **Config Templates**: Auto-copy config.template.yml to config.yml if missing
 19. **CDK Subprocess Reality**: CDK requires subprocess invocation - accepted as necessary
+20. **Table Import Support**: Check CDK context and AWS for existing tables before creating new ones
+21. **Schema Validation**: Validate partition and sort keys match expected configuration
+22. **Data Retention**: Always use RemovalPolicy.RETAIN and CfnDeletionPolicy.RETAIN for DynamoDB
+23. **Safe Dictionary Access**: Use .get() method instead of square brackets to prevent KeyError
+24. **Nested Dictionary Access**: Chain .get() calls with default empty dict for intermediate levels
 
 ## Current System Issues
 
@@ -78,10 +87,17 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 
 ## Detailed Stack Resources
 
-### 1. DynamoDB Stack
+### 1. DynamoDB Stack  
 **Resources:**
-- 11 tables: players, characters, rooms, exits, items, prototypes, archetypes, motd, story, segments, active_segments
+- 14 tables: players, characters, rooms, exits, items, prototypes, archetypes, motd, story, segments, active_segments, opponents, story_history, segment_history
 - Single IAM managed policy for DynamoDB read/write access
+- Global Secondary Indexes on characters, active_segments tables
+
+**Features:**
+- Import existing tables from CDK context or AWS
+- Schema validation before import
+- Automatic creation if tables don't exist
+- Data retention with RemovalPolicy.RETAIN and CfnDeletionPolicy.RETAIN
 
 **Config.yml Output:**
 - Table name mappings only

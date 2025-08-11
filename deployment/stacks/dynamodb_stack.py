@@ -29,7 +29,7 @@ class DynamoDBStack(Stack):
 
         # Create or import each table from configuration
         for config in TABLE_CONFIGS:
-            table_name = config["name"]
+            table_name = config.get("name", "")
 
             # Check if we should use an existing table from context
             if table_name in self.existing_tables:
@@ -43,9 +43,9 @@ class DynamoDBStack(Stack):
                     table = dynamodb.Table.from_table_name(self, f"{table_name}-imported", table_name)
                 else:
                     print(f"ERROR: Table {table_name} exists but has incorrect schema!")
-                    print(f"Expected partition key: {config['partition_key']['name']}")
+                    print(f"Expected partition key: {config.get('partition_key', {}).get('name', '')}")
                     if "sort_key" in config:
-                        print(f"Expected sort key: {config['sort_key']['name']}")
+                        print(f"Expected sort key: {config.get('sort_key', {}).get('name', '')}")
                     else:
                         print("Expected no sort key")
                     print("Please manually delete or migrate the table before deploying.")
@@ -57,19 +57,19 @@ class DynamoDBStack(Stack):
 
             self.tables[table_name] = table
             table_arns.append(table.table_arn)
-            table_outputs[config["name"]] = table.table_name
+            table_outputs[config.get("name", "")] = table.table_name
 
             # Collect GSI ARNs if present
             if "gsi" in config:
-                for gsi in config["gsi"]:
-                    index_arns.append(f"{table.table_arn}/index/{gsi['name']}")
+                for gsi in config.get("gsi", []):
+                    index_arns.append(f"{table.table_arn}/index/{gsi.get('name', '')}")
 
             # Create output for each table
             CfnOutput(
                 self,
-                f"{config['name'].replace('_', '')}TableName",
+                f"{config.get('name', '').replace('_', '')}TableName",
                 value=table.table_name,
-                description=f"DynamoDB table name for {config['name']}"
+                description=f"DynamoDB table name for {config.get('name', '')}"
             )
 
         # Create single IAM managed policy for DynamoDB access
@@ -112,31 +112,31 @@ class DynamoDBStack(Stack):
         """Create a DynamoDB table from configuration."""
         # Base table properties
         table_props = {
-            "table_name": config["name"],
+            "table_name": config.get("name", ""),
             "billing_mode": dynamodb.BillingMode.PAY_PER_REQUEST,
             "removal_policy": RemovalPolicy.RETAIN,
             "point_in_time_recovery": False,  # Can be enabled if needed
         }
 
         # Add partition key
-        partition_key = config["partition_key"]
+        partition_key = config.get("partition_key", {})
         table_props["partition_key"] = dynamodb.Attribute(
-            name=partition_key["name"],
-            type=get_attribute_type(partition_key["type"])
+            name=partition_key.get("name", ""),
+            type=get_attribute_type(partition_key.get("type", ""))
         )
 
         # Add sort key if present
         if "sort_key" in config:
-            sort_key = config["sort_key"]
+            sort_key = config.get("sort_key", {})
             table_props["sort_key"] = dynamodb.Attribute(
-                name=sort_key["name"],
-                type=get_attribute_type(sort_key["type"])
+                name=sort_key.get("name", ""),
+                type=get_attribute_type(sort_key.get("type", ""))
             )
 
         # Create the table
         table = dynamodb.Table(
             self,
-            f"{config['name'].replace('_', '')}Table",
+            f"{config.get('name', '').replace('_', '')}Table",
             **table_props
         )
 
@@ -147,7 +147,7 @@ class DynamoDBStack(Stack):
 
         # Add GSIs if present
         if "gsi" in config:
-            for gsi_config in config["gsi"]:
+            for gsi_config in config.get("gsi", []):
                 add_gsi(table, gsi_config)
 
         return table
@@ -155,7 +155,7 @@ class DynamoDBStack(Stack):
     def _load_existing_tables_from_context(self) -> None:
         """Load existing table names from CDK context."""
         for config in TABLE_CONFIGS:
-            table_name = config["name"]
+            table_name = config.get("name", "")
             context_key = f"dynamodb_{table_name}_table"
             existing_table_name = self.node.try_get_context(context_key)
             if existing_table_name:
@@ -196,13 +196,13 @@ class DynamoDBStack(Stack):
         try:
             dynamodb_client = boto3.client("dynamodb", region_name=self.region)
             response = dynamodb_client.describe_table(TableName=table_name)
-            key_schema = response["Table"]["KeySchema"]
+            key_schema = response.get("Table", {}).get("KeySchema", [])
 
             # Check partition key
-            pk_name = config["partition_key"]["name"]
+            pk_name = config.get("partition_key", {}).get("name", "")
             pk_found = False
             for key in key_schema:
-                if key["KeyType"] == "HASH" and key["AttributeName"] == pk_name:
+                if key.get("KeyType") == "HASH" and key.get("AttributeName") == pk_name:
                     pk_found = True
                     break
 
@@ -212,11 +212,11 @@ class DynamoDBStack(Stack):
 
             # Check sort key
             if "sort_key" in config:
-                sk_name = config["sort_key"]["name"]
+                sk_name = config.get("sort_key", {}).get("name", "")
                 # Table should have a sort key
                 sk_found = False
                 for key in key_schema:
-                    if key["KeyType"] == "RANGE" and key["AttributeName"] == sk_name:
+                    if key.get("KeyType") == "RANGE" and key.get("AttributeName") == sk_name:
                         sk_found = True
                         break
                 if not sk_found:
@@ -225,8 +225,8 @@ class DynamoDBStack(Stack):
             else:
                 # Table should NOT have a sort key
                 for key in key_schema:
-                    if key["KeyType"] == "RANGE":
-                        print(f"WARNING: Table {table_name} has unexpected sort key: {key['AttributeName']}")
+                    if key.get("KeyType") == "RANGE":
+                        print(f"WARNING: Table {table_name} has unexpected sort key: {key.get('AttributeName', '')}")
                         return False
 
             return True
@@ -238,18 +238,18 @@ class DynamoDBStack(Stack):
 def add_gsi(table: dynamodb.Table, gsi_config: dict) -> None:
     """Add a Global Secondary Index to a table."""
     gsi_props = {
-        "index_name": gsi_config["name"],
+        "index_name": gsi_config.get("name", ""),
         "partition_key": dynamodb.Attribute(
-            name=gsi_config["partition_key"]["name"],
-            type=get_attribute_type(gsi_config["partition_key"]["type"])
+            name=gsi_config.get("partition_key", {}).get("name", ""),
+            type=get_attribute_type(gsi_config.get("partition_key", {}).get("type", ""))
         ),
     }
 
     # Add sort key if present
     if "sort_key" in gsi_config:
         gsi_props["sort_key"] = dynamodb.Attribute(
-            name=gsi_config["sort_key"]["name"],
-            type=get_attribute_type(gsi_config["sort_key"]["type"])
+            name=gsi_config.get("sort_key", {}).get("name", ""),
+            type=get_attribute_type(gsi_config.get("sort_key", {}).get("type", ""))
         )
 
     # Set projection type

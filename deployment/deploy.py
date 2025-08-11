@@ -31,7 +31,7 @@ def get_aws_account_id() -> str:
     try:
         sts = boto3.client("sts")
         identity = sts.get_caller_identity()
-        return identity['Account']
+        return identity.get('Account', '')
     except Exception as err:
         print(f"Error: Unable to get AWS account ID - {err}")
         return ""
@@ -48,7 +48,7 @@ def verify_aws_credentials() -> bool:
         sts = boto3.client("sts")
         identity = sts.get_caller_identity()
         print(f"AWS Account: {account_id}")
-        print(f"AWS User/Role: {identity['Arn']}")
+        print(f"AWS User/Role: {identity.get('Arn', '')}")
         return True
     except Exception as err:
         print(f"Error: Unable to access AWS - {err}")
@@ -84,7 +84,7 @@ def verify_cdk_bootstrap(region: str) -> bool:
     try:
         # CDK bootstrap creates a stack named CDKToolkit
         response = cfn.describe_stacks(StackName="CDKToolkit")
-        if response["Stacks"]:
+        if response.get("Stacks"):
             print(f"CDK Bootstrap: Found in {region}")
             return True
     except ClientError as err:
@@ -151,11 +151,11 @@ def extract_stack_outputs(stack_name: str, region: str) -> dict:
 
     try:
         response = cfn.describe_stacks(StackName=stack_name)
-        stack = response["Stacks"][0]
+        stack = response.get("Stacks", [{}])[0]
 
         outputs = {}
         for output in stack.get("Outputs", []):
-            outputs[output["OutputKey"]] = output["OutputValue"]
+            outputs[output.get("OutputKey", "")] = output.get("OutputValue", "")
 
         return outputs
     except ClientError as err:
@@ -188,7 +188,7 @@ def validate_tables(region: str) -> dict:
             if table in existing_tables:
                 # Check table status
                 table_desc = dynamodb.describe_table(TableName=table)
-                status = table_desc["Table"]["TableStatus"]
+                status = table_desc.get("Table", {}).get("TableStatus", "")
                 
                 if status == "ACTIVE":
                     print(f"  [OK] {table}")
@@ -212,7 +212,7 @@ def validate_tables(region: str) -> dict:
             for table in creating_tables:
                 try:
                     table_desc = dynamodb.describe_table(TableName=table)
-                    status = table_desc["Table"]["TableStatus"]
+                    status = table_desc.get("Table", {}).get("TableStatus", "")
                     
                     if status == "ACTIVE":
                         print(f"  [OK] {table}")
@@ -301,7 +301,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
 def execute_deployment(params: DeploymentParams, state: CDKState) -> bool:
     """Execute the deployment with given parameters."""
     # Check if already deployed
-    if "dynamodb" in state.stacks and state.stacks["dynamodb"].get("deployed"):
+    if "dynamodb" in state.stacks and state.stacks.get("dynamodb", {}).get("deployed"):
         print("\nDynamoDB stack already deployed")
         response = input("Redeploy? [y/N]: ").strip().lower()
         if response != "y":
@@ -329,7 +329,7 @@ def execute_deployment(params: DeploymentParams, state: CDKState) -> bool:
     
     # Deploy the stack
     result = deploy_dynamodb_stack(params.region)
-    return result["success"]
+    return result.get("success", False)
 
 
 def verify_deployment(params: DeploymentParams) -> dict:
@@ -345,7 +345,7 @@ def verify_deployment(params: DeploymentParams) -> dict:
     return {
         "tables": table_validation,
         "policies": policy_validation,
-        "success": table_validation["success"] and all(policy_validation.values())
+        "success": table_validation.get("success", False) and all(policy_validation.values())
     }
 
 
@@ -353,7 +353,7 @@ def update_configurations(config: Config, state: CDKState, params: DeploymentPar
                          validation: dict, config_path: Path, state_path: Path) -> None:
     """Update config and state files with deployment results."""
     # Update configuration
-    config.dynamodb_tables = validation["tables"]["tables"]
+    config.dynamodb_tables = validation.get("tables", {}).get("tables", {})
     config.region = params.region
     config.save(str(config_path))
     print(f"\nConfiguration saved to config.yml")
@@ -397,11 +397,11 @@ def main():
     # Step 4: Verify deployment
     validation = verify_deployment(params)
     
-    if not validation["success"]:
+    if not validation.get("success", False):
         print("\nWarning: Deployment completed with issues")
-        if not validation["tables"]["success"]:
+        if not validation.get("tables", {}).get("success", False):
             print("  - Some tables were not created")
-        if not all(validation["policies"].values()):
+        if not all(validation.get("policies", {}).values()):
             print("  - Some IAM policies were not created")
 
     # Step 5: Update configurations
@@ -409,7 +409,7 @@ def main():
 
     # Final response
     print("\n" + "=" * 60)
-    if validation["success"]:
+    if validation.get("success", False):
         print("DynamoDB deployment completed successfully!")
     else:
         print("DynamoDB deployment completed with warnings")
