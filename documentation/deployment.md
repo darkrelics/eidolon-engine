@@ -4,11 +4,38 @@ This guide explains how to deploy and manage Eidolon Engine infrastructure using
 
 ## Prerequisites
 
-- Python 3.11 or later (use `python3` command)
+- Python 3.12 or later (use `python3` command)
 - AWS CLI configured with appropriate credentials
 - AWS CDK CLI installed: `npm install -g aws-cdk`
 - Required Python packages: `pip3 install -r requirements/scripts-requirements.txt`
 - AWS CDK Bootstrap: The target AWS account must be bootstrapped for CDK. Run `cdk bootstrap aws://ACCOUNT-ID/REGION` if not already done
+
+## DynamoDB Stack Deployment
+
+### Quick Start
+
+From the project root:
+
+```bash
+cd deployment
+python deploy.py
+```
+
+This will:
+1. Create 14 DynamoDB tables as defined in schema.md
+2. Create the eidolon-dynamodb-policy IAM managed policy
+3. Update config.yml with table names (operational data only)
+4. Save deployment state to .cdk-state.json (infrastructure details)
+
+### Manual CDK Commands
+
+If needed, you can run CDK commands directly from the deployment directory:
+
+```bash
+cdk synth dynamodb          # Generate CloudFormation template
+cdk deploy dynamodb         # Deploy the stack
+cdk destroy dynamodb        # Remove the stack (tables are retained)
+```
 
 ## Overview
 
