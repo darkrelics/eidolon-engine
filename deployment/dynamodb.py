@@ -120,27 +120,6 @@ def update_dynamodb_configurations(config: Config, state: CDKState, params,
 
 def execute_dynamodb_deployment(params, state: CDKState) -> bool:
     """Execute the DynamoDB deployment with given parameters."""
-    from utilities import verify_cdk_bootstrap
-    
-    # Check CDK bootstrap
-    if not verify_cdk_bootstrap(params.region):
-        response = input("\nCDK bootstrap not found. Continue anyway? [y/N]: ").strip().lower()
-        if response != "y":
-            print("Deployment cancelled")
-            return False
-    
-    # Confirm deployment
-    print("\nDeployment Summary:")
-    print(f"  Account: {params.account_id}")
-    print(f"  Region: {params.region}")
-    print(f"  Stack: dynamodb")
-    print(f"  Resources: 14 DynamoDB tables, 1 IAM policy")
-    
-    response = input("\nProceed with deployment? [Y/n]: ").strip().lower()
-    if response == "n":
-        print("Deployment cancelled")
-        return False
-    
     # Deploy the stack
     result = deploy_dynamodb_stack(params.region)
     return result.get("success", False)

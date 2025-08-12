@@ -142,6 +142,32 @@ def main():
         print(f"Error: {err}")
         return 1
 
+    # Check CDK bootstrap
+    from utilities import verify_cdk_bootstrap
+    if not verify_cdk_bootstrap(params.region):
+        response = input("\nCDK bootstrap not found. Continue anyway? [y/N]: ").strip().lower()
+        if response != "y":
+            print("Deployment cancelled")
+            return 0
+
+    # Single deployment confirmation after all input
+    print("\n" + "=" * 60)
+    print("Deployment Summary")
+    print("=" * 60)
+    print(f"  Account: {params.account_id}")
+    print(f"  Region: {params.region}")
+    print(f"  Stacks to deploy:")
+    print(f"    - DynamoDB: 14 tables, 1 IAM policy")
+    print(f"    - CodeBuild: 2 projects, 1 S3 bucket, 1 role, 2 policies")
+    print(f"  S3 Bucket: {params.s3_bucket}")
+    print(f"  GitHub: {params.github_owner}/{params.github_repo} ({params.github_branch})")
+    print("=" * 60)
+    
+    response = input("\nProceed with deployment? [Y/n]: ").strip().lower()
+    if response == "n":
+        print("Deployment cancelled")
+        return 0
+
     # Deploy stacks
     dynamodb_success = deploy_dynamodb(params, config, state, config_path, state_path)
     codebuild_success = deploy_codebuild(params, config, state, config_path, state_path)
