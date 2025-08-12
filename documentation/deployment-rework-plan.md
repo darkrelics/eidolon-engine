@@ -32,9 +32,57 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 - **Repeatable deployment** - Removed redeploy prompt for seamless updates
 - **Production tested** - Successfully deployed and redeployed in production environment
 
-## Phase 2: CodeBuild Stack (COMPLETE)
+## Phase 2: CodeBuild Stack [COMPLETE]
 
-## Phase 3: S3 Stack (COMPLETE)
+## Phase 3: S3 Stack [COMPLETE]
+
+## Phase 4: CloudWatch Stack [COMPLETE]
+
+### Phase 4 Summary
+
+Successfully implemented CloudWatch infrastructure for logging and monitoring with the following architecture:
+- Single log group `/eidolon/server` with 1-year retention and RETAIN policy
+- Metrics namespace `eidolon/metrics` for custom application metrics
+- Managed policy `eidolon-cloudwatch-policy` with permissions for log streams and metrics
+- Import capability for existing log groups
+- Simplified from original CloudFormation (removed Lambda/CodeBuild specific groups)
+
+### Phase 4 Status
+
+#### Completed Tasks
+
+- Created CloudWatchStack with single server log group
+- Implemented managed policy for CloudWatch access (logs and metrics)
+- Created cloudwatch.py deployment module with validation
+- Created app_cloudwatch.py for stack isolation
+- Updated DeploymentParams to use existing region parameter
+- Extended Config class with CloudWatch settings and defaults
+- Updated deploy.py to include CloudWatch stack deployment
+- Added CloudWatch to deployment summary and final status
+- Fixed region parameter handling to match established patterns
+- Fixed stack ID naming to match conventions
+
+### Phase 4 Lessons Learned Violations & Corrections
+
+During Phase 4 implementation, the following lessons were violated:
+
+**Violated Lesson #43 - Pattern Reuse**
+
+- Initially used different parameter names (`region` vs `region_name`) than established stacks
+- Initially used different stack ID pattern (`eidolon-cloudwatch` vs `cloudwatch`)
+- Corrected: Updated to match exact patterns from existing stacks
+
+**Violated Lesson #27 - CDK Tokens vs Strings**
+
+- Attempted to override CDK Stack's read-only `region` property
+- Corrected: Used `region_name` parameter stored before super().__init__()
+
+**Root Cause Analysis**
+
+The CloudWatch stack implementation failed to properly analyze existing patterns before implementation:
+1. Did not check how other stacks handled region parameters
+2. Did not verify stack ID naming conventions
+3. Did not examine app file structure patterns thoroughly
 
 ### Phase 3 Summary
 
@@ -258,6 +306,12 @@ Post-deployment checks will verify:
 44. **Script Upload Integration**: Include data upload as part of stack deployment for complete provisioning
 45. **Stack Isolation**: Each CDK stack should have its own app file to prevent cross-contamination of outputs
 46. **No Legacy Code**: Remove deprecated files immediately - no backwards compatibility needed per project policy
+47. **CloudWatch Simplification**: Single log group for server, not separate groups for Lambda/CodeBuild
+48. **Default Values**: Provide sensible defaults for CloudWatch settings in Config class
+49. **Pattern Analysis Before Implementation**: Always examine existing stack implementations for patterns before creating new stacks
+50. **Stack ID Convention**: Use lowercase stack type names as stack IDs (e.g., "cloudwatch" not "eidolon-cloudwatch")
+51. **Parameter Naming Consistency**: Use exact same parameter names across all stacks (e.g., region_name not region)
+52. **App File Structure**: Follow established app file patterns including parse_known_args() and description parameter
 
 ## Current System Issues
 
@@ -283,7 +337,7 @@ Post-deployment checks will verify:
 1. DynamoDB Stack     → Tables and access policies [COMPLETE]
 2. CodeBuild Stack    → Build infrastructure and artifacts bucket [COMPLETE]
 3. S3 Stack          → Scripts bucket [COMPLETE]
-4. CloudWatch Stack  → Logging and metrics
+4. CloudWatch Stack  → Logging and metrics [COMPLETE]
 5. [Build Phase]     → Execute Lambda builds
 6. Player Stack      → Cognito and auth Lambdas
 7. Character Stack   → Character management Lambdas
@@ -338,18 +392,18 @@ Post-deployment checks will verify:
 
 - S3.ScriptsBucket
 
-### 4. CloudWatch Stack
+### 4. CloudWatch Stack [COMPLETE]
 
 **Resources:**
 
-- Log groups for Lambda and application
-- Metrics namespace
-- IAM managed policies for CloudWatch access
+- Single log group `/eidolon/server` with 1-year retention
+- Metrics namespace `eidolon/metrics`
+- IAM managed policy `eidolon-cloudwatch-policy`
 
 **Config.yml Output:**
 
-- CloudWatch.LogGroup
-- CloudWatch.MetricsNamespace
+- CloudWatch.LogGroup: /eidolon/server
+- CloudWatch.MetricsNamespace: eidolon/metrics
 
 ### 5. Build Execution Phase
 

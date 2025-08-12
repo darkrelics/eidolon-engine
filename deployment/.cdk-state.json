@@ -2,12 +2,12 @@
   "stacks": {
     "dynamodb": {
       "deployed": true,
-      "timestamp": "2025-08-12T01:58:47.232057",
+      "timestamp": "2025-08-12T02:35:09.391255",
       "outputs": {}
     },
     "codebuild": {
       "deployed": true,
-      "timestamp": "2025-08-12T01:58:51.181835",
+      "timestamp": "2025-08-12T02:35:13.416493",
       "outputs": {
         "CodeBuildRoleArn": "arn:aws:iam::542230992937:role/eidolon-lambda-codebuild-role",
         "LambdaFunctionsProjectName": "eidolon-lambda-functions",
@@ -17,15 +17,24 @@
     },
     "s3": {
       "deployed": true,
-      "timestamp": "2025-08-12T01:58:54.911511",
+      "timestamp": "2025-08-12T02:35:17.156217",
       "outputs": {
         "ScriptsBucketName": "darkrelics-scripts",
         "ScriptsS3PolicyArn": "arn:aws:iam::542230992937:policy/eidolon-scripts-s3-policy"
+      }
+    },
+    "cloudwatch": {
+      "deployed": true,
+      "timestamp": "2025-08-12T02:36:02.885402",
+      "outputs": {
+        "MetricsNamespace": "eidolon/metrics",
+        "CloudWatchPolicyArn": "arn:aws:iam::542230992937:policy/eidolon-cloudwatch-policy",
+        "LogGroupName": "/eidolon/server"
       }
     }
   },
   "infrastructure": {
     "dynamodb_policy_arn": "arn:aws:iam::542230992937:policy/eidolon-dynamodb-policy"
   },
-  "last_updated": "2025-08-12T01:58:54.911521"
+  "last_updated": "2025-08-12T02:36:02.885407"
 }

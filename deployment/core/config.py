@@ -20,6 +20,10 @@ class Config:
     s3_artifacts_bucket: str = ""
     s3_scripts_bucket: str = ""
     
+    # CloudWatch settings
+    cloudwatch_log_group: str = "/eidolon/server"
+    cloudwatch_metrics_namespace: str = "eidolon/metrics"
+    
     def save(self, path: str) -> None:
         """Save operational configuration to config.yml."""
         config_path = Path(path)
@@ -43,6 +47,15 @@ class Config:
                 existing_config["S3"]["ArtifactsBucket"] = self.s3_artifacts_bucket
             if self.s3_scripts_bucket:
                 existing_config["S3"]["ScriptsBucket"] = self.s3_scripts_bucket
+        
+        # Update CloudWatch section if settings are set
+        if self.cloudwatch_log_group or self.cloudwatch_metrics_namespace:
+            if "CloudWatch" not in existing_config:
+                existing_config["CloudWatch"] = {}
+            if self.cloudwatch_log_group:
+                existing_config["CloudWatch"]["LogGroup"] = self.cloudwatch_log_group
+            if self.cloudwatch_metrics_namespace:
+                existing_config["CloudWatch"]["MetricsNamespace"] = self.cloudwatch_metrics_namespace
         
         with open(config_path, "w") as f:
             yaml.dump(existing_config, f, default_flow_style=False, sort_keys=False)
@@ -78,5 +91,8 @@ class Config:
         if "S3" in data:
             instance.s3_artifacts_bucket = data.get("S3", {}).get("ArtifactsBucket", "")
             instance.s3_scripts_bucket = data.get("S3", {}).get("ScriptsBucket", "")
+        if "CloudWatch" in data:
+            instance.cloudwatch_log_group = data.get("CloudWatch", {}).get("LogGroup", instance.cloudwatch_log_group)
+            instance.cloudwatch_metrics_namespace = data.get("CloudWatch", {}).get("MetricsNamespace", instance.cloudwatch_metrics_namespace)
         
         return instance
