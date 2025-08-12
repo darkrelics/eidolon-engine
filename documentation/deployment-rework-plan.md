@@ -38,10 +38,6 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 
 #### Open Tasks
 
-- Create stacks/codebuild_stack.py with CodeBuildStack class
-- Implement S3 bucket import/create logic with RETAIN policy
-- Implement CodeBuild projects for lambda-layer and lambda-functions
-- Add IAM roles and policies for CodeBuild projects
 - Update app.py to instantiate CodeBuildStack
 - Add deploy_codebuild_stack function in deploy.py
 - Add validation functions for S3 bucket and CodeBuild projects
@@ -55,6 +51,10 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 - Updated Config class to handle S3 ArtifactsBucket field
 - Implemented cdk.json context persistence for CodeBuild parameters
 - Fixed all dictionary access to use .get() method
+- Created stacks/codebuild_stack.py with CodeBuildStack class
+- Implemented S3 bucket import/create logic with RETAIN policy
+- Implemented CodeBuild projects for lambda-layer and lambda-functions
+- Created shared IAM role with custom managed policies for CloudWatch and S3 access
 
 ### Phase 2 Lessons Learned Violations & Corrections
 
@@ -79,6 +79,11 @@ During initial Phase 2 implementation, the following lessons from Phase 1 were v
 
 - Initial implementation would have used square bracket access
 - Corrected: All dictionary access uses .get() method
+
+**Violated Lesson #31 - Managed Policies Only**
+
+- Initially created two separate IAM roles with AWS managed policies
+- Corrected: Created single shared role with custom managed policies following lessons 32-35
 
 ### Objectives
 
@@ -113,19 +118,18 @@ The stack will manage an S3 bucket to store Lambda deployment packages and layer
 
 **Lambda Layer CodeBuild Project**
 
-A CodeBuild project named "eidolon-lambda-layer-build" will build Python dependencies into a Lambda layer using buildspec/lambda-layer.yml. The project will use Python 3.12 runtime and output lambda-layer.zip to the S3 bucket. If the project exists, it will be imported. RemovalPolicy.DESTROY applies since projects can be recreated.
+A CodeBuild project named "eidolon-lambda-layer" will build Python dependencies into a Lambda layer using buildspec/lambda-layer.yml. The project will use Python 3.12 runtime and output lambda-layer.zip to the S3 bucket. If the project exists, it will be imported. RemovalPolicy.DESTROY applies since projects can be recreated.
 
 **Lambda Functions CodeBuild Project**
 
-A CodeBuild project named "eidolon-lambda-functions-build" will package individual Lambda functions using buildspec/lambda-functions.yml. It generates a bloom filter for character names and packages each Lambda function with its dependencies. The project outputs multiple zip files to the S3 bucket.
+A CodeBuild project named "eidolon-lambda-functions" will package individual Lambda functions using buildspec/lambda-functions.yml. It generates a bloom filter for character names and packages each Lambda function with its dependencies. The project outputs multiple zip files to the S3 bucket.
 
 **IAM Roles and Policies**
 
-Each CodeBuild project will have its own IAM role with permissions to:
+A single shared IAM role (`eidolon-lambda-codebuild-role`) will be used by both CodeBuild projects with two custom managed policies:
 
-- Write to the S3 artifacts bucket
-- Create CloudWatch Logs
-- Read from the public GitHub repository
+- `eidolon-codebuild-logs-policy`: CloudWatch Logs permissions for `/aws/codebuild/*`
+- `eidolon-codebuild-s3-policy`: Read/write access to artifacts bucket at `/*`
 
 #### Resource Import Pattern
 
@@ -184,6 +188,11 @@ Post-deployment checks will verify:
 28. **Python3 Compatibility**: Always use python3 in scripts and cdk.json, not python
 29. **Repeatable Deployments**: Design for frequent re-runs without user prompts for CI/CD compatibility
 30. **No Sensitive Data in Docs**: Never include account numbers or other sensitive data in documentation
+31. **Managed Policies Only**: All IAM policies must be managed policies (AWS managed or custom managed) - no inline policies
+32. **Shared IAM Roles**: When multiple resources need similar permissions, use a single shared role
+33. **Custom Managed Policies**: Prefer custom managed policies with least privilege over AWS managed policies
+34. **Resource Naming**: Use consistent naming pattern (eidolon-resource-type-purpose)
+35. **Policy Resource Scoping**: Be specific with resource ARNs while maintaining flexibility for growth
 
 ## Current System Issues
 
