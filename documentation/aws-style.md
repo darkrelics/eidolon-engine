@@ -158,10 +158,12 @@ Avoid transactions for:
 ##### Critical Operations Requiring Transactions
 
 1. **Story Operations**:
+
    - Starting a story (Character + ActiveSegments + History)
    - Story completion/abandonment (atomic cleanup required)
 
 2. **Character Operations**:
+
    - Creating character with initial items (Player + Character + Items)
    - Deleting character (ensures complete removal)
 

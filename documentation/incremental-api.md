@@ -276,6 +276,7 @@ Content-Type: application/json
 **Implementation Notes:**
 
 1. **Name Validation:** Character names must:
+
    - Be 3-32 characters long
    - Contain only letters, spaces, and hyphens
    - Not be in the restricted names bloom filter
@@ -284,11 +285,13 @@ Content-Type: application/json
 2. **Character Limit:** Players can create up to the configured maximum (default 10) characters.
 
 3. **Archetype Resolution:**
+
    - If no archetype is specified, "default" is used
    - If an invalid archetype is specified, "default" is used with a log warning
    - Only player-available archetypes (`Player: true`) can be used
 
 4. **Starting Items:** Based on the archetype's `StartingItems` configuration:
+
    - Items are created from prototypes and added to the character's inventory
    - The first container item becomes the primary container (e.g., backpack)
    - Worn items (`IsWorn: true`) are equipped automatically
@@ -489,6 +492,7 @@ Maps inventory slot numbers to detailed item information:
 1. **Character Ownership:** The Lambda validates that the requested character belongs to the authenticated player. Attempting to access another player's character returns 404.
 
 2. **Response Field Behavior:** The response dynamically includes different fields based on the character's state:
+
    - **With active story:** Includes `ActiveStory` and `ActiveSegment` objects (if present), does NOT include `AvailableStories`
    - **Without active story:** Does NOT include `ActiveStory` or `ActiveSegment`, but includes `AvailableStories` array if any stories are available
    - Fields are completely omitted from the response rather than being set to null
@@ -534,8 +538,8 @@ Deletes a character belonging to the authenticated player.
 
 **Query Parameters:**
 
-| Parameter     | Type   | Required | Description                       |
-| ------------- | ------ | -------- | --------------------------------- |
+| Parameter     | Type   | Required | Description                     |
+| ------------- | ------ | -------- | ------------------------------- |
 | `CharacterID` | String | Yes      | UUID of the character to delete |
 
 **Request:**
@@ -587,10 +591,10 @@ Content-Type: application/json
 
 **Request Body:**
 
-| Field         | Type   | Required | Description                         |
-| ------------- | ------ | -------- | ----------------------------------- |
-| `CharacterID` | String | Yes      | UUID of the character               |
-| `StoryID`     | String | Yes      | ID of the story to start            |
+| Field         | Type   | Required | Description              |
+| ------------- | ------ | -------- | ------------------------ |
+| `CharacterID` | String | Yes      | UUID of the character    |
+| `StoryID`     | String | Yes      | ID of the story to start |
 
 **Response:**
 
@@ -616,12 +620,12 @@ Content-Type: application/json
 
 **Error Responses:**
 
-| Status | Error Message                     | Cause                              |
-| ------ | --------------------------------- | ---------------------------------- |
-| `403`  | "Story not available"             | Story not available to character   |
-| `409`  | "Character is already in a story" | Character has an active story      |
-| `401`  | "Unauthorized"                    | Invalid or missing JWT token       |
-| `500`  | "Internal server error"           | Database or system failure         |
+| Status | Error Message                     | Cause                            |
+| ------ | --------------------------------- | -------------------------------- |
+| `403`  | "Story not available"             | Story not available to character |
+| `409`  | "Character is already in a story" | Character has an active story    |
+| `401`  | "Unauthorized"                    | Invalid or missing JWT token     |
+| `500`  | "Internal server error"           | Database or system failure       |
 
 ---
 
@@ -635,9 +639,9 @@ Abandons the current active story for a character.
 
 **Query Parameters:**
 
-| Parameter     | Type   | Required | Description                       |
-| ------------- | ------ | -------- | --------------------------------- |
-| `CharacterID` | String | Yes      | UUID of the character             |
+| Parameter     | Type   | Required | Description           |
+| ------------- | ------ | -------- | --------------------- |
+| `CharacterID` | String | Yes      | UUID of the character |
 
 **Request:**
 
@@ -656,11 +660,11 @@ Authorization: Bearer <jwt-token>
 
 **Error Responses:**
 
-| Status | Error Message           | Cause                          |
-| ------ | ----------------------- | ------------------------------ |
-| `400`  | "No active story found" | Character has no active story  |
-| `401`  | "Unauthorized"          | Invalid or missing JWT token   |
-| `500`  | "Internal server error" | Database or system failure     |
+| Status | Error Message           | Cause                         |
+| ------ | ----------------------- | ----------------------------- |
+| `400`  | "No active story found" | Character has no active story |
+| `401`  | "Unauthorized"          | Invalid or missing JWT token  |
+| `500`  | "Internal server error" | Database or system failure    |
 
 ---
 
@@ -687,10 +691,10 @@ Content-Type: application/json
 
 **Request Body:**
 
-| Field         | Type   | Required | Description                         |
-| ------------- | ------ | -------- | ----------------------------------- |
-| `CharacterID` | String | Yes      | UUID of the character               |
-| `Decision`    | String | Yes      | Player's decision for the segment   |
+| Field         | Type   | Required | Description                       |
+| ------------- | ------ | -------- | --------------------------------- |
+| `CharacterID` | String | Yes      | UUID of the character             |
+| `Decision`    | String | Yes      | Player's decision for the segment |
 
 **Response:**
 
@@ -702,12 +706,12 @@ Content-Type: application/json
 
 **Error Responses:**
 
-| Status | Error Message              | Cause                          |
-| ------ | -------------------------- | ------------------------------ |
-| `404`  | "Segment not found"        | No active segment found        |
-| `409`  | "Decision already submitted" | Decision was already made     |
-| `401`  | "Unauthorized"             | Invalid or missing JWT token   |
-| `500`  | "Internal server error"    | Database or system failure     |
+| Status | Error Message                | Cause                        |
+| ------ | ---------------------------- | ---------------------------- |
+| `404`  | "Segment not found"          | No active segment found      |
+| `409`  | "Decision already submitted" | Decision was already made    |
+| `401`  | "Unauthorized"               | Invalid or missing JWT token |
+| `500`  | "Internal server error"      | Database or system failure   |
 
 ---
 
@@ -721,10 +725,10 @@ Retrieves the outcome of a completed segment.
 
 **Query Parameters:**
 
-| Parameter     | Type   | Required | Description                       |
-| ------------- | ------ | -------- | --------------------------------- |
-| `CharacterID` | String | Yes      | UUID of the character             |
-| `SegmentID`   | String | Yes      | UUID of the segment               |
+| Parameter     | Type   | Required | Description           |
+| ------------- | ------ | -------- | --------------------- |
+| `CharacterID` | String | Yes      | UUID of the character |
+| `SegmentID`   | String | Yes      | UUID of the segment   |
 
 **Request:**
 
@@ -753,12 +757,12 @@ Authorization: Bearer <jwt-token>
 
 **Error Responses:**
 
-| Status | Error Message              | Cause                          |
-| ------ | -------------------------- | ------------------------------ |
-| `404`  | "Segment not found"        | Segment doesn't exist          |
-| `409`  | "Segment not yet completed" | Segment is still processing    |
-| `401`  | "Unauthorized"             | Invalid or missing JWT token   |
-| `500`  | "Internal server error"    | Database or system failure     |
+| Status | Error Message               | Cause                        |
+| ------ | --------------------------- | ---------------------------- |
+| `404`  | "Segment not found"         | Segment doesn't exist        |
+| `409`  | "Segment not yet completed" | Segment is still processing  |
+| `401`  | "Unauthorized"              | Invalid or missing JWT token |
+| `500`  | "Internal server error"     | Database or system failure   |
 
 ---
 
@@ -772,9 +776,9 @@ Gets the current status of an active segment.
 
 **Query Parameters:**
 
-| Parameter     | Type   | Required | Description                       |
-| ------------- | ------ | -------- | --------------------------------- |
-| `CharacterID` | String | Yes      | UUID of the character             |
+| Parameter     | Type   | Required | Description           |
+| ------------- | ------ | -------- | --------------------- |
+| `CharacterID` | String | Yes      | UUID of the character |
 
 **Request:**
 
@@ -795,11 +799,11 @@ Authorization: Bearer <jwt-token>
 
 **Error Responses:**
 
-| Status | Error Message           | Cause                          |
-| ------ | ----------------------- | ------------------------------ |
-| `404`  | "No active segment found" | No active segment exists      |
-| `401`  | "Unauthorized"          | Invalid or missing JWT token   |
-| `500`  | "Internal server error" | Database or system failure     |
+| Status | Error Message             | Cause                        |
+| ------ | ------------------------- | ---------------------------- |
+| `404`  | "No active segment found" | No active segment exists     |
+| `401`  | "Unauthorized"            | Invalid or missing JWT token |
+| `500`  | "Internal server error"   | Database or system failure   |
 
 ---
 
@@ -813,9 +817,9 @@ Retrieves historical segment data for a character.
 
 **Query Parameters:**
 
-| Parameter     | Type   | Required | Description                       |
-| ------------- | ------ | -------- | --------------------------------- |
-| `CharacterID` | String | Yes      | UUID of the character             |
+| Parameter     | Type   | Required | Description           |
+| ------------- | ------ | -------- | --------------------- |
+| `CharacterID` | String | Yes      | UUID of the character |
 
 **Request:**
 
@@ -847,11 +851,11 @@ Authorization: Bearer <jwt-token>
 
 **Error Responses:**
 
-| Status | Error Message           | Cause                          |
-| ------ | ----------------------- | ------------------------------ |
-| `404`  | "No history found"      | No segment history exists      |
-| `401`  | "Unauthorized"          | Invalid or missing JWT token   |
-| `500`  | "Internal server error" | Database or system failure     |
+| Status | Error Message           | Cause                        |
+| ------ | ----------------------- | ---------------------------- |
+| `404`  | "No history found"      | No segment history exists    |
+| `401`  | "Unauthorized"          | Invalid or missing JWT token |
+| `500`  | "Internal server error" | Database or system failure   |
 
 ---
 
@@ -877,9 +881,9 @@ Content-Type: application/json
 
 **Request Body:**
 
-| Field         | Type   | Required | Description                         |
-| ------------- | ------ | -------- | ----------------------------------- |
-| `CharacterID` | String | Yes      | UUID of the character               |
+| Field         | Type   | Required | Description           |
+| ------------- | ------ | -------- | --------------------- |
+| `CharacterID` | String | Yes      | UUID of the character |
 
 **Response:**
 
@@ -898,8 +902,8 @@ Content-Type: application/json
 
 **Error Responses:**
 
-| Status | Error Message                     | Cause                              |
-| ------ | --------------------------------- | ---------------------------------- |
-| `409`  | "Character is already in a segment" | Character has an active segment   |
-| `401`  | "Unauthorized"                    | Invalid or missing JWT token       |
-| `500`  | "Internal server error"           | Database or system failure         |
+| Status | Error Message                       | Cause                           |
+| ------ | ----------------------------------- | ------------------------------- |
+| `409`  | "Character is already in a segment" | Character has an active segment |
+| `401`  | "Unauthorized"                      | Invalid or missing JWT token    |
+| `500`  | "Internal server error"             | Database or system failure      |

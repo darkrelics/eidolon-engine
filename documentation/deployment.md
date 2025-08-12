@@ -22,6 +22,7 @@ python deploy.py
 ```
 
 This will:
+
 1. Create 14 DynamoDB tables as defined in schema.md
 2. Create the eidolon-dynamodb-policy IAM managed policy
 3. Update config.yml with table names (operational data only)
@@ -173,7 +174,8 @@ API:
   Subdomain: api # api.darkrelics.net
 
 # CORS configuration for API Gateway
-allowed_cors_origins: [] # Optional list; when empty, API preflight defaults to "*" without credentials
+allowed_cors_origins:
+  [] # Optional list; when empty, API preflight defaults to "*" without credentials
   # When set, API Gateway preflight uses this explicit list and allows credentials
   # ALLOWED_ORIGINS env var is passed to Lambdas as a comma-separated string
 
@@ -517,12 +519,14 @@ If you encounter errors like "SSM parameter /cdk-bootstrap/hnb659fds/version not
    ```
 
 2. **If bootstrap fails due to existing resources**:
+
    - Check for existing CDK resources: `aws s3 ls | grep cdk-hnb659fds`
    - Delete failed bootstrap stack: `aws cloudformation delete-stack --stack-name CDKToolkit`
    - Wait for deletion: `aws cloudformation wait stack-delete-complete --stack-name CDKToolkit`
    - Retry bootstrap
 
 3. **Common bootstrap errors**:
+
    - "Policy already exists": Delete conflicting IAM policies first
    - "Bucket already exists": The CDK assets bucket exists from a previous bootstrap
    - "SSM parameter already exists": Delete the parameter with `aws ssm delete-parameter --name /cdk-bootstrap/hnb659fds/version`

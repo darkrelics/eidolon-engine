@@ -1,5 +1,6 @@
 """Main deployment script for Eidolon Engine infrastructure."""
 
+import json
 import subprocess
 import sys
 import time
@@ -17,8 +18,12 @@ from core.state import CDKState
 @dataclass
 class DeploymentParams:
     """Parameters for deployment."""
-    region: str
-    account_id: str
+    region: str = "us-east-1"
+    account_id: str = ""
+    s3_bucket: str = ""
+    github_owner: str = "robinje"
+    github_repo: str = "eidolon-engine"
+    github_branch: str = "develop"
 
 
 @cache
@@ -155,11 +160,15 @@ def extract_stack_outputs(stack_name: str, region: str) -> dict:
 
     try:
         response = cfn.describe_stacks(StackName=stack_name)
-        stack = response.get("Stacks", [{}])[0]
+        stacks = response.get("Stacks", [])
+        stack = stacks[0] if stacks else {}
 
         outputs = {}
         for output in stack.get("Outputs", []):
-            outputs[output.get("OutputKey", "")] = output.get("OutputValue", "")
+            output_key = output.get("OutputKey", "")
+            output_value = output.get("OutputValue", "")
+            if output_key:
+                outputs[output_key] = output_value
 
         return outputs
     except ClientError as err:
@@ -344,7 +353,60 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
         config.region = validated_region
         print(f"Updated region to: {validated_region}")
     
-    return DeploymentParams(region=validated_region, account_id=account_id)
+    # Create params with defaults
+    params = DeploymentParams(region=validated_region, account_id=account_id)
+    
+    # Load cdk.json context values if they exist
+    cdk_json_path = Path(__file__).parent / "cdk.json"
+    cdk_context = {}
+    if cdk_json_path.exists():
+        with open(cdk_json_path, "r") as f:
+            cdk_data = json.load(f)
+            cdk_context = cdk_data.get("context", {})
+    
+    # S3 Bucket - priority: default → cdk.json → config.yml → user prompt
+    s3_bucket = params.s3_bucket or cdk_context.get("s3_bucket", "") or getattr(config, "s3_artifacts_bucket", "")
+    if s3_bucket:
+        bucket_input = input(f"S3 Artifacts Bucket [{s3_bucket}]: ").strip()
+        params.s3_bucket = bucket_input if bucket_input else s3_bucket
+    else:
+        while not params.s3_bucket:
+            params.s3_bucket = input("S3 Artifacts Bucket: ").strip()
+            if not params.s3_bucket:
+                print("S3 bucket name is required")
+    
+    # GitHub Owner
+    github_owner = cdk_context.get("github_owner", params.github_owner)
+    owner_input = input(f"GitHub Owner [{github_owner}]: ").strip()
+    params.github_owner = owner_input if owner_input else github_owner
+    
+    # GitHub Repository
+    github_repo = cdk_context.get("github_repo", params.github_repo)
+    repo_input = input(f"GitHub Repository [{github_repo}]: ").strip()
+    params.github_repo = repo_input if repo_input else github_repo
+    
+    # GitHub Branch
+    github_branch = cdk_context.get("github_branch", params.github_branch)
+    branch_input = input(f"GitHub Branch [{github_branch}]: ").strip()
+    params.github_branch = branch_input if branch_input else github_branch
+    
+    # Save user selections back to cdk.json
+    cdk_data = {"app": "python3 app.py", "context": {}}
+    if cdk_json_path.exists():
+        with open(cdk_json_path, "r") as f:
+            cdk_data = json.load(f)
+    
+    if "context" not in cdk_data:
+        cdk_data["context"] = {}
+    cdk_data["context"]["s3_bucket"] = params.s3_bucket
+    cdk_data["context"]["github_owner"] = params.github_owner
+    cdk_data["context"]["github_repo"] = params.github_repo
+    cdk_data["context"]["github_branch"] = params.github_branch
+    
+    with open(cdk_json_path, "w") as f:
+        json.dump(cdk_data, f, indent=2)
+    
+    return params
 
 
 def execute_deployment(params: DeploymentParams, state: CDKState) -> bool:

@@ -35,9 +35,12 @@ class DynamoDBStack(Stack):
 
             # Check if we should use an existing table from context
             if table_name in self.existing_tables:
-                existing_table_name = self.existing_tables[table_name]
-                print(f"Importing existing DynamoDB table from context: {existing_table_name}")
-                table = dynamodb.Table.from_table_name(self, f"{table_name}-imported", existing_table_name)
+                existing_table_name = self.existing_tables.get(table_name, "")
+                if existing_table_name:
+                    print(f"Importing existing DynamoDB table from context: {existing_table_name}")
+                    table = dynamodb.Table.from_table_name(self, f"{table_name}-imported", existing_table_name)
+                else:
+                    continue
             elif self._table_exists(table_name):
                 # Check if existing table has correct schema
                 if self._validate_table_schema(table_name, config):

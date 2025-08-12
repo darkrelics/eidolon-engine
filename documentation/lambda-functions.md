@@ -128,6 +128,7 @@ All Lambda functions must follow these parameter standards:
   - Example: `/characters?characterId=123`
   - Use `get_query_parameter()` from `eidolon.requests`
 - **Request Body**: Use for data submission (POST, PUT, PATCH)
+
   - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
 
 - **Path Parameters**: **NEVER** use for IDs - always use query parameters instead
@@ -145,11 +146,13 @@ All Lambda functions must follow these parameter standards:
 Lambda functions are packaged and deployed through AWS CodeBuild:
 
 1. **Build Process** (`buildspec/lambda-functions.yml`):
+
    - Each function is packaged as a separate zip file
    - Shared `eidolon` modules are included if imported
    - Zip files are uploaded to S3
 
 2. **Dependencies** (`buildspec/lambda-layer.yml`):
+
    - Common dependencies are packaged as a Lambda layer
    - Requirements from `requirements/lambda-requirements.txt`
 
@@ -332,6 +335,7 @@ Some Lambda functions apply transformations to data before returning responses:
 The `api_get_character.py` function applies several transformations for client compatibility:
 
 1. **Inventory Enrichment**: Raw inventory UUIDs are enriched with item details
+
    - Database: `{"RightHand": "sword-uuid"}`
    - Response adds: `{"InventoryDetails": {"RightHand": {"itemId": "sword-uuid", "name": "Iron Sword", ...}}}`
 
