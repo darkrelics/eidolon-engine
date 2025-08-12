@@ -13,7 +13,7 @@ from utilities import run_cdk_deploy, validate_policies
 
 def deploy_dynamodb_stack(region: str) -> dict:
     """Deploy the DynamoDB stack using CDK."""
-    app_command = f"python3 app.py --region {region}"
+    app_command = f"python3 app_dynamodb.py --region {region}"
     return run_cdk_deploy("dynamodb", region, app_command)
 
 

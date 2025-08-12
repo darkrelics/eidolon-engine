@@ -32,7 +32,34 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 - **Repeatable deployment** - Removed redeploy prompt for seamless updates
 - **Production tested** - Successfully deployed and redeployed in production environment
 
-## Phase 2: CodeBuild Stack (IN PROGRESS)
+## Phase 2: CodeBuild Stack (COMPLETE)
+
+## Phase 3: S3 Stack (COMPLETE)
+
+### Phase 3 Summary
+
+Successfully implemented S3 infrastructure for Lua scripts with the following architecture:
+- S3 bucket with import capability and RETAIN policy
+- Managed policy `eidolon-scripts-s3-policy` for read/write access
+- Automatic upload of scripts from `/scripts_lua/*` to `<bucket>/scripts/*`
+- Reused patterns from CodeBuild stack for consistency
+- Refactored to separate app files per stack for clean isolation
+
+### Phase 3 Status
+
+#### Completed Tasks
+
+- Updated DeploymentParams with scripts_bucket field
+- Extended collect_deployment_params for scripts bucket input
+- Created S3Stack with bucket import/create logic
+- Implemented managed policy for S3 access (no role needed)
+- Created s3.py module with deployment and validation functions
+- Added automatic script upload using boto3
+- Updated app.py for conditional S3Stack creation
+- Updated main() to include S3 deployment
+- Extended Config class to persist scripts bucket
+- Refactored to separate app files (app_dynamodb.py, app_codebuild.py, app_s3.py) for stack isolation
+- Removed deprecated app.py per no legacy code policy
 
 ### Phase 2 Summary
 
@@ -42,12 +69,11 @@ Successfully implemented CodeBuild infrastructure for Lambda builds with the fol
 - Two CodeBuild projects for lambda-layer and lambda-functions builds
 - Modular deployment code split into focused modules under 300 lines each
 - Comprehensive validation for all resources
+- Unified user input flow with single deployment confirmation
+
+**Phase 2 Completed**: Successfully deployed and tested in production environment
 
 ### Phase 2 Status
-
-#### Open Tasks
-
-- Test CodeBuild stack deployment
 
 #### Completed Tasks
 
@@ -65,6 +91,9 @@ Successfully implemented CodeBuild infrastructure for Lambda builds with the fol
 - Added validation functions for S3 bucket and CodeBuild projects
 - Updated main() to handle CodeBuild stack deployment
 - Refactored deployment code into modular structure (deploy.py, utilities.py, dynamodb.py, codebuild.py)
+- Unified user input collection with single deployment confirmation
+- Removed per-stack deployment prompts for uninterrupted execution
+- Tested CodeBuild stack deployment successfully
 
 ### Phase 2 Lessons Learned Violations & Corrections
 
@@ -99,6 +128,16 @@ During initial Phase 2 implementation, the following lessons from Phase 1 were v
 
 - deploy.py grew to over 700 lines with mixed responsibilities
 - Corrected: Refactored into 4 focused modules under 300 lines each
+
+**Violated User Experience Principle**
+
+- Initially had deployment confirmations scattered throughout execution
+- Corrected: Consolidated all user input first, then single confirmation before execution
+
+**Violated Stack Isolation Principle**
+
+- Initially had single app.py creating all stacks, causing output contamination
+- Corrected: Separated into app_dynamodb.py, app_codebuild.py, app_s3.py for clean isolation
 
 ### Objectives
 
@@ -212,6 +251,13 @@ Post-deployment checks will verify:
 37. **Import Organization**: Group imports by category (standard library, external packages, local modules)
 38. **Function Parameter Types**: Use dataclasses for complex parameter sets, primitives for simple functions
 39. **Conditional Stack Creation**: Use conditional logic in app.py to only create stacks when required parameters exist
+40. **User Input Flow**: Collect all user input upfront, confirm once, then execute without interruption
+41. **Deployment Confirmation**: Show comprehensive summary of all resources before asking for confirmation
+42. **Stack Execution Order**: Execute infrastructure stacks before build stacks to ensure dependencies exist
+43. **Pattern Reuse**: Copy successful patterns from previous stacks to maintain consistency
+44. **Script Upload Integration**: Include data upload as part of stack deployment for complete provisioning
+45. **Stack Isolation**: Each CDK stack should have its own app file to prevent cross-contamination of outputs
+46. **No Legacy Code**: Remove deprecated files immediately - no backwards compatibility needed per project policy
 
 ## Current System Issues
 
@@ -234,9 +280,9 @@ Post-deployment checks will verify:
 ### Stack Organization
 
 ```
-1. DynamoDB Stack     → Tables and access policies
-2. CodeBuild Stack    → Build infrastructure and artifacts bucket
-3. S3 Stack          → Scripts bucket
+1. DynamoDB Stack     → Tables and access policies [COMPLETE]
+2. CodeBuild Stack    → Build infrastructure and artifacts bucket [COMPLETE]
+3. S3 Stack          → Scripts bucket [COMPLETE]
 4. CloudWatch Stack  → Logging and metrics
 5. [Build Phase]     → Execute Lambda builds
 6. Player Stack      → Cognito and auth Lambdas
@@ -280,11 +326,13 @@ Post-deployment checks will verify:
 
 - None (infrastructure only)
 
-### 3. S3 Stack
+### 3. S3 Stack (COMPLETE)
 
 **Resources:**
 
 - Scripts S3 bucket for Lua scripts
+- IAM managed policy for S3 read/write access
+- Automatic script upload from /scripts_lua/* to bucket/scripts/*
 
 **Config.yml Output:**
 

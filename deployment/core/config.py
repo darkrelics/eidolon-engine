@@ -18,6 +18,7 @@ class Config:
     
     # S3 buckets
     s3_artifacts_bucket: str = ""
+    s3_scripts_bucket: str = ""
     
     def save(self, path: str) -> None:
         """Save operational configuration to config.yml."""
@@ -34,11 +35,14 @@ class Config:
             "Tables": self.dynamodb_tables
         }
         
-        # Update S3 section if artifacts bucket is set
-        if self.s3_artifacts_bucket:
+        # Update S3 section if buckets are set
+        if self.s3_artifacts_bucket or self.s3_scripts_bucket:
             if "S3" not in existing_config:
                 existing_config["S3"] = {}
-            existing_config["S3"]["ArtifactsBucket"] = self.s3_artifacts_bucket
+            if self.s3_artifacts_bucket:
+                existing_config["S3"]["ArtifactsBucket"] = self.s3_artifacts_bucket
+            if self.s3_scripts_bucket:
+                existing_config["S3"]["ScriptsBucket"] = self.s3_scripts_bucket
         
         with open(config_path, "w") as f:
             yaml.dump(existing_config, f, default_flow_style=False, sort_keys=False)
@@ -73,5 +77,6 @@ class Config:
             instance.dynamodb_tables = data.get("DynamoDB", {}).get("Tables", {})
         if "S3" in data:
             instance.s3_artifacts_bucket = data.get("S3", {}).get("ArtifactsBucket", "")
+            instance.s3_scripts_bucket = data.get("S3", {}).get("ScriptsBucket", "")
         
         return instance

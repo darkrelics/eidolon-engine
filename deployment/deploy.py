@@ -10,6 +10,7 @@ from core.state import CDKState
 from utilities import get_aws_account_id, validate_region, verify_prerequisites
 from dynamodb import deploy_dynamodb
 from codebuild import deploy_codebuild
+from s3 import deploy_s3
 
 
 @dataclass
@@ -18,6 +19,7 @@ class DeploymentParams:
     region: str = "us-east-1"
     account_id: str = ""
     s3_bucket: str = ""
+    scripts_bucket: str = ""
     github_owner: str = "robinje"
     github_repo: str = "eidolon-engine"
     github_branch: str = "develop"
@@ -73,7 +75,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             cdk_data = json.load(f)
             cdk_context = cdk_data.get("context", {})
     
-    # S3 Bucket - priority: default → cdk.json → config.yml → user prompt
+    # S3 Artifacts Bucket - priority: default → cdk.json → config.yml → user prompt
     s3_bucket = params.s3_bucket or cdk_context.get("s3_bucket", "") or getattr(config, "s3_artifacts_bucket", "")
     if s3_bucket:
         bucket_input = input(f"S3 Artifacts Bucket [{s3_bucket}]: ").strip()
@@ -83,6 +85,17 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             params.s3_bucket = input("S3 Artifacts Bucket: ").strip()
             if not params.s3_bucket:
                 print("S3 bucket name is required")
+    
+    # S3 Scripts Bucket - priority: default → cdk.json → config.yml → user prompt
+    scripts_bucket = params.scripts_bucket or cdk_context.get("scripts_bucket", "") or getattr(config, "s3_scripts_bucket", "")
+    if scripts_bucket:
+        scripts_input = input(f"S3 Scripts Bucket [{scripts_bucket}]: ").strip()
+        params.scripts_bucket = scripts_input if scripts_input else scripts_bucket
+    else:
+        while not params.scripts_bucket:
+            params.scripts_bucket = input("S3 Scripts Bucket: ").strip()
+            if not params.scripts_bucket:
+                print("S3 scripts bucket name is required")
     
     # GitHub Owner
     github_owner = cdk_context.get("github_owner", params.github_owner)
@@ -108,6 +121,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     if "context" not in cdk_data:
         cdk_data["context"] = {}
     cdk_data["context"]["s3_bucket"] = params.s3_bucket
+    cdk_data["context"]["scripts_bucket"] = params.scripts_bucket
     cdk_data["context"]["github_owner"] = params.github_owner
     cdk_data["context"]["github_repo"] = params.github_repo
     cdk_data["context"]["github_branch"] = params.github_branch
@@ -159,7 +173,9 @@ def main():
     print(f"  Stacks to deploy:")
     print(f"    - DynamoDB: 14 tables, 1 IAM policy")
     print(f"    - CodeBuild: 2 projects, 1 S3 bucket, 1 role, 2 policies")
-    print(f"  S3 Bucket: {params.s3_bucket}")
+    print(f"    - S3: 1 bucket, 1 IAM policy, Lua scripts upload")
+    print(f"  S3 Artifacts: {params.s3_bucket}")
+    print(f"  S3 Scripts: {params.scripts_bucket}")
     print(f"  GitHub: {params.github_owner}/{params.github_repo} ({params.github_branch})")
     print("=" * 60)
     
@@ -171,6 +187,7 @@ def main():
     # Deploy stacks
     dynamodb_success = deploy_dynamodb(params, config, state, config_path, state_path)
     codebuild_success = deploy_codebuild(params, config, state, config_path, state_path)
+    s3_success = deploy_s3(params, config, state, config_path, state_path)
 
     # Final summary
     print("\n" + "=" * 60)
@@ -178,6 +195,7 @@ def main():
     print("=" * 60)
     print(f"[{'OK' if dynamodb_success else 'WARNING'}] DynamoDB Stack")
     print(f"[{'OK' if codebuild_success else 'WARNING'}] CodeBuild Stack")
+    print(f"[{'OK' if s3_success else 'WARNING'}] S3 Stack")
     print("=" * 60)
     
     return 0

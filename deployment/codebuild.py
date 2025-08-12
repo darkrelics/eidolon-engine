@@ -13,7 +13,7 @@ from utilities import run_cdk_deploy, validate_policies
 def deploy_codebuild_stack(params) -> dict:
     """Deploy the CodeBuild stack using CDK."""
     app_command = (
-        f"python3 app.py --region {params.region} --s3-bucket {params.s3_bucket} "
+        f"python3 app_codebuild.py --region {params.region} --s3-bucket {params.s3_bucket} "
         f"--github-owner {params.github_owner} --github-repo {params.github_repo} "
         f"--github-branch {params.github_branch}"
     )

@@ -1,10 +1,9 @@
-"""CDK application entry point for Eidolon Engine infrastructure."""
+"""CDK application entry point for CodeBuild stack."""
 
 import argparse
 
 import aws_cdk as cdk
 
-from stacks.dynamodb_stack import DynamoDBStack
 from stacks.codebuild_stack import CodeBuildStack
 
 # Parse command line arguments
@@ -18,14 +17,6 @@ args, unknown = parser.parse_known_args()  # Use parse_known_args to ignore CDK'
 
 app = cdk.App()
 
-# Deploy DynamoDB stack with explicit region
-dynamodb_stack = DynamoDBStack(
-    app,
-    "dynamodb",
-    description="DynamoDB tables and access policy for Eidolon Engine",
-    region_name=args.region  # Pass region as explicit parameter
-)
-
 # Deploy CodeBuild stack with explicit parameters
 if args.s3_bucket:  # Only create if S3 bucket is provided
     codebuild_stack = CodeBuildStack(
@@ -38,5 +29,8 @@ if args.s3_bucket:  # Only create if S3 bucket is provided
         github_repo=args.github_repo,
         github_branch=args.github_branch
     )
+else:
+    print("Error: S3 bucket parameter is required for CodeBuild stack")
+    exit(1)
 
 app.synth()
