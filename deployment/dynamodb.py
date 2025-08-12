@@ -87,7 +87,7 @@ def validate_tables(region: str) -> dict:
 
 def verify_dynamodb_deployment(params) -> dict:
     """Verify the DynamoDB deployment completed successfully."""
-    print("\nVerifying deployment...")
+    print("\nVerifying DynamoDB deployment...")
     
     # Validate tables
     table_validation = validate_tables(params.region)

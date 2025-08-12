@@ -13,11 +13,11 @@ from core.dynamodb_tables import TABLE_CONFIGS
 class DynamoDBStack(Stack):
     """Creates DynamoDB tables and access policy for Eidolon Engine."""
 
-    def __init__(self, scope: Construct, construct_id: str, region_name: str = "us-east-1", **kwargs) -> None:
+    def __init__(self, scope: Construct, stack_id: str, region_name: str = "us-east-1", **kwargs) -> None:
         """Initialize DynamoDB stack."""
         # Extract region_name before passing kwargs to parent
         self.region_name = region_name
-        super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, stack_id, **kwargs)
 
         # Initialize existing tables from context
         self.existing_tables = {}

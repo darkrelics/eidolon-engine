@@ -24,6 +24,10 @@ class Config:
     cloudwatch_log_group: str = "/eidolon/server"
     cloudwatch_metrics_namespace: str = "eidolon/metrics"
     
+    # Cognito settings
+    cognito_user_pool_id: str = ""
+    cognito_client_id: str = ""
+    
     def save(self, path: str) -> None:
         """Save operational configuration to config.yml."""
         config_path = Path(path)
@@ -56,6 +60,15 @@ class Config:
                 existing_config["CloudWatch"]["LogGroup"] = self.cloudwatch_log_group
             if self.cloudwatch_metrics_namespace:
                 existing_config["CloudWatch"]["MetricsNamespace"] = self.cloudwatch_metrics_namespace
+        
+        # Update Cognito section if settings are set
+        if self.cognito_user_pool_id or self.cognito_client_id:
+            if "Cognito" not in existing_config:
+                existing_config["Cognito"] = {}
+            if self.cognito_user_pool_id:
+                existing_config["Cognito"]["UserPoolId"] = self.cognito_user_pool_id
+            if self.cognito_client_id:
+                existing_config["Cognito"]["ClientId"] = self.cognito_client_id
         
         with open(config_path, "w") as f:
             yaml.dump(existing_config, f, default_flow_style=False, sort_keys=False)
@@ -94,5 +107,8 @@ class Config:
         if "CloudWatch" in data:
             instance.cloudwatch_log_group = data.get("CloudWatch", {}).get("LogGroup", instance.cloudwatch_log_group)
             instance.cloudwatch_metrics_namespace = data.get("CloudWatch", {}).get("MetricsNamespace", instance.cloudwatch_metrics_namespace)
+        if "Cognito" in data:
+            instance.cognito_user_pool_id = data.get("Cognito", {}).get("UserPoolId", "")
+            instance.cognito_client_id = data.get("Cognito", {}).get("ClientId", "")
         
         return instance

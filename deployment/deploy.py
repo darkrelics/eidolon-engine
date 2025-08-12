@@ -12,6 +12,7 @@ from dynamodb import deploy_dynamodb
 from codebuild import deploy_codebuild
 from s3 import deploy_s3
 from cloudwatch import deploy_cloudwatch
+from player import deploy_player
 
 
 @dataclass
@@ -173,9 +174,10 @@ def main():
     print(f"  Region: {params.region}")
     print(f"  Stacks to deploy:")
     print(f"    - DynamoDB: 14 tables, 1 IAM policy")
-    print(f"    - CodeBuild: 2 projects, 1 S3 bucket, 1 role, 2 policies")
+    print(f"    - CodeBuild: 2 projects, 1 S3 bucket, 1 role, 2 policies, Lambda builds")
     print(f"    - S3: 1 bucket, 1 IAM policy, Lua scripts upload")
     print(f"    - CloudWatch: 1 log group, metrics namespace, 1 IAM policy")
+    print(f"    - Player: Cognito User Pool, Lambda function, IAM role")
     print(f"  S3 Artifacts: {params.s3_bucket}")
     print(f"  S3 Scripts: {params.scripts_bucket}")
     print(f"  GitHub: {params.github_owner}/{params.github_repo} ({params.github_branch})")
@@ -191,6 +193,7 @@ def main():
     codebuild_success = deploy_codebuild(params, config, state, config_path, state_path)
     s3_success = deploy_s3(params, config, state, config_path, state_path)
     cloudwatch_success = deploy_cloudwatch(params, config, state, config_path, state_path)
+    player_success = deploy_player(params, config, state, config_path, state_path)
 
     # Final summary
     print("\n" + "=" * 60)
@@ -200,6 +203,7 @@ def main():
     print(f"[{'OK' if codebuild_success else 'WARNING'}] CodeBuild Stack")
     print(f"[{'OK' if s3_success else 'WARNING'}] S3 Stack")
     print(f"[{'OK' if cloudwatch_success else 'WARNING'}] CloudWatch Stack")
+    print(f"[{'OK' if player_success else 'WARNING'}] Player Stack")
     print("=" * 60)
     
     return 0

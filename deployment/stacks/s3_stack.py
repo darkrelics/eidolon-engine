@@ -14,7 +14,7 @@ class S3Stack(Stack):
     def __init__(
         self,
         scope: Construct,
-        construct_id: str,
+        stack_id: str,
         region_name: str = "us-east-1",
         scripts_bucket: str = "",
         **kwargs
@@ -22,7 +22,7 @@ class S3Stack(Stack):
         """Initialize S3 stack."""
         self.region_name = region_name
         self.scripts_bucket_name = scripts_bucket
-        super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, stack_id, **kwargs)
 
         # Create or import S3 bucket for scripts
         if self._bucket_exists(self.scripts_bucket_name):

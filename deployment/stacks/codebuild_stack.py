@@ -15,7 +15,7 @@ class CodeBuildStack(Stack):
     def __init__(
         self,
         scope: Construct,
-        construct_id: str,
+        stack_id: str,
         region_name: str = "us-east-1",
         s3_bucket: str = "",
         github_owner: str = "robinje",
@@ -29,7 +29,7 @@ class CodeBuildStack(Stack):
         self.github_owner = github_owner
         self.github_repo = github_repo
         self.github_branch = github_branch
-        super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, stack_id, **kwargs)
 
         # Create or import S3 bucket for artifacts
         if self._bucket_exists(self.s3_bucket_name):
