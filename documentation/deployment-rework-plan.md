@@ -34,14 +34,19 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 
 ## Phase 2: CodeBuild Stack (IN PROGRESS)
 
+### Phase 2 Summary
+
+Successfully implemented CodeBuild infrastructure for Lambda builds with the following architecture:
+- Single shared IAM role with custom managed policies for least privilege
+- S3 bucket with import capability and RETAIN policy for artifacts
+- Two CodeBuild projects for lambda-layer and lambda-functions builds
+- Modular deployment code split into focused modules under 300 lines each
+- Comprehensive validation for all resources
+
 ### Phase 2 Status
 
 #### Open Tasks
 
-- Update app.py to instantiate CodeBuildStack
-- Add deploy_codebuild_stack function in deploy.py
-- Add validation functions for S3 bucket and CodeBuild projects
-- Update main() to handle CodeBuild stack deployment
 - Test CodeBuild stack deployment
 
 #### Completed Tasks
@@ -55,6 +60,11 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 - Implemented S3 bucket import/create logic with RETAIN policy
 - Implemented CodeBuild projects for lambda-layer and lambda-functions
 - Created shared IAM role with custom managed policies for CloudWatch and S3 access
+- Updated app.py to instantiate CodeBuildStack
+- Added deploy_codebuild_stack function (now in codebuild.py)
+- Added validation functions for S3 bucket and CodeBuild projects
+- Updated main() to handle CodeBuild stack deployment
+- Refactored deployment code into modular structure (deploy.py, utilities.py, dynamodb.py, codebuild.py)
 
 ### Phase 2 Lessons Learned Violations & Corrections
 
@@ -84,6 +94,11 @@ During initial Phase 2 implementation, the following lessons from Phase 1 were v
 
 - Initially created two separate IAM roles with AWS managed policies
 - Corrected: Created single shared role with custom managed policies following lessons 32-35
+
+**Violated Lesson #2 - Script vs Library**
+
+- deploy.py grew to over 700 lines with mixed responsibilities
+- Corrected: Refactored into 4 focused modules under 300 lines each
 
 ### Objectives
 
@@ -193,6 +208,10 @@ Post-deployment checks will verify:
 33. **Custom Managed Policies**: Prefer custom managed policies with least privilege over AWS managed policies
 34. **Resource Naming**: Use consistent naming pattern (eidolon-resource-type-purpose)
 35. **Policy Resource Scoping**: Be specific with resource ARNs while maintaining flexibility for growth
+36. **Module Size Enforcement**: When a module exceeds 300 lines, immediately refactor into focused sub-modules
+37. **Import Organization**: Group imports by category (standard library, external packages, local modules)
+38. **Function Parameter Types**: Use dataclasses for complex parameter sets, primitives for simple functions
+39. **Conditional Stack Creation**: Use conditional logic in app.py to only create stacks when required parameters exist
 
 ## Current System Issues
 
