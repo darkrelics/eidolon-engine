@@ -53,6 +53,4 @@ phases:
         done
 
 artifacts:
-  files:
-    - lambda/*.zip
-  name: lambda-functions
+  Type: NO_ARTIFACTS

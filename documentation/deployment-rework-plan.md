@@ -61,6 +61,8 @@ Successfully implemented CloudWatch infrastructure for logging and monitoring wi
 - Added CloudWatch to deployment summary and final status
 - Fixed region parameter handling to match established patterns
 - Fixed stack ID naming to match conventions
+- Fixed IAM policy validation by removing import logic
+- Aligned with other stacks' managed policy patterns
 
 ### Phase 4 Lessons Learned Violations & Corrections
 
@@ -70,6 +72,7 @@ During Phase 4 implementation, the following lessons were violated:
 
 - Initially used different parameter names (`region` vs `region_name`) than established stacks
 - Initially used different stack ID pattern (`eidolon-cloudwatch` vs `cloudwatch`)
+- Initially tried to import existing IAM policies while other stacks always create them
 - Corrected: Updated to match exact patterns from existing stacks
 
 **Violated Lesson #27 - CDK Tokens vs Strings**
@@ -77,12 +80,19 @@ During Phase 4 implementation, the following lessons were violated:
 - Attempted to override CDK Stack's read-only `region` property
 - Corrected: Used `region_name` parameter stored before super().__init__()
 
+**Violated Lesson #31 - Managed Policies Only**
+
+- Attempted to import existing managed policies using `from_managed_policy_arn()`
+- This created references that CDK doesn't actually manage, causing validation failures
+- Corrected: Always create managed policy definitions and let CDK handle create/update
+
 **Root Cause Analysis**
 
 The CloudWatch stack implementation failed to properly analyze existing patterns before implementation:
 1. Did not check how other stacks handled region parameters
 2. Did not verify stack ID naming conventions
 3. Did not examine app file structure patterns thoroughly
+4. Added unnecessary complexity with policy import logic not used elsewhere
 
 ### Phase 3 Summary
 
@@ -109,7 +119,7 @@ Successfully implemented S3 infrastructure for Lua scripts with the following ar
 - Refactored to separate app files (app_dynamodb.py, app_codebuild.py, app_s3.py) for stack isolation
 - Removed deprecated app.py per no legacy code policy
 
-### Phase 2 Summary
+### Phase 2 Summary (Including Phase 5 Integration)
 
 Successfully implemented CodeBuild infrastructure for Lambda builds with the following architecture:
 - Single shared IAM role with custom managed policies for least privilege
@@ -118,8 +128,12 @@ Successfully implemented CodeBuild infrastructure for Lambda builds with the fol
 - Modular deployment code split into focused modules under 300 lines each
 - Comprehensive validation for all resources
 - Unified user input flow with single deployment confirmation
+- **Phase 5 Integration**: Automatic build execution after stack deployment
+- Sequential build execution (layer then functions)
+- Real-time build monitoring with phase updates
+- Build artifact validation for all 17 Lambda functions
 
-**Phase 2 Completed**: Successfully deployed and tested in production environment
+**Phase 2 & 5 Completed**: Successfully deployed and tested with integrated build execution
 
 ### Phase 2 Status
 
@@ -312,6 +326,17 @@ Post-deployment checks will verify:
 50. **Stack ID Convention**: Use lowercase stack type names as stack IDs (e.g., "cloudwatch" not "eidolon-cloudwatch")
 51. **Parameter Naming Consistency**: Use exact same parameter names across all stacks (e.g., region_name not region)
 52. **App File Structure**: Follow established app file patterns including parse_known_args() and description parameter
+53. **Phase Integration**: Build execution phases can be integrated into deployment phases for better cohesion
+54. **Sequential Dependencies**: Enforce build order when artifacts depend on each other (layer before functions)
+55. **Build Monitoring**: Provide real-time phase updates during long-running operations
+56. **Error Context**: Include relevant logs (last 50 lines) when builds fail for immediate debugging
+57. **Artifact Validation**: Always validate build outputs exist and have reasonable sizes
+58. **Consistent Messaging**: Integrated operations should maintain parent phase context in output
+59. **CDK Resource Management**: Always create resource definitions; let CDK handle create vs update logic
+60. **Avoid Import Complexity**: Don't import existing AWS resources unless absolutely necessary - CDK handles updates
+61. **Validation Compatibility**: Imported resources won't validate properly since CDK doesn't manage them
+62. **Artifact Path Accuracy**: Verify exact S3 paths for artifacts (e.g., lambda-layer/lambda-layer.zip)
+63. **Function Name Precision**: Use exact Lambda function names in validation (ops-segment-process not processor)
 
 ## Current System Issues
 
@@ -335,10 +360,10 @@ Post-deployment checks will verify:
 
 ```
 1. DynamoDB Stack     → Tables and access policies [COMPLETE]
-2. CodeBuild Stack    → Build infrastructure and artifacts bucket [COMPLETE]
+2. CodeBuild Stack    → Build infrastructure, artifacts bucket, and Lambda builds [COMPLETE]
 3. S3 Stack          → Scripts bucket [COMPLETE]
 4. CloudWatch Stack  → Logging and metrics [COMPLETE]
-5. [Build Phase]     → Execute Lambda builds
+5. [Build Phase]     → Execute Lambda builds [COMPLETE - Integrated into Phase 2]
 6. Player Stack      → Cognito and auth Lambdas
 7. Character Stack   → Character management Lambdas
 8. Story Stack       → Story processing, SQS, EventBridge
@@ -405,13 +430,40 @@ Post-deployment checks will verify:
 - CloudWatch.LogGroup: /eidolon/server
 - CloudWatch.MetricsNamespace: eidolon/metrics
 
-### 5. Build Execution Phase
+### 5. Build Execution Phase [COMPLETE - Integrated into Phase 2]
 
-**Actions:**
+**Actions:** (Integrated into CodeBuild stack deployment process)
 
-- Execute Lambda Layer build
-- Execute Lambda Functions build
-- Validate artifacts in S3
+- Start Lambda Layer build after CodeBuild stack validation
+- Monitor build progress with real-time phase updates
+- Wait for layer build completion before starting functions build
+- Start Lambda Functions build (requires completed layer)
+- Monitor functions build progress
+- Print last 50 lines of logs on failure for debugging
+- Validate artifacts in S3:
+  - lambda-layer.zip exists and has reasonable size
+  - All Lambda function zips exist (17 total: 2 Player, 5 Character, 10 Story)
+  - Verify artifacts are in correct S3 location
+
+**Implementation:**
+- Added to codebuild.py: start_build(), monitor_build(), validate_artifacts()
+- Execute sequentially: layer must complete before functions
+- 30-minute timeout per build
+- Integrated into deploy_codebuild() after stack validation
+
+### Phase 5 Status
+
+#### Completed Tasks
+
+- Added start_build() function to initiate CodeBuild projects
+- Implemented monitor_build() with real-time phase tracking
+- Added print_build_logs() for debugging failed builds
+- Created execute_lambda_builds() for sequential execution
+- Implemented validate_build_artifacts() to verify all 17 Lambda zips
+- Integrated execution into deploy_codebuild() after stack validation
+- Maintained Phase 2 messaging context (not separate phase output)
+- Fixed artifact validation paths (lambda-layer in subdirectory)
+- Fixed function name (ops-segment-process not processor)
 
 ### 6. Player Stack
 

@@ -2,12 +2,12 @@
   "stacks": {
     "dynamodb": {
       "deployed": true,
-      "timestamp": "2025-08-12T02:35:09.391255",
+      "timestamp": "2025-08-12T03:00:28.307515",
       "outputs": {}
     },
     "codebuild": {
       "deployed": true,
-      "timestamp": "2025-08-12T02:35:13.416493",
+      "timestamp": "2025-08-12T03:00:32.437353",
       "outputs": {
         "CodeBuildRoleArn": "arn:aws:iam::542230992937:role/eidolon-lambda-codebuild-role",
         "LambdaFunctionsProjectName": "eidolon-lambda-functions",
@@ -17,7 +17,7 @@
     },
     "s3": {
       "deployed": true,
-      "timestamp": "2025-08-12T02:35:17.156217",
+      "timestamp": "2025-08-12T03:03:28.074544",
       "outputs": {
         "ScriptsBucketName": "darkrelics-scripts",
         "ScriptsS3PolicyArn": "arn:aws:iam::542230992937:policy/eidolon-scripts-s3-policy"
@@ -36,5 +36,5 @@
   "infrastructure": {
     "dynamodb_policy_arn": "arn:aws:iam::542230992937:policy/eidolon-dynamodb-policy"
   },
-  "last_updated": "2025-08-12T02:36:02.885407"
+  "last_updated": "2025-08-12T03:03:28.074555"
 }

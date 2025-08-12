@@ -34,6 +34,4 @@ phases:
         fi
 
 artifacts:
-  base-directory: incremental/build/web
-  files:
-    - "**/*"
+  Type: NO_ARTIFACTS

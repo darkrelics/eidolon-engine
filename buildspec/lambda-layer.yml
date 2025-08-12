@@ -17,4 +17,4 @@ phases:
 
 artifacts:
   files:
-    - lambda-layer.zip
+    Type: NO_ARTIFACTS

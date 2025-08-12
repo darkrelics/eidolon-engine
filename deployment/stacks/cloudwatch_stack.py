@@ -78,17 +78,7 @@ class CloudWatchStack(Stack):
         """Create managed policy for CloudWatch access."""
         policy_name = "eidolon-cloudwatch-policy"
         
-        # Check if policy exists
-        if self._policy_exists(policy_name):
-            print(f"  Using existing managed policy: {policy_name}")
-            account_id = Stack.of(self).account
-            return iam.ManagedPolicy.from_managed_policy_arn(
-                self,
-                "CloudWatchPolicy",
-                f"arn:aws:iam::{account_id}:policy/{policy_name}"
-            )
-        
-        print(f"  Creating new managed policy: {policy_name}")
+        print(f"  Creating managed policy: {policy_name}")
         return iam.ManagedPolicy(
             self,
             "CloudWatchPolicy",
@@ -119,16 +109,6 @@ class CloudWatchStack(Stack):
                 )
             ]
         )
-    
-    def _policy_exists(self, policy_name: str) -> bool:
-        """Check if a managed policy exists."""
-        try:
-            iam_client = boto3.client("iam", region_name=self.region_name)
-            account_id = boto3.client("sts", region_name=self.region_name).get_caller_identity()["Account"]
-            iam_client.get_policy(PolicyArn=f"arn:aws:iam::{account_id}:policy/{policy_name}")
-            return True
-        except ClientError:
-            return False
     
     def _add_outputs(self) -> None:
         """Add stack outputs."""

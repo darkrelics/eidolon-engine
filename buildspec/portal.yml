@@ -39,6 +39,4 @@ phases:
         fi
 
 artifacts:
-  base-directory: portal/build/web
-  files:
-    - "**/*"
+  Type: NO_ARTIFACTS
