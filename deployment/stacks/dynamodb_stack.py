@@ -13,8 +13,10 @@ from core.dynamodb_tables import TABLE_CONFIGS
 class DynamoDBStack(Stack):
     """Creates DynamoDB tables and access policy for Eidolon Engine."""
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, region_name: str = "us-east-1", **kwargs) -> None:
         """Initialize DynamoDB stack."""
+        # Extract region_name before passing kwargs to parent
+        self.region_name = region_name
         super().__init__(scope, construct_id, **kwargs)
 
         # Initialize existing tables from context
@@ -174,7 +176,7 @@ class DynamoDBStack(Stack):
             if not table_name:
                 return False
 
-            dynamodb_client = boto3.client("dynamodb", region_name=self.region)
+            dynamodb_client = boto3.client("dynamodb", region_name=self.region_name)
             dynamodb_client.describe_table(TableName=table_name)
             return True
         except ClientError as err:
@@ -194,7 +196,7 @@ class DynamoDBStack(Stack):
             True if schema matches, False otherwise
         """
         try:
-            dynamodb_client = boto3.client("dynamodb", region_name=self.region)
+            dynamodb_client = boto3.client("dynamodb", region_name=self.region_name)
             response = dynamodb_client.describe_table(TableName=table_name)
             key_schema = response.get("Table", {}).get("KeySchema", [])
 

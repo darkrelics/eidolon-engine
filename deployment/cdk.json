@@ -1,7 +1,0 @@
-{
-  "app": "python app.py",
-  "context": {
-    "@aws-cdk/aws-iam:minimizePolicies": true,
-    "@aws-cdk/core:newStyleStackSynthesis": true
-  }
-}

@@ -79,6 +79,10 @@ def verify_cdk_installed() -> bool:
 
 def verify_cdk_bootstrap(region: str) -> bool:
     """Check if CDK is bootstrapped in the target region."""
+    # Validate region before attempting to check bootstrap
+    if not validate_region(region):
+        return False
+    
     cfn = boto3.client("cloudformation", region_name=region)
     
     try:
@@ -111,7 +115,7 @@ def deploy_dynamodb_stack(region: str) -> dict:
                 "cdk", "deploy", "dynamodb",
                 "--require-approval", "never",
                 "--region", region,
-                "--app", "python app.py"
+                "--app", f"python3 app.py --region {region}"
             ],
             capture_output=True,
             text=True,
@@ -262,6 +266,32 @@ def validate_policies(policy_names: list[str]) -> dict:
     return results
 
 
+def validate_region(region: str) -> str:
+    """Validate and sanitize AWS region.
+    
+    Args:
+        region: AWS region to validate
+        
+    Returns:
+        Sanitized region string if valid, empty string if invalid
+    """
+    # Sanitize input - strip whitespace and convert to lowercase
+    sanitized_region = region.strip().lower()
+    
+    # Define supported regions
+    supported_regions = ["us-east-1", "us-east-2", "us-west-2"]
+    
+    if sanitized_region in supported_regions:
+        return sanitized_region
+    
+    # Invalid region - print error and return empty string
+    print(f"\nError: Region '{region}' is not supported")
+    print(f"Supported regions: {', '.join(supported_regions)}")
+    print("To use a different region, please modify the validate_region function")
+    
+    return ""
+
+
 def verify_prerequisites() -> bool:
     """Verify all prerequisites for deployment."""
     print("\nChecking prerequisites...")
@@ -285,29 +315,40 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
         raise ValueError("Unable to determine AWS account ID")
     print(f"AWS Account: {account_id}")
     
-    # Get region with user input
+    # Get region with user input and validation
     print(f"Current region: {config.region}")
-    region_input = input(f"AWS Region [{config.region}]: ").strip()
-    region = region_input if region_input else config.region
+    
+    # Validate current config region first
+    validated_region = validate_region(config.region)
+    if not validated_region:
+        # Current config has invalid region, force user to enter valid one
+        while not validated_region:
+            region_input = input("Enter AWS Region (us-east-1, us-east-2, us-west-2): ").strip()
+            validated_region = validate_region(region_input)
+            if not validated_region:
+                print("Please enter a valid region")
+    else:
+        # Current config region is valid, offer it as default
+        region_input = input(f"AWS Region [{config.region}]: ").strip()
+        if region_input:
+            # User entered a new region, validate it
+            new_region = validate_region(region_input)
+            if new_region:
+                validated_region = new_region
+            else:
+                print(f"Keeping current region: {config.region}")
+                validated_region = config.region
     
     # Update config if region changed
-    if region != config.region:
-        config.region = region
-        print(f"Updated region to: {region}")
+    if validated_region != config.region:
+        config.region = validated_region
+        print(f"Updated region to: {validated_region}")
     
-    return DeploymentParams(region=region, account_id=account_id)
+    return DeploymentParams(region=validated_region, account_id=account_id)
 
 
 def execute_deployment(params: DeploymentParams, state: CDKState) -> bool:
     """Execute the deployment with given parameters."""
-    # Check if already deployed
-    if "dynamodb" in state.stacks and state.stacks.get("dynamodb", {}).get("deployed"):
-        print("\nDynamoDB stack already deployed")
-        response = input("Redeploy? [y/N]: ").strip().lower()
-        if response != "y":
-            print("Deployment cancelled")
-            return False
-    
     # Check CDK bootstrap
     if not verify_cdk_bootstrap(params.region):
         response = input("\nCDK bootstrap not found. Continue anyway? [y/N]: ").strip().lower()

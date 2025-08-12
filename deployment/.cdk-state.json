@@ -1,0 +1,13 @@
+{
+  "stacks": {
+    "dynamodb": {
+      "deployed": true,
+      "timestamp": "2025-08-11T22:19:11.667700",
+      "outputs": {}
+    }
+  },
+  "infrastructure": {
+    "dynamodb_policy_arn": "arn:aws:iam::542230992937:policy/eidolon-dynamodb-policy"
+  },
+  "last_updated": "2025-08-11T22:19:11.667708"
+}
