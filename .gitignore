@@ -89,4 +89,4 @@ CLAUDE.md
 **/.ruff_cache
 **/.ruff_cache/**
 
-**/.deployment_state.json
+**/.cdk-state.json
