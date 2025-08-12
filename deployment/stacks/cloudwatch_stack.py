@@ -35,7 +35,7 @@ class CloudWatchStack(Stack):
         # Add outputs
         self._add_outputs()
     
-    def _create_log_group(self) -> logs.LogGroup:
+    def _create_log_group(self) -> logs.ILogGroup:
         """Create or import the server log group."""
         log_group_name = "/eidolon/server"
         

@@ -336,7 +336,16 @@ Post-deployment checks will verify:
 60. **Avoid Import Complexity**: Don't import existing AWS resources unless absolutely necessary - CDK handles updates
 61. **Validation Compatibility**: Imported resources won't validate properly since CDK doesn't manage them
 62. **Artifact Path Accuracy**: Verify exact S3 paths for artifacts (e.g., lambda-layer/lambda-layer.zip)
-63. **Function Name Precision**: Use exact Lambda function names in validation (ops-segment-process not processor)
+63. **Function Name Precision**: Use exact Lambda function names in validation (ops-segment-process not ops-segment-processor)
+64. **Lambda Infrastructure First**: Deploy Lambda layer and functions before service integrations (Cognito, SQS, EventBridge)
+65. **Trigger Separation**: Cognito-triggered Lambdas have different lifecycle - handle separately from API/operational Lambdas
+66. **Shared IAM Role**: Single Lambda execution role with attached policies is simpler than per-function roles
+67. **Policy Attachment Pattern**: Create base policies with stack, attach additional policies in dependent stacks
+68. **Environment Variable Sources**: Lambda environment variables derived from previous stack outputs, not config.yml
+69. **Dynamic CloudWatch Logs**: Lambda functions create their own log groups dynamically - no pre-creation needed
+70. **Wide Initial Permissions**: Start with broad Lambda role permissions, refine pre-GA
+71. **No Lambda Versioning**: Aliases and versions add complexity without value for this use case
+72. **Custom Domain Required**: System requires custom domain for CORS - collect upfront to avoid circular dependencies
 
 ## Current System Issues
 
@@ -363,12 +372,11 @@ Post-deployment checks will verify:
 2. CodeBuild Stack    → Build infrastructure, artifacts bucket, and Lambda builds [COMPLETE]
 3. S3 Stack          → Scripts bucket [COMPLETE]
 4. CloudWatch Stack  → Logging and metrics [COMPLETE]
-5. [Build Phase]     → Execute Lambda builds [COMPLETE - Integrated into Phase 2]
-6. Player Stack      → Cognito and auth Lambdas
-7. Character Stack   → Character management Lambdas
-8. Story Stack       → Story processing, SQS, EventBridge
-9. Client Stack      → Portal, CloudFront, API Gateway
-10. [Portal Build]   → Final frontend deployment
+5. Lambda Stack      → Lambda layer, IAM role/policies, 16 Lambda functions (excluding cognito-player-delete)
+6. Player Stack      → Cognito User Pool, triggers, cognito-player-delete Lambda
+7. Story Stack       → SSM parameter, SQS, EventBridge, additional Lambda permissions
+8. Client Stack      → Portal, CloudFront, API Gateway
+9. [Portal Build]    → Final frontend deployment
 ```
 
 ## Detailed Stack Resources
@@ -430,40 +438,37 @@ Post-deployment checks will verify:
 - CloudWatch.LogGroup: /eidolon/server
 - CloudWatch.MetricsNamespace: eidolon/metrics
 
-### 5. Build Execution Phase [COMPLETE - Integrated into Phase 2]
+### 5. Lambda Stack
 
-**Actions:** (Integrated into CodeBuild stack deployment process)
+**Resources:**
 
-- Start Lambda Layer build after CodeBuild stack validation
-- Monitor build progress with real-time phase updates
-- Wait for layer build completion before starting functions build
-- Start Lambda Functions build (requires completed layer)
-- Monitor functions build progress
-- Print last 50 lines of logs on failure for debugging
-- Validate artifacts in S3:
-  - lambda-layer.zip exists and has reasonable size
-  - All Lambda function zips exist (17 total: 2 Player, 5 Character, 10 Story)
-  - Verify artifacts are in correct S3 location
+- Lambda Layer deployment from built artifact
+- Shared IAM role for all Lambda functions
+- IAM managed policies:
+  - DynamoDB read/write access (attach existing policy from DynamoDB stack)
+  - CloudWatch Logs write access (create/write to dynamic log groups)
+- 16 Lambda functions (all except cognito-player-delete):
+  - Player: `cognito-player-new`
+  - Character: `api-archetype-list`, `api-character-add`, `api-character-delete`, `api-character-get`, `api-character-list`
+  - Story: `api-segment-decision`, `api-segment-history`, `api-segment-outcome`, `api-segment-rest`, `api-segment-status`, `api-story-abandon`, `api-story-start`, `ops-segment-poller`, `ops-segment-process`, `ops-story-advance`
 
-**Implementation:**
-- Added to codebuild.py: start_build(), monitor_build(), validate_artifacts()
-- Execute sequentially: layer must complete before functions
-- 30-minute timeout per build
-- Integrated into deploy_codebuild() after stack validation
+**Lambda Configuration:**
+- Runtime: Python 3.12
+- Memory: 128MB (all functions)
+- Timeout: 30 seconds (all functions)
+- Layer association for all functions
+- Environment variables (from environment.py patterns):
+  - DynamoDB table names from DynamoDB stack outputs
+  - APPLICATION_NAME, LOG_LEVEL
+  - ALLOWED_ORIGINS (from custom domain input collected upfront)
+  - CORS settings (credentials, headers, methods, max age)
+  - Function-specific configs (SEGMENT_BATCH_SIZE, etc.)
 
-### Phase 5 Status
+**Required User Input:**
+- Custom domain name (for CORS configuration)
 
-#### Completed Tasks
-
-- Added start_build() function to initiate CodeBuild projects
-- Implemented monitor_build() with real-time phase tracking
-- Added print_build_logs() for debugging failed builds
-- Created execute_lambda_builds() for sequential execution
-- Implemented validate_build_artifacts() to verify all 17 Lambda zips
-- Integrated execution into deploy_codebuild() after stack validation
-- Maintained Phase 2 messaging context (not separate phase output)
-- Fixed artifact validation paths (lambda-layer in subdirectory)
-- Fixed function name (ops-segment-process not processor)
+**Config.yml Output:**
+- None (Lambda ARNs used directly by dependent stacks)
 
 ### 6. Player Stack
 
@@ -471,34 +476,20 @@ Post-deployment checks will verify:
 
 - Cognito User Pool
 - Cognito User Pool Client
-- IAM role with attached policies
-- Lambda functions:
-  - `cognito-player-new` (PostConfirmation trigger)
+- Lambda function:
   - `cognito-player-delete` (PreUserDeletion trigger)
-- Cognito triggers configuration
+- IAM execution role for cognito-player-delete
+- Cognito triggers configuration:
+  - PostConfirmation → cognito-player-new (from Lambda Stack)
+  - PreUserDeletion → cognito-player-delete
+- Lambda invoke permissions for Cognito service
 
 **Config.yml Output:**
 
 - Cognito.UserPoolId
 - Cognito.ClientId
 
-### 7. Character Stack
-
-**Resources:**
-
-- IAM role with attached policies
-- Lambda functions:
-  - `api-archetype-list`
-  - `api-character-add`
-  - `api-character-delete`
-  - `api-character-get`
-  - `api-character-list`
-
-**Config.yml Output:**
-
-- None
-
-### 8. Story Stack
+### 7. Story Stack
 
 **Resources:**
 
@@ -506,36 +497,35 @@ Post-deployment checks will verify:
 - SQS Queues:
   - processing-queue
   - advancement-queue
-- SQS access policy
-- EventBridge rule for polling
-- IAM role with attached policies
-- Lambda functions:
-  - `api-segment-decision`
-  - `api-segment-history`
-  - `api-segment-outcome`
-  - `api-segment-rest`
-  - `api-segment-status`
-  - `api-story-abandon`
-  - `api-story-start`
-  - `ops-segment-poller`
-  - `ops-segment-processor`
-  - `ops-story-advance`
+- EventBridge rule for polling schedule
+- IAM managed policy with:
+  - SSM read access for story parameters
+  - SQS send/receive/delete permissions
+  - EventBridge permissions
+- Attach policy to Lambda role from Lambda Stack
+- Lambda permissions:
+  - EventBridge invoke permission for ops-segment-poller
+  - Update Lambda environment variables with SQS queue URLs
 
 **Config.yml Output:**
 
 - SSM.StoryParameter
 
-### 9. Client Stack
+### 8. Client Stack
 
 **Resources:**
 
 - Portal S3 bucket
 - CloudFront distribution
-- Route53 alias (if custom domain)
-- ACM certificate (if custom domain)
-- API Gateway with Lambda integrations
-- API Gateway custom domain (if configured)
+- Route53 alias (required - custom domain)
+- ACM certificate (required - custom domain)
+- API Gateway with Lambda integrations (using Lambda ARNs from Lambda Stack)
+- API Gateway custom domain (required)
 - Portal CodeBuild project
+
+**Required User Input:**
+- Custom domain name (same as Lambda Stack)
+- Route53 Hosted Zone ID
 
 **Config.yml Output:**
 
@@ -544,7 +534,7 @@ Post-deployment checks will verify:
 - CloudFront.DomainName
 - API.GatewayUrl
 
-### 10. Portal Build Execution
+### 9. Portal Build Execution
 
 **Actions:**
 
