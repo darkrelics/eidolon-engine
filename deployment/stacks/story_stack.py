@@ -1,7 +1,5 @@
 """Story processing stack with SSM, SQS, and EventBridge."""
 
-import boto3
-from botocore.exceptions import ClientError
 from aws_cdk import Stack, RemovalPolicy, CfnOutput, Duration
 from aws_cdk import aws_ssm as ssm
 from aws_cdk import aws_sqs as sqs
@@ -71,16 +69,7 @@ class StoryStack(Stack):
     
     def _create_ssm_parameter(self) -> ssm.StringParameter:
         """Create SSM Parameter for story configuration."""
-        parameter_name = "/eidolon/story/config"
-        
-        # Check if parameter already exists
-        if self._parameter_exists(parameter_name):
-            print(f"  Importing existing SSM Parameter: {parameter_name}")
-            return ssm.StringParameter.from_string_parameter_name(
-                self, "StoryConfigParameter", parameter_name
-            ) #type: ignore
-        
-        print(f"  Creating SSM Parameter: {parameter_name}")
+        print("  Creating SSM Parameter: /eidolon/story/config")
         
         # Default story configuration
         default_config = '{"enabled": false, "polling_interval": 60}'
@@ -96,18 +85,7 @@ class StoryStack(Stack):
     
     def _create_processing_queue(self) -> sqs.Queue:
         """Create SQS queue for segment processing."""
-        queue_name = "eidolon-processing-queue"
-        
-        # Check if queue already exists
-        exists, queue_url = self._queue_exists(queue_name)
-        if exists:
-            print(f"  Importing existing SQS Queue: {queue_name}")
-            return sqs.Queue.from_queue_arn(
-                self, "ProcessingQueue",
-                f"arn:aws:sqs:{self.region_name}:{self.account}:eidolon-processing-queue"
-            ) # type: ignore
-        
-        print(f"  Creating SQS Queue: {queue_name}")
+        print("  Creating SQS Queue: eidolon-processing-queue")
         
         return sqs.Queue(
             self,
@@ -120,18 +98,7 @@ class StoryStack(Stack):
     
     def _create_advancement_queue(self) -> sqs.Queue:
         """Create SQS queue for story advancement."""
-        queue_name = "eidolon-advancement-queue"
-        
-        # Check if queue already exists
-        exists, queue_url = self._queue_exists(queue_name)
-        if exists:
-            print(f"  Importing existing SQS Queue: {queue_name}")
-            return sqs.Queue.from_queue_arn(
-                self, "AdvancementQueue",
-                f"arn:aws:sqs:{self.region_name}:{self.account}:eidolon-advancement-queue"
-            ) # type: ignore
-        
-        print(f"  Creating SQS Queue: {queue_name}")
+        print("  Creating SQS Queue: eidolon-advancement-queue")
         
         return sqs.Queue(
             self,
@@ -184,7 +151,7 @@ class StoryStack(Stack):
     
     def _attach_policy_to_role(self) -> None:
         """Attach story policy to Lambda execution role."""
-        print(f"  Attaching story policy to Lambda role")
+        print("  Attaching story policy to Lambda role")
         
         # Import the Lambda role
         lambda_role = iam.Role.from_role_arn(
@@ -198,7 +165,7 @@ class StoryStack(Stack):
     
     def _configure_sqs_trigger(self, queue: sqs.Queue, lambda_arn: str, trigger_id: str) -> None:
         """Configure SQS to trigger Lambda function."""
-        print(f"  Configuring SQS trigger for Lambda")
+        print("  Configuring SQS trigger for Lambda")
         
         # Import the Lambda function
         lambda_function = lambda_.Function.from_function_arn(
@@ -219,7 +186,7 @@ class StoryStack(Stack):
     
     def _create_polling_rule(self) -> events.Rule:
         """Create EventBridge rule for polling (starts disabled)."""
-        rule_name = "eidolon-story-poller"
+        print("  Creating EventBridge Rule: eidolon-story-poller (disabled)")
         
         # Import the Lambda function
         poller_function = lambda_.Function.from_function_arn(
@@ -227,20 +194,6 @@ class StoryStack(Stack):
             "PollerFunction",
             self.poller_lambda_arn
         )
-        
-        # Check if rule already exists
-        if self._rule_exists(rule_name):
-            print(f"  Importing existing EventBridge Rule: {rule_name}")
-            # Import the existing rule
-            rule = events.Rule.from_rule_arn( # type: ignore
-                self, "PollingRule",
-                f"arn:aws:events:{self.region_name}:{self.account}:rule/{rule_name}"
-            )
-            # Add Lambda target to existing rule
-            rule.add_target(targets.LambdaFunction(poller_function))  # type: ignore
-            return rule
-        
-        print(f"  Creating EventBridge Rule: {rule_name} (disabled)")
         
         # Create the rule (starts disabled)
         rule = events.Rule(
@@ -322,60 +275,3 @@ class StoryStack(Stack):
             value=self.story_policy.managed_policy_arn,
             description="ARN of the story IAM policy"
         )
-    
-    def _parameter_exists(self, parameter_name: str) -> bool:
-        """Check if SSM parameter exists.
-        
-        Args:
-            parameter_name: Name of the parameter to check
-            
-        Returns:
-            True if parameter exists, False otherwise
-        """
-        try:
-            ssm_client = boto3.client("ssm", region_name=self.region_name)
-            ssm_client.get_parameter(Name=parameter_name)
-            return True
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code == "ParameterNotFound":
-                return False
-        return False
-    
-    def _queue_exists(self, queue_name: str) -> tuple[bool, str]:
-        """Check if SQS queue exists.
-        
-        Args:
-            queue_name: Name of the queue to check
-            
-        Returns:
-            Tuple of (exists, queue_url)
-        """
-        try:
-            sqs_client = boto3.client("sqs", region_name=self.region_name)
-            response = sqs_client.get_queue_url(QueueName=queue_name)
-            return True, response.get("QueueUrl", "")
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code == "AWS.SimpleQueueService.NonExistentQueue":
-                return False, ""
-        return False, ""
-    
-    def _rule_exists(self, rule_name: str) -> bool:
-        """Check if EventBridge rule exists.
-        
-        Args:
-            rule_name: Name of the rule to check
-            
-        Returns:
-            True if rule exists, False otherwise
-        """
-        try:
-            events_client = boto3.client("events", region_name=self.region_name)
-            events_client.describe_rule(Name=rule_name)
-            return True
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code == "ResourceNotFoundException":
-                return False
-        return False
