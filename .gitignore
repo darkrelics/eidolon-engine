@@ -90,3 +90,6 @@ CLAUDE.md
 **/.ruff_cache/**
 
 **/cdk.json
+
+# CDK state file
+deployment/.cdk-state.json

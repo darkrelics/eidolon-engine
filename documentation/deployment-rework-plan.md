@@ -415,6 +415,16 @@ Post-deployment checks will verify:
 85. **Reply Email Required**: Cognito requires reply-to email even with default email service
 86. **Lambda ARN Graceful Handling**: Warn but continue if trigger Lambda not found
 87. **Consistency Over Convenience**: Follow established patterns even if less convenient
+88. **CDK Synthesis vs Runtime**: Resource existence checks during CDK synthesis don't have AWS access - always create resources
+89. **Stack Parameter Consistency**: All stacks should use same parameter pattern (explicit parameters, not kwargs extraction)
+90. **Output Method Standardization**: All stacks should use _add_outputs() method for consistent output organization
+91. **Context Over Arguments**: Use CDK context (-c flags) for passing parameters to app files instead of command-line arguments
+92. **Resource Import Limitations**: Importing existing resources during CDK synthesis is unreliable - prefer creating resources
+93. **Existence Checks for Validation Only**: _exists() methods should be for post-deployment validation, not stack creation logic
+94. **Lambda Layer Dependencies**: Layer must be successfully built before Lambda stack deployment
+95. **Buildspec Artifact Handling**: When manually uploading to S3, omit artifacts section or use minimal configuration
+96. **EventBridge Rule Dependencies**: Rule creation requires Lambda ARN to be available at synthesis time
+97. **CDK State File Exclusion**: .cdk-state.json should be gitignored as it contains deployment-specific state
 
 ## Current System Issues
 
@@ -443,7 +453,7 @@ Post-deployment checks will verify:
 4. CloudWatch Stack  → Logging and metrics [COMPLETE]
 5. Lambda Stack      → Lambda layer, IAM role/policies, 16 Lambda functions [COMPLETE]
 6. Player Stack      → Cognito User Pool and PostConfirmation trigger [COMPLETE]
-7. Story Stack       → SSM parameter, SQS, EventBridge, additional Lambda permissions
+7. Story Stack       → SSM parameter, SQS, EventBridge, additional Lambda permissions [WIP - PARTIAL]
 8. Client Stack      → Portal, CloudFront, API Gateway
 9. [Portal Build]    → Final frontend deployment
 ```
@@ -558,27 +568,32 @@ Post-deployment checks will verify:
 - Cognito.UserPoolId
 - Cognito.ClientId
 
-### 7. Story Stack
+### 7. Story Stack [WIP - PARTIAL]
 
 **Resources:**
 
-- SSM Parameter for story configuration
-- SQS Queues:
+- SSM Parameter for story configuration [ISSUE: Imports but doesn't create]
+- SQS Queues: [ISSUE: Import but don't create]
   - processing-queue
   - advancement-queue
-- EventBridge rule for polling schedule
-- IAM managed policy with:
+- EventBridge rule for polling schedule [MISSING: Not created when poller ARN empty]
+- IAM managed policy with: [COMPLETE]
   - SSM read access for story parameters
   - SQS send/receive/delete permissions
   - EventBridge permissions
-- Attach policy to Lambda role from Lambda Stack
+- Attach policy to Lambda role from Lambda Stack [COMPLETE]
 - Lambda permissions:
-  - EventBridge invoke permission for ops-segment-poller
-  - Update Lambda environment variables with SQS queue URLs
+  - EventBridge invoke permission for ops-segment-poller [INCOMPLETE]
+  - Update Lambda environment variables with SQS queue URLs [COMPLETE]
 
 **Config.yml Output:**
 
 - SSM.StoryParameter
+
+**Known Issues:**
+- Resource existence checks incorrectly return true during CDK synthesis
+- Resources import instead of create when they don't exist
+- EventBridge rule creation skipped when Lambda ARN not provided
 
 ### 8. Client Stack
 
