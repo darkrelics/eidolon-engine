@@ -350,6 +350,15 @@ def deploy_codebuild(params, config: Config, state: CDKState,
     # Update state
     if validation.get("success", False):
         state.mark_stack_deployed("codebuild", result.get("outputs", {}))
+        
+        # Store infrastructure resources needed by other stacks
+        if "infrastructure" not in state.__dict__:
+            state.infrastructure = {}
+        # Store S3 bucket name for Lambda stack
+        s3_bucket_name = result.get("outputs", {}).get("S3BucketName", "")
+        if s3_bucket_name:
+            state.infrastructure["artifacts_bucket"] = s3_bucket_name
+        
         state.save(str(state_path))
     
     # Execute builds if stack deployment was successful

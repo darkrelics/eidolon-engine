@@ -53,4 +53,4 @@ phases:
         done
 
 artifacts:
-  Type: NO_ARTIFACTS
+  type: NO_ARTIFACTS

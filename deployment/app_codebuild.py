@@ -7,7 +7,7 @@ import aws_cdk as cdk
 from stacks.codebuild_stack import CodeBuildStack
 
 # Parse command line arguments
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description="Deploy CodeBuild stack for Eidolon Engine")
 parser.add_argument("--region", default="us-east-1", help="AWS region for deployment")
 parser.add_argument("--s3-bucket", default="", help="S3 bucket for Lambda artifacts")
 parser.add_argument("--github-owner", default="robinje", help="GitHub repository owner")

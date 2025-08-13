@@ -96,6 +96,9 @@ def deploy_cloudwatch(params, config: Config, state: CDKState,
     # Update state
     if validation.get("success", False):
         state.mark_stack_deployed("cloudwatch", result.get("outputs", {}))
+        
+        # No infrastructure resources needed by other stacks from CloudWatch
+        
         state.save(str(state_path))
     
     return validation.get("success", False)

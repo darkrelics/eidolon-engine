@@ -11,10 +11,10 @@ from core.state import CDKState
 from utilities import run_cdk_deploy, validate_policies
 
 
-def deploy_dynamodb_stack(region: str) -> dict:
+def deploy_dynamodb_stack(params) -> dict:
     """Deploy the DynamoDB stack using CDK."""
-    app_command = f"python3 app_dynamodb.py --region {region}"
-    return run_cdk_deploy("dynamodb", region, app_command)
+    app_command = f"python3 app_dynamodb.py --region {params.region}"
+    return run_cdk_deploy("dynamodb", params.region, app_command)
 
 
 def validate_tables(region: str) -> dict:
@@ -102,29 +102,6 @@ def verify_dynamodb_deployment(params) -> dict:
     }
 
 
-def update_dynamodb_configurations(config: Config, state: CDKState, params, 
-                                  validation: dict, config_path: Path, state_path: Path) -> None:
-    """Update config and state files with DynamoDB deployment results."""
-    # Update configuration
-    config.dynamodb_tables = validation.get("tables", {}).get("tables", {})
-    config.region = params.region
-    config.save(str(config_path))
-    print(f"\nConfiguration saved to config.yml")
-    
-    # Update state
-    state.mark_stack_deployed("dynamodb", {})
-    state.infrastructure["dynamodb_policy_arn"] = f"arn:aws:iam::{params.account_id}:policy/eidolon-dynamodb-policy"
-    state.save(str(state_path))
-    print(f"State saved to .cdk-state.json")
-
-
-def execute_dynamodb_deployment(params, state: CDKState) -> bool:
-    """Execute the DynamoDB deployment with given parameters."""
-    # Deploy the stack
-    result = deploy_dynamodb_stack(params.region)
-    return result.get("success", False)
-
-
 def deploy_dynamodb(params, config: Config, state: CDKState, 
                    config_path: Path, state_path: Path) -> bool:
     """Deploy and verify DynamoDB stack."""
@@ -132,8 +109,10 @@ def deploy_dynamodb(params, config: Config, state: CDKState,
     print("Phase 1: DynamoDB Stack")
     print("=" * 60)
     
-    # Execute deployment
-    if not execute_dynamodb_deployment(params, state):
+    # Deploy stack
+    result = deploy_dynamodb_stack(params)
+    
+    if not result.get("success", False):
         print("\nDynamoDB deployment failed!")
         return False
     
@@ -147,7 +126,21 @@ def deploy_dynamodb(params, config: Config, state: CDKState,
         if not all(validation.get("policies", {}).values()):
             print("  - Some IAM policies were not created")
     
-    # Update configurations
-    update_dynamodb_configurations(config, state, params, validation, config_path, state_path)
+    # Update configuration
+    if validation.get("tables", {}).get("success", False):
+        config.dynamodb_tables = validation.get("tables", {}).get("tables", {})
+        config.region = params.region
+        config.save(str(config_path))
+    
+    # Update state
+    if validation.get("success", False):
+        state.mark_stack_deployed("dynamodb", result.get("outputs", {}))
+        
+        # Store infrastructure resources needed by other stacks
+        if "infrastructure" not in state.__dict__:
+            state.infrastructure = {}
+        state.infrastructure["dynamodb_policy_arn"] = f"arn:aws:iam::{params.account_id}:policy/eidolon-dynamodb-policy"
+        
+        state.save(str(state_path))
     
     return validation.get("success", False)

@@ -9,29 +9,33 @@ from constructs import Construct
 
 
 class S3Stack(Stack):
-    """Creates S3 bucket and access policy for Eidolon Engine scripts."""
+    """S3 stack for Eidolon Engine scripts storage."""
 
-    def __init__(
-        self,
-        scope: Construct,
-        stack_id: str,
-        region_name: str = "us-east-1",
-        scripts_bucket: str = "",
-        **kwargs
-    ) -> None:
-        """Initialize S3 stack."""
+    def __init__(self, scope: Construct, stack_id: str,
+                 region_name: str = "us-east-1",
+                 scripts_bucket: str = "",
+                 **kwargs) -> None:
+        """Initialize S3 stack.
+        
+        Args:
+            scope: CDK construct scope
+            stack_id: Stack identifier
+            region_name: AWS region for resource operations
+            scripts_bucket: S3 bucket name for Lua scripts
+            **kwargs: Additional stack properties
+        """
         self.region_name = region_name
         self.scripts_bucket_name = scripts_bucket
         super().__init__(scope, stack_id, **kwargs)
 
         # Create or import S3 bucket for scripts
         if self._bucket_exists(self.scripts_bucket_name):
-            print(f"Importing existing S3 bucket: {self.scripts_bucket_name}")
+            print(f"  Importing existing S3 bucket: {self.scripts_bucket_name}")
             bucket = s3.Bucket.from_bucket_name(
                 self, "ScriptsBucket", self.scripts_bucket_name
             )
         else:
-            print(f"Creating new S3 bucket: {self.scripts_bucket_name}")
+            print(f"  Creating new S3 bucket: {self.scripts_bucket_name}")
             bucket = s3.Bucket(
                 self,
                 "ScriptsBucket",

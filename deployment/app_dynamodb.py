@@ -7,7 +7,7 @@ import aws_cdk as cdk
 from stacks.dynamodb_stack import DynamoDBStack
 
 # Parse command line arguments
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description="Deploy DynamoDB stack for Eidolon Engine")
 parser.add_argument("--region", default="us-east-1", help="AWS region for deployment")
 args, unknown = parser.parse_known_args()  # Use parse_known_args to ignore CDK's other args
 

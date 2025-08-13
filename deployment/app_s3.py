@@ -7,7 +7,7 @@ import aws_cdk as cdk
 from stacks.s3_stack import S3Stack
 
 # Parse command line arguments
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description="Deploy S3 stack for Eidolon Engine")
 parser.add_argument("--region", default="us-east-1", help="AWS region for deployment")
 parser.add_argument("--scripts-bucket", default="", help="S3 bucket for Lua scripts")
 args, unknown = parser.parse_known_args()  # Use parse_known_args to ignore CDK's other args

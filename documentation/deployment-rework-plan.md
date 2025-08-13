@@ -4,7 +4,7 @@
 
 Complete replacement of the existing monolithic deployment system with a clean, modular architecture focused on simplicity and maintainability.
 
-## Status: Phase 1 COMPLETE - DynamoDB Stack Deployed and Battle-Tested
+## Status: Phase 5 COMPLETE - Lambda Stack Deployed
 
 ### Phase 1 Completed Work
 
@@ -37,6 +37,34 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 ## Phase 3: S3 Stack [COMPLETE]
 
 ## Phase 4: CloudWatch Stack [COMPLETE]
+
+## Phase 5: Lambda Stack [COMPLETE]
+
+### Phase 5 Summary
+
+Successfully implemented Lambda infrastructure for all non-Cognito-triggered Lambda functions with the following architecture:
+- Lambda layer deployed from CodeBuild artifacts (lambda-layer.zip)
+- Shared IAM execution role with DynamoDB and CloudWatch Logs policies
+- 16 Lambda functions deployed (all except cognito-player-delete)
+- CORS configuration using client FQDN (client_host.domain)
+- Environment variables for DynamoDB tables and CORS settings
+- Handler configurations fixed to use underscores (matching Python module names)
+
+### Phase 5 Status
+
+#### Completed Tasks
+
+- Created LambdaStack with layer deployment from S3 artifacts
+- Implemented shared IAM execution role with proper permissions
+- Created lambda_functions.py deployment module (renamed from lambda_deploy.py)
+- Created app_lambda.py for stack isolation
+- Deployed 16 Lambda functions in alphabetical order
+- Fixed handler configurations (api_character_list.lambda_handler not api-character-list.lambda_handler)
+- Added CORS configuration with client_host and client_domain parameters
+- Integrated DynamoDB table names from previous stack outputs
+- Fixed module naming conflict (lambda is a Python keyword)
+- Ensured consistent parameter passing across modules
+- Validated Lambda artifacts exist in S3 before deployment
 
 ### Phase 4 Summary
 
@@ -346,6 +374,14 @@ Post-deployment checks will verify:
 70. **Wide Initial Permissions**: Start with broad Lambda role permissions, refine pre-GA
 71. **No Lambda Versioning**: Aliases and versions add complexity without value for this use case
 72. **Custom Domain Required**: System requires custom domain for CORS - collect upfront to avoid circular dependencies
+73. **Lambda Module Naming**: Avoid Python keywords in module names (e.g., lambda.py → lambda_functions.py)
+74. **Handler Path Consistency**: Lambda handlers must match Python module names (underscores not hyphens)
+75. **CORS FQDN Assembly**: Assemble client FQDN at deployment module level, pass complete value to stacks
+76. **Parameter Object Pattern**: Pass complete params object to deployment modules for flexibility
+77. **CDK Auto-Update**: CDK automatically updates existing resources - no manual update logic needed
+78. **Player Stack Separation**: Cognito-triggered Lambdas require different lifecycle management
+79. **Comment Out Not Delete**: Comment out incomplete implementations for future reference
+80. **Default Values Matter**: Provide sensible defaults (portal, darkrelics.net) to streamline deployment
 
 ## Current System Issues
 
@@ -476,13 +512,13 @@ Post-deployment checks will verify:
 
 - Cognito User Pool
 - Cognito User Pool Client
-- Lambda function:
-  - `cognito-player-delete` (PreUserDeletion trigger)
-- IAM execution role for cognito-player-delete
+- ~~Lambda function: `cognito-player-delete`~~ (No appropriate Cognito trigger - needs different approach)
+- ~~IAM execution role for cognito-player-delete~~ (Not needed without the Lambda)
 - Cognito triggers configuration:
   - PostConfirmation → cognito-player-new (from Lambda Stack)
-  - PreUserDeletion → cognito-player-delete
 - Lambda invoke permissions for Cognito service
+
+**Note:** cognito-player-delete cannot be deployed as originally planned. A different process needs to be devised for player deletion.
 
 **Config.yml Output:**
 

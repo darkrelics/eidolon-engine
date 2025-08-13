@@ -7,12 +7,13 @@ from pathlib import Path
 
 from core.config import Config
 from core.state import CDKState
-from utilities import get_aws_account_id, validate_region, verify_prerequisites
+from utilities import get_aws_account_id, validate_region, verify_prerequisites, verify_cdk_bootstrap
 from dynamodb import deploy_dynamodb
 from codebuild import deploy_codebuild
 from s3 import deploy_s3
 from cloudwatch import deploy_cloudwatch
 from player import deploy_player
+from lambda_functions import deploy_lambda
 
 
 @dataclass
@@ -25,6 +26,8 @@ class DeploymentParams:
     github_owner: str = "robinje"
     github_repo: str = "eidolon-engine"
     github_branch: str = "develop"
+    domain: str = "darkrelics.net"
+    client_host: str = "portal"
 
 
 def collect_deployment_params(config: Config) -> DeploymentParams:
@@ -114,6 +117,28 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     branch_input = input(f"GitHub Branch [{github_branch}]: ").strip()
     params.github_branch = branch_input if branch_input else github_branch
     
+    # Domain (base domain for all services)
+    domain = cdk_context.get("domain", params.domain)
+    if domain:
+        domain_input = input(f"Domain (e.g., darkrelics.net) [{domain}]: ").strip()
+        params.domain = domain_input if domain_input else domain
+    else:
+        while not params.domain:
+            params.domain = input("Domain (e.g., darkrelics.net): ").strip()
+            if not params.domain:
+                print("Domain is required for deployment")
+    
+    # Client Host (for portal)
+    client_host = cdk_context.get("client_host", params.client_host)
+    if client_host:
+        host_input = input(f"Client Host (e.g., portal) [{client_host}]: ").strip()
+        params.client_host = host_input if host_input else client_host
+    else:
+        while not params.client_host:
+            params.client_host = input("Client Host (e.g., portal): ").strip()
+            if not params.client_host:
+                print("Client host is required for portal configuration")
+    
     # Save user selections back to cdk.json
     cdk_data = {"app": "python3 app.py", "context": {}}
     if cdk_json_path.exists():
@@ -127,6 +152,8 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     cdk_data["context"]["github_owner"] = params.github_owner
     cdk_data["context"]["github_repo"] = params.github_repo
     cdk_data["context"]["github_branch"] = params.github_branch
+    cdk_data["context"]["domain"] = params.domain
+    cdk_data["context"]["client_host"] = params.client_host
     
     with open(cdk_json_path, "w") as f:
         json.dump(cdk_data, f, indent=2)
@@ -159,7 +186,6 @@ def main():
         return 1
 
     # Check CDK bootstrap
-    from utilities import verify_cdk_bootstrap
     if not verify_cdk_bootstrap(params.region):
         response = input("\nCDK bootstrap not found. Continue anyway? [y/N]: ").strip().lower()
         if response != "y":
@@ -177,10 +203,12 @@ def main():
     print(f"    - CodeBuild: 2 projects, 1 S3 bucket, 1 role, 2 policies, Lambda builds")
     print(f"    - S3: 1 bucket, 1 IAM policy, Lua scripts upload")
     print(f"    - CloudWatch: 1 log group, metrics namespace, 1 IAM policy")
-    print(f"    - Player: Cognito User Pool, Lambda function, IAM role")
+    # print(f"    - Player: Cognito User Pool and client")
+    print(f"    - Lambda: 1 layer, 16 functions, 1 IAM role, 1 new policy")
     print(f"  S3 Artifacts: {params.s3_bucket}")
     print(f"  S3 Scripts: {params.scripts_bucket}")
     print(f"  GitHub: {params.github_owner}/{params.github_repo} ({params.github_branch})")
+    print(f"  Client URL: {params.client_host}.{params.domain}")
     print("=" * 60)
     
     response = input("\nProceed with deployment? [Y/n]: ").strip().lower()
@@ -193,7 +221,9 @@ def main():
     codebuild_success = deploy_codebuild(params, config, state, config_path, state_path)
     s3_success = deploy_s3(params, config, state, config_path, state_path)
     cloudwatch_success = deploy_cloudwatch(params, config, state, config_path, state_path)
-    player_success = deploy_player(params, config, state, config_path, state_path)
+    # player_success = deploy_player(params, config, state, config_path, state_path)
+    player_success = True  # Temporarily skipped
+    lambda_success = deploy_lambda(params, config, state, config_path, state_path)
 
     # Final summary
     print("\n" + "=" * 60)
@@ -203,7 +233,8 @@ def main():
     print(f"[{'OK' if codebuild_success else 'WARNING'}] CodeBuild Stack")
     print(f"[{'OK' if s3_success else 'WARNING'}] S3 Stack")
     print(f"[{'OK' if cloudwatch_success else 'WARNING'}] CloudWatch Stack")
-    print(f"[{'OK' if player_success else 'WARNING'}] Player Stack")
+    # print(f"[{'OK' if player_success else 'WARNING'}] Player Stack")
+    print(f"[{'OK' if lambda_success else 'WARNING'}] Lambda Stack")
     print("=" * 60)
     
     return 0

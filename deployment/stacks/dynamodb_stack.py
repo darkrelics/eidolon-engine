@@ -11,11 +11,19 @@ from core.dynamodb_tables import TABLE_CONFIGS
 
 
 class DynamoDBStack(Stack):
-    """Creates DynamoDB tables and access policy for Eidolon Engine."""
+    """DynamoDB stack for Eidolon Engine data storage."""
 
-    def __init__(self, scope: Construct, stack_id: str, region_name: str = "us-east-1", **kwargs) -> None:
-        """Initialize DynamoDB stack."""
-        # Extract region_name before passing kwargs to parent
+    def __init__(self, scope: Construct, stack_id: str, 
+                 region_name: str = "us-east-1", 
+                 **kwargs) -> None:
+        """Initialize DynamoDB stack.
+        
+        Args:
+            scope: CDK construct scope
+            stack_id: Stack identifier
+            region_name: AWS region for resource operations
+            **kwargs: Additional stack properties
+        """
         self.region_name = region_name
         super().__init__(scope, stack_id, **kwargs)
 
@@ -37,7 +45,7 @@ class DynamoDBStack(Stack):
             if table_name in self.existing_tables:
                 existing_table_name = self.existing_tables.get(table_name, "")
                 if existing_table_name:
-                    print(f"Importing existing DynamoDB table from context: {existing_table_name}")
+                    print(f"  Importing existing DynamoDB table from context: {existing_table_name}")
                     table = dynamodb.Table.from_table_name(self, f"{table_name}-imported", existing_table_name)
                 else:
                     continue
@@ -57,7 +65,7 @@ class DynamoDBStack(Stack):
                     raise ValueError(f"Table {table_name} has incorrect schema")
             else:
                 # Create new table
-                print(f"Creating new DynamoDB table: {table_name}")
+                print(f"  Creating new DynamoDB table: {table_name}")
                 table = self.create_table(config)
 
             self.tables[table_name] = table

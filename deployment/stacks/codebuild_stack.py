@@ -10,20 +10,27 @@ from constructs import Construct
 
 
 class CodeBuildStack(Stack):
-    """Creates CodeBuild projects and S3 bucket for Lambda artifacts."""
+    """CodeBuild stack for Eidolon Engine Lambda builds."""
 
-    def __init__(
-        self,
-        scope: Construct,
-        stack_id: str,
-        region_name: str = "us-east-1",
-        s3_bucket: str = "",
-        github_owner: str = "robinje",
-        github_repo: str = "eidolon-engine",
-        github_branch: str = "develop",
-        **kwargs
-    ) -> None:
-        """Initialize CodeBuild stack."""
+    def __init__(self, scope: Construct, stack_id: str,
+                 region_name: str = "us-east-1",
+                 s3_bucket: str = "",
+                 github_owner: str = "robinje",
+                 github_repo: str = "eidolon-engine",
+                 github_branch: str = "develop",
+                 **kwargs) -> None:
+        """Initialize CodeBuild stack.
+        
+        Args:
+            scope: CDK construct scope
+            stack_id: Stack identifier
+            region_name: AWS region for resource operations
+            s3_bucket: S3 bucket name for Lambda artifacts
+            github_owner: GitHub repository owner
+            github_repo: GitHub repository name
+            github_branch: GitHub branch to build from
+            **kwargs: Additional stack properties
+        """
         self.region_name = region_name
         self.s3_bucket_name = s3_bucket
         self.github_owner = github_owner
@@ -33,12 +40,12 @@ class CodeBuildStack(Stack):
 
         # Create or import S3 bucket for artifacts
         if self._bucket_exists(self.s3_bucket_name):
-            print(f"Importing existing S3 bucket: {self.s3_bucket_name}")
+            print(f"  Importing existing S3 bucket: {self.s3_bucket_name}")
             bucket = s3.Bucket.from_bucket_name(
                 self, "ArtifactsBucket", self.s3_bucket_name
             )
         else:
-            print(f"Creating new S3 bucket: {self.s3_bucket_name}")
+            print(f"  Creating new S3 bucket: {self.s3_bucket_name}")
             bucket = s3.Bucket(
                 self,
                 "ArtifactsBucket",
@@ -191,7 +198,7 @@ class CodeBuildStack(Stack):
         if self._project_exists(project_name):
             print(f"CodeBuild project {project_name} already exists, will be updated")
         else:
-            print(f"Creating new CodeBuild project: {project_name}")
+            print(f"  Creating new CodeBuild project: {project_name}")
 
         # Create the project
         project = codebuild.Project(
@@ -242,7 +249,7 @@ class CodeBuildStack(Stack):
         if self._project_exists(project_name):
             print(f"CodeBuild project {project_name} already exists, will be updated")
         else:
-            print(f"Creating new CodeBuild project: {project_name}")
+            print(f"  Creating new CodeBuild project: {project_name}")
 
         # Create the project
         project = codebuild.Project(

@@ -138,6 +138,9 @@ def deploy_s3(params, config: Config, state: CDKState,
     # Update state
     if validation.get("success", False):
         state.mark_stack_deployed("s3", result.get("outputs", {}))
+        
+        # No infrastructure resources needed by other stacks from S3
+        
         state.save(str(state_path))
     
     return validation.get("success", False)

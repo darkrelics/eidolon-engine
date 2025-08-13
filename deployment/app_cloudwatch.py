@@ -7,7 +7,7 @@ import aws_cdk as cdk
 from stacks.cloudwatch_stack import CloudWatchStack
 
 # Parse command line arguments
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description="Deploy CloudWatch stack for Eidolon Engine")
 parser.add_argument("--region", default="us-east-1", help="AWS region for deployment")
 args, unknown = parser.parse_known_args()  # Use parse_known_args to ignore CDK's other args
 
