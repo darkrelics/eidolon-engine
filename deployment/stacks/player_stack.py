@@ -1,7 +1,11 @@
 """Player stack for Cognito User Pool."""
 
+import boto3
+from botocore.exceptions import ClientError
 from aws_cdk import Stack, RemovalPolicy, CfnOutput, Duration
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_iam as iam
 from constructs import Construct
 
 
@@ -10,6 +14,8 @@ class PlayerStack(Stack):
     
     def __init__(self, scope: Construct, stack_id: str, 
                  region_name: str = "us-east-1",
+                 lambda_function_arn: str = "",
+                 reply_email: str = "contact@darkrelics.net",
                  **kwargs) -> None:
         """Initialize Player stack.
         
@@ -17,9 +23,13 @@ class PlayerStack(Stack):
             scope: CDK construct scope
             stack_id: Stack identifier
             region_name: AWS region for resource operations
+            lambda_function_arn: ARN of cognito-player-new Lambda function
+            reply_email: Email address for Cognito notifications
             **kwargs: Additional stack properties
         """
         self.region_name = region_name
+        self.lambda_function_arn = lambda_function_arn
+        self.reply_email = reply_email
         super().__init__(scope, stack_id, **kwargs)
         
         # Create Cognito User Pool
@@ -28,6 +38,10 @@ class PlayerStack(Stack):
         # Create User Pool Client
         self.app_client = self._create_app_client()
         
+        # Configure Lambda trigger if ARN provided
+        if self.lambda_function_arn:
+            self._configure_lambda_trigger()
+        
         # Add outputs
         self._add_outputs()
     
@@ -35,7 +49,14 @@ class PlayerStack(Stack):
         """Create Cognito User Pool."""
         user_pool_name = "eidolon-users"
         
-        print(f"  Creating/updating user pool: {user_pool_name}")
+        # Check if user pool already exists
+        exists, pool_id = self._user_pool_exists(user_pool_name)
+        if exists:
+            print(f"  Importing existing user pool: {user_pool_name} ({pool_id})")
+            return cognito.UserPool.from_user_pool_id(self, "UserPool", pool_id)
+        
+        print(f"  Creating new user pool: {user_pool_name}")
+        print(f"  Reply email: {self.reply_email}")
         return cognito.UserPool(
             self,
             "UserPool",
@@ -55,7 +76,9 @@ class PlayerStack(Stack):
             ),
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
             removal_policy=RemovalPolicy.RETAIN,
-            email=cognito.UserPoolEmail.with_cognito()
+            email=cognito.UserPoolEmail.with_cognito(
+                reply_to=self.reply_email
+            )
         )
     
     def _create_app_client(self) -> cognito.UserPoolClient:
@@ -73,6 +96,30 @@ class PlayerStack(Stack):
             access_token_validity=Duration.hours(1),
             id_token_validity=Duration.hours(1),
             refresh_token_validity=Duration.days(30)
+        )
+    
+    def _configure_lambda_trigger(self) -> None:
+        """Configure Lambda trigger for user pool."""
+        print(f"  Configuring PostConfirmation trigger with Lambda ARN")
+        
+        # Import the Lambda function
+        lambda_function = lambda_.Function.from_function_arn(
+            self,
+            "CognitoPlayerNewFunction",
+            self.lambda_function_arn
+        )
+        
+        # Add trigger to user pool
+        self.user_pool.add_trigger( # type: ignore
+            cognito.UserPoolOperation.POST_CONFIRMATION,
+            lambda_function
+        )
+        
+        # Grant Cognito permission to invoke the Lambda
+        lambda_function.add_permission(
+            "CognitoInvokePermission",
+            principal=iam.ServicePrincipal("cognito-idp.amazonaws.com"),  # type: ignore
+            source_arn=self.user_pool.user_pool_arn
         )
     
     def _add_outputs(self) -> None:
@@ -97,3 +144,24 @@ class PlayerStack(Stack):
             value=self.user_pool.user_pool_arn,
             description="Cognito User Pool ARN"
         )
+    
+    def _user_pool_exists(self, user_pool_name: str) -> tuple[bool, str]:
+        """Check if Cognito User Pool exists.
+        
+        Args:
+            user_pool_name: Name of the user pool to check
+            
+        Returns:
+            Tuple of (exists, user_pool_id)
+        """
+        try:
+            cognito_client = boto3.client("cognito-idp", region_name=self.region_name)
+            response = cognito_client.list_user_pools(MaxResults=60)
+            
+            for pool in response.get("UserPools", []):
+                if pool.get("Name") == user_pool_name:
+                    return True, pool.get("Id", "")
+            return False, ""
+            
+        except ClientError:
+            return False, ""

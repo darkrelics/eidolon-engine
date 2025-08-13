@@ -51,6 +51,3 @@ phases:
             aws s3 cp "$zip_file" "s3://$S3_BUCKET/$(basename $zip_file)"
           fi
         done
-
-artifacts:
-  type: NO_ARTIFACTS

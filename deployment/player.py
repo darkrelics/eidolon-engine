@@ -10,9 +10,44 @@ from core.state import CDKState
 from utilities import run_cdk_deploy
 
 
+def get_lambda_function_arn(region: str) -> str:
+    """Get cognito-player-new Lambda function ARN.
+    
+    Args:
+        region: AWS region
+        
+    Returns:
+        Lambda function ARN or empty string
+    """
+    try:
+        lambda_client = boto3.client("lambda", region_name=region)
+        response = lambda_client.get_function(FunctionName="cognito-player-new")
+        return response["Configuration"]["FunctionArn"]
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code == "ResourceNotFoundException":
+            return ""
+        print(f"Error getting Lambda ARN: {err}")
+        return ""
+
+
 def deploy_player_stack(params) -> dict:
     """Deploy the Player stack using CDK."""
-    app_command = f"python3 app_player.py --region {params.region}"
+    # Pass all parameters through context
+    context_args = [
+        f"-c region={params.region}",
+        f"-c reply_email={params.reply_email}"
+    ]
+    
+    # Get Lambda ARN if available
+    lambda_arn = get_lambda_function_arn(params.region)
+    if lambda_arn:
+        context_args.append(f"-c lambda_function_arn={lambda_arn}")
+    else:
+        print("Warning: cognito-player-new Lambda not found")
+        print("PostConfirmation trigger will not be configured")
+    
+    app_command = f"python3 app_player.py {' '.join(context_args)}"
     return run_cdk_deploy("player", params.region, app_command)
 
 

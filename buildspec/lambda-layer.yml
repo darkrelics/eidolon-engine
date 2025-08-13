@@ -15,5 +15,3 @@ phases:
     commands:
       - aws s3 cp lambda-layer.zip "s3://$S3_BUCKET/lambda-layer/lambda-layer.zip"
 
-artifacts:
-  type: NO_ARTIFACTS

@@ -1,5 +1,7 @@
 """Lambda stack for all Lambda functions and layer."""
 
+import boto3
+from botocore.exceptions import ClientError
 from aws_cdk import Stack, CfnOutput, Duration
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_iam as iam
@@ -51,6 +53,8 @@ class LambdaStack(Stack):
     
     def _create_lambda_layer(self) -> lambda_.LayerVersion:
         """Create Lambda dependencies layer."""
+        layer_name = "eidolon-dependencies"
+        
         print(f"  Creating Lambda layer from {self.s3_bucket_name}/lambda-layer/lambda-layer.zip")
         
         bucket = s3.Bucket.from_bucket_name(self, "ArtifactsBucket", self.s3_bucket_name)
@@ -58,7 +62,7 @@ class LambdaStack(Stack):
         return lambda_.LayerVersion(
             self,
             "DependenciesLayer",
-            layer_version_name="eidolon-dependencies",
+            layer_version_name=layer_name,
             code=lambda_.Code.from_bucket(bucket, "lambda-layer/lambda-layer.zip"),
             compatible_runtimes=[lambda_.Runtime.PYTHON_3_12],
             description="Shared dependencies for Eidolon Engine Lambda functions"
@@ -243,3 +247,41 @@ class LambdaStack(Stack):
                 value=function.function_arn,
                 description=f"{function_name} Lambda function ARN"
             )
+    
+    def _function_exists(self, function_name: str) -> bool:
+        """Check if a Lambda function exists.
+        
+        Args:
+            function_name: Name of the function to check
+            
+        Returns:
+            True if function exists, False otherwise
+        """
+        try:
+            lambda_client = boto3.client("lambda", region_name=self.region_name)
+            lambda_client.get_function(FunctionName=function_name)
+            return True
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceNotFoundException":
+                return False
+        return False
+    
+    def _layer_exists(self, layer_name: str) -> bool:
+        """Check if a Lambda layer exists.
+        
+        Args:
+            layer_name: Name of the layer to check
+            
+        Returns:
+            True if layer exists, False otherwise
+        """
+        try:
+            lambda_client = boto3.client("lambda", region_name=self.region_name)
+            response = lambda_client.list_layer_versions(LayerName=layer_name)
+            return len(response.get("LayerVersions", [])) > 0
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceNotFoundException":
+                return False
+        return False

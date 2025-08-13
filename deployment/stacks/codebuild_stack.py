@@ -64,34 +64,8 @@ class CodeBuildStack(Stack):
         self.lambda_layer_project = self._create_lambda_layer_project()
         self.lambda_functions_project = self._create_lambda_functions_project()
 
-        # Create outputs
-        CfnOutput(
-            self,
-            "S3BucketName",
-            value=bucket.bucket_name,
-            description="S3 bucket for Lambda artifacts"
-        )
-
-        CfnOutput(
-            self,
-            "CodeBuildRoleArn",
-            value=self.codebuild_role.role_arn,
-            description="ARN of the shared CodeBuild IAM role"
-        )
-
-        CfnOutput(
-            self,
-            "LambdaLayerProjectName",
-            value=self.lambda_layer_project.project_name,
-            description="CodeBuild project for Lambda layer"
-        )
-
-        CfnOutput(
-            self,
-            "LambdaFunctionsProjectName",
-            value=self.lambda_functions_project.project_name,
-            description="CodeBuild project for Lambda functions"
-        )
+        # Add outputs
+        self._add_outputs()
 
     def _bucket_exists(self, bucket_name: str) -> bool:
         """Check if S3 bucket exists.
@@ -290,3 +264,33 @@ class CodeBuildStack(Stack):
         project.apply_removal_policy(RemovalPolicy.DESTROY)
 
         return project
+    
+    def _add_outputs(self) -> None:
+        """Add stack outputs."""
+        CfnOutput(
+            self,
+            "S3BucketName",
+            value=self.artifacts_bucket.bucket_name,
+            description="S3 bucket for Lambda artifacts"
+        )
+
+        CfnOutput(
+            self,
+            "CodeBuildRoleArn",
+            value=self.codebuild_role.role_arn,
+            description="ARN of the shared CodeBuild IAM role"
+        )
+
+        CfnOutput(
+            self,
+            "LambdaLayerProjectName",
+            value=self.lambda_layer_project.project_name,
+            description="CodeBuild project for Lambda layer"
+        )
+
+        CfnOutput(
+            self,
+            "LambdaFunctionsProjectName",
+            value=self.lambda_functions_project.project_name,
+            description="CodeBuild project for Lambda functions"
+        )

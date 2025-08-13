@@ -32,9 +32,9 @@ class DynamoDBStack(Stack):
         self._load_existing_tables_from_context()
 
         # Store table ARNs for policy
-        table_arns = []
-        index_arns = []
-        table_outputs = {}
+        self.table_arns = []
+        self.index_arns = []
+        self.table_outputs = {}
         self.tables = {}
 
         # Create or import each table from configuration
@@ -69,24 +69,16 @@ class DynamoDBStack(Stack):
                 table = self.create_table(config)
 
             self.tables[table_name] = table
-            table_arns.append(table.table_arn)
-            table_outputs[config.get("name", "")] = table.table_name
+            self.table_arns.append(table.table_arn)
+            self.table_outputs[config.get("name", "")] = table.table_name
 
             # Collect GSI ARNs if present
             if "gsi" in config:
                 for gsi in config.get("gsi", []):
-                    index_arns.append(f"{table.table_arn}/index/{gsi.get('name', '')}")
-
-            # Create output for each table
-            CfnOutput(
-                self,
-                f"{config.get('name', '').replace('_', '')}TableName",
-                value=table.table_name,
-                description=f"DynamoDB table name for {config.get('name', '')}"
-            )
+                    self.index_arns.append(f"{table.table_arn}/index/{gsi.get('name', '')}")
 
         # Create single IAM managed policy for DynamoDB access
-        policy = iam.ManagedPolicy(
+        self.policy = iam.ManagedPolicy(
             self,
             "DynamoDBAccessPolicy",
             managed_policy_name="eidolon-dynamodb-policy",
@@ -104,22 +96,16 @@ class DynamoDBStack(Stack):
                         "dynamodb:BatchGetItem",
                         "dynamodb:BatchWriteItem",
                     ],
-                    resources=table_arns + index_arns
+                    resources=self.table_arns + self.index_arns
                 )
             ]
         )
 
-        # Output the policy ARN
-        CfnOutput(
-            self,
-            "DynamoDBPolicyArn",
-            value=policy.managed_policy_arn,
-            description="ARN of the DynamoDB access policy"
-        )
-
-        # Store outputs for retrieval
-        self.table_outputs = table_outputs
-        self.policy_arn = policy.managed_policy_arn
+        # Store policy ARN for retrieval
+        self.policy_arn = self.policy.managed_policy_arn
+        
+        # Add outputs
+        self._add_outputs()
 
     def create_table(self, config: dict) -> dynamodb.Table:
         """Create a DynamoDB table from configuration."""
@@ -246,6 +232,25 @@ class DynamoDBStack(Stack):
         except Exception as err:
             print(f"Error validating table schema: {err}")
             return False
+    
+    def _add_outputs(self) -> None:
+        """Add stack outputs."""
+        # Output each table name
+        for table_name, table in self.tables.items():
+            CfnOutput(
+                self,
+                f"{table_name.replace('_', '')}TableName",
+                value=table.table_name,
+                description=f"DynamoDB table name for {table_name}"
+            )
+        
+        # Output the policy ARN
+        CfnOutput(
+            self,
+            "DynamoDBPolicyArn",
+            value=self.policy_arn,
+            description="ARN of the DynamoDB access policy"
+        )
 
 
 def add_gsi(table: dynamodb.Table, gsi_config: dict) -> None:

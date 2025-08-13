@@ -11,7 +11,9 @@ from botocore.exceptions import ClientError
 class CloudWatchStack(Stack):
     """CloudWatch stack for Eidolon Engine logging and metrics."""
     
-    def __init__(self, scope: Construct, stack_id: str, region_name: str = "us-east-1", **kwargs) -> None:
+    def __init__(self, scope: Construct, stack_id: str,
+                 region_name: str = "us-east-1",
+                 **kwargs) -> None:
         """Initialize CloudWatch stack.
         
         Args:

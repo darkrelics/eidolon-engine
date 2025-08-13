@@ -48,7 +48,7 @@ class S3Stack(Stack):
         self.scripts_bucket = bucket
 
         # Create managed policy for S3 access
-        s3_policy = iam.ManagedPolicy(
+        self.s3_policy = iam.ManagedPolicy(
             self,
             "ScriptsS3Policy",
             managed_policy_name="eidolon-scripts-s3-policy",
@@ -70,20 +70,8 @@ class S3Stack(Stack):
             ]
         )
 
-        # Create outputs
-        CfnOutput(
-            self,
-            "ScriptsBucketName",
-            value=bucket.bucket_name,
-            description="S3 bucket for Lua scripts"
-        )
-
-        CfnOutput(
-            self,
-            "ScriptsS3PolicyArn",
-            value=s3_policy.managed_policy_arn,
-            description="ARN of the scripts S3 access policy"
-        )
+        # Add outputs
+        self._add_outputs()
 
     def _bucket_exists(self, bucket_name: str) -> bool:
         """Check if S3 bucket exists.
@@ -110,3 +98,19 @@ class S3Stack(Stack):
                 print(f"Warning: Cannot verify bucket {bucket_name} - permission denied, assuming it exists")
                 return True
         return False
+    
+    def _add_outputs(self) -> None:
+        """Add stack outputs."""
+        CfnOutput(
+            self,
+            "ScriptsBucketName",
+            value=self.scripts_bucket.bucket_name,
+            description="S3 bucket for Lua scripts"
+        )
+
+        CfnOutput(
+            self,
+            "ScriptsS3PolicyArn",
+            value=self.s3_policy.managed_policy_arn,
+            description="ARN of the scripts S3 access policy"
+        )

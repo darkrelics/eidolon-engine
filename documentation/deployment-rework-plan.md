@@ -4,7 +4,7 @@
 
 Complete replacement of the existing monolithic deployment system with a clean, modular architecture focused on simplicity and maintainability.
 
-## Status: Phase 5 COMPLETE - Lambda Stack Deployed
+## Status: Phase 6 COMPLETE - Player Stack Deployed
 
 ### Phase 1 Completed Work
 
@@ -40,6 +40,30 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 
 ## Phase 5: Lambda Stack [COMPLETE]
 
+## Phase 6: Player Stack [COMPLETE]
+
+### Phase 6 Summary
+
+Successfully implemented Cognito User Pool for player authentication with the following architecture:
+- Cognito User Pool with email sign-in and password requirements
+- User Pool Client for web applications (no secret)
+- PostConfirmation trigger connected to cognito-player-new Lambda
+- Reply email configuration for notifications
+- No hosted UI domain (clients handle authentication)
+
+### Phase 6 Status
+
+#### Completed Tasks
+
+- Created PlayerStack with Cognito User Pool and Client
+- Implemented PostConfirmation trigger integration with existing Lambda
+- Created player.py deployment module with Lambda ARN retrieval
+- Created app_player.py for stack isolation
+- Added reply email parameter collection to main deployment flow
+- Fixed consistency issues across all deployment modules
+- Validated User Pool and Client creation
+- Updated config.yml with Cognito IDs
+
 ### Phase 5 Summary
 
 Successfully implemented Lambda infrastructure for all non-Cognito-triggered Lambda functions with the following architecture:
@@ -65,6 +89,8 @@ Successfully implemented Lambda infrastructure for all non-Cognito-triggered Lam
 - Fixed module naming conflict (lambda is a Python keyword)
 - Ensured consistent parameter passing across modules
 - Validated Lambda artifacts exist in S3 before deployment
+- Fixed buildspec YAML syntax errors (artifacts: type: NO_ARTIFACTS)
+- Successfully tested complete Lambda stack deployment
 
 ### Phase 4 Summary
 
@@ -382,6 +408,13 @@ Post-deployment checks will verify:
 78. **Player Stack Separation**: Cognito-triggered Lambdas require different lifecycle management
 79. **Comment Out Not Delete**: Comment out incomplete implementations for future reference
 80. **Default Values Matter**: Provide sensible defaults (portal, darkrelics.net) to streamline deployment
+81. **Buildspec YAML Syntax**: Use `artifacts: type: NO_ARTIFACTS` not `artifacts: files: Type: NO_ARTIFACTS`
+82. **No Hosted UI Domain**: Skip Cognito hosted UI when clients provide authentication interfaces
+83. **Trigger Integration Pattern**: Import existing Lambda ARNs for Cognito triggers rather than creating new ones
+84. **User Input Centralization**: Collect all user inputs in deploy.py's collect_deployment_params()
+85. **Reply Email Required**: Cognito requires reply-to email even with default email service
+86. **Lambda ARN Graceful Handling**: Warn but continue if trigger Lambda not found
+87. **Consistency Over Convenience**: Follow established patterns even if less convenient
 
 ## Current System Issues
 
@@ -408,8 +441,8 @@ Post-deployment checks will verify:
 2. CodeBuild Stack    → Build infrastructure, artifacts bucket, and Lambda builds [COMPLETE]
 3. S3 Stack          → Scripts bucket [COMPLETE]
 4. CloudWatch Stack  → Logging and metrics [COMPLETE]
-5. Lambda Stack      → Lambda layer, IAM role/policies, 16 Lambda functions (excluding cognito-player-delete)
-6. Player Stack      → Cognito User Pool, triggers, cognito-player-delete Lambda
+5. Lambda Stack      → Lambda layer, IAM role/policies, 16 Lambda functions [COMPLETE]
+6. Player Stack      → Cognito User Pool and PostConfirmation trigger [COMPLETE]
 7. Story Stack       → SSM parameter, SQS, EventBridge, additional Lambda permissions
 8. Client Stack      → Portal, CloudFront, API Gateway
 9. [Portal Build]    → Final frontend deployment

@@ -33,5 +33,3 @@ phases:
           echo "No CloudFront distribution ID provided, skipping cache invalidation"
         fi
 
-artifacts:
-  Type: NO_ARTIFACTS

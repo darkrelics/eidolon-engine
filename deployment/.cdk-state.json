@@ -2,7 +2,7 @@
   "stacks": {
     "dynamodb": {
       "deployed": true,
-      "timestamp": "2025-08-13T01:58:45.975802",
+      "timestamp": "2025-08-13T04:03:34.995810",
       "outputs": {
         "roomsTableName": "rooms",
         "opponentsTableName": "opponents",
@@ -23,7 +23,7 @@
     },
     "codebuild": {
       "deployed": true,
-      "timestamp": "2025-08-13T01:58:50.321142",
+      "timestamp": "2025-08-13T04:03:39.237556",
       "outputs": {
         "CodeBuildRoleArn": "arn:aws:iam::542230992937:role/eidolon-lambda-codebuild-role",
         "LambdaFunctionsProjectName": "eidolon-lambda-functions",
@@ -33,7 +33,7 @@
     },
     "s3": {
       "deployed": true,
-      "timestamp": "2025-08-13T01:59:04.803851",
+      "timestamp": "2025-08-13T04:03:53.747796",
       "outputs": {
         "ScriptsBucketName": "darkrelics-scripts",
         "ScriptsS3PolicyArn": "arn:aws:iam::542230992937:policy/eidolon-scripts-s3-policy"
@@ -71,6 +71,15 @@
         "ApisegmentoutcomeArn": "arn:aws:lambda:us-east-1:542230992937:function:api-segment-outcome",
         "ApistoryabandonArn": "arn:aws:lambda:us-east-1:542230992937:function:api-story-abandon"
       }
+    },
+    "player": {
+      "deployed": true,
+      "timestamp": "2025-08-13T04:04:45.437938",
+      "outputs": {
+        "UserPoolClientId": "2bumcaq9lbg52b2nf85ph89sis",
+        "UserPoolId": "us-east-1_yZvqRa8h6",
+        "UserPoolArn": "arn:aws:cognito-idp:us-east-1:542230992937:userpool/us-east-1_yZvqRa8h6"
+      }
     }
   },
   "infrastructure": {
@@ -96,5 +105,5 @@
       "ops-story-advance": "arn:aws:lambda:us-east-1:542230992937:function:ops-story-advance"
     }
   },
-  "last_updated": "2025-08-13T02:00:21.488486"
+  "last_updated": "2025-08-13T04:04:45.437946"
 }

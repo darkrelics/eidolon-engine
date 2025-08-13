@@ -14,6 +14,7 @@ from s3 import deploy_s3
 from cloudwatch import deploy_cloudwatch
 from player import deploy_player
 from lambda_functions import deploy_lambda
+from story import deploy_story
 
 
 @dataclass
@@ -28,6 +29,7 @@ class DeploymentParams:
     github_branch: str = "develop"
     domain: str = "darkrelics.net"
     client_host: str = "portal"
+    reply_email: str = "contact@darkrelics.net"
 
 
 def collect_deployment_params(config: Config) -> DeploymentParams:
@@ -139,6 +141,11 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             if not params.client_host:
                 print("Client host is required for portal configuration")
     
+    # Reply Email (for Cognito)
+    reply_email = cdk_context.get("reply_email", params.reply_email)
+    email_input = input(f"Reply email for Cognito [{reply_email}]: ").strip()
+    params.reply_email = email_input if email_input else reply_email
+    
     # Save user selections back to cdk.json
     cdk_data = {"app": "python3 app.py", "context": {}}
     if cdk_json_path.exists():
@@ -154,6 +161,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     cdk_data["context"]["github_branch"] = params.github_branch
     cdk_data["context"]["domain"] = params.domain
     cdk_data["context"]["client_host"] = params.client_host
+    cdk_data["context"]["reply_email"] = params.reply_email
     
     with open(cdk_json_path, "w") as f:
         json.dump(cdk_data, f, indent=2)
@@ -203,8 +211,9 @@ def main():
     print(f"    - CodeBuild: 2 projects, 1 S3 bucket, 1 role, 2 policies, Lambda builds")
     print(f"    - S3: 1 bucket, 1 IAM policy, Lua scripts upload")
     print(f"    - CloudWatch: 1 log group, metrics namespace, 1 IAM policy")
-    # print(f"    - Player: Cognito User Pool and client")
     print(f"    - Lambda: 1 layer, 16 functions, 1 IAM role, 1 new policy")
+    print(f"    - Player: Cognito User Pool and client with PostConfirmation trigger")
+    print(f"    - Story: SSM parameter, 2 SQS queues, EventBridge rule, 1 IAM policy")
     print(f"  S3 Artifacts: {params.s3_bucket}")
     print(f"  S3 Scripts: {params.scripts_bucket}")
     print(f"  GitHub: {params.github_owner}/{params.github_repo} ({params.github_branch})")
@@ -221,9 +230,9 @@ def main():
     codebuild_success = deploy_codebuild(params, config, state, config_path, state_path)
     s3_success = deploy_s3(params, config, state, config_path, state_path)
     cloudwatch_success = deploy_cloudwatch(params, config, state, config_path, state_path)
-    # player_success = deploy_player(params, config, state, config_path, state_path)
-    player_success = True  # Temporarily skipped
     lambda_success = deploy_lambda(params, config, state, config_path, state_path)
+    player_success = deploy_player(params, config, state, config_path, state_path)
+    story_success = deploy_story(params, config, state, config_path, state_path)
 
     # Final summary
     print("\n" + "=" * 60)
@@ -233,8 +242,9 @@ def main():
     print(f"[{'OK' if codebuild_success else 'WARNING'}] CodeBuild Stack")
     print(f"[{'OK' if s3_success else 'WARNING'}] S3 Stack")
     print(f"[{'OK' if cloudwatch_success else 'WARNING'}] CloudWatch Stack")
-    # print(f"[{'OK' if player_success else 'WARNING'}] Player Stack")
     print(f"[{'OK' if lambda_success else 'WARNING'}] Lambda Stack")
+    print(f"[{'OK' if player_success else 'WARNING'}] Player Stack")
+    print(f"[{'OK' if story_success else 'WARNING'}] Story Stack")
     print("=" * 60)
     
     return 0
