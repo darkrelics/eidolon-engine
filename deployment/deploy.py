@@ -8,6 +8,7 @@ from pathlib import Path
 from core.config import Config
 from core.state import CDKState
 from utilities import get_aws_account_id, validate_region, verify_prerequisites, verify_cdk_bootstrap
+from deploy_mode import validate_deployment_mode, get_deployment_order, display_mode_summary
 from dynamodb import deploy_dynamodb
 from codebuild import deploy_codebuild
 from s3 import deploy_s3
@@ -22,6 +23,7 @@ class DeploymentParams:
     """Parameters for deployment."""
     region: str = "us-east-1"
     account_id: str = ""
+    deployment_mode: str = "hybrid"
     s3_bucket: str = ""
     scripts_bucket: str = ""
     github_owner: str = "robinje"
@@ -82,6 +84,14 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             cdk_data = json.load(f)
             cdk_context = cdk_data.get("context", {})
     
+    # Deployment Mode - priority: config.yml → cdk.json → default
+    deployment_mode = config.deployment_mode or cdk_context.get("deployment_mode", params.deployment_mode)
+    mode_input = input(f"Deployment Mode (mud/incremental/hybrid) [{deployment_mode}]: ").strip()
+    if mode_input:
+        params.deployment_mode = validate_deployment_mode(mode_input)
+    else:
+        params.deployment_mode = validate_deployment_mode(deployment_mode)
+    
     # S3 Artifacts Bucket - priority: default → cdk.json → config.yml → user prompt
     s3_bucket = params.s3_bucket or cdk_context.get("s3_bucket", "") or getattr(config, "s3_artifacts_bucket", "")
     if s3_bucket:
@@ -93,16 +103,17 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             if not params.s3_bucket:
                 print("S3 bucket name is required")
     
-    # S3 Scripts Bucket - priority: default → cdk.json → config.yml → user prompt
-    scripts_bucket = params.scripts_bucket or cdk_context.get("scripts_bucket", "") or getattr(config, "s3_scripts_bucket", "")
-    if scripts_bucket:
-        scripts_input = input(f"S3 Scripts Bucket [{scripts_bucket}]: ").strip()
-        params.scripts_bucket = scripts_input if scripts_input else scripts_bucket
-    else:
-        while not params.scripts_bucket:
-            params.scripts_bucket = input("S3 Scripts Bucket: ").strip()
-            if not params.scripts_bucket:
-                print("S3 scripts bucket name is required")
+    # S3 Scripts Bucket - only needed for MUD and Hybrid modes
+    if params.deployment_mode != "incremental":
+        scripts_bucket = params.scripts_bucket or cdk_context.get("scripts_bucket", "") or getattr(config, "s3_scripts_bucket", "")
+        if scripts_bucket:
+            scripts_input = input(f"S3 Scripts Bucket [{scripts_bucket}]: ").strip()
+            params.scripts_bucket = scripts_input if scripts_input else scripts_bucket
+        else:
+            while not params.scripts_bucket:
+                params.scripts_bucket = input("S3 Scripts Bucket: ").strip()
+                if not params.scripts_bucket:
+                    print("S3 scripts bucket name is required")
     
     # GitHub Owner
     github_owner = cdk_context.get("github_owner", params.github_owner)
@@ -154,6 +165,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     
     if "context" not in cdk_data:
         cdk_data["context"] = {}
+    cdk_data["context"]["deployment_mode"] = params.deployment_mode
     cdk_data["context"]["s3_bucket"] = params.s3_bucket
     cdk_data["context"]["scripts_bucket"] = params.scripts_bucket
     cdk_data["context"]["github_owner"] = params.github_owner
@@ -200,20 +212,13 @@ def main():
             print("Deployment cancelled")
             return 0
 
-    # Single deployment confirmation after all input
+    # Display deployment summary based on mode
     print("\n" + "=" * 60)
     print("Deployment Summary")
     print("=" * 60)
     print(f"  Account: {params.account_id}")
     print(f"  Region: {params.region}")
-    print(f"  Stacks to deploy:")
-    print(f"    - DynamoDB: 14 tables, 1 IAM policy")
-    print(f"    - CodeBuild: 2 projects, 1 S3 bucket, 1 role, 2 policies, Lambda builds")
-    print(f"    - S3: 1 bucket, 1 IAM policy, Lua scripts upload")
-    print(f"    - CloudWatch: 1 log group, metrics namespace, 1 IAM policy")
-    print(f"    - Lambda: 1 layer, 16 functions, 1 IAM role, 1 new policy")
-    print(f"    - Player: Cognito User Pool and client with PostConfirmation trigger")
-    print(f"    - Story: SSM parameter, 2 SQS queues, EventBridge rule, 1 IAM policy")
+    display_mode_summary(params.deployment_mode)
     print(f"  S3 Artifacts: {params.s3_bucket}")
     print(f"  S3 Scripts: {params.scripts_bucket}")
     print(f"  GitHub: {params.github_owner}/{params.github_repo} ({params.github_branch})")
@@ -225,26 +230,54 @@ def main():
         print("Deployment cancelled")
         return 0
 
-    # Deploy stacks
-    dynamodb_success = deploy_dynamodb(params, config, state, config_path, state_path)
-    codebuild_success = deploy_codebuild(params, config, state, config_path, state_path)
-    s3_success = deploy_s3(params, config, state, config_path, state_path)
-    cloudwatch_success = deploy_cloudwatch(params, config, state, config_path, state_path)
-    lambda_success = deploy_lambda(params, config, state, config_path, state_path)
-    player_success = deploy_player(params, config, state, config_path, state_path)
-    story_success = deploy_story(params, config, state, config_path, state_path)
+    # Update config with deployment mode
+    config.deployment_mode = params.deployment_mode
+    config.save(str(config_path))
+    
+    # Get deployment order based on mode
+    deployment_order = get_deployment_order(params.deployment_mode)
+    
+    # Map stack names to deployment functions
+    deployment_functions = {
+        "codebuild": deploy_codebuild,
+        "dynamodb": deploy_dynamodb,
+        "lambda": deploy_lambda,
+        "player": deploy_player,
+        "story": deploy_story,
+        "s3": deploy_s3,
+        "cloudwatch": deploy_cloudwatch,
+        # "client": deploy_client,  # Add when available
+    }
+    
+    # Deploy stacks in order
+    deployment_results = {}
+    for stack_name in deployment_order:
+        if stack_name in deployment_functions:
+            print(f"\nDeploying {stack_name} stack...")
+            deploy_func = deployment_functions[stack_name]
+            try:
+                success = deploy_func(params, config, state, config_path, state_path)
+                deployment_results[stack_name] = success
+                if not success:
+                    print(f"WARNING: {stack_name} deployment had issues")
+            except Exception as e:
+                print(f"ERROR deploying {stack_name}: {e}")
+                deployment_results[stack_name] = False
+        else:
+            print(f"\nSkipping {stack_name} stack (not yet implemented)")
+            deployment_results[stack_name] = False
 
     # Final summary
     print("\n" + "=" * 60)
     print("Deployment Summary")
     print("=" * 60)
-    print(f"[{'OK' if dynamodb_success else 'WARNING'}] DynamoDB Stack")
-    print(f"[{'OK' if codebuild_success else 'WARNING'}] CodeBuild Stack")
-    print(f"[{'OK' if s3_success else 'WARNING'}] S3 Stack")
-    print(f"[{'OK' if cloudwatch_success else 'WARNING'}] CloudWatch Stack")
-    print(f"[{'OK' if lambda_success else 'WARNING'}] Lambda Stack")
-    print(f"[{'OK' if player_success else 'WARNING'}] Player Stack")
-    print(f"[{'OK' if story_success else 'WARNING'}] Story Stack")
+    print(f"Mode: {params.deployment_mode.upper()}")
+    for stack_name in deployment_order:
+        if stack_name in deployment_results:
+            status = "OK" if deployment_results[stack_name] else "WARNING"
+            print(f"[{status}] {stack_name.capitalize()} Stack")
+        else:
+            print(f"[SKIPPED] {stack_name.capitalize()} Stack")
     print("=" * 60)
     
     return 0

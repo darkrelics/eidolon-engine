@@ -13,6 +13,9 @@ class Config:
     # Region for deployment
     region: str = "us-east-1"
     
+    # Deployment mode
+    deployment_mode: str = "hybrid"
+    
     # Table name mappings (logical to physical)
     dynamodb_tables: dict = field(default_factory=dict)
     
@@ -37,6 +40,9 @@ class Config:
         if config_path.exists():
             with open(config_path, "r") as f:
                 existing_config = yaml.safe_load(f) or {}
+        
+        # Update deployment mode
+        existing_config["DeploymentMode"] = self.deployment_mode
         
         # Update DynamoDB section
         existing_config["DynamoDB"] = {
@@ -96,6 +102,9 @@ class Config:
         # Load the config file
         with open(config_path, "r") as f:
             data = yaml.safe_load(f) or {}
+        
+        # Load deployment mode
+        instance.deployment_mode = data.get("DeploymentMode", instance.deployment_mode)
         
         if "AWS" in data:
             instance.region = data.get("AWS", {}).get("Region", instance.region)
