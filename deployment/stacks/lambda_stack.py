@@ -11,16 +11,20 @@ from constructs import Construct
 
 class LambdaStack(Stack):
     """Lambda stack for Eidolon Engine functions."""
-    
-    def __init__(self, scope: Construct, stack_id: str,
-                 region_name: str = "us-east-1",
-                 s3_bucket: str = "",
-                 client_fqdn: str = "",
-                 dynamodb_policy_arn: str = "",
-                 dynamodb_tables = None,
-                 **kwargs) -> None:
+
+    def __init__(
+        self,
+        scope: Construct,
+        stack_id: str,
+        region_name: str = "us-east-1",
+        s3_bucket: str = "",
+        client_fqdn: str = "",
+        dynamodb_policy_arn: str = "",
+        dynamodb_tables=None,
+        **kwargs,
+    ) -> None:
         """Initialize Lambda stack.
-        
+
         Args:
             scope: CDK construct scope
             stack_id: Stack identifier
@@ -37,56 +41,52 @@ class LambdaStack(Stack):
         self.dynamodb_policy_arn = dynamodb_policy_arn
         self.dynamodb_tables = dynamodb_tables or {}
         super().__init__(scope, stack_id, **kwargs)
-        
+
         # Create Lambda layer
         self.lambda_layer = self._create_lambda_layer()
-        
+
         # Create shared IAM execution role
         self.lambda_role = self._create_lambda_role()
-        
+
         # Deploy Lambda functions in alphabetical order
         self.functions = {}
         self._deploy_lambda_functions()
-        
+
         # Add outputs
         self._add_outputs()
-    
+
     def _create_lambda_layer(self) -> lambda_.LayerVersion:
         """Create Lambda dependencies layer."""
         layer_name = "eidolon-dependencies"
-        
+
         print(f"  Creating Lambda layer from {self.s3_bucket_name}/lambda-layer/lambda-layer.zip")
-        
+
         bucket = s3.Bucket.from_bucket_name(self, "ArtifactsBucket", self.s3_bucket_name)
-        
+
         return lambda_.LayerVersion(
             self,
             "DependenciesLayer",
             layer_version_name=layer_name,
             code=lambda_.Code.from_bucket(bucket, "lambda-layer/lambda-layer.zip"),
             compatible_runtimes=[lambda_.Runtime.PYTHON_3_12],
-            description="Shared dependencies for Eidolon Engine Lambda functions"
+            description="Shared dependencies for Eidolon Engine Lambda functions",
         )
-    
+
     def _create_lambda_role(self) -> iam.Role:
         """Create shared Lambda execution role."""
         print("  Creating shared Lambda execution role")
-        
+
         role = iam.Role(
             self,
             "LambdaExecutionRole",
             role_name="eidolon-lambda-execution-role",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"), # type: ignore
-            description="Shared execution role for Eidolon Engine Lambda functions"
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),  # type: ignore
+            description="Shared execution role for Eidolon Engine Lambda functions",
         )
-        
+
         # Attach basic Lambda execution policy
-        role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "service-role/AWSLambdaBasicExecutionRole"
-            )
-        )
-        
+        role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"))
+
         # Create and attach CloudWatch Logs policy for dynamic log group creation
         logs_policy = iam.ManagedPolicy(
             self,
@@ -96,32 +96,24 @@ class LambdaStack(Stack):
             statements=[
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
-                    actions=[
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    resources=[f"arn:aws:logs:{self.region_name}:*:*"]
+                    actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                    resources=[f"arn:aws:logs:{self.region_name}:*:*"],
                 )
-            ]
+            ],
         )
         role.add_managed_policy(logs_policy)
-        
+
         # Attach DynamoDB policy if provided
         if self.dynamodb_policy_arn:
             print(f"  Attaching DynamoDB policy: {self.dynamodb_policy_arn}")
-            dynamodb_policy = iam.ManagedPolicy.from_managed_policy_arn(
-                self,
-                "DynamoDBPolicy",
-                self.dynamodb_policy_arn
-            )
+            dynamodb_policy = iam.ManagedPolicy.from_managed_policy_arn(self, "DynamoDBPolicy", self.dynamodb_policy_arn)
             role.add_managed_policy(dynamodb_policy)
-        
+
         return role
-    
+
     def _deploy_lambda_functions(self) -> None:
         """Deploy all Lambda functions in alphabetical order."""
-        
+
         # Define all Lambda functions with their configurations
         lambda_configs = [
             # Character API functions
@@ -143,20 +135,20 @@ class LambdaStack(Stack):
             # Operations functions
             ("ops-segment-poller", "ops_segment_poller.lambda_handler"),
             ("ops-segment-process", "ops_segment_process.lambda_handler"),
-            ("ops-story-advance", "ops_story_advance.lambda_handler")
+            ("ops-story-advance", "ops_story_advance.lambda_handler"),
         ]
-        
+
         # Get common environment variables
         env_vars = self._get_environment_variables()
-        
+
         bucket = s3.Bucket.from_bucket_name(self, "FunctionsBucket", self.s3_bucket_name)
-        
+
         for function_name, handler in lambda_configs:
             print(f"  Deploying Lambda function: {function_name}")
-            
+
             # Create resource ID from function name (remove hyphens for CDK)
             resource_id = function_name.replace("-", "").title()
-            
+
             self.functions[function_name] = lambda_.Function(
                 self,
                 resource_id,
@@ -165,18 +157,18 @@ class LambdaStack(Stack):
                 handler=handler,
                 code=lambda_.Code.from_bucket(bucket, f"{function_name}.zip"),
                 layers=[self.lambda_layer],
-                role=self.lambda_role, # type: ignore
+                role=self.lambda_role,  # type: ignore
                 timeout=Duration.seconds(30),
                 memory_size=128,
                 environment=self._get_function_environment(function_name, env_vars),
-                description=f"Eidolon Engine {function_name} function"
+                description=f"Eidolon Engine {function_name} function",
             )
-    
+
     def _get_environment_variables(self) -> dict:
         """Get common environment variables for all Lambda functions."""
         # Use client FQDN for CORS origin
         cors_origin = f"https://{self.client_fqdn}" if self.client_fqdn else "*"
-        
+
         env_vars = {
             "APPLICATION_NAME": "eidolon-engine",
             "LOG_LEVEL": "20",
@@ -184,9 +176,9 @@ class LambdaStack(Stack):
             "CORS_ALLOW_CREDENTIALS": "true",
             "CORS_ALLOW_HEADERS": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
             "CORS_ALLOW_METHODS": "GET,POST,PUT,DELETE,OPTIONS",
-            "CORS_MAX_AGE": "86400"
+            "CORS_MAX_AGE": "86400",
         }
-        
+
         # Add DynamoDB table names
         table_mapping = {
             "players_table": "players",
@@ -202,58 +194,43 @@ class LambdaStack(Stack):
             "active_segments_table": "active_segments",
             "story_history_table": "story_history",
             "segment_history_table": "segment_history",
-            "opponents_table": "opponents"
+            "opponents_table": "opponents",
         }
-        
+
         for env_key, table_key in table_mapping.items():
             env_vars[env_key] = self.dynamodb_tables.get(table_key, table_key)
-        
+
         return env_vars
-    
+
     def _get_function_environment(self, function_name: str, base_env: dict) -> dict:
         """Get environment variables for a specific Lambda function."""
         env = base_env.copy()
-        
+
         # Add function-specific environment variables
         if function_name == "ops-segment-process":
             env["SEGMENT_BATCH_SIZE"] = "10"
         elif function_name == "ops-segment-poller":
             env["POLLING_INTERVAL"] = "60"
-        
+
         return env
-    
+
     def _add_outputs(self) -> None:
         """Add stack outputs."""
-        CfnOutput(
-            self,
-            "LambdaLayerArn",
-            value=self.lambda_layer.layer_version_arn,
-            description="Lambda dependencies layer ARN"
-        )
-        
-        CfnOutput(
-            self,
-            "LambdaRoleArn",
-            value=self.lambda_role.role_arn,
-            description="Shared Lambda execution role ARN"
-        )
-        
+        CfnOutput(self, "LambdaLayerArn", value=self.lambda_layer.layer_version_arn, description="Lambda dependencies layer ARN")
+
+        CfnOutput(self, "LambdaRoleArn", value=self.lambda_role.role_arn, description="Shared Lambda execution role ARN")
+
         # Output each Lambda function ARN
         for function_name, function in self.functions.items():
             output_id = function_name.replace("-", "").title() + "Arn"
-            CfnOutput(
-                self,
-                output_id,
-                value=function.function_arn,
-                description=f"{function_name} Lambda function ARN"
-            )
-    
+            CfnOutput(self, output_id, value=function.function_arn, description=f"{function_name} Lambda function ARN")
+
     def _function_exists(self, function_name: str) -> bool:
         """Check if a Lambda function exists.
-        
+
         Args:
             function_name: Name of the function to check
-            
+
         Returns:
             True if function exists, False otherwise
         """
@@ -266,13 +243,13 @@ class LambdaStack(Stack):
             if error_code == "ResourceNotFoundException":
                 return False
         return False
-    
+
     def _layer_exists(self, layer_name: str) -> bool:
         """Check if a Lambda layer exists.
-        
+
         Args:
             layer_name: Name of the layer to check
-            
+
         Returns:
             True if layer exists, False otherwise
         """

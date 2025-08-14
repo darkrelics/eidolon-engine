@@ -15,10 +15,8 @@ from utilities import run_cdk_deploy, validate_policies
 def deploy_dynamodb_stack(params) -> dict:
     """Deploy the DynamoDB stack using CDK."""
     # Pass parameters through context
-    context_args = [
-        "-c", f"region={params.region}"
-    ]
-    
+    context_args = ["-c", f"region={params.region}"]
+
     app_command = "python3 app_dynamodb.py"
     return run_cdk_deploy("dynamodb", params.region, app_command, context_args)
 
@@ -28,9 +26,20 @@ def validate_tables(region: str) -> dict:
     dynamodb = boto3.client("dynamodb", region_name=region)
 
     expected_tables = [
-        "players", "characters", "rooms", "exits", "items", "prototypes",
-        "archetypes", "motd", "story", "segments", "active_segments",
-        "story_history", "segment_history", "opponents"
+        "players",
+        "characters",
+        "rooms",
+        "exits",
+        "items",
+        "prototypes",
+        "archetypes",
+        "motd",
+        "story",
+        "segments",
+        "active_segments",
+        "story_history",
+        "segment_history",
+        "opponents",
     ]
 
     print("\nValidating DynamoDB tables...")
@@ -49,7 +58,7 @@ def validate_tables(region: str) -> dict:
                 # Check table status
                 table_desc = dynamodb.describe_table(TableName=table)
                 status = table_desc.get("Table", {}).get("TableStatus", "")
-                
+
                 if status == "ACTIVE":
                     print(f"  [OK] {table}")
                     results[table] = table
@@ -67,13 +76,13 @@ def validate_tables(region: str) -> dict:
         if creating_tables:
             print("\nWaiting for tables to become active...")
             time.sleep(10)
-            
+
             # Check creating tables again
             for table in creating_tables:
                 try:
                     table_desc = dynamodb.describe_table(TableName=table)
                     status = table_desc.get("Table", {}).get("TableStatus", "")
-                    
+
                     if status == "ACTIVE":
                         print(f"  [OK] {table}")
                         results[table] = table
@@ -94,60 +103,59 @@ def validate_tables(region: str) -> dict:
 def verify_dynamodb_deployment(params) -> dict:
     """Verify the DynamoDB deployment completed successfully."""
     print("\nVerifying DynamoDB deployment...")
-    
+
     # Validate tables
     table_validation = validate_tables(params.region)
-    
+
     # Validate IAM policies
     policy_validation = validate_policies(["eidolon-dynamodb-policy"])
-    
+
     return {
         "tables": table_validation,
         "policies": policy_validation,
-        "success": table_validation.get("success", False) and all(policy_validation.values())
+        "success": table_validation.get("success", False) and all(policy_validation.values()),
     }
 
 
-def deploy_dynamodb(params, config: Config, state: CDKState, 
-                   config_path: Path, state_path: Path) -> bool:
+def deploy_dynamodb(params, config: Config, state: CDKState, config_path: Path, state_path: Path) -> bool:
     """Deploy and verify DynamoDB stack."""
     phase = get_stack_phase_number("dynamodb", params.deployment_mode)
     print("\n" + "=" * 60)
     print(f"Phase {phase}: DynamoDB Stack")
     print("=" * 60)
-    
+
     # Deploy stack
     result = deploy_dynamodb_stack(params)
-    
+
     if not result.get("success", False):
         print("\nDynamoDB deployment failed!")
         return False
-    
+
     # Verify deployment
     validation = verify_dynamodb_deployment(params)
-    
+
     if not validation.get("success", False):
         print("\nWarning: DynamoDB deployment completed with issues")
         if not validation.get("tables", {}).get("success", False):
             print("  - Some tables were not created")
         if not all(validation.get("policies", {}).values()):
             print("  - Some IAM policies were not created")
-    
+
     # Update configuration
     if validation.get("tables", {}).get("success", False):
         config.dynamodb_tables = validation.get("tables", {}).get("tables", {})
         config.region = params.region
         config.save(str(config_path))
-    
+
     # Update state
     if validation.get("success", False):
         state.mark_stack_deployed("dynamodb", result.get("outputs", {}))
-        
+
         # Store infrastructure resources needed by other stacks
         if "infrastructure" not in state.__dict__:
             state.infrastructure = {}
         state.infrastructure["dynamodb_policy_arn"] = f"arn:aws:iam::{params.account_id}:policy/eidolon-dynamodb-policy"
-        
+
         state.save(str(state_path))
-    
+
     return validation.get("success", False)

@@ -21,6 +21,7 @@ from story import deploy_story
 @dataclass
 class DeploymentParams:
     """Parameters for deployment."""
+
     region: str = "us-east-1"
     account_id: str = ""
     deployment_mode: str = "hybrid"
@@ -37,16 +38,16 @@ class DeploymentParams:
 def collect_deployment_params(config: Config) -> DeploymentParams:
     """Collect deployment parameters from user input."""
     print("\nConfiguration Parameters:")
-    
+
     # Get account ID
     account_id = get_aws_account_id()
     if not account_id:
         raise ValueError("Unable to determine AWS account ID")
     print(f"AWS Account: {account_id}")
-    
+
     # Get region with user input and validation
     print(f"Current region: {config.region}")
-    
+
     # Validate current config region first
     validated_region = validate_region(config.region)
     if not validated_region:
@@ -67,15 +68,15 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             else:
                 print(f"Keeping current region: {config.region}")
                 validated_region = config.region
-    
+
     # Update config if region changed
     if validated_region != config.region:
         config.region = validated_region
         print(f"Updated region to: {validated_region}")
-    
+
     # Create params with defaults
     params = DeploymentParams(region=validated_region, account_id=account_id)
-    
+
     # Load cdk.json context values if they exist
     cdk_json_path = Path(__file__).parent / "cdk.json"
     cdk_context = {}
@@ -83,7 +84,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
         with open(cdk_json_path, "r") as f:
             cdk_data = json.load(f)
             cdk_context = cdk_data.get("context", {})
-    
+
     # Deployment Mode - priority: config.yml → cdk.json → default
     deployment_mode = config.deployment_mode or cdk_context.get("deployment_mode", params.deployment_mode)
     mode_input = input(f"Deployment Mode (mud/incremental/hybrid) [{deployment_mode}]: ").strip()
@@ -91,7 +92,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
         params.deployment_mode = validate_deployment_mode(mode_input)
     else:
         params.deployment_mode = validate_deployment_mode(deployment_mode)
-    
+
     # S3 Artifacts Bucket - priority: default → cdk.json → config.yml → user prompt
     s3_bucket = params.s3_bucket or cdk_context.get("s3_bucket", "") or getattr(config, "s3_artifacts_bucket", "")
     if s3_bucket:
@@ -102,7 +103,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             params.s3_bucket = input("S3 Artifacts Bucket: ").strip()
             if not params.s3_bucket:
                 print("S3 bucket name is required")
-    
+
     # S3 Scripts Bucket - only needed for MUD and Hybrid modes
     if params.deployment_mode != "incremental":
         scripts_bucket = params.scripts_bucket or cdk_context.get("scripts_bucket", "") or getattr(config, "s3_scripts_bucket", "")
@@ -114,22 +115,22 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
                 params.scripts_bucket = input("S3 Scripts Bucket: ").strip()
                 if not params.scripts_bucket:
                     print("S3 scripts bucket name is required")
-    
+
     # GitHub Owner
     github_owner = cdk_context.get("github_owner", params.github_owner)
     owner_input = input(f"GitHub Owner [{github_owner}]: ").strip()
     params.github_owner = owner_input if owner_input else github_owner
-    
+
     # GitHub Repository
     github_repo = cdk_context.get("github_repo", params.github_repo)
     repo_input = input(f"GitHub Repository [{github_repo}]: ").strip()
     params.github_repo = repo_input if repo_input else github_repo
-    
+
     # GitHub Branch
     github_branch = cdk_context.get("github_branch", params.github_branch)
     branch_input = input(f"GitHub Branch [{github_branch}]: ").strip()
     params.github_branch = branch_input if branch_input else github_branch
-    
+
     # Domain (base domain for all services)
     domain = cdk_context.get("domain", params.domain)
     if domain:
@@ -140,7 +141,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             params.domain = input("Domain (e.g., darkrelics.net): ").strip()
             if not params.domain:
                 print("Domain is required for deployment")
-    
+
     # Client Host (for portal)
     client_host = cdk_context.get("client_host", params.client_host)
     if client_host:
@@ -151,18 +152,18 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             params.client_host = input("Client Host (e.g., portal): ").strip()
             if not params.client_host:
                 print("Client host is required for portal configuration")
-    
+
     # Reply Email (for Cognito)
     reply_email = cdk_context.get("reply_email", params.reply_email)
     email_input = input(f"Reply email for Cognito [{reply_email}]: ").strip()
     params.reply_email = email_input if email_input else reply_email
-    
+
     # Save user selections back to cdk.json
     cdk_data = {"app": "python3 app.py", "context": {}}
     if cdk_json_path.exists():
         with open(cdk_json_path, "r") as f:
             cdk_data = json.load(f)
-    
+
     if "context" not in cdk_data:
         cdk_data["context"] = {}
     cdk_data["context"]["deployment_mode"] = params.deployment_mode
@@ -174,10 +175,10 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     cdk_data["context"]["domain"] = params.domain
     cdk_data["context"]["client_host"] = params.client_host
     cdk_data["context"]["reply_email"] = params.reply_email
-    
+
     with open(cdk_json_path, "w") as f:
         json.dump(cdk_data, f, indent=2)
-    
+
     return params
 
 
@@ -190,7 +191,7 @@ def main():
     # Load configuration
     config_path = Path(__file__).parent.parent / "config.yml"
     state_path = Path(__file__).parent / ".cdk-state.json"
-    
+
     config = Config.load(str(config_path))
     state = CDKState.load(str(state_path))
 
@@ -224,7 +225,7 @@ def main():
     print(f"  GitHub: {params.github_owner}/{params.github_repo} ({params.github_branch})")
     print(f"  Client URL: {params.client_host}.{params.domain}")
     print("=" * 60)
-    
+
     response = input("\nProceed with deployment? [Y/n]: ").strip().lower()
     if response == "n":
         print("Deployment cancelled")
@@ -233,10 +234,10 @@ def main():
     # Update config with deployment mode
     config.deployment_mode = params.deployment_mode
     config.save(str(config_path))
-    
+
     # Get deployment order based on mode
     deployment_order = get_deployment_order(params.deployment_mode)
-    
+
     # Map stack names to deployment functions
     deployment_functions = {
         "codebuild": deploy_codebuild,
@@ -248,7 +249,7 @@ def main():
         "cloudwatch": deploy_cloudwatch,
         # "client": deploy_client,  # Add when available
     }
-    
+
     # Deploy stacks in order
     deployment_results = {}
     for stack_name in deployment_order:
@@ -279,7 +280,7 @@ def main():
         else:
             print(f"[SKIPPED] {stack_name.capitalize()} Stack")
     print("=" * 60)
-    
+
     return 0
 
 

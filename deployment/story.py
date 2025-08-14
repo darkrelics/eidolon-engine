@@ -26,14 +26,14 @@ def get_lambda_arns(params, state: CDKState) -> dict:
         "lambda_role_arn": f"arn:aws:iam::{params.account_id}:role/eidolon-lambda-execution-role",
         "poller_arn": f"arn:aws:lambda:{params.region}:{params.account_id}:function:ops-segment-poller",
         "processor_arn": f"arn:aws:lambda:{params.region}:{params.account_id}:function:ops-segment-process",
-        "advance_arn": f"arn:aws:lambda:{params.region}:{params.account_id}:function:ops-story-advance"
+        "advance_arn": f"arn:aws:lambda:{params.region}:{params.account_id}:function:ops-story-advance",
     }
 
     # Check if ARNs are stored in state from Lambda stack deployment
-    if hasattr(state, 'infrastructure') and state.infrastructure:
+    if hasattr(state, "infrastructure") and state.infrastructure:
         # Use stored role ARN if available
         if state.infrastructure.get("lambda_role_arn"):
-            arns["lambda_role_arn"] = state.infrastructure.get("lambda_role_arn") #type: ignore
+            arns["lambda_role_arn"] = state.infrastructure.get("lambda_role_arn")  # type: ignore
             print("  Using Lambda role ARN from state")
 
         # Check for function ARNs in state (if stored)
@@ -64,7 +64,7 @@ def get_lambda_arns(params, state: CDKState) -> dict:
         functions = [
             ("ops-segment-poller", "poller_arn"),
             ("ops-segment-process", "processor_arn"),
-            ("ops-story-advance", "advance_arn")
+            ("ops-story-advance", "advance_arn"),
         ]
 
         for function_name, arn_key in functions:
@@ -88,11 +88,16 @@ def deploy_story_stack(params, state: CDKState) -> dict:
 
     # Pass all parameters through context - each -c and key=value must be separate
     context_args = [
-        "-c", f"region={params.region}",
-        "-c", f"lambda_role_arn={arns['lambda_role_arn']}",
-        "-c", f"poller_lambda_arn={arns['poller_arn']}",
-        "-c", f"processor_lambda_arn={arns['processor_arn']}",
-        "-c", f"advance_lambda_arn={arns['advance_arn']}"
+        "-c",
+        f"region={params.region}",
+        "-c",
+        f"lambda_role_arn={arns['lambda_role_arn']}",
+        "-c",
+        f"poller_lambda_arn={arns['poller_arn']}",
+        "-c",
+        f"processor_lambda_arn={arns['processor_arn']}",
+        "-c",
+        f"advance_lambda_arn={arns['advance_arn']}",
     ]
 
     # App command is just the Python script, context goes to CDK
@@ -210,7 +215,7 @@ def update_lambda_environments(params, processing_queue_url: str, advancement_qu
         "SEGMENT_QUEUE_URL": processing_queue_url,
         "STORY_ADVANCEMENT_QUEUE_URL": advancement_queue_url,
         "SSM_POLLER_STATE_PARAMETER": "/eidolon/story/config",
-        "EVENTBRIDGE_RULE_NAME": "eidolon-story-poller"
+        "EVENTBRIDGE_RULE_NAME": "eidolon-story-poller",
     }
 
     function_updates = [
@@ -225,7 +230,7 @@ def update_lambda_environments(params, processing_queue_url: str, advancement_qu
         # Operations functions
         ("ops-segment-poller", story_env_vars),
         ("ops-segment-process", story_env_vars),
-        ("ops-story-advance", story_env_vars)
+        ("ops-story-advance", story_env_vars),
     ]
 
     all_success = True
@@ -239,10 +244,7 @@ def update_lambda_environments(params, processing_queue_url: str, advancement_qu
             current_env.update(env_updates)
 
             # Update function configuration
-            lambda_client.update_function_configuration(
-                FunctionName=function_name,
-                Environment={"Variables": current_env}
-            )
+            lambda_client.update_function_configuration(FunctionName=function_name, Environment={"Variables": current_env})
             print(f"  [OK] Updated environment for {function_name}")
 
         except ClientError as err:
@@ -281,12 +283,11 @@ def verify_story_deployment(params) -> dict:
         "advancement_queue_url": advancement_url,
         "eventbridge": eventbridge_valid,
         "policy": policy_valid,
-        "success": all([ssm_valid, processing_valid, advancement_valid, eventbridge_valid, policy_valid])
+        "success": all([ssm_valid, processing_valid, advancement_valid, eventbridge_valid, policy_valid]),
     }
 
 
-def deploy_story(params, config: Config, state: CDKState,
-                config_path: Path, state_path: Path) -> bool:
+def deploy_story(params, config: Config, state: CDKState, config_path: Path, state_path: Path) -> bool:
     """Deploy and verify Story stack."""
     phase = get_stack_phase_number("story", params.deployment_mode)
     print("\n" + "=" * 60)
@@ -318,11 +319,7 @@ def deploy_story(params, config: Config, state: CDKState,
 
     # Update Lambda function environment variables if queues were created
     if validation.get("processing_queue_url") and validation.get("advancement_queue_url"):
-        update_lambda_environments(
-            params,
-            validation.get("processing_queue_url", ""),
-            validation.get("advancement_queue_url", "")
-        )
+        update_lambda_environments(params, validation.get("processing_queue_url", ""), validation.get("advancement_queue_url", ""))
 
     # Update configuration with queue URLs if available
     if validation.get("processing_queue_url"):

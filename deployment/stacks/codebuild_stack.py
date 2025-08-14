@@ -12,15 +12,19 @@ from constructs import Construct
 class CodeBuildStack(Stack):
     """CodeBuild stack for Eidolon Engine Lambda builds."""
 
-    def __init__(self, scope: Construct, stack_id: str,
-                 region_name: str = "us-east-1",
-                 s3_bucket: str = "",
-                 github_owner: str = "robinje",
-                 github_repo: str = "eidolon-engine",
-                 github_branch: str = "develop",
-                 **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        stack_id: str,
+        region_name: str = "us-east-1",
+        s3_bucket: str = "",
+        github_owner: str = "robinje",
+        github_repo: str = "eidolon-engine",
+        github_branch: str = "develop",
+        **kwargs,
+    ) -> None:
         """Initialize CodeBuild stack.
-        
+
         Args:
             scope: CDK construct scope
             stack_id: Stack identifier
@@ -41,9 +45,7 @@ class CodeBuildStack(Stack):
         # Create or import S3 bucket for artifacts
         if self._bucket_exists(self.s3_bucket_name):
             print(f"  Importing existing S3 bucket: {self.s3_bucket_name}")
-            bucket = s3.Bucket.from_bucket_name(
-                self, "ArtifactsBucket", self.s3_bucket_name
-            )
+            bucket = s3.Bucket.from_bucket_name(self, "ArtifactsBucket", self.s3_bucket_name)
         else:
             print(f"  Creating new S3 bucket: {self.s3_bucket_name}")
             bucket = s3.Bucket(
@@ -69,16 +71,16 @@ class CodeBuildStack(Stack):
 
     def _bucket_exists(self, bucket_name: str) -> bool:
         """Check if S3 bucket exists.
-        
+
         Args:
             bucket_name: Name of the bucket to check
-            
+
         Returns:
             True if bucket exists, False otherwise
         """
         if not bucket_name:
             return False
-            
+
         try:
             s3_client = boto3.client("s3", region_name=self.region_name)
             s3_client.head_bucket(Bucket=bucket_name)
@@ -104,14 +106,10 @@ class CodeBuildStack(Stack):
             statements=[
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
-                    actions=[
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    resources=[f"arn:aws:logs:{self.region_name}:*:log-group:/aws/codebuild/*"]
+                    actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                    resources=[f"arn:aws:logs:{self.region_name}:*:log-group:/aws/codebuild/*"],
                 )
-            ]
+            ],
         )
 
         # Create custom managed policy for S3 access
@@ -123,18 +121,10 @@ class CodeBuildStack(Stack):
             statements=[
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
-                    actions=[
-                        "s3:GetObject",
-                        "s3:PutObject",
-                        "s3:DeleteObject",
-                        "s3:ListBucket"
-                    ],
-                    resources=[
-                        self.artifacts_bucket.bucket_arn,
-                        f"{self.artifacts_bucket.bucket_arn}/*"
-                    ]
+                    actions=["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
+                    resources=[self.artifacts_bucket.bucket_arn, f"{self.artifacts_bucket.bucket_arn}/*"],
                 )
-            ]
+            ],
         )
 
         # Create the role with both managed policies
@@ -143,17 +133,17 @@ class CodeBuildStack(Stack):
             "LambdaCodeBuildRole",
             role_name="eidolon-lambda-codebuild-role",
             assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com"),  # type: ignore
-            managed_policies=[logs_policy, s3_policy]
+            managed_policies=[logs_policy, s3_policy],
         )
 
         return role
 
     def _project_exists(self, project_name: str) -> bool:
         """Check if CodeBuild project exists.
-        
+
         Args:
             project_name: Name of the project to check
-            
+
         Returns:
             True if project exists, False otherwise
         """
@@ -167,7 +157,7 @@ class CodeBuildStack(Stack):
     def _create_lambda_layer_project(self):
         """Create CodeBuild project for Lambda layer."""
         project_name = "eidolon-lambda-layer"
-        
+
         # Check if project exists
         if self._project_exists(project_name):
             print(f"CodeBuild project {project_name} already exists, will be updated")
@@ -193,12 +183,8 @@ class CodeBuildStack(Stack):
                 compute_type=codebuild.ComputeType.SMALL,
             ),
             environment_variables={
-                "S3_BUCKET": codebuild.BuildEnvironmentVariable(
-                    value=self.artifacts_bucket.bucket_name
-                ),
-                "AWS_DEFAULT_REGION": codebuild.BuildEnvironmentVariable(
-                    value=self.region_name
-                ),
+                "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.artifacts_bucket.bucket_name),
+                "AWS_DEFAULT_REGION": codebuild.BuildEnvironmentVariable(value=self.region_name),
             },
             build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-layer.yml"),
             artifacts=codebuild.Artifacts.s3(
@@ -218,7 +204,7 @@ class CodeBuildStack(Stack):
     def _create_lambda_functions_project(self):
         """Create CodeBuild project for Lambda functions."""
         project_name = "eidolon-lambda-functions"
-        
+
         # Check if project exists
         if self._project_exists(project_name):
             print(f"CodeBuild project {project_name} already exists, will be updated")
@@ -244,12 +230,8 @@ class CodeBuildStack(Stack):
                 compute_type=codebuild.ComputeType.SMALL,
             ),
             environment_variables={
-                "S3_BUCKET": codebuild.BuildEnvironmentVariable(
-                    value=self.artifacts_bucket.bucket_name
-                ),
-                "AWS_DEFAULT_REGION": codebuild.BuildEnvironmentVariable(
-                    value=self.region_name
-                ),
+                "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.artifacts_bucket.bucket_name),
+                "AWS_DEFAULT_REGION": codebuild.BuildEnvironmentVariable(value=self.region_name),
             },
             build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-functions.yml"),
             artifacts=codebuild.Artifacts.s3(
@@ -264,33 +246,23 @@ class CodeBuildStack(Stack):
         project.apply_removal_policy(RemovalPolicy.DESTROY)
 
         return project
-    
+
     def _add_outputs(self) -> None:
         """Add stack outputs."""
-        CfnOutput(
-            self,
-            "S3BucketName",
-            value=self.artifacts_bucket.bucket_name,
-            description="S3 bucket for Lambda artifacts"
-        )
+        CfnOutput(self, "S3BucketName", value=self.artifacts_bucket.bucket_name, description="S3 bucket for Lambda artifacts")
 
-        CfnOutput(
-            self,
-            "CodeBuildRoleArn",
-            value=self.codebuild_role.role_arn,
-            description="ARN of the shared CodeBuild IAM role"
-        )
+        CfnOutput(self, "CodeBuildRoleArn", value=self.codebuild_role.role_arn, description="ARN of the shared CodeBuild IAM role")
 
         CfnOutput(
             self,
             "LambdaLayerProjectName",
             value=self.lambda_layer_project.project_name,
-            description="CodeBuild project for Lambda layer"
+            description="CodeBuild project for Lambda layer",
         )
 
         CfnOutput(
             self,
             "LambdaFunctionsProjectName",
             value=self.lambda_functions_project.project_name,
-            description="CodeBuild project for Lambda functions"
+            description="CodeBuild project for Lambda functions",
         )

@@ -13,11 +13,9 @@ from core.dynamodb_tables import TABLE_CONFIGS
 class DynamoDBStack(Stack):
     """DynamoDB stack for Eidolon Engine data storage."""
 
-    def __init__(self, scope: Construct, stack_id: str, 
-                 region_name: str = "us-east-1", 
-                 **kwargs) -> None:
+    def __init__(self, scope: Construct, stack_id: str, region_name: str = "us-east-1", **kwargs) -> None:
         """Initialize DynamoDB stack.
-        
+
         Args:
             scope: CDK construct scope
             stack_id: Stack identifier
@@ -96,14 +94,14 @@ class DynamoDBStack(Stack):
                         "dynamodb:BatchGetItem",
                         "dynamodb:BatchWriteItem",
                     ],
-                    resources=self.table_arns + self.index_arns
+                    resources=self.table_arns + self.index_arns,
                 )
-            ]
+            ],
         )
 
         # Store policy ARN for retrieval
         self.policy_arn = self.policy.managed_policy_arn
-        
+
         # Add outputs
         self._add_outputs()
 
@@ -120,29 +118,23 @@ class DynamoDBStack(Stack):
         # Add partition key
         partition_key = config.get("partition_key", {})
         table_props["partition_key"] = dynamodb.Attribute(
-            name=partition_key.get("name", ""),
-            type=get_attribute_type(partition_key.get("type", ""))
+            name=partition_key.get("name", ""), type=get_attribute_type(partition_key.get("type", ""))
         )
 
         # Add sort key if present
         if "sort_key" in config:
             sort_key = config.get("sort_key", {})
             table_props["sort_key"] = dynamodb.Attribute(
-                name=sort_key.get("name", ""),
-                type=get_attribute_type(sort_key.get("type", ""))
+                name=sort_key.get("name", ""), type=get_attribute_type(sort_key.get("type", ""))
             )
 
         # Create the table
-        table = dynamodb.Table(
-            self,
-            f"{config.get('name', '').replace('_', '')}Table",
-            **table_props
-        )
+        table = dynamodb.Table(self, f"{config.get('name', '').replace('_', '')}Table", **table_props)
 
         # Set UpdateReplacePolicy to Retain to prevent data loss during updates
         cfn_table = table.node.default_child
         if cfn_table:
-            cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN # type: ignore
+            cfn_table.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN  # type: ignore
 
         # Add GSIs if present
         if "gsi" in config:
@@ -232,7 +224,7 @@ class DynamoDBStack(Stack):
         except Exception as err:
             print(f"Error validating table schema: {err}")
             return False
-    
+
     def _add_outputs(self) -> None:
         """Add stack outputs."""
         # Output each table name
@@ -241,16 +233,11 @@ class DynamoDBStack(Stack):
                 self,
                 f"{table_name.replace('_', '')}TableName",
                 value=table.table_name,
-                description=f"DynamoDB table name for {table_name}"
+                description=f"DynamoDB table name for {table_name}",
             )
-        
+
         # Output the policy ARN
-        CfnOutput(
-            self,
-            "DynamoDBPolicyArn",
-            value=self.policy_arn,
-            description="ARN of the DynamoDB access policy"
-        )
+        CfnOutput(self, "DynamoDBPolicyArn", value=self.policy_arn, description="ARN of the DynamoDB access policy")
 
 
 def add_gsi(table: dynamodb.Table, gsi_config: dict) -> None:
@@ -259,7 +246,7 @@ def add_gsi(table: dynamodb.Table, gsi_config: dict) -> None:
         "index_name": gsi_config.get("name", ""),
         "partition_key": dynamodb.Attribute(
             name=gsi_config.get("partition_key", {}).get("name", ""),
-            type=get_attribute_type(gsi_config.get("partition_key", {}).get("type", ""))
+            type=get_attribute_type(gsi_config.get("partition_key", {}).get("type", "")),
         ),
     }
 
@@ -267,7 +254,7 @@ def add_gsi(table: dynamodb.Table, gsi_config: dict) -> None:
     if "sort_key" in gsi_config:
         gsi_props["sort_key"] = dynamodb.Attribute(
             name=gsi_config.get("sort_key", {}).get("name", ""),
-            type=get_attribute_type(gsi_config.get("sort_key", {}).get("type", ""))
+            type=get_attribute_type(gsi_config.get("sort_key", {}).get("type", "")),
         )
 
     # Set projection type

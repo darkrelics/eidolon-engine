@@ -7,15 +7,9 @@ TABLE_CONFIGS = [
         "partition_key": {"name": "PlayerID", "type": "S"},
     },
     {
-        "name": "characters", 
+        "name": "characters",
         "partition_key": {"name": "CharacterID", "type": "S"},
-        "gsi": [
-            {
-                "name": "CharacterNameIndex",
-                "partition_key": {"name": "CharacterName", "type": "S"},
-                "projection": "KEYS_ONLY"
-            }
-        ]
+        "gsi": [{"name": "CharacterNameIndex", "partition_key": {"name": "CharacterName", "type": "S"}, "projection": "KEYS_ONLY"}],
     },
     {
         "name": "rooms",
@@ -54,18 +48,14 @@ TABLE_CONFIGS = [
         "name": "active_segments",
         "partition_key": {"name": "ActiveSegmentID", "type": "S"},
         "gsi": [
-            {
-                "name": "CharacterID-index",
-                "partition_key": {"name": "CharacterID", "type": "S"},
-                "projection": "ALL"
-            },
+            {"name": "CharacterID-index", "partition_key": {"name": "CharacterID", "type": "S"}, "projection": "ALL"},
             {
                 "name": "EndTimeIndex",
                 "partition_key": {"name": "Status", "type": "S"},
                 "sort_key": {"name": "EndTime", "type": "N"},
-                "projection": "ALL"
-            }
-        ]
+                "projection": "ALL",
+            },
+        ],
     },
     {
         "name": "story_history",

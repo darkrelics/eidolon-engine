@@ -23,7 +23,7 @@ story_stack = StoryStack(
     lambda_role_arn=lambda_role_arn,
     poller_lambda_arn=poller_lambda_arn,
     processor_lambda_arn=processor_lambda_arn,
-    advance_lambda_arn=advance_lambda_arn
+    advance_lambda_arn=advance_lambda_arn,
 )
 
 app.synth()

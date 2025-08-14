@@ -18,46 +18,48 @@ def deploy_lambda_stack(params) -> dict:
     state_path = Path(__file__).parent / ".cdk-state.json"
     state = CDKState.load(str(state_path))
     dynamodb_policy_arn = state.infrastructure.get("dynamodb_policy_arn", "")
-    
+
     # Get config for DynamoDB tables
     config_path = Path(__file__).parent.parent / "config.yml"
     config = Config.load(str(config_path))
-    
+
     # Build client FQDN
     client_fqdn = f"{params.client_host}.{params.domain}"
-    
+
     # Convert DynamoDB tables to JSON for context passing
     tables_json = json.dumps(config.dynamodb_tables)
-    
+
     # Pass parameters through context
     context_args = [
-        "-c", f"region={params.region}",
-        "-c", f"s3_bucket={params.s3_bucket}",
-        "-c", f"client_fqdn={client_fqdn}",
-        "-c", f"dynamodb_policy_arn={dynamodb_policy_arn}",
-        "-c", f"dynamodb_tables={tables_json}"
+        "-c",
+        f"region={params.region}",
+        "-c",
+        f"s3_bucket={params.s3_bucket}",
+        "-c",
+        f"client_fqdn={client_fqdn}",
+        "-c",
+        f"dynamodb_policy_arn={dynamodb_policy_arn}",
+        "-c",
+        f"dynamodb_tables={tables_json}",
     ]
-    
+
     app_command = "python3 app_lambda.py"
     return run_cdk_deploy("lambda", params.region, app_command, context_args)
 
 
 def validate_lambda_layer(layer_name: str, region: str) -> bool:
     """Validate that Lambda layer exists.
-    
+
     Args:
         layer_name: Name of the Lambda layer
         region: AWS region
-        
+
     Returns:
         True if layer exists, False otherwise
     """
     try:
         lambda_client = boto3.client("lambda", region_name=region)
-        response = lambda_client.list_layer_versions(
-            LayerName=layer_name,
-            MaxItems=1
-        )
+        response = lambda_client.list_layer_versions(LayerName=layer_name, MaxItems=1)
         if response.get("LayerVersions"):
             print(f"  [OK] Lambda layer: {layer_name}")
             return True
@@ -74,11 +76,11 @@ def validate_lambda_layer(layer_name: str, region: str) -> bool:
 
 def validate_lambda_function(function_name: str, region: str) -> bool:
     """Validate that Lambda function exists.
-    
+
     Args:
         function_name: Name of the Lambda function
         region: AWS region
-        
+
     Returns:
         True if function exists, False otherwise
     """
@@ -98,11 +100,11 @@ def validate_lambda_function(function_name: str, region: str) -> bool:
 
 def validate_lambda_role(role_name: str, region: str) -> bool:
     """Validate that IAM role exists.
-    
+
     Args:
         role_name: Name of the IAM role
         region: AWS region
-        
+
     Returns:
         True if role exists, False otherwise
     """
@@ -123,7 +125,7 @@ def validate_lambda_role(role_name: str, region: str) -> bool:
 def verify_lambda_deployment(params) -> dict:
     """Verify the Lambda deployment completed successfully."""
     print("\nVerifying Lambda deployment...")
-    
+
     # List of expected Lambda functions in alphabetical order
     expected_functions = [
         "api-archetype-list",
@@ -141,15 +143,15 @@ def verify_lambda_deployment(params) -> dict:
         "cognito-player-new",
         "ops-segment-poller",
         "ops-segment-process",
-        "ops-story-advance"
+        "ops-story-advance",
     ]
-    
+
     # Validate Lambda layer
     layer_valid = validate_lambda_layer("eidolon-dependencies", params.region)
-    
+
     # Validate IAM role
     role_valid = validate_lambda_role("eidolon-lambda-execution-role", params.region)
-    
+
     # Validate all Lambda functions
     functions_valid = True
     function_results = {}
@@ -158,30 +160,29 @@ def verify_lambda_deployment(params) -> dict:
         function_results[function_name] = result
         if not result:
             functions_valid = False
-    
+
     # Count successful deployments
     successful_functions = sum(1 for v in function_results.values() if v)
     total_functions = len(expected_functions)
-    
+
     print(f"\nLambda functions deployed: {successful_functions}/{total_functions}")
-    
+
     return {
         "layer": layer_valid,
         "role": role_valid,
         "functions": functions_valid,
         "function_results": function_results,
-        "success": layer_valid and role_valid and functions_valid
+        "success": layer_valid and role_valid and functions_valid,
     }
 
 
-def deploy_lambda(params, config: Config, state: CDKState,
-                 config_path: Path, state_path: Path) -> bool:
+def deploy_lambda(params, config: Config, state: CDKState, config_path: Path, state_path: Path) -> bool:
     """Deploy and verify Lambda stack."""
     phase = get_stack_phase_number("lambda", params.deployment_mode)
     print("\n" + "=" * 60)
     print(f"Phase {phase}: Lambda Stack")
     print("=" * 60)
-    
+
     # Check if S3 bucket with artifacts exists
     try:
         s3 = boto3.client("s3", region_name=params.region)
@@ -190,17 +191,17 @@ def deploy_lambda(params, config: Config, state: CDKState,
         print(f"\nError: S3 bucket {params.s3_bucket} not accessible")
         print("Please ensure CodeBuild has run and created Lambda artifacts")
         return False
-    
+
     # Deploy stack
     result = deploy_lambda_stack(params)
-    
+
     if not result.get("success", False):
         print("\nLambda deployment failed!")
         return False
-    
+
     # Verify deployment
     validation = verify_lambda_deployment(params)
-    
+
     if not validation.get("success", False):
         print("\nWarning: Lambda deployment completed with issues")
         if not validation.get("layer", False):
@@ -210,18 +211,18 @@ def deploy_lambda(params, config: Config, state: CDKState,
         if not validation.get("functions", False):
             failed_functions = [k for k, v in validation.get("function_results", {}).items() if not v]
             print(f"  - Failed functions: {', '.join(failed_functions)}")
-    
+
     # Update state with Lambda ARNs
     if validation.get("success", False):
         state.mark_stack_deployed("lambda", result.get("outputs", {}))
-        
+
         # Store Lambda function ARNs in infrastructure
         if "infrastructure" not in state.__dict__:
             state.infrastructure = {}
-        
+
         # Store role ARN
         state.infrastructure["lambda_role_arn"] = result.get("outputs", {}).get("LambdaRoleArn", "")
-        
+
         # Store function ARNs
         lambda_arns = {}
         for function_name in validation.get("function_results", {}).keys():
@@ -229,8 +230,8 @@ def deploy_lambda(params, config: Config, state: CDKState,
             arn_value = result.get("outputs", {}).get(arn_key, "")
             if arn_value:
                 lambda_arns[function_name] = arn_value
-        
+
         state.infrastructure["lambda_function_arns"] = lambda_arns
         state.save(str(state_path))
-    
+
     return validation.get("success", False)

@@ -32,7 +32,7 @@ if s3_bucket:  # Only create if S3 bucket is provided
         s3_bucket=s3_bucket,
         client_fqdn=client_fqdn,
         dynamodb_policy_arn=dynamodb_policy_arn,
-        dynamodb_tables=dynamodb_tables
+        dynamodb_tables=dynamodb_tables,
     )
 else:
     print("Error: S3 bucket parameter is required for Lambda stack")

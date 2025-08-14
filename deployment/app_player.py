@@ -18,7 +18,7 @@ player_stack = PlayerStack(
     description="Cognito User Pool for Eidolon Engine",
     region_name=region,
     lambda_function_arn=lambda_function_arn,
-    reply_email=reply_email
+    reply_email=reply_email,
 )
 
 app.synth()

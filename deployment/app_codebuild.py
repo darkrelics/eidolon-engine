@@ -23,7 +23,7 @@ if s3_bucket:  # Only create if S3 bucket is provided
         s3_bucket=s3_bucket,
         github_owner=github_owner,
         github_repo=github_repo,
-        github_branch=github_branch
+        github_branch=github_branch,
     )
 else:
     print("Error: S3 bucket parameter is required for CodeBuild stack")
