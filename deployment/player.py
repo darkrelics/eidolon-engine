@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 
 from core.config import Config
 from core.state import CDKState
+from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy
 
 
@@ -33,22 +34,22 @@ def get_lambda_function_arn(region: str) -> str:
 
 def deploy_player_stack(params) -> dict:
     """Deploy the Player stack using CDK."""
-    # Pass all parameters through context
+    # Pass all parameters through context - each -c and key=value must be separate
     context_args = [
-        f"-c region={params.region}",
-        f"-c reply_email={params.reply_email}"
+        "-c", f"region={params.region}",
+        "-c", f"reply_email={params.reply_email}"
     ]
     
     # Get Lambda ARN if available
     lambda_arn = get_lambda_function_arn(params.region)
     if lambda_arn:
-        context_args.append(f"-c lambda_function_arn={lambda_arn}")
+        context_args.extend(["-c", f"lambda_function_arn={lambda_arn}"])
     else:
         print("Warning: cognito-player-new Lambda not found")
         print("PostConfirmation trigger will not be configured")
     
-    app_command = f"python3 app_player.py {' '.join(context_args)}"
-    return run_cdk_deploy("player", params.region, app_command)
+    app_command = "python3 app_player.py"
+    return run_cdk_deploy("player", params.region, app_command, context_args)
 
 
 def validate_user_pool(user_pool_name: str, region: str) -> tuple[bool, str]:
@@ -135,8 +136,9 @@ def verify_player_deployment(params) -> dict:
 def deploy_player(params, config: Config, state: CDKState,
                  config_path: Path, state_path: Path) -> bool:
     """Deploy and verify Player stack."""
+    phase = get_stack_phase_number("player", params.deployment_mode)
     print("\n" + "=" * 60)
-    print("Phase 6: Player Stack")
+    print(f"Phase {phase}: Player Stack")
     print("=" * 60)
     
     # Deploy stack

@@ -63,6 +63,23 @@ def get_deployment_order(mode: str) -> list:
         return base_order + ["story", "s3", "cloudwatch", "client"]
 
 
+def get_stack_phase_number(stack_name: str, mode: str) -> int:
+    """Get the phase number for a stack based on deployment mode.
+    
+    Args:
+        stack_name: Name of the stack
+        mode: Deployment mode
+        
+    Returns:
+        int: Phase number (1-based index)
+    """
+    order = get_deployment_order(mode)
+    try:
+        return order.index(stack_name) + 1
+    except ValueError:
+        return 0  # Stack not in deployment order
+
+
 def get_stack_description(stack_name: str) -> str:
     """Get a human-readable description of a stack.
     

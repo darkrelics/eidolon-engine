@@ -30,6 +30,7 @@ class PlayerStack(Stack):
         self.region_name = region_name
         self.lambda_function_arn = lambda_function_arn
         self.reply_email = reply_email
+        self.is_imported_pool = False  # Initialize flag
         super().__init__(scope, stack_id, **kwargs)
         
         # Create Cognito User Pool
@@ -53,10 +54,13 @@ class PlayerStack(Stack):
         exists, pool_id = self._user_pool_exists(user_pool_name)
         if exists:
             print(f"  Importing existing user pool: {user_pool_name} ({pool_id})")
+            # Mark that this is an imported pool
+            self.is_imported_pool = True
             return cognito.UserPool.from_user_pool_id(self, "UserPool", pool_id)
         
         print(f"  Creating new user pool: {user_pool_name}")
         print(f"  Reply email: {self.reply_email}")
+        self.is_imported_pool = False
         return cognito.UserPool(
             self,
             "UserPool",
@@ -100,6 +104,10 @@ class PlayerStack(Stack):
     
     def _configure_lambda_trigger(self) -> None:
         """Configure Lambda trigger for user pool."""
+        # Skip trigger configuration for imported pools
+        if self.is_imported_pool:
+            return
+            
         print(f"  Configuring PostConfirmation trigger with Lambda ARN")
         
         # Import the Lambda function
@@ -109,7 +117,7 @@ class PlayerStack(Stack):
             self.lambda_function_arn
         )
         
-        # Add trigger to user pool
+        # Add trigger to user pool (only works for created pools)
         self.user_pool.add_trigger( # type: ignore
             cognito.UserPoolOperation.POST_CONFIRMATION,
             lambda_function

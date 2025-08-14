@@ -13,6 +13,7 @@ poller_lambda_arn = app.node.try_get_context("poller_lambda_arn") or ""
 processor_lambda_arn = app.node.try_get_context("processor_lambda_arn") or ""
 advance_lambda_arn = app.node.try_get_context("advance_lambda_arn") or ""
 
+
 # Deploy Story stack with context parameters
 story_stack = StoryStack(
     app,

@@ -1,5 +1,6 @@
 """Lambda stack deployment functions."""
 
+import json
 from pathlib import Path
 
 import boto3
@@ -7,6 +8,7 @@ from botocore.exceptions import ClientError
 
 from core.config import Config
 from core.state import CDKState
+from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy
 
 
@@ -24,20 +26,20 @@ def deploy_lambda_stack(params) -> dict:
     # Build client FQDN
     client_fqdn = f"{params.client_host}.{params.domain}"
     
-    # Build DynamoDB tables parameter
-    tables_list = []
-    for key, value in config.dynamodb_tables.items():
-        tables_list.append(f"{key}={value}")
-    tables_param = ",".join(tables_list)
+    # Convert DynamoDB tables to JSON for context passing
+    tables_json = json.dumps(config.dynamodb_tables)
     
-    app_command = (
-        f"python3 app_lambda.py --region {params.region} "
-        f"--s3-bucket {params.s3_bucket} "
-        f"--client-fqdn {client_fqdn} "
-        f"--dynamodb-policy-arn {dynamodb_policy_arn} "
-        f"--dynamodb-tables '{tables_param}'"
-    )
-    return run_cdk_deploy("lambda", params.region, app_command)
+    # Pass parameters through context
+    context_args = [
+        "-c", f"region={params.region}",
+        "-c", f"s3_bucket={params.s3_bucket}",
+        "-c", f"client_fqdn={client_fqdn}",
+        "-c", f"dynamodb_policy_arn={dynamodb_policy_arn}",
+        "-c", f"dynamodb_tables={tables_json}"
+    ]
+    
+    app_command = "python3 app_lambda.py"
+    return run_cdk_deploy("lambda", params.region, app_command, context_args)
 
 
 def validate_lambda_layer(layer_name: str, region: str) -> bool:
@@ -175,8 +177,9 @@ def verify_lambda_deployment(params) -> dict:
 def deploy_lambda(params, config: Config, state: CDKState,
                  config_path: Path, state_path: Path) -> bool:
     """Deploy and verify Lambda stack."""
+    phase = get_stack_phase_number("lambda", params.deployment_mode)
     print("\n" + "=" * 60)
-    print("Phase 5: Lambda Stack")
+    print(f"Phase {phase}: Lambda Stack")
     print("=" * 60)
     
     # Check if S3 bucket with artifacts exists

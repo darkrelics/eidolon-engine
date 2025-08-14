@@ -183,29 +183,37 @@ def validate_policies(policy_names: list[str]) -> dict:
     
     return results
 
-
-def run_cdk_deploy(stack_name: str, region: str, app_command: str) -> dict:
-    """Run CDK deploy for a specific stack.
+def run_cdk_deploy(stack_name: str, region: str, app_command: str, context_args = None) -> dict:
+    """Run CDK deploy for a specific stack with context arguments.
     
     Args:
         stack_name: Name of the CDK stack to deploy
         region: AWS region
         app_command: Full app command with parameters
+        context_args: List of context arguments to pass to CDK
         
     Returns:
         Dict with success status and outputs
     """
     print(f"\nDeploying {stack_name} stack in {region}...")
+    
+    context_args = context_args or []
+
+    # Build CDK command with context arguments
+    cdk_command = [
+        "cdk", "deploy", stack_name,
+        "--require-approval", "never",
+        "--region", region,
+        "--app", app_command
+    ]
+    
+    # Add context arguments
+    cdk_command.extend(context_args)
 
     # Run CDK deploy
     try:
         result = subprocess.run(
-            [
-                "cdk", "deploy", stack_name,
-                "--require-approval", "never",
-                "--region", region,
-                "--app", app_command
-            ],
+            cdk_command,
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent,

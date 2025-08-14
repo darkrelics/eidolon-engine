@@ -1,41 +1,37 @@
 """CDK application entry point for Lambda stack."""
 
-import argparse
+import json
 
 import aws_cdk as cdk
 
 from stacks.lambda_stack import LambdaStack
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description="Deploy Lambda stack for Eidolon Engine")
-parser.add_argument("--region", default="us-east-1", help="AWS region for deployment")
-parser.add_argument("--s3-bucket", default="", help="S3 bucket containing Lambda artifacts")
-parser.add_argument("--client-fqdn", default="", help="Client FQDN for CORS configuration")
-parser.add_argument("--dynamodb-policy-arn", default="", help="ARN of DynamoDB policy to attach")
-parser.add_argument("--dynamodb-tables", default="", help="Comma-separated list of table names")
-args, unknown = parser.parse_known_args()  # Use parse_known_args to ignore CDK's other args
-
 app = cdk.App()
 
-# Parse DynamoDB tables if provided
-dynamodb_tables = {}
-if args.dynamodb_tables:
-    # Expected format: "players=players,characters=characters,..."
-    for pair in args.dynamodb_tables.split(","):
-        if "=" in pair:
-            key, value = pair.split("=", 1)
-            dynamodb_tables[key] = value
+# Get parameters from context
+region = app.node.try_get_context("region") or "us-east-1"
+s3_bucket = app.node.try_get_context("s3_bucket") or ""
+client_fqdn = app.node.try_get_context("client_fqdn") or ""
+dynamodb_policy_arn = app.node.try_get_context("dynamodb_policy_arn") or ""
+dynamodb_tables_json = app.node.try_get_context("dynamodb_tables") or "{}"
 
-# Deploy Lambda stack with explicit parameters
-if args.s3_bucket:  # Only create if S3 bucket is provided
+# Parse DynamoDB tables from JSON string
+try:
+    dynamodb_tables = json.loads(dynamodb_tables_json) if dynamodb_tables_json else {}
+except json.JSONDecodeError:
+    print(f"Error: Invalid JSON for dynamodb_tables: {dynamodb_tables_json}")
+    dynamodb_tables = {}
+
+# Deploy Lambda stack with context parameters
+if s3_bucket:  # Only create if S3 bucket is provided
     lambda_stack = LambdaStack(
         app,
         "lambda",
         description="Lambda functions and layer for Eidolon Engine",
-        region_name=args.region,
-        s3_bucket=args.s3_bucket,
-        client_fqdn=args.client_fqdn,
-        dynamodb_policy_arn=args.dynamodb_policy_arn,
+        region_name=region,
+        s3_bucket=s3_bucket,
+        client_fqdn=client_fqdn,
+        dynamodb_policy_arn=dynamodb_policy_arn,
         dynamodb_tables=dynamodb_tables
     )
 else:

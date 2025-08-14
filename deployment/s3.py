@@ -7,13 +7,20 @@ from botocore.exceptions import ClientError
 
 from core.config import Config
 from core.state import CDKState
+from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy, validate_policies
 
 
 def deploy_s3_stack(params) -> dict:
     """Deploy the S3 stack using CDK."""
-    app_command = f"python3 app_s3.py --region {params.region} --scripts-bucket {params.scripts_bucket}"
-    return run_cdk_deploy("s3", params.region, app_command)
+    # Pass parameters through context
+    context_args = [
+        "-c", f"region={params.region}",
+        "-c", f"scripts_bucket={params.scripts_bucket}"
+    ]
+    
+    app_command = "python3 app_s3.py"
+    return run_cdk_deploy("s3", params.region, app_command, context_args)
 
 
 def validate_s3_bucket(bucket_name: str, region: str) -> bool:
@@ -103,8 +110,9 @@ def upload_scripts(bucket_name: str, region: str) -> bool:
 def deploy_s3(params, config: Config, state: CDKState,
              config_path: Path, state_path: Path) -> bool:
     """Deploy and verify S3 stack."""
+    phase = get_stack_phase_number("s3", params.deployment_mode)
     print("\n" + "=" * 60)
-    print("Phase 3: S3 Stack")
+    print(f"Phase {phase}: S3 Stack")
     print("=" * 60)
     
     # Deploy stack

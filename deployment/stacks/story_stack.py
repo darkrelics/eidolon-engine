@@ -37,6 +37,8 @@ class StoryStack(Stack):
         self.poller_lambda_arn = poller_lambda_arn
         self.processor_lambda_arn = processor_lambda_arn
         self.advance_lambda_arn = advance_lambda_arn
+        
+        
         super().__init__(scope, stack_id, **kwargs)
         
         # Create SSM Parameter for story configuration
@@ -167,11 +169,18 @@ class StoryStack(Stack):
         """Configure SQS to trigger Lambda function."""
         print("  Configuring SQS trigger for Lambda")
         
-        # Import the Lambda function
-        lambda_function = lambda_.Function.from_function_arn(
+        # Import the Lambda function with its role for proper permission grants
+        # We need to use from_function_attributes to include the role
+        lambda_function = lambda_.Function.from_function_attributes(
             self,
             f"Imported{trigger_id}",
-            lambda_arn
+            function_arn=lambda_arn,
+            # Use the same role that was passed to the stack
+            role=iam.Role.from_role_arn(
+                self,
+                f"ImportedRole{trigger_id}",
+                self.lambda_role_arn
+            ) if self.lambda_role_arn else None
         )
         
         # Add SQS event source
@@ -181,7 +190,7 @@ class StoryStack(Stack):
             batch_size=10
         )
         
-        # Grant SQS permissions to Lambda
+        # Grant SQS permissions to Lambda execution role
         queue.grant_consume_messages(lambda_function)
     
     def _create_polling_rule(self) -> events.Rule:

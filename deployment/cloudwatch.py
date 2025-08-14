@@ -7,13 +7,19 @@ from botocore.exceptions import ClientError
 
 from core.config import Config
 from core.state import CDKState
+from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy, validate_policies
 
 
 def deploy_cloudwatch_stack(params) -> dict:
     """Deploy the CloudWatch stack using CDK."""
-    app_command = f"python3 app_cloudwatch.py --region {params.region}"
-    return run_cdk_deploy("cloudwatch", params.region, app_command)
+    # Pass parameters through context
+    context_args = [
+        "-c", f"region={params.region}"
+    ]
+    
+    app_command = "python3 app_cloudwatch.py"
+    return run_cdk_deploy("cloudwatch", params.region, app_command, context_args)
 
 
 def validate_log_group(log_group_name: str, region: str) -> bool:
@@ -66,8 +72,9 @@ def verify_cloudwatch_deployment(params) -> dict:
 def deploy_cloudwatch(params, config: Config, state: CDKState,
                      config_path: Path, state_path: Path) -> bool:
     """Deploy and verify CloudWatch stack."""
+    phase = get_stack_phase_number("cloudwatch", params.deployment_mode)
     print("\n" + "=" * 60)
-    print("Phase 4: CloudWatch Stack")
+    print(f"Phase {phase}: CloudWatch Stack")
     print("=" * 60)
     
     # Deploy stack

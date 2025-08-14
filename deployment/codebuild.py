@@ -8,17 +8,23 @@ from botocore.exceptions import ClientError
 
 from core.config import Config
 from core.state import CDKState
+from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy, validate_policies
 
 
 def deploy_codebuild_stack(params) -> dict:
     """Deploy the CodeBuild stack using CDK."""
-    app_command = (
-        f"python3 app_codebuild.py --region {params.region} --s3-bucket {params.s3_bucket} "
-        f"--github-owner {params.github_owner} --github-repo {params.github_repo} "
-        f"--github-branch {params.github_branch}"
-    )
-    return run_cdk_deploy("codebuild", params.region, app_command)
+    # Pass parameters through context
+    context_args = [
+        "-c", f"region={params.region}",
+        "-c", f"s3_bucket={params.s3_bucket}",
+        "-c", f"github_owner={params.github_owner}",
+        "-c", f"github_repo={params.github_repo}",
+        "-c", f"github_branch={params.github_branch}"
+    ]
+    
+    app_command = "python3 app_codebuild.py"
+    return run_cdk_deploy("codebuild", params.region, app_command, context_args)
 
 
 def validate_s3_bucket(bucket_name: str, region: str) -> bool:
@@ -319,8 +325,9 @@ def validate_build_artifacts(bucket_name: str, region: str) -> bool:
 def deploy_codebuild(params, config: Config, state: CDKState,
                     config_path: Path, state_path: Path) -> bool:
     """Deploy and verify CodeBuild stack."""
+    phase = get_stack_phase_number("codebuild", params.deployment_mode)
     print("\n" + "=" * 60)
-    print("Phase 2: CodeBuild Stack")
+    print(f"Phase {phase}: CodeBuild Stack")
     print("=" * 60)
     
     # Deploy stack

@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 
 from core.config import Config
 from core.state import CDKState
+from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy, validate_policies
 
 
@@ -85,17 +86,18 @@ def deploy_story_stack(params, state: CDKState) -> dict:
     # Get Lambda ARNs from state or construct them
     arns = get_lambda_arns(params, state)
 
-    # Pass all parameters through context
+    # Pass all parameters through context - each -c and key=value must be separate
     context_args = [
-        f"-c region={params.region}",
-        f"-c lambda_role_arn={arns['lambda_role_arn']}",
-        f"-c poller_lambda_arn={arns['poller_arn']}",
-        f"-c processor_lambda_arn={arns['processor_arn']}",
-        f"-c advance_lambda_arn={arns['advance_arn']}"
+        "-c", f"region={params.region}",
+        "-c", f"lambda_role_arn={arns['lambda_role_arn']}",
+        "-c", f"poller_lambda_arn={arns['poller_arn']}",
+        "-c", f"processor_lambda_arn={arns['processor_arn']}",
+        "-c", f"advance_lambda_arn={arns['advance_arn']}"
     ]
 
-    app_command = f"python3 app_story.py {' '.join(context_args)}"
-    return run_cdk_deploy("story", params.region, app_command)
+    # App command is just the Python script, context goes to CDK
+    app_command = "python3 app_story.py"
+    return run_cdk_deploy("story", params.region, app_command, context_args)
 
 
 def validate_ssm_parameter(parameter_name: str, region: str) -> bool:
@@ -286,8 +288,9 @@ def verify_story_deployment(params) -> dict:
 def deploy_story(params, config: Config, state: CDKState,
                 config_path: Path, state_path: Path) -> bool:
     """Deploy and verify Story stack."""
+    phase = get_stack_phase_number("story", params.deployment_mode)
     print("\n" + "=" * 60)
-    print("Phase 7: Story Stack")
+    print(f"Phase {phase}: Story Stack")
     print("=" * 60)
 
     # Deploy stack

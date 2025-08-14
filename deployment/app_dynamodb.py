@@ -1,24 +1,20 @@
 """CDK application entry point for DynamoDB stack."""
 
-import argparse
-
 import aws_cdk as cdk
 
 from stacks.dynamodb_stack import DynamoDBStack
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description="Deploy DynamoDB stack for Eidolon Engine")
-parser.add_argument("--region", default="us-east-1", help="AWS region for deployment")
-args, unknown = parser.parse_known_args()  # Use parse_known_args to ignore CDK's other args
-
 app = cdk.App()
 
-# Deploy DynamoDB stack with explicit region
+# Get parameters from context
+region = app.node.try_get_context("region") or "us-east-1"
+
+# Deploy DynamoDB stack with context parameters
 dynamodb_stack = DynamoDBStack(
     app,
     "dynamodb",
     description="DynamoDB tables and access policy for Eidolon Engine",
-    region_name=args.region  # Pass region as explicit parameter
+    region_name=region
 )
 
 app.synth()
