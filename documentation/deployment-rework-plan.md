@@ -4,7 +4,7 @@
 
 Complete replacement of the existing monolithic deployment system with a clean, modular architecture focused on simplicity and maintainability.
 
-## Status: Deployment Mode System Implemented - Ready for Phase 8
+## Status: 7 of 9 Phases Complete - All Core Infrastructure Operational
 
 ### Phase 1 Completed Work
 
@@ -31,6 +31,32 @@ Complete replacement of the existing monolithic deployment system with a clean, 
 - **Python3 compatibility** - Fixed cdk.json and deploy.py to use python3
 - **Repeatable deployment** - Removed redeploy prompt for seamless updates
 - **Production tested** - Successfully deployed and redeployed in production environment
+
+## CDK Context Standardization [COMPLETE]
+
+### Implementation Summary
+
+Successfully standardized all CDK app files to use context pattern instead of argparse:
+- **Removed argparse**: Eliminated boilerplate argument parsing from all app files
+- **Unified pattern**: All stacks now use `app.node.try_get_context()` for parameters
+- **Simplified deployment modules**: All use `run_cdk_deploy()` with context arguments
+- **Complex data support**: DynamoDB tables passed as JSON through context
+
+### Changes Applied
+
+#### App Files Updated
+- app_dynamodb.py - Removed argparse, uses context
+- app_codebuild.py - Removed argparse, uses context  
+- app_s3.py - Removed argparse, uses context
+- app_cloudwatch.py - Removed argparse, uses context
+- app_lambda.py - Removed argparse, uses context with JSON parsing
+- app_player.py - Already used context (no change)
+- app_story.py - Already used context (no change)
+
+#### Deployment Modules Updated
+- All modules now pass context using `-c` flags
+- Proper format: `["-c", "key=value"]` as separate list items
+- Complex data (DynamoDB tables) serialized as JSON
 
 ## Deployment Mode System [COMPLETE]
 
@@ -63,16 +89,16 @@ Successfully implemented deployment mode system to support three distinct deploy
 - Dynamic stack ordering replaces hardcoded deployment sequence
 - Stack deployment map allows easy addition of future stacks
 
-## Phase 7: Story Stack [READY FOR TESTING]
+## Phase 7: Story Stack [COMPLETE]
 
 ### Phase 7 Summary
 
-Successfully remediated Story Stack implementation with the following fixes:
-- Removed all boto3 existence checks from CDK stack constructor
-- Simplified resource creation to always create (SSM, SQS, EventBridge)
-- Fixed Lambda ARN construction using account_id and region from params
-- Integrated state management for Lambda ARNs from previous deployments
-- All resources now create properly on first deployment
+Successfully deployed Story Stack with complete EventBridge and SQS integration:
+- Fixed CDK context passing for Lambda ARNs
+- Implemented proper Lambda import with execution roles for SQS permissions
+- Created EventBridge rule with Lambda targets
+- Configured SQS triggers for segment processing
+- All resources deploy and validate successfully
 
 ### Phase 7 Status
 
@@ -80,20 +106,21 @@ Successfully remediated Story Stack implementation with the following fixes:
 
 - Created StoryStack with SSM parameter, SQS queues, and EventBridge rule
 - Implemented IAM managed policy for story operations
-- Created story.py deployment module with ARN construction
-- Created app_story.py for stack isolation
-- Fixed resource creation issues that prevented proper deployment
-- Updated Lambda environment variable configuration
-- Removed problematic existence checks from CDK synthesis phase
-- Ensured EventBridge rule creation with constructed Lambda ARNs
+- Fixed context passing using separate `-c` flags for each parameter
+- Used `Function.from_function_attributes()` for proper Lambda imports
+- Created EventBridge rule (starts disabled) for polling
+- Configured SQS triggers for ops-segment-process and ops-story-advance
+- Updated Lambda environment variables with queue URLs
+- Full production deployment successful
 
-#### Ready for Testing
+#### Validated Resources
 
-- SSM Parameter creation at `/eidolon/story/config`
-- SQS queue creation (processing and advancement)
-- EventBridge rule creation with Lambda target
-- IAM policy attachment to Lambda execution role
-- Lambda environment variable updates with queue URLs
+- SSM Parameter: `/eidolon/story/config`
+- SQS Queue: `eidolon-processing-queue`
+- SQS Queue: `eidolon-advancement-queue`
+- EventBridge Rule: `eidolon-story-poller` (DISABLED)
+- IAM Policy: `eidolon-story-policy`
+- Lambda environment variables updated
 
 ## Phase 2: CodeBuild Stack [COMPLETE]
 
@@ -450,8 +477,8 @@ Post-deployment checks will verify:
 57. **Artifact Validation**: Always validate build outputs exist and have reasonable sizes
 58. **Consistent Messaging**: Integrated operations should maintain parent phase context in output
 59. **CDK Resource Management**: Always create resource definitions; let CDK handle create vs update logic
-60. **Avoid Import Complexity**: Don't import existing AWS resources unless absolutely necessary - CDK handles updates
-61. **Validation Compatibility**: Imported resources won't validate properly since CDK doesn't manage them
+60. **Resource Preservation Pattern**: Check for existing critical resources (S3, DynamoDB, Cognito, CloudFront, ACM) and import them to preserve data and avoid recreation
+61. **Consolidated Resource Checks**: Use stack_utilities.py module for all boto3 existence checks to maintain consistency
 62. **Artifact Path Accuracy**: Verify exact S3 paths for artifacts (e.g., lambda-layer/lambda-layer.zip)
 63. **Function Name Precision**: Use exact Lambda function names in validation (ops-segment-process not ops-segment-processor)
 64. **Lambda Infrastructure First**: Deploy Lambda layer and functions before service integrations (Cognito, SQS, EventBridge)
@@ -483,16 +510,16 @@ Post-deployment checks will verify:
 90. **Output Method Standardization**: All stacks should use _add_outputs() method for consistent output organization
 91. **Context Over Arguments**: Use CDK context (-c flags) for passing parameters to app files instead of command-line arguments
 92. **Resource Import Limitations**: Importing existing resources during CDK synthesis is unreliable - prefer creating resources
-93. **Existence Checks for Validation Only**: _exists() methods should be for post-deployment validation, not stack creation logic
+93. **Existence Checks for Import Logic**: _exists() methods in stacks determine whether to import or create resources
 94. **Lambda Layer Dependencies**: Layer must be successfully built before Lambda stack deployment
 95. **Buildspec Artifact Handling**: When manually uploading to S3, omit artifacts section or use minimal configuration
 96. **EventBridge Rule Dependencies**: Rule creation requires Lambda ARN to be available at synthesis time
 97. **CDK State File Exclusion**: .cdk-state.json should be gitignored as it contains deployment-specific state
-98. **No Runtime Checks in CDK Stacks**: CDK synthesis happens before AWS access - never use boto3 in stack constructors
-99. **Always Create Resources**: Let CDK handle the create/update/import logic automatically
+98. **Resource Checks During Construction**: Use boto3 during stack construction to check for existing resources that must be preserved
+99. **Import or Create Pattern**: Check existence, import if found, create with RETAIN policy if not found
 100. **Construct ARNs When Needed**: Use account ID and region to build expected ARNs rather than empty string defaults
 101. **State Over Query**: Use deployment state to pass values between stacks rather than querying AWS
-102. **Post-Deployment Validation Only**: Resource existence checks belong in deployment modules, not CDK stacks
+102. **Post-Deployment Validation**: Additional validation checks belong in deployment modules after stack deployment
 103. **Parameter Object Consistency**: Pass complete params object to deployment functions for access to all values
 104. **Deployment Mode Flexibility**: Support multiple deployment configurations through mode selection
 105. **Dynamic Stack Ordering**: Use mode-based stack ordering instead of hardcoded sequences
@@ -501,6 +528,26 @@ Post-deployment checks will verify:
 108. **Conditional Input Collection**: Skip unnecessary inputs based on deployment mode
 109. **Stack Function Mapping**: Use dictionary mapping for dynamic function dispatch
 110. **Mode Validation**: Always validate and normalize user input for deployment modes
+111. **CDK Context Standardization**: Use CDK context (`-c` flags) instead of argparse for all app files
+112. **Context Flag Format**: Each `-c` and `key=value` must be separate list items for subprocess
+113. **Lambda Import with Role**: Use `from_function_attributes()` with role ARN for proper permissions
+114. **Imported Pool Limitations**: Cannot use `add_trigger()` on imported Cognito User Pools
+115. **Dynamic Phase Numbering**: Calculate phase numbers based on deployment mode order
+116. **JSON for Complex Context**: Pass complex data structures as JSON strings through context
+117. **Silent Fallback**: Skip operations that can't be performed on imported resources without warnings
+118. **ACM and CloudFront Preservation**: Always check for existing ACM certificates and CloudFront distributions to avoid recreation and DNS disruption
+119. **Stack Separation by Responsibility**: Separate API Gateway from Client/Portal infrastructure for independent deployment and single responsibility
+120. **API URL Passing**: Pass API URL from API stack outputs to Client stack via CDK context for proper dependency chain
+121. **Default Bucket Naming**: Generate S3 bucket names from domain and subdomain (e.g., portal-darkrelics-net) when not explicitly provided
+122. **Required Domain Parameters**: Make domain and hosted_zone_id required parameters to avoid circular dependencies and ensure proper DNS configuration
+123. **Stack Descriptions**: Always provide descriptive stack descriptions in super().__init__() for CloudFormation visibility
+124. **Verification Output Timing**: Pass deployment outputs directly to verification functions rather than reading from state that hasn't been updated yet
+125. **Bucket Name Consistency**: Ensure verification uses the same bucket name that was actually deployed (from outputs or configuration)
+126. **Post-Deployment Bucket Policy**: Update S3 bucket policy after stack deployment to ensure CloudFront has access, especially for imported buckets
+127. **Automated Portal Deployment**: Execute CodeBuild project automatically after infrastructure setup to provide complete end-to-end deployment
+128. **Fixed Logical IDs Required**: Always use fixed logical IDs for persistent resources (certificates, distributions, buckets) to prevent recreation on updates
+129. **No Runtime Checks in Synthesis**: Resource existence checks during CDK synthesis don't work - they always return false without AWS credentials
+130. **Import Pattern Belongs in Deployment Layer**: Resource import decisions must be made in deployment modules with AWS access, then passed via CDK context
 
 ## Current System Issues
 
@@ -579,8 +626,9 @@ The deployment order varies based on the selected deployment mode:
 5. Story Stack        → SSM parameter, SQS, EventBridge, additional Lambda permissions [READY FOR TESTING]
 6. S3 Stack           → Scripts bucket [COMPLETE]
 7. CloudWatch Stack   → Logging and metrics [COMPLETE]
-8. Client Stack       → Portal, CloudFront, API Gateway [NOT STARTED]
-9. [Portal Build]     → Frontend deployment with incremental.yml [NOT STARTED]
+8. API Stack          → API Gateway, custom domain, ACM certificate, Route53 record [DEPLOYED]
+9. Client Stack       → S3 bucket, CloudFront, CodeBuild project, ACM certificate, Route53 record [DEPLOYED WITH WARNINGS]
+10. [Portal Build]    → Frontend deployment with incremental.yml [NOT STARTED]
 ```
 
 #### MUD Mode - Traditional Multi-User Dungeon
@@ -591,8 +639,9 @@ The deployment order varies based on the selected deployment mode:
 4. Player Stack       → Cognito User Pool and PostConfirmation trigger [COMPLETE]
 5. S3 Stack           → Scripts bucket [COMPLETE]
 6. CloudWatch Stack   → Logging and metrics [COMPLETE]
-7. Client Stack       → Portal, CloudFront, API Gateway [NOT STARTED]
-8. [Portal Build]     → Frontend deployment with portal.yml [NOT STARTED]
+7. API Stack          → API Gateway, custom domain, ACM certificate, Route53 record [DEPLOYED]
+8. Client Stack       → S3 bucket, CloudFront, CodeBuild project, ACM certificate, Route53 record [DEPLOYED WITH WARNINGS]
+9. [Portal Build]     → Frontend deployment with portal.yml [NOT STARTED]
 ```
 Note: Story Stack is excluded in MUD mode
 
@@ -603,25 +652,28 @@ Note: Story Stack is excluded in MUD mode
 3. Lambda Stack       → Lambda layer, IAM role/policies, 16 Lambda functions [COMPLETE]
 4. Player Stack       → Cognito User Pool and PostConfirmation trigger [COMPLETE]
 5. Story Stack        → SSM parameter, SQS, EventBridge, additional Lambda permissions [READY FOR TESTING]
-6. Client Stack       → Portal, CloudFront, API Gateway [NOT STARTED]
-7. [Portal Build]     → Frontend deployment with incremental.yml [NOT STARTED]
+6. API Stack          → API Gateway, custom domain, ACM certificate, Route53 record [DEPLOYED]
+7. Client Stack       → S3 bucket, CloudFront, CodeBuild project, ACM certificate, Route53 record [DEPLOYED WITH WARNINGS]
+8. [Portal Build]     → Frontend deployment with incremental.yml [NOT STARTED]
 ```
 Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 
 ## Project Status Summary
 
-### Completed Phases (7 of 9)
-- **Phase 1**: DynamoDB Stack - DEPLOYED  
-- **Phase 2**: CodeBuild Stack - DEPLOYED  
-- **Phase 3**: S3 Stack - DEPLOYED  
-- **Phase 4**: CloudWatch Stack - DEPLOYED  
-- **Phase 5**: Lambda Stack - DEPLOYED  
-- **Phase 6**: Player Stack - DEPLOYED  
-- **Phase 7**: Story Stack - READY FOR TESTING
+### Completed Phases (9 of 10) - API and Client Stacks Deployed
+- **Phase 1**: DynamoDB Stack - DEPLOYED
+- **Phase 2**: CodeBuild Stack - DEPLOYED
+- **Phase 3**: S3 Stack - DEPLOYED
+- **Phase 4**: CloudWatch Stack - DEPLOYED
+- **Phase 5**: Lambda Stack - DEPLOYED
+- **Phase 6**: Player Stack - DEPLOYED
+- **Phase 7**: Story Stack - DEPLOYED
 
 ### System Enhancements
 - **Deployment Mode System** - IMPLEMENTED
+- **CDK Context Standardization** - COMPLETED
 - **Story Stack Remediation** - COMPLETED
+- **Dynamic Phase Numbering** - IMPLEMENTED
 
 ### Remaining Work (2 of 9)
 - **Phase 8**: Client Stack - NOT STARTED  
@@ -632,7 +684,8 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 - All modules under 300 lines as per standards
 - Clean separation of concerns
 - Dynamic deployment based on mode
-- Production tested through Phase 6
+- Standardized CDK context pattern across all stacks
+- Production tested and operational for all 7 completed phases
 
 ## Detailed Stack Resources
 
@@ -772,7 +825,7 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 - Lambda ARNs constructed from account_id and region to ensure EventBridge rule creation
 - All boto3 checks moved to post-deployment validation only
 
-### 8. Client Stack [Phase 8 - NOT STARTED]
+### 8. Client Stack [Phase 8 - COMPLETED]
 
 **Resources:**
 
@@ -1077,3 +1130,31 @@ After complete deployment:
 - Focus on simplicity over cleverness
 - User should understand what's happening
 - Each step should be obvious and verifiable
+
+## Critical Lessons Learned
+
+### Resource Recreation Issue (Fixed)
+
+**Problem:** Resources were being deleted and recreated on every deployment despite using import-or-create pattern.
+
+**Root Cause:** CDK synthesis happens before deployment and has no AWS access. The check functions always returned False during synthesis, causing CDK to generate CloudFormation templates with new logical IDs each time.
+
+**Solution:** Use fixed logical IDs for all resources and rely on CDK/CloudFormation to handle create vs update:
+
+```python
+# OLD (BROKEN):
+if check_s3_bucket_exists(bucket_name, region):
+    return s3.Bucket.from_bucket_name(scope, construct_id, bucket_name)
+return s3.Bucket(scope, construct_id, ...)  # Creates new logical ID each time
+
+# NEW (WORKING):
+return s3.Bucket(
+    scope,
+    "FixedLogicalId",  # Same ID every deployment
+    bucket_name=bucket_name,
+    removal_policy=RemovalPolicy.RETAIN,
+    ...
+)
+```
+
+**Key Insight:** CDK synthesis is deterministic - same inputs should produce same outputs. Dynamic checks during synthesis break this principle.
