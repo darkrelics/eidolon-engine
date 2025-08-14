@@ -32,10 +32,29 @@ def get_lambda_function_arn(region: str) -> str:
         return ""
 
 
+def check_existing_user_pool(region: str) -> tuple[bool, str]:
+    """Check if the Cognito User Pool already exists."""
+    from stacks import stack_utilities as utils
+    
+    user_pool_name = "eidolon-users"
+    exists, pool_id = utils.check_cognito_user_pool_exists(user_pool_name, region)
+    if exists:
+        print(f"  Found existing user pool: {user_pool_name} ({pool_id})")
+        return True, pool_id
+    return False, ""
+
+
 def deploy_player_stack(params) -> dict:
     """Deploy the Player stack using CDK."""
+    print("\nChecking for existing Cognito resources...")
+    exists, user_pool_id = check_existing_user_pool(params.region)
+    
     # Pass all parameters through context - each -c and key=value must be separate
     context_args = ["-c", f"region={params.region}", "-c", f"reply_email={params.reply_email}"]
+    
+    # Add existing user pool ID to context if found
+    if exists and user_pool_id:
+        context_args.extend(["-c", f"existing_user_pool_id={user_pool_id}"])
 
     # Get Lambda ARN if available
     lambda_arn = get_lambda_function_arn(params.region)

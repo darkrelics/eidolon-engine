@@ -144,12 +144,12 @@ class LambdaStack(Stack):
         for function_name, handler in lambda_configs:
             print(f"  Deploying Lambda function: {function_name}")
 
-            # Create resource ID from function name (remove hyphens for CDK)
-            resource_id = function_name.replace("-", "").title()
+            # Use fixed logical ID for each function
+            logical_id = self._get_function_logical_id(function_name)
 
             self.functions[function_name] = lambda_.Function(
                 self,
-                resource_id,
+                logical_id,
                 function_name=function_name,
                 runtime=lambda_.Runtime.PYTHON_3_12,
                 handler=handler,
@@ -161,6 +161,32 @@ class LambdaStack(Stack):
                 environment=self._get_function_environment(function_name, env_vars),
                 description=f"Eidolon Engine {function_name} function",
             )
+
+    def _get_function_logical_id(self, function_name: str) -> str:
+        """Get fixed logical ID for a Lambda function.
+        
+        This ensures consistent logical IDs across deployments.
+        """
+        # Define fixed mappings for all Lambda functions
+        logical_id_map = {
+            "api-archetype-list": "ApiArchetypeListFunction",
+            "api-character-add": "ApiCharacterAddFunction",
+            "api-character-delete": "ApiCharacterDeleteFunction",
+            "api-character-get": "ApiCharacterGetFunction",
+            "api-character-list": "ApiCharacterListFunction",
+            "api-segment-decision": "ApiSegmentDecisionFunction",
+            "api-segment-history": "ApiSegmentHistoryFunction",
+            "api-segment-outcome": "ApiSegmentOutcomeFunction",
+            "api-segment-rest": "ApiSegmentRestFunction",
+            "api-segment-status": "ApiSegmentStatusFunction",
+            "api-story-abandon": "ApiStoryAbandonFunction",
+            "api-story-start": "ApiStoryStartFunction",
+            "cognito-player-new": "CognitoPlayerNewFunction",
+            "ops-segment-poller": "OpsSegmentPollerFunction",
+            "ops-segment-process": "OpsSegmentProcessFunction",
+            "ops-story-advance": "OpsStoryAdvanceFunction",
+        }
+        return logical_id_map.get(function_name, function_name.replace("-", "").title() + "Function")
 
     def _get_environment_variables(self) -> dict:
         """Get common environment variables for all Lambda functions."""
@@ -218,8 +244,8 @@ class LambdaStack(Stack):
 
         CfnOutput(self, "LambdaRoleArn", value=self.lambda_role.role_arn, description="Shared Lambda execution role ARN")
 
-        # Output each Lambda function ARN
+        # Output each Lambda function ARN with fixed IDs
         for function_name, function in self.functions.items():
-            output_id = function_name.replace("-", "").title() + "Arn"
+            output_id = self._get_function_logical_id(function_name) + "Arn"
             CfnOutput(self, output_id, value=function.function_arn, description=f"{function_name} Lambda function ARN")
 

@@ -161,16 +161,21 @@ class StoryStack(Stack):
 
         # Import the Lambda function with its role for proper permission grants
         # We need to use from_function_attributes to include the role
+        # Use fixed logical IDs based on trigger_id
+        function_logical_id = "ImportedProcessFunction" if trigger_id == "ProcessTrigger" else "ImportedAdvanceFunction"
+        role_logical_id = "ImportedProcessRole" if trigger_id == "ProcessTrigger" else "ImportedAdvanceRole"
+        mapping_logical_id = "ProcessMapping" if trigger_id == "ProcessTrigger" else "AdvanceMapping"
+        
         lambda_function = lambda_.Function.from_function_attributes(
             self,
-            f"Imported{trigger_id}",
+            function_logical_id,
             function_arn=lambda_arn,
             # Use the same role that was passed to the stack
-            role=iam.Role.from_role_arn(self, f"ImportedRole{trigger_id}", self.lambda_role_arn) if self.lambda_role_arn else None,
+            role=iam.Role.from_role_arn(self, role_logical_id, self.lambda_role_arn) if self.lambda_role_arn else None,
         )
 
-        # Add SQS event source
-        lambda_function.add_event_source_mapping(f"{trigger_id}Mapping", event_source_arn=queue.queue_arn, batch_size=10)
+        # Add SQS event source with fixed logical ID
+        lambda_function.add_event_source_mapping(mapping_logical_id, event_source_arn=queue.queue_arn, batch_size=10)
 
         # Grant SQS permissions to Lambda execution role
         queue.grant_consume_messages(lambda_function)

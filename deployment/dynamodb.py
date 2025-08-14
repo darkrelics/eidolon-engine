@@ -12,10 +12,49 @@ from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy, validate_policies
 
 
+def check_existing_tables(region: str) -> dict:
+    """Check for existing DynamoDB tables and validate their schemas."""
+    import json
+    from core.dynamodb_tables import TABLE_CONFIGS
+    from stacks import stack_utilities as utils
+    
+    existing_tables = {}
+    
+    for config in TABLE_CONFIGS:
+        table_name = config.get("name", "")
+        if utils.check_dynamodb_table_exists(table_name, region):
+            # Validate schema
+            if utils.validate_dynamodb_table_schema(table_name, region, config):
+                print(f"  Found existing table with correct schema: {table_name}")
+                existing_tables[table_name] = table_name
+            else:
+                print(f"  WARNING: Table {table_name} exists but has incorrect schema!")
+                print(f"    Expected partition key: {config.get('partition_key', {}).get('name', '')}")
+                if "sort_key" in config:
+                    print(f"    Expected sort key: {config.get('sort_key', {}).get('name', '')}")
+                # Mark as empty string to indicate it should not be imported
+                existing_tables[table_name] = ""
+        else:
+            # Mark as empty string to indicate it doesn't exist
+            existing_tables[table_name] = ""
+    
+    return existing_tables
+
+
 def deploy_dynamodb_stack(params) -> dict:
     """Deploy the DynamoDB stack using CDK."""
+    import json
+    
+    print("\nChecking for existing DynamoDB tables...")
+    existing_tables = check_existing_tables(params.region)
+    
     # Pass parameters through context
     context_args = ["-c", f"region={params.region}"]
+    
+    # Add existing tables to context
+    for table_name, actual_name in existing_tables.items():
+        context_key = f"dynamodb_{table_name}_table"
+        context_args.extend(["-c", f"{context_key}={actual_name}"])
 
     app_command = "python3 app_dynamodb.py"
     return run_cdk_deploy("dynamodb", params.region, app_command, context_args)

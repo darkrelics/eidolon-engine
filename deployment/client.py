@@ -1,6 +1,7 @@
 """Client stack deployment functions."""
 
 import json
+import time
 from pathlib import Path
 
 import boto3
@@ -322,5 +323,187 @@ def deploy_client(params, config: Config, state: CDKState, config_path: Path, st
     if validation.get("success", False):
         state.mark_stack_deployed("client", result.get("outputs", {}))
         state.save(str(state_path))
+        
+        # Execute portal build
+        print("\n" + "=" * 60)
+        print("Phase 9: Portal Build Execution")
+        print("=" * 60)
+        
+        if execute_portal_build(params):
+            print("\nPortal build and deployment completed successfully!")
+        else:
+            print("\nWarning: Portal build failed, but infrastructure is ready")
+            print("You can manually trigger the build from AWS CodeBuild console")
 
     return validation.get("success", False)
+
+
+def start_portal_build(region: str) -> str:
+    """Start the portal CodeBuild project build.
+    
+    Args:
+        region: AWS region
+        
+    Returns:
+        Build ID if successful, empty string if failed
+    """
+    try:
+        codebuild = boto3.client("codebuild", region_name=region)
+        project_name = "eidolon-portal-build"
+        print(f"\n  Starting portal build: {project_name}")
+        response = codebuild.start_build(projectName=project_name)
+        build_id = response["build"]["id"]
+        print(f"  Build started: {build_id}")
+        return build_id
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        print(f"  [ERROR] Failed to start portal build: {error_code}")
+        if error_code == "ResourceNotFoundException":
+            print("  Portal build project not found. Ensure Client stack deployed successfully.")
+        return ""
+
+
+def monitor_portal_build(build_id: str, region: str, timeout_minutes: int = 30) -> bool:
+    """Monitor the portal build until completion.
+    
+    Args:
+        build_id: Build ID to monitor
+        region: AWS region
+        timeout_minutes: Maximum time to wait
+        
+    Returns:
+        True if build succeeded, False otherwise
+    """
+    codebuild = boto3.client("codebuild", region_name=region)
+    start_time = time.time()
+    timeout_seconds = timeout_minutes * 60
+    last_phase = ""
+    
+    print(f"  Monitoring build (timeout: {timeout_minutes} minutes)")
+    
+    while True:
+        try:
+            response = codebuild.batch_get_builds(ids=[build_id])
+            if not response["builds"]:
+                print(f"  [ERROR] Build not found: {build_id}")
+                return False
+                
+            build = response["builds"][0]
+            status = build.get("buildStatus", "UNKNOWN")
+            phase = build.get("currentPhase", "UNKNOWN")
+            
+            # Print phase changes
+            if phase != last_phase:
+                print(f"    Phase: {phase}")
+                last_phase = phase
+                
+            # Check terminal states
+            if status == "SUCCEEDED":
+                print(f"  Build completed successfully")
+                return True
+            elif status in ["FAILED", "FAULT", "TIMED_OUT", "STOPPED"]:
+                print(f"  Build failed with status: {status}")
+                print_portal_build_logs(build_id, region)
+                return False
+                
+            # Check timeout
+            if time.time() - start_time > timeout_seconds:
+                print(f"  Build timed out after {timeout_minutes} minutes")
+                return False
+                
+            # Wait before next check
+            time.sleep(10)
+            
+        except ClientError as err:
+            print(f"  [ERROR] Failed to get build status: {err}")
+            return False
+
+
+def print_portal_build_logs(build_id: str, region: str, tail_lines: int = 50) -> None:
+    """Print the last N lines of portal build logs.
+    
+    Args:
+        build_id: Build ID to get logs for
+        region: AWS region
+        tail_lines: Number of lines to print
+    """
+    try:
+        codebuild = boto3.client("codebuild", region_name=region)
+        response = codebuild.batch_get_builds(ids=[build_id])
+        
+        if not response["builds"]:
+            return
+            
+        build = response["builds"][0]
+        log_info = build.get("logs", {})
+        
+        if not log_info.get("streamName"):
+            print("  No log stream available")
+            return
+            
+        # Get logs from CloudWatch
+        logs = boto3.client("logs", region_name=region)
+        group_name = log_info.get("groupName", "/aws/codebuild/eidolon-portal-build")
+        stream_name = log_info["streamName"]
+        
+        print(f"\n  Last {tail_lines} lines of build logs:")
+        print("  " + "-" * 56)
+        
+        response = logs.get_log_events(
+            logGroupName=group_name,
+            logStreamName=stream_name,
+            limit=tail_lines,
+            startFromHead=False
+        )
+        
+        events = response.get("events", [])
+        for event in events[-tail_lines:]:
+            print(f"  {event['message'].rstrip()}")
+            
+        print("  " + "-" * 56)
+        
+    except ClientError:
+        print("  Could not retrieve build logs")
+
+
+def execute_portal_build(params) -> bool:
+    """Execute the portal build and deployment.
+    
+    Args:
+        params: Deployment parameters with region and mode
+        
+    Returns:
+        True if build succeeded, False otherwise
+    """
+    print(f"\nExecuting portal build for {params.deployment_mode} mode")
+    
+    # The buildspec was configured during stack creation based on deployment mode
+    # MUD mode: buildspec/portal.yml - Traditional MUD interface
+    # Incremental/Hybrid: buildspec/incremental.yml - Story-driven interface
+    if params.deployment_mode == "mud":
+        print("  Buildspec: /buildspec/portal.yml (Traditional MUD interface)")
+        print("  Features: Character management, room exploration, combat")
+    else:
+        print("  Buildspec: /buildspec/incremental.yml (Story-driven interface)")
+        print("  Features: Narrative progression, dynamic segments, story mode")
+    
+    # Start the build
+    build_id = start_portal_build(params.region)
+    if not build_id:
+        return False
+        
+    # Monitor until completion
+    if not monitor_portal_build(build_id, params.region):
+        print("\nPortal build failed")
+        print("Check the build logs in AWS CodeBuild console for details")
+        return False
+        
+    print("\nPortal build completed successfully!")
+    print("  [OK] Frontend application built and uploaded to S3")
+    print("  [OK] CloudFront distribution updated")
+    print("  [OK] Cache invalidation triggered automatically")
+    print("\nDeployment Complete!")
+    print(f"  Portal URL: https://{params.client_host}.{params.domain}")
+    print("  Note: DNS propagation may take 5-10 minutes")
+    
+    return True

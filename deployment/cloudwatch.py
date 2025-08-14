@@ -11,10 +11,28 @@ from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy, validate_policies
 
 
+def check_existing_log_group(region: str) -> str:
+    """Check if the CloudWatch log group already exists."""
+    from stacks import stack_utilities as utils
+    
+    log_group_name = "/eidolon/server"
+    if utils.check_cloudwatch_log_group_exists(log_group_name, region):
+        print(f"  Found existing log group: {log_group_name}")
+        return log_group_name
+    return ""
+
+
 def deploy_cloudwatch_stack(params) -> dict:
     """Deploy the CloudWatch stack using CDK."""
+    print("\nChecking for existing CloudWatch resources...")
+    existing_log_group = check_existing_log_group(params.region)
+    
     # Pass parameters through context
     context_args = ["-c", f"region={params.region}"]
+    
+    # Add existing log group to context if found
+    if existing_log_group:
+        context_args.extend(["-c", f"existing_log_group={existing_log_group}"])
 
     app_command = "python3 app_cloudwatch.py"
     return run_cdk_deploy("cloudwatch", params.region, app_command, context_args)

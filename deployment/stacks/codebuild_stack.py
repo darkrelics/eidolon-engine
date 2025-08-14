@@ -112,12 +112,7 @@ class CodeBuildStack(Stack):
     def _create_lambda_layer_project(self):
         """Create CodeBuild project for Lambda layer."""
         project_name = "eidolon-lambda-layer"
-
-        # Check if project exists (CDK will update if it exists)
-        if utils.check_codebuild_project_exists(project_name, self.region_name):
-            print(f"CodeBuild project {project_name} already exists, will be updated")
-        else:
-            print(f"  Creating new CodeBuild project: {project_name}")
+        print(f"  Creating/updating CodeBuild project: {project_name}")
 
         # Create the project
         project = codebuild.Project(
@@ -159,12 +154,7 @@ class CodeBuildStack(Stack):
     def _create_lambda_functions_project(self):
         """Create CodeBuild project for Lambda functions."""
         project_name = "eidolon-lambda-functions"
-
-        # Check if project exists (CDK will update if it exists)
-        if utils.check_codebuild_project_exists(project_name, self.region_name):
-            print(f"CodeBuild project {project_name} already exists, will be updated")
-        else:
-            print(f"  Creating new CodeBuild project: {project_name}")
+        print(f"  Creating/updating CodeBuild project: {project_name}")
 
         # Create the project
         project = codebuild.Project(

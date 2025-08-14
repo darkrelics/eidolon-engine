@@ -11,16 +11,19 @@ from . import stack_utilities as utils
 class CloudWatchStack(Stack):
     """CloudWatch stack for Eidolon Engine logging and metrics."""
 
-    def __init__(self, scope: Construct, stack_id: str, region_name: str = "us-east-1", **kwargs) -> None:
+    def __init__(self, scope: Construct, stack_id: str, region_name: str = "us-east-1", 
+                 existing_log_group: str = "", **kwargs) -> None:
         """Initialize CloudWatch stack.
 
         Args:
             scope: CDK construct scope
             stack_id: Stack identifier
             region_name: AWS region for resource operations
+            existing_log_group: Name of existing log group to import (empty if none)
             **kwargs: Additional stack properties
         """
         self.region_name = region_name
+        self.existing_log_group = existing_log_group
         super().__init__(scope, stack_id, **kwargs)
 
         # Create or import log group
@@ -39,12 +42,12 @@ class CloudWatchStack(Stack):
         """Create or import the server log group."""
         log_group_name = "/eidolon/server"
 
-        # Check if log group exists
-        if utils.check_cloudwatch_log_group_exists(log_group_name, self.region_name):
-            print(f"  Importing existing log group: {log_group_name}")
-            return logs.LogGroup.from_log_group_name(self, "ServerLogGroup", log_group_name)
+        # Check if we should import from context
+        if self.existing_log_group:
+            print(f"  Using existing log group from context: {self.existing_log_group}")
+            return logs.LogGroup.from_log_group_name(self, "ServerLogGroup", self.existing_log_group)
 
-        print(f"  Creating new log group: {log_group_name}")
+        print(f"  Creating/updating log group: {log_group_name}")
         return logs.LogGroup(
             self,
             "ServerLogGroup",

@@ -936,9 +936,9 @@ def create_and_validate_character(name: str, player_id: str) -> dict:
 
 If you need "and" to describe what a function does, it's doing too much:
 
-- ❌ "This function validates AND saves the character"
-- ❌ "This class manages authentication AND user profiles"
-- ❌ "This module handles database operations AND business logic"
+- [BAD] "This function validates AND saves the character"
+- [BAD] "This class manages authentication AND user profiles"
+- [BAD] "This module handles database operations AND business logic"
 
 #### Common SRP Violations to Avoid
 

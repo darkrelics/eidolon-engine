@@ -19,6 +19,7 @@ class PlayerStack(Stack):
         region_name: str = "us-east-1",
         lambda_function_arn: str = "",
         reply_email: str = "contact@darkrelics.net",
+        existing_user_pool_id: str = "",
         **kwargs,
     ) -> None:
         """Initialize Player stack.
@@ -29,11 +30,13 @@ class PlayerStack(Stack):
             region_name: AWS region for resource operations
             lambda_function_arn: ARN of cognito-player-new Lambda function
             reply_email: Email address for Cognito notifications
+            existing_user_pool_id: ID of existing user pool to import (empty if none)
             **kwargs: Additional stack properties
         """
         self.region_name = region_name
         self.lambda_function_arn = lambda_function_arn
         self.reply_email = reply_email
+        self.existing_user_pool_id = existing_user_pool_id
         self.is_imported_pool = False  # Initialize flag
         super().__init__(scope, stack_id, **kwargs)
 
@@ -54,15 +57,14 @@ class PlayerStack(Stack):
         """Create Cognito User Pool."""
         user_pool_name = "eidolon-users"
 
-        # Check if user pool already exists
-        exists, pool_id = utils.check_cognito_user_pool_exists(user_pool_name, self.region_name)
-        if exists:
-            print(f"  Importing existing user pool: {user_pool_name} ({pool_id})")
+        # Check if we should import from context
+        if self.existing_user_pool_id:
+            print(f"  Using existing user pool from context: {self.existing_user_pool_id}")
             # Mark that this is an imported pool
             self.is_imported_pool = True
-            return cognito.UserPool.from_user_pool_id(self, "UserPool", pool_id)
+            return cognito.UserPool.from_user_pool_id(self, "UserPool", self.existing_user_pool_id)
 
-        print(f"  Creating new user pool: {user_pool_name}")
+        print(f"  Creating/updating user pool: {user_pool_name}")
         print(f"  Reply email: {self.reply_email}")
         self.is_imported_pool = False
         return cognito.UserPool(

@@ -193,8 +193,10 @@ class ApiStack(Stack):
     ) -> None:
         """Add Lambda integration to API resource."""
         if function_name in self.lambda_arns:
+            # Use fixed logical ID for imported Lambda functions
+            logical_id = self._get_lambda_import_logical_id(function_name)
             lambda_function = lambda_.Function.from_function_arn(
-                self, f"Import{function_name}", self.lambda_arns[function_name]
+                self, logical_id, self.lambda_arns[function_name]
             )
             
             resource.add_method(
@@ -248,6 +250,28 @@ class ApiStack(Stack):
             record_name=self.api_host,
             target=route53.RecordTarget.from_alias(targets.ApiGatewayDomain(custom_domain)), # type: ignore
         )
+
+    def _get_lambda_import_logical_id(self, function_name: str) -> str:
+        """Get fixed logical ID for imported Lambda function.
+        
+        This ensures consistent logical IDs across deployments.
+        """
+        # Define fixed mappings for all Lambda functions used by API
+        logical_id_map = {
+            "api-archetype-list": "ImportApiArchetypeList",
+            "api-character-add": "ImportApiCharacterAdd",
+            "api-character-delete": "ImportApiCharacterDelete",
+            "api-character-get": "ImportApiCharacterGet",
+            "api-character-list": "ImportApiCharacterList",
+            "api-segment-decision": "ImportApiSegmentDecision",
+            "api-segment-history": "ImportApiSegmentHistory",
+            "api-segment-outcome": "ImportApiSegmentOutcome",
+            "api-segment-rest": "ImportApiSegmentRest",
+            "api-segment-status": "ImportApiSegmentStatus",
+            "api-story-abandon": "ImportApiStoryAbandon",
+            "api-story-start": "ImportApiStoryStart",
+        }
+        return logical_id_map.get(function_name, "Import" + function_name.replace("-", "").title())
 
     def _add_outputs(self) -> None:
         """Add stack outputs."""

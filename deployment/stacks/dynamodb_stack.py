@@ -42,27 +42,17 @@ class DynamoDBStack(Stack):
             if table_name in self.existing_tables:
                 existing_table_name = self.existing_tables.get(table_name, "")
                 if existing_table_name:
-                    print(f"  Importing existing DynamoDB table from context: {existing_table_name}")
-                    table = dynamodb.Table.from_table_name(self, f"{table_name}-imported", existing_table_name)
+                    print(f"  Using existing DynamoDB table from context: {existing_table_name}")
+                    # Use fixed logical ID based on table name
+                    logical_id = self._get_table_logical_id(table_name) + "Imported"
+                    table = dynamodb.Table.from_table_name(self, logical_id, existing_table_name)
                 else:
-                    continue
-            elif utils.check_dynamodb_table_exists(table_name, self.region_name):
-                # Check if existing table has correct schema
-                if utils.validate_dynamodb_table_schema(table_name, self.region_name, config):
-                    print(f"Found existing DynamoDB table: {table_name}, importing...")
-                    table = dynamodb.Table.from_table_name(self, f"{table_name}-imported", table_name)
-                else:
-                    print(f"ERROR: Table {table_name} exists but has incorrect schema!")
-                    print(f"Expected partition key: {config.get('partition_key', {}).get('name', '')}")
-                    if "sort_key" in config:
-                        print(f"Expected sort key: {config.get('sort_key', {}).get('name', '')}")
-                    else:
-                        print("Expected no sort key")
-                    print("Please manually delete or migrate the table before deploying.")
-                    raise ValueError(f"Table {table_name} has incorrect schema")
+                    # Table was marked as non-existent in context, create new
+                    print(f"  Creating new DynamoDB table: {table_name}")
+                    table = self.create_table(config)
             else:
-                # Create new table
-                print(f"  Creating new DynamoDB table: {table_name}")
+                # No context provided, always create (CDK will handle create vs update)
+                print(f"  Creating/updating DynamoDB table: {table_name}")
                 table = self.create_table(config)
 
             self.tables[table_name] = table
@@ -127,8 +117,9 @@ class DynamoDBStack(Stack):
                 name=sort_key.get("name", ""), type=get_attribute_type(sort_key.get("type", ""))
             )
 
-        # Create the table
-        table = dynamodb.Table(self, f"{config.get('name', '').replace('_', '')}Table", **table_props)
+        # Create the table with fixed logical ID
+        logical_id = self._get_table_logical_id(config.get('name', ''))
+        table = dynamodb.Table(self, logical_id, **table_props)
 
         # Set UpdateReplacePolicy to Retain to prevent data loss during updates
         cfn_table = table.node.default_child
@@ -152,13 +143,39 @@ class DynamoDBStack(Stack):
                 self.existing_tables[table_name] = existing_table_name
 
 
+    def _get_table_logical_id(self, table_name: str) -> str:
+        """Get fixed logical ID for a table.
+        
+        This ensures consistent logical IDs across deployments.
+        """
+        # Define fixed mappings for all tables
+        logical_id_map = {
+            "players": "PlayersTable",
+            "characters": "CharactersTable",
+            "rooms": "RoomsTable",
+            "exits": "ExitsTable",
+            "items": "ItemsTable",
+            "prototypes": "PrototypesTable",
+            "archetypes": "ArchetypesTable",
+            "motd": "MotdTable",
+            "story": "StoryTable",
+            "segments": "SegmentsTable",
+            "active_segments": "ActiveSegmentsTable",
+            "story_history": "StoryHistoryTable",
+            "segment_history": "SegmentHistoryTable",
+            "opponents": "OpponentsTable",
+        }
+        return logical_id_map.get(table_name, table_name.replace('_', '').title() + "Table")
+
     def _add_outputs(self) -> None:
         """Add stack outputs."""
         # Output each table name
         for table_name, table in self.tables.items():
+            # Use fixed output ID
+            output_id = self._get_table_logical_id(table_name) + "Name"
             CfnOutput(
                 self,
-                f"{table_name.replace('_', '')}TableName",
+                output_id,
                 value=table.table_name,
                 description=f"DynamoDB table name for {table_name}",
             )
