@@ -1,0 +1,256 @@
+"""API stack for API Gateway and related resources."""
+
+from aws_cdk import Stack, CfnOutput
+from aws_cdk import aws_apigateway as apigateway
+from aws_cdk import aws_certificatemanager as acm
+from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_route53 as route53
+from aws_cdk import aws_route53_targets as targets
+from constructs import Construct
+
+from . import stack_utilities as utils
+
+
+class ApiStack(Stack):
+    """API stack for Eidolon Engine API Gateway."""
+
+    def __init__(
+        self,
+        scope: Construct,
+        stack_id: str,
+        region_name: str,
+        hosted_zone_id: str,
+        domain: str,
+        api_host: str = "api",
+        deployment_mode: str = "hybrid",
+        lambda_arns = None,
+        cognito_user_pool_id: str = "",
+        cognito_client_id: str = "",
+        cognito_user_pool_arn: str = "",
+        **kwargs,
+    ) -> None:
+        """Initialize API stack.
+
+        Args:
+            scope: CDK construct scope
+            stack_id: Stack identifier
+            region_name: AWS region
+            hosted_zone_id: Route53 Hosted Zone ID
+            domain: Base domain name
+            api_host: Subdomain for API (default: api)
+            deployment_mode: Deployment mode (mud/incremental/hybrid)
+            lambda_arns: Dictionary of Lambda function ARNs
+            cognito_user_pool_id: Cognito User Pool ID
+            cognito_client_id: Cognito Client ID
+            cognito_user_pool_arn: Cognito User Pool ARN
+            **kwargs: Additional stack properties
+        """
+        self.region_name = region_name
+        self.hosted_zone_id = hosted_zone_id
+        self.domain = domain
+        self.api_host = api_host
+        self.deployment_mode = deployment_mode
+        self.lambda_arns = lambda_arns or {}
+        self.cognito_user_pool_id = cognito_user_pool_id
+        self.cognito_client_id = cognito_client_id
+        self.cognito_user_pool_arn = cognito_user_pool_arn
+
+        super().__init__(scope, stack_id, description="API Gateway with custom domain and Lambda integrations", **kwargs)
+
+        # Create API Gateway
+        self.api = self._create_api_gateway()
+
+        # Add outputs
+        self._add_outputs()
+
+    def _create_api_gateway(self) -> apigateway.RestApi:
+        """Create API Gateway with Lambda integrations."""
+        print("  Creating API Gateway")
+
+        # Create API
+        api = apigateway.RestApi(
+            self,
+            "EidolonApi",
+            rest_api_name="eidolon-api",
+            description="Eidolon Engine API",
+            default_cors_preflight_options=apigateway.CorsOptions(
+                allow_origins=["*"],
+                allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                allow_headers=["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"],
+                allow_credentials=True,
+            ),
+        )
+
+        # Create Cognito authorizer if we have the pool ARN
+        authorizer = None
+        if self.cognito_user_pool_arn:
+            user_pool = cognito.UserPool.from_user_pool_arn(self, "ImportedUserPool", self.cognito_user_pool_arn)
+            authorizer = apigateway.CognitoUserPoolsAuthorizer(
+                self,
+                "ApiAuthorizer",
+                cognito_user_pools=[user_pool],
+                authorizer_name="eidolon-api-authorizer",
+                identity_source="method.request.header.Authorization",
+            )
+
+        # Add Lambda integrations for available functions
+        self._add_api_endpoints(api, authorizer) # type: ignore
+
+        # Configure custom domain
+        self._configure_api_domain(api)
+
+        return api
+
+    def _add_api_endpoints(self, api: apigateway.RestApi, authorizer: apigateway.CognitoUserPoolsAuthorizer) -> None:
+        """Add API endpoints with Lambda integrations."""
+        # Archetype endpoints
+        if "api-archetype-get" in self.lambda_arns:
+            archetype_resource = api.root.add_resource("archetype")
+            self._add_lambda_integration(
+                archetype_resource, "GET", "api-archetype-get", authorizer
+            )
+
+        # Character endpoints
+        character_resource = api.root.add_resource("character")
+        
+        if "api-character-add" in self.lambda_arns:
+            self._add_lambda_integration(
+                character_resource, "POST", "api-character-add", authorizer
+            )
+        
+        if "api-character-get" in self.lambda_arns:
+            self._add_lambda_integration(
+                character_resource, "GET", "api-character-get", authorizer
+            )
+        
+        if "api-character-delete" in self.lambda_arns:
+            self._add_lambda_integration(
+                character_resource, "DELETE", "api-character-delete", authorizer
+            )
+        
+        if "api-character-list" in self.lambda_arns:
+            list_resource = character_resource.add_resource("list")
+            self._add_lambda_integration(
+                list_resource, "GET", "api-character-list", authorizer
+            )
+
+        # Story endpoints (for incremental/hybrid modes)
+        if self.deployment_mode in ["incremental", "hybrid"]:
+            story_resource = api.root.add_resource("story")
+            
+            if "api-story-start" in self.lambda_arns:
+                start_resource = story_resource.add_resource("start")
+                self._add_lambda_integration(
+                    start_resource, "POST", "api-story-start", authorizer
+                )
+            
+            if "api-story-abandon" in self.lambda_arns:
+                abandon_resource = story_resource.add_resource("abandon")
+                self._add_lambda_integration(
+                    abandon_resource, "POST", "api-story-abandon", authorizer
+                )
+
+            # Segment endpoints
+            segment_resource = api.root.add_resource("segment")
+            
+            if "api-segment-decision" in self.lambda_arns:
+                decision_resource = segment_resource.add_resource("decision")
+                self._add_lambda_integration(
+                    decision_resource, "POST", "api-segment-decision", authorizer
+                )
+            
+            if "api-segment-outcome" in self.lambda_arns:
+                outcome_resource = segment_resource.add_resource("outcome")
+                self._add_lambda_integration(
+                    outcome_resource, "GET", "api-segment-outcome", authorizer
+                )
+            
+            if "api-segment-status" in self.lambda_arns:
+                status_resource = segment_resource.add_resource("status")
+                self._add_lambda_integration(
+                    status_resource, "GET", "api-segment-status", authorizer
+                )
+            
+            if "api-segment-history" in self.lambda_arns:
+                history_resource = segment_resource.add_resource("history")
+                self._add_lambda_integration(
+                    history_resource, "GET", "api-segment-history", authorizer
+                )
+            
+            if "api-character-rest" in self.lambda_arns:
+                rest_resource = segment_resource.add_resource("rest")
+                self._add_lambda_integration(
+                    rest_resource, "POST", "api-character-rest", authorizer
+                )
+
+    def _add_lambda_integration(
+        self,
+        resource: apigateway.Resource,
+        method: str,
+        function_name: str,
+        authorizer: apigateway.CognitoUserPoolsAuthorizer
+    ) -> None:
+        """Add Lambda integration to API resource."""
+        if function_name in self.lambda_arns:
+            lambda_function = lambda_.Function.from_function_arn(
+                self, f"Import{function_name}", self.lambda_arns[function_name]
+            )
+            
+            resource.add_method(
+                method,
+                apigateway.LambdaIntegration(lambda_function),
+                authorizer=authorizer,
+                authorization_type=apigateway.AuthorizationType.COGNITO if authorizer else None,
+            )
+
+    def _configure_api_domain(self, api: apigateway.RestApi) -> None:
+        """Configure custom domain for API Gateway."""
+        api_domain = f"{self.api_host}.{self.domain}"
+        
+        # Get hosted zone by ID
+        hosted_zone = utils.get_hosted_zone_by_id(self, self.hosted_zone_id, self.domain)
+        if not hosted_zone:
+            raise ValueError(f"Could not find hosted zone {self.hosted_zone_id} for domain {self.domain}")
+
+        # Create ACM certificate with fixed logical ID
+        certificate = acm.Certificate(
+            self,
+            "ApiCertificate",  # Fixed logical ID - won't change between deployments
+            domain_name=api_domain,
+            validation=acm.CertificateValidation.from_dns(hosted_zone),
+        )
+
+        # Create custom domain
+        custom_domain = apigateway.DomainName(
+            self,
+            "ApiDomain",
+            domain_name=api_domain,
+            certificate=certificate,
+            endpoint_type=apigateway.EndpointType.REGIONAL,
+            security_policy=apigateway.SecurityPolicy.TLS_1_2,
+        )
+
+        # Map API to custom domain
+        apigateway.BasePathMapping(
+            self,
+            "ApiMapping",
+            domain_name=custom_domain,
+            rest_api=api,
+            base_path="",
+        )
+
+        # Create Route53 record
+        route53.ARecord(
+            self,
+            "ApiDnsRecord",
+            zone=hosted_zone,
+            record_name=self.api_host,
+            target=route53.RecordTarget.from_alias(targets.ApiGatewayDomain(custom_domain)), # type: ignore
+        )
+
+    def _add_outputs(self) -> None:
+        """Add stack outputs."""
+        CfnOutput(self, "ApiUrl", value=f"https://{self.api_host}.{self.domain}", description="API custom domain URL")
+        CfnOutput(self, "ApiId", value=self.api.rest_api_id, description="API Gateway ID")
+        CfnOutput(self, "ApiGatewayUrl", value=self.api.url, description="API Gateway direct URL")

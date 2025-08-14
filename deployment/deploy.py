@@ -16,6 +16,8 @@ from cloudwatch import deploy_cloudwatch
 from player import deploy_player
 from lambda_functions import deploy_lambda
 from story import deploy_story
+from api import deploy_api
+from client import deploy_client
 
 
 @dataclass
@@ -27,10 +29,13 @@ class DeploymentParams:
     deployment_mode: str = "hybrid"
     s3_bucket: str = ""
     scripts_bucket: str = ""
+    client_bucket: str = ""
     github_owner: str = "robinje"
     github_repo: str = "eidolon-engine"
     github_branch: str = "develop"
     domain: str = "darkrelics.net"
+    hosted_zone_id: str = ""
+    api_host: str = "api"
     client_host: str = "portal"
     reply_email: str = "contact@darkrelics.net"
 
@@ -116,6 +121,21 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
                 if not params.scripts_bucket:
                     print("S3 scripts bucket name is required")
 
+    # S3 Client Bucket (for portal static files)
+    client_bucket = cdk_context.get("client_bucket", params.client_bucket)
+    if not client_bucket:
+        # Generate default based on domain and client host
+        if params.domain and params.client_host:
+            client_bucket = f"{params.client_host}-{params.domain.replace('.', '-')}"
+    if client_bucket:
+        client_input = input(f"S3 Client Bucket [{client_bucket}]: ").strip()
+        params.client_bucket = client_input if client_input else client_bucket
+    else:
+        while not params.client_bucket:
+            params.client_bucket = input("S3 Client Bucket: ").strip()
+            if not params.client_bucket:
+                print("S3 client bucket name is required")
+
     # GitHub Owner
     github_owner = cdk_context.get("github_owner", params.github_owner)
     owner_input = input(f"GitHub Owner [{github_owner}]: ").strip()
@@ -131,6 +151,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     branch_input = input(f"GitHub Branch [{github_branch}]: ").strip()
     params.github_branch = branch_input if branch_input else github_branch
 
+    # Domain and Hosting Configuration
     # Domain (base domain for all services)
     domain = cdk_context.get("domain", params.domain)
     if domain:
@@ -142,7 +163,29 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             if not params.domain:
                 print("Domain is required for deployment")
 
-    # Client Host (for portal)
+    # Route53 Hosted Zone ID
+    hosted_zone_id = cdk_context.get("hosted_zone_id", params.hosted_zone_id)
+    if hosted_zone_id:
+        zone_input = input(f"Route53 Hosted Zone ID [{hosted_zone_id}]: ").strip()
+        params.hosted_zone_id = zone_input if zone_input else hosted_zone_id
+    else:
+        while not params.hosted_zone_id:
+            params.hosted_zone_id = input("Route53 Hosted Zone ID (e.g., Z1234567890ABC): ").strip()
+            if not params.hosted_zone_id:
+                print("Hosted Zone ID is required for DNS configuration")
+
+    # API Host (subdomain for API)
+    api_host = cdk_context.get("api_host", params.api_host)
+    if api_host:
+        api_input = input(f"API Host (e.g., api) [{api_host}]: ").strip()
+        params.api_host = api_input if api_input else api_host
+    else:
+        while not params.api_host:
+            params.api_host = input("API Host (e.g., api): ").strip()
+            if not params.api_host:
+                print("API host is required for API configuration")
+
+    # Client Host (subdomain for portal)
     client_host = cdk_context.get("client_host", params.client_host)
     if client_host:
         host_input = input(f"Client Host (e.g., portal) [{client_host}]: ").strip()
@@ -169,10 +212,13 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     cdk_data["context"]["deployment_mode"] = params.deployment_mode
     cdk_data["context"]["s3_bucket"] = params.s3_bucket
     cdk_data["context"]["scripts_bucket"] = params.scripts_bucket
+    cdk_data["context"]["client_bucket"] = params.client_bucket
     cdk_data["context"]["github_owner"] = params.github_owner
     cdk_data["context"]["github_repo"] = params.github_repo
     cdk_data["context"]["github_branch"] = params.github_branch
     cdk_data["context"]["domain"] = params.domain
+    cdk_data["context"]["hosted_zone_id"] = params.hosted_zone_id
+    cdk_data["context"]["api_host"] = params.api_host
     cdk_data["context"]["client_host"] = params.client_host
     cdk_data["context"]["reply_email"] = params.reply_email
 
@@ -222,7 +268,9 @@ def main():
     display_mode_summary(params.deployment_mode)
     print(f"  S3 Artifacts: {params.s3_bucket}")
     print(f"  S3 Scripts: {params.scripts_bucket}")
+    print(f"  S3 Client: {params.client_bucket}")
     print(f"  GitHub: {params.github_owner}/{params.github_repo} ({params.github_branch})")
+    print(f"  API URL: {params.api_host}.{params.domain}")
     print(f"  Client URL: {params.client_host}.{params.domain}")
     print("=" * 60)
 
@@ -247,7 +295,8 @@ def main():
         "story": deploy_story,
         "s3": deploy_s3,
         "cloudwatch": deploy_cloudwatch,
-        # "client": deploy_client,  # Add when available
+        "api": deploy_api,
+        "client": deploy_client,
     }
 
     # Deploy stacks in order

@@ -1,13 +1,12 @@
 """DynamoDB stack for Eidolon Engine."""
 
-import boto3
 from aws_cdk import CfnDeletionPolicy, CfnOutput, RemovalPolicy, Stack
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
-from botocore.exceptions import ClientError
 from constructs import Construct
 
 from core.dynamodb_tables import TABLE_CONFIGS
+from . import stack_utilities as utils
 
 
 class DynamoDBStack(Stack):
@@ -47,9 +46,9 @@ class DynamoDBStack(Stack):
                     table = dynamodb.Table.from_table_name(self, f"{table_name}-imported", existing_table_name)
                 else:
                     continue
-            elif self._table_exists(table_name):
+            elif utils.check_dynamodb_table_exists(table_name, self.region_name):
                 # Check if existing table has correct schema
-                if self._validate_table_schema(table_name, config):
+                if utils.validate_dynamodb_table_schema(table_name, self.region_name, config):
                     print(f"Found existing DynamoDB table: {table_name}, importing...")
                     table = dynamodb.Table.from_table_name(self, f"{table_name}-imported", table_name)
                 else:
@@ -152,78 +151,6 @@ class DynamoDBStack(Stack):
             if existing_table_name:
                 self.existing_tables[table_name] = existing_table_name
 
-    def _table_exists(self, table_name: str) -> bool:
-        """Check if a DynamoDB table exists.
-
-        Args:
-            table_name: Name of the table to check
-
-        Returns:
-            True if table exists, False otherwise
-        """
-        try:
-            if not table_name:
-                return False
-
-            dynamodb_client = boto3.client("dynamodb", region_name=self.region_name)
-            dynamodb_client.describe_table(TableName=table_name)
-            return True
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code == "ResourceNotFoundException":
-                return False
-        return False
-
-    def _validate_table_schema(self, table_name: str, config: dict) -> bool:
-        """Validate that an existing table matches the expected schema.
-
-        Args:
-            table_name: Name of the table to validate
-            config: Expected table configuration
-
-        Returns:
-            True if schema matches, False otherwise
-        """
-        try:
-            dynamodb_client = boto3.client("dynamodb", region_name=self.region_name)
-            response = dynamodb_client.describe_table(TableName=table_name)
-            key_schema = response.get("Table", {}).get("KeySchema", [])
-
-            # Check partition key
-            pk_name = config.get("partition_key", {}).get("name", "")
-            pk_found = False
-            for key in key_schema:
-                if key.get("KeyType") == "HASH" and key.get("AttributeName") == pk_name:
-                    pk_found = True
-                    break
-
-            if not pk_found:
-                print(f"WARNING: Table {table_name} has incorrect partition key. Expected: {pk_name}")
-                return False
-
-            # Check sort key
-            if "sort_key" in config:
-                sk_name = config.get("sort_key", {}).get("name", "")
-                # Table should have a sort key
-                sk_found = False
-                for key in key_schema:
-                    if key.get("KeyType") == "RANGE" and key.get("AttributeName") == sk_name:
-                        sk_found = True
-                        break
-                if not sk_found:
-                    print(f"WARNING: Table {table_name} has incorrect sort key. Expected: {sk_name}")
-                    return False
-            else:
-                # Table should NOT have a sort key
-                for key in key_schema:
-                    if key.get("KeyType") == "RANGE":
-                        print(f"WARNING: Table {table_name} has unexpected sort key: {key.get('AttributeName', '')}")
-                        return False
-
-            return True
-        except Exception as err:
-            print(f"Error validating table schema: {err}")
-            return False
 
     def _add_outputs(self) -> None:
         """Add stack outputs."""

@@ -1,10 +1,8 @@
 """S3 stack for Eidolon Engine scripts bucket."""
 
-import boto3
-from aws_cdk import CfnOutput, RemovalPolicy, Stack
-from aws_cdk import aws_iam as iam
+from aws_cdk import CfnOutput, Stack, RemovalPolicy
 from aws_cdk import aws_s3 as s3
-from botocore.exceptions import ClientError
+from aws_cdk import aws_iam as iam
 from constructs import Construct
 
 
@@ -25,19 +23,15 @@ class S3Stack(Stack):
         self.scripts_bucket_name = scripts_bucket
         super().__init__(scope, stack_id, **kwargs)
 
-        # Create or import S3 bucket for scripts
-        if self._bucket_exists(self.scripts_bucket_name):
-            print(f"  Importing existing S3 bucket: {self.scripts_bucket_name}")
-            bucket = s3.Bucket.from_bucket_name(self, "ScriptsBucket", self.scripts_bucket_name)
-        else:
-            print(f"  Creating new S3 bucket: {self.scripts_bucket_name}")
-            bucket = s3.Bucket(
-                self,
-                "ScriptsBucket",
-                bucket_name=self.scripts_bucket_name,
-                removal_policy=RemovalPolicy.RETAIN,
-                versioned=True,
-            )
+        # Create S3 bucket for scripts with fixed logical ID
+        bucket = s3.Bucket(
+            self,
+            "ScriptsBucket",  # Fixed logical ID - won't change between deployments
+            bucket_name=self.scripts_bucket_name,
+            removal_policy=RemovalPolicy.RETAIN,
+            auto_delete_objects=False,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+        )
 
         # Store bucket reference
         self.scripts_bucket = bucket
@@ -60,31 +54,6 @@ class S3Stack(Stack):
         # Add outputs
         self._add_outputs()
 
-    def _bucket_exists(self, bucket_name: str) -> bool:
-        """Check if S3 bucket exists.
-
-        Args:
-            bucket_name: Name of the bucket to check
-
-        Returns:
-            True if bucket exists, False otherwise
-        """
-        if not bucket_name:
-            return False
-
-        try:
-            s3_client = boto3.client("s3", region_name=self.region_name)
-            s3_client.head_bucket(Bucket=bucket_name)
-            return True
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code in ["404", "NoSuchBucket"]:
-                return False
-            # If it's a permission error, assume bucket exists
-            if error_code == "403":
-                print(f"Warning: Cannot verify bucket {bucket_name} - permission denied, assuming it exists")
-                return True
-        return False
 
     def _add_outputs(self) -> None:
         """Add stack outputs."""

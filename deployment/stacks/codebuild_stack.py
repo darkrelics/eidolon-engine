@@ -1,12 +1,12 @@
 """CodeBuild stack for Eidolon Engine Lambda builds."""
 
-import boto3
-from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, Stack, RemovalPolicy
 from aws_cdk import aws_codebuild as codebuild
-from aws_cdk import aws_iam as iam
 from aws_cdk import aws_s3 as s3
-from botocore.exceptions import ClientError
+from aws_cdk import aws_iam as iam
 from constructs import Construct
+
+from . import stack_utilities as utils
 
 
 class CodeBuildStack(Stack):
@@ -42,19 +42,15 @@ class CodeBuildStack(Stack):
         self.github_branch = github_branch
         super().__init__(scope, stack_id, **kwargs)
 
-        # Create or import S3 bucket for artifacts
-        if self._bucket_exists(self.s3_bucket_name):
-            print(f"  Importing existing S3 bucket: {self.s3_bucket_name}")
-            bucket = s3.Bucket.from_bucket_name(self, "ArtifactsBucket", self.s3_bucket_name)
-        else:
-            print(f"  Creating new S3 bucket: {self.s3_bucket_name}")
-            bucket = s3.Bucket(
-                self,
-                "ArtifactsBucket",
-                bucket_name=self.s3_bucket_name,
-                removal_policy=RemovalPolicy.RETAIN,
-                versioned=True,
-            )
+        # Create S3 bucket for artifacts with fixed logical ID
+        bucket = s3.Bucket(
+            self,
+            "ArtifactsBucket",  # Fixed logical ID - won't change between deployments
+            bucket_name=self.s3_bucket_name,
+            removal_policy=RemovalPolicy.RETAIN,
+            auto_delete_objects=False,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+        )
 
         # Store bucket reference
         self.artifacts_bucket = bucket
@@ -69,31 +65,6 @@ class CodeBuildStack(Stack):
         # Add outputs
         self._add_outputs()
 
-    def _bucket_exists(self, bucket_name: str) -> bool:
-        """Check if S3 bucket exists.
-
-        Args:
-            bucket_name: Name of the bucket to check
-
-        Returns:
-            True if bucket exists, False otherwise
-        """
-        if not bucket_name:
-            return False
-
-        try:
-            s3_client = boto3.client("s3", region_name=self.region_name)
-            s3_client.head_bucket(Bucket=bucket_name)
-            return True
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code in ["404", "NoSuchBucket"]:
-                return False
-            # If it's a permission error, assume bucket exists
-            if error_code == "403":
-                print(f"Warning: Cannot verify bucket {bucket_name} - permission denied, assuming it exists")
-                return True
-        return False
 
     def _create_codebuild_role(self) -> iam.Role:
         """Create shared IAM role for CodeBuild projects."""
@@ -138,28 +109,12 @@ class CodeBuildStack(Stack):
 
         return role
 
-    def _project_exists(self, project_name: str) -> bool:
-        """Check if CodeBuild project exists.
-
-        Args:
-            project_name: Name of the project to check
-
-        Returns:
-            True if project exists, False otherwise
-        """
-        try:
-            cb_client = boto3.client("codebuild", region_name=self.region_name)
-            response = cb_client.batch_get_projects(names=[project_name])
-            return len(response.get("projects", [])) > 0
-        except ClientError:
-            return False
-
     def _create_lambda_layer_project(self):
         """Create CodeBuild project for Lambda layer."""
         project_name = "eidolon-lambda-layer"
 
-        # Check if project exists
-        if self._project_exists(project_name):
+        # Check if project exists (CDK will update if it exists)
+        if utils.check_codebuild_project_exists(project_name, self.region_name):
             print(f"CodeBuild project {project_name} already exists, will be updated")
         else:
             print(f"  Creating new CodeBuild project: {project_name}")
@@ -205,8 +160,8 @@ class CodeBuildStack(Stack):
         """Create CodeBuild project for Lambda functions."""
         project_name = "eidolon-lambda-functions"
 
-        # Check if project exists
-        if self._project_exists(project_name):
+        # Check if project exists (CDK will update if it exists)
+        if utils.check_codebuild_project_exists(project_name, self.region_name):
             print(f"CodeBuild project {project_name} already exists, will be updated")
         else:
             print(f"  Creating new CodeBuild project: {project_name}")

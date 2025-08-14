@@ -1,7 +1,5 @@
 """Lambda stack for all Lambda functions and layer."""
 
-import boto3
-from botocore.exceptions import ClientError
 from aws_cdk import Stack, CfnOutput, Duration
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_iam as iam
@@ -225,40 +223,3 @@ class LambdaStack(Stack):
             output_id = function_name.replace("-", "").title() + "Arn"
             CfnOutput(self, output_id, value=function.function_arn, description=f"{function_name} Lambda function ARN")
 
-    def _function_exists(self, function_name: str) -> bool:
-        """Check if a Lambda function exists.
-
-        Args:
-            function_name: Name of the function to check
-
-        Returns:
-            True if function exists, False otherwise
-        """
-        try:
-            lambda_client = boto3.client("lambda", region_name=self.region_name)
-            lambda_client.get_function(FunctionName=function_name)
-            return True
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code == "ResourceNotFoundException":
-                return False
-        return False
-
-    def _layer_exists(self, layer_name: str) -> bool:
-        """Check if a Lambda layer exists.
-
-        Args:
-            layer_name: Name of the layer to check
-
-        Returns:
-            True if layer exists, False otherwise
-        """
-        try:
-            lambda_client = boto3.client("lambda", region_name=self.region_name)
-            response = lambda_client.list_layer_versions(LayerName=layer_name)
-            return len(response.get("LayerVersions", [])) > 0
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code == "ResourceNotFoundException":
-                return False
-        return False

@@ -4,8 +4,8 @@ from aws_cdk import Stack, RemovalPolicy, CfnOutput
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_iam as iam
 from constructs import Construct
-import boto3
-from botocore.exceptions import ClientError
+
+from . import stack_utilities as utils
 
 
 class CloudWatchStack(Stack):
@@ -40,7 +40,7 @@ class CloudWatchStack(Stack):
         log_group_name = "/eidolon/server"
 
         # Check if log group exists
-        if self._log_group_exists(log_group_name):
+        if utils.check_cloudwatch_log_group_exists(log_group_name, self.region_name):
             print(f"  Importing existing log group: {log_group_name}")
             return logs.LogGroup.from_log_group_name(self, "ServerLogGroup", log_group_name)
 
@@ -52,20 +52,6 @@ class CloudWatchStack(Stack):
             retention=logs.RetentionDays.ONE_YEAR,
             removal_policy=RemovalPolicy.RETAIN,
         )
-
-    def _log_group_exists(self, log_group_name: str) -> bool:
-        """Check if a log group exists in AWS."""
-        try:
-            cloudwatch = boto3.client("logs", region_name=self.region_name)
-            response = cloudwatch.describe_log_groups(logGroupNamePrefix=log_group_name, limit=1)
-
-            for group in response.get("logGroups", []):
-                if group.get("logGroupName") == log_group_name:
-                    return True
-            return False
-
-        except ClientError:
-            return False
 
     def _create_cloudwatch_policy(self) -> iam.ManagedPolicy:
         """Create managed policy for CloudWatch access."""

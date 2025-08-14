@@ -53,13 +53,13 @@ def get_deployment_order(mode: str) -> list:
 
     if mode == "mud":
         # MUD: No Story stack
-        return base_order + ["s3", "cloudwatch", "client"]
+        return base_order + ["s3", "cloudwatch", "api", "client"]
     elif mode == "incremental":
         # Incremental: Story but no S3/CloudWatch
-        return base_order + ["story", "client"]
+        return base_order + ["story", "api", "client"]
     else:  # hybrid
         # Hybrid: All stacks
-        return base_order + ["story", "s3", "cloudwatch", "client"]
+        return base_order + ["story", "s3", "cloudwatch", "api", "client"]
 
 
 def get_stack_phase_number(stack_name: str, mode: str) -> int:
@@ -96,7 +96,8 @@ def get_stack_description(stack_name: str) -> str:
         "story": "SSM, 2 SQS queues, EventBridge, 1 policy",
         "s3": "1 bucket, 1 IAM policy, Lua scripts upload",
         "cloudwatch": "1 log group, metrics, 1 IAM policy",
-        "client": "Portal, CloudFront, API Gateway",
+        "api": "API Gateway, custom domain, ACM certificate, Route53 record",
+        "client": "1 S3 bucket, CloudFront, CodeBuild project, ACM certificate, Route53 record",
     }
     return descriptions.get(stack_name, "Unknown stack")
 

@@ -1,12 +1,12 @@
 """Player stack for Cognito User Pool."""
 
-import boto3
-from botocore.exceptions import ClientError
 from aws_cdk import Stack, RemovalPolicy, CfnOutput, Duration
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_iam as iam
 from constructs import Construct
+
+from . import stack_utilities as utils
 
 
 class PlayerStack(Stack):
@@ -55,7 +55,7 @@ class PlayerStack(Stack):
         user_pool_name = "eidolon-users"
 
         # Check if user pool already exists
-        exists, pool_id = self._user_pool_exists(user_pool_name)
+        exists, pool_id = utils.check_cognito_user_pool_exists(user_pool_name, self.region_name)
         if exists:
             print(f"  Importing existing user pool: {user_pool_name} ({pool_id})")
             # Mark that this is an imported pool
@@ -123,23 +123,3 @@ class PlayerStack(Stack):
 
         CfnOutput(self, "UserPoolArn", value=self.user_pool.user_pool_arn, description="Cognito User Pool ARN")
 
-    def _user_pool_exists(self, user_pool_name: str) -> tuple[bool, str]:
-        """Check if Cognito User Pool exists.
-
-        Args:
-            user_pool_name: Name of the user pool to check
-
-        Returns:
-            Tuple of (exists, user_pool_id)
-        """
-        try:
-            cognito_client = boto3.client("cognito-idp", region_name=self.region_name)
-            response = cognito_client.list_user_pools(MaxResults=60)
-
-            for pool in response.get("UserPools", []):
-                if pool.get("Name") == user_pool_name:
-                    return True, pool.get("Id", "")
-            return False, ""
-
-        except ClientError:
-            return False, ""
