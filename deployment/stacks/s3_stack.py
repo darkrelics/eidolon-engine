@@ -9,7 +9,15 @@ from constructs import Construct
 class S3Stack(Stack):
     """S3 stack for Eidolon Engine scripts storage."""
 
-    def __init__(self, scope: Construct, stack_id: str, region_name: str = "us-east-1", scripts_bucket: str = "", bucket_exists: bool = False, **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        stack_id: str,
+        region_name: str = "us-east-1",
+        scripts_bucket: str = "",
+        bucket_exists: bool = False,
+        **kwargs,
+    ) -> None:
         """Initialize S3 stack.
 
         Args:
@@ -27,11 +35,7 @@ class S3Stack(Stack):
         # Import existing bucket or create new one with fixed logical ID
         if bucket_exists:
             print(f"  Using existing S3 bucket: {self.scripts_bucket_name}")
-            bucket = s3.Bucket.from_bucket_name(
-                self,
-                "ScriptsBucket",  # Fixed logical ID
-                self.scripts_bucket_name
-            )
+            bucket = s3.Bucket.from_bucket_name(self, "ScriptsBucket", self.scripts_bucket_name)  # Fixed logical ID
         else:
             bucket = s3.Bucket(
                 self,
@@ -62,7 +66,6 @@ class S3Stack(Stack):
 
         # Add outputs
         self._add_outputs()
-
 
     def _add_outputs(self) -> None:
         """Add stack outputs."""

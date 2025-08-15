@@ -164,7 +164,7 @@ class LambdaStack(Stack):
 
     def _get_function_logical_id(self, function_name: str) -> str:
         """Get fixed logical ID for a Lambda function.
-        
+
         This ensures consistent logical IDs across deployments.
         """
         # Define fixed mappings for all Lambda functions
@@ -248,4 +248,3 @@ class LambdaStack(Stack):
         for function_name, function in self.functions.items():
             output_id = self._get_function_logical_id(function_name) + "Arn"
             CfnOutput(self, output_id, value=function.function_arn, description=f"{function_name} Lambda function ARN")
-

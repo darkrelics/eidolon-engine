@@ -117,7 +117,7 @@ class DynamoDBStack(Stack):
             )
 
         # Create the table with fixed logical ID
-        logical_id = self._get_table_logical_id(config.get('name', ''))
+        logical_id = self._get_table_logical_id(config.get("name", ""))
         table = dynamodb.Table(self, logical_id, **table_props)
 
         # Set UpdateReplacePolicy to Retain to prevent data loss during updates
@@ -141,10 +141,9 @@ class DynamoDBStack(Stack):
             if existing_table_name:
                 self.existing_tables[table_name] = existing_table_name
 
-
     def _get_table_logical_id(self, table_name: str) -> str:
         """Get fixed logical ID for a table.
-        
+
         This ensures consistent logical IDs across deployments.
         """
         # Define fixed mappings for all tables
@@ -164,7 +163,7 @@ class DynamoDBStack(Stack):
             "segment_history": "SegmentHistoryTable",
             "opponents": "OpponentsTable",
         }
-        return logical_id_map.get(table_name, table_name.replace('_', '').title() + "Table")
+        return logical_id_map.get(table_name, table_name.replace("_", "").title() + "Table")
 
     def _add_outputs(self) -> None:
         """Add stack outputs."""

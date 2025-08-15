@@ -14,13 +14,17 @@ def deploy_s3_stack(params) -> dict:
     """Deploy the S3 stack using CDK."""
     # Check if S3 bucket already exists
     from stacks.stack_utilities import check_s3_bucket_exists
+
     bucket_exists = check_s3_bucket_exists(params.scripts_bucket, params.region)
-    
+
     # Pass parameters through context
     context_args = [
-        "-c", f"region={params.region}", 
-        "-c", f"scripts_bucket={params.scripts_bucket}",
-        "-c", f"bucket_exists={'true' if bucket_exists else 'false'}",
+        "-c",
+        f"region={params.region}",
+        "-c",
+        f"scripts_bucket={params.scripts_bucket}",
+        "-c",
+        f"bucket_exists={'true' if bucket_exists else 'false'}",
     ]
 
     app_command = "python3 app_s3.py"

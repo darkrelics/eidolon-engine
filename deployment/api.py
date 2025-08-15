@@ -81,25 +81,30 @@ def get_lambda_function_arns(region: str) -> dict:
 def deploy_api_stack(params, state: CDKState) -> dict:
     """Deploy the API stack using CDK."""
     print("\nPreparing API Gateway deployment...")
-    
+
     # Get Lambda function ARNs
     print("  Discovering Lambda functions for API integration...")
     lambda_arns = get_lambda_function_arns(params.region)
     if not lambda_arns:
         print("  [ERROR] No Lambda functions found")
         return {"success": False, "outputs": {}}
-    
+
     print(f"  Found {len(lambda_arns)} Lambda functions to integrate:")
     for func in lambda_arns:
         print(f"    - {func}")
 
     # Build context arguments
     context_args = [
-        "-c", f"region={params.region}",
-        "-c", f"hosted_zone_id={params.hosted_zone_id}",
-        "-c", f"domain={params.domain}",
-        "-c", f"api_host={params.api_host}",
-        "-c", f"deployment_mode={params.deployment_mode}",
+        "-c",
+        f"region={params.region}",
+        "-c",
+        f"hosted_zone_id={params.hosted_zone_id}",
+        "-c",
+        f"domain={params.domain}",
+        "-c",
+        f"api_host={params.api_host}",
+        "-c",
+        f"deployment_mode={params.deployment_mode}",
     ]
 
     # Add Lambda ARNs as JSON

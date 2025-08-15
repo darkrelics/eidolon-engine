@@ -45,11 +45,7 @@ class CodeBuildStack(Stack):
         # Import existing bucket or create new one with fixed logical ID
         if bucket_exists:
             print(f"  Using existing S3 bucket: {self.s3_bucket_name}")
-            bucket = s3.Bucket.from_bucket_name(
-                self,
-                "ArtifactsBucket",  # Fixed logical ID
-                self.s3_bucket_name
-            )
+            bucket = s3.Bucket.from_bucket_name(self, "ArtifactsBucket", self.s3_bucket_name)  # Fixed logical ID
         else:
             bucket = s3.Bucket(
                 self,
@@ -72,7 +68,6 @@ class CodeBuildStack(Stack):
 
         # Add outputs
         self._add_outputs()
-
 
     def _create_codebuild_role(self) -> iam.Role:
         """Create shared IAM role for CodeBuild projects."""

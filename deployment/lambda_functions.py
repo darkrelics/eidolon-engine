@@ -177,51 +177,47 @@ def verify_lambda_deployment(params) -> dict:
 
 def update_lambda_layer_from_s3(layer_name: str, s3_bucket: str, region: str) -> tuple[bool, str]:
     """Update Lambda layer with latest code from S3 and clean up old versions.
-    
+
     Args:
         layer_name: Name of the Lambda layer
         s3_bucket: S3 bucket containing the layer code
         region: AWS region
-        
+
     Returns:
         Tuple of (success status, layer version ARN)
     """
     try:
         lambda_client = boto3.client("lambda", region_name=region)
-        
+
         print(f"\n  Updating Lambda layer '{layer_name}' from S3...")
-        
+
         # Publish a new layer version with the latest code from S3
         response = lambda_client.publish_layer_version(
             LayerName=layer_name,
             Description=f"Updated from {s3_bucket}/lambda-layer/lambda-layer.zip",
-            Content={
-                'S3Bucket': s3_bucket,
-                'S3Key': 'lambda-layer/lambda-layer.zip'
-            },
-            CompatibleRuntimes=['python3.12'],
-            CompatibleArchitectures=['x86_64']  # Specify architecture for consistency
+            Content={"S3Bucket": s3_bucket, "S3Key": "lambda-layer/lambda-layer.zip"},
+            CompatibleRuntimes=["python3.12"],
+            CompatibleArchitectures=["x86_64"],  # Specify architecture for consistency
         )
-        
-        new_version = response.get('Version', 0)
-        layer_arn = response.get('LayerVersionArn', '')
+
+        new_version = response.get("Version", 0)
+        layer_arn = response.get("LayerVersionArn", "")
         print(f"    [OK] Layer updated to version {new_version}")
-        
+
         # Delete the previous version to avoid accumulation (keep only latest)
         old_version = new_version - 1
         if old_version > 0:
             try:
-                lambda_client.delete_layer_version(
-                    LayerName=layer_name,
-                    VersionNumber=old_version
-                )
+                lambda_client.delete_layer_version(LayerName=layer_name, VersionNumber=old_version)
                 print(f"    [CLEANUP] Deleted old layer version {old_version}")
             except ClientError as cleanup_err:
                 # Don't fail if we can't delete old version
-                print(f"    [WARNING] Could not delete old layer version {old_version}: {cleanup_err.response.get('Error', {}).get('Code', '')}")
-        
+                print(
+                    f"    [WARNING] Could not delete old layer version {old_version}: {cleanup_err.response.get('Error', {}).get('Code', '')}"
+                )
+
         return True, layer_arn
-        
+
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "")
         print(f"    [ERROR] Failed to update layer: {error_code}")
@@ -230,32 +226,28 @@ def update_lambda_layer_from_s3(layer_name: str, s3_bucket: str, region: str) ->
 
 def update_lambda_function_from_s3(function_name: str, s3_bucket: str, region: str) -> bool:
     """Update Lambda function with latest code from S3.
-    
+
     Args:
         function_name: Name of the Lambda function
         s3_bucket: S3 bucket containing the function code
         region: AWS region
-        
+
     Returns:
         True if update successful, False otherwise
     """
     try:
         lambda_client = boto3.client("lambda", region_name=region)
-        
+
         # Update function code from S3
-        lambda_client.update_function_code(
-            FunctionName=function_name,
-            S3Bucket=s3_bucket,
-            S3Key=f"{function_name}.zip"
-        )
-        
+        lambda_client.update_function_code(FunctionName=function_name, S3Bucket=s3_bucket, S3Key=f"{function_name}.zip")
+
         # Wait for update to complete
-        waiter = lambda_client.get_waiter('function_updated')
+        waiter = lambda_client.get_waiter("function_updated")
         waiter.wait(FunctionName=function_name)
-        
+
         print(f"    [OK] {function_name} updated from S3")
         return True
-        
+
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "")
         if error_code == "ResourceNotFoundException":
@@ -267,24 +259,21 @@ def update_lambda_function_from_s3(function_name: str, s3_bucket: str, region: s
 
 def get_latest_layer_version_arn(layer_name: str, region: str) -> str:
     """Get the ARN of the latest version of a Lambda layer.
-    
+
     Args:
         layer_name: Name of the Lambda layer
         region: AWS region
-        
+
     Returns:
         ARN of the latest layer version, or empty string if not found
     """
     try:
         lambda_client = boto3.client("lambda", region_name=region)
-        response = lambda_client.list_layer_versions(
-            LayerName=layer_name,
-            MaxItems=1
-        )
-        
-        versions = response.get('LayerVersions', [])
+        response = lambda_client.list_layer_versions(LayerName=layer_name, MaxItems=1)
+
+        versions = response.get("LayerVersions", [])
         if versions:
-            return versions[0]['LayerVersionArn']
+            return versions[0]["LayerVersionArn"]
         return ""
     except ClientError:
         return ""
@@ -292,31 +281,28 @@ def get_latest_layer_version_arn(layer_name: str, region: str) -> str:
 
 def update_function_layer(function_name: str, layer_arn: str, region: str) -> bool:
     """Update a Lambda function to use the specified layer version.
-    
+
     Args:
         function_name: Name of the Lambda function
         layer_arn: ARN of the layer version to use
         region: AWS region
-        
+
     Returns:
         True if update successful, False otherwise
     """
     try:
         lambda_client = boto3.client("lambda", region_name=region)
-        
+
         # Get current function configuration
         lambda_client.get_function_configuration(FunctionName=function_name)
-        
+
         # Update function configuration with new layer
-        lambda_client.update_function_configuration(
-            FunctionName=function_name,
-            Layers=[layer_arn] if layer_arn else []
-        )
-        
+        lambda_client.update_function_configuration(FunctionName=function_name, Layers=[layer_arn] if layer_arn else [])
+
         # Wait for update to complete
-        waiter = lambda_client.get_waiter('function_updated')
+        waiter = lambda_client.get_waiter("function_updated")
         waiter.wait(FunctionName=function_name)
-        
+
         return True
     except ClientError:
         return False
@@ -324,71 +310,68 @@ def update_function_layer(function_name: str, layer_arn: str, region: str) -> bo
 
 def update_all_functions_with_layer(layer_name: str, new_layer_arn: str, region: str) -> dict:
     """Update all Lambda functions that use a specific layer to use the new version.
-    
+
     Args:
         layer_name: Name of the layer (used for matching)
         new_layer_arn: ARN of the new layer version
         region: AWS region
-        
+
     Returns:
         Dictionary with update results for each function
     """
     results = {}
-    
+
     try:
         lambda_client = boto3.client("lambda", region_name=region)
-        
+
         # Get all functions (with pagination support)
-        paginator = lambda_client.get_paginator('list_functions')
-        
+        paginator = lambda_client.get_paginator("list_functions")
+
         for page in paginator.paginate():
-            for function in page.get('Functions', []):
-                function_name = function.get('FunctionName', '')
-                current_layers = function.get('Layers', [])
-                
+            for function in page.get("Functions", []):
+                function_name = function.get("FunctionName", "")
+                current_layers = function.get("Layers", [])
+
                 # Check if this function uses our layer
                 uses_our_layer = False
                 updated_layers = []
-                
+
                 for layer in current_layers:
-                    layer_arn = layer.get('Arn', '')
+                    layer_arn = layer.get("Arn", "")
                     # Check if this is our layer by name (ARN format: arn:aws:lambda:region:account:layer:name:version)
                     if f":layer:{layer_name}:" in layer_arn:
                         uses_our_layer = True
                         updated_layers.append(new_layer_arn)
                     else:
                         updated_layers.append(layer_arn)
-                
+
                 # Update function if it uses our layer
                 if uses_our_layer:
                     try:
-                        lambda_client.update_function_configuration(
-                            FunctionName=function_name,
-                            Layers=updated_layers
-                        )
+                        lambda_client.update_function_configuration(FunctionName=function_name, Layers=updated_layers)
                         print(f"    [OK] Updated {function_name} to use new layer version")
                         results[function_name] = True
                     except ClientError as err:
                         print(f"    [ERROR] Failed to update {function_name}: {err.response.get('Error', {}).get('Code', '')}")
                         results[function_name] = False
-                        
+
     except ClientError as err:
         print(f"    [ERROR] Failed to list functions: {err.response.get('Error', {}).get('Code', '')}")
-        
+
     return results
 
 
 def update_all_lambda_functions_from_s3(params) -> dict:
     """Update all Lambda functions and layer with latest code from S3.
-    
+
     Args:
         params: Deployment parameters with S3 bucket and region
-        
+
     Returns:
         Dictionary with update results
     """
     print("\n  Updating Lambda functions with latest code from S3...")
-    
+
     # List of all Lambda functions we manage
     expected_functions = [
         "api-archetype-list",
@@ -408,38 +391,38 @@ def update_all_lambda_functions_from_s3(params) -> dict:
         "ops-segment-process",
         "ops-story-advance",
     ]
-    
+
     # Update layer first and get the new ARN
     layer_updated, new_layer_arn = update_lambda_layer_from_s3("eidolon-dependencies", params.s3_bucket, params.region)
-    
+
     # Update all functions that use this layer to the new version
     layer_update_results = {}
     if layer_updated and new_layer_arn:
         print(f"  New layer ARN: {new_layer_arn}")
         layer_update_results = update_all_functions_with_layer("eidolon-dependencies", new_layer_arn, params.region)
-    
+
     # Update function code for our managed functions
     function_results = {}
     for function_name in expected_functions:
         # Update function code from S3
         result = update_lambda_function_from_s3(function_name, params.s3_bucket, params.region)
         function_results[function_name] = result
-    
+
     successful_updates = sum(1 for v in function_results.values() if v)
     total_functions = len(expected_functions)
-    
+
     print(f"\n  Lambda functions code updated: {successful_updates}/{total_functions}")
-    
+
     if layer_update_results:
         layer_updates = sum(1 for v in layer_update_results.values() if v)
         print(f"  Functions updated with new layer: {layer_updates}/{len(layer_update_results)}")
-    
+
     return {
         "layer_updated": layer_updated,
         "layer_arn": new_layer_arn,
         "functions_updated": function_results,
         "layer_updates": layer_update_results,
-        "success": True  # We don't fail deployment if updates fail
+        "success": True,  # We don't fail deployment if updates fail
     }
 
 

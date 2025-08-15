@@ -9,8 +9,9 @@ from constructs import Construct
 class CloudWatchStack(Stack):
     """CloudWatch stack for Eidolon Engine logging and metrics."""
 
-    def __init__(self, scope: Construct, stack_id: str, region_name: str = "us-east-1", 
-                 existing_log_group: str = "", **kwargs) -> None:
+    def __init__(
+        self, scope: Construct, stack_id: str, region_name: str = "us-east-1", existing_log_group: str = "", **kwargs
+    ) -> None:
         """Initialize CloudWatch stack.
 
         Args:

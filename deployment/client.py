@@ -60,8 +60,6 @@ def check_cloudfront_exists(distribution_id: str) -> bool:
             return False
 
 
-
-
 def validate_codebuild_project(project_name: str, region: str) -> bool:
     """Validate that CodeBuild project exists.
 
@@ -88,8 +86,6 @@ def validate_codebuild_project(project_name: str, region: str) -> bool:
         return False
 
 
-
-
 def deploy_client_stack(params, state: CDKState) -> dict:
     """Deploy the Client stack using CDK."""
     # Get API URL from API stack outputs
@@ -105,17 +101,28 @@ def deploy_client_stack(params, state: CDKState) -> dict:
 
     # Build context arguments
     context_args = [
-        "-c", f"region={params.region}",
-        "-c", f"hosted_zone_id={params.hosted_zone_id}",
-        "-c", f"domain={params.domain}",
-        "-c", f"api_host={params.api_host}",
-        "-c", f"client_host={params.client_host}",
-        "-c", f"client_bucket={params.client_bucket}",
-        "-c", f"deployment_mode={params.deployment_mode}",
-        "-c", f"github_owner={params.github_owner}",
-        "-c", f"github_repo={params.github_repo}",
-        "-c", f"github_branch={params.github_branch}",
-        "-c", f"bucket_exists={'true' if bucket_exists else 'false'}",
+        "-c",
+        f"region={params.region}",
+        "-c",
+        f"hosted_zone_id={params.hosted_zone_id}",
+        "-c",
+        f"domain={params.domain}",
+        "-c",
+        f"api_host={params.api_host}",
+        "-c",
+        f"client_host={params.client_host}",
+        "-c",
+        f"client_bucket={params.client_bucket}",
+        "-c",
+        f"deployment_mode={params.deployment_mode}",
+        "-c",
+        f"github_owner={params.github_owner}",
+        "-c",
+        f"github_repo={params.github_repo}",
+        "-c",
+        f"github_branch={params.github_branch}",
+        "-c",
+        f"bucket_exists={'true' if bucket_exists else 'false'}",
     ]
 
     # Add API URL
@@ -133,50 +140,50 @@ def deploy_client_stack(params, state: CDKState) -> dict:
 
 def execute_codebuild_project(project_name: str, region: str) -> bool:
     """Execute CodeBuild project to deploy the portal.
-    
+
     Args:
         project_name: Name of the CodeBuild project
         region: AWS region
-        
+
     Returns:
         True if build started successfully
     """
     try:
         codebuild = boto3.client("codebuild", region_name=region)
-        
+
         print(f"\nStarting CodeBuild project: {project_name}")
         response = codebuild.start_build(projectName=project_name)
-        
+
         build_id = response["build"]["id"]
         build_number = build_id.split(":")[-1]
-        
+
         print(f"  [OK] Build started: #{build_number}")
         print(f"  Build ID: {build_id}")
         print("  You can monitor the build in the AWS Console or wait for completion...")
-        
+
         # Wait for build to complete using polling
         print("\nWaiting for build to complete (this may take a few minutes)...")
-        
+
         start_time = time.time()
         timeout_seconds = 600  # 10 minutes timeout
         last_phase = ""
-        
+
         while True:
             try:
                 response = codebuild.batch_get_builds(ids=[build_id])
                 if not response["builds"]:
                     print(f"  [ERROR] Build not found: {build_id}")
                     return False
-                
+
                 build = response["builds"][0]
                 status = build.get("buildStatus", "UNKNOWN")
                 phase = build.get("currentPhase", "UNKNOWN")
-                
+
                 # Print phase changes
                 if phase != last_phase and phase != "UNKNOWN":
                     print(f"    Phase: {phase}")
                     last_phase = phase
-                
+
                 # Check terminal states
                 if status == "SUCCEEDED":
                     print("  [OK] Build completed successfully!")
@@ -188,20 +195,20 @@ def execute_codebuild_project(project_name: str, region: str) -> bool:
                     if logs.get("deepLink"):
                         print(f"  Check logs at: {logs.get('deepLink')}")
                     return False
-                
+
                 # Check timeout
                 if time.time() - start_time > timeout_seconds:
                     print(f"  [WARNING] Build timed out after {timeout_seconds/60:.0f} minutes")
                     print(f"  Build is still running in background: {build_id}")
                     return True  # Build started successfully even if we timed out waiting
-                
+
                 # Wait before next check
                 time.sleep(10)
-                
+
             except ClientError as err:
                 print(f"  [ERROR] Failed to get build status: {err}")
                 return False
-            
+
     except ClientError as err:
         print(f"  [ERROR] Failed to start CodeBuild project: {err}")
         return False
@@ -209,24 +216,24 @@ def execute_codebuild_project(project_name: str, region: str) -> bool:
 
 def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, region: str) -> bool:
     """Update S3 bucket policy to allow CloudFront access.
-    
+
     Args:
         bucket_name: Name of the S3 bucket
         distribution_id: CloudFront distribution ID
         region: AWS region
-        
+
     Returns:
         True if policy was updated successfully
     """
     try:
         s3_client = boto3.client("s3", region_name=region)
         cloudfront_client = boto3.client("cloudfront", region_name="us-east-1")  # CloudFront is global
-        
+
         # Get the distribution to find the OAI
         try:
             dist_response = cloudfront_client.get_distribution(Id=distribution_id)
             origins = dist_response.get("Distribution", {}).get("DistributionConfig", {}).get("Origins", {}).get("Items", [])
-            
+
             # Find the S3 origin and its OAI
             oai_id = None
             for origin in origins:
@@ -237,16 +244,16 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, 
                         # Extract OAI ID from the full path
                         oai_id = oai.split("/")[-1] if "/" in oai else oai
                         break
-            
+
             if not oai_id:
                 print(f"  [WARNING] No OAI found for distribution {distribution_id}")
                 print("  CloudFront may be using OAC or public access")
                 return False
-                
+
         except ClientError as err:
             print(f"  [ERROR] Failed to get distribution details: {err}")
             return False
-        
+
         # Create bucket policy that allows CloudFront OAI to read objects
         bucket_policy = {
             "Version": "2012-10-17",
@@ -254,34 +261,27 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, 
                 {
                     "Sid": "AllowCloudFrontOAIAccess",
                     "Effect": "Allow",
-                    "Principal": {
-                        "AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"
-                    },
+                    "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
                     "Action": "s3:GetObject",
-                    "Resource": f"arn:aws:s3:::{bucket_name}/*"
+                    "Resource": f"arn:aws:s3:::{bucket_name}/*",
                 },
                 {
                     "Sid": "AllowCloudFrontOAIListBucket",
                     "Effect": "Allow",
-                    "Principal": {
-                        "AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"
-                    },
+                    "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
                     "Action": "s3:ListBucket",
-                    "Resource": f"arn:aws:s3:::{bucket_name}"
-                }
-            ]
+                    "Resource": f"arn:aws:s3:::{bucket_name}",
+                },
+            ],
         }
-        
+
         # Apply the bucket policy
-        s3_client.put_bucket_policy(
-            Bucket=bucket_name,
-            Policy=json.dumps(bucket_policy)
-        )
-        
+        s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(bucket_policy))
+
         print("  [OK] Updated bucket policy for CloudFront OAI access")
         print(f"  OAI ID: {oai_id}")
         return True
-        
+
     except ClientError as err:
         print(f"  [ERROR] Failed to update bucket policy: {err}")
         return False
@@ -296,7 +296,7 @@ def verify_client_deployment(params, outputs: dict) -> dict:
     if not portal_bucket_name:
         # Use the bucket name that was actually provided during deployment
         portal_bucket_name = params.client_bucket
-    
+
     # Validate portal bucket
     portal_bucket_valid = False
     if portal_bucket_name:
@@ -337,14 +337,14 @@ def deploy_client(params, config, state: CDKState, config_path, state_path: Path
     outputs = result.get("outputs", {})
     bucket_name = outputs.get("PortalBucketName", "") or params.client_bucket
     distribution_id = outputs.get("CloudFrontDistributionId", "")
-    
+
     if bucket_name and distribution_id:
         print("\nUpdating bucket policy for CloudFront access...")
         update_bucket_policy_for_cloudfront(bucket_name, distribution_id, params.region)
-    
+
     # Verify deployment
     validation = verify_client_deployment(params, outputs)
-    
+
     # Execute CodeBuild to deploy the portal/incremental app
     if validation.get("codebuild_project", False):
         print("\n" + "=" * 60)
@@ -377,10 +377,10 @@ def deploy_client(params, config, state: CDKState, config_path, state_path: Path
 
 def start_portal_build(region: str) -> str:
     """Start the portal CodeBuild project build.
-    
+
     Args:
         region: AWS region
-        
+
     Returns:
         Build ID if successful, empty string if failed
     """
@@ -402,12 +402,12 @@ def start_portal_build(region: str) -> str:
 
 def monitor_portal_build(build_id: str, region: str, timeout_minutes: int = 30) -> bool:
     """Monitor the portal build until completion.
-    
+
     Args:
         build_id: Build ID to monitor
         region: AWS region
         timeout_minutes: Maximum time to wait
-        
+
     Returns:
         True if build succeeded, False otherwise
     """
@@ -415,25 +415,25 @@ def monitor_portal_build(build_id: str, region: str, timeout_minutes: int = 30) 
     start_time = time.time()
     timeout_seconds = timeout_minutes * 60
     last_phase = ""
-    
+
     print(f"  Monitoring build (timeout: {timeout_minutes} minutes)")
-    
+
     while True:
         try:
             response = codebuild.batch_get_builds(ids=[build_id])
             if not response["builds"]:
                 print(f"  [ERROR] Build not found: {build_id}")
                 return False
-                
+
             build = response["builds"][0]
             status = build.get("buildStatus", "UNKNOWN")
             phase = build.get("currentPhase", "UNKNOWN")
-            
+
             # Print phase changes
             if phase != last_phase:
                 print(f"    Phase: {phase}")
                 last_phase = phase
-                
+
             # Check terminal states
             if status == "SUCCEEDED":
                 print("  Build completed successfully")
@@ -442,15 +442,15 @@ def monitor_portal_build(build_id: str, region: str, timeout_minutes: int = 30) 
                 print(f"  Build failed with status: {status}")
                 print_portal_build_logs(build_id, region)
                 return False
-                
+
             # Check timeout
             if time.time() - start_time > timeout_seconds:
                 print(f"  Build timed out after {timeout_minutes} minutes")
                 return False
-                
+
             # Wait before next check
             time.sleep(10)
-            
+
         except ClientError as err:
             print(f"  [ERROR] Failed to get build status: {err}")
             return False
@@ -458,7 +458,7 @@ def monitor_portal_build(build_id: str, region: str, timeout_minutes: int = 30) 
 
 def print_portal_build_logs(build_id: str, region: str, tail_lines: int = 50) -> None:
     """Print the last N lines of portal build logs.
-    
+
     Args:
         build_id: Build ID to get logs for
         region: AWS region
@@ -467,53 +467,48 @@ def print_portal_build_logs(build_id: str, region: str, tail_lines: int = 50) ->
     try:
         codebuild = boto3.client("codebuild", region_name=region)
         response = codebuild.batch_get_builds(ids=[build_id])
-        
+
         if not response["builds"]:
             return
-            
+
         build = response["builds"][0]
         log_info = build.get("logs", {})
-        
+
         if not log_info.get("streamName"):
             print("  No log stream available")
             return
-            
+
         # Get logs from CloudWatch
         logs = boto3.client("logs", region_name=region)
         group_name = log_info.get("groupName", "/aws/codebuild/eidolon-portal-build")
         stream_name = log_info["streamName"]
-        
+
         print(f"\n  Last {tail_lines} lines of build logs:")
         print("  " + "-" * 56)
-        
-        response = logs.get_log_events(
-            logGroupName=group_name,
-            logStreamName=stream_name,
-            limit=tail_lines,
-            startFromHead=False
-        )
-        
+
+        response = logs.get_log_events(logGroupName=group_name, logStreamName=stream_name, limit=tail_lines, startFromHead=False)
+
         events = response.get("events", [])
         for event in events[-tail_lines:]:
             print(f"  {event['message'].rstrip()}")
-            
+
         print("  " + "-" * 56)
-        
+
     except ClientError:
         print("  Could not retrieve build logs")
 
 
 def execute_portal_build(params) -> bool:
     """Execute the portal build and deployment.
-    
+
     Args:
         params: Deployment parameters with region and mode
-        
+
     Returns:
         True if build succeeded, False otherwise
     """
     print(f"\nExecuting portal build for {params.deployment_mode} mode")
-    
+
     # The buildspec was configured during stack creation based on deployment mode
     # MUD mode: buildspec/portal.yml - Traditional MUD interface
     # Incremental/Hybrid: buildspec/incremental.yml - Story-driven interface
@@ -523,18 +518,18 @@ def execute_portal_build(params) -> bool:
     else:
         print("  Buildspec: /buildspec/incremental.yml (Story-driven interface)")
         print("  Features: Narrative progression, dynamic segments, story mode")
-    
+
     # Start the build
     build_id = start_portal_build(params.region)
     if not build_id:
         return False
-        
+
     # Monitor until completion
     if not monitor_portal_build(build_id, params.region):
         print("\nPortal build failed")
         print("Check the build logs in AWS CodeBuild console for details")
         return False
-        
+
     print("\nPortal build completed successfully!")
     print("  [OK] Frontend application built and uploaded to S3")
     print("  [OK] CloudFront distribution updated")
@@ -542,5 +537,5 @@ def execute_portal_build(params) -> bool:
     print("\nDeployment Complete!")
     print(f"  Portal URL: https://{params.client_host}.{params.domain}")
     print("  Note: DNS propagation may take 5-10 minutes")
-    
+
     return True

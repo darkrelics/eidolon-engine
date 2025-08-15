@@ -91,15 +91,11 @@ class ClientStack(Stack):
         """Create S3 bucket for portal."""
         # Use provided bucket name or generate one
         bucket_name = self.client_bucket or f"{self.client_host}-{self.domain.replace('.', '-')}"
-        
+
         # Import existing bucket or create new one with fixed logical ID
         if self.bucket_exists:
             print(f"  Using existing S3 bucket: {bucket_name}")
-            return s3.Bucket.from_bucket_name(
-                self,
-                "PortalBucket",  # Fixed logical ID
-                bucket_name
-            )
+            return s3.Bucket.from_bucket_name(self, "PortalBucket", bucket_name)  # Fixed logical ID
         else:
             return s3.Bucket(
                 self,
@@ -117,10 +113,10 @@ class ClientStack(Stack):
         # Configure custom domain
         portal_domain = f"{self.client_host}.{self.domain}"
         hosted_zone = utils.get_hosted_zone_by_id(self, self.hosted_zone_id, self.domain)
-        
+
         if not hosted_zone:
             raise ValueError(f"Could not find hosted zone {self.hosted_zone_id} for domain {self.domain}")
-        
+
         # Create certificate with fixed logical ID
         certificate = acm.Certificate(
             self,
@@ -163,7 +159,7 @@ class ClientStack(Stack):
             "PortalDnsRecord",
             zone=hosted_zone,
             record_name=self.client_host,
-            target=route53.RecordTarget.from_alias(targets.CloudFrontTarget(distribution)), # type: ignore
+            target=route53.RecordTarget.from_alias(targets.CloudFrontTarget(distribution)),  # type: ignore
         )
 
         return distribution
@@ -174,7 +170,7 @@ class ClientStack(Stack):
 
         # Determine buildspec file based on deployment mode
         buildspec_file = "buildspec/portal.yml" if self.deployment_mode == "mud" else "buildspec/incremental.yml"
-        
+
         # Use the provided API URL
 
         # Create CodeBuild project
@@ -207,7 +203,7 @@ class ClientStack(Stack):
 
         # Grant permissions
         self.portal_bucket.grant_read_write(project)
-        
+
         project.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["cloudfront:CreateInvalidation"],
@@ -217,15 +213,18 @@ class ClientStack(Stack):
 
         return project
 
-
     def _add_outputs(self) -> None:
         """Add stack outputs."""
         CfnOutput(self, "PortalBucketName", value=self.portal_bucket.bucket_name, description="Portal S3 bucket name")
-        
-        CfnOutput(self, "CloudFrontDistributionId", value=self.distribution.distribution_id, description="CloudFront distribution ID")
-        
-        CfnOutput(self, "CloudFrontUrl", value=f"https://{self.distribution.distribution_domain_name}", description="CloudFront URL")
-        
+
+        CfnOutput(
+            self, "CloudFrontDistributionId", value=self.distribution.distribution_id, description="CloudFront distribution ID"
+        )
+
+        CfnOutput(
+            self, "CloudFrontUrl", value=f"https://{self.distribution.distribution_domain_name}", description="CloudFront URL"
+        )
+
         CfnOutput(self, "PortalUrl", value=f"https://{self.client_host}.{self.domain}", description="Portal custom domain URL")
-        
+
         CfnOutput(self, "CodeBuildProjectName", value=self.build_project.project_name, description="CodeBuild project name")

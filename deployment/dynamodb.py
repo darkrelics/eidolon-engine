@@ -16,9 +16,9 @@ def check_existing_tables(region: str) -> dict:
 
     from core.dynamodb_tables import TABLE_CONFIGS
     from stacks import stack_utilities as utils
-    
+
     existing_tables = {}
-    
+
     for config in TABLE_CONFIGS:
         table_name = config.get("name", "")
         if utils.check_dynamodb_table_exists(table_name, region):
@@ -36,19 +36,19 @@ def check_existing_tables(region: str) -> dict:
         else:
             # Mark as empty string to indicate it doesn't exist
             existing_tables[table_name] = ""
-    
+
     return existing_tables
 
 
 def deploy_dynamodb_stack(params) -> dict:
     """Deploy the DynamoDB stack using CDK."""
-    
+
     print("\nChecking for existing DynamoDB tables...")
     existing_tables = check_existing_tables(params.region)
-    
+
     # Pass parameters through context
     context_args = ["-c", f"region={params.region}"]
-    
+
     # Add existing tables to context
     for table_name, actual_name in existing_tables.items():
         context_key = f"dynamodb_{table_name}_table"

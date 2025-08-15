@@ -15,8 +15,9 @@ def deploy_codebuild_stack(params) -> dict:
     """Deploy the CodeBuild stack using CDK."""
     # Check if S3 bucket already exists
     from stacks.stack_utilities import check_s3_bucket_exists
+
     bucket_exists = check_s3_bucket_exists(params.s3_bucket, params.region)
-    
+
     # Pass parameters through context
     context_args = [
         "-c",

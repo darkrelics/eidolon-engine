@@ -24,7 +24,7 @@ class ApiStack(Stack):
         domain: str,
         api_host: str = "api",
         deployment_mode: str = "hybrid",
-        lambda_arns = None,
+        lambda_arns=None,
         cognito_user_pool_id: str = "",
         cognito_client_id: str = "",
         cognito_user_pool_arn: str = "",
@@ -95,7 +95,7 @@ class ApiStack(Stack):
             )
 
         # Add Lambda integrations for available functions
-        self._add_api_endpoints(api, authorizer) # type: ignore
+        self._add_api_endpoints(api, authorizer)  # type: ignore
 
         # Configure custom domain
         self._configure_api_domain(api)
@@ -107,98 +107,68 @@ class ApiStack(Stack):
         # Archetype endpoints
         if "api-archetype-get" in self.lambda_arns:
             archetype_resource = api.root.add_resource("archetype")
-            self._add_lambda_integration(
-                archetype_resource, "GET", "api-archetype-get", authorizer
-            )
+            self._add_lambda_integration(archetype_resource, "GET", "api-archetype-get", authorizer)
 
         # Character endpoints
         character_resource = api.root.add_resource("character")
-        
+
         if "api-character-add" in self.lambda_arns:
-            self._add_lambda_integration(
-                character_resource, "POST", "api-character-add", authorizer
-            )
-        
+            self._add_lambda_integration(character_resource, "POST", "api-character-add", authorizer)
+
         if "api-character-get" in self.lambda_arns:
-            self._add_lambda_integration(
-                character_resource, "GET", "api-character-get", authorizer
-            )
-        
+            self._add_lambda_integration(character_resource, "GET", "api-character-get", authorizer)
+
         if "api-character-delete" in self.lambda_arns:
-            self._add_lambda_integration(
-                character_resource, "DELETE", "api-character-delete", authorizer
-            )
-        
+            self._add_lambda_integration(character_resource, "DELETE", "api-character-delete", authorizer)
+
         if "api-character-list" in self.lambda_arns:
             list_resource = character_resource.add_resource("list")
-            self._add_lambda_integration(
-                list_resource, "GET", "api-character-list", authorizer
-            )
+            self._add_lambda_integration(list_resource, "GET", "api-character-list", authorizer)
 
         # Story endpoints (for incremental/hybrid modes)
         if self.deployment_mode in ["incremental", "hybrid"]:
             story_resource = api.root.add_resource("story")
-            
+
             if "api-story-start" in self.lambda_arns:
                 start_resource = story_resource.add_resource("start")
-                self._add_lambda_integration(
-                    start_resource, "POST", "api-story-start", authorizer
-                )
-            
+                self._add_lambda_integration(start_resource, "POST", "api-story-start", authorizer)
+
             if "api-story-abandon" in self.lambda_arns:
                 abandon_resource = story_resource.add_resource("abandon")
-                self._add_lambda_integration(
-                    abandon_resource, "POST", "api-story-abandon", authorizer
-                )
+                self._add_lambda_integration(abandon_resource, "POST", "api-story-abandon", authorizer)
 
             # Segment endpoints
             segment_resource = api.root.add_resource("segment")
-            
+
             if "api-segment-decision" in self.lambda_arns:
                 decision_resource = segment_resource.add_resource("decision")
-                self._add_lambda_integration(
-                    decision_resource, "POST", "api-segment-decision", authorizer
-                )
-            
+                self._add_lambda_integration(decision_resource, "POST", "api-segment-decision", authorizer)
+
             if "api-segment-outcome" in self.lambda_arns:
                 outcome_resource = segment_resource.add_resource("outcome")
-                self._add_lambda_integration(
-                    outcome_resource, "GET", "api-segment-outcome", authorizer
-                )
-            
+                self._add_lambda_integration(outcome_resource, "GET", "api-segment-outcome", authorizer)
+
             if "api-segment-status" in self.lambda_arns:
                 status_resource = segment_resource.add_resource("status")
-                self._add_lambda_integration(
-                    status_resource, "GET", "api-segment-status", authorizer
-                )
-            
+                self._add_lambda_integration(status_resource, "GET", "api-segment-status", authorizer)
+
             if "api-segment-history" in self.lambda_arns:
                 history_resource = segment_resource.add_resource("history")
-                self._add_lambda_integration(
-                    history_resource, "GET", "api-segment-history", authorizer
-                )
-            
+                self._add_lambda_integration(history_resource, "GET", "api-segment-history", authorizer)
+
             if "api-character-rest" in self.lambda_arns:
                 rest_resource = segment_resource.add_resource("rest")
-                self._add_lambda_integration(
-                    rest_resource, "POST", "api-character-rest", authorizer
-                )
+                self._add_lambda_integration(rest_resource, "POST", "api-character-rest", authorizer)
 
     def _add_lambda_integration(
-        self,
-        resource: apigateway.Resource,
-        method: str,
-        function_name: str,
-        authorizer: apigateway.CognitoUserPoolsAuthorizer
+        self, resource: apigateway.Resource, method: str, function_name: str, authorizer: apigateway.CognitoUserPoolsAuthorizer
     ) -> None:
         """Add Lambda integration to API resource."""
         if function_name in self.lambda_arns:
             # Use fixed logical ID for imported Lambda functions
             logical_id = self._get_lambda_import_logical_id(function_name)
-            lambda_function = lambda_.Function.from_function_arn(
-                self, logical_id, self.lambda_arns[function_name]
-            )
-            
+            lambda_function = lambda_.Function.from_function_arn(self, logical_id, self.lambda_arns[function_name])
+
             resource.add_method(
                 method,
                 apigateway.LambdaIntegration(lambda_function),
@@ -209,7 +179,7 @@ class ApiStack(Stack):
     def _configure_api_domain(self, api: apigateway.RestApi) -> None:
         """Configure custom domain for API Gateway."""
         api_domain = f"{self.api_host}.{self.domain}"
-        
+
         # Get hosted zone by ID
         hosted_zone = utils.get_hosted_zone_by_id(self, self.hosted_zone_id, self.domain)
         if not hosted_zone:
@@ -248,12 +218,12 @@ class ApiStack(Stack):
             "ApiDnsRecord",
             zone=hosted_zone,
             record_name=self.api_host,
-            target=route53.RecordTarget.from_alias(targets.ApiGatewayDomain(custom_domain)), # type: ignore
+            target=route53.RecordTarget.from_alias(targets.ApiGatewayDomain(custom_domain)),  # type: ignore
         )
 
     def _get_lambda_import_logical_id(self, function_name: str) -> str:
         """Get fixed logical ID for imported Lambda function.
-        
+
         This ensures consistent logical IDs across deployments.
         """
         # Define fixed mappings for all Lambda functions used by API

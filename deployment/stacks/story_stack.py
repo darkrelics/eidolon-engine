@@ -165,7 +165,7 @@ class StoryStack(Stack):
         function_logical_id = "ImportedProcessFunction" if trigger_id == "ProcessorTrigger" else "ImportedAdvanceFunction"
         role_logical_id = "ImportedProcessRole" if trigger_id == "ProcessorTrigger" else "ImportedAdvanceRole"
         mapping_logical_id = "ProcessMapping" if trigger_id == "ProcessorTrigger" else "AdvanceMapping"
-        
+
         lambda_function = lambda_.Function.from_function_attributes(
             self,
             function_logical_id,
