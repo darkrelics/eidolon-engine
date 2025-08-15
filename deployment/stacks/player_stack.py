@@ -7,7 +7,6 @@ from aws_cdk import aws_lambda as lambda_
 from constructs import Construct
 
 
-
 class PlayerStack(Stack):
     """Player stack for Eidolon Engine authentication."""
 

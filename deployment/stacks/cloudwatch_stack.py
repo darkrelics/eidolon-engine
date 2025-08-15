@@ -6,7 +6,6 @@ from aws_cdk import aws_logs as logs
 from constructs import Construct
 
 
-
 class CloudWatchStack(Stack):
     """CloudWatch stack for Eidolon Engine logging and metrics."""
 

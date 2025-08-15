@@ -7,7 +7,6 @@ from constructs import Construct
 from core.dynamodb_tables import TABLE_CONFIGS
 
 
-
 class DynamoDBStack(Stack):
     """DynamoDB stack for Eidolon Engine data storage."""
 
