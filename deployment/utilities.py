@@ -166,7 +166,7 @@ def validate_policies(policy_names: list[str]) -> dict:
     results = {}
     for policy_name in policy_names:
         try:
-            response = iam.get_policy(PolicyArn=f"arn:aws:iam::{account_id}:policy/{policy_name}")
+            iam.get_policy(PolicyArn=f"arn:aws:iam::{account_id}:policy/{policy_name}")
             print(f"  [OK] IAM Policy: {policy_name}")
             results[policy_name] = True
         except ClientError:

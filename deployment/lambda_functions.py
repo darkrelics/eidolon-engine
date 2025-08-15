@@ -243,7 +243,7 @@ def update_lambda_function_from_s3(function_name: str, s3_bucket: str, region: s
         lambda_client = boto3.client("lambda", region_name=region)
         
         # Update function code from S3
-        response = lambda_client.update_function_code(
+        lambda_client.update_function_code(
             FunctionName=function_name,
             S3Bucket=s3_bucket,
             S3Key=f"{function_name}.zip"
@@ -305,7 +305,7 @@ def update_function_layer(function_name: str, layer_arn: str, region: str) -> bo
         lambda_client = boto3.client("lambda", region_name=region)
         
         # Get current function configuration
-        response = lambda_client.get_function_configuration(FunctionName=function_name)
+        lambda_client.get_function_configuration(FunctionName=function_name)
         
         # Update function configuration with new layer
         lambda_client.update_function_configuration(
@@ -467,7 +467,7 @@ def deploy_lambda(params, config: Config, state: CDKState, config_path: Path, st
         return False
 
     # Update all Lambda functions and layer from S3 to ensure latest code
-    update_results = update_all_lambda_functions_from_s3(params)
+    update_all_lambda_functions_from_s3(params)
 
     # Verify deployment
     validation = verify_lambda_deployment(params)

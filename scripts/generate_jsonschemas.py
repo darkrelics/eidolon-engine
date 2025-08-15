@@ -15,7 +15,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-import eidolon.models as _eid_models  # type: ignore
+import eidolon.models as _eid_models  # type: ignore # noqa: E402
 
 
 def write_schema(model, out_dir: Path, name: str) -> None:
