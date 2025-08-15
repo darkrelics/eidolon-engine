@@ -22,6 +22,7 @@ The Lambda functions are deployed as part of the 9-stack CDK architecture:
 All 16 Lambda functions are fully implemented and operational in production:
 
 ### Character Management (5 functions)
+
 - `api-archetype-list` - List available archetypes
 - `api-character-add` - Create new character with bloom filter validation
 - `api-character-delete` - Delete character
@@ -29,6 +30,7 @@ All 16 Lambda functions are fully implemented and operational in production:
 - `api-character-list` - List player's characters
 
 ### Story Operations (7 functions)
+
 - `api-story-start` - Begin new story
 - `api-story-abandon` - Exit active story
 - `api-segment-decision` - Submit player choice
@@ -38,11 +40,13 @@ All 16 Lambda functions are fully implemented and operational in production:
 - `api-segment-history` - Retrieve past segments
 
 ### Processing Functions (3 functions)
+
 - `ops-segment-poller` - EventBridge-triggered polling
 - `ops-segment-process` - SQS mechanical processing
 - `ops-story-advance` - SQS story advancement
 
 ### Cognito Trigger (1 function)
+
 - `cognito-player-new` - PostConfirmation trigger
 
 The bloom filter for restricted character names is properly loaded and functional.
@@ -54,6 +58,7 @@ The bloom filter for restricted character names is properly loaded and functiona
 #### Lambda Stack Functions (All 16)
 
 All functions are deployed via the Lambda Stack with:
+
 - **Runtime**: Python 3.12
 - **Memory**: 128MB
 - **Timeout**: 30 seconds
@@ -149,12 +154,14 @@ All 14 tables with lowercase environment variable names:
 ### Function-Specific Variables
 
 **Story Processing Functions**:
+
 - `SEGMENT_QUEUE_URL` - SQS queue for mechanical segments
 - `STORY_ADVANCEMENT_QUEUE_URL` - SQS queue for advancement
 - `SSM_POLLER_STATE_PARAMETER` - SSM parameter for polling
 - `SEGMENT_BATCH_SIZE` - Processing batch size (default: 10)
 
 **Character Configuration**:
+
 - `MAX_CHARACTERS_PER_PLAYER` - Maximum characters per player (default: 1)
 
 ## API Design Standards
@@ -167,7 +174,6 @@ All Lambda functions must follow these parameter standards:
   - Example: `/characters?characterId=123`
   - Use `get_query_parameter()` from `eidolon.requests`
 - **Request Body**: Use for data submission (POST, PUT, PATCH)
-
   - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
 
 - **Path Parameters**: **NEVER** use for IDs - always use query parameters instead
@@ -199,6 +205,7 @@ Lambda functions are deployed through the modular CDK stack system:
    - Attaches DynamoDB managed policy
 
 3. **Post-Deployment Updates**:
+
    ```python
    # Automatic update from S3 artifacts
    lambda_client.update_function_code(
@@ -399,7 +406,6 @@ Some Lambda functions apply transformations to data before returning responses:
 The `api_get_character.py` function applies several transformations for client compatibility:
 
 1. **Inventory Enrichment**: Raw inventory UUIDs are enriched with item details
-
    - Database: `{"RightHand": "sword-uuid"}`
    - Response adds: `{"InventoryDetails": {"RightHand": {"itemId": "sword-uuid", "name": "Iron Sword", ...}}}`
 

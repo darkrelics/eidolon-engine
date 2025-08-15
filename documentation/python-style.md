@@ -5,6 +5,7 @@ This document defines the Python coding standards for the Eidolon Engine project
 ## Production Implementation Status
 
 These style guidelines have been validated through production deployment:
+
 - **Module Size Compliance**: 94% of modules under 300 lines, 100% under 1000 lines
 - **16 Lambda Functions**: All following separation of concerns pattern
 - **Fixed Logical IDs**: Implemented throughout for resource stability
@@ -658,6 +659,7 @@ The `lambda_handler` function is the entry point for AWS Lambda and must **NEVER
 #### Production Lambda Configuration
 
 All 16 production Lambda functions follow these standards:
+
 - **Runtime**: Python 3.12
 - **Memory**: 128MB (standardized across all functions)
 - **Timeout**: 30 seconds
@@ -1347,6 +1349,7 @@ logical_id_map = {
 ### Script vs Library Distinction
 
 Deployment scripts are one-time run scripts, not libraries:
+
 - No need for `__init__.py` imports
 - No complex module structures
 - Direct execution with `python3` command
@@ -1355,6 +1358,7 @@ Deployment scripts are one-time run scripts, not libraries:
 ### Parameter Passing
 
 Be explicit with parameter passing:
+
 - Region flows through arguments, not environment variables
 - Pass complete values to stacks (e.g., full FQDN for CORS)
 - Avoid Python keywords in module names (e.g., use `lambda_functions.py` not `lambda.py`)

@@ -268,16 +268,19 @@ The wound healing system operates continuously across both game modes:
 ### Mode-Specific Stack Deployment
 
 **MUD Mode (8 Stacks):**
+
 - Excludes Story Stack (no SQS/EventBridge)
 - Includes S3 Scripts and CloudWatch for Lua support
 - Portal frontend via `buildspec/portal.yml`
 
 **Incremental Mode (7 Stacks):**
+
 - Includes Story Stack for segment processing
 - Excludes S3 Scripts and CloudWatch stacks
 - Incremental frontend via `buildspec/incremental.yml`
 
 **Hybrid Mode (9 Stacks - Default):**
+
 - Includes all stacks for complete functionality
 - Supports both MUD and Incremental gameplay
 - Incremental frontend with mode selection

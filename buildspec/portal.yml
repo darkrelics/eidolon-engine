@@ -37,4 +37,3 @@ phases:
         else
           echo "No CloudFront distribution ID provided, skipping cache invalidation"
         fi
-

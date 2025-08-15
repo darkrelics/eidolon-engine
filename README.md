@@ -52,13 +52,11 @@ The system features a complete end-to-end deployment pipeline that provisions al
 The engine uses a modern cloud-native architecture with a unified backend serving multiple frontends:
 
 - **Frontend Applications**:
-
   - Flutter web app for incremental gameplay (`/incremental`)
   - Flutter portal for MUD web interface (`/portal`)
   - SSH server for traditional MUD access (`/server`)
 
 - **Unified Backend Services** (shared by all game modes):
-
   - AWS Lambda functions for all game logic (`/lambda`)
   - DynamoDB tables for persistent game state
   - Character GameMode field prevents concurrent MUD/Incremental access
@@ -107,7 +105,6 @@ The engine uses a modern cloud-native architecture with a unified backend servin
    - Display the portal URL upon completion
 
 4. **Deployment Modes**:
-
    - **MUD Mode**: Traditional MUD without story features (uses portal.yml buildspec)
    - **Incremental Mode**: Story-driven gameplay (uses incremental.yml buildspec)
    - **Hybrid Mode**: Full feature set (default, uses incremental.yml buildspec)
@@ -174,7 +171,7 @@ python deploy.py --analyze-only
 Choose the deployment mode based on your game focus:
 
 - **MUD Mode**: Excludes story features, uses traditional MUD interface (`portal.yml`)
-- **Incremental Mode**: Excludes S3/CloudWatch stacks, uses story interface (`incremental.yml`)  
+- **Incremental Mode**: Excludes S3/CloudWatch stacks, uses story interface (`incremental.yml`)
 - **Hybrid Mode** (Default): All features enabled, uses story interface (`incremental.yml`)
 
 The deployment automatically adjusts stack order and buildspec selection based on the chosen mode.

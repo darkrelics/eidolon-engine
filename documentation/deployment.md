@@ -51,18 +51,21 @@ The deployment system provides:
 ## Deployment Modes
 
 ### MUD Mode (8 Stacks)
+
 - **Frontend**: Portal app via `buildspec/portal.yml`
 - **Excludes**: Story Stack (no SQS/EventBridge)
 - **Includes**: S3 Scripts, CloudWatch logging
 - **Use Case**: Traditional MUD experience only
 
 ### Incremental Mode (7 Stacks)
+
 - **Frontend**: Incremental app via `buildspec/incremental.yml`
 - **Excludes**: S3 Scripts, CloudWatch Stack
 - **Includes**: Story Stack (SQS/EventBridge)
 - **Use Case**: Story-driven incremental gameplay
 
 ### Hybrid Mode - Default (9 Stacks)
+
 - **Frontend**: Incremental app via `buildspec/incremental.yml`
 - **Includes**: All stacks for complete functionality
 - **Use Case**: Full feature set with both game modes
@@ -103,6 +106,7 @@ You'll be prompted for:
 ### Parameter Priority
 
 The system loads parameters in this order:
+
 1. Hardcoded defaults in code
 2. Saved values from `cdk.json`
 3. Existing `config.yml` values
@@ -205,8 +209,7 @@ API:
   Subdomain: api # api.darkrelics.net
 
 # CORS configuration for API Gateway
-allowed_cors_origins:
-  [] # Optional list; when empty, API preflight defaults to "*" without credentials
+allowed_cors_origins: [] # Optional list; when empty, API preflight defaults to "*" without credentials
   # When set, API Gateway preflight uses this explicit list and allows credentials
   # ALLOWED_ORIGINS env var is passed to Lambdas as a comma-separated string
 
@@ -276,6 +279,7 @@ Tracks deployed resources and outputs (gitignored).
 ### Shared Execution Role
 
 All Lambda functions use a single execution role with:
+
 - DynamoDB access via managed policy
 - CloudWatch Logs permissions
 - Additional policies attached by dependent stacks
@@ -345,6 +349,7 @@ if current_trigger == lambda_arn:
 ## Production Metrics
 
 ### Deployment Statistics
+
 - **Total Stacks**: 9 independent CDK stacks
 - **Lambda Functions**: 16 with shared execution role
 - **DynamoDB Tables**: 14 with RemovalPolicy.RETAIN
@@ -357,6 +362,7 @@ if current_trigger == lambda_arn:
 ### Portal Build (MUD Mode)
 
 Using `buildspec/portal.yml`:
+
 ```yaml
 # Builds from portal/ directory
 # Deploys traditional MUD interface
@@ -366,6 +372,7 @@ Using `buildspec/portal.yml`:
 ### Incremental Build (Incremental/Hybrid)
 
 Using `buildspec/incremental.yml`:
+
 ```yaml
 # Builds from incremental/ directory
 # Includes story progression features
@@ -399,6 +406,7 @@ CodeBuild runs automatically after Client Stack:
 ### CDK App Files (`deployment/app_*.py`)
 
 Each stack has its own app file:
+
 - Prevents output contamination
 - Uses CDK context for parameters
 - No argparse, uses `try_get_context()`
@@ -418,10 +426,12 @@ API → (URL passed to) → Client
 ### Mode-Specific Dependencies
 
 **MUD Mode**:
+
 - S3 Scripts → Server can read Lua scripts
 - CloudWatch → Server writes logs
 
 **Incremental/Hybrid**:
+
 - Story → SQS triggers Lambda functions
 - Story → EventBridge invokes poller
 
@@ -433,7 +443,6 @@ API → (URL passed to) → Client
 4. **S3 Policies**: Update for CloudFront access
 5. **Portal Build**: Execute CodeBuild project
 
-
 ## Troubleshooting
 
 ### CDK Bootstrap Required
@@ -443,6 +452,7 @@ cdk bootstrap aws://ACCOUNT-ID/REGION
 ```
 
 If you see "SSM parameter /cdk-bootstrap/hnb659fds/version not found":
+
 - The account needs CDK bootstrap
 - Bootstrap creates required roles and buckets
 - Only needed once per account/region
@@ -450,6 +460,7 @@ If you see "SSM parameter /cdk-bootstrap/hnb659fds/version not found":
 ### Resource Already Exists
 
 With fixed logical IDs, CDK handles existing resources:
+
 - Resources are updated, not recreated
 - Data is preserved across deployments
 - Use RemovalPolicy.RETAIN for safety
@@ -457,6 +468,7 @@ With fixed logical IDs, CDK handles existing resources:
 ### Lambda Permission Issues
 
 For Cognito triggers on imported pools:
+
 ```bash
 # Manually add if needed
 aws lambda add-permission \
@@ -470,6 +482,7 @@ aws lambda add-permission \
 ### API URL Double HTTPS Issue
 
 If you see `https://https://api.domain.com`:
+
 ```python
 # Problem: API_DOMAIN set to full URL
 # Solution: Pass domain only
@@ -479,6 +492,7 @@ If you see `https://https://api.domain.com`:
 ### LOG_LEVEL Validation
 
 The system now validates LOG_LEVEL:
+
 ```python
 # Accepts: "20", "INFO", "DEBUG", etc.
 # Returns: Always a string name for logging module
@@ -488,6 +502,7 @@ LOG_LEVEL = _validate_log_level(os.environ.get("LOG_LEVEL", "INFO"))
 ### Layer Version Accumulation
 
 Old layer versions are automatically deleted:
+
 ```python
 # Keeps only current version
 lambda_client.delete_layer_version(

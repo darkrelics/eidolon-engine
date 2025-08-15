@@ -28,6 +28,7 @@
 ```
 
 **Infrastructure Context (9 CDK Stacks):**
+
 - **Lambda Stack**: 16 functions with shared execution role
 - **DynamoDB Stack**: 14 tables with managed IAM policy
 - **Story Stack**: SQS queues, EventBridge rule, SSM parameter
@@ -52,20 +53,20 @@ The system uses a front-loaded processing model where all outcomes are calculate
 
 All endpoints use the existing API Gateway at `api.{domain}`. Field names use PascalCase to match DynamoDB schemas.
 
-| Method | Endpoint            | Lambda Function         | Purpose                              |
-| ------ | ------------------- | ----------------------- | ------------------------------------ |
-| GET    | /archetype          | api-archetype-list      | List available archetypes            |
-| POST   | /character          | api-character-add       | Create new character                 |
-| DELETE | /character          | api-character-delete    | Delete character                     |
-| GET    | /character          | api-character-get       | Get character details                |
-| GET    | /character/list     | api-character-list      | List player's characters             |
-| POST   | /segment/decision   | api-segment-decision    | Submit player choice                 |
-| GET    | /segment/history    | api-segment-history     | Retrieve processed results           |
-| GET    | /segment/outcome    | api-segment-outcome     | Get segment outcome                  |
-| POST   | /segment/rest       | api-segment-rest        | Initiate rest segment                |
-| GET    | /segment/status     | api-segment-status      | Check segment readiness              |
-| POST   | /story/abandon      | api-story-abandon       | Exit current story                   |
-| POST   | /story/start        | api-story-start         | Begin a new story                    |
+| Method | Endpoint          | Lambda Function      | Purpose                    |
+| ------ | ----------------- | -------------------- | -------------------------- |
+| GET    | /archetype        | api-archetype-list   | List available archetypes  |
+| POST   | /character        | api-character-add    | Create new character       |
+| DELETE | /character        | api-character-delete | Delete character           |
+| GET    | /character        | api-character-get    | Get character details      |
+| GET    | /character/list   | api-character-list   | List player's characters   |
+| POST   | /segment/decision | api-segment-decision | Submit player choice       |
+| GET    | /segment/history  | api-segment-history  | Retrieve processed results |
+| GET    | /segment/outcome  | api-segment-outcome  | Get segment outcome        |
+| POST   | /segment/rest     | api-segment-rest     | Initiate rest segment      |
+| GET    | /segment/status   | api-segment-status   | Check segment readiness    |
+| POST   | /story/abandon    | api-story-abandon    | Exit current story         |
+| POST   | /story/start      | api-story-start      | Begin a new story          |
 
 ### 2.2 Request/Response Examples
 
@@ -126,6 +127,7 @@ def business_logic(param1: str, param2: str) -> dict:
 **Production Lambda Functions (16 Total):**
 
 All functions use:
+
 - Shared execution role: `eidolon-lambda-execution-role`
 - DynamoDB managed policy with DescribeTable permission
 - Fixed logical IDs preventing recreation on updates
@@ -133,6 +135,7 @@ All functions use:
 - Environment variables for table names and configuration
 
 **api-story-start**
+
 - Validates character ownership and GameMode="None"
 - Creates ActiveSegments record with calculated end time
 - Generates ActiveSegmentID using UUIDv7 for time-based ordering
@@ -141,6 +144,7 @@ All functions use:
 - Environment: `SEGMENT_QUEUE_URL` for SQS integration
 
 **ops-segment-poller** (EventBridge triggered)
+
 - EventBridge rule: `eidolon-story-poller` (1-minute schedule)
 - Reads SSM parameter `/eidolon/story/config` for run/stop state
 - Queries EndTimeIndex for segments where EndTime <= Now
@@ -148,6 +152,7 @@ All functions use:
 - Manages polling state (auto-disable when no segments)
 
 **ops-segment-process** (SQS triggered)
+
 - Triggered by `eidolon-processing-queue`
 - Processes mechanical segments only
 - Uses MUD mechanics for calculations:
@@ -158,6 +163,7 @@ All functions use:
 - Environment: `SEGMENT_BATCH_SIZE` for processing limits
 
 **ops-story-advance** (SQS triggered)
+
 - Triggered by `eidolon-advancement-queue`
 - Claims segment with RunningFlag to prevent duplicates
 - Processes simple segments (rest/decision) if not already processed
@@ -173,6 +179,7 @@ Production deployment includes 14 DynamoDB tables with RemovalPolicy.RETAIN:
 ### 4.1 Table Usage
 
 **Core Tables:**
+
 - `players`: User accounts with CharacterList
 - `characters`: Character data with GameMode field
 - `archetypes`: Character classes (Player: true for player-available)
@@ -181,6 +188,7 @@ Production deployment includes 14 DynamoDB tables with RemovalPolicy.RETAIN:
 - `motd`: Message of the day
 
 **Story Tables (Incremental/Hybrid modes):**
+
 - `story`: Immutable story definitions
 - `segments`: Immutable segment templates
 - `active_segments`: Runtime instances with pre-calculated results
@@ -436,18 +444,21 @@ class PollingManager {
 ### 8.1 AWS Services (Story Stack - Incremental/Hybrid Only)
 
 **Lambda Functions:**
+
 - 16 total functions deployed via Lambda Stack
 - Python 3.12 runtime with eidolon library layer
 - Shared execution role with DynamoDB access
 - Post-deployment updates from S3 artifacts
 
 **DynamoDB Tables:**
+
 - 14 tables deployed via DynamoDB Stack
 - Pay-per-request pricing
 - Point-in-time recovery enabled
 - RemovalPolicy.RETAIN for data persistence
 
 **Story Stack Components:**
+
 - **EventBridge**: Rule `eidolon-story-poller` (1-minute schedule, disabled by default)
 - **SQS Queues**:
   - `eidolon-processing-queue`: For immediate mechanical segment processing
@@ -497,6 +508,7 @@ CloudWatch metrics:
 The incremental game deploys as part of the 9-stack CDK system:
 
 **Stack Deployment Order (Incremental Mode):**
+
 1. **CodeBuild**: Build infrastructure and Lambda artifacts
 2. **DynamoDB**: 14 tables with managed IAM policy
 3. **Lambda**: Layer and 16 functions with shared execution role
@@ -506,6 +518,7 @@ The incremental game deploys as part of the 9-stack CDK system:
 7. **Client**: CloudFront, S3, and automated incremental build
 
 **Lambda Stack Implementation:**
+
 ```python
 # From lambda_stack.py - Fixed logical IDs prevent recreation
 lambda_configs = [
@@ -532,6 +545,7 @@ lambda_configs = [
 ```
 
 **Portal Build Automation:**
+
 - CodeBuild uses `buildspec/incremental.yml`
 - Builds from `incremental/` directory
 - Syncs to S3 and invalidates CloudFront
@@ -542,6 +556,7 @@ lambda_configs = [
 All Lambda functions receive standardized environment variables:
 
 **Common Variables (from lambda_stack.py):**
+
 ```python
 "APPLICATION_NAME": "eidolon-engine"
 "LOG_LEVEL": "INFO"  # Validated by eidolon/environment.py
@@ -553,6 +568,7 @@ All Lambda functions receive standardized environment variables:
 ```
 
 **DynamoDB Table Names:**
+
 ```python
 "players_table": "players"
 "characters_table": "characters"
@@ -568,6 +584,7 @@ All Lambda functions receive standardized environment variables:
 ```
 
 **Story Stack Integration (Incremental/Hybrid):**
+
 ```python
 "SEGMENT_QUEUE_URL": "https://sqs.{region}.amazonaws.com/{account}/eidolon-processing-queue"
 "STORY_ADVANCEMENT_QUEUE_URL": "https://sqs.{region}.amazonaws.com/{account}/eidolon-advancement-queue"
@@ -578,6 +595,7 @@ All Lambda functions receive standardized environment variables:
 ### 10.3 Production Deployment Status
 
 **Deployment Metrics:**
+
 - **9 CDK Stacks**: All operational in production
 - **16 Lambda Functions**: Deployed with fixed logical IDs
 - **14 DynamoDB Tables**: Created with RemovalPolicy.RETAIN
@@ -586,6 +604,7 @@ All Lambda functions receive standardized environment variables:
 - **Lessons Applied**: 140 documented improvements implemented
 
 **Key Implementation Details:**
+
 - Fixed logical IDs prevent resource recreation
 - Post-deployment Lambda updates from S3
 - Automated portal build via CodeBuild

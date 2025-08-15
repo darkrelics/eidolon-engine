@@ -58,6 +58,7 @@ The deployment system rework has been **successfully completed** with all 9 phas
 ### Implementation Summary
 
 Successfully standardized all CDK app files to use context pattern instead of argparse:
+
 - **Removed argparse**: Eliminated boilerplate argument parsing from all app files
 - **Unified pattern**: All stacks now use `app.node.try_get_context()` for parameters
 - **Simplified deployment modules**: All use `run_cdk_deploy()` with context arguments
@@ -66,8 +67,9 @@ Successfully standardized all CDK app files to use context pattern instead of ar
 ### Changes Applied
 
 #### App Files Updated
+
 - app_dynamodb.py - Removed argparse, uses context
-- app_codebuild.py - Removed argparse, uses context  
+- app_codebuild.py - Removed argparse, uses context
 - app_s3.py - Removed argparse, uses context
 - app_cloudwatch.py - Removed argparse, uses context
 - app_lambda.py - Removed argparse, uses context with JSON parsing
@@ -75,6 +77,7 @@ Successfully standardized all CDK app files to use context pattern instead of ar
 - app_story.py - Already used context (no change)
 
 #### Deployment Modules Updated
+
 - All modules now pass context using `-c` flags
 - Proper format: `["-c", "key=value"]` as separate list items
 - Complex data (DynamoDB tables) serialized as JSON
@@ -84,6 +87,7 @@ Successfully standardized all CDK app files to use context pattern instead of ar
 ### Implementation Summary
 
 Successfully implemented deployment mode system to support three distinct deployment configurations:
+
 - **MUD Mode**: Traditional Multi-User Dungeon without story features
 - **Incremental Mode**: Story-driven gameplay without S3/CloudWatch
 - **Hybrid Mode**: Full feature set (default)
@@ -91,20 +95,23 @@ Successfully implemented deployment mode system to support three distinct deploy
 ### Implementation Details
 
 #### Created `deploy_mode.py` Module
+
 - Deployment mode validation and normalization
 - Stack order determination based on mode
 - Portal buildspec selection (portal.yml for MUD, incremental.yml for others)
 - Human-readable stack descriptions for display
 
 #### Updated Core Components
+
 - **Config class**: Added deployment_mode field with persistence to config.yml
 - **DeploymentParams**: Added deployment_mode field
-- **deploy.py**: 
+- **deploy.py**:
   - Dynamic stack deployment based on mode
   - Mode-aware user input collection
   - Mode-specific deployment summaries
 
 #### Deployment Flow Changes
+
 - Mode selection integrated into parameter collection
 - Conditional S3 scripts bucket collection (skipped for Incremental mode)
 - Dynamic stack ordering replaces hardcoded deployment sequence
@@ -115,6 +122,7 @@ Successfully implemented deployment mode system to support three distinct deploy
 ### Phase 7 Summary
 
 Successfully deployed Story Stack with complete EventBridge and SQS integration:
+
 - Fixed CDK context passing for Lambda ARNs
 - Implemented proper Lambda import with execution roles for SQS permissions
 - Created EventBridge rule with Lambda targets
@@ -156,6 +164,7 @@ Successfully deployed Story Stack with complete EventBridge and SQS integration:
 ### Phase 6 Summary
 
 Successfully implemented Cognito User Pool for player authentication with the following architecture:
+
 - Cognito User Pool with email sign-in and password requirements
 - User Pool Client for web applications (no secret)
 - PostConfirmation trigger connected to cognito-player-new Lambda
@@ -178,6 +187,7 @@ Successfully implemented Cognito User Pool for player authentication with the fo
 ### Phase 5 Summary
 
 Successfully implemented Lambda infrastructure for all non-Cognito-triggered Lambda functions with the following architecture:
+
 - Lambda layer deployed from CodeBuild artifacts (lambda-layer.zip)
 - Shared IAM execution role with DynamoDB and CloudWatch Logs policies
 - 16 Lambda functions deployed (all except cognito-player-delete)
@@ -206,6 +216,7 @@ Successfully implemented Lambda infrastructure for all non-Cognito-triggered Lam
 ### Phase 4 Summary
 
 Successfully implemented CloudWatch infrastructure for logging and monitoring with the following architecture:
+
 - Single log group `/eidolon/server` with 1-year retention and RETAIN policy
 - Metrics namespace `eidolon/metrics` for custom application metrics
 - Managed policy `eidolon-cloudwatch-policy` with permissions for log streams and metrics
@@ -243,7 +254,7 @@ During Phase 4 implementation, the following lessons were violated:
 **Violated Lesson #27 - CDK Tokens vs Strings**
 
 - Attempted to override CDK Stack's read-only `region` property
-- Corrected: Used `region_name` parameter stored before super().__init__()
+- Corrected: Used `region_name` parameter stored before super().**init**()
 
 **Violated Lesson #31 - Managed Policies Only**
 
@@ -254,6 +265,7 @@ During Phase 4 implementation, the following lessons were violated:
 **Root Cause Analysis**
 
 The CloudWatch stack implementation failed to properly analyze existing patterns before implementation:
+
 1. Did not check how other stacks handled region parameters
 2. Did not verify stack ID naming conventions
 3. Did not examine app file structure patterns thoroughly
@@ -262,6 +274,7 @@ The CloudWatch stack implementation failed to properly analyze existing patterns
 ### Phase 3 Summary
 
 Successfully implemented S3 infrastructure for Lua scripts with the following architecture:
+
 - S3 bucket with import capability and RETAIN policy
 - Managed policy `eidolon-scripts-s3-policy` for read/write access
 - Automatic upload of scripts from `/scripts_lua/*` to `<bucket>/scripts/*`
@@ -287,6 +300,7 @@ Successfully implemented S3 infrastructure for Lua scripts with the following ar
 ### Phase 2 Summary (Including Phase 5 Integration)
 
 Successfully implemented CodeBuild infrastructure for Lambda builds with the following architecture:
+
 - Single shared IAM role with custom managed policies for least privilege
 - S3 bucket with import capability and RETAIN policy for artifacts
 - Two CodeBuild projects for lambda-layer and lambda-functions builds
@@ -528,10 +542,10 @@ Post-deployment checks will verify:
 87. **Consistency Over Convenience**: Follow established patterns even if less convenient
 88. **CDK Synthesis vs Runtime**: Resource existence checks during CDK synthesis don't have AWS access - always create resources
 89. **Stack Parameter Consistency**: All stacks should use same parameter pattern (explicit parameters, not kwargs extraction)
-90. **Output Method Standardization**: All stacks should use _add_outputs() method for consistent output organization
+90. **Output Method Standardization**: All stacks should use \_add_outputs() method for consistent output organization
 91. **Context Over Arguments**: Use CDK context (-c flags) for passing parameters to app files instead of command-line arguments
 92. **Resource Import Limitations**: Importing existing resources during CDK synthesis is unreliable - prefer creating resources
-93. **Existence Checks for Import Logic**: _exists() methods in stacks determine whether to import or create resources
+93. **Existence Checks for Import Logic**: \_exists() methods in stacks determine whether to import or create resources
 94. **Lambda Layer Dependencies**: Layer must be successfully built before Lambda stack deployment
 95. **Buildspec Artifact Handling**: When manually uploading to S3, omit artifacts section or use minimal configuration
 96. **EventBridge Rule Dependencies**: Rule creation requires Lambda ARN to be available at synthesis time
@@ -561,7 +575,7 @@ Post-deployment checks will verify:
 120. **API URL Passing**: Pass API URL from API stack outputs to Client stack via CDK context for proper dependency chain
 121. **Default Bucket Naming**: Generate S3 bucket names from domain and subdomain (e.g., portal-darkrelics-net) when not explicitly provided
 122. **Required Domain Parameters**: Make domain and hosted_zone_id required parameters to avoid circular dependencies and ensure proper DNS configuration
-123. **Stack Descriptions**: Always provide descriptive stack descriptions in super().__init__() for CloudFormation visibility
+123. **Stack Descriptions**: Always provide descriptive stack descriptions in super().**init**() for CloudFormation visibility
 124. **Verification Output Timing**: Pass deployment outputs directly to verification functions rather than reading from state that hasn't been updated yet
 125. **Bucket Name Consistency**: Ensure verification uses the same bucket name that was actually deployed (from outputs or configuration)
 126. **Post-Deployment Bucket Policy**: Update S3 bucket policy after stack deployment to ensure CloudFront has access, especially for imported buckets
@@ -593,8 +607,10 @@ Post-deployment checks will verify:
 The system supports three deployment modes, each tailored for different use cases:
 
 ### MUD Mode (Multi-User Dungeon)
+
 **Purpose:** Traditional MUD deployment without story-driven features
-**Stack Order:** 
+**Stack Order:**
+
 1. CodeBuild
 2. DynamoDB
 3. Lambda
@@ -607,8 +623,10 @@ The system supports three deployment modes, each tailored for different use case
 **Portal Build:** Uses `/buildspec/portal.yml`
 
 ### Incremental Mode
+
 **Purpose:** Story-driven gameplay with incremental narrative features
 **Stack Order:**
+
 1. CodeBuild
 2. DynamoDB
 3. Lambda
@@ -620,8 +638,10 @@ The system supports three deployment modes, each tailored for different use case
 **Portal Build:** Uses `/buildspec/incremental.yml`
 
 ### Hybrid Mode (Default)
+
 **Purpose:** Full feature set combining MUD and story-driven elements
 **Stack Order:**
+
 1. CodeBuild
 2. DynamoDB
 3. Lambda
@@ -649,6 +669,7 @@ The system supports three deployment modes, each tailored for different use case
 The deployment order varies based on the selected deployment mode:
 
 #### Hybrid Mode (Default) - All Features
+
 ```
 1. CodeBuild Stack    → Build infrastructure, artifacts bucket, and Lambda builds [COMPLETE]
 2. DynamoDB Stack     → Tables and access policies [COMPLETE]
@@ -663,6 +684,7 @@ The deployment order varies based on the selected deployment mode:
 ```
 
 #### MUD Mode - Traditional Multi-User Dungeon
+
 ```
 1. CodeBuild Stack    → Build infrastructure, artifacts bucket, and Lambda builds [COMPLETE]
 2. DynamoDB Stack     → Tables and access policies [COMPLETE]
@@ -674,9 +696,11 @@ The deployment order varies based on the selected deployment mode:
 8. Client Stack       → S3 bucket, CloudFront, CodeBuild project, ACM certificate, Route53 record [COMPLETE]
 9. [Portal Build]     → Frontend deployment with portal.yml [AUTOMATED]
 ```
+
 Note: Story Stack is excluded in MUD mode
 
 #### Incremental Mode - Story-Driven Focus
+
 ```
 1. CodeBuild Stack    → Build infrastructure, artifacts bucket, and Lambda builds [COMPLETE]
 2. DynamoDB Stack     → Tables and access policies [COMPLETE]
@@ -687,11 +711,13 @@ Note: Story Stack is excluded in MUD mode
 7. Client Stack       → S3 bucket, CloudFront, CodeBuild project, ACM certificate, Route53 record [COMPLETE]
 8. [Portal Build]     → Frontend deployment with incremental.yml [AUTOMATED]
 ```
+
 Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 
 ## Project Status Summary
 
 ### Completed Phases (9 of 9) - All Stacks Deployed with Automated Portal Build
+
 - **Phase 1**: DynamoDB Stack - COMPLETE
 - **Phase 2**: CodeBuild Stack - COMPLETE
 - **Phase 3**: S3 Stack - COMPLETE
@@ -703,16 +729,19 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 - **Phase 9**: Client Stack with Portal Build - COMPLETE
 
 ### System Enhancements
+
 - **Deployment Mode System** - IMPLEMENTED
 - **CDK Context Standardization** - COMPLETED
 - **Story Stack Remediation** - COMPLETED
 - **Dynamic Phase Numbering** - IMPLEMENTED
 
 ### All Phases Complete
+
 - No remaining deployment phases
 - System fully operational with automated end-to-end deployment
 
 ### Architecture Achievements
+
 - Replaced 1800+ line monolithic class with modular architecture
 - 94% of modules under 300 lines (6 modules between 300-508 lines, all under 1000 line limit)
 - Clean separation of concerns with config vs state management
@@ -764,7 +793,7 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 
 - Scripts S3 bucket for Lua scripts
 - IAM managed policy for S3 read/write access
-- Automatic script upload from /scripts_lua/* to bucket/scripts/*
+- Automatic script upload from /scripts_lua/_ to bucket/scripts/_
 
 **Config.yml Output:**
 
@@ -798,6 +827,7 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
   - Story: `api-segment-decision`, `api-segment-history`, `api-segment-outcome`, `api-segment-rest`, `api-segment-status`, `api-story-abandon`, `api-story-start`, `ops-segment-poller`, `ops-segment-process`, `ops-story-advance`
 
 **Lambda Configuration:**
+
 - Runtime: Python 3.12
 - Memory: 128MB (all functions)
 - Timeout: 30 seconds (all functions)
@@ -810,9 +840,11 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
   - Function-specific configs (SEGMENT_BATCH_SIZE, etc.)
 
 **Required User Input:**
+
 - Custom domain name (for CORS configuration)
 
 **Config.yml Output:**
+
 - None (Lambda ARNs used directly by dependent stacks)
 
 ### 6. Player Stack
@@ -857,6 +889,7 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 - SSM.StoryParameter
 
 **Remediation Applied:**
+
 - Removed all resource existence checks that fail during CDK synthesis
 - Resources now always create (CDK handles create vs update)
 - Lambda ARNs constructed from account_id and region to ensure EventBridge rule creation
@@ -873,6 +906,7 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 - Cognito authorizer integration
 
 **Status:**
+
 - Fixed logical IDs for all resources
 - No AWS access during CDK synthesis
 - Production deployed and operational
@@ -890,12 +924,14 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 - Portal CodeBuild project
 
 **Deployment Mode Variations:**
+
 - **MUD Mode:** Deployed as final stack (after CloudWatch)
 - **Incremental Mode:** Deployed as final stack (after Story)
 - **Hybrid Mode:** Deployed as final stack (after CloudWatch)
 - All modes include full Client Stack resources
 
 **Required User Input:**
+
 - Custom domain name (same as Lambda Stack)
 - Route53 Hosted Zone ID
 - Deployment mode selection (MUD/Incremental/Hybrid)
@@ -912,6 +948,7 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 **Status:** AUTOMATED - Executes automatically after Client Stack deployment
 
 **Implementation:**
+
 - Integrated into client.py deployment module
 - Automatic execution using boto3 CodeBuild client
 - Real-time build monitoring with phase updates
@@ -919,11 +956,13 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 - Automatic CloudFront cache invalidation
 
 **Buildspec Selection (Configured during stack creation):**
+
 - **MUD Mode:** Uses `/buildspec/portal.yml` - Traditional MUD interface without story elements
 - **Incremental Mode:** Uses `/buildspec/incremental.yml` - Enhanced interface with story progression features
 - **Hybrid Mode:** Uses `/buildspec/incremental.yml` - Full feature set with story mode
 
 **Automated Features:**
+
 - Build starts immediately after Client Stack deployment
 - Progress monitoring with phase updates
 - Automatic S3 upload and CloudFront distribution update

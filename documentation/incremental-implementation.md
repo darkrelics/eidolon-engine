@@ -1013,7 +1013,7 @@ from constructs import Construct
 class StoryStack(Stack):
     def __init__(self, scope: Construct, stack_id: str, **kwargs):
         super().__init__(scope, stack_id, **kwargs)
-        
+
         # SQS Queue for segment processing
         self.processing_queue = sqs.Queue(
             self, "ProcessingQueue",
@@ -1021,8 +1021,8 @@ class StoryStack(Stack):
             visibility_timeout=Duration.seconds(300),
             retention_period=Duration.days(14)
         )
-        
-        # SQS Queue for story advancement  
+
+        # SQS Queue for story advancement
         self.advancement_queue = sqs.Queue(
             self, "AdvancementQueue",
             queue_name="eidolon-advancement-queue",
@@ -1037,7 +1037,7 @@ class StoryStack(Stack):
             string_value=json.dumps({"polling_enabled": False}),
             description="Story processing configuration"
         )
-        
+
         # EventBridge rule (disabled by default)
         self.polling_rule = events.Rule(
             self, "PollingRule",
@@ -1045,12 +1045,12 @@ class StoryStack(Stack):
             schedule=events.Schedule.rate(Duration.minutes(1)),
             enabled=False
         )
-        
+
         # Note: Lambda functions are deployed via Lambda Stack
         # This stack only provides the infrastructure they use
-        
+
         # Outputs for Lambda Stack
-        CfnOutput(self, "ProcessingQueueUrl", 
+        CfnOutput(self, "ProcessingQueueUrl",
                   value=self.processing_queue.queue_url)
         CfnOutput(self, "AdvancementQueueUrl",
                   value=self.advancement_queue.queue_url)
@@ -1072,7 +1072,7 @@ env_vars = {
     "CORS_ALLOW_HEADERS": "Content-Type,X-Amz-Date,Authorization,...",
     "CORS_ALLOW_METHODS": "GET,POST,PUT,DELETE,OPTIONS",
     "CORS_MAX_AGE": "86400",
-    
+
     # DynamoDB table names from stack outputs
     "players_table": "players",
     "characters_table": "characters",
@@ -1483,6 +1483,7 @@ def update_character_with_metrics(character_id, updates):
 ## Production Deployment Status
 
 ### Deployment Metrics
+
 - **9 CDK Stacks**: All operational in production
 - **16 Lambda Functions**: Deployed with fixed logical IDs
 - **14 DynamoDB Tables**: Created with RemovalPolicy.RETAIN
@@ -1492,6 +1493,7 @@ def update_character_with_metrics(character_id, updates):
 - **Deployment Time**: Full deployment in under 15 minutes
 
 ### Key Implementation Details
+
 - **Fixed Logical IDs**: Prevent resource recreation on updates
 - **Post-Deployment Updates**: Lambda functions updated from S3
 - **Shared Execution Role**: `eidolon-lambda-execution-role`
@@ -1500,6 +1502,7 @@ def update_character_with_metrics(character_id, updates):
 - **Automated Portal Build**: Via CodeBuild with `buildspec/incremental.yml`
 
 ### Stack Dependencies
+
 1. **CodeBuild Stack**: Provides Lambda artifacts
 2. **DynamoDB Stack**: Tables and managed policy
 3. **Lambda Stack**: Functions and execution role

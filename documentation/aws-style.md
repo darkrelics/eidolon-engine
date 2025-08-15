@@ -158,12 +158,10 @@ Avoid transactions for:
 ##### Critical Operations Requiring Transactions
 
 1. **Story Operations**:
-
    - Starting a story (Character + ActiveSegments + History)
    - Story completion/abandonment (atomic cleanup required)
 
 2. **Character Operations**:
-
    - Creating character with initial items (Player + Character + Items)
    - Deleting character (ensures complete removal)
 
@@ -264,7 +262,7 @@ bucket = s3.Bucket(
 def deploy_stack(params):
     from stacks.stack_utilities import check_s3_bucket_exists
     bucket_exists = check_s3_bucket_exists(params.bucket, params.region)
-    
+
     context_args = [
         "-c", f"bucket_exists={'true' if bucket_exists else 'false'}",
     ]
@@ -301,14 +299,14 @@ cfn_table.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
 def update_lambda_layer(layer_name: str, s3_key: str):
     # Publish new version
     new_version = lambda_client.publish_layer_version(...)
-    
+
     # Update all functions to use new version
     for function in functions:
         lambda_client.update_function_configuration(
             FunctionName=function,
             Layers=[new_version['LayerVersionArn']]
         )
-    
+
     # Delete old version
     lambda_client.delete_layer_version(
         LayerName=layer_name,
@@ -342,7 +340,7 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str):
     # Get OAI from CloudFront distribution
     dist = cloudfront_client.get_distribution(Id=distribution_id)
     oai_id = extract_oai_id(dist)
-    
+
     # Create bucket policy for OAI
     policy = {
         "Statement": [{
@@ -436,7 +434,7 @@ The deployment system consists of 9 CDK stacks deployed sequentially:
 #### Deployment Modes
 
 - **MUD Mode**: Traditional gameplay (excludes Story stack)
-- **Incremental Mode**: Story-driven (excludes S3, CloudWatch stacks)  
+- **Incremental Mode**: Story-driven (excludes S3, CloudWatch stacks)
 - **Hybrid Mode**: Full feature set (all stacks)
 
 #### Deployment Commands
@@ -459,6 +457,7 @@ cd deployment && python3 deploy.py
 Before deploying any infrastructure changes:
 
 #### CDK Development
+
 - [ ] Uses fixed logical IDs for all persistent resources
 - [ ] No boto3 calls or resource checks in CDK synthesis
 - [ ] Passes region as explicit parameter, not CDK token
@@ -467,6 +466,7 @@ Before deploying any infrastructure changes:
 - [ ] Separate app file for each stack
 
 #### Resource Management
+
 - [ ] S3 buckets have RemovalPolicy.RETAIN
 - [ ] DynamoDB tables have both RETAIN policies
 - [ ] Existing resources checked in deployment layer
@@ -475,6 +475,7 @@ Before deploying any infrastructure changes:
 - [ ] Old Lambda layer versions cleaned up
 
 #### AWS Standards
+
 - [ ] Uses YAML for CloudFormation templates
 - [ ] No direct Lambda-to-Lambda invocations
 - [ ] Follows naming conventions (eidolon-{component})
@@ -485,6 +486,7 @@ Before deploying any infrastructure changes:
 - [ ] Uses DynamoDB transactions for multi-item operations
 
 #### Deployment Validation
+
 - [ ] CDK code synthesizes successfully
 - [ ] All resources verified post-deployment
 - [ ] CloudFront OAI permissions updated for imported buckets

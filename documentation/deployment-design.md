@@ -206,16 +206,19 @@ This consolidation follows the codebase principle of "simplicity of code is high
 ### Deployment Modes
 
 **MUD Mode**: Traditional Multi-User Dungeon
+
 - Stack Order: CodeBuild → DynamoDB → Lambda → Player → S3 → CloudWatch → API → Client
 - Portal Build: Uses `buildspec/portal.yml`
 - Excludes: Story Stack
 
 **Incremental Mode**: Story-Driven Gameplay
+
 - Stack Order: CodeBuild → DynamoDB → Lambda → Player → Story → API → Client
 - Portal Build: Uses `buildspec/incremental.yml`
 - Excludes: S3 and CloudWatch Stacks
 
 **Hybrid Mode** (Default): Full Feature Set
+
 - Stack Order: CodeBuild → DynamoDB → Lambda → Player → Story → S3 → CloudWatch → API → Client
 - Portal Build: Uses `buildspec/incremental.yml`
 - Includes: All stacks
@@ -289,18 +292,21 @@ During routine deployment checks:
 ## System Validation
 
 ### Post-Stack Validation
+
 - Resource existence verification with boto3
 - IAM policy attachment confirmation
 - Lambda function and layer updates from S3
 - Cognito trigger configuration for imported pools
 
 ### Build Artifact Validation
+
 - Lambda layer zip existence and size
 - All 16 Lambda function zips present
 - Portal build output in S3
 - CloudFront distribution accessibility
 
 ### Integration Points
+
 - Cognito PostConfirmation → cognito-player-new Lambda
 - SQS Queues → ops-segment-process and ops-story-advance
 - EventBridge → ops-segment-poller (disabled by default)

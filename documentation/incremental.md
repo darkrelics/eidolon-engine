@@ -67,6 +67,7 @@ The incremental module serves as:
 ### Key Lambda Functions
 
 **Story Operations**:
+
 - `api-story-start`: Begin new stories
 - `api-story-abandon`: Exit active stories
 - `api-segment-decision`: Submit player choices
@@ -76,6 +77,7 @@ The incremental module serves as:
 - `api-segment-history`: View past segments
 
 **Processing Functions**:
+
 - `ops-segment-poller`: EventBridge-triggered polling
 - `ops-segment-process`: SQS mechanical processing
 - `ops-story-advance`: SQS story advancement
@@ -83,14 +85,17 @@ The incremental module serves as:
 ### Story Infrastructure
 
 **SQS Queues**:
+
 - `eidolon-processing-queue`: Mechanical segment processing
 - `eidolon-advancement-queue`: Story advancement
 
 **EventBridge**:
+
 - Rule: `eidolon-story-poller` (1-minute schedule)
 - Auto-enabled when stories active, disabled when idle
 
 **SSM Parameter**:
+
 - `/eidolon/story/config`: Controls polling state
 
 ## Documentation
@@ -112,6 +117,7 @@ Players can access the Incremental game through the portal deployed at `https://
 ### For Developers
 
 **Deployment**:
+
 ```bash
 cd deployment
 python3 deploy.py
@@ -119,6 +125,7 @@ python3 deploy.py
 ```
 
 **Key Environment Variables** (set in Lambda Stack):
+
 - `SEGMENT_QUEUE_URL`: SQS queue for mechanical processing
 - `STORY_ADVANCEMENT_QUEUE_URL`: SQS queue for story advancement
 - `SSM_POLLER_STATE_PARAMETER`: SSM parameter for polling control

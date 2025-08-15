@@ -5,6 +5,7 @@ This guide explains how Cross-Origin Resource Sharing (CORS) is configured for t
 ## Overview
 
 CORS configuration is handled at two levels in the deployment system:
+
 1. **API Gateway**: Handles preflight OPTIONS requests with wildcard origins
 2. **Lambda Functions**: Validate actual request origins via environment variables
 
@@ -42,6 +43,7 @@ Each Lambda function receives CORS configuration via environment variables:
 ### 3. Origin Validation Pattern
 
 The actual origin validation happens in Lambda functions, not at the API Gateway level. This allows for:
+
 - Dynamic origin configuration without redeploying API Gateway
 - Different origins for different Lambda functions if needed
 - Proper credential support with specific origins
@@ -70,6 +72,7 @@ Client Host (e.g., portal): portal
 ### Environment Variable Structure
 
 All API Lambda functions receive these CORS-related environment variables:
+
 - `ALLOWED_ORIGINS`: The FQDN of the client (e.g., `https://portal.darkrelics.net`)
 - `CORS_ALLOW_CREDENTIALS`: Set to `"true"` for authenticated requests
 - `CORS_ALLOW_HEADERS`: Comma-separated list of allowed headers
@@ -87,7 +90,7 @@ from eidolon import cors
 def lambda_handler(event, context):
     # Get origin from request
     origin = event.get('headers', {}).get('origin', '')
-    
+
     # Validate origin
     allowed_origins = os.environ.get('ALLOWED_ORIGINS', '').split(',')
     if origin not in allowed_origins:
@@ -95,9 +98,9 @@ def lambda_handler(event, context):
             'statusCode': 403,
             'body': json.dumps({'error': 'Origin not allowed'})
         }
-    
+
     # Process request...
-    
+
     # Return with CORS headers
     return {
         'statusCode': 200,
@@ -133,6 +136,7 @@ cd deployment && python3 deploy.py
 ```
 
 The deployment will prompt for domain configuration:
+
 - Domain name (e.g., darkrelics.net)
 - Client host subdomain (e.g., portal)
 
@@ -155,7 +159,6 @@ These values are used to construct the ALLOWED_ORIGINS for Lambda functions.
    ```
 
 3. Common issues and solutions:
-
    - **Origin not allowed**: The request origin doesn't match ALLOWED_ORIGINS in Lambda
    - **Credentials not supported**: Ensure CORS_ALLOW_CREDENTIALS is "true"
    - **Preflight failing**: Check API Gateway has OPTIONS method configured
@@ -207,6 +210,7 @@ Currently, the system only supports a single origin. To add multiple origins:
 3. Modify Lambda functions to split and validate against multiple origins
 
 Example enhancement:
+
 ```python
 # In lambda_stack.py
 allowed_origins = [

@@ -20,6 +20,7 @@ Authorization: Bearer <jwt-token>
 ```
 
 **Cognito Configuration:**
+
 - User Pool: `eidolon-users`
 - PostConfirmation Trigger: `cognito-player-new` Lambda
 - Permissions managed post-deployment for imported pools
@@ -29,6 +30,7 @@ Authorization: Bearer <jwt-token>
 All API endpoints are implemented as individual Lambda functions:
 
 ### Character Management
+
 - `api-archetype-list` - GET /archetype
 - `api-character-add` - POST /character
 - `api-character-delete` - DELETE /character
@@ -36,6 +38,7 @@ All API endpoints are implemented as individual Lambda functions:
 - `api-character-list` - GET /character/list
 
 ### Story Management
+
 - `api-segment-decision` - POST /segment/decision
 - `api-segment-history` - GET /segment/history
 - `api-segment-outcome` - GET /segment/outcome
@@ -45,6 +48,7 @@ All API endpoints are implemented as individual Lambda functions:
 - `api-story-start` - POST /story/start
 
 ### Operational Functions (Not API-exposed)
+
 - `cognito-player-new` - Cognito PostConfirmation trigger
 - `ops-segment-poller` - EventBridge scheduled polling
 - `ops-segment-process` - SQS segment processor
@@ -340,14 +344,13 @@ Content-Type: application/json
    - If an invalid archetype is specified, "default" is used with a log warning
    - Only player-available archetypes (`Player: true`) can be used
 
-4. **Starting Items:** Based on the archetype's `StartingItems` configuration:
-
+5. **Starting Items:** Based on the archetype's `StartingItems` configuration:
    - Items are created from prototypes and added to the character's inventory
    - The first container item becomes the primary container (e.g., backpack)
    - Worn items (`IsWorn: true`) are equipped automatically
    - Non-worn items are placed inside the primary container
 
-5. **Initial State:** New characters start with:
+6. **Initial State:** New characters start with:
    - Full health (based on archetype)
    - Full essence (based on archetype)
    - No wounds
@@ -552,13 +555,13 @@ Maps inventory slot numbers to detailed item information:
    - **Without active story:** Does NOT include `ActiveStory` or `ActiveSegment`, but includes `AvailableStories` array if any stories are available
    - Fields are completely omitted from the response rather than being set to null
 
-3. **Available Stories:** When the character doesn't have an active story, the `AvailableStories` field is automatically populated with story details including availability status, cooldown information, prerequisites, and metadata. This eliminates the need for a separate API call to get available stories.
+4. **Available Stories:** When the character doesn't have an active story, the `AvailableStories` field is automatically populated with story details including availability status, cooldown information, prerequisites, and metadata. This eliminates the need for a separate API call to get available stories.
 
-4. **Inventory Enrichment:** The `InventoryDetails` field provides full item information for UI display without requiring additional API calls. If item lookups fail, the character is still returned without enrichment.
+5. **Inventory Enrichment:** The `InventoryDetails` field provides full item information for UI display without requiring additional API calls. If item lookups fail, the character is still returned without enrichment.
 
-5. **Health Calculation:** Current health is not stored but should be calculated as: `Health = MaxHealth - Wounds.length`
+6. **Health Calculation:** Current health is not stored but should be calculated as: `Health = MaxHealth - Wounds.length`
 
-6. **Container Items:** Items stored inside containers (like backpacks) are not shown in the character's inventory. They exist in the container item's Contents array.
+7. **Container Items:** Items stored inside containers (like backpacks) are not shown in the character's inventory. They exist in the container item's Contents array.
 
 **Example Client Code (Dart):**
 
@@ -932,6 +935,7 @@ Authorization: Bearer <jwt-token>
 These API endpoints are part of the Eidolon Engine's 9-stack CDK deployment:
 
 ### Stack Dependencies
+
 - **DynamoDB Stack**: Provides 14 tables with managed IAM policy
 - **Lambda Stack**: Deploys all 16 Lambda functions with shared execution role
 - **Player Stack**: Configures Cognito authorizer for API Gateway
@@ -939,6 +943,7 @@ These API endpoints are part of the Eidolon Engine's 9-stack CDK deployment:
 - **API Stack**: Creates API Gateway with Lambda integrations
 
 ### Post-Deployment Operations
+
 - Lambda functions updated from S3 artifacts
 - Layer versions managed with automatic cleanup
 - Cognito trigger permissions configured for imported pools
@@ -1026,6 +1031,7 @@ All API Lambda functions receive these environment variables:
 ## API Domain Configuration
 
 The API is deployed at `api.{domain}` with:
+
 - ACM certificate for HTTPS
 - Route53 DNS record
 - CloudFront distribution (optional)
@@ -1033,6 +1039,7 @@ The API is deployed at `api.{domain}` with:
 - Actual origin validation in Lambda functions
 
 **Important:** The Flutter client receives the domain without protocol:
+
 ```python
 # In client_stack.py
 "API_DOMAIN": f"{api_host}.{domain}"  # Not the full URL
