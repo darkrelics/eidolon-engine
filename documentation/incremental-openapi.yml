@@ -1266,9 +1266,7 @@ components:
           example:
             Error: "Failed to load archetypes"
 
-    
-  # Additional schemas for deployed endpoints
-  schemas:
+    # Additional schemas for deployed endpoints
     ClientEvent:
       type: object
       properties:
