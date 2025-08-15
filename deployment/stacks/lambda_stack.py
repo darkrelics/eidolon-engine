@@ -195,7 +195,7 @@ class LambdaStack(Stack):
 
         env_vars = {
             "APPLICATION_NAME": "eidolon-engine",
-            "LOG_LEVEL": "20",
+            "LOG_LEVEL": "INFO",
             "ALLOWED_ORIGINS": cors_origin,
             "CORS_ALLOW_CREDENTIALS": "true",
             "CORS_ALLOW_HEADERS": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",

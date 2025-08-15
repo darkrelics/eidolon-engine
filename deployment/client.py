@@ -102,6 +102,9 @@ def deploy_client_stack(params, state: CDKState) -> dict:
         # Fallback to default if API stack hasn't been deployed yet
         api_url = f"https://{params.api_host}.{params.domain}"
 
+    # Check if client bucket already exists
+    bucket_exists = check_bucket_exists(params.client_bucket, params.region)
+
     # Build context arguments
     context_args = [
         "-c", f"region={params.region}",
@@ -114,6 +117,7 @@ def deploy_client_stack(params, state: CDKState) -> dict:
         "-c", f"github_owner={params.github_owner}",
         "-c", f"github_repo={params.github_repo}",
         "-c", f"github_branch={params.github_branch}",
+        "-c", f"bucket_exists={'true' if bucket_exists else 'false'}",
     ]
 
     # Add API URL
@@ -152,38 +156,53 @@ def execute_codebuild_project(project_name: str, region: str) -> bool:
         print(f"  Build ID: {build_id}")
         print(f"  You can monitor the build in the AWS Console or wait for completion...")
         
-        # Optional: Wait for build to complete
+        # Wait for build to complete using polling
         print("\nWaiting for build to complete (this may take a few minutes)...")
         
-        waiter = codebuild.get_waiter("build_complete")
-        try:
-            waiter.wait(
-                ids=[build_id],
-                WaiterConfig={
-                    "Delay": 10,
-                    "MaxAttempts": 60  # Wait up to 10 minutes
-                }
-            )
-            
-            # Get final build status
-            build_response = codebuild.batch_get_builds(ids=[build_id])
-            build_status = build_response["builds"][0]["buildStatus"]
-            
-            if build_status == "SUCCEEDED":
-                print(f"  [OK] Build completed successfully!")
-                return True
-            else:
-                print(f"  [ERROR] Build failed with status: {build_status}")
-                # Get last few log lines for context
-                logs = build_response["builds"][0].get("logs", {})
-                if logs.get("streamName"):
-                    print(f"  Check logs at: {logs.get('deepLink', 'AWS Console')}")
-                return False
+        start_time = time.time()
+        timeout_seconds = 600  # 10 minutes timeout
+        last_phase = ""
+        
+        while True:
+            try:
+                response = codebuild.batch_get_builds(ids=[build_id])
+                if not response["builds"]:
+                    print(f"  [ERROR] Build not found: {build_id}")
+                    return False
                 
-        except Exception as e:
-            print(f"  [WARNING] Timeout waiting for build. Check AWS Console for status.")
-            print(f"  Build is still running in background: {build_id}")
-            return True  # Return True since build started successfully
+                build = response["builds"][0]
+                status = build.get("buildStatus", "UNKNOWN")
+                phase = build.get("currentPhase", "UNKNOWN")
+                
+                # Print phase changes
+                if phase != last_phase and phase != "UNKNOWN":
+                    print(f"    Phase: {phase}")
+                    last_phase = phase
+                
+                # Check terminal states
+                if status == "SUCCEEDED":
+                    print(f"  [OK] Build completed successfully!")
+                    return True
+                elif status in ["FAILED", "FAULT", "TIMED_OUT", "STOPPED"]:
+                    print(f"  [ERROR] Build failed with status: {status}")
+                    # Get last few log lines for context
+                    logs = build.get("logs", {})
+                    if logs.get("deepLink"):
+                        print(f"  Check logs at: {logs.get('deepLink')}")
+                    return False
+                
+                # Check timeout
+                if time.time() - start_time > timeout_seconds:
+                    print(f"  [WARNING] Build timed out after {timeout_seconds/60:.0f} minutes")
+                    print(f"  Build is still running in background: {build_id}")
+                    return True  # Build started successfully even if we timed out waiting
+                
+                # Wait before next check
+                time.sleep(10)
+                
+            except ClientError as err:
+                print(f"  [ERROR] Failed to get build status: {err}")
+                return False
             
     except ClientError as err:
         print(f"  [ERROR] Failed to start CodeBuild project: {err}")
@@ -203,24 +222,54 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, 
     """
     try:
         s3_client = boto3.client("s3", region_name=region)
+        cloudfront_client = boto3.client("cloudfront", region_name="us-east-1")  # CloudFront is global
         
-        # Create bucket policy that allows CloudFront to read objects
+        # Get the distribution to find the OAI
+        try:
+            dist_response = cloudfront_client.get_distribution(Id=distribution_id)
+            origins = dist_response.get("Distribution", {}).get("DistributionConfig", {}).get("Origins", {}).get("Items", [])
+            
+            # Find the S3 origin and its OAI
+            oai_id = None
+            for origin in origins:
+                if bucket_name in origin.get("DomainName", ""):
+                    s3_origin_config = origin.get("S3OriginConfig", {})
+                    oai = s3_origin_config.get("OriginAccessIdentity", "")
+                    if oai:
+                        # Extract OAI ID from the full path
+                        oai_id = oai.split("/")[-1] if "/" in oai else oai
+                        break
+            
+            if not oai_id:
+                print(f"  [WARNING] No OAI found for distribution {distribution_id}")
+                print(f"  CloudFront may be using OAC or public access")
+                return False
+                
+        except ClientError as err:
+            print(f"  [ERROR] Failed to get distribution details: {err}")
+            return False
+        
+        # Create bucket policy that allows CloudFront OAI to read objects
         bucket_policy = {
             "Version": "2012-10-17",
             "Statement": [
                 {
-                    "Sid": "AllowCloudFrontAccess",
+                    "Sid": "AllowCloudFrontOAIAccess",
                     "Effect": "Allow",
                     "Principal": {
-                        "Service": "cloudfront.amazonaws.com"
+                        "AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"
                     },
                     "Action": "s3:GetObject",
-                    "Resource": f"arn:aws:s3:::{bucket_name}/*",
-                    "Condition": {
-                        "StringEquals": {
-                            "AWS:SourceArn": f"arn:aws:cloudfront::{distribution_id}:distribution/{distribution_id}"
-                        }
-                    }
+                    "Resource": f"arn:aws:s3:::{bucket_name}/*"
+                },
+                {
+                    "Sid": "AllowCloudFrontOAIListBucket",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"
+                    },
+                    "Action": "s3:ListBucket",
+                    "Resource": f"arn:aws:s3:::{bucket_name}"
                 }
             ]
         }
@@ -231,7 +280,8 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, 
             Policy=json.dumps(bucket_policy)
         )
         
-        print(f"  [OK] Updated bucket policy for CloudFront access")
+        print(f"  [OK] Updated bucket policy for CloudFront OAI access")
+        print(f"  OAI ID: {oai_id}")
         return True
         
     except ClientError as err:
@@ -239,7 +289,7 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, 
         return False
 
 
-def verify_client_deployment(params, state: CDKState, outputs: dict) -> dict:
+def verify_client_deployment(params, outputs: dict) -> dict:
     """Verify the Client deployment completed successfully."""
     print("\nVerifying Client deployment...")
 
@@ -271,7 +321,7 @@ def verify_client_deployment(params, state: CDKState, outputs: dict) -> dict:
     }
 
 
-def deploy_client(params, config: Config, state: CDKState, config_path: Path, state_path: Path) -> bool:
+def deploy_client(params, config, state: CDKState, config_path, state_path: Path) -> bool:
     """Deploy and verify Client stack."""
     phase = get_stack_phase_number("client", params.deployment_mode)
     print("\n" + "=" * 60)
@@ -295,7 +345,7 @@ def deploy_client(params, config: Config, state: CDKState, config_path: Path, st
         update_bucket_policy_for_cloudfront(bucket_name, distribution_id, params.region)
     
     # Verify deployment
-    validation = verify_client_deployment(params, state, outputs)
+    validation = verify_client_deployment(params, outputs)
     
     # Execute CodeBuild to deploy the portal/incremental app
     if validation.get("codebuild_project", False):
@@ -323,17 +373,6 @@ def deploy_client(params, config: Config, state: CDKState, config_path: Path, st
     if validation.get("success", False):
         state.mark_stack_deployed("client", result.get("outputs", {}))
         state.save(str(state_path))
-        
-        # Execute portal build
-        print("\n" + "=" * 60)
-        print("Phase 9: Portal Build Execution")
-        print("=" * 60)
-        
-        if execute_portal_build(params):
-            print("\nPortal build and deployment completed successfully!")
-        else:
-            print("\nWarning: Portal build failed, but infrastructure is ready")
-            print("You can manually trigger the build from AWS CodeBuild console")
 
     return validation.get("success", False)
 

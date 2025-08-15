@@ -34,6 +34,7 @@ class ClientStack(Stack):
         github_branch: str = "",
         cognito_user_pool_id: str = "",
         cognito_client_id: str = "",
+        bucket_exists: bool = False,
         **kwargs,
     ) -> None:
         """Initialize Client stack.
@@ -54,6 +55,7 @@ class ClientStack(Stack):
             github_branch: GitHub branch
             cognito_user_pool_id: Cognito User Pool ID
             cognito_client_id: Cognito Client ID
+            bucket_exists: Whether the S3 bucket already exists
             **kwargs: Additional stack properties
         """
         self.region_name = region_name
@@ -69,6 +71,7 @@ class ClientStack(Stack):
         self.github_branch = github_branch
         self.cognito_user_pool_id = cognito_user_pool_id
         self.cognito_client_id = cognito_client_id
+        self.bucket_exists = bucket_exists
 
         super().__init__(scope, stack_id, description="Portal S3 bucket, CloudFront CDN, and CodeBuild deployment", **kwargs)
 
@@ -89,15 +92,23 @@ class ClientStack(Stack):
         # Use provided bucket name or generate one
         bucket_name = self.client_bucket or f"{self.client_host}-{self.domain.replace('.', '-')}"
         
-        # Create bucket with fixed logical ID
-        return s3.Bucket(
-            self,
-            "PortalBucket",  # Fixed logical ID
-            bucket_name=bucket_name,
-            removal_policy=RemovalPolicy.RETAIN,
-            auto_delete_objects=False,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-        )
+        # Import existing bucket or create new one with fixed logical ID
+        if self.bucket_exists:
+            print(f"  Using existing S3 bucket: {bucket_name}")
+            return s3.Bucket.from_bucket_name(
+                self,
+                "PortalBucket",  # Fixed logical ID
+                bucket_name
+            )
+        else:
+            return s3.Bucket(
+                self,
+                "PortalBucket",  # Fixed logical ID
+                bucket_name=bucket_name,
+                removal_policy=RemovalPolicy.RETAIN,
+                auto_delete_objects=False,
+                block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            )
 
     def _create_cloudfront_distribution(self) -> cloudfront.Distribution:
         """Create CloudFront distribution for portal."""
@@ -187,7 +198,7 @@ class ClientStack(Stack):
                 "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=self.portal_bucket.bucket_name),
                 "USER_POOL_ID": codebuild.BuildEnvironmentVariable(value=self.cognito_user_pool_id),
                 "CLIENT_ID": codebuild.BuildEnvironmentVariable(value=self.cognito_client_id),
-                "API_DOMAIN": codebuild.BuildEnvironmentVariable(value=self.api_url),
+                "API_DOMAIN": codebuild.BuildEnvironmentVariable(value=f"{self.api_host}.{self.domain}"),
                 "AWS_REGION": codebuild.BuildEnvironmentVariable(value=self.region_name),
                 "CLOUDFRONT_DISTRIBUTION_ID": codebuild.BuildEnvironmentVariable(value=self.distribution.distribution_id),
             },

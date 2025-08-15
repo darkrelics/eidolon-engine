@@ -1,22 +1,60 @@
-# Incremental Game API Documentation
+# Eidolon Engine API Documentation
 
 ## Overview
 
-The Incremental Game API provides RESTful endpoints for the Eidolon Engine incremental game mode. All endpoints require authentication via AWS Cognito and return JSON responses with PascalCase keys.
+The Eidolon Engine API provides RESTful endpoints for both MUD and Incremental game modes. Deployed via API Gateway with Lambda integrations, all endpoints require authentication via AWS Cognito and return JSON responses with PascalCase keys.
+
+## Infrastructure
+
+- **API Gateway**: REST API deployed at `api.{domain}` with Cognito authorizer
+- **Lambda Functions**: 16 functions with shared execution role and DynamoDB access
+- **CORS Configuration**: Handled at Lambda level with environment variables
+- **Deployment**: Part of 9-stack CDK deployment system (API Stack #8)
 
 ## Authentication
 
-All API endpoints require authentication using AWS Cognito JWT tokens. The token should be included in the `Authorization` header:
+All API endpoints require authentication using AWS Cognito JWT tokens from the `eidolon-users` User Pool. The token should be included in the `Authorization` header:
 
 ```
 Authorization: Bearer <jwt-token>
 ```
 
+**Cognito Configuration:**
+- User Pool: `eidolon-users`
+- PostConfirmation Trigger: `cognito-player-new` Lambda
+- Permissions managed post-deployment for imported pools
+
+## Lambda Functions
+
+All API endpoints are implemented as individual Lambda functions:
+
+### Character Management
+- `api-archetype-list` - GET /archetype
+- `api-character-add` - POST /character
+- `api-character-delete` - DELETE /character
+- `api-character-get` - GET /character
+- `api-character-list` - GET /character/list
+
+### Story Management
+- `api-segment-decision` - POST /segment/decision
+- `api-segment-history` - GET /segment/history
+- `api-segment-outcome` - GET /segment/outcome
+- `api-segment-rest` - POST /segment/rest
+- `api-segment-status` - GET /segment/status
+- `api-story-abandon` - POST /story/abandon
+- `api-story-start` - POST /story/start
+
+### Operational Functions (Not API-exposed)
+- `cognito-player-new` - Cognito PostConfirmation trigger
+- `ops-segment-poller` - EventBridge scheduled polling
+- `ops-segment-process` - SQS segment processor
+- `ops-story-advance` - SQS story advancement
+
 ## Common Response Formats
 
 ### Success Response
 
-All successful responses return HTTP 200 with JSON data using PascalCase keys.
+All successful responses return HTTP 200 with JSON data using PascalCase keys matching DynamoDB field names.
 
 ### Error Response
 
@@ -125,11 +163,15 @@ Authorization: Bearer <jwt-token>
 
 **Implementation Notes:**
 
-1. **Caching:** The Lambda function caches archetypes at cold start to minimize database calls. The cache persists for the lifetime of the Lambda instance (typically 30 minutes to 2 hours).
+1. **Lambda Configuration:** The `api-archetype-list` function uses:
+   - Shared execution role: `eidolon-lambda-execution-role`
+   - DynamoDB policy: `eidolon-dynamodb-policy` with DescribeTable permission
+   - Environment variables: Table names from DynamoDB stack outputs
+   - Fixed logical ID: `ApiArchetypeListFunction` preventing recreation
 
-2. **Filtering:** Only archetypes with `Player: true` in the database are returned, excluding NPC-only archetypes.
+2. **Caching:** The Lambda function caches archetypes at cold start to minimize database calls. The cache persists for the lifetime of the Lambda instance.
 
-3. **Sorting:** Results are sorted alphabetically by `ArchetypeName` for consistent ordering.
+3. **Filtering:** Only archetypes with `Player: true` in the database are returned, excluding NPC-only archetypes.
 
 4. **Client Usage:** The Flutter client uses a subset of the returned fields, ignoring `StartRoom`, `StartingItems`, and `AvailableStories` in its `ArchetypeInfo` model.
 
@@ -199,11 +241,15 @@ Authorization: Bearer <jwt-token>
 
 **Implementation Notes:**
 
-1. **Data Source:** Character information is retrieved from the Player table's `CharacterList` field, providing a lightweight response without requiring multiple database queries.
+1. **Lambda Configuration:** The `api-character-list` function:
+   - Uses the shared Lambda execution role
+   - Accesses the `players` DynamoDB table
+   - Returns PascalCase field names matching database schema
+   - Post-deployment updates ensure latest code from S3
 
-2. **No Caching:** This endpoint always returns fresh data to ensure players see their current character list immediately after character creation or death.
+2. **Data Source:** Character information is retrieved from the Player table's `CharacterList` field, providing a lightweight response without requiring multiple database queries.
 
-3. **Minimal Data:** Only essential information for character selection is returned. Full character details are retrieved separately via the Get Character endpoint.
+3. **No Caching:** This endpoint always returns fresh data to ensure players see their current character list immediately after character creation or death.
 
 4. **Client Handling:** The Flutter client adds a default `GameMode: 'None'` if not provided by the API for defensive programming.
 
@@ -275,17 +321,21 @@ Content-Type: application/json
 
 **Implementation Notes:**
 
-1. **Name Validation:** Character names must:
+1. **Lambda Configuration:** The `api-character-add` function:
+   - Accesses both `characters` and `archetypes` tables
+   - Uses environment variable `MAX_CHARACTERS_PER_PLAYER` (default 1)
+   - Validates against bloom filter loaded at function initialization
+   - Fixed logical ID: `ApiCharacterAddFunction`
 
+2. **Name Validation:** Character names must:
    - Be 3-32 characters long
    - Contain only letters, spaces, and hyphens
    - Not be in the restricted names bloom filter
    - Not already exist in the database
 
-2. **Character Limit:** Players can create up to the configured maximum (default 10) characters.
+3. **Character Limit:** Players can create up to the configured maximum (from environment variable).
 
-3. **Archetype Resolution:**
-
+4. **Archetype Resolution:**
    - If no archetype is specified, "default" is used
    - If an invalid archetype is specified, "default" is used with a log warning
    - Only player-available archetypes (`Player: true`) can be used
@@ -489,10 +539,15 @@ Maps inventory slot numbers to detailed item information:
 
 **Implementation Notes:**
 
-1. **Character Ownership:** The Lambda validates that the requested character belongs to the authenticated player. Attempting to access another player's character returns 404.
+1. **Lambda Configuration:** The `api-character-get` function:
+   - Accesses `characters`, `story`, `segments`, and `items` tables
+   - Enriches response with multiple table lookups
+   - Environment includes all DynamoDB table names
+   - Uses shared execution role with DynamoDB policy
 
-2. **Response Field Behavior:** The response dynamically includes different fields based on the character's state:
+2. **Character Ownership:** The Lambda validates that the requested character belongs to the authenticated player. Attempting to access another player's character returns 404.
 
+3. **Response Field Behavior:** The response dynamically includes different fields based on the character's state:
    - **With active story:** Includes `ActiveStory` and `ActiveSegment` objects (if present), does NOT include `AvailableStories`
    - **Without active story:** Does NOT include `ActiveStory` or `ActiveSegment`, but includes `AvailableStories` array if any stories are available
    - Fields are completely omitted from the response rather than being set to null
@@ -570,7 +625,7 @@ Authorization: Bearer <jwt-token>
 
 ### Start Story
 
-Starts a new story for the specified character.
+Starts a new story for the specified character. In Incremental/Hybrid modes, this triggers the Story Stack's SQS queues for segment processing.
 
 **Endpoint:** `POST /story/start`
 
@@ -617,6 +672,19 @@ Content-Type: application/json
   }
 }
 ```
+
+**Implementation Notes:**
+
+1. **Lambda Configuration:** The `api-story-start` function:
+   - Writes to `story`, `active_segments` tables
+   - May send message to SQS queue (Incremental/Hybrid modes)
+   - Environment includes `SEGMENT_QUEUE_URL` for SQS integration
+   - Story Stack provides SQS permissions via managed policy
+
+2. **Story Processing:** In Incremental/Hybrid modes:
+   - Creates initial segment in `active_segments` table
+   - Sends message to `eidolon-processing-queue`
+   - `ops-segment-process` Lambda processes segment asynchronously
 
 **Error Responses:**
 
@@ -859,6 +927,25 @@ Authorization: Bearer <jwt-token>
 
 ---
 
+## Deployment Context
+
+These API endpoints are part of the Eidolon Engine's 9-stack CDK deployment:
+
+### Stack Dependencies
+- **DynamoDB Stack**: Provides 14 tables with managed IAM policy
+- **Lambda Stack**: Deploys all 16 Lambda functions with shared execution role
+- **Player Stack**: Configures Cognito authorizer for API Gateway
+- **Story Stack** (Incremental/Hybrid): Provides SQS queues and EventBridge
+- **API Stack**: Creates API Gateway with Lambda integrations
+
+### Post-Deployment Operations
+- Lambda functions updated from S3 artifacts
+- Layer versions managed with automatic cleanup
+- Cognito trigger permissions configured for imported pools
+- CORS configured via Lambda environment variables
+
+---
+
 ### Character Rest
 
 Initiates a rest segment for character healing.
@@ -907,3 +994,46 @@ Content-Type: application/json
 | `409`  | "Character is already in a segment" | Character has an active segment |
 | `401`  | "Unauthorized"                      | Invalid or missing JWT token    |
 | `500`  | "Internal server error"             | Database or system failure      |
+
+## Environment Variables
+
+All API Lambda functions receive these environment variables:
+
+```python
+# From lambda_stack.py
+"APPLICATION_NAME": "eidolon-engine"
+"LOG_LEVEL": "INFO"  # Validated by eidolon/environment.py
+"ALLOWED_ORIGINS": "https://{client_host}.{domain}"
+"CORS_ALLOW_CREDENTIALS": "true"
+"CORS_ALLOW_HEADERS": "Content-Type,X-Amz-Date,Authorization,..."
+"CORS_ALLOW_METHODS": "GET,POST,PUT,DELETE,OPTIONS"
+"CORS_MAX_AGE": "86400"
+
+# DynamoDB table names from stack outputs
+"players_table": "players"
+"characters_table": "characters"
+"archetypes_table": "archetypes"
+"story_table": "story"
+"segments_table": "segments"
+"active_segments_table": "active_segments"
+# ... etc
+
+# Function-specific (e.g., ops-segment-process)
+"SEGMENT_BATCH_SIZE": "10"
+"SEGMENT_QUEUE_URL": "https://sqs.{region}.amazonaws.com/{account}/eidolon-processing-queue"
+```
+
+## API Domain Configuration
+
+The API is deployed at `api.{domain}` with:
+- ACM certificate for HTTPS
+- Route53 DNS record
+- CloudFront distribution (optional)
+- CORS preflight handled by API Gateway with wildcard
+- Actual origin validation in Lambda functions
+
+**Important:** The Flutter client receives the domain without protocol:
+```python
+# In client_stack.py
+"API_DOMAIN": f"{api_host}.{domain}"  # Not the full URL
+```

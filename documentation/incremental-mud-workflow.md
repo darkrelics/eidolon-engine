@@ -1,30 +1,42 @@
-# Incremental to MUD Character Workflow
+# Eidolon Engine Character Mode Workflow
 
 ## Overview
 
-This document describes how characters transition between Incremental and MUD game modes using the shared backend infrastructure. The GameMode field on each character ensures they can only be active in one mode at a time, preventing concurrent access issues.
+This document describes how characters transition between Incremental and MUD game modes in the production Eidolon Engine system. Built on the 9-stack CDK deployment with 16 Lambda functions and 14 DynamoDB tables, the system uses the GameMode field to ensure characters can only be active in one mode at a time.
+
+## Infrastructure Context
+
+- **Deployment Modes**: MUD (8 stacks), Incremental (7 stacks), or Hybrid (9 stacks)
+- **Shared Resources**: All modes use the same DynamoDB tables and Lambda functions
+- **Authentication**: Cognito User Pool (`eidolon-users`) with PostConfirmation trigger
+- **API Gateway**: REST API at `api.{domain}` with Lambda integrations
 
 ## Workflow Steps
 
 ### 1. Account Creation
 
-- Player creates account via Incremental UI
-- Cognito handles authentication
-- Player record created in DynamoDB
+- Player creates account via Incremental UI (deployed at `portal.{domain}`)
+- Cognito User Pool (`eidolon-users`) handles authentication
+- `cognito-player-new` Lambda (PostConfirmation trigger) creates player record
+- Player record stored in `players` DynamoDB table
+- Lambda permission for Cognito trigger managed post-deployment for imported pools
 
 ### 2. Character Creation
+
+**Lambda Function**: `api-character-add` (POST /character)
 
 - Player provides character name and optional archetype selection
 - Name format validated (length, allowed characters, etc.)
 - Restricted names checked against loaded bloom filter
 - Name uniqueness verified using CharacterNameIndex GSI query
-- Player's character count checked against limit (max 10 per player)
-- Archetype data loaded from archetypes table (defaults used if invalid/missing)
+- Player's character count checked against limit (from `MAX_CHARACTERS_PER_PLAYER` env var)
+- Archetype data loaded from `archetypes` table (defaults used if invalid/missing)
 - Starting items created from archetype's prototype list
 - Character created with `GameMode: "None"` (allows player to choose initial mode)
-- Character record stored in shared characters table
+- Character record stored in shared `characters` table
 - Player's CharacterList updated with new character entry
 - AvailableStories list populated from archetype configuration
+- Response uses PascalCase field names matching DynamoDB schema
 
 ### 3. Character Customization (Rapid Inactive)
 
@@ -39,21 +51,28 @@ Characters can transition between modes with these safeguards:
 
 **None to Incremental:**
 
+**Lambda Function**: `api-story-start` (POST /story/start)
+
 - Character must have GameMode "None" (not in any active mode)
 - Player selects a story from AvailableStories list
 - GameMode updated to "Incremental"
 - ActiveStoryID and ActiveSegmentID set
-- First segment created and processed immediately
-- SSM parameter checked, polling enabled if needed
+- First segment created in `active_segments` table
+- For mechanical segments, message sent to `eidolon-processing-queue`
+- `ops-segment-process` Lambda triggered by SQS to process segment
+- SSM parameter `/eidolon/story/config` checked, EventBridge rule enabled if needed
 
 **Incremental to None:**
 
-- Occurs automatically when story completes (success or failure)
+**Lambda Functions**: `ops-story-advance` (SQS) or `api-story-abandon` (POST /story/abandon)
+
+- Occurs automatically when story completes (via `ops-story-advance`)
 - Can be triggered manually via abandon story API
 - All ActiveSegments for character deleted
 - GameMode reset to "None"
 - ActiveStoryID and ActiveSegmentID cleared
 - Story moved to CompletedStories or AbandonedStories list
+- Records written to `story_history` and `segment_history` tables
 
 **None to MUD:**
 
@@ -71,7 +90,7 @@ Characters can transition between modes with these safeguards:
 
 ### 5. Persistent State Between Modes
 
-Character state persists across mode transitions, creating meaningful consequences:
+Character state persists across mode transitions in the 14 DynamoDB tables (all with RemovalPolicy.RETAIN):
 
 **Health and Wounds:**
 
@@ -181,10 +200,14 @@ The Incremental mode maintains sophisticated state tracking:
 - AbandonedStories: Stories started but not completed
 - Story types (one-time, daily, repeatable) control re-availability
 
-**Polling System:**
+**Polling System (Story Stack - Incremental/Hybrid Only):**
 
-- 1-minute EventBridge polling for segment completion
-- SSM parameter `/eidolon/segment-poller-state` controls polling
+- EventBridge rule `eidolon-story-poller` (1-minute schedule)
+- Triggers `ops-segment-poller` Lambda function
+- SSM parameter `/eidolon/story/config` controls polling state
+- Queries EndTimeIndex on `active_segments` table
+- Sends completed segments to `eidolon-advancement-queue`
+- `ops-story-advance` Lambda processes queue messages
 - Automatic enable when stories start, disable when none active
 - Stuck segment recovery after 15 minutes
 
@@ -217,19 +240,44 @@ The wound healing system operates continuously across both game modes:
 ## Security Considerations
 
 - GameMode field is only modifiable through authorized Lambda functions
+- All Lambda functions use shared execution role: `eidolon-lambda-execution-role`
+- DynamoDB access via managed policy: `eidolon-dynamodb-policy` (includes DescribeTable)
 - Mode transitions require validation of game state
-- IAM roles restrict direct database access
-- API Gateway authentication required for all operations
+- API Gateway at `api.{domain}` with Cognito authorizer
+- CORS validation at Lambda level using environment variables
 - RunningFlag prevents concurrent segment processing
 - Conditional updates prevent race conditions
+- Fixed logical IDs prevent resource recreation on stack updates
 
 ## Performance Optimization
 
-- Character lookups use DynamoDB's consistent performance
+- Character lookups use DynamoDB's pay-per-request pricing
 - GameMode checks are simple string comparisons
-- Lambda functions cache archetype data
+- Lambda functions cache archetype data at cold start
+- Lambda layer contains shared `eidolon` library (updated post-deployment)
 - Conditional writes prevent race conditions
 - Front-loaded segment processing eliminates runtime calculations
 - GSI queries (EndTimeIndex) enable efficient polling
-- SQS batching reduces API calls
+- SQS queues (`eidolon-processing-queue`, `eidolon-advancement-queue`) batch processing
 - Auto-disable polling when no active stories
+- Post-deployment Lambda updates from S3 artifacts ensure latest code
+- Layer version cleanup prevents accumulation
+
+## Deployment Considerations
+
+### Mode-Specific Stack Deployment
+
+**MUD Mode (8 Stacks):**
+- Excludes Story Stack (no SQS/EventBridge)
+- Includes S3 Scripts and CloudWatch for Lua support
+- Portal frontend via `buildspec/portal.yml`
+
+**Incremental Mode (7 Stacks):**
+- Includes Story Stack for segment processing
+- Excludes S3 Scripts and CloudWatch stacks
+- Incremental frontend via `buildspec/incremental.yml`
+
+**Hybrid Mode (9 Stacks - Default):**
+- Includes all stacks for complete functionality
+- Supports both MUD and Incremental gameplay
+- Incremental frontend with mode selection

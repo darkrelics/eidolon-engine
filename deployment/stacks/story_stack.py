@@ -162,9 +162,9 @@ class StoryStack(Stack):
         # Import the Lambda function with its role for proper permission grants
         # We need to use from_function_attributes to include the role
         # Use fixed logical IDs based on trigger_id
-        function_logical_id = "ImportedProcessFunction" if trigger_id == "ProcessTrigger" else "ImportedAdvanceFunction"
-        role_logical_id = "ImportedProcessRole" if trigger_id == "ProcessTrigger" else "ImportedAdvanceRole"
-        mapping_logical_id = "ProcessMapping" if trigger_id == "ProcessTrigger" else "AdvanceMapping"
+        function_logical_id = "ImportedProcessFunction" if trigger_id == "ProcessorTrigger" else "ImportedAdvanceFunction"
+        role_logical_id = "ImportedProcessRole" if trigger_id == "ProcessorTrigger" else "ImportedAdvanceRole"
+        mapping_logical_id = "ProcessMapping" if trigger_id == "ProcessorTrigger" else "AdvanceMapping"
         
         lambda_function = lambda_.Function.from_function_attributes(
             self,

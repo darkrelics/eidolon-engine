@@ -14,6 +14,10 @@ from utilities import run_cdk_deploy, validate_policies
 
 def deploy_codebuild_stack(params) -> dict:
     """Deploy the CodeBuild stack using CDK."""
+    # Check if S3 bucket already exists
+    from stacks.stack_utilities import check_s3_bucket_exists
+    bucket_exists = check_s3_bucket_exists(params.s3_bucket, params.region)
+    
     # Pass parameters through context
     context_args = [
         "-c",
@@ -26,6 +30,8 @@ def deploy_codebuild_stack(params) -> dict:
         f"github_repo={params.github_repo}",
         "-c",
         f"github_branch={params.github_branch}",
+        "-c",
+        f"bucket_exists={'true' if bucket_exists else 'false'}",
     ]
 
     app_command = "python3 app_codebuild.py"

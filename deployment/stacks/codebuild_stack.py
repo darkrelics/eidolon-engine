@@ -21,6 +21,7 @@ class CodeBuildStack(Stack):
         github_owner: str = "robinje",
         github_repo: str = "eidolon-engine",
         github_branch: str = "develop",
+        bucket_exists: bool = False,
         **kwargs,
     ) -> None:
         """Initialize CodeBuild stack.
@@ -33,6 +34,7 @@ class CodeBuildStack(Stack):
             github_owner: GitHub repository owner
             github_repo: GitHub repository name
             github_branch: GitHub branch to build from
+            bucket_exists: Whether the S3 bucket already exists
             **kwargs: Additional stack properties
         """
         self.region_name = region_name
@@ -42,15 +44,23 @@ class CodeBuildStack(Stack):
         self.github_branch = github_branch
         super().__init__(scope, stack_id, **kwargs)
 
-        # Create S3 bucket for artifacts with fixed logical ID
-        bucket = s3.Bucket(
-            self,
-            "ArtifactsBucket",  # Fixed logical ID - won't change between deployments
-            bucket_name=self.s3_bucket_name,
-            removal_policy=RemovalPolicy.RETAIN,
-            auto_delete_objects=False,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-        )
+        # Import existing bucket or create new one with fixed logical ID
+        if bucket_exists:
+            print(f"  Using existing S3 bucket: {self.s3_bucket_name}")
+            bucket = s3.Bucket.from_bucket_name(
+                self,
+                "ArtifactsBucket",  # Fixed logical ID
+                self.s3_bucket_name
+            )
+        else:
+            bucket = s3.Bucket(
+                self,
+                "ArtifactsBucket",  # Fixed logical ID - won't change between deployments
+                bucket_name=self.s3_bucket_name,
+                removal_policy=RemovalPolicy.RETAIN,
+                auto_delete_objects=False,
+                block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            )
 
         # Store bucket reference
         self.artifacts_bucket = bucket

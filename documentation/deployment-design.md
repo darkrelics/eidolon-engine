@@ -1,43 +1,46 @@
-# Incremental Deployment System Design
+# Eidolon Engine Deployment System Design
 
 ## Executive Summary
 
-The Eidolon Engine deployment system provides a sophisticated, incremental infrastructure deployment solution that supports multiple game modes while maintaining a unified backend architecture. This system was designed to solve the complex challenge of deploying and managing AWS infrastructure for a multi-mode gaming platform that can operate as a traditional MUD, an incremental idle game, or a hybrid of both.
+The Eidolon Engine deployment system provides a modular, CDK-based infrastructure deployment solution that supports multiple game modes while maintaining clean separation of concerns. Successfully replacing a monolithic 1800+ line deployment class, the new architecture features 9 independent CDK stacks, 3 deployment modes, and automated end-to-end deployment from infrastructure provisioning to portal deployment.
 
-The deployment system leverages AWS CDK (Cloud Development Kit) to provide infrastructure-as-code capabilities while adding intelligent state management, resource discovery, and fail-forward recovery mechanisms. This approach enables zero-downtime updates, efficient resource utilization, and seamless transitions between different operational modes.
+The system leverages AWS CDK v2 with a clear separation between CDK synthesis and deployment operations, ensuring that AWS API calls only occur during the deployment phase. This architecture enables reliable deployments, efficient resource management, and seamless transitions between different operational modes (MUD, Incremental, and Hybrid).
 
 ## The Challenge
 
-Traditional deployment approaches often require complete infrastructure teardown and rebuild for significant changes, leading to:
+The original deployment system suffered from:
 
-- Extended downtime during updates
-- Risk of data loss or corruption
-- Complex rollback procedures
-- Difficulty in maintaining multiple environments
-- Manual configuration management prone to errors
+- **Monolithic Structure**: Single 1800+ line class handling all deployment logic
+- **Poor Separation of Concerns**: Business logic, infrastructure, and UI mixed together
+- **Code Duplication**: AWS client creation and configuration management scattered
+- **Complex Dependencies**: Circular dependencies and tightly coupled components
+- **Inconsistent Error Handling**: Silent failures with no clear recovery mechanism
+- **Resource Recreation**: Resources being deleted and recreated on every deployment
 
 The Eidolon Engine needed a deployment system that could:
 
 - Support multiple game modes with different frontend requirements
-- Share backend infrastructure efficiently across all modes
-- Enable incremental updates without service disruption
-- Detect and report configuration drift
-- Provide clear recovery paths when deployments fail
-- Minimize manual configuration while maintaining flexibility
+- Maintain clean separation between CDK synthesis and AWS operations
+- Use fixed logical IDs to prevent resource recreation
+- Provide post-deployment Lambda updates from S3 artifacts
+- Enable automated portal builds after infrastructure deployment
+- Enforce module size limits (300 lines ideal, 1000 maximum)
 
 ## The Solution
 
-Our incremental deployment system addresses these challenges through:
+The new modular deployment system addresses these challenges through:
 
-1. **Unified Backend Architecture**: All game modes share the same DynamoDB tables, Lambda functions, and API Gateway endpoints, reducing infrastructure costs and complexity.
+1. **Modular Architecture**: 9 independent CDK stacks with clean separation of concerns, 94% of modules under 300 lines.
 
-2. **Mode-Aware Frontend Selection**: The system automatically deploys the appropriate frontend (Portal for MUD, Incremental for other modes) based on the selected deployment mode.
+2. **Fixed Logical IDs**: Preventing resource recreation by using consistent logical IDs across deployments.
 
-3. **Intelligent State Management**: The system tracks deployment state, preserves configuration between runs, and can resume from partial deployments.
+3. **CDK Context Standardization**: All stacks use `app.node.try_get_context()` instead of argparse for parameter passing.
 
-4. **Resource Discovery and Validation**: Before deployment, the system discovers existing AWS resources and validates their configuration against the desired state.
+4. **Post-Deployment Updates**: Lambda functions and layers automatically updated from S3 artifacts after CDK deployment.
 
-5. **Fail-Forward Recovery**: Instead of automatic rollback, the system preserves successful deployments and provides clear guidance for fixing and continuing from failure points.
+5. **Automated Portal Deployment**: CodeBuild project executes automatically after Client Stack deployment.
+
+6. **AWS Access Isolation**: All AWS API calls moved from CDK synthesis to deployment layer, ensuring synthesis is deterministic.
 
 ## Overview
 
@@ -68,111 +71,99 @@ All deployment modes (MUD, Incremental, Hybrid) share:
 - Updates configuration files with deployment outputs
 - Implements fail-forward approach for error recovery
 
-### 2. State Manager (`deployment/state_manager.py`)
+### 2. Core Infrastructure (`deployment/core/`)
 
-- Reads and writes infrastructure state to local cache
-- Tracks deployed resources and their configurations
-- Persists deployment parameters between runs
-- Records deployment history and events
+- **config.py**: Configuration dataclass for operational data persistence
+- **state.py**: CDK state tracking for deployment management
+- **dynamodb_tables.py**: Table configurations with schema definitions
 
-### 3. Resource Validator (`deployment/resource_validator.py`)
+### 3. Stack Utilities (`deployment/stacks/stack_utilities.py`)
 
-- Validates individual AWS resources (DynamoDB, CloudWatch, CodeBuild, etc.)
-- Checks resource configurations against desired state
-- Detects configuration drift
-- Provides factory pattern for extensible resource validation
+- Consolidated resource existence checks using boto3
+- S3 bucket, DynamoDB table, and Cognito User Pool validation
+- ACM certificate and CloudFront distribution preservation
+- Used during deployment layer, not CDK synthesis
 
-### 4. CDK Application (`deployment/cdk/`)
+### 4. CDK Applications (`deployment/app_*.py`)
 
-- **app.py**: Main CDK application entry point with mode-aware deployment
-- **stacks/**: Individual CDK stack definitions
-  - `iam_stack.py`: IAM roles and policies for server execution
-  - `s3_stack.py`: S3 buckets with smart existing bucket detection
-  - `dynamodb_stack.py`: Unified DynamoDB tables for all modes
-  - `cognito_stack.py`: User authentication infrastructure (shared)
-  - `cloudwatch_stack.py`: Logging and metrics configuration
-  - `cloudfront_stack.py`: CDN distribution with mode-aware configuration
-  - `codebuild_stack.py`: CI/CD pipeline selecting buildspec by mode
-  - `lambda_stack.py`: Unified Lambda functions and API Gateway
-  - `base_lambda_stack.py`: Shared Lambda layer and base functions
+Each stack has its own app file to prevent cross-contamination:
 
-### 5. Configuration Manager (within `state_manager.py`)
+- **app_dynamodb.py**: DynamoDB tables with managed policy
+- **app_codebuild.py**: Build projects and artifacts bucket
+- **app_s3.py**: Scripts bucket with automatic upload
+- **app_cloudwatch.py**: Log group and metrics namespace
+- **app_lambda.py**: Layer, functions, and execution role
+- **app_player.py**: Cognito User Pool with triggers
+- **app_story.py**: SSM, SQS, EventBridge integration
+- **app_api.py**: API Gateway with Lambda integrations
+- **app_client.py**: CloudFront, S3, and portal build
 
-- Reads and updates `config.yml`
-- Manages configuration sections (Game, AWS, Cognito, DynamoDB, etc.)
-- Ensures configuration consistency with deployed resources
+### 5. Deployment Modules
 
-### 6. Script Deployment (`deployment/deploy_scripts.py`)
+Modular deployment functions for each stack:
 
-- Standalone utility for Lua script deployment to S3
-- List and delete capabilities for deployed scripts
-- Independent of main infrastructure deployment
+- **dynamodb.py**: Table deployment and validation
+- **codebuild.py**: Build project deployment with automatic execution
+- **s3.py**: Scripts bucket with Lua upload
+- **cloudwatch.py**: Logging infrastructure
+- **lambda_functions.py**: Lambda deployment with post-deploy updates
+- **player.py**: Cognito setup with trigger configuration
+- **story.py**: Event-driven processing setup
+- **api.py**: API Gateway deployment
+- **client.py**: Portal infrastructure with automated build
 
 ## Deployment Flow
 
 1. **Prerequisites Check**
+   - Verify CDK bootstrap status
+   - Validate AWS credentials and region
+   - Auto-copy config.template.yml if needed
 
-   - Verify CDK is installed
-   - Validate AWS credentials and access
-   - Confirm AWS account and region
+2. **Parameter Collection**
+   - Priority: Defaults → cdk.json → config.yml → User prompts
+   - Collect all user input upfront
+   - Single deployment confirmation
+   - Mode selection (MUD/Incremental/Hybrid)
 
-2. **Parameter Loading**
+3. **Stack Deployment Order (Mode-Dependent)**
 
-   - Load saved parameters from state manager
-   - Read existing `config.yml` if present
-   - Determine deployment mode (mud/incremental/hybrid)
-   - Extract S3 bucket names and other configurations
-   - Prompt user for any missing required parameters
+   **Hybrid Mode (Default):**
+   1. CodeBuild → 2. DynamoDB → 3. Lambda → 4. Player → 5. Story → 6. S3 → 7. CloudWatch → 8. API → 9. Client → [Portal Build]
 
-3. **Discovery & Analysis Phase**
+   **MUD Mode:**
+   1. CodeBuild → 2. DynamoDB → 3. Lambda → 4. Player → 5. S3 → 6. CloudWatch → 7. API → 8. Client → [Portal Build]
 
-   - Query existing CloudFormation stacks
-   - Validate existing resources for drift detection
-   - Generate drift report for any configuration mismatches
+   **Incremental Mode:**
+   1. CodeBuild → 2. DynamoDB → 3. Lambda → 4. Player → 5. Story → 6. API → 7. Client → [Portal Build]
 
-4. **Planning Phase**
+4. **CDK Execution**
+   - Pass parameters via CDK context (-c flags)
+   - Each stack in separate app file
+   - Fixed logical IDs for all resources
+   - Post-deployment validation with boto3
 
-   - Identify stacks to create vs update
-   - Build comprehensive deployment plan
-   - Present plan to user for approval
+5. **Post-Deployment Operations**
+   - Lambda function updates from S3
+   - Layer version management and cleanup
+   - Cognito trigger configuration for imported pools
+   - S3 bucket policy updates for CloudFront
 
-5. **Execution Phase**
+6. **Automated Portal Build**
+   - CodeBuild project execution
+   - Real-time phase monitoring
+   - S3 sync and CloudFront invalidation
+   - Portal URL display on completion
 
-   - Set up CDK environment variables and context
-   - Pass deployment mode to CDK context
-   - Execute `cdk deploy --all` with appropriate parameters
-   - CDK creates unified backend for all modes
-   - CDK selects frontend based on deployment mode
-   - Monitor deployment progress
-   - On failure, stop and provide recovery guidance
+## Key Achievements
 
-6. **Configuration Update**
-
-   - Query deployed stack outputs
-   - Update `config.yml` with:
-     - Cognito user pool and client IDs
-     - DynamoDB table names
-     - CloudWatch log groups
-     - S3 bucket names
-     - CloudFront distribution ID and portal URL
-   - Save updated configuration
-
-7. **Finalization**
-   - Record deployment event in state manager
-   - Save deployment state and parameters
-   - Deploy Lua scripts to S3 (if applicable)
-   - Report deployment summary
-
-## Key Benefits
-
-- No complete redeployment for minor changes
-- Faster deployment times
-- Fail-forward approach with clear recovery paths
-- Configuration drift detection
-- Minimal user input required
-- Infrastructure as code with type safety
-- Built-in CDK diff capabilities
-- Automatic dependency resolution by CDK
+- **Modular Architecture**: 94% of modules under 300 lines (vs 1800+ line monolith)
+- **Fixed Logical IDs**: Preventing resource recreation on updates
+- **CDK Best Practices**: No AWS access during synthesis phase
+- **Automated Deployment**: End-to-end from infrastructure to portal
+- **Post-Deploy Updates**: Ensuring Lambda functions use latest code
+- **Layer Management**: Automatic cleanup of old Lambda layer versions
+- **Production Tested**: All 9 phases deployed and operational
+- **140 Lessons Learned**: Documented and applied throughout implementation
 
 ## Implementation Notes
 
@@ -189,52 +180,45 @@ This consolidation follows the codebase principle of "simplicity of code is high
 
 ### Resource Naming
 
-- All resources use simple names for clarity and consistency:
-  - DynamoDB tables (unified): `players`, `characters`, `archetypes`, `items`, `progress`, `resources`, `rooms`, `exits`, `prototypes`, `motd`, `story`
-  - S3 buckets:
-    - Portal: `darkrelics-portal` (default) or custom name
-    - Scripts: `darkrelics-scripts` (default) or custom name
-    - Lambda: `{game_name}-lambda-{account_id}` (e.g., `eidolon-engine-lambda-123456789012`)
-  - CloudWatch log group: `/aws/eidolon/server`
-  - Cognito user pool: `eidolon-users`
-  - CodeBuild project: `eidolon-codebuild`
-  - CloudFront: `eidolon-distribution`
-  - API Gateway: `eidolon-api` at `api.{domain}`
-  - IAM resources:
-    - Role: `{game_name}-server-execution-role`
-    - Policies: `eidolon-{game_name}-dynamodb-access`, `eidolon-{game_name}-cloudwatch-access`
-- CDK stack names are simple service names: `iam`, `s3`, `dynamodb`, `cognito`, `cloudwatch`, `codebuild`, `base-lambda`, `lambda`, `cloudfront`
+- **DynamoDB Tables**: `players`, `characters`, `rooms`, `exits`, `items`, `prototypes`, `archetypes`, `motd`, `story`, `segments`, `active_segments`, `story_history`, `segment_history`, `opponents`
+- **S3 Buckets**:
+  - Artifacts: `eidolon-engine-lambda-{account_id}`
+  - Scripts: `eidolon-scripts-{account_id}`
+  - Portal: `portal.{domain}` or custom
+- **Lambda Functions**: 16 functions with fixed logical IDs
+- **Cognito**: `eidolon-users` pool
+- **CloudWatch**: `/eidolon/server` log group
+- **API Gateway**: REST API at `api.{domain}`
+- **CloudFront**: Distribution at `portal.{domain}`
+- **IAM**: Shared execution role with managed policies
+- **CDK Stack IDs**: Simple lowercase names (`dynamodb`, `lambda`, `player`, etc.)
 
-### CI/CD Integration
+### Critical Implementation Lessons
 
-The CodeBuild stack is integrated with CloudFront for seamless deployments:
+1. **CDK Synthesis vs Runtime**: Resource existence checks during synthesis don't have AWS access - use fixed logical IDs instead
+2. **Post-Deployment Updates**: Lambda functions must be updated from S3 after CDK deployment to ensure latest code
+3. **Context Over Arguments**: Use CDK context (-c flags) instead of argparse for all app files
+4. **Stack Isolation**: Each CDK stack needs its own app file to prevent output contamination
+5. **Lambda Permission Management**: Cognito trigger permissions must be managed post-deployment for imported User Pools
+6. **API Domain Configuration**: Pass domain without protocol to Flutter builds to prevent double `https://`
+7. **DynamoDB Permissions**: Include `DescribeTable` action for proper table access
 
-- **Mode-aware builds**: Selects buildspec based on deployment mode
-  - MUD mode: Uses `buildspec/portal.yml`, builds from `portal/`
-  - Incremental/Hybrid: Uses `buildspec/incremental.yml`, builds from `incremental/`
-- **Automatic cache invalidation**: Build process invalidates CloudFront distribution after S3 sync
-- **Conditional invalidation**: Only runs when CloudFront distribution ID is configured
-- **IAM permissions**: CodeBuild role includes cloudfront:CreateInvalidation permission
+### Deployment Modes
 
-This ensures zero-downtime deployments with immediate content updates for end users.
+**MUD Mode**: Traditional Multi-User Dungeon
+- Stack Order: CodeBuild → DynamoDB → Lambda → Player → S3 → CloudWatch → API → Client
+- Portal Build: Uses `buildspec/portal.yml`
+- Excludes: Story Stack
 
-### Fail-Forward Approach
+**Incremental Mode**: Story-Driven Gameplay
+- Stack Order: CodeBuild → DynamoDB → Lambda → Player → Story → API → Client
+- Portal Build: Uses `buildspec/incremental.yml`
+- Excludes: S3 and CloudWatch Stacks
 
-The deployment system uses a fail-forward strategy rather than automatic rollback:
-
-1. **Partial Deployment Success**: If some stacks deploy successfully before a failure, they remain deployed
-2. **Incremental Recovery**: Failed deployments can be fixed and re-run without affecting successful stacks
-3. **State Preservation**: Deployment state tracks what succeeded for informed recovery decisions
-4. **CDK Stack Rollback**: Individual stack failures are rolled back by CDK, preventing broken stacks
-5. **Manual Intervention**: Requires human decision on whether to continue, fix, or destroy
-
-This approach:
-
-- **Preserves successful work**: Doesn't waste successfully deployed resources
-- **Enables debugging**: Failed stacks can be investigated in place
-- **Supports iteration**: Fix issues and redeploy only what failed
-- **Reduces risk**: No cascading rollback failures
-- **Maintains control**: Operators decide the recovery strategy
+**Hybrid Mode** (Default): Full Feature Set
+- Stack Order: CodeBuild → DynamoDB → Lambda → Player → Story → S3 → CloudWatch → API → Client
+- Portal Build: Uses `buildspec/incremental.yml`
+- Includes: All stacks
 
 ## Real-World Usage Scenarios
 
@@ -277,41 +261,53 @@ During routine deployment checks:
 3. Offers options to update infrastructure or update expectations
 4. Ensures consistency between code and deployed resources
 
-## Benefits and Outcomes
+## Production Deployment Results
 
-### Operational Benefits
+### Architecture Improvements
 
-- **Reduced Deployment Time**: Incremental updates typically complete in 5-10 minutes vs 30-45 minutes for full deployments
-- **Zero Downtime**: Backend services remain available during frontend updates
-- **Lower Risk**: Partial failures don't affect running services
-- **Better Observability**: Clear visibility into what's deployed and what's pending
+- **Code Organization**: From 1800+ line monolith to modular architecture (94% modules under 300 lines)
+- **Deployment Reliability**: Fixed logical IDs prevent resource recreation
+- **CDK Compliance**: No AWS access during synthesis phase
+- **Automation**: End-to-end deployment including portal build
 
-### Development Benefits
+### Operational Achievements
 
-- **Faster Iteration**: Developers can quickly test infrastructure changes
-- **Mode Flexibility**: Easy switching between MUD, Incremental, and Hybrid modes
-- **Simplified Testing**: Each component can be updated independently
-- **Clear Separation**: Frontend and backend concerns are properly isolated
+- **9 CDK Stacks**: All deployed and operational in production
+- **3 Deployment Modes**: Successfully tested (MUD, Incremental, Hybrid)
+- **140 Lessons Learned**: Documented and applied
+- **Post-Deploy Updates**: Lambda functions automatically updated from S3
+- **Layer Management**: Old versions automatically cleaned up
 
-### Business Benefits
+### Key Metrics
 
-- **Cost Optimization**: Shared infrastructure reduces AWS costs by ~40%
-- **Scalability**: Unified backend scales efficiently for all game modes
-- **Maintainability**: Single codebase for infrastructure management
-- **Flexibility**: New game modes can be added without infrastructure redesign
+- **Module Size**: 94% under 300 lines, 100% under 1000 lines
+- **Stack Count**: 9 independent CDK stacks
+- **Lambda Functions**: 16 functions with shared execution role
+- **DynamoDB Tables**: 14 tables with managed policy
+- **Deployment Time**: Full deployment in under 15 minutes
 
-## Future Enhancements
+## System Validation
 
-The deployment system is designed for extensibility:
+### Post-Stack Validation
+- Resource existence verification with boto3
+- IAM policy attachment confirmation
+- Lambda function and layer updates from S3
+- Cognito trigger configuration for imported pools
 
-1. **Multi-Region Support**: Deploy to multiple AWS regions with data replication
-2. **Blue-Green Deployments**: Support for zero-downtime backend updates
-3. **Automated Testing**: Integration with infrastructure testing frameworks
-4. **Cost Monitoring**: Built-in cost analysis and optimization recommendations
-5. **Backup and Restore**: Automated backup strategies with point-in-time recovery
+### Build Artifact Validation
+- Lambda layer zip existence and size
+- All 16 Lambda function zips present
+- Portal build output in S3
+- CloudFront distribution accessibility
+
+### Integration Points
+- Cognito PostConfirmation → cognito-player-new Lambda
+- SQS Queues → ops-segment-process and ops-story-advance
+- EventBridge → ops-segment-poller (disabled by default)
+- API Gateway → All API Lambda functions with Cognito authorizer
 
 ## Conclusion
 
-The Eidolon Engine's incremental deployment system represents a sophisticated approach to infrastructure management that balances flexibility, reliability, and efficiency. By combining AWS CDK's infrastructure-as-code capabilities with intelligent state management and fail-forward recovery, the system enables rapid development and deployment while maintaining production stability.
+The Eidolon Engine deployment system successfully demonstrates how a complex monolithic deployment system can be transformed into a clean, modular architecture. Through 140 documented lessons learned and strict adherence to CDK best practices, the system achieves reliable, automated deployments while maintaining code simplicity.
 
-This design demonstrates that complex multi-mode applications can be deployed and managed effectively without sacrificing simplicity or reliability. The unified backend architecture with mode-aware frontend selection provides a blueprint for similar multi-tenant or multi-mode applications.
+Key successes include the separation of CDK synthesis from AWS operations, use of fixed logical IDs to prevent resource recreation, and automated post-deployment updates ensuring Lambda functions always use the latest code. The system's production deployment validates that sophisticated multi-mode applications can be deployed efficiently without sacrificing maintainability or reliability.

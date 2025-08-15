@@ -28,6 +28,7 @@ deployment_mode = app.node.try_get_context("deployment_mode") or "hybrid"
 github_owner = app.node.try_get_context("github_owner") or "robinje"
 github_repo = app.node.try_get_context("github_repo") or "eidolon-engine"
 github_branch = app.node.try_get_context("github_branch") or "develop"
+bucket_exists = app.node.try_get_context("bucket_exists") == "true"
 
 # Get Cognito settings
 cognito_user_pool_id = app.node.try_get_context("cognito_user_pool_id") or ""
@@ -51,6 +52,7 @@ client_stack = ClientStack(
     github_branch=github_branch,
     cognito_user_pool_id=cognito_user_pool_id,
     cognito_client_id=cognito_client_id,
+    bucket_exists=bucket_exists,
 )
 
 app.synth()

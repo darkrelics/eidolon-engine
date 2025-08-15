@@ -12,6 +12,17 @@ The Eidolon Engine's incremental game mode features a story-driven progression s
 - **Event-driven Advancement**: A polling system checks every minute for completed segments
 - **Mode Exclusivity**: Characters can only be active in one game mode at a time (MUD or Incremental)
 
+### Production Infrastructure
+
+The story system is deployed as part of the 9-stack CDK architecture:
+
+- **Story Stack**: Available in Incremental and Hybrid deployment modes
+- **16 Lambda Functions**: Including 12 story-related functions
+- **14 DynamoDB Tables**: 5 dedicated to story/segment data
+- **SQS Queues**: Dual queues for processing and advancement
+- **EventBridge**: 1-minute polling rule (auto-enabled when stories active)
+- **Fixed Logical IDs**: Preventing resource recreation on updates
+
 ## Schema Elements
 
 ### Story Table
@@ -273,35 +284,47 @@ Rest segments are special healing segments that allow characters to recover from
 
 ## Lambda Function Machinery
 
+### Production Configuration
+
+All Lambda functions are deployed with:
+- **Runtime**: Python 3.12
+- **Memory**: 128MB
+- **Timeout**: 30 seconds
+- **Shared Execution Role**: `eidolon-lambda-execution-role`
+- **DynamoDB Policy**: `eidolon-dynamodb-policy` with DescribeTable permission
+- **Fixed Logical IDs**: Preventing recreation on stack updates
+- **Post-Deployment Updates**: Functions updated from S3 artifacts
+
 ### API Layer Functions
 
-**api-story-start**:
+**api-story-start** (Logical ID: `ApiStoryStartFunction`):
 
 - Validates prerequisites and character state
 - Creates first ActiveSegment
 - Updates character to active game mode
-- Queues mechanical segments
-- Enables polling infrastructure
+- Queues mechanical segments to `eidolon-processing-queue`
+- Enables polling infrastructure via SSM parameter
+- Environment: `SEGMENT_QUEUE_URL` for SQS integration
 
-**api-segment-decision**:
+**api-segment-decision** (Logical ID: `ApiSegmentDecisionFunction`):
 
 - Records player choice in Decision field
 - Sets DecisionMadeAt timestamp
 - Returns confirmation to client
 
-**api-segment-outcome**:
+**api-segment-outcome** (Logical ID: `ApiSegmentOutcomeFunction`):
 
 - Retrieves completed segment results
 - Returns narrative and effects
 - Used by client after segment timer expires
 
-**api-story-abandon**:
+**api-story-abandon** (Logical ID: `ApiStoryAbandonFunction`):
 
 - Marks story as abandoned
 - Clears character active state
 - Records in StoryHistory
 
-**api-segment-rest**:
+**api-segment-rest** (Logical ID: `ApiSegmentRestFunction`):
 
 - Initiates healing rest for wounded characters
 - Creates a special rest segment with calculated healing times
@@ -312,59 +335,68 @@ Rest segments are special healing segments that allow characters to recover from
 
 ### Processing Layer Functions
 
-**ops-segment-poller** (EventBridge every minute):
+**ops-segment-poller** (Logical ID: `OpsSegmentPollerFunction`):
 
-- Queries segments with EndTime <= now + 30s
-- Categorizes segments (ready/stuck/exhausted)
-- Sends mechanical segments to processing queue
-- Sends completed segments to advancement queue
-- Manages polling infrastructure state
+- **Trigger**: EventBridge rule `eidolon-story-poller` (1-minute schedule)
+- Reads SSM parameter `/eidolon/story/config` for run/stop state
+- Queries EndTimeIndex GSI for segments with EndTime <= now
+- Sends ALL completed segments to `eidolon-advancement-queue`
+- Auto-disables polling when no active segments exist
+- Environment: `SSM_POLLER_STATE_PARAMETER`, queue URLs
 
-**ops-segment-process** (SQS triggered):
+**ops-segment-process** (Logical ID: `OpsSegmentProcessFunction`):
 
-- Claims segment with RunningFlag
-- Processes mechanical challenges
-- Simulates combat rounds
-- Applies XP and wounds
-- Updates segment with results
+- **Trigger**: SQS `eidolon-processing-queue`
+- Claims segment with RunningFlag (prevents duplicates)
+- Processes mechanical challenges using MUD mechanics
+- Uses ResolveStaticCheckWithXP and ResolveOpposedCheckWithXP
+- Generates ClientEvents array for display
+- Environment: `SEGMENT_BATCH_SIZE` for processing limits
 
-**ops-story-advance** (SQS triggered):
+**ops-story-advance** (Logical ID: `OpsStoryAdvanceFunction`):
 
-- Claims segment for advancement
-- Processes simple segments if needed
-- Applies all CharacterUpdates
-- Determines next segment
-- Creates next segment or completes story
-- Archives to history tables
-- Deletes ActiveSegment
+- **Trigger**: SQS `eidolon-advancement-queue`
+- Claims segment with RunningFlag for idempotency
+- Processes simple segments (rest/decision) if needed
+- Applies CharacterUpdates (XP, wounds, room changes)
+- Creates next segment with UUIDv7 for ordering
+- Resets GameMode="None" when story completes
+- Writes to story_history and segment_history tables
 
 ### Queue Architecture
 
-**SEGMENT_QUEUE_URL**:
+**Production Queue Configuration**:
 
-- Feeds ops-segment-process
+**eidolon-processing-queue** (SQS Standard Queue):
+- URL: `https://sqs.{region}.amazonaws.com/{account}/eidolon-processing-queue`
+- Feeds ops-segment-process Lambda
 - Handles mechanical segments only
-- Provides retry with exponential backoff
+- Message retention: 4 days
+- Visibility timeout: 30 seconds
+- Dead-letter queue after 3 retries
 
-**STORY_ADVANCEMENT_QUEUE_URL**:
-
-- Feeds ops-story-advance
-- Handles all segment types
-- Ensures ordered story progression
+**eidolon-advancement-queue** (SQS Standard Queue):
+- URL: `https://sqs.{region}.amazonaws.com/{account}/eidolon-advancement-queue`
+- Feeds ops-story-advance Lambda
+- Handles all segment types for completion
+- Message retention: 4 days
+- Visibility timeout: 30 seconds
+- Dead-letter queue after 3 retries
 
 ### Polling Infrastructure
 
-**SSM Parameter** (SSM_POLLER_STATE_PARAMETER):
-
+**SSM Parameter** (`/eidolon/story/config`):
 - Stores polling state: "run" or "stop"
 - Checked by poller each invocation
 - Updated based on active segment presence
+- Managed by Story Stack in CDK
 
-**EventBridge Rule** (eidolon-segment-poller-rule):
-
-- Triggers ops-segment-poller every minute
-- Enabled when segments exist
-- Disabled when no active segments
+**EventBridge Rule** (`eidolon-story-poller`):
+- Schedule: rate(1 minute)
+- Target: ops-segment-poller Lambda
+- State: DISABLED by default
+- Auto-enabled when stories start
+- Auto-disabled when no active stories
 
 ## Error Recovery and Edge Cases
 

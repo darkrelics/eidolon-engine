@@ -1,102 +1,165 @@
 # CORS Configuration Guide for Eidolon Engine
 
-This guide explains how Cross-Origin Resource Sharing (CORS) is configured for the Eidolon Engine's MUD Portal and Incremental game applications.
+This guide explains how Cross-Origin Resource Sharing (CORS) is configured for the Eidolon Engine's API Gateway and Lambda functions.
 
 ## Overview
 
-CORS configuration is derived from CloudFront distributions and domain settings in the deployment configuration. The system automatically configures CORS based on your CloudFront setup.
+CORS configuration is handled at two levels in the deployment system:
+1. **API Gateway**: Handles preflight OPTIONS requests with wildcard origins
+2. **Lambda Functions**: Validate actual request origins via environment variables
 
 ## How CORS Currently Works
 
-### 1. Automatic Configuration
+### 1. API Gateway Configuration
 
-CORS origins are automatically derived from your CloudFront and domain configuration:
+The API Gateway is configured with permissive CORS settings to handle preflight requests:
 
-```yaml
-# In config.yml
-Domain: yourdomain.com
-CloudFrontDistributions:
-  MUDPortal: dxxxxxxxxxxxxx.cloudfront.net
-  IncrementalGame: dyyyyyyyyyy.cloudfront.net
+```python
+# In api_stack.py
+default_cors_preflight_options=apigateway.CorsOptions(
+    allow_origins=["*"],  # Wildcard for preflight
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"],
+    allow_credentials=True,
+)
 ```
 
-The CDK deployment automatically allows CORS from:
+**Important**: The wildcard origin (`*`) is only for preflight OPTIONS requests. Actual origin validation happens in Lambda functions.
 
-- Your configured domain (with https://, https://www., http://, http://www.)
-- CloudFront distribution URLs
-- Common localhost ports for development (3000, 8080, 8000)
+### 2. Lambda Function Configuration
 
-### 2. Additional Origins Configuration
+Each Lambda function receives CORS configuration via environment variables:
 
-If you need to add additional origins beyond the automatic configuration, set `allowed_cors_origins` in your config.yml:
-
-```yaml
-CORS:
-allowed_cors_origins:
-  - https://additional.domain.com
+```python
+# Environment variables set in lambda_stack.py
+"ALLOWED_ORIGINS": f"https://{client_host}.{domain}",
+"CORS_ALLOW_CREDENTIALS": "true",
+"CORS_ALLOW_HEADERS": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+"CORS_ALLOW_METHODS": "GET,POST,PUT,DELETE,OPTIONS",
+"CORS_MAX_AGE": "86400",
 ```
 
-### 3. Manual Override (Not Currently Implemented)
+### 3. Origin Validation Pattern
 
-The `configure_cors.py` script exists but its output is not currently used by the CDK deployment. It writes to these fields which are ignored:
+The actual origin validation happens in Lambda functions, not at the API Gateway level. This allows for:
+- Dynamic origin configuration without redeploying API Gateway
+- Different origins for different Lambda functions if needed
+- Proper credential support with specific origins
 
-```yaml
-# These fields are written by configure_cors.py but NOT USED
-CORS:
-  MUDOrigins: # Not read by CDK
-  IncrementalOrigins: # Not read by CDK
+### 4. Domain-Based Configuration
+
+During deployment, CORS origins are configured based on your domain settings:
+
+```bash
+# During deployment, you'll be prompted for:
+Domain (e.g., darkrelics.net): yourdomain.com
+Client Host (e.g., portal): portal
+
+# This results in ALLOWED_ORIGINS being set to:
+# https://portal.yourdomain.com
 ```
 
 ## Technical Implementation
 
-1. **CDK Integration**: The CDK app derives CORS origins from CloudFront distributions and domain configuration
-2. **Environment Variables**: Origins are passed to Lambda functions via the `ALLOWED_ORIGINS` environment variable (a comma-separated list). When an explicit list is configured, API Gateway preflight enables `Access-Control-Allow-Credentials`.
-3. **Lambda Handler**: The `eidolon/cors.py` module validates request origins against the allowed list
-4. **API Gateway**: Configured to handle preflight OPTIONS requests
+### CDK Stack Integration
 
-## Security Features
+1. **Lambda Stack**: Sets CORS environment variables on all API Lambda functions
+2. **API Stack**: Configures API Gateway with CORS preflight options
+3. **Client Stack**: Deploys the portal to the configured client host domain
 
-- **Origin Validation**: Only explicitly allowed origins can make requests
-- **Credentials Support**: When origins are configured, credentials are allowed
-- **No Wildcards**: Production deployments should never use wildcard (`*`) origins
-- **Preflight Handling**: Proper OPTIONS request handling for complex requests
+### Environment Variable Structure
+
+All API Lambda functions receive these CORS-related environment variables:
+- `ALLOWED_ORIGINS`: The FQDN of the client (e.g., `https://portal.darkrelics.net`)
+- `CORS_ALLOW_CREDENTIALS`: Set to `"true"` for authenticated requests
+- `CORS_ALLOW_HEADERS`: Comma-separated list of allowed headers
+- `CORS_ALLOW_METHODS`: Comma-separated list of allowed HTTP methods
+- `CORS_MAX_AGE`: Preflight cache duration in seconds (86400 = 24 hours)
+
+### Lambda Handler Pattern
+
+Lambda functions should implement CORS handling like this:
+
+```python
+import os
+from eidolon import cors
+
+def lambda_handler(event, context):
+    # Get origin from request
+    origin = event.get('headers', {}).get('origin', '')
+    
+    # Validate origin
+    allowed_origins = os.environ.get('ALLOWED_ORIGINS', '').split(',')
+    if origin not in allowed_origins:
+        return {
+            'statusCode': 403,
+            'body': json.dumps({'error': 'Origin not allowed'})
+        }
+    
+    # Process request...
+    
+    # Return with CORS headers
+    return {
+        'statusCode': 200,
+        'headers': {
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Credentials': 'true'
+        },
+        'body': json.dumps(response_data)
+    }
+```
+
+## Security Considerations
+
+### Current Implementation Gaps
+
+1. **Wildcard in API Gateway**: The API Gateway uses `*` for preflight, which is less secure than explicit origins
+2. **Single Origin**: Only supports one client origin (portal.domain.com), not multiple environments
+3. **No Development Support**: Localhost origins aren't automatically added
+
+### Recommended Improvements
+
+1. Replace wildcard with explicit origins in API Gateway
+2. Support multiple origins (dev, staging, prod)
+3. Add localhost origins for development
+4. Implement origin validation at API Gateway level
 
 ## Deployment
 
-CORS configuration is automatically applied when you deploy:
+CORS configuration is automatically applied during deployment:
 
 ```bash
-# Deploy all stacks
-cdk deploy --all
-
-# Or deploy specific stacks
-cdk deploy base-lambda mud-lambda incremental-lambda
+cd deployment && python3 deploy.py
 ```
 
-Note: Changes to CloudFront distributions or domain configuration in `config.yml` will update CORS origins on the next deployment.
+The deployment will prompt for domain configuration:
+- Domain name (e.g., darkrelics.net)
+- Client host subdomain (e.g., portal)
+
+These values are used to construct the ALLOWED_ORIGINS for Lambda functions.
 
 ## Troubleshooting
 
 ### CORS Errors in Browser Console
 
-1. Check your CloudFront and domain configuration:
+1. Verify Lambda environment variables:
 
    ```bash
-   cat config.yml | grep -E "Domain|CloudFrontDistributions" -A 3
+   aws lambda get-function-configuration --function-name api-character-list | jq '.Environment.Variables | .ALLOWED_ORIGINS'
    ```
 
-2. Verify Lambda environment variables:
+2. Check API Gateway CORS configuration:
 
    ```bash
-   aws lambda get-function-configuration --function-name api-character-list | grep ALLOWED_ORIGINS
+   aws apigateway get-rest-api --rest-api-id YOUR_API_ID | jq '.defaultCorsPreflightOptions'
    ```
 
-3. Check CloudFront is forwarding the Origin header
+3. Common issues and solutions:
 
-4. Verify the actual origins being used:
-   - Your domain should appear with https://, https://www., http://, and http://www. prefixes
-   - CloudFront distributions should be included
-   - Localhost origins (for development) should be present
+   - **Origin not allowed**: The request origin doesn't match ALLOWED_ORIGINS in Lambda
+   - **Credentials not supported**: Ensure CORS_ALLOW_CREDENTIALS is "true"
+   - **Preflight failing**: Check API Gateway has OPTIONS method configured
+   - **CloudFront blocking**: Ensure CloudFront forwards the Origin header
 
 ### Testing CORS
 
@@ -117,49 +180,49 @@ curl https://mud-api.yourdomain.com/characters \
 
 ## Best Practices
 
-1. **Be Specific**: Only add origins that actually need access
+1. **Domain-Based Origins**: Use the client's FQDN for production CORS
 2. **Use HTTPS**: Always use HTTPS origins in production
-3. **No Wildcards**: Never use `*` for production APIs
-4. **Separate Environments**: Use different origins for dev/staging/prod
-5. **Regular Audits**: Review and remove unused origins periodically
+3. **Validate in Lambda**: Perform actual origin validation in Lambda functions
+4. **Credentials with Specific Origins**: When using credentials, specify exact origins
+5. **Environment Variables**: Use environment variables for dynamic configuration
 
-## Adding Custom CORS Origins
+## Key Lessons from Deployment
 
-To add custom CORS origins beyond the automatic CloudFront/domain configuration:
+Based on production deployment experience:
 
-1. Add them to the `allowed_cors_origins` field in `config.yml`:
+1. **Custom Domain Required**: The system requires a custom domain for proper CORS configuration - this is collected during deployment to avoid circular dependencies
 
-   ```yaml
-   CORS:
-   allowed_cors_origins:
-     - https://custom.domain.com
-     - https://another.domain.com
-   ```
+2. **FQDN Assembly**: The client FQDN (e.g., `https://portal.darkrelics.net`) is assembled at the deployment module level and passed as a complete value to stacks
 
-2. Deploy the changes:
-   ```bash
-   cdk deploy --all
-   ```
+3. **Two-Layer CORS**: API Gateway handles preflight with wildcards, Lambda functions validate actual origins - this provides flexibility without compromising security
 
-Note: The `configure_cors.py` script exists but its output (`CORS.MUDOrigins` and `CORS.IncrementalOrigins`) is not currently read by the CDK deployment.
+4. **Environment Variables Over Hard-Coding**: All CORS settings are passed via environment variables, allowing changes without code modifications
 
-## Environment-Specific Configuration
+## Adding Multiple Origins Support
 
-You can maintain different configurations for different environments by using different config files:
+Currently, the system only supports a single origin. To add multiple origins:
 
-```bash
-# Development config with different domain/CloudFront
-cp config.yml config.dev.yml
-# Edit config.dev.yml to set development domain and CloudFront distributions
+1. Modify the Lambda stack to accept multiple client hosts
+2. Update ALLOWED_ORIGINS to be a comma-separated list
+3. Modify Lambda functions to split and validate against multiple origins
 
-# Production config
-cp config.yml config.prod.yml
-# Edit config.prod.yml to set production domain and CloudFront distributions
-
-# Deploy with specific config
-cdk deploy --all -c config_file=config.prod.yml
+Example enhancement:
+```python
+# In lambda_stack.py
+allowed_origins = [
+    f"https://{client_host}.{domain}",
+    "http://localhost:3000",  # Development
+    "http://localhost:8080",  # Alternative dev port
+]
+env_vars["ALLOWED_ORIGINS"] = ",".join(allowed_origins)
 ```
 
-## Future Enhancement
+## Deployment Mode Considerations
 
-The `configure_cors.py` script and per-application CORS configuration (`CORS.MUDOrigins` and `CORS.IncrementalOrigins`) represent a planned enhancement that would allow more granular CORS control. To enable this functionality, the CDK deployment code would need to be updated to read from these configuration fields.
+The deployment system supports three modes that affect CORS:
+
+- **MUD Mode**: Traditional gameplay - client at `portal.domain.com`
+- **Incremental Mode**: Story-driven gameplay - client at `portal.domain.com`
+- **Hybrid Mode**: Both features - client at `portal.domain.com`
+
+All modes currently use the same client host configuration for CORS.

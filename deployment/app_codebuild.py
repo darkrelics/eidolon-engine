@@ -12,6 +12,7 @@ s3_bucket = app.node.try_get_context("s3_bucket") or ""
 github_owner = app.node.try_get_context("github_owner") or "robinje"
 github_repo = app.node.try_get_context("github_repo") or "eidolon-engine"
 github_branch = app.node.try_get_context("github_branch") or "develop"
+bucket_exists = app.node.try_get_context("bucket_exists") == "true"
 
 # Deploy CodeBuild stack with context parameters
 if s3_bucket:  # Only create if S3 bucket is provided
@@ -24,6 +25,7 @@ if s3_bucket:  # Only create if S3 bucket is provided
         github_owner=github_owner,
         github_repo=github_repo,
         github_branch=github_branch,
+        bucket_exists=bucket_exists,
     )
 else:
     print("Error: S3 bucket parameter is required for CodeBuild stack")

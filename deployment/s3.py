@@ -13,8 +13,16 @@ from utilities import run_cdk_deploy, validate_policies
 
 def deploy_s3_stack(params) -> dict:
     """Deploy the S3 stack using CDK."""
+    # Check if S3 bucket already exists
+    from stacks.stack_utilities import check_s3_bucket_exists
+    bucket_exists = check_s3_bucket_exists(params.scripts_bucket, params.region)
+    
     # Pass parameters through context
-    context_args = ["-c", f"region={params.region}", "-c", f"scripts_bucket={params.scripts_bucket}"]
+    context_args = [
+        "-c", f"region={params.region}", 
+        "-c", f"scripts_bucket={params.scripts_bucket}",
+        "-c", f"bucket_exists={'true' if bucket_exists else 'false'}",
+    ]
 
     app_command = "python3 app_s3.py"
     return run_cdk_deploy("s3", params.region, app_command, context_args)

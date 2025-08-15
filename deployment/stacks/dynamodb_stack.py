@@ -74,6 +74,7 @@ class DynamoDBStack(Stack):
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
                     actions=[
+                        "dynamodb:DescribeTable",
                         "dynamodb:GetItem",
                         "dynamodb:PutItem",
                         "dynamodb:UpdateItem",
