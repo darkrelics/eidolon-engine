@@ -1,12 +1,12 @@
 """Story processing stack with SSM, SQS, and EventBridge."""
 
-from aws_cdk import Stack, RemovalPolicy, CfnOutput, Duration
-from aws_cdk import aws_ssm as ssm
-from aws_cdk import aws_sqs as sqs
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
 from aws_cdk import aws_events as events
 from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_sqs as sqs
+from aws_cdk import aws_ssm as ssm
 from constructs import Construct
 
 

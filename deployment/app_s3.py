@@ -1,7 +1,6 @@
 """CDK application entry point for S3 stack."""
 
 import aws_cdk as cdk
-
 from stacks.s3_stack import S3Stack
 
 app = cdk.App()

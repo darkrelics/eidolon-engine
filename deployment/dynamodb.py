@@ -5,7 +5,6 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
-
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
@@ -14,7 +13,7 @@ from utilities import run_cdk_deploy, validate_policies
 
 def check_existing_tables(region: str) -> dict:
     """Check for existing DynamoDB tables and validate their schemas."""
-    import json
+
     from core.dynamodb_tables import TABLE_CONFIGS
     from stacks import stack_utilities as utils
     
@@ -43,7 +42,6 @@ def check_existing_tables(region: str) -> dict:
 
 def deploy_dynamodb_stack(params) -> dict:
     """Deploy the DynamoDB stack using CDK."""
-    import json
     
     print("\nChecking for existing DynamoDB tables...")
     existing_tables = check_existing_tables(params.region)

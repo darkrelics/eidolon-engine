@@ -1,7 +1,6 @@
 """CDK application entry point for CodeBuild stack."""
 
 import aws_cdk as cdk
-
 from stacks.codebuild_stack import CodeBuildStack
 
 app = cdk.App()

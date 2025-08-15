@@ -1,8 +1,8 @@
 """Lambda stack for all Lambda functions and layer."""
 
-from aws_cdk import Stack, CfnOutput, Duration
-from aws_cdk import aws_lambda as lambda_
+from aws_cdk import CfnOutput, Duration, Stack
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_s3 as s3
 from constructs import Construct
 

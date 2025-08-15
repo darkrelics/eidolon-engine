@@ -1,8 +1,8 @@
 """Utilities for CDK stack resource management and preservation."""
 
 import boto3
-from botocore.exceptions import ClientError
 from aws_cdk import aws_route53 as route53
+from botocore.exceptions import ClientError
 from constructs import Construct
 
 

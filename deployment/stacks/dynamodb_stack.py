@@ -4,9 +4,8 @@ from aws_cdk import CfnDeletionPolicy, CfnOutput, RemovalPolicy, Stack
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from constructs import Construct
-
 from core.dynamodb_tables import TABLE_CONFIGS
-from . import stack_utilities as utils
+
 
 
 class DynamoDBStack(Stack):

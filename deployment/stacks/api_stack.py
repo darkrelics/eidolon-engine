@@ -1,6 +1,6 @@
 """API stack for API Gateway and related resources."""
 
-from aws_cdk import Stack, CfnOutput
+from aws_cdk import CfnOutput, Stack
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cognito as cognito

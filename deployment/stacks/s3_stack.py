@@ -1,8 +1,8 @@
 """S3 stack for Eidolon Engine scripts bucket."""
 
-from aws_cdk import CfnOutput, Stack, RemovalPolicy
-from aws_cdk import aws_s3 as s3
+from aws_cdk import CfnOutput, RemovalPolicy, Stack
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 

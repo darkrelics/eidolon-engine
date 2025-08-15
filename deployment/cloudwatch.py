@@ -4,7 +4,6 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
-
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number

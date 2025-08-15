@@ -87,7 +87,7 @@ class Config:
         if not config_path.exists():
             template_path = config_path.parent / "config.template.yml"
             if template_path.exists():
-                print(f"Creating config.yml from template...")
+                print("Creating config.yml from template...")
                 with open(template_path, "r") as template_file:
                     template_data = template_file.read()
                 with open(config_path, "w") as config_file:

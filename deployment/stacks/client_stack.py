@@ -1,14 +1,14 @@
 """Client stack for portal deployment with CloudFront and CodeBuild."""
 
-from aws_cdk import Stack, CfnOutput, Duration, RemovalPolicy
-from aws_cdk import aws_s3 as s3
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as origins
+from aws_cdk import aws_codebuild as codebuild
+from aws_cdk import aws_iam as iam
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as targets
-from aws_cdk import aws_iam as iam
-from aws_cdk import aws_codebuild as codebuild
+from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 from . import stack_utilities as utils

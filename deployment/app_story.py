@@ -1,7 +1,6 @@
 """CDK application entry point for Story stack."""
 
 import aws_cdk as cdk
-
 from stacks.story_stack import StoryStack
 
 app = cdk.App()

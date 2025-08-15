@@ -1,7 +1,6 @@
 """CDK application entry point for CloudWatch stack."""
 
 import aws_cdk as cdk
-
 from stacks.cloudwatch_stack import CloudWatchStack
 
 app = cdk.App()

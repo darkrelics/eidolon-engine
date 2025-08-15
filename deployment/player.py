@@ -4,7 +4,6 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
-
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
@@ -30,7 +29,7 @@ def get_cognito_player_new_arn(region: str) -> str:
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "")
         if error_code == "ResourceNotFoundException":
-            print(f"  [DEBUG] Lambda function cognito-player-new not found")
+            print("  [DEBUG] Lambda function cognito-player-new not found")
             return ""
         print(f"  [ERROR] Failed to get Lambda ARN: {err}")
         return ""
@@ -120,7 +119,7 @@ def validate_user_pool_client(user_pool_id: str, region: str) -> tuple[bool, str
             print(f"  [OK] User Pool Client: {client_id}")
             return True, client_id
 
-        print(f"  [MISSING] User Pool Client")
+        print("  [MISSING] User Pool Client")
         return False, ""
 
     except ClientError as err:
@@ -139,7 +138,7 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
     Returns:
         True if trigger is configured (already was or newly configured)
     """
-    print(f"  [DEBUG] configure_user_pool_trigger called with:")
+    print("  [DEBUG] configure_user_pool_trigger called with:")
     print(f"    user_pool_id: {user_pool_id}")
     print(f"    lambda_arn: {lambda_arn}")
     print(f"    region: {region}")
@@ -159,14 +158,14 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
         trigger_needs_update = False
         
         if current_trigger == lambda_arn:
-            print(f"  [OK] PostConfirmation trigger already configured correctly")
+            print("  [OK] PostConfirmation trigger already configured correctly")
             print(f"  [DEBUG] Current trigger matches expected: {current_trigger}")
         elif current_trigger:
             print(f"  [WARNING] Different trigger configured: {current_trigger}")
             print(f"  [INFO] Will update to: {lambda_arn}")
             trigger_needs_update = True
         else:
-            print(f"  [INFO] No PostConfirmation trigger currently configured")
+            print("  [INFO] No PostConfirmation trigger currently configured")
             print(f"  [DEBUG] Lambda config: {lambda_config}")
             trigger_needs_update = True
         
@@ -183,7 +182,7 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
                 LambdaConfig=lambda_config
             )
             
-            print(f"  [OK] PostConfirmation trigger configured successfully")
+            print("  [OK] PostConfirmation trigger configured successfully")
         
         # STEP 3: PERMISSIONS - Always ensure Lambda has permission to be invoked by Cognito
         # This is needed even if the trigger is already configured, as permissions can be lost
@@ -200,14 +199,14 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
                     FunctionName="cognito-player-new",
                     StatementId="CognitoInvokePermission"
                 )
-                print(f"  [INFO] Removed existing Lambda permission")
+                print("  [INFO] Removed existing Lambda permission")
             except ClientError:
                 pass  # Permission doesn't exist, which is fine
             
             # Now add the correct permission
-            print(f"  [DEBUG] Adding Lambda permission with:")
-            print(f"    FunctionName: cognito-player-new")
-            print(f"    StatementId: CognitoInvokePermission")
+            print("  [DEBUG] Adding Lambda permission with:")
+            print("    FunctionName: cognito-player-new")
+            print("    StatementId: CognitoInvokePermission")
             print(f"    SourceArn: arn:aws:cognito-idp:{region}:{account_id}:userpool/{user_pool_id}")
             
             lambda_client.add_permission(
@@ -217,14 +216,14 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
                 Principal="cognito-idp.amazonaws.com",
                 SourceArn=f"arn:aws:cognito-idp:{region}:{account_id}:userpool/{user_pool_id}"
             )
-            print(f"  [OK] Lambda invoke permission granted to Cognito")
+            print("  [OK] Lambda invoke permission granted to Cognito")
             print(f"       Source ARN: arn:aws:cognito-idp:{region}:{account_id}:userpool/{user_pool_id}")
         except ClientError as err:
             error_code = err.response.get("Error", {}).get("Code", "")
             print(f"  [ERROR] Could not add Lambda permission: {err}")
             print(f"  [DEBUG] Error code: {error_code}")
             if error_code == "ResourceConflictException":
-                print(f"  [INFO] Permission may already exist with a different configuration")
+                print("  [INFO] Permission may already exist with a different configuration")
         
         return True
         
@@ -281,7 +280,7 @@ def deploy_player(params, config: Config, state: CDKState, config_path: Path, st
     
     # Configure Lambda trigger for existing User Pool (CDK can't do this for imported pools)
     if validation.get("user_pool_id"):
-        print(f"\n[DEBUG] Checking for Lambda trigger configuration...")
+        print("\n[DEBUG] Checking for Lambda trigger configuration...")
         print(f"  User Pool ID: {validation.get('user_pool_id')}")
         lambda_arn = get_cognito_player_new_arn(params.region)
         if lambda_arn:

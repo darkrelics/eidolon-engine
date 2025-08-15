@@ -1,10 +1,8 @@
 """CDK app for Client stack deployment."""
 
-import json
 import os
 
 import aws_cdk as cdk
-
 from stacks.client_stack import ClientStack
 
 app = cdk.App()

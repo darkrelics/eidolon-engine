@@ -1,6 +1,5 @@
 """Utility functions for deployment scripts."""
 
-import json
 import subprocess
 from functools import cache
 from pathlib import Path

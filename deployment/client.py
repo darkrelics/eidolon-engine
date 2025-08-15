@@ -6,8 +6,6 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
-
-from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy
@@ -154,7 +152,7 @@ def execute_codebuild_project(project_name: str, region: str) -> bool:
         
         print(f"  [OK] Build started: #{build_number}")
         print(f"  Build ID: {build_id}")
-        print(f"  You can monitor the build in the AWS Console or wait for completion...")
+        print("  You can monitor the build in the AWS Console or wait for completion...")
         
         # Wait for build to complete using polling
         print("\nWaiting for build to complete (this may take a few minutes)...")
@@ -181,7 +179,7 @@ def execute_codebuild_project(project_name: str, region: str) -> bool:
                 
                 # Check terminal states
                 if status == "SUCCEEDED":
-                    print(f"  [OK] Build completed successfully!")
+                    print("  [OK] Build completed successfully!")
                     return True
                 elif status in ["FAILED", "FAULT", "TIMED_OUT", "STOPPED"]:
                     print(f"  [ERROR] Build failed with status: {status}")
@@ -242,7 +240,7 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, 
             
             if not oai_id:
                 print(f"  [WARNING] No OAI found for distribution {distribution_id}")
-                print(f"  CloudFront may be using OAC or public access")
+                print("  CloudFront may be using OAC or public access")
                 return False
                 
         except ClientError as err:
@@ -280,7 +278,7 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, 
             Policy=json.dumps(bucket_policy)
         )
         
-        print(f"  [OK] Updated bucket policy for CloudFront OAI access")
+        print("  [OK] Updated bucket policy for CloudFront OAI access")
         print(f"  OAI ID: {oai_id}")
         return True
         
@@ -438,7 +436,7 @@ def monitor_portal_build(build_id: str, region: str, timeout_minutes: int = 30) 
                 
             # Check terminal states
             if status == "SUCCEEDED":
-                print(f"  Build completed successfully")
+                print("  Build completed successfully")
                 return True
             elif status in ["FAILED", "FAULT", "TIMED_OUT", "STOPPED"]:
                 print(f"  Build failed with status: {status}")

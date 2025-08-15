@@ -5,19 +5,19 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.config import Config
-from core.state import CDKState
-from utilities import get_aws_account_id, validate_region, verify_prerequisites, verify_cdk_bootstrap
-from deploy_mode import validate_deployment_mode, get_deployment_order, display_mode_summary
-from dynamodb import deploy_dynamodb
-from codebuild import deploy_codebuild
-from s3 import deploy_s3
-from cloudwatch import deploy_cloudwatch
-from player import deploy_player
-from lambda_functions import deploy_lambda
-from story import deploy_story
 from api import deploy_api
 from client import deploy_client
+from cloudwatch import deploy_cloudwatch
+from codebuild import deploy_codebuild
+from core.config import Config
+from core.state import CDKState
+from deploy_mode import display_mode_summary, get_deployment_order, validate_deployment_mode
+from dynamodb import deploy_dynamodb
+from lambda_functions import deploy_lambda
+from player import deploy_player
+from s3 import deploy_s3
+from story import deploy_story
+from utilities import get_aws_account_id, validate_region, verify_cdk_bootstrap, verify_prerequisites
 
 
 @dataclass

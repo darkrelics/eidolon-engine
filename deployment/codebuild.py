@@ -5,7 +5,6 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
-
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
@@ -177,7 +176,7 @@ def monitor_build(build_id: str, region: str, timeout_minutes: int = 30) -> bool
 
             # Check terminal states
             if status == "SUCCEEDED":
-                print(f"  Build completed successfully")
+                print("  Build completed successfully")
                 return True
             elif status in ["FAILED", "FAULT", "TIMED_OUT", "STOPPED"]:
                 print(f"  Build failed with status: {status}")

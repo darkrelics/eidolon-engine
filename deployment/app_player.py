@@ -1,7 +1,6 @@
 """CDK application entry point for Player stack."""
 
 import aws_cdk as cdk
-
 from stacks.player_stack import PlayerStack
 
 app = cdk.App()

@@ -1,12 +1,11 @@
 """Player stack for Cognito User Pool."""
 
-from aws_cdk import Stack, RemovalPolicy, CfnOutput, Duration
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
 from aws_cdk import aws_cognito as cognito
-from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as lambda_
 from constructs import Construct
 
-from . import stack_utilities as utils
 
 
 class PlayerStack(Stack):
@@ -102,7 +101,7 @@ class PlayerStack(Stack):
         if self.is_imported_pool:
             return
 
-        print(f"  Configuring PostConfirmation trigger with Lambda ARN")
+        print("  Configuring PostConfirmation trigger with Lambda ARN")
 
         # Import the Lambda function
         lambda_function = lambda_.Function.from_function_arn(self, "CognitoPlayerNewFunction", self.lambda_function_arn)
