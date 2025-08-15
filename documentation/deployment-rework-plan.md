@@ -793,7 +793,7 @@ Note: S3 and CloudWatch Stacks are excluded in Incremental mode
 
 - Scripts S3 bucket for Lua scripts
 - IAM managed policy for S3 read/write access
-- Automatic script upload from /scripts_lua/_ to bucket/scripts/_
+- Automatic script upload from /scripts*lua/* to bucket/scripts/\_
 
 **Config.yml Output:**
 
