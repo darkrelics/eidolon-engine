@@ -7,7 +7,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 - Front-loaded processing: All outcomes are calculated when segments start, not when they end
 - Shared tables: Both game modes use the same character, item, and room data
 - Mode exclusivity: GameMode field ensures characters can only be active in one mode at a time
-- Event-driven advancement: 30-second polling system processes completed segments
+- Event-driven advancement: 1-minute polling system processes completed segments
 
 ## Player Table
 
@@ -58,7 +58,8 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
 
 **Global Secondary Index:**
 
-- **CharacterNameIndex**: CharacterName - For ensuring unique character names across all players
+- **CharacterNameIndex**: CharacterName (HASH) - For ensuring unique character names across all players
+  - Projection Type: KEYS_ONLY (only includes keys for name uniqueness checks)
 
 **Health Calculation:**
 
@@ -355,8 +356,10 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 
 **Global Secondary Indexes:**
 
-- **CharacterID-index**: CharacterID - For querying active segments by character
+- **CharacterID-index**: CharacterID (HASH) - For querying active segments by character
+  - Projection Type: ALL (includes all attributes for complete segment data retrieval)
 - **EndTimeIndex**: Status (HASH), EndTime (RANGE) - For finding segments by status and monitoring upcoming completions
+  - Projection Type: ALL (includes all attributes for segment processing)
 
 ## StoryHistory Table
 

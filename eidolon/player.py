@@ -69,30 +69,6 @@ def create_player_record(user_uuid: str, email: str) -> None:
         raise RuntimeError(f"Failed to create player record: {err}") from err
 
 
-def extract_player_id(event: dict) -> str:
-    """
-    Extract player ID from Cognito authorizer claims in API Gateway event.
-
-    Args:
-        event: API Gateway event with Cognito authorizer
-
-    Returns:
-        Player ID (sub claim) from JWT token
-
-    Raises:
-        ValueError: If player ID is not found in claims (unauthorized)
-    """
-    claims: dict = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    player_id: str = claims.get("sub", "")
-
-    if not player_id:
-        logger.warning("No player ID found in request claims")
-        raise ValueError("Unauthorized - No player ID in token")
-
-    logger.debug(f"Extracted player ID from claims player_id: {player_id}")
-    return player_id
-
-
 def validate_player(player_id: str) -> bool:
     """
     Validate that a player exists in the database.
@@ -362,6 +338,11 @@ def delete_player_active_segments(player_id: str) -> int:
     """
     Delete any active game segments for the player.
 
+    Since there's no PlayerID GSI on the active_segments table, we need to:
+    1. Get the player's character list
+    2. Query active segments for each character using CharacterID-index GSI
+    3. Delete the found segments
+
     Args:
         player_id: Cognito user ID
 
@@ -372,36 +353,62 @@ def delete_player_active_segments(player_id: str) -> int:
         RuntimeError: If query fails (but continues deletion attempts)
     """
     deleted_count = 0
+
     try:
-        items = dynamo.query(
-            TableName.ACTIVE_SEGMENTS,
-            KeyConditionExpression="PlayerID = :pid",
-            ExpressionAttributeValues={":pid": player_id},
-        )
+        # First get the player's characters
+        player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
+        if not player:
+            logger.warning(f"Player not found: {player_id}")
+            return 0
 
-        for item in items:  # type: ignore
+        character_list = player.get("CharacterList", {})
+
+        # For each character, query and delete their active segments
+        for _, char_info in character_list.items():
+            character_id = char_info.get("UUID")
+            if not character_id:
+                continue
+
             try:
-                dynamo.delete_item(
+                # Query using CharacterID-index GSI
+                items = dynamo.query(
                     TableName.ACTIVE_SEGMENTS,
-                    Key={"ActiveSegmentID": item.get("ActiveSegmentID")},
+                    IndexName="CharacterID-index",
+                    KeyConditionExpression="CharacterID = :cid",
+                    ExpressionAttributeValues={":cid": character_id},
                 )
-                deleted_count += 1
-            except ClientError as err:
-                logger.error(f"Failed to delete active segment for {item.get('ActiveSegmentID')} Error: {err}")
 
-        logger.info(f"Deleted active segments for {player_id}")
+                for item in items:  # type: ignore
+                    try:
+                        dynamo.delete_item(
+                            TableName.ACTIVE_SEGMENTS,
+                            Key={"ActiveSegmentID": item.get("ActiveSegmentID")},
+                        )
+                        deleted_count += 1
+                    except ClientError as err:
+                        logger.error(f"Failed to delete active segment {item.get('ActiveSegmentID')}: {err}")
+
+            except ClientError as err:
+                logger.error(f"Error querying active segments for character {character_id}: {err}")
+                continue
+
+        logger.info(f"Deleted {deleted_count} active segments for player {player_id}")
         return deleted_count
-    except ClientError as err:
-        logger.error(f"Error querying active segments for {player_id} Error: {err}", exc_info=True)
-        return deleted_count
+
     except Exception as err:
-        logger.error(f"Error deleting active segments for {player_id} Error: {err}", exc_info=True)
+        logger.error(f"Error deleting active segments for player {player_id}: {err}", exc_info=True)
         return deleted_count
 
 
 def delete_player_character_history(player_id: str) -> int:
     """
-    Delete all character history records for the player.
+    Delete all segment history records for the player's characters.
+
+    Since the segment_history table uses CharacterID as partition key (not PlayerID),
+    we need to:
+    1. Get the player's character list
+    2. Query segment history for each character
+    3. Delete the found records
 
     Args:
         player_id: Cognito user ID
@@ -413,31 +420,79 @@ def delete_player_character_history(player_id: str) -> int:
         RuntimeError: If query fails (but continues deletion attempts)
     """
     deleted_count = 0
+
     try:
-        items = dynamo.query(
-            TableName.CHARACTER_HISTORY,
-            KeyConditionExpression="PlayerID = :pid",
-            ExpressionAttributeValues={":pid": player_id},
-        )
+        # First get the player's characters
+        player = dynamo.get_item(TableName.PLAYERS, {"PlayerID": player_id})
+        if not player:
+            logger.warning(f"Player not found: {player_id}")
+            return 0
 
-        for item in items:  # type: ignore
+        character_list = player.get("CharacterList", {})
+
+        # For each character, query and delete their segment history
+        for _, char_info in character_list.items():
+            character_id = char_info.get("UUID")
+            if not character_id:
+                continue
+
             try:
-                dynamo.delete_item(
-                    TableName.CHARACTER_HISTORY,
-                    Key={"PlayerID": player_id, "Timestamp": item.get("Timestamp")},
+                # Query segment_history table with CharacterID as partition key
+                items = dynamo.query(
+                    TableName.SEGMENT_HISTORY,
+                    KeyConditionExpression="CharacterID = :cid",
+                    ExpressionAttributeValues={":cid": character_id},
                 )
-                deleted_count += 1
+
+                for item in items:  # type: ignore
+                    try:
+                        # Delete using composite key: CharacterID + ActiveSegmentID
+                        dynamo.delete_item(
+                            TableName.SEGMENT_HISTORY,
+                            Key={"CharacterID": character_id, "ActiveSegmentID": item.get("ActiveSegmentID")},
+                        )
+                        deleted_count += 1
+                    except ClientError as err:
+                        logger.error(f"Failed to delete segment history for {item.get('ActiveSegmentID')}: {err}")
+
             except ClientError as err:
-                logger.error(f"Failed to delete history record for {item.get('Timestamp')} Error: {err}")
+                logger.error(f"Error querying segment history for character {character_id}: {err}")
+                continue
 
-        logger.info(f"Deleted history records for {player_id}")
+        # Also delete from story_history table
+        for _, char_info in character_list.items():
+            character_id = char_info.get("UUID")
+            if not character_id:
+                continue
+
+            try:
+                # Query story_history table with CharacterID as partition key
+                items = dynamo.query(
+                    TableName.STORY_HISTORY,
+                    KeyConditionExpression="CharacterID = :cid",
+                    ExpressionAttributeValues={":cid": character_id},
+                )
+
+                for item in items:  # type: ignore
+                    try:
+                        # Delete using composite key: CharacterID + StoryID
+                        dynamo.delete_item(
+                            TableName.STORY_HISTORY,
+                            Key={"CharacterID": character_id, "StoryID": item.get("StoryID")},
+                        )
+                        deleted_count += 1
+                    except ClientError as err:
+                        logger.error(f"Failed to delete story history for {item.get('StoryID')}: {err}")
+
+            except ClientError as err:
+                logger.error(f"Error querying story history for character {character_id}: {err}")
+                continue
+
+        logger.info(f"Deleted {deleted_count} history records for player {player_id}")
         return deleted_count
 
-    except ClientError as err:
-        logger.error(f"Error querying character history for {player_id} Error: {err}", exc_info=True)
-        return deleted_count
     except Exception as err:
-        logger.error(f"Error in delete_character_history Error: {err}", exc_info=True)
+        logger.error(f"Error deleting character history for player {player_id}: {err}", exc_info=True)
         return deleted_count
 
 

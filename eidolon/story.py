@@ -18,6 +18,7 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
+from eidolon.schema import normalize_segment_definition
 from eidolon.segment import (
     create_next_active_segment,
     delete_active_segment,
@@ -238,7 +239,7 @@ def get_story_segment(story_id: str, segment_id: str) -> dict:
         segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id})
         if not segment:
             raise ValueError("Segment not found")
-        return segment
+        return normalize_segment_definition(segment)
     except ClientError as err:
         logger.error(f"Failed to get segment for {segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get segment: {err}") from err
@@ -272,13 +273,15 @@ def get_completed_segment_for_character(character_id: str, player_id: str, segme
             TableName.ACTIVE_SEGMENTS,
             IndexName="CharacterID-index",
             KeyConditionExpression="CharacterID = :cid",
-            FilterExpression="PlayerID = :pid AND SegmentID = :sid AND #status = :status",
+            # Accept both processed and completed to support pre-completion outcomes
+            FilterExpression="PlayerID = :pid AND SegmentID = :sid AND (#status = :completed OR ProcessingStatus = :processed)",
             ExpressionAttributeNames={"#status": "Status"},
             ExpressionAttributeValues={
                 ":cid": character_id,
                 ":pid": player_id,
                 ":sid": segment_id,
-                ":status": "completed",
+                ":completed": "completed",
+                ":processed": "processed",
             },
         )
     except ClientError as err:
@@ -286,13 +289,39 @@ def get_completed_segment_for_character(character_id: str, player_id: str, segme
         raise RuntimeError(f"Failed to query segments: {err}") from err
 
     if not items:
-        raise ValueError("Completed segment not found")
+        # Fallback: check segment_history for the last record for this character/segment
+        try:
+            history_items = dynamo.query(
+                TableName.SEGMENT_HISTORY,
+                KeyConditionExpression="CharacterID = :cid",
+                ExpressionAttributeValues={":cid": character_id},
+            )
+        except ClientError as err:
+            logger.error(
+                f"Failed to query segment history for {character_id} Error: {err}",
+                exc_info=True,
+            )
+            raise RuntimeError(f"Failed to query segments: {err}") from err
+
+        if not history_items:
+            raise ValueError("Completed segment not found")
+
+        # Filter to matching SegmentID and PlayerID; choose the latest by CompletedAt (fallback EndTime)
+        candidates = [it for it in history_items if it.get("SegmentID") == segment_id and it.get("PlayerID") == player_id]
+        if not candidates:
+            raise ValueError("Completed segment not found")
+
+        def sort_key(it: dict):
+            completed = it.get("CompletedAt") or ""
+            end_time = it.get("EndTime") or 0
+            return (1, completed) if completed else (0, end_time)
+
+        return max(candidates, key=sort_key)
 
     active_segment = items[0]
 
-    # Double-check segment is completed
-    status = active_segment.get("Status")
-    if status != "completed":
+    # If only processed (outcome known pre-completion), allow
+    if active_segment.get("Status") != "completed" and active_segment.get("ProcessingStatus") != "processed":
         raise ValueError("Segment not yet completed")
 
     return active_segment
@@ -454,6 +483,11 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
     current_time = int(time.time())
     end_time = current_time + duration
 
+    # Ensure StartTime < EndTime invariant
+    if end_time <= current_time:
+        logger.warning(f"Invalid duration {duration} for segment {segment_id}, using default 300 seconds")
+        end_time = current_time + 300  # Default 5 minutes
+
     # Generate UUIDv7 for time-based ordering
     active_segment_id = str(uuid7())
 
@@ -482,7 +516,8 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
         # If combat is configured, set up combat state
         combat_config = segment.get("Combat", {})
         if combat_config:
-            opponent_id = combat_config.get("opponentId")
+            # Accept both PascalCase and camelCase for compatibility
+            opponent_id = combat_config.get("OpponentID") or combat_config.get("opponentId")
 
             # Load opponent to get initial health
             opponent_health = 5  # Default health
@@ -494,12 +529,13 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
                 except Exception as err:
                     logger.warning(f"Failed to load opponent for combat state init for {opponent_id} Error: {err}")
 
+            # Use PascalCase keys for inter-system records
             active_segment["CombatState"] = {
-                "round": 0,
-                "playerWounds": [],
-                "opponentWounds": [],
-                "opponentHealth": opponent_health,
-                "opponentId": opponent_id,
+                "Round": 0,
+                "PlayerWounds": [],
+                "OpponentWounds": [],
+                "OpponentHealth": opponent_health,
+                "OpponentID": opponent_id,
             }
 
     # Store in DynamoDB
@@ -580,7 +616,10 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         # Include combat opponent if configured
         combat_config = segment.get("Combat", {})
         if combat_config:
-            response["OpponentID"] = combat_config.get("opponentID")
+            # Accept both PascalCase and camelCase for compatibility
+            opponent_id = combat_config.get("OpponentID") or combat_config.get("opponentId")
+            if opponent_id:
+                response["OpponentID"] = opponent_id
 
     return response
 
@@ -806,7 +845,10 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
             next_segment_time = int(time.time()) + next_segment_def.get("SegmentDuration", 60)
             response_data["NextSegmentTime"] = next_segment_time
 
-            logger.info(f"Advanced to next segment after decision for {character_id}")
+            # Delete prior segment immediately after creating the next to avoid overlap
+            delete_active_segment(active_segment_id)
+
+            logger.info(f"Advanced to next segment after decision and deleted prior segment for {character_id}")
 
             # Queue mechanical segments for immediate processing
             if next_segment_def.get("SegmentType") == "mechanical":
@@ -831,9 +873,6 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
         # Story complete
         complete_story(character_id, story_id, "normal")
         logger.info(f"Story completed after decision for {character_id}")
-
-    # Delete processed segment
-    delete_active_segment(active_segment_id)
 
     logger.info(f"Decision submitted and story advanced for {active_segment_id}")
 
@@ -1014,7 +1053,13 @@ def calculate_story_rewards(story_metadata: dict, outcome: str, segments_complet
 
     # Get base XP multiplier and reward tiers
     base_xp_multiplier = float(story_metadata.get("BaseXPMultiplier", 0.5))
-    reward_tiers = story_metadata.get("RewardTiers", {})
+    reward_tiers_raw = story_metadata.get("RewardTiers", {})
+    # Build a case-insensitive lookup for reward tiers; tolerate non-dict values
+    reward_tiers: dict = {}
+    if isinstance(reward_tiers_raw, dict):
+        reward_tiers = {str(k).lower(): v for k, v in reward_tiers_raw.items()}
+    else:
+        reward_tiers = {}
 
     # Calculate XP based on outcome
     outcome_multipliers = {
@@ -1035,8 +1080,13 @@ def calculate_story_rewards(story_metadata: dict, outcome: str, segments_complet
 
     # Get items and currency from reward tiers
     tier_rewards = reward_tiers.get(outcome, {})
-    rewards["items"] = tier_rewards.get("items", [])
-    rewards["currency"] = tier_rewards.get("currency", 0)
+    # If tier rewards are strings (as in some test content), ignore for items/currency
+    if isinstance(tier_rewards, dict):
+        rewards["items"] = tier_rewards.get("items", [])
+        rewards["currency"] = tier_rewards.get("currency", 0)
+    else:
+        rewards["items"] = []
+        rewards["currency"] = 0
 
     return rewards
 

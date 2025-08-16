@@ -7,9 +7,10 @@ Lambda function to list character names for an authenticated player.
 Returns only character names and death status from the player table.
 """
 
+from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, get_character_list, validate_player
+from eidolon.player import get_character_list, validate_player
 from eidolon.responses import lambda_error, lambda_response
 
 

@@ -6,54 +6,89 @@ This directory contains AWS Lambda functions that power the Eidolon Engine's uni
 
 All Lambda functions in this directory serve both the MUD Portal and Incremental game interfaces. The same backend infrastructure supports all deployment modes (MUD, Incremental, or Hybrid), with different frontend applications consuming these shared APIs.
 
+## Production Deployment
+
+The Lambda functions are deployed as part of the 9-stack CDK architecture:
+
+- **16 Lambda Functions**: All operational with fixed logical IDs
+- **Shared Execution Role**: `eidolon-lambda-execution-role`
+- **Managed IAM Policy**: `eidolon-dynamodb-policy` with DescribeTable permission
+- **Lambda Layer**: Shared `eidolon` library updated post-deployment
+- **Fixed Logical IDs**: Preventing resource recreation on stack updates
+- **Post-Deployment Updates**: Functions updated from S3 artifacts
+
 ## Current Implementation Status
 
-All Lambda functions are fully implemented and working:
+All 16 Lambda functions are fully implemented and operational in production:
 
-- User login and account creation (via Cognito)
-- Account validation
-- Account deletion with complete data cleanup
-- Listing characters
-- Character creation with name validation
-- Character retrieval with active segments
-- Character deletion
-- Archetype listing
+### Character Management (5 functions)
+
+- `api-archetype-list` - List available archetypes
+- `api-character-add` - Create new character with bloom filter validation
+- `api-character-delete` - Delete character
+- `api-character-get` - Get character details with inventory enrichment
+- `api-character-list` - List player's characters
+
+### Story Operations (7 functions)
+
+- `api-story-start` - Begin new story
+- `api-story-abandon` - Exit active story
+- `api-segment-decision` - Submit player choice
+- `api-segment-rest` - Initiate healing segment
+- `api-segment-status` - Check segment readiness
+- `api-segment-outcome` - Get segment results
+- `api-segment-history` - Retrieve past segments
+
+### Processing Functions (3 functions)
+
+- `ops-segment-poller` - EventBridge-triggered polling
+- `ops-segment-process` - SQS mechanical processing
+- `ops-story-advance` - SQS story advancement
+
+### Cognito Trigger (1 function)
+
+- `cognito-player-new` - PostConfirmation trigger
 
 The bloom filter for restricted character names is properly loaded and functional.
 
 ## Structure
 
-### Cognito Triggers
+### Function Organization by Stack
 
-- `cognito_new_player.py` - Post-confirmation trigger to create player records
-- `cognito_delete_player.py` - Pre-deletion trigger to clean up player data
+#### Lambda Stack Functions (All 16)
 
-### Character Management API (Shared)
+All functions are deployed via the Lambda Stack with:
 
-These functions handle character operations for both Portal and Incremental interfaces:
+- **Runtime**: Python 3.12
+- **Memory**: 128MB
+- **Timeout**: 30 seconds
+- **Layer**: Shared `eidolon` library
 
-#### Implemented Functions:
+#### Fixed Logical IDs
 
-- `api_character_list.py` - List all characters for a player
-- `api_character_add.py` - Create new character with bloom filter name validation
-- `api_get_character.py` - Get character details including active story segments (enriches inventory with item details)
-- `api_character_delete.py` - Delete a character by ID
-- `api_archetypes_get.py` - Get available character archetypes
+Each function has a fixed logical ID to prevent recreation:
 
-#### Not Yet Implemented:
-
-- Character state saving/updating functionality
-- Story progression APIs
-- Segment management APIs (start, update, complete segments)
-
-### Future Additions
-
-Additional Lambda functions will be added for Incremental-specific features:
-
-- Story progression tracking
-- Segment management
-- Plot state handling
-- Active segment timers
+```python
+# From lambda_stack.py
+logical_id_map = {
+    "api-archetype-list": "ApiArchetypeListFunction",
+    "api-character-add": "ApiCharacterAddFunction",
+    "api-character-delete": "ApiCharacterDeleteFunction",
+    "api-character-get": "ApiCharacterGetFunction",
+    "api-character-list": "ApiCharacterListFunction",
+    "api-segment-decision": "ApiSegmentDecisionFunction",
+    "api-segment-history": "ApiSegmentHistoryFunction",
+    "api-segment-outcome": "ApiSegmentOutcomeFunction",
+    "api-segment-rest": "ApiSegmentRestFunction",
+    "api-segment-status": "ApiSegmentStatusFunction",
+    "api-story-abandon": "ApiStoryAbandonFunction",
+    "api-story-start": "ApiStoryStartFunction",
+    "cognito-player-new": "CognitoPlayerNewFunction",
+    "ops-segment-poller": "OpsSegmentPollerFunction",
+    "ops-segment-process": "OpsSegmentProcessFunction",
+    "ops-story-advance": "OpsStoryAdvanceFunction"
+}
+```
 
 ## Shared Modules
 
@@ -82,38 +117,52 @@ These modules are automatically included in the deployment package during the bu
 
 ## Environment Variables
 
-Each Lambda function may use the following environment variables:
+All Lambda functions receive standardized environment variables from the Lambda Stack:
 
-### Database Tables
+### Common Variables (All Functions)
 
-All tables are shared between MUD and Incremental game modes:
+```python
+# From lambda_stack.py
+"APPLICATION_NAME": "eidolon-engine"
+"LOG_LEVEL": "INFO"  # Validated by eidolon/environment.py
+"ALLOWED_ORIGINS": f"https://{client_host}.{domain}"
+"CORS_ALLOW_CREDENTIALS": "true"
+"CORS_ALLOW_HEADERS": "Content-Type,X-Amz-Date,Authorization,..."
+"CORS_ALLOW_METHODS": "GET,POST,PUT,DELETE,OPTIONS"
+"CORS_MAX_AGE": "86400"
+```
 
-- `PLAYERS_TABLE` - Players table (unified authentication)
-- `CHARACTERS_TABLE` - Characters table (with GameMode field preventing concurrent use)
-- `ARCHETYPES_TABLE` - Character archetypes
-- `ITEMS_TABLE` - Items table
-- `ROOMS_TABLE` - Rooms table
-- `EXITS_TABLE` - Room exits
-- `PROTOTYPES_TABLE` - Item prototypes
-- `MOTD_TABLE` - Messages of the day
+### Database Tables (From DynamoDB Stack Outputs)
 
-Tables being added for Incremental features:
+All 14 tables with lowercase environment variable names:
 
-- `STORY_TABLE` - Story metadata (table name: story)
-- `ACTIVE_SEGMENTS_TABLE` - Active story segments (table not yet created in DynamoDB stack)
-- `CHARACTER_HISTORY_TABLE` - Story completion tracking (table not yet created in DynamoDB stack)
+- `players_table` - Players table
+- `characters_table` - Characters table with GameMode field
+- `archetypes_table` - Character archetypes
+- `items_table` - Items table
+- `rooms_table` - Rooms table
+- `exits_table` - Room exits
+- `prototypes_table` - Item prototypes
+- `motd_table` - Messages of the day
+- `story_table` - Story metadata
+- `segments_table` - Story segment definitions
+- `active_segments_table` - Active segment instances
+- `story_history_table` - Story completion tracking
+- `segment_history_table` - Segment completion history
+- `opponents_table` - Combat opponent definitions
 
-Note: The `ACTIVE_SEGMENTS_TABLE` and `CHARACTER_HISTORY_TABLE` are referenced in existing Lambda functions but the corresponding tables need to be added to the DynamoDB stack configuration.
+### Function-Specific Variables
 
-### Character Configuration
+**Story Processing Functions**:
 
-- `DEFAULT_HEALTH` - Default health points for new characters (default: 10)
-- `DEFAULT_ESSENCE` - Default essence points for new characters (default: 3)
-- `MAX_CHARACTERS_PER_PLAYER` - Maximum characters allowed per player (default: 1)
+- `SEGMENT_QUEUE_URL` - SQS queue for mechanical segments
+- `STORY_ADVANCEMENT_QUEUE_URL` - SQS queue for advancement
+- `SSM_POLLER_STATE_PARAMETER` - SSM parameter for polling
+- `SEGMENT_BATCH_SIZE` - Processing batch size (default: 10)
 
-### CORS Configuration
+**Character Configuration**:
 
-- `ALLOWED_ORIGINS` - Comma-separated list of allowed CORS origins
+- `MAX_CHARACTERS_PER_PLAYER` - Maximum characters per player (default: 1)
 
 ## API Design Standards
 
@@ -139,21 +188,49 @@ All Lambda functions must follow these parameter standards:
 
 ## Deployment
 
-Lambda functions are packaged and deployed through AWS CodeBuild:
+Lambda functions are deployed through the modular CDK stack system:
 
-1. **Build Process** (`buildspec/lambda-functions.yml`):
-   - Each function is packaged as a separate zip file
-   - Shared `eidolon` modules are included if imported
-   - Zip files are uploaded to S3
+### CDK Stack Deployment (Lambda Stack #3)
 
-2. **Dependencies** (`buildspec/lambda-layer.yml`):
-   - Common dependencies are packaged as a Lambda layer
-   - Requirements from `requirements/lambda-requirements.txt`
+1. **CodeBuild Process** (Stack #1):
+   - Builds Lambda layer from `requirements/lambda-requirements.txt`
+   - Packages each function with `eidolon` modules
+   - Uploads artifacts to S3 bucket
 
-3. **CDK Deployment**:
-   - Functions are deployed via CDK stacks
-   - Environment variables are set by CDK
-   - IAM roles are managed by CDK
+2. **Lambda Stack Deployment** (Stack #3):
+   - Creates shared execution role
+   - Deploys Lambda layer
+   - Creates 16 functions with fixed logical IDs
+   - Sets environment variables from stack outputs
+   - Attaches DynamoDB managed policy
+
+3. **Post-Deployment Updates**:
+
+   ```python
+   # Automatic update from S3 artifacts
+   lambda_client.update_function_code(
+       FunctionName=function_name,
+       S3Bucket=bucket_name,
+       S3Key=f"{function_name}.zip"
+   )
+   ```
+
+4. **Layer Version Management**:
+   - New layer version published if changed
+   - All functions updated to use new layer
+   - Old layer versions automatically deleted
+
+### Integration with Other Stacks
+
+- **Player Stack** (#4): Configures Cognito trigger
+- **Story Stack** (#5): Adds SQS/EventBridge permissions
+- **API Stack** (#8): Creates API Gateway integrations
+
+### Deployment Modes
+
+- **MUD Mode**: All 16 functions deployed (Story Stack excluded)
+- **Incremental Mode**: All 16 functions deployed with Story Stack
+- **Hybrid Mode**: All 16 functions deployed with all stacks
 
 ## Local Testing
 
@@ -337,7 +414,7 @@ The `api_get_character.py` function applies several transformations for client c
 
 ### JSON Field Naming Convention
 
-All JSON responses use PascalCase for field names to maintain consistency with DynamoDB field names:
+All JSON responses use PascalCase for field names to maintain consistency with DynamoDB field names. Flexible casing is not supported.
 
 - Database field: `CharacterName`
 - API response: `CharacterName` (not transformed)

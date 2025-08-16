@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/character.dart';
-import '../models/segment_outcome.dart';
 import '../utils/api_parser.dart';
 import '../utils/api_validation.dart';
 import 'auth_service.dart';
@@ -69,7 +68,7 @@ class ApiService {
     );
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/characters'),
+      Uri.parse('$baseUrl/character'),
       headers: headers,
       body: jsonEncode({'CharacterName': name, 'ArchetypeName': archetype}),
     );
@@ -169,13 +168,13 @@ class ApiService {
   /// List all characters for the player
   Future<List<CharacterInfo>> listCharacters() async {
     debugPrint('ApiService: Calling listCharacters...');
-    debugPrint('ApiService: API URL: $baseUrl/characters');
+    debugPrint('ApiService: API URL: $baseUrl/character/list');
 
     final headers = await _getHeaders();
     debugPrint('ApiService: Headers prepared, making request...');
 
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/characters'),
+      Uri.parse('$baseUrl/character/list'),
       headers: headers,
     );
 
@@ -223,7 +222,7 @@ class ApiService {
     debugPrint('ApiService: Starting story - characterId: $characterId, storyId: $storyId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/stories/start'),
+      Uri.parse('$baseUrl/story/start'),
       headers: headers,
       body: jsonEncode({'CharacterID': characterId, 'StoryID': storyId}),
     );
@@ -256,7 +255,7 @@ class ApiService {
     debugPrint('ApiService: Submitting decision - characterId: $characterId, decision: $decision');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/segments/decision'),
+      Uri.parse('$baseUrl/segment/decision'),
       headers: headers,
       body: jsonEncode({'CharacterID': characterId, 'Decision': decision}),
     );
@@ -289,7 +288,7 @@ class ApiService {
     debugPrint('ApiService: Getting segment outcome - characterId: $characterId, segmentId: $segmentId');
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/segments/outcome?CharacterID=$characterId&SegmentID=$segmentId'),
+      Uri.parse('$baseUrl/segment/outcome?CharacterID=$characterId&SegmentID=$segmentId'),
       headers: headers,
     );
 
@@ -313,30 +312,12 @@ class ApiService {
     return json;
   }
 
-  /// Conclude a story segment
-  Future<SegmentOutcome> concludeSegment({required String segmentId}) async {
-    final headers = await _getHeaders();
-    final response = await _httpClient.post(
-      Uri.parse('$baseUrl/segment/conclude'),
-      headers: headers,
-      body: jsonEncode({'SegmentID': segmentId}),
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Failed to conclude segment: ${response.body}');
-    }
-
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final outcomeData = json['Outcome'] as Map<String, dynamic>;
-    return SegmentOutcome.fromJson(outcomeData);
-  }
-
   /// Abandon current story run
   Future<Map<String, dynamic>> abandonStory(String characterId) async {
     debugPrint('ApiService: Abandoning story for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/stories/abandon?CharacterID=$characterId'),
+      Uri.parse('$baseUrl/story/abandon?CharacterID=$characterId'),
       headers: headers,
     );
 
@@ -357,7 +338,7 @@ class ApiService {
     debugPrint('ApiService: Initiating rest for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/character/rest'),
+      Uri.parse('$baseUrl/segment/rest'),
       headers: headers,
       body: jsonEncode({'CharacterID': characterId}),
     );
@@ -380,7 +361,7 @@ class ApiService {
     debugPrint('ApiService: Getting archetypes...');
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/archetypes'),
+      Uri.parse('$baseUrl/archetype'),
       headers: headers,
     );
 
@@ -409,7 +390,7 @@ class ApiService {
     debugPrint('ApiService: Getting segment history for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/segments/history?CharacterID=$characterId'),
+      Uri.parse('$baseUrl/segment/history?CharacterID=$characterId'),
       headers: headers,
     );
 
@@ -440,7 +421,7 @@ class ApiService {
     debugPrint('ApiService: Getting segment status for character: $characterId');
     final headers = await _getHeaders();
     final response = await _httpClient.get(
-      Uri.parse('$baseUrl/segments/status?CharacterID=$characterId'),
+      Uri.parse('$baseUrl/segment/status?CharacterID=$characterId'),
       headers: headers,
     );
 

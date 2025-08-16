@@ -175,7 +175,6 @@ Avoid transactions for:
 - Maximum 4MB total transaction size
 - All items must be in same AWS Region
 - Cannot target same item multiple times
-- Cannot use with Global Secondary Indexes
 - Consumes 2x the standard read/write capacity
 
 ##### Implementation Guidelines
@@ -223,7 +222,164 @@ Since CloudFormation doesn't support AWS Secrets Manager references:
 - Environment variables for non-sensitive config
 - CDK can reference Secrets Manager, but synthesized CF templates cannot
 
-### 6. Monitoring and Observability
+### 6. CDK Development Patterns
+
+#### Critical CDK Lessons from Production
+
+Based on extensive production deployment experience, these patterns must be followed:
+
+##### CDK Synthesis Limitations
+
+- **No AWS Access During Synthesis**: CDK synthesis happens without AWS credentials. Any boto3 calls or resource existence checks will fail
+- **Fixed Logical IDs Required**: Use fixed IDs like `"PortalBucket"` not dynamic ones to prevent resource recreation
+- **CDK Tokens vs Strings**: `self.region` returns a token, not a string. Pass actual region values as parameters
+- **No Runtime Imports**: All imports must be at module level. No dynamic imports or module injection
+
+##### Resource Management Patterns
+
+```python
+# CORRECT: Fixed logical ID with RETAIN policy
+bucket = s3.Bucket(
+    self,
+    "ArtifactsBucket",  # Fixed ID - won't change between deployments
+    bucket_name=bucket_name,
+    removal_policy=RemovalPolicy.RETAIN,
+    auto_delete_objects=False,
+)
+
+# WRONG: Dynamic ID causes recreation
+bucket = s3.Bucket(
+    self,
+    f"Bucket-{timestamp}",  # Changes every deployment!
+    bucket_name=bucket_name,
+)
+```
+
+##### Import Pattern for Existing Resources
+
+```python
+# In deployment module (has AWS access)
+def deploy_stack(params):
+    from stacks.stack_utilities import check_s3_bucket_exists
+    bucket_exists = check_s3_bucket_exists(params.bucket, params.region)
+
+    context_args = [
+        "-c", f"bucket_exists={'true' if bucket_exists else 'false'}",
+    ]
+    return run_cdk_deploy("stack", params.region, app_command, context_args)
+
+# In CDK stack
+def __init__(self, scope, id, bucket_exists: bool = False, **kwargs):
+    if bucket_exists:
+        bucket = s3.Bucket.from_bucket_name(self, "Bucket", bucket_name)
+    else:
+        bucket = s3.Bucket(self, "Bucket", bucket_name=bucket_name,
+                          removal_policy=RemovalPolicy.RETAIN)
+```
+
+##### DynamoDB Table Protection
+
+```python
+# Tables need BOTH retention policies
+table = dynamodb.Table(
+    self, "PlayersTable",
+    table_name="players",
+    removal_policy=RemovalPolicy.RETAIN,
+    # ... other config
+)
+# Add CloudFormation deletion policy
+cfn_table = table.node.default_child
+cfn_table.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
+```
+
+##### Lambda Layer Version Management
+
+```python
+# Post-deployment cleanup of old layer versions
+def update_lambda_layer(layer_name: str, s3_key: str):
+    # Publish new version
+    new_version = lambda_client.publish_layer_version(...)
+
+    # Update all functions to use new version
+    for function in functions:
+        lambda_client.update_function_configuration(
+            FunctionName=function,
+            Layers=[new_version['LayerVersionArn']]
+        )
+
+    # Delete old version
+    lambda_client.delete_layer_version(
+        LayerName=layer_name,
+        VersionNumber=old_version
+    )
+```
+
+##### Module Organization Rules
+
+- **300 Line Limit**: Each module should be under 300 lines (1000 max for complex modules)
+- **Single Responsibility**: Each stack does ONE thing (e.g., DynamoDB, Lambda, not both)
+- **Separate App Files**: Each stack gets its own `app_*.py` to prevent output contamination
+- **Context Over Arguments**: Use CDK context instead of argparse
+
+```python
+# app_dynamodb.py
+app = cdk.App()
+region = app.node.try_get_context("region") or "us-east-1"
+tables = json.loads(app.node.try_get_context("tables") or "[]")
+
+dynamodb_stack = DynamoDBStack(app, "dynamodb", region_name=region, tables=tables)
+app.synth()
+```
+
+##### CloudFront and S3 Integration
+
+For imported S3 buckets, OAI permissions must be set post-deployment:
+
+```python
+def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str):
+    # Get OAI from CloudFront distribution
+    dist = cloudfront_client.get_distribution(Id=distribution_id)
+    oai_id = extract_oai_id(dist)
+
+    # Create bucket policy for OAI
+    policy = {
+        "Statement": [{
+            "Principal": {
+                "AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"
+            },
+            "Action": "s3:GetObject",
+            "Resource": f"arn:aws:s3:::{bucket_name}/*"
+        }]
+    }
+    s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
+```
+
+##### Build Monitoring Pattern
+
+CodeBuild doesn't have built-in waiters:
+
+```python
+# WRONG: Waiter doesn't exist
+waiter = codebuild.get_waiter("build_complete")  # Will fail!
+
+# CORRECT: Polling pattern
+while True:
+    response = codebuild.batch_get_builds(ids=[build_id])
+    status = response["builds"][0]["buildStatus"]
+    if status in ["SUCCEEDED", "FAILED", "STOPPED"]:
+        break
+    time.sleep(10)
+```
+
+##### Common Pitfalls to Avoid
+
+1. **Square Bracket Dictionary Access**: Use `.get()` method for safe access
+2. **Environment Variable Manipulation**: Pass region explicitly, don't rely on CDK environment
+3. **Inline IAM Policies**: Always use managed policies
+4. **Dynamic Resource Naming**: Causes resource recreation on every deployment
+5. **Resource Checks in CDK**: Will always fail during synthesis
+
+### 7. Monitoring and Observability
 
 #### CloudWatch Integration
 
@@ -259,20 +415,82 @@ logs.LogGroup(
 - Use ARM-based Graviton2 where compatible
 - Implement proper timeout values
 
-### 8. Compliance Checklist
+### 8. Deployment System Architecture
+
+#### Stack Organization
+
+The deployment system consists of 9 CDK stacks deployed sequentially:
+
+1. **CodeBuild**: Build infrastructure for Lambda artifacts
+2. **DynamoDB**: 14 tables with retention policies
+3. **Lambda**: Layer and 16 functions with shared execution role
+4. **Player**: Cognito User Pool with triggers
+5. **Story**: SSM, SQS, EventBridge for async processing
+6. **S3**: Scripts bucket for Lua files
+7. **CloudWatch**: Centralized logging and metrics
+8. **API**: API Gateway with custom domain
+9. **Client**: S3, CloudFront, CodeBuild for portal
+
+#### Deployment Modes
+
+- **MUD Mode**: Traditional gameplay (excludes Story stack)
+- **Incremental Mode**: Story-driven (excludes S3, CloudWatch stacks)
+- **Hybrid Mode**: Full feature set (all stacks)
+
+#### Deployment Commands
+
+```bash
+# Deploy infrastructure
+cd deployment && python3 deploy.py
+
+# The system will prompt for:
+# - AWS Region
+# - Deployment Mode
+# - S3 bucket names
+# - GitHub repository details
+# - Domain configuration
+# - Cognito reply email
+```
+
+### 9. Compliance Checklist
 
 Before deploying any infrastructure changes:
 
+#### CDK Development
+
+- [ ] Uses fixed logical IDs for all persistent resources
+- [ ] No boto3 calls or resource checks in CDK synthesis
+- [ ] Passes region as explicit parameter, not CDK token
+- [ ] Uses CDK context for parameters, not argparse
+- [ ] Each module under 300 lines (1000 max)
+- [ ] Separate app file for each stack
+
+#### Resource Management
+
+- [ ] S3 buckets have RemovalPolicy.RETAIN
+- [ ] DynamoDB tables have both RETAIN policies
+- [ ] Existing resources checked in deployment layer
+- [ ] Import patterns used for existing resources
+- [ ] Post-deployment updates for Lambda code
+- [ ] Old Lambda layer versions cleaned up
+
+#### AWS Standards
+
 - [ ] Uses YAML for CloudFormation templates
 - [ ] No direct Lambda-to-Lambda invocations
-- [ ] Follows naming conventions
-- [ ] Includes required tags
+- [ ] Follows naming conventions (eidolon-{component})
+- [ ] Includes required tags (Project, ManagedBy)
 - [ ] Has CloudWatch logs configured
-- [ ] Implements least-privilege IAM
+- [ ] Implements least-privilege IAM with managed policies
 - [ ] No sensitive data storage introduced
 - [ ] Uses DynamoDB transactions for multi-item operations
+
+#### Deployment Validation
+
 - [ ] CDK code synthesizes successfully
-- [ ] CloudFormation templates are updated
+- [ ] All resources verified post-deployment
+- [ ] CloudFront OAI permissions updated for imported buckets
+- [ ] Build monitoring uses polling, not waiters
 - [ ] Cost implications documented
 - [ ] Monitoring/alarms configured
 

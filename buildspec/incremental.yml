@@ -32,8 +32,3 @@ phases:
         else
           echo "No CloudFront distribution ID provided, skipping cache invalidation"
         fi
-
-artifacts:
-  base-directory: incremental/build/web
-  files:
-    - "**/*"

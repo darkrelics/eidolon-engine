@@ -10,11 +10,12 @@ Returns the full character data including active segments if any.
 from eidolon.character_data import character_get
 from eidolon.character_segment import character_get_active_segment
 from eidolon.character_story import character_get_active_story, get_stories
+from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float
 from eidolon.items import get_inventory
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, validate_player
+from eidolon.player import validate_player
 from eidolon.responses import lambda_error, lambda_response
 
 

@@ -5,9 +5,10 @@ import json
 from eidolon.archetypes import get_archetype
 from eidolon.bloom import character_name_filter
 from eidolon.character_data import check_character_limit, create_character
+from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import extract_player_id, validate_player
+from eidolon.player import validate_player
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_character_name
 

@@ -76,7 +76,7 @@ void main() {
     Widget createTestApp({Character? character}) {
       return MultiProvider(
         providers: [
-          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider.create()),
         ],
         child: MaterialApp(
           home: GameScreen(),

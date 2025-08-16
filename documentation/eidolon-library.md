@@ -7,20 +7,20 @@ This directory contains shared Python modules used across multiple Lambda functi
 ```
 eidolon/
 ├── __init__.py          # Package initialization
-├── cors_handler.py      # CORS handling for Lambda functions
+├── cors.py              # CORS handling for Lambda functions
 └── README.md           # This file
 ```
 
 ## Modules
 
-### cors_handler.py
+### cors.py
 
 Provides centralized CORS (Cross-Origin Resource Sharing) configuration and validation for API responses.
 
 **Usage:**
 
 ```python
-from eidolon.cors_handler import cors_handler
+from eidolon.cors import cors_handler
 
 def lambda_handler(event, context):
     # Handle preflight requests
@@ -77,7 +77,7 @@ import os
 # Add parent directory to path for local testing
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from eidolon.cors_handler import cors_handler
+from eidolon.cors import cors_handler
 ```
 
 ## Best Practices

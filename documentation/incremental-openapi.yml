@@ -10,7 +10,7 @@ info:
     name: Proprietary
 
 servers:
-  - url: https://api.darkrelics.net/incremental
+  - url: https://api.darkrelics.net
     description: Production server
 security:
   - CognitoAuth: []
@@ -20,9 +20,13 @@ tags:
     description: Character archetype operations
   - name: Characters
     description: Character management operations
+  - name: Stories
+    description: Story lifecycle operations
+  - name: Segments
+    description: Segment processing and polling operations
 
 paths:
-  /archetypes:
+  /archetype:
     get:
       tags:
         - Archetypes
@@ -78,7 +82,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /characters:
+  /character/list:
     get:
       tags:
         - Characters
@@ -120,6 +124,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /character:
     post:
       tags:
         - Characters
@@ -191,7 +196,6 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /character:
     get:
       tags:
         - Characters
@@ -321,6 +325,337 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 Error: "Character not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    delete:
+      tags:
+        - Characters
+      summary: Delete a character
+      description: Deletes a character owned by the authenticated player.
+      operationId: deleteCharacter
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the character to delete
+      responses:
+        "200":
+          description: Character deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CharacterDeleteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Character not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /story/start:
+    post:
+      tags:
+        - Stories
+      summary: Start a story
+      description: Starts a story for a character and returns the first segment info.
+      operationId: startStory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [CharacterID, StoryID]
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+                StoryID:
+                  type: string
+      responses:
+        "200":
+          description: Story started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartStoryResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Story not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Character or story not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Character already in a game mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /story/abandon:
+    post:
+      tags:
+        - Stories
+      summary: Abandon active story
+      description: Abandons a character's current story and resets game mode.
+      operationId: abandonStory
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Story abandoned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AbandonResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /segment/decision:
+    post:
+      tags:
+        - Segments
+      summary: Submit a decision
+      description: Submits a player's decision for a decision segment.
+      operationId: submitDecision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [CharacterID, Decision]
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+                Decision:
+                  type: string
+      responses:
+        "200":
+          description: Decision accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Segment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Decision already submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /segment/outcome:
+    get:
+      tags:
+        - Segments
+      summary: Get segment outcome
+      description: Retrieves outcome narrative and effects for a completed or processed segment.
+      operationId: getSegmentOutcome
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: SegmentID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Outcome data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentOutcomeResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Character or segment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Segment not yet completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /segment/status:
+    get:
+      tags:
+        - Segments
+      summary: Get active segment status
+      description: Returns status and timing for the character's current segment.
+      operationId: getSegmentStatus
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Status data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentStatusResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No active segment found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /segment/history:
+    get:
+      tags:
+        - Segments
+      summary: Get segment history
+      description: Retrieves completed segment history for the active story.
+      operationId: getSegmentHistory
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Segment history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentHistoryResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /segment/rest:
+    post:
+      tags:
+        - Segments
+      summary: Insert a rest segment
+      description: Inserts a rest segment into the flow to allow healing.
+      operationId: insertRest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [CharacterID]
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Rest segment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Cannot insert rest at this point
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -586,6 +921,16 @@ components:
           description: Success confirmation message
           example: Character created successfully
 
+    CharacterDeleteResponse:
+      type: object
+      required:
+        - Message
+      properties:
+        Message:
+          type: string
+          description: Success confirmation message
+          example: Character deleted successfully
+
     CharacterDetailResponse:
       type: object
       required:
@@ -839,15 +1184,8 @@ components:
         ClientEvents:
           type: array
           items:
-            type: object
-            properties:
-              eventType:
-                type: string
-              title:
-                type: string
-              description:
-                type: string
-          description: Events to display to client
+            $ref: "#/components/schemas/ClientEvent"
+          description: Events to display to client (PascalCase fields)
 
     AvailableStory:
       type: object
@@ -927,3 +1265,273 @@ components:
             $ref: "#/components/schemas/Error"
           example:
             Error: "Failed to load archetypes"
+
+    # Additional schemas for deployed endpoints
+    ClientEvent:
+      type: object
+      properties:
+        EventType:
+          type: string
+        Title:
+          type: string
+        Description:
+          type: string
+        Data:
+          type: object
+      additionalProperties: false
+
+    ChallengeAttempt:
+      type: object
+      properties:
+        EffectiveScore:
+          type: number
+        Difficulty:
+          type: integer
+        Sigma:
+          type: number
+        Success:
+          type: boolean
+      required: [EffectiveScore, Difficulty, Sigma, Success]
+
+    ChallengeResult:
+      type: object
+      properties:
+        Attribute:
+          type: string
+          nullable: true
+        Skill:
+          type: string
+          nullable: true
+        Difficulty:
+          type: integer
+        Attempts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChallengeAttempt"
+        BestSigma:
+          type: number
+        Passed:
+          type: boolean
+      required: [Difficulty, Attempts, BestSigma, Passed]
+
+    CombatAttack:
+      type: object
+      properties:
+        Hit:
+          type: boolean
+        Sigma:
+          type: number
+        Damage:
+          type: integer
+          nullable: true
+        DamageType:
+          type: string
+          nullable: true
+      required: [Hit, Sigma]
+
+    CombatRound:
+      type: object
+      properties:
+        Round:
+          type: integer
+        PlayerAttack:
+          $ref: "#/components/schemas/CombatAttack"
+        OpponentAttack:
+          $ref: "#/components/schemas/CombatAttack"
+
+    CombatState:
+      type: object
+      properties:
+        Round:
+          type: integer
+        PlayerWounds:
+          type: array
+          items:
+            type: object
+        OpponentWounds:
+          type: array
+          items:
+            type: object
+        OpponentHealth:
+          type: integer
+          nullable: true
+        OpponentID:
+          type: string
+          nullable: true
+        CombatLog:
+          type: array
+          items:
+            $ref: "#/components/schemas/CombatRound"
+        Victor:
+          type: string
+          nullable: true
+        OpponentDefeated:
+          type: boolean
+          nullable: true
+
+    StartStoryResponse:
+      type: object
+      properties:
+        Success:
+          type: boolean
+        Segment:
+          type: object
+          properties:
+            ActiveSegmentID:
+              type: string
+            SegmentType:
+              type: string
+            StartTime:
+              type: integer
+            EndTime:
+              type: integer
+            ShortStatus:
+              type: string
+            Duration:
+              type: integer
+      required: [Success, Segment]
+
+    DecisionResponse:
+      type: object
+      properties:
+        Accepted:
+          type: boolean
+        NextSegmentTime:
+          type: integer
+          nullable: true
+      required: [Accepted]
+
+    SegmentOutcomeResponse:
+      type: object
+      properties:
+        Outcome:
+          type: string
+        Narrative:
+          type: string
+        Effects:
+          type: object
+        NextSegmentID:
+          type: string
+          nullable: true
+        Decision:
+          type: string
+          nullable: true
+        ChallengeResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChallengeResult"
+        CombatState:
+          $ref: "#/components/schemas/CombatState"
+      required: [Outcome, Narrative, Effects]
+
+    SegmentStatusResponse:
+      type: object
+      properties:
+        ActiveSegmentID:
+          type: string
+        StoryID:
+          type: string
+        SegmentID:
+          type: string
+        Status:
+          type: string
+        IsComplete:
+          type: boolean
+        TimeRemaining:
+          type: integer
+        EndTime:
+          type: integer
+        Outcome:
+          type: string
+          nullable: true
+        Decision:
+          type: string
+          nullable: true
+        ChallengeResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChallengeResult"
+        CombatState:
+          $ref: "#/components/schemas/CombatState"
+
+    SegmentHistoryItem:
+      type: object
+      properties:
+        ActiveSegmentID:
+          type: string
+        SegmentID:
+          type: string
+        SegmentType:
+          type: string
+        Status:
+          type: string
+        ProcessingStatus:
+          type: string
+        StartTime:
+          type: integer
+        EndTime:
+          type: integer
+        Outcome:
+          type: string
+        ClientEvents:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClientEvent"
+        CharacterUpdates:
+          type: object
+        Decision:
+          type: string
+        ChallengeResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChallengeResult"
+        SkillXPAwarded:
+          type: object
+        AttributeXPAwarded:
+          type: object
+        CombatState:
+          $ref: "#/components/schemas/CombatState"
+        NextSegmentID:
+          type: string
+
+    SegmentHistoryResponse:
+      type: object
+      properties:
+        CharacterID:
+          type: string
+        StoryID:
+          type: string
+          nullable: true
+        Segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/SegmentHistoryItem"
+      required: [CharacterID, Segments]
+
+    RestResponse:
+      type: object
+      properties:
+        Success:
+          type: boolean
+        RestSegmentId:
+          type: string
+        InsertedAfter:
+          type: string
+        Message:
+          type: string
+      required: [Success]
+
+    AbandonResponse:
+      type: object
+      properties:
+        CharacterID:
+          type: string
+        StoryID:
+          type: string
+        StoryTitle:
+          type: string
+        Abandoned:
+          type: boolean
+        Message:
+          type: string
+      required: [CharacterID, StoryID, Abandoned]

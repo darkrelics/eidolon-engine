@@ -227,24 +227,16 @@ try {
 
 ## JSON Handling
 
-### Flexible Field Access
+### Strict PascalCase Fields
 
-Use the `JsonUtils` utility for robust JSON parsing:
+All API JSON uses PascalCase keys only. Do not rely on flexible parsing.
 
 ```dart
-// Handle both PascalCase and camelCase field names
-final characterId = JsonUtils.getFlexibleRequired<String>(
-  json,
-  'CharacterID',
-  'characterId',
-);
+// Required field
+final characterId = json['CharacterID'] as String;
 
-// Optional fields with defaults
-final health = JsonUtils.getFlexible<int>(
-  json,
-  'Health',
-  'health',
-) ?? 10;
+// Optional field with default
+final health = (json['Health'] as int?) ?? 10;
 ```
 
 ### Model Classes
@@ -267,11 +259,11 @@ class Character {
 
   factory Character.fromJson(Map<String, dynamic> json) {
     return Character(
-      id: JsonUtils.getFlexibleRequired<String>(json, 'CharacterID', 'characterId'),
-      name: JsonUtils.getFlexibleRequired<String>(json, 'CharacterName', 'characterName'),
-      archetypeName: JsonUtils.getFlexible<String>(json, 'ArchetypeName', 'archetypeName') ?? 'Unknown',
-      health: JsonUtils.getFlexible<int>(json, 'Health', 'health') ?? 0,
-      maxHealth: JsonUtils.getFlexible<int>(json, 'MaxHealth', 'maxHealth') ?? 10,
+      id: json['CharacterID'] as String,
+      name: json['CharacterName'] as String,
+      archetypeName: (json['ArchetypeName'] as String?) ?? 'Unknown',
+      health: (json['Health'] as int?) ?? 0,
+      maxHealth: (json['MaxHealth'] as int?) ?? 10,
     );
   }
 }

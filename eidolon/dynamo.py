@@ -11,13 +11,11 @@ from math import ceil
 from time import sleep
 
 from boto3 import resource
-from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from eidolon.environment import (
     ACTIVE_SEGMENTS_TABLE,
     ARCHETYPES_TABLE,
-    CHARACTER_HISTORY_TABLE,
     CHARACTERS_TABLE,
     EXITS_TABLE,
     ITEMS_TABLE,
@@ -45,7 +43,6 @@ class TableName(Enum):
     STORY = "story"
     SEGMENTS = "segments"
     ACTIVE_SEGMENTS = "active_segments"
-    CHARACTER_HISTORY = "character_history"
     STORY_HISTORY = "story_history"
     SEGMENT_HISTORY = "segment_history"
     OPPONENTS = "opponents"
@@ -64,7 +61,6 @@ TABLE_ENV_MAP: dict = {
     TableName.STORY: STORY_TABLE,
     TableName.SEGMENTS: SEGMENTS_TABLE,
     TableName.ACTIVE_SEGMENTS: ACTIVE_SEGMENTS_TABLE,
-    TableName.CHARACTER_HISTORY: CHARACTER_HISTORY_TABLE,
     TableName.STORY_HISTORY: STORY_HISTORY_TABLE,
     TableName.SEGMENT_HISTORY: SEGMENT_HISTORY_TABLE,
     TableName.OPPONENTS: OPPONENTS_TABLE,
@@ -554,98 +550,6 @@ class DynamoInterface:
             raise
 
         return failed_items
-
-    @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
-    def query_by_gsi(self, table_enum: TableName, index_name: str, key_conditions: dict, **kwargs) -> list:
-        """
-        Query a table using a Global Secondary Index with Key conditions.
-
-        Args:
-            table_enum: TableName enum value
-            index_name: GSI name
-            key_conditions: Dictionary of key conditions (e.g., {"PartitionKey": value})
-            **kwargs: Additional query parameters (FilterExpression, ExpressionAttributeValues, etc.)
-
-        Returns:
-            List of items with Decimals converted to floats
-
-        Raises:
-            ClientError: If DynamoDB operation fails
-        """
-        # Build key condition expression
-        key_expressions = []
-        for key, value in key_conditions.items():
-            key_expressions.append(Key(key).eq(value))
-
-        if len(key_expressions) == 1:
-            key_condition_expression = key_expressions[0]
-        else:
-            # Combine multiple key conditions with AND
-            key_condition_expression = key_expressions[0]
-            for expr in key_expressions[1:]:
-                key_condition_expression = key_condition_expression & expr
-
-        # Add IndexName and KeyConditionExpression to kwargs
-        kwargs["IndexName"] = index_name
-        kwargs["KeyConditionExpression"] = key_condition_expression
-
-        logger.debug(f"DB Interface: GSI Query for {table_enum.value}")
-
-        # Use the existing query method
-        return self.query(table_enum, **kwargs)  # type: ignore
-
-    def update_item_fields(self, table_enum: TableName, key: dict, updates: dict, condition_expression=None) -> dict:
-        """
-        Update multiple fields in an item with automatic expression building.
-
-        Args:
-            table_enum: TableName enum value
-            key: Item key dictionary
-            updates: Dictionary of field updates {field_name: new_value}
-            condition_expression: Optional condition expression string
-
-        Returns:
-            Response from DynamoDB update_item
-
-        Raises:
-            ClientError: If DynamoDB operation fails
-            ValueError: If updates dict is empty
-        """
-        if not updates:
-            raise ValueError("Updates dictionary cannot be empty")
-
-        # Build update expression
-        update_parts = []
-        expression_names = {}
-        expression_values = {}
-
-        for field, value in updates.items():
-            # Use expression attribute names to handle reserved words
-            field_placeholder = f"#{field}"
-            value_placeholder = f":{field}"
-
-            update_parts.append(f"{field_placeholder} = {value_placeholder}")
-            expression_names[field_placeholder] = field
-            expression_values[value_placeholder] = value
-
-        update_expression = "SET " + ", ".join(update_parts)
-
-        # Build update parameters
-        update_params = {
-            "Key": key,
-            "UpdateExpression": update_expression,
-            "ExpressionAttributeNames": expression_names,
-            "ExpressionAttributeValues": expression_values,
-            "ReturnValues": "UPDATED_NEW",
-        }
-
-        if condition_expression:
-            update_params["ConditionExpression"] = condition_expression
-
-        logger.debug(f"DB Interface: Update Fields for {table_enum.value}")
-
-        # Use the existing update_item method
-        return self.update_item(table_enum, **update_params)  # type: ignore
 
 
 def clean_value(value: object) -> object:

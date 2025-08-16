@@ -28,7 +28,7 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => AuthProvider()),
-          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider.create()),
         ],
         child: const EidolonIncrementalApp(),
       ),
@@ -50,8 +50,8 @@ class EidolonIncrementalApp extends StatelessWidget {
       builder: (context, themeProvider, _) {
         return MaterialApp(
           title: 'Eidolon Incremental',
-          theme: AppTheme.lightTheme(),
-          darkTheme: AppTheme.darkTheme(),
+          theme: themeProvider.getThemeForMode(context),
+          darkTheme: themeProvider.theme,
           themeMode: themeProvider.themeMode,
           home: const AuthWrapper(),
           routes: {

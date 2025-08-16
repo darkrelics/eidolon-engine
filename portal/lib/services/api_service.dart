@@ -79,7 +79,7 @@ class ApiService {
     }
 
     final response = await http.get(
-      Uri.parse('$_baseUrl/characters'),
+      Uri.parse('$_baseUrl/character/list'),
       headers: {
         'Authorization': 'Bearer $idToken',
         'Content-Type': 'application/json',

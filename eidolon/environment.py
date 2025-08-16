@@ -20,7 +20,6 @@ PROTOTYPES_TABLE = os.environ.get("PROTOTYPES_TABLE", "prototypes")
 STORY_TABLE = os.environ.get("STORY_TABLE", "story")
 SEGMENTS_TABLE = os.environ.get("SEGMENTS_TABLE", "segments")
 ACTIVE_SEGMENTS_TABLE = os.environ.get("ACTIVE_SEGMENTS_TABLE", "active_segments")
-CHARACTER_HISTORY_TABLE = os.environ.get("CHARACTER_HISTORY_TABLE", "character_history")
 STORY_HISTORY_TABLE = os.environ.get("STORY_HISTORY_TABLE", "story_history")
 SEGMENT_HISTORY_TABLE = os.environ.get("SEGMENT_HISTORY_TABLE", "segment_history")
 OPPONENTS_TABLE = os.environ.get("OPPONENTS_TABLE", "opponents")
@@ -36,8 +35,34 @@ DEFAULT_HEALTH = int(os.environ.get("DEFAULT_HEALTH", "10"))
 DEFAULT_ESSENCE = int(os.environ.get("DEFAULT_ESSENCE", "3"))
 MAX_CHARACTERS_PER_PLAYER = int(os.environ.get("MAX_CHARACTERS_PER_PLAYER", "1"))
 
+
 # Logging Configuration
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+def _validate_log_level(level_str: str) -> str:
+    """Validate and normalize log level.
+
+    Accepts:
+    - Integer strings (e.g., "20" for INFO, "10" for DEBUG)
+    - String names (e.g., "INFO", "DEBUG", "WARNING", "ERROR", "CRITICAL")
+
+    Returns normalized string name or "INFO" as default.
+    """
+    # Mapping of numeric levels to names
+    numeric_levels = {"50": "CRITICAL", "40": "ERROR", "30": "WARNING", "20": "INFO", "10": "DEBUG"}
+
+    # Valid string names
+    valid_names = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+    # Try to parse as integer
+    try:
+        numeric_str = str(int(level_str))
+        return numeric_levels.get(numeric_str, "INFO")
+    except (ValueError, TypeError):
+        # Not a number, check if it's a valid string name
+        upper_level = level_str.upper()
+        return upper_level if upper_level in valid_names else "INFO"
+
+
+LOG_LEVEL = _validate_log_level(os.environ.get("LOG_LEVEL", "INFO"))
 
 # AWS Environment Detection
 AWS_EXECUTION_ENV = os.environ.get("AWS_EXECUTION_ENV")
