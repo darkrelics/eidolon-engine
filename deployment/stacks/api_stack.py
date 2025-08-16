@@ -105,9 +105,9 @@ class ApiStack(Stack):
     def _add_api_endpoints(self, api: apigateway.RestApi, authorizer: apigateway.CognitoUserPoolsAuthorizer) -> None:
         """Add API endpoints with Lambda integrations."""
         # Archetype endpoints
-        if "api-archetype-get" in self.lambda_arns:
+        if "api-archetype-list" in self.lambda_arns:
             archetype_resource = api.root.add_resource("archetype")
-            self._add_lambda_integration(archetype_resource, "GET", "api-archetype-get", authorizer)
+            self._add_lambda_integration(archetype_resource, "GET", "api-archetype-list", authorizer)
 
         # Character endpoints
         character_resource = api.root.add_resource("character")
@@ -156,9 +156,9 @@ class ApiStack(Stack):
                 history_resource = segment_resource.add_resource("history")
                 self._add_lambda_integration(history_resource, "GET", "api-segment-history", authorizer)
 
-            if "api-character-rest" in self.lambda_arns:
+            if "api-segment-rest" in self.lambda_arns:
                 rest_resource = segment_resource.add_resource("rest")
-                self._add_lambda_integration(rest_resource, "POST", "api-character-rest", authorizer)
+                self._add_lambda_integration(rest_resource, "POST", "api-segment-rest", authorizer)
 
     def _add_lambda_integration(
         self, resource: apigateway.Resource, method: str, function_name: str, authorizer: apigateway.CognitoUserPoolsAuthorizer

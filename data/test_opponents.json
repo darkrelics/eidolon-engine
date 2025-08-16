@@ -337,6 +337,27 @@
       "LootTable": [],
       "Tags": ["demon", "dungeon", "flying", "weak"],
       "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "51eadb06-e05c-4515-84a7-1e415d6b88e1",
+      "Name": "Gremlin",
+      "Description": "A small, mischievous creature with sharp teeth and grubby claws",
+      "CombatRating": 4,
+      "DefenseRating": 5,
+      "DamageRating": 3,
+      "Toughness": 2,
+      "ArmorRating": 0,
+      "Health": 3,
+      "WeaponType": "bashing",
+      "WeaponDamage": 1,
+      "LootTable": [
+        {
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.2
+        }
+      ],
+      "Tags": ["goblinoid", "dungeon", "weak", "pest"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
     }
   ]
 }

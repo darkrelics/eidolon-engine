@@ -44,19 +44,25 @@ def verify_aws_credentials() -> bool:
 
 def verify_cdk_installed() -> bool:
     """Check if AWS CDK is installed."""
-    try:
-        result = subprocess.run(["cdk", "--version"], capture_output=True, text=True, check=False)
-        if result.returncode == 0:
-            print(f"CDK Version: {result.stdout.strip()}")
-            return True
-        else:
-            print("Error: AWS CDK is not installed")
-            print("Install it with: npm install -g aws-cdk")
-            return False
-    except FileNotFoundError:
-        print("Error: AWS CDK is not installed")
-        print("Install it with: npm install -g aws-cdk")
-        return False
+    import platform
+    
+    # On Windows, try both 'cdk' and 'cdk.cmd'
+    commands = ["cdk", "cdk.cmd"] if platform.system() == "Windows" else ["cdk"]
+    
+    for cmd in commands:
+        try:
+            result = subprocess.run([cmd, "--version"], capture_output=True, text=True, check=False, shell=True)
+            if result.returncode == 0:
+                print(f"CDK Version: {result.stdout.strip()}")
+                return True
+        except (FileNotFoundError, OSError):
+            continue
+    
+    # If we get here, CDK wasn't found
+    print("Error: AWS CDK is not installed or not in PATH")
+    print("Install it with: npm install -g aws-cdk")
+    print("If CDK is installed, ensure it's in your system PATH")
+    return False
 
 
 def verify_cdk_bootstrap(region: str) -> bool:
