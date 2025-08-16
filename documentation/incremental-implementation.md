@@ -174,7 +174,7 @@ DynamoDB transactions ensure atomic updates across multiple tables when starting
 This transaction atomically updates the character's game mode and creates the active segment record, ensuring data consistency even if failures occur during the story start process.
 
 ```python
-from uuid_extension import uuid7  # Repo-provided helper for UUIDv7-like IDs
+from uuid_extension import uuid7  # Repo-provided helper for UUIDv7 IDs
 
 def start_story_transaction(character_id, story_id, segment_data):
     # Generate UUIDv7 for the active segment
