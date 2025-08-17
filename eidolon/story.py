@@ -502,6 +502,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
         "Status": "active",
         "StartTime": current_time,
         "EndTime": end_time,
+        "DefaultStatus": segment.get("ShortStatus", "Processing..."),
     }
 
     # Add type-specific fields based on segment type
@@ -570,6 +571,8 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
             "StoryType": story_type,
             "SegmentHistory": [],
             "AbandonedCount": 0,
+            "SkillXPAwarded": {},
+            "AttributeXPAwarded": {},
         }
 
         # Put item (will overwrite if exists - handles retries)
@@ -1009,7 +1012,7 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
     # Complete the story and clean up character state
     complete_story_for_character(character_id, story_id, outcome)
 
-    # Get story metadata for reward calculation
+    # Get story metadata for reward calculation and type checking
     try:
         story_metadata = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
         if not story_metadata:
@@ -1017,6 +1020,32 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
     except ClientError as err:
         logger.error(f"Failed to get story for {story_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get story: {err}") from err
+
+    # Update LastCompleted timestamp for repeatable stories
+    # This is critical for cooldown tracking
+    story_type = story_metadata.get("StoryType", "repeatable")
+    if story_type == "repeatable":
+        try:
+            # Get character's completed stories list
+            character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+            if character:
+                completed_stories = character.get("CompletedStories", {})
+                completed_stories[story_id] = {
+                    "LastCompleted": int(time.time()),
+                    "CompletionCount": completed_stories.get(story_id, {}).get("CompletionCount", 0) + 1
+                }
+                
+                # Update character with completed story info
+                dynamo.update_item(
+                    TableName.CHARACTERS,
+                    Key={"CharacterID": character_id},
+                    UpdateExpression="SET CompletedStories = :completed",
+                    ExpressionAttributeValues={":completed": completed_stories}
+                )
+                logger.info(f"Updated LastCompleted for repeatable story {story_id} for {character_id}")
+        except Exception as err:
+            # Non-critical - cooldown tracking will just not work properly
+            logger.warning(f"Failed to update LastCompleted for story {story_id}: {err}")
 
     history = get_story_history(character_id, story_id)
 
@@ -1290,6 +1319,8 @@ def ensure_story_history_exists(character_id: str, story_id: str, story_title: s
                     "StoryTitle": story_title,
                     "StartedAt": datetime.now(timezone.utc).isoformat(),
                     "SegmentCount": 0,
+                    "SkillXPAwarded": {},
+                    "AttributeXPAwarded": {},
                 },
             )
             logger.info(f"Created story history record for {character_id}")

@@ -202,7 +202,7 @@ class ActiveStoryDisplay extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: FilledButton.tonal(
-                        onPressed: timeRemaining == 0 ? () {
+                        onPressed: timeRemaining > 0 ? () {
                           // Handle decision selection
                           if (onDecision != null) onDecision!();
                         } : null,
@@ -210,6 +210,14 @@ class ActiveStoryDisplay extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (timeRemaining == 0)
+                    Text(
+                      'Time expired - default choice will be made',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                 ] else ...[
                   Text(
                     currentSegment.defaultStatus ?? '',

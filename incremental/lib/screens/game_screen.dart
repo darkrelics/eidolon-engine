@@ -222,6 +222,10 @@ class _GameScreenState extends State<GameScreen> {
 
       // Reload character to get the new story state
       await _loadCharacterData();
+      
+      // Set up segment status polling
+      // Poll once after 1 minute to get processed narrative
+      _setupSegmentPolling();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -234,6 +238,73 @@ class _GameScreenState extends State<GameScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+  
+  void _setupSegmentPolling() {
+    if (_character == null || _character!.storyState == null) return;
+    
+    final activeSegment = _character!.storyState?['ActiveSegment'];
+    if (activeSegment == null) return;
+    
+    final segmentType = activeSegment['SegmentType'] as String?;
+    final endTime = activeSegment['EndTime'] as int?;
+    final startTime = activeSegment['StartTime'] as int?;
+    
+    if (endTime == null || startTime == null) return;
+    
+    final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    
+    // Cancel any existing polling timers
+    _mechanicalPollingSubscription?.cancel();
+    
+    // For mechanical segments, poll after 1 minute to get processed narrative
+    if (segmentType == 'mechanical') {
+      Timer(const Duration(minutes: 1), () async {
+        if (!mounted) return;
+        
+        try {
+          debugPrint('GameScreen: Polling segment status after 1 minute');
+          final statusResponse = await _apiService.getSegmentStatus(
+            characterId: _character!.id,
+          );
+          
+          // Update UI with narrative if available
+          if (statusResponse['ProcessingStatus'] == 'processed' && mounted) {
+            // Reload character to get updated segment data with narrative
+            await _loadCharacterData(silent: true);
+          }
+        } catch (e) {
+          debugPrint('GameScreen: Error polling segment status: $e');
+        }
+      });
+    }
+    
+    // Poll at segment completion time for all segment types
+    final timeUntilCompletion = endTime - currentTime;
+    if (timeUntilCompletion > 0) {
+      Timer(Duration(seconds: timeUntilCompletion), () async {
+        if (!mounted) return;
+        
+        try {
+          debugPrint('GameScreen: Polling segment status at completion time for $segmentType segment');
+          final statusResponse = await _apiService.getSegmentStatus(
+            characterId: _character!.id,
+          );
+          
+          // Check if segment is complete
+          if (statusResponse['IsComplete'] == true && mounted) {
+            // For decision segments that timed out, the backend will use default decision
+            if (segmentType == 'decision') {
+              debugPrint('GameScreen: Decision segment timed out - default decision will be used');
+            }
+            // Reload character to advance to next segment or complete story
+            await _loadCharacterData();
+          }
+        } catch (e) {
+          debugPrint('GameScreen: Error checking segment completion: $e');
+        }
+      });
     }
   }
 
@@ -250,6 +321,9 @@ class _GameScreenState extends State<GameScreen> {
 
       // Reload character to get the next segment
       await _loadCharacterData();
+      
+      // Set up polling for the new segment
+      _setupSegmentPolling();
       
       if (mounted) {
         // Show notification for decision outcome

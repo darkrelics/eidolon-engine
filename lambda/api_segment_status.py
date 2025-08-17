@@ -47,6 +47,8 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
     is_complete = current_time >= end_time
     time_remaining = max(0, end_time - current_time)
 
+    processing_status = active_segment.get("ProcessingStatus", "")
+    
     response = {
         "ActiveSegmentID": active_segment.get("ActiveSegmentID"),
         "StoryID": active_segment.get("StoryID"),
@@ -55,14 +57,32 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
         "IsComplete": is_complete,
         "TimeRemaining": time_remaining,
         "EndTime": end_time,
+        "ProcessingStatus": processing_status,
+        "SegmentType": active_segment.get("SegmentType"),
     }
 
-    # Include results if segment is complete
-    if is_complete:
+    # Only include narrative data if segment is processed or if it's not a mechanical segment
+    # Mechanical segments need processing before narrative is available
+    segment_type = active_segment.get("SegmentType", "").lower()
+    
+    if segment_type != "mechanical" or processing_status == "processed":
+        # Include narrative and events for display
+        response["DefaultStatus"] = active_segment.get("DefaultStatus")
+        response["ClientEvents"] = active_segment.get("ClientEvents", [])
         response["ChallengeResults"] = active_segment.get("ChallengeResults", [])
         response["Outcome"] = active_segment.get("Outcome")
-        response["Decision"] = active_segment.get("Decision")
         response["CombatState"] = active_segment.get("CombatState")
+    else:
+        # Segment is still processing - just return basic status
+        response["DefaultStatus"] = "Processing..."
+    
+    # Include decision-specific data
+    if segment_type == "decision":
+        response["Decision"] = active_segment.get("Decision")
+        response["DecisionOptions"] = active_segment.get("DecisionOptions")
+    
+    # Include healing data for rest segments
+    if segment_type == "rest":
         response["HealingApplied"] = active_segment.get("HealingApplied")
 
     logger.info(f"Segment status retrieved for {character_id}")

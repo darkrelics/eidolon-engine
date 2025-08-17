@@ -164,18 +164,23 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
     active_segment = create_active_segment(character_id, player_id, story_id, story_title, first_segment)
     logger.info(f"Active segment created: {active_segment.get('ActiveSegmentID', 'unknown')}")
 
-    # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID and remove from available list
+    # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID
+    # Only remove from available list if story is not repeatable
     try:
-        # Build update expression to set GameMode and remove from AvailableStories
+        # Check if story should be removed from available list
+        story_type = story.get("StoryType", "repeatable")
+        should_remove = story_type != "repeatable"
+        
+        # Build update expression to set GameMode and optionally remove from AvailableStories
         available_stories = character.get("AvailableStories", [])
-        if story_id in available_stories:
+        if should_remove and story_id in available_stories:
             story_index = available_stories.index(story_id)
             update_expression = (
                 "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id "
                 f"REMOVE AvailableStories[{story_index}]"
             )
         else:
-            # Story not in list anymore (race condition), just update the mode
+            # Either story is repeatable or not in list (race condition), just update the mode
             update_expression = "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
 
         # Build condition expression - allow if GameMode is None OR (Incremental with no active story/segment)
@@ -219,8 +224,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         logger.error(f"Failed to update character state for {character_id}: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update character state: {err}") from err
 
-    # Create history entry
-    story_type = story.get("StoryType", "repeatable")
+    # Create history entry (story_type already extracted above)
     create_story_history_entry(character_id, story_id, story_title, story_type)
 
     logger.info(f"Story started successfully for {character_id}")
