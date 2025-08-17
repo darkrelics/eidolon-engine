@@ -32,15 +32,22 @@ def manage_eventbridge_rule(should_enable: bool) -> None:
 
     try:
         if should_enable:
-            events_client.enable_rule(Name=EVENTBRIDGE_RULE_NAME)
-            logger.info(f"EventBridge rule enabled for {EVENTBRIDGE_RULE_NAME}")
+            logger.info(f"Enabling EventBridge rule: {EVENTBRIDGE_RULE_NAME}")
+            response = events_client.enable_rule(Name=EVENTBRIDGE_RULE_NAME)
+            logger.info(f"EventBridge rule enabled successfully - Status: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}")
         else:
-            events_client.disable_rule(Name=EVENTBRIDGE_RULE_NAME)
-            logger.info(f"EventBridge rule disabled for {EVENTBRIDGE_RULE_NAME}")
+            logger.info(f"Disabling EventBridge rule: {EVENTBRIDGE_RULE_NAME}")
+            response = events_client.disable_rule(Name=EVENTBRIDGE_RULE_NAME)
+            logger.info(f"EventBridge rule disabled successfully - Status: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}")
     except ClientError as err:
-        logger.error(f"Failed to manage EventBridge rule for {EVENTBRIDGE_RULE_NAME} Error: {err}", exc_info=True)
-        # Don't fail the whole operation if rule management fails
-        logger.warning("Continuing despite EventBridge rule management failure")
+        error_code = err.response.get("Error", {}).get("Code", "Unknown")
+        if error_code == "ResourceNotFoundException":
+            logger.error(f"EventBridge rule '{EVENTBRIDGE_RULE_NAME}' not found", exc_info=True)
+        elif error_code == "AccessDeniedException":
+            logger.error(f"Access denied for EventBridge rule '{EVENTBRIDGE_RULE_NAME}'", exc_info=True)
+        else:
+            logger.error(f"Failed to manage EventBridge rule - Code: {error_code}", exc_info=True)
+        raise
 
 
 def update_polling_state(state: str) -> None:
@@ -97,12 +104,15 @@ def ensure_polling_enabled() -> None:
     Used only by api-story-start.
     """
     try:
+        logger.info(f"Enabling polling system - Rule: {EVENTBRIDGE_RULE_NAME}, SSM: {SSM_POLLER_STATE_PARAMETER}")
+        
         # Set parameter to run
         update_polling_state("run")
+        
         # Enable the EventBridge rule
         manage_eventbridge_rule(True)
-        logger.info("Polling enabled: parameter=run, rule=enabled")
+        
+        logger.info("Polling system enabled successfully")
     except Exception as err:
-        logger.error(f"Failed to enable polling: {err}", exc_info=True)
-        # Don't block story start if polling setup fails
-        logger.warning("Continuing despite polling setup failure")
+        # Log error but don't block story start
+        logger.error(f"Failed to enable polling system: {err}", exc_info=True)

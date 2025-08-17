@@ -83,11 +83,11 @@ ENABLE_BATCH_PROCESSING = os.environ.get("ENABLE_BATCH_PROCESSING", "true").lowe
 MAX_SEGMENTS_PER_POLL = int(os.environ.get("MAX_SEGMENTS_PER_POLL", "50"))
 
 # SSM Parameters
-SSM_POLLER_STATE_PARAMETER = os.environ.get("SSM_POLLER_STATE_PARAMETER", "/eidolon/segment-poller-state")
+SSM_POLLER_STATE_PARAMETER = os.environ.get("SSM_POLLER_STATE_PARAMETER", "/eidolon/story/config")
 
 # SQS Configuration
 SEGMENT_QUEUE_URL = os.environ.get("SEGMENT_QUEUE_URL", "")
 STORY_ADVANCEMENT_QUEUE_URL = os.environ.get("STORY_ADVANCEMENT_QUEUE_URL", "")
 
 # EventBridge Configuration
-EVENTBRIDGE_RULE_NAME = os.environ.get("EVENTBRIDGE_RULE_NAME", "eidolon-segment-poller")
+EVENTBRIDGE_RULE_NAME = os.environ.get("EVENTBRIDGE_RULE_NAME", "eidolon-story-poller")

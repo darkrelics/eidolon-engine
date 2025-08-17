@@ -142,6 +142,12 @@ class StoryStack(Stack):
                     ],
                     resources=[self.processing_queue.queue_arn, self.advancement_queue.queue_arn],
                 ),
+                # EventBridge permissions for enabling/disabling the polling rule
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=["events:EnableRule", "events:DisableRule"],
+                    resources=[f"arn:aws:events:{self.region_name}:{self.account}:rule/eidolon-story-poller"],
+                ),
             ],
         )
 
