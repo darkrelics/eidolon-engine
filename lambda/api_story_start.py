@@ -91,8 +91,11 @@ def start_story_business_logic(character_id: str, story_id: str, player_id: str)
         ValueError: If validation fails
         RuntimeError: If critical operations fail
     """
+    logger.debug(f"start_story_business_logic called - char: {character_id}, story: {story_id}, player: {player_id}")
+    
     # Start the story (critical - can raise)
     result = start_story_for_character(character_id, story_id, player_id)
+    logger.debug(f"start_story_for_character returned: active_segment={result.get('active_segment', {}).get('ActiveSegmentID', 'N/A')}")
 
     active_segment = result.get("active_segment", {})
     segment = result.get("segment", {})
@@ -125,24 +128,31 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         RuntimeError: If database operations fail
     """
 
+    logger.debug(f"Getting character {character_id} for player {player_id}")
     # Get character and verify ownership
     character: dict = character_get(character_id, player_id)
+    logger.debug(f"Character retrieved: {character.get('CharacterName', 'unknown')}, Mode: {character.get('GameMode', 'None')}")
 
     # Check if character is already in a game mode
     game_mode = character.get("GameMode", "None")
     if game_mode != "None":
-        logger.warning(f"Character already in game mode for {character_id}")
+        logger.warning(f"Character {character_id} already in {game_mode} mode, cannot start new story")
         raise ValueError(f"Character is currently in {game_mode} mode")
 
     # Validate story is available
+    logger.debug(f"Validating story {story_id} is available for character")
     validate_story_available(character, story_id)
 
     # Get story and first segment
+    logger.debug(f"Getting story {story_id} and first segment")
     story, first_segment = get_story_and_first_segment(story_id)
+    logger.debug(f"Story: {story.get('Title', 'Unknown')}, First segment: {first_segment.get('SegmentID', 'unknown')}")
 
     # Create active segment first to get the segment ID
     story_title = story.get("Title", "Unknown Story")
+    logger.info(f"Creating active segment for story '{story_title}'")
     active_segment = create_active_segment(character_id, player_id, story_id, story_title, first_segment)
+    logger.info(f"Active segment created: {active_segment.get('ActiveSegmentID', 'unknown')}")
 
     # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID and remove from available list
     try:
@@ -158,6 +168,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
             # Story not in list anymore (race condition), just update the mode
             update_expression = "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
 
+        logger.debug(f"Updating character state with GameMode=Incremental, ActiveStoryID={story_id}")
         dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
@@ -172,20 +183,25 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         )
 
     except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "Unknown")
+        logger.error(f"DynamoDB error updating character {character_id}: Code={error_code}, Error={err}")
+        
         # Rollback: Delete the active segment we just created
         try:
+            logger.debug(f"Rolling back active segment {active_segment.get('ActiveSegmentID')}")
             dynamo.delete_item(
                 TableName.ACTIVE_SEGMENTS,
                 Key={"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
             )
+            logger.debug("Rollback successful")
         except Exception as rollback_err:
-            logger.error(f"Failed to rollback active segment for {active_segment.get('ActiveSegmentID')} Error: {rollback_err}")
+            logger.error(f"Rollback failed for segment {active_segment.get('ActiveSegmentID')}: {rollback_err}")
 
-        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning(f"Character state changed during story start for {character_id}")
+        if error_code == "ConditionalCheckFailedException":
+            logger.warning(f"Character {character_id} state changed during story start (race condition)")
             raise ValueError("Character state conflict") from err
 
-        logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
+        logger.error(f"Failed to update character state for {character_id}: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update character state: {err}") from err
 
     # Create history entry
@@ -253,30 +269,44 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Parse request body with flexible field names
     try:
         body = parse_event_body(event)
+        logger.debug(f"Parsed body: {body}")
         character_id: str = body.get("character_id") or body.get("CharacterID")  # type: ignore
         story_id: str = body.get("story_id") or body.get("StoryID")  # type: ignore
+        logger.info(f"Request parameters - CharacterID: {character_id}, StoryID: {story_id}")
 
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:
         return lambda_error(event, err)
 
+    # Validate required parameters
+    if not character_id:
+        logger.error("Missing required parameter: CharacterID")
+        return lambda_response(400, {"Error": "CharacterID is required"}, event)
+    
+    if not story_id:
+        logger.error("Missing required parameter: StoryID")
+        return lambda_response(400, {"Error": "StoryID is required"}, event)
+
     # Validate UUIDs
-    if character_id and not validate_uuid(character_id):  # type: ignore
+    if not validate_uuid(character_id):  # type: ignore
+        logger.error(f"Invalid character ID format: {character_id}")
         return lambda_response(400, {"Error": "Invalid character ID format"}, event)
 
-    if story_id and not validate_uuid(story_id):  # type: ignore
+    if not validate_uuid(story_id):  # type: ignore
+        logger.error(f"Invalid story ID format: {story_id}")
         return lambda_response(400, {"Error": "Invalid story ID format"}, event)
 
-    logger.info(f"Starting story for {character_id}")
+    logger.info(f"Starting story {story_id} for character {character_id} owned by {player_id}")
 
     # Call business logic
     try:
         response_data = start_story_business_logic(character_id, story_id, player_id)  # type: ignore
+        logger.info(f"Story started successfully for {character_id}")
         return lambda_response(200, response_data, event)
     except ValueError as err:
-        logger.warning(f"Invalid request for {character_id} Error: {err}")
         error_msg = str(err)
+        logger.warning(f"Invalid request for character={character_id}, story={story_id}: {error_msg}")
         if "not found" in error_msg.lower():
             return lambda_response(404, {"Error": error_msg}, event)
         elif "already in" in error_msg.lower() and "mode" in error_msg.lower():
@@ -286,7 +316,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         return lambda_response(400, {"Error": error_msg}, event)
     except RuntimeError as err:
         logger.error(
-            f"Failed to start story for {character_id} Error: {err}",
+            f"Runtime error starting story={story_id} for character={character_id}: {err}",
             exc_info=True,
         )
         return lambda_response(500, {"Error": "Internal server error"}, event)

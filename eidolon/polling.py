@@ -88,64 +88,21 @@ def get_polling_state() -> str:
         raise RuntimeError(f"Failed to get polling state: {err}")
 
 
-def enable_polling_infrastructure() -> None:
-    """
-    Enable the polling infrastructure by updating SSM state and enabling EventBridge rule.
-
-    This is typically called when a new story starts and polling needs to be activated.
-    """
-    logger.info("Enabling polling infrastructure")
-
-    # Update SSM parameter first
-    update_polling_state("run")
-
-    # Then enable EventBridge rule
-    manage_eventbridge_rule(True)
-
-    logger.info("Polling infrastructure enabled")
-
-
-def disable_polling_infrastructure() -> None:
-    """
-    Disable the polling infrastructure by updating SSM state and disabling EventBridge rule.
-
-    This is typically called when no active segments remain and polling should stop
-    to save costs.
-    """
-    logger.info("Disabling polling infrastructure")
-
-    # Update SSM parameter first
-    try:
-        update_polling_state("stop")
-    except Exception as err:
-        logger.warning(f"Failed to update SSM parameter during shutdown Error: {err}")
-
-    # Then disable EventBridge rule
-    manage_eventbridge_rule(False)
-
-    logger.info("Polling infrastructure disabled")
 
 
 def ensure_polling_enabled() -> None:
     """
-    Ensure polling is enabled, starting it if necessary.
-
-    This is typically called when starting a new story to make sure
-    the polling system is active.
+    Ensure polling is enabled when starting a story.
+    Sets SSM parameter to "run" and enables EventBridge rule.
+    Used only by api-story-start.
     """
     try:
-        state = get_polling_state()
-        if state == "stop":
-            enable_polling_infrastructure()
-            logger.info("Polling was stopped, now enabled")
-        else:
-            logger.info("Polling already running")
+        # Set parameter to run
+        update_polling_state("run")
+        # Enable the EventBridge rule
+        manage_eventbridge_rule(True)
+        logger.info("Polling enabled: parameter=run, rule=enabled")
     except Exception as err:
-        # If we can't determine state, try to enable anyway
-        logger.warning(f"Could not determine polling state, attempting to enable Error: {err}")
-        try:
-            enable_polling_infrastructure()
-        except Exception as enable_err:
-            logger.error(f"Failed to enable polling infrastructure Error: {enable_err}", exc_info=True)
-            # Don't block story start if polling setup fails
-            logger.warning("Continuing despite polling setup failure")
+        logger.error(f"Failed to enable polling: {err}", exc_info=True)
+        # Don't block story start if polling setup fails
+        logger.warning("Continuing despite polling setup failure")

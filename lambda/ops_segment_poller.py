@@ -14,7 +14,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.polling import disable_polling_infrastructure, enable_polling_infrastructure, get_polling_state
+from eidolon.polling import get_polling_state, manage_eventbridge_rule, update_polling_state
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import (
     check_active_segments_exist,
@@ -193,21 +193,28 @@ def poll_and_process_segments_business_logic() -> dict:
             segments_queued += result.get("successful", 0)
             segments_failed += result.get("failed", 0)
 
-    # Update SSM parameter and EventBridge rule based on state
-    if poller_state == "stop":
-        if completed_segments:
-            # Found segments while stopped, switch to run
-            enable_polling_infrastructure()
-            logger.info("Poller state changed from stop to run due to found segments")
-    else:  # poller_state == "run"
+    # Handle polling state transitions based on your design
+    if poller_state == "run":
+        # Parameter is "run"
         if not completed_segments:
-            # No segments found, check if table is empty
-            has_active_segments = check_active_segments_exist()
-
-            if not has_active_segments:
-                # No active segments at all, switch to stop
-                disable_polling_infrastructure()
-                logger.info("Poller state changed from run to stop - no active segments")
+            # No segments to process - set parameter to "stop"
+            update_polling_state("stop")
+            logger.info("Parameter set to stop - no segments to process")
+    else:  # poller_state == "stop"
+        # Parameter is "stop" - check for active segments
+        has_active_segments = check_active_segments_exist()
+        
+        if has_active_segments:
+            # Found active segments - return to "run"
+            update_polling_state("run")
+            logger.info("Active segments found - parameter set back to run")
+        else:
+            # No active segments - disable the EventBridge rule
+            try:
+                manage_eventbridge_rule(False)
+                logger.info("No active segments - EventBridge rule disabled")
+            except Exception as err:
+                logger.warning(f"Failed to disable EventBridge rule: {err}")
 
     return {
         "SegmentsFound": len(completed_segments),

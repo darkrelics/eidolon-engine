@@ -294,10 +294,10 @@ All Lambda functions are deployed with:
 **api-story-start** (Logical ID: `ApiStoryStartFunction`):
 
 - Validates prerequisites and character state
-- Creates first ActiveSegment
-- Updates character to active game mode
+- Creates first ActiveSegment with pre-calculated outcomes
+- Updates character to active game mode (GameMode="Incremental")
 - Queues mechanical segments to `eidolon-processing-queue`
-- Enables polling infrastructure via SSM parameter
+- **Polling Management**: Sets SSM parameter to "run" AND enables EventBridge rule
 - Environment: `SEGMENT_QUEUE_URL` for SQS integration
 
 **api-segment-decision** (Logical ID: `ApiSegmentDecisionFunction`):
@@ -331,29 +331,37 @@ All Lambda functions are deployed with:
 
 **ops-segment-poller** (Logical ID: `OpsSegmentPollerFunction`):
 
-- **Trigger**: EventBridge rule `eidolon-story-poller` (1-minute schedule)
-- Reads SSM parameter `/eidolon/story/config` for run/stop state
-- Queries EndTimeIndex GSI for segments with EndTime <= now
+- **Trigger**: EventBridge rule `eidolon-segment-poller` (1-minute schedule)
+- Reads SSM parameter `/eidolon/segment-poller-state` for "run"/"stop" state
+- Queries for segments with EndTime <= now
 - Sends ALL completed segments to `eidolon-advancement-queue`
-- Auto-disables polling when no active segments exist
+- **Polling State Management**:
+  - If parameter="run" and no segments found: Sets parameter to "stop"
+  - If parameter="stop": Checks for active segments
+    - If active segments exist: Sets parameter back to "run"
+    - If no active segments: Disables EventBridge rule
 - Environment: `SSM_POLLER_STATE_PARAMETER`, queue URLs
 
 **ops-segment-process** (Logical ID: `OpsSegmentProcessFunction`):
 
 - **Trigger**: SQS `eidolon-processing-queue`
 - Claims segment with RunningFlag (prevents duplicates)
-- Processes mechanical challenges using MUD mechanics
-- Uses ResolveStaticCheckWithXP and ResolveOpposedCheckWithXP
-- Generates ClientEvents array for display
+- Processes mechanical challenges and combat
+- Applies XP and wounds immediately to character
+- Updates segment with outcome and results
+- **No polling management** - focused solely on segment processing
 - Environment: `SEGMENT_BATCH_SIZE` for processing limits
 
 **ops-story-advance** (Logical ID: `OpsStoryAdvanceFunction`):
 
 - **Trigger**: SQS `eidolon-advancement-queue`
 - Claims segment with RunningFlag for idempotency
-- Processes simple segments (rest/decision) if needed
-- Applies CharacterUpdates (XP, wounds, room changes)
-- Creates next segment with UUIDv7 for ordering
+- Processes simple segments (rest/decision) if not already processed
+- Applies deferred CharacterUpdates (combat rewards, story effects)
+- Creates next segment or completes story
+- **Polling Management**: When story completes (next_segment_id is None):
+  - Checks if any active segments remain
+  - If none: Sets SSM parameter to "stop" (does NOT touch EventBridge)
 - Resets GameMode="None" when story completes
 - Writes to story_history and segment_history tables
 
@@ -381,20 +389,51 @@ All Lambda functions are deployed with:
 
 ### Polling Infrastructure
 
-**SSM Parameter** (`/eidolon/story/config`):
+**SSM Parameter** (`/eidolon/segment-poller-state`):
 
 - Stores polling state: "run" or "stop"
 - Checked by poller each invocation
-- Updated based on active segment presence
-- Managed by Story Stack in CDK
+- **State Transitions**:
+  - Set to "run" by: api-story-start, ops-segment-poller (when finding active segments)
+  - Set to "stop" by: ops-story-advance (when completing last story), ops-segment-poller (when no segments to process)
 
-**EventBridge Rule** (`eidolon-story-poller`):
+**EventBridge Rule** (`eidolon-segment-poller`):
 
 - Schedule: rate(1 minute)
 - Target: ops-segment-poller Lambda
 - State: DISABLED by default
-- Auto-enabled when stories start
-- Auto-disabled when no active stories
+- **Enable/Disable Authority**:
+  - ONLY api-story-start can enable the rule
+  - ONLY ops-segment-poller can disable the rule (when parameter="stop" and no active segments)
+- Race condition window: <100ms between final check and disable (acceptable)
+
+### Polling State Flow
+
+The polling system follows this state machine:
+
+```
+1. INITIAL STATE: Parameter="stop", Rule=DISABLED
+   └─> Player starts story (api-story-start)
+       └─> Sets Parameter="run", Enables Rule → POLLING ACTIVE
+
+2. POLLING ACTIVE: Parameter="run", Rule=ENABLED
+   ├─> Poller finds no segments (ops-segment-poller)
+   │   └─> Sets Parameter="stop" → POLLING STOPPED
+   └─> Story completes with no other active segments (ops-story-advance)
+       └─> Sets Parameter="stop" → POLLING STOPPED
+
+3. POLLING STOPPED: Parameter="stop", Rule=ENABLED
+   ├─> Poller finds active segments (ops-segment-poller)
+   │   └─> Sets Parameter="run" → POLLING ACTIVE
+   └─> Poller finds no active segments (ops-segment-poller)
+       └─> Disables Rule → INITIAL STATE
+```
+
+**Key Design Principles**:
+- Separation of concerns: SSM parameter controls polling behavior, EventBridge rule controls execution
+- Single responsibility: Each Lambda has specific polling authority
+- Graceful degradation: System continues even if polling management fails
+- Cost optimization: Automatic shutdown when no stories active
 
 ## Error Recovery and Edge Cases
 

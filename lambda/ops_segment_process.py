@@ -11,9 +11,8 @@ Rest and Decision segments are handled directly by the poller.
 import json
 
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.polling import disable_polling_infrastructure
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.segment import check_active_segments_exist, is_mechanical_segment, process_segment_completely
+from eidolon.segment import is_mechanical_segment, process_segment_completely
 from eidolon.validation_messages import validate_processing_message
 
 
@@ -200,15 +199,9 @@ def lambda_handler(event: dict, context: object) -> dict:
                 )
 
                 success_count += 1
-
-                # If no next segment (story complete), check if we should disable polling
-                if not result.get("nextSegment"):
-                    # Check if any active segments remain
-                    has_active_segments = check_active_segments_exist()
-
-                    if not has_active_segments:
-                        # No more active segments, disable polling infrastructure
-                        disable_polling_infrastructure()
+                
+                # No polling management needed here per design
+                # ops-story-advance and ops-segment-poller handle all polling state
 
             except Exception as err:
                 logger.error(

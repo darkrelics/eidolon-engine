@@ -753,16 +753,19 @@ def extract_character_updates_from_results(results: dict, segment_def: dict, out
     updates = {}
 
     # Include XP updates (already applied to DB, needed for client display)
-    if "xpUpdates" in results:
-        updates.update(results["xpUpdates"])
+    xp_updates = results.get("xpUpdates")
+    if xp_updates:
+        updates.update(xp_updates)
 
     # Include wound updates (already applied to DB, needed for client display)
-    if "woundUpdates" in results:
-        updates.update(results["woundUpdates"])
+    wound_updates = results.get("woundUpdates")
+    if wound_updates:
+        updates.update(wound_updates)
 
     # Extract combat rewards to be applied later
-    if results.get("combatState", {}).get("opponentDefeated"):
-        opponent_id = results["combatState"].get("opponentId")
+    combat_state = results.get("combatState", {})
+    if combat_state.get("opponentDefeated"):
+        opponent_id = combat_state.get("opponentId")
         if opponent_id:
             # Get opponent data to store for later reward application
             try:
@@ -861,13 +864,16 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
     expression_values = {":outcome": outcome, ":proc_status": "processed"}
 
     # Add results based on segment type
-    if "challengeResults" in results:
+    challenge_results = results.get("challengeResults")
+    if challenge_results:
         update_expression += ", ChallengeResults = :results"
-    # Use simple converter for stability; Pydantic models available in eidolon.models
-    expression_values[":results"] = _challenge_results_to_pascal(results["challengeResults"])  # type: ignore
-    if "combatState" in results:
+        # Use simple converter for stability; Pydantic models available in eidolon.models
+        expression_values[":results"] = _challenge_results_to_pascal(challenge_results)  # type: ignore
+    
+    combat_state = results.get("combatState")
+    if combat_state:
         update_expression += ", CombatState = :state"
-    expression_values[":state"] = _combat_state_to_pascal(results["combatState"])  # type: ignore
+        expression_values[":state"] = _combat_state_to_pascal(combat_state)  # type: ignore
 
     # Extract and add deferred rewards
     if segment_def:
@@ -899,13 +905,15 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
             logger.warning(f"Failed to get narrative for outcome {outcome}: {err}")
 
     # Add skill check events if present
-    if "challengeResults" in results:
-        skill_events = generate_skill_check_events(results["challengeResults"])
+    challenge_results_for_events = results.get("challengeResults")
+    if challenge_results_for_events:
+        skill_events = generate_skill_check_events(challenge_results_for_events)
         client_events.extend(skill_events)
 
     # Add combat events if present (only for combat segments)
-    if "combatState" in results:
-        combat_events = generate_combat_client_events(results["combatState"])
+    combat_state_for_events = results.get("combatState")
+    if combat_state_for_events:
+        combat_events = generate_combat_client_events(combat_state_for_events)
         client_events.extend(combat_events)
 
     if client_events:
@@ -1581,11 +1589,11 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
             results = {}
 
         # Check for per-outcome NextSegmentID
-        if outcome_key in results:
-            outcome_result = results[outcome_key]
+        outcome_result = results.get(outcome_key)
+        if outcome_result:
             if isinstance(outcome_result, dict) and "NextSegmentID" in outcome_result:
                 # Explicitly provided per-outcome next segment (None means terminal)
-                next_segment_id = outcome_result["NextSegmentID"]
+                next_segment_id = outcome_result.get("NextSegmentID")
                 logger.info(f"Using per-outcome branch for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
                 return next_segment_id
 
