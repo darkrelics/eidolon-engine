@@ -300,11 +300,8 @@ class _GameScreenState extends State<GameScreen> {
         _isLoading = true;
       });
 
-      // Submit rest action
-      await _apiService.submitDecision(
-        characterId: _character!.id,
-        decision: 'rest',
-      );
+      // Call the rest endpoint directly
+      await _apiService.rest(_character!.id);
       
       // Reload character data
       await _loadCharacterData();
