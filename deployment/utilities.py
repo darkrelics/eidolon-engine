@@ -44,45 +44,40 @@ def verify_aws_credentials() -> bool:
 
 def verify_cdk_installed() -> bool:
     """Check if AWS CDK is installed."""
-    import platform
-    
-    # On Windows, try both 'cdk' and 'cdk.cmd'
-    commands = ["cdk", "cdk.cmd"] if platform.system() == "Windows" else ["cdk"]
-    
-    for cmd in commands:
-        try:
-            result = subprocess.run([cmd, "--version"], capture_output=True, text=True, check=False, shell=True)
-            if result.returncode == 0:
-                print(f"CDK Version: {result.stdout.strip()}")
-                return True
-        except (FileNotFoundError, OSError):
-            continue
-    
-    # If we get here, CDK wasn't found
-    print("Error: AWS CDK is not installed or not in PATH")
-    print("Install it with: npm install -g aws-cdk")
-    print("If CDK is installed, ensure it's in your system PATH")
-    return False
+    try:
+        result = subprocess.run(["cdk", "--version"], capture_output=True, text=True, check=False)
+        if result.returncode == 0:
+            print(f"CDK Version: {result.stdout.strip()}")
+            return True
+        else:
+            print("Error: AWS CDK is not installed")
+            print("Install it with: npm install -g aws-cdk")
+            return False
+    except FileNotFoundError:
+        print("Error: AWS CDK is not installed")
+        print("Install it with: npm install -g aws-cdk")
+        return False
 
 
 def verify_cdk_bootstrap(region: str) -> bool:
     """Check if CDK is bootstrapped in the target region."""
     # Validate region before attempting to check bootstrap
-    if not validate_region(region):
+    validated_region = validate_region(region)
+    if not validated_region:
         return False
 
-    cfn = boto3.client("cloudformation", region_name=region)
+    cfn = boto3.client("cloudformation", region_name=validated_region)
 
     try:
         # CDK bootstrap creates a stack named CDKToolkit
         response = cfn.describe_stacks(StackName="CDKToolkit")
         if response.get("Stacks"):
-            print(f"CDK Bootstrap: Found in {region}")
+            print(f"CDK Bootstrap: Found in {validated_region}")
             return True
     except ClientError as err:
         if "does not exist" in str(err):
-            print(f"Warning: CDK not bootstrapped in {region}")
-            print(f"Run: cdk bootstrap aws://{get_aws_account_id()}/{region}")
+            print(f"Warning: CDK not bootstrapped in {validated_region}")
+            print(f"Run: cdk bootstrap aws://{get_aws_account_id()}/{validated_region}")
             return False
         else:
             # Other errors - might be permissions

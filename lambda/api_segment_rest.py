@@ -7,6 +7,7 @@ from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
+from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment import get_active_segment_info, insert_rest_segment
 
@@ -115,7 +116,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Parse request body
     try:
-        body: dict = event.get("body", {})
+        body = parse_event_body(event)
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:

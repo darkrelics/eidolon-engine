@@ -11,6 +11,7 @@ from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
+from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.story import submit_decision_for_character
 
@@ -76,7 +77,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Parse request body with flexible field names
     try:
-        body: dict = event.get("body", {})
+        body = parse_event_body(event)
         character_id: str = body.get("character_id") or body.get("CharacterID")  # type: ignore
         decision_id: str = body.get("decision") or body.get("Decision")  # type: ignore
 

@@ -17,6 +17,7 @@ from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
 from eidolon.polling import ensure_polling_enabled
+from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.sqs import send_message
 from eidolon.story import create_active_segment, create_story_history_entry, get_story_and_first_segment, validate_story_available
@@ -251,7 +252,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Parse request body with flexible field names
     try:
-        body: dict = event.get("body", {})
+        body = parse_event_body(event)
         character_id: str = body.get("character_id") or body.get("CharacterID")  # type: ignore
         story_id: str = body.get("story_id") or body.get("StoryID")  # type: ignore
 

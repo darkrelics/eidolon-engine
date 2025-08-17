@@ -53,7 +53,7 @@ def get_lambda_function_arns(region: str) -> dict:
 
     # List of Lambda functions needed for API
     api_functions = [
-        "api-archetype-get",
+        "api-archetype-list",
         "api-character-add",
         "api-character-get",
         "api-character-delete",
@@ -64,7 +64,7 @@ def get_lambda_function_arns(region: str) -> dict:
         "api-segment-outcome",
         "api-segment-status",
         "api-segment-history",
-        "api-character-rest",
+        "api-segment-rest",
     ]
 
     for function_name in api_functions:
