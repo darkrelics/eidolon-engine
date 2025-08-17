@@ -50,7 +50,7 @@ class ActiveSegment {
       startTime: json['StartTime'] as int,
       endTime: json['EndTime'] as int,
       challengeResults: json['ChallengeResults'] as List<dynamic>?,
-      outcome: json['Outcome'] as String?,
+      outcome: json['Outcome'] is Map ? (json['Outcome']['Type'] as String?) : json['Outcome'] as String?,
       decision: json['Decision'] as String?,
       decisionOptions: json['DecisionOptions'] as Map<String, dynamic>?,
       combatState: json['CombatState'] as Map<String, dynamic>?,

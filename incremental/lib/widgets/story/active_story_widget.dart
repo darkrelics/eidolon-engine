@@ -425,7 +425,8 @@ class _CurrentSegment extends StatelessWidget {
     final status = segment['ShortStatus'] ?? 'Processing...';
     final longStatus = segment['LongStatus'] ?? '';
     final choices = segment['Choices'] as List?;
-    final outcome = segment['Outcome'] as Map<String, dynamic>?;
+    final outcomeValue = segment['Outcome'];
+    final outcome = outcomeValue is String ? {'Type': outcomeValue} : outcomeValue as Map<String, dynamic>?;
     final processingStatus = segment['ProcessingStatus'];
 
     return Container(
@@ -975,7 +976,8 @@ class _HistorySegmentCard extends StatelessWidget {
     final theme = Theme.of(context);
     final type = segment['SegmentType'] ?? 'unknown';
     final status = segment['ShortStatus'] ?? '';
-    final outcome = segment['Outcome'] as Map<String, dynamic>?;
+    final outcomeValue = segment['Outcome'];
+    final outcome = outcomeValue is String ? {'Type': outcomeValue} : outcomeValue as Map<String, dynamic>?;
 
     return Container(
       decoration: BoxDecoration(

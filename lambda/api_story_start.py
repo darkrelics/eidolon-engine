@@ -136,8 +136,18 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
     # Check if character is already in a game mode
     game_mode = character.get("GameMode", "None")
     if game_mode != "None":
-        logger.warning(f"Character {character_id} already in {game_mode} mode, cannot start new story")
-        raise ValueError(f"Character is currently in {game_mode} mode")
+        # Safety check: Allow starting a new story in Incremental mode if no active story/segment
+        if game_mode == "Incremental":
+            active_story_id = character.get("ActiveStoryID")
+            active_segment_id = character.get("ActiveSegmentID")
+            if not active_story_id and not active_segment_id:
+                logger.info(f"Character {character_id} in Incremental mode but no active story/segment, allowing new story")
+            else:
+                logger.warning(f"Character {character_id} already in {game_mode} mode with active story/segment, cannot start new story")
+                raise ValueError(f"Character is currently in {game_mode} mode with an active story")
+        else:
+            logger.warning(f"Character {character_id} already in {game_mode} mode, cannot start new story")
+            raise ValueError(f"Character is currently in {game_mode} mode")
 
     # Validate story is available
     logger.debug(f"Validating story {story_id} is available for character")
@@ -168,6 +178,9 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
             # Story not in list anymore (race condition), just update the mode
             update_expression = "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
 
+        # Build condition expression - allow if GameMode is None OR (Incremental with no active story/segment)
+        condition_expression = "(GameMode = :none) OR (GameMode = :incremental AND (attribute_not_exists(ActiveStoryID) OR ActiveStoryID = :null) AND (attribute_not_exists(ActiveSegmentID) OR ActiveSegmentID = :null))"
+        
         logger.debug(f"Updating character state with GameMode=Incremental, ActiveStoryID={story_id}")
         dynamo.update_item(
             TableName.CHARACTERS,
@@ -176,10 +189,12 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
             ExpressionAttributeValues={
                 ":mode": "Incremental",
                 ":none": "None",
+                ":incremental": "Incremental",
+                ":null": None,
                 ":story_id": story_id,
                 ":segment_id": active_segment.get("ActiveSegmentID"),
             },
-            ConditionExpression="GameMode = :none",
+            ConditionExpression=condition_expression,
         )
 
     except ClientError as err:
