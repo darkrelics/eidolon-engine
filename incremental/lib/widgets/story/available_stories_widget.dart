@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+
 import '../../models/story.dart';
 import '../../models/character.dart';
 
@@ -126,24 +126,21 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
             Icons.library_books_outlined,
             size: 80,
             color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-          ).animate()
-            .scale(delay: 100.ms, duration: 300.ms),
+          ),
           const SizedBox(height: 16),
           Text(
             'No Stories Available',
             style: theme.textTheme.headlineSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
-          ).animate()
-            .fadeIn(delay: 200.ms),
+          ),
           const SizedBox(height: 8),
           Text(
             'Check back later for new adventures',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
-          ).animate()
-            .fadeIn(delay: 300.ms),
+          ),
         ],
       ),
     );
@@ -167,9 +164,7 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
               ? () => widget.onStorySelect!(story)
               : null,
           isGrid: true,
-        ).animate()
-          .fadeIn(delay: Duration(milliseconds: 50 * index))
-          .scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1));
+        );
       },
     );
   }
@@ -188,9 +183,7 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
                 ? () => widget.onStorySelect!(story)
                 : null,
             isGrid: false,
-          ).animate()
-            .fadeIn(delay: Duration(milliseconds: 50 * index))
-            .slideX(begin: 0.1, end: 0),
+          ),
         );
       },
     );
@@ -587,10 +580,7 @@ class _AvailabilityIndicator extends StatelessWidget {
             ),
           ],
         ),
-      ).animate()
-        .shimmer(duration: 2000.ms, delay: 1000.ms)
-        .then()
-        .shimmer(duration: 2000.ms, delay: 3000.ms);
+      );
     } else {
       return Row(
         mainAxisSize: MainAxisSize.min,

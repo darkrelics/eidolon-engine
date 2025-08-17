@@ -1690,9 +1690,9 @@ def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome, RunningFlag = :false",
-            ExpressionAttributeNames={"#outcome": "Outcome"},
-            ExpressionAttributeValues={":status": "completed", ":outcome": "exceptional", ":false": False},
+            UpdateExpression="SET ProcessingStatus = :proc_status, #status = :status, #outcome = :outcome, RunningFlag = :false",
+            ExpressionAttributeNames={"#outcome": "Outcome", "#status": "Status"},
+            ExpressionAttributeValues={":proc_status": "processed", ":status": "completed", ":outcome": "exceptional", ":false": False},
         )
         logger.info(f"Marked exhausted segment as completed with exceptional outcome for {active_segment_id}")
     except ClientError as err:

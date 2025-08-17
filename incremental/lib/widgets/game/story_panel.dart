@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../../models/character.dart';
 import '../../models/story.dart';
 import '../story/active_story_widget.dart';
@@ -33,39 +32,8 @@ class StoryPanel extends StatefulWidget {
   State<StoryPanel> createState() => _StoryPanelState();
 }
 
-class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateMixin {
+class _StoryPanelState extends State<StoryPanel> {
   bool _showHistory = false;
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    );
-    _animationController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(StoryPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Trigger animation when story state changes
-    if (_hasActiveStory() != _hasActiveStory(oldWidget.character)) {
-      _animationController.forward(from: 0);
-    }
-  }
 
   bool _hasActiveStory([Character? character]) {
     final char = character ?? widget.character;
@@ -110,18 +78,13 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
                 // History toggle button
                 if (!_hasActiveStory() && widget.character.completedStories.isNotEmpty)
                   IconButton(
-                    icon: AnimatedRotation(
-                      turns: _showHistory ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        _showHistory ? Icons.library_books : Icons.history,
-                        color: colorScheme.onPrimaryContainer,
-                      ),
+                    icon: Icon(
+                      _showHistory ? Icons.library_books : Icons.history,
+                      color: colorScheme.onPrimaryContainer,
                     ),
                     onPressed: () {
                       setState(() {
                         _showHistory = !_showHistory;
-                        _animationController.forward(from: 0);
                       });
                     },
                     tooltip: _showHistory ? 'Show Available Stories' : 'Show History',
@@ -137,16 +100,11 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
                   ),
               ],
             ),
-          ).animate()
-            .fadeIn(duration: 200.ms)
-            .slideY(begin: -0.1, end: 0),
+          ),
           
           // Content
           Expanded(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: _buildContent(),
-            ),
+            child: _buildContent(),
           ),
         ],
       ),
@@ -181,9 +139,7 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
               ),
             ),
           ],
-        ).animate()
-          .fadeIn(duration: 300.ms)
-          .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1)),
+        ),
       );
     }
 
@@ -216,9 +172,7 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
               Icons.error_outline,
               size: 64,
               color: colorScheme.error,
-            ).animate()
-              .shake(duration: 500.ms)
-              .scale(delay: 100.ms),
+            ),
             const SizedBox(height: 16),
             Text(
               'Error Loading Stories',
@@ -240,9 +194,7 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
                 onPressed: widget.onRefresh,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry'),
-              ).animate()
-                .fadeIn(delay: 200.ms)
-                .slideY(begin: 0.2, end: 0),
+              ),
             ],
           ],
         ),
@@ -251,39 +203,28 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
   }
 
   Widget _buildActiveStoryWidget() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      child: ActiveStoryWidget(
-        key: ValueKey('active_story_${widget.character.storyState?.hashCode}'),
-        character: widget.character,
-        onDecisionSelect: widget.onDecisionSelect,
-        onAbandonStory: widget.onAbandonStory,
-        onRestSegment: widget.onRestSegment,
-      ),
+    return ActiveStoryWidget(
+      key: ValueKey('active_story_${widget.character.storyState?.hashCode}'),
+      character: widget.character,
+      onDecisionSelect: widget.onDecisionSelect,
+      onAbandonStory: widget.onAbandonStory,
+      onRestSegment: widget.onRestSegment,
     );
   }
 
   Widget _buildAvailableStoriesWidget() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      child: AvailableStoriesWidget(
-        key: const ValueKey('available_stories'),
-        character: widget.character,
-        onStorySelect: widget.onStorySelect,
-        isLoading: widget.isLoading,
-      ),
+    return AvailableStoriesWidget(
+      key: const ValueKey('available_stories'),
+      character: widget.character,
+      onStorySelect: widget.onStorySelect,
+      isLoading: widget.isLoading,
     );
   }
 
   Widget _buildHistoryWidget() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      switchInCurve: Curves.easeInOut,
-      switchOutCurve: Curves.easeInOut,
-      child: StoryHistoryWidget(
-        key: const ValueKey('story_history'),
-        character: widget.character,
-      ),
+    return StoryHistoryWidget(
+      key: const ValueKey('story_history'),
+      character: widget.character,
     );
   }
 }

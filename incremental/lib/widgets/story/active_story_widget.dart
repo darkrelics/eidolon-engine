@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../models/character.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../unified/decision_widget.dart';
 import '../segments/mechanical_progress.dart';
 import '../segments/outcome_display.dart';
@@ -70,9 +69,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
         children: [
           // Story Card
           if (storyData != null) ...[
-            _StoryCard(story: storyData).animate()
-              .fadeIn(duration: 300.ms)
-              .slideY(begin: -0.1, end: 0),
+            _StoryCard(story: storyData),
             const SizedBox(height: 16),
           ],
 
@@ -80,8 +77,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
           _ActionButtons(
             onRest: widget.onRestSegment,
             onAbandon: widget.onAbandonStory,
-          ).animate()
-            .fadeIn(delay: 100.ms, duration: 300.ms),
+          ),
           const SizedBox(height: 20),
 
           // Current Segment
@@ -95,9 +91,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               segment: segmentData,
               onDecisionSelect: widget.onDecisionSelect,
               onContinue: widget.onContinue,
-            ).animate()
-              .fadeIn(delay: 200.ms, duration: 300.ms)
-              .slideX(begin: 0.1, end: 0),
+            ),
             const SizedBox(height: 20),
           ],
 
@@ -953,9 +947,7 @@ class _SegmentHistory extends StatelessWidget {
           child: _HistorySegmentCard(
             segment: segment,
             index: segments.length - index,
-          ).animate()
-            .fadeIn(delay: Duration(milliseconds: 50 * index))
-            .slideX(begin: -0.05, end: 0),
+          ),
         );
       }).toList(),
     );

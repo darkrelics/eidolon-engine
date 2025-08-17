@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 /// Widget showing progress for mechanical segments
 class MechanicalSegmentProgress extends StatefulWidget {
@@ -130,9 +129,7 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
                   color: Colors.orange,
                   size: 24,
                 ),
-              ).animate(
-                onPlay: isProcessing ? (controller) => controller.repeat() : null,
-              ).rotate(duration: 2000.ms),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -185,9 +182,7 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
                       ),
                     ],
                   ),
-                ).animate()
-                  .fadeIn()
-                  .scale(delay: 100.ms),
+                ),
             ],
           ),
 
@@ -265,9 +260,7 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
                     ),
                   ],
                 ),
-              ).animate()
-                .fadeIn(delay: 200.ms)
-                .slideX(begin: -0.1, end: 0),
+              ),
 
               // Status Message
               if (widget.processingStatus == 'processed')
@@ -298,54 +291,13 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
                       ),
                     ],
                   ),
-                ).animate()
-                  .fadeIn()
-                  .scale()
-                  .shake(delay: 100.ms),
+                ),
             ],
           ),
 
-          // Animated Gears
-          if (isProcessing) ...[
-            const SizedBox(height: 20),
-            _AnimatedGears().animate()
-              .fadeIn(delay: 300.ms),
-          ],
+          // Processing indicator removed for performance
         ],
       ),
-    );
-  }
-}
-
-class _AnimatedGears extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          Icons.settings,
-          size: 20,
-          color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.3),
-        ).animate(onPlay: (controller) => controller.repeat())
-          .rotate(duration: 3000.ms, curve: Curves.linear),
-        const SizedBox(width: 8),
-        Icon(
-          Icons.settings,
-          size: 28,
-          color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.4),
-        ).animate(onPlay: (controller) => controller.repeat())
-          .rotate(duration: 2000.ms, curve: Curves.linear, begin: 0.5),
-        const SizedBox(width: 8),
-        Icon(
-          Icons.settings,
-          size: 20,
-          color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.3),
-        ).animate(onPlay: (controller) => controller.repeat())
-          .rotate(duration: 3000.ms, curve: Curves.linear),
-      ],
     );
   }
 }

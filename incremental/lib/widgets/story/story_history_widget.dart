@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+
 import '../../models/character.dart';
 
 /// Widget displaying completed story history
@@ -131,9 +131,7 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
                   onTap: widget.onStoryTap != null
                       ? () => widget.onStoryTap!(entry.storyId)
                       : null,
-                ).animate()
-                  .fadeIn(delay: Duration(milliseconds: 50 * index))
-                  .slideY(begin: 0.1, end: 0),
+                ),
               );
             },
           ),
@@ -153,24 +151,21 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
             Icons.history,
             size: 80,
             color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-          ).animate()
-            .scale(delay: 100.ms, duration: 300.ms),
+          ),
           const SizedBox(height: 16),
           Text(
             'No Completed Stories',
             style: theme.textTheme.headlineSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
-          ).animate()
-            .fadeIn(delay: 200.ms),
+          ),
           const SizedBox(height: 8),
           Text(
             'Your completed adventures will appear here',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
-          ).animate()
-            .fadeIn(delay: 300.ms),
+          ),
         ],
       ),
     );
@@ -457,9 +452,7 @@ class _StatisticsSummary extends StatelessWidget {
           ),
         ],
       ),
-    ).animate()
-      .fadeIn(duration: 300.ms)
-      .slideY(begin: -0.1, end: 0);
+    );
   }
 
   String _formatDuration(Duration duration) {

@@ -1243,10 +1243,19 @@ def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, at
 
     try:
         # Build update expressions for XP accumulation
-        update_expressions = ["SegmentCount = SegmentCount + :one"]
+        # Use if_not_exists to handle case where SegmentCount doesn't exist yet
+        update_expressions = ["SegmentCount = if_not_exists(SegmentCount, :zero) + :one"]
         expression_names = {}
-        expression_values = {":one": Decimal("1")}
+        expression_values = {":one": Decimal("1"), ":zero": Decimal("0")}
 
+        # Initialize maps if they don't exist
+        if skill_xp:
+            update_expressions.append("SkillXPAwarded = if_not_exists(SkillXPAwarded, :empty_skill_map)")
+            expression_values[":empty_skill_map"] = {}  # type: ignore
+        if attribute_xp:
+            update_expressions.append("AttributeXPAwarded = if_not_exists(AttributeXPAwarded, :empty_attr_map)")
+            expression_values[":empty_attr_map"] = {}  # type: ignore
+            
         # Add skill XP updates
         for skill, xp_value in skill_xp.items():
             if xp_value > 0:

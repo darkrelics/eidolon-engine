@@ -163,35 +163,18 @@ def poll_and_process_segments_business_logic() -> dict:
             if messages:
                 result = send_message_batch(SEGMENT_QUEUE_URL, messages)
 
-    # 3. Mark exhausted segments as done and send to advancement
+    # 3. Mark exhausted segments as done (no advancement needed - they're completed)
     if exhausted_segments:
-        messages = []
         for segment in exhausted_segments:
             try:
                 # Mark as completed with exceptional outcome to protect player from system failures
                 # If our processing failed repeatedly, give the player the best possible outcome
+                # This sets Status="completed" so the segment won't be picked up again
                 mark_segment_as_completed_exceptional(segment.get("ActiveSegmentID"))
                 segments_marked_done += 1
-
-                # Queue for advancement to complete the story flow
-                messages.append(
-                    {
-                        "body": {
-                            "ActiveSegmentID": segment.get("ActiveSegmentID"),
-                            "CharacterID": segment.get("CharacterID"),
-                            "StoryID": segment.get("StoryID"),
-                            "SegmentID": segment.get("SegmentID"),
-                            "SegmentType": segment.get("SegmentType"),
-                        }
-                    }
-                )
+                logger.info(f"Marked exhausted segment as exceptional - no further processing needed for {segment.get('ActiveSegmentID')}")
             except Exception as err:
                 logger.error(f"Failed to mark exhausted segment as done for {segment.get('ActiveSegmentID')} Error: {err}")
-
-        if messages:
-            result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, messages)
-            segments_queued += result.get("successful", 0)
-            segments_failed += result.get("failed", 0)
 
     # Handle polling state transitions based on your design
     if poller_state == "run":

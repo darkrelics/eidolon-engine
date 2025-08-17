@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
-/// Animated display for segment outcomes
+/// Display for segment outcomes
 class AnimatedOutcomeDisplay extends StatefulWidget {
   final Map<String, dynamic> outcome;
   final VoidCallback? onDismiss;
@@ -16,34 +15,12 @@ class AnimatedOutcomeDisplay extends StatefulWidget {
   State<AnimatedOutcomeDisplay> createState() => _AnimatedOutcomeDisplayState();
 }
 
-class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  bool _showDetails = false;
+class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay> {
+  final bool _showDetails = true;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-    _controller.forward();
-
-    // Auto-show details after initial animation
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted) {
-        setState(() {
-          _showDetails = true;
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 
   @override
@@ -60,14 +37,7 @@ class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay>
         mainAxisSize: MainAxisSize.min,
         children: [
           // Outcome Icon Animation
-          _OutcomeIcon(type: type)
-              .animate()
-              .scale(
-                duration: 500.ms,
-                curve: Curves.elasticOut,
-              )
-              .then()
-              .shake(delay: 100.ms, duration: 300.ms),
+          _OutcomeIcon(type: type),
 
           const SizedBox(height: 16),
 
@@ -78,9 +48,7 @@ class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay>
               color: _getOutcomeColor(type),
               fontWeight: FontWeight.bold,
             ),
-          ).animate()
-            .fadeIn(delay: 300.ms)
-            .slideY(begin: 0.2, end: 0),
+          ),
 
           if (description.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -95,27 +63,19 @@ class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay>
                 style: theme.textTheme.bodyLarge,
                 textAlign: TextAlign.center,
               ),
-            ).animate()
-              .fadeIn(delay: 500.ms)
-              .slideY(begin: 0.1, end: 0),
+            ),
           ],
 
           // Rewards Section
           if (_showDetails && rewards != null && rewards.isNotEmpty) ...[
             const SizedBox(height: 20),
-            _RewardsSection(rewards: rewards)
-                .animate()
-                .fadeIn(delay: 100.ms)
-                .slideY(begin: 0.1, end: 0),
+            _RewardsSection(rewards: rewards),
           ],
 
           // Consequences Section
           if (_showDetails && consequences != null && consequences.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _ConsequencesSection(consequences: consequences)
-                .animate()
-                .fadeIn(delay: 200.ms)
-                .slideY(begin: 0.1, end: 0),
+            _ConsequencesSection(consequences: consequences),
           ],
 
           // Continue Button
@@ -128,9 +88,7 @@ class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay>
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
-            ).animate()
-              .fadeIn(delay: 300.ms)
-              .scale(delay: 400.ms),
+            ),
           ],
         ],
       ),
@@ -208,8 +166,7 @@ class _OutcomeIcon extends StatelessWidget {
         icon,
         size: 50,
         color: color,
-      ).animate(onPlay: (controller) => controller.repeat())
-        .shimmer(duration: 2000.ms, color: color.withValues(alpha: 0.5)),
+      ),
     );
   }
 
@@ -301,15 +258,11 @@ class _RewardsSection extends StatelessWidget {
             alignment: WrapAlignment.center,
             spacing: 12,
             runSpacing: 8,
-            children: rewards.entries.toList().asMap().entries.map((entry) {
-              final index = entry.key;
-              final rewardEntry = entry.value;
+            children: rewards.entries.map((entry) {
               return _RewardChip(
-                type: rewardEntry.key,
-                value: rewardEntry.value,
-              ).animate()
-                .fadeIn(delay: Duration(milliseconds: 100 * index))
-                .scale(delay: Duration(milliseconds: 100 * index));
+                type: entry.key,
+                value: entry.value,
+              );
             }).toList(),
           ),
         ],
