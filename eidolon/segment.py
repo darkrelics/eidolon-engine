@@ -21,7 +21,7 @@ from eidolon.logger import logger
 from eidolon.mechanics import calculate_heal_time, resolve_opposed_check
 from eidolon.models import ChallengeResultModel, ClientEvent, CombatStateModel, StorySegment
 from eidolon.schema import normalize_segment_definition
-from eidolon.time_utils import now_iso, future_iso, seconds_until
+from eidolon.time_utils import now_iso, future_iso, seconds_until, now_unix
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES: list = ["mechanical", "decision", "rest"]
@@ -1221,7 +1221,7 @@ def record_abandoned_segment_history(character_id: str, story_id: str, active_se
             "StartTime": active_segment.get("StartTime"),
             "EndTime": active_segment.get("EndTime"),
             "ProcessedAt": active_segment.get("ProcessedAt"),
-            "CompletedAt": datetime.now(timezone.utc).isoformat(),
+            "CompletedAt": now_unix(),
             "Outcome": "abandoned",
             "ClientEvents": active_segment.get("ClientEvents", []),
             "CharacterUpdates": {},
@@ -1450,7 +1450,7 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
         "StartTime": segment_data.get("StartTime"),  # Unix timestamp from active segment
         "EndTime": segment_data.get("EndTime"),  # Unix timestamp from active segment
         "ProcessedAt": segment_data.get("ProcessedAt"),  # When outcomes were calculated
-        "CompletedAt": datetime.now(timezone.utc).isoformat(),  # When segment was advanced
+        "CompletedAt": now_unix(),  # When segment was advanced
         "Outcome": segment_data.get("Outcome"),
         "ClientEvents": segment_data.get("ClientEvents", []),
         "CharacterUpdates": character_updates,  # Complete updates applied

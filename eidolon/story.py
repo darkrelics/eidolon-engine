@@ -27,7 +27,7 @@ from eidolon.segment import (
     record_segment_history,
 )
 from eidolon.sqs import send_message
-from eidolon.time_utils import now_iso, future_iso
+from eidolon.time_utils import now_iso, future_iso, now_unix, future_unix, from_unix
 
 
 def get_active_story_segment(character_id: str) -> dict:
@@ -481,12 +481,12 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
     segment_type = segment.get("SegmentType", "mechanical")
     duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
 
-    # Use ISO 8601 timestamps
-    start_time = now_iso()
-    end_time = future_iso(duration)
+    # Use Unix timestamps for storage (required by DynamoDB indexes)
+    start_time = now_unix()
+    end_time = future_unix(duration)
 
-    # Log for debugging
-    logger.info(f"Creating segment with StartTime: {start_time}, EndTime: {end_time}, Duration: {duration}s")
+    # Log for debugging with ISO format for readability
+    logger.info(f"Creating segment with StartTime: {from_unix(start_time)}, EndTime: {from_unix(end_time)}, Duration: {duration}s")
 
     # Generate UUIDv7 for time-based ordering
     active_segment_id = str(uuid7())

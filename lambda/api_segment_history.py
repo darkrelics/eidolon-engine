@@ -18,6 +18,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
+from eidolon.time_utils import from_unix
 
 
 def get_segment_history_business_logic(character_id: str, player_id: str) -> SegmentHistoryResponse:
@@ -75,14 +76,18 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
     # Format segments for response with all the data Flutter expects
     formatted_segments: list[SegmentHistoryItem] = []
     for segment in segments or []:
+        # Convert Unix timestamps to ISO 8601 for API response
+        start_time_unix = segment.get("StartTime", 0)
+        end_time_unix = segment.get("EndTime", 0)
+        
         formatted_segment_dict = {
             "ActiveSegmentID": segment.get("ActiveSegmentID"),
             "SegmentID": segment.get("SegmentID"),
             "SegmentType": segment.get("SegmentType"),
             "Status": segment.get("Status"),
             "ProcessingStatus": segment.get("ProcessingStatus"),
-            "StartTime": segment.get("StartTime"),
-            "EndTime": segment.get("EndTime"),
+            "StartTime": from_unix(start_time_unix) if start_time_unix else None,
+            "EndTime": from_unix(end_time_unix) if end_time_unix else None,
         }
 
         # Add enriched data that Flutter needs

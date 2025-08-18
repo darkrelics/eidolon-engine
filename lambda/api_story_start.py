@@ -21,7 +21,7 @@ from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.sqs import send_message
 from eidolon.story import create_active_segment, create_story_history_entry, get_story_and_first_segment, validate_story_available
-from eidolon.time_utils import duration_between
+from eidolon.time_utils import duration_between, from_unix
 from eidolon.validation import validate_uuid
 
 
@@ -36,9 +36,14 @@ def format_start_story_response(active_segment: dict, segment: dict) -> dict:
     Returns:
         Dict with success and segment data
     """
-    start_time = active_segment.get("StartTime", "")
-    end_time = active_segment.get("EndTime", "")
-    duration = duration_between(start_time, end_time) if start_time and end_time else 0
+    # Convert Unix timestamps to ISO 8601 for API response
+    start_time_unix = active_segment.get("StartTime", 0)
+    end_time_unix = active_segment.get("EndTime", 0)
+    
+    start_time = from_unix(start_time_unix) if start_time_unix else ""
+    end_time = from_unix(end_time_unix) if end_time_unix else ""
+    
+    duration = end_time_unix - start_time_unix if start_time_unix and end_time_unix else 0
     
     return {
         "Success": True,

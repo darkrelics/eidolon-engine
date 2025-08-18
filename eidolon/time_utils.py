@@ -177,3 +177,41 @@ def duration_between(start_iso: str, end_iso: str) -> int:
     end_dt = parse_iso(end_iso)
     delta = end_dt - start_dt
     return int(delta.total_seconds())
+
+
+def now_unix() -> int:
+    """
+    Get current UTC time as Unix timestamp.
+    
+    Returns:
+        Current UTC time as Unix timestamp in seconds
+    """
+    return int(datetime.now(timezone.utc).timestamp())
+
+
+def future_unix(seconds: int) -> int:
+    """
+    Get future UTC time as Unix timestamp.
+    
+    Args:
+        seconds: Number of seconds in the future
+    
+    Returns:
+        Future UTC time as Unix timestamp in seconds
+    """
+    future_time = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+    return int(future_time.timestamp())
+
+
+def past_unix(seconds: int) -> int:
+    """
+    Get past UTC time as Unix timestamp.
+    
+    Args:
+        seconds: Number of seconds in the past
+    
+    Returns:
+        Past UTC time as Unix timestamp in seconds
+    """
+    past_time = datetime.now(timezone.utc) - timedelta(seconds=seconds)
+    return int(past_time.timestamp())

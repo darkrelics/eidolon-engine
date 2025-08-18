@@ -356,7 +356,6 @@ class _SimpleSegmentCard extends StatelessWidget {
     final segmentType = segment['SegmentType'] ?? 'mechanical';
     final shortStatus = segment['ShortStatus'] ?? 'Processing...';
     final defaultStatus = segment['DefaultStatus'] ?? '';
-    final processingStatus = segment['ProcessingStatus'];
     final outcome = segment['Outcome'];
     final endTime = segment['EndTime'];
     
