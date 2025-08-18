@@ -17,6 +17,7 @@ from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.story import get_active_story_segment_with_player_check
+from eidolon.time_utils import seconds_until, is_past
 
 
 def get_segment_status_business_logic(character_id: str, player_id: str) -> SegmentStatusResponse:
@@ -42,10 +43,9 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
     active_segment = get_active_story_segment_with_player_check(character_id, player_id)
 
     # Calculate status
-    current_time = int(time.time())
-    end_time = int(active_segment.get("EndTime", 0))
-    is_complete = current_time >= end_time
-    time_remaining = max(0, end_time - current_time)
+    end_time = active_segment.get("EndTime", "")
+    is_complete = is_past(end_time) if end_time else False
+    time_remaining = seconds_until(end_time) if end_time else 0
 
     processing_status = active_segment.get("ProcessingStatus", "")
     

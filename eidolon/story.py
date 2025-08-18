@@ -27,6 +27,7 @@ from eidolon.segment import (
     record_segment_history,
 )
 from eidolon.sqs import send_message
+from eidolon.time_utils import now_iso, future_iso
 
 
 def get_active_story_segment(character_id: str) -> dict:
@@ -126,7 +127,7 @@ def record_story_abandonment(character_id: str, story_id: str) -> None:
                 Key={"CharacterID": character_id, "StoryID": story_id},
                 UpdateExpression="SET FinishedAt = :finished, AbandonedCount = :count, FinalOutcome = :outcome",
                 ExpressionAttributeValues={
-                    ":finished": datetime.now(timezone.utc).isoformat(),
+                    ":finished": now_iso(),
                     ":count": abandoned_count,
                     ":outcome": "abandoned",
                 },
@@ -480,13 +481,12 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
     segment_type = segment.get("SegmentType", "mechanical")
     duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
 
-    current_time = int(time.time())
-    end_time = current_time + duration
+    # Use ISO 8601 timestamps
+    start_time = now_iso()
+    end_time = future_iso(duration)
 
-    # Ensure StartTime < EndTime invariant
-    if end_time <= current_time:
-        logger.warning(f"Invalid duration {duration} for segment {segment_id}, using default 300 seconds")
-        end_time = current_time + 300  # Default 5 minutes
+    # Log for debugging
+    logger.info(f"Creating segment with StartTime: {start_time}, EndTime: {end_time}, Duration: {duration}s")
 
     # Generate UUIDv7 for time-based ordering
     active_segment_id = str(uuid7())
@@ -500,7 +500,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
         "SegmentType": segment_type,
         "StoryTitle": story_title,
         "Status": "active",
-        "StartTime": current_time,
+        "StartTime": start_time,
         "EndTime": end_time,
         "DefaultStatus": segment.get("ShortStatus", "Processing..."),
     }
@@ -567,7 +567,7 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
             "CharacterID": character_id,
             "StoryID": story_id,
             "StoryTitle": story_title,
-            "StartedAt": datetime.now(timezone.utc).isoformat(),
+            "StartedAt": now_iso(),
             "StoryType": story_type,
             "SegmentHistory": [],
             "AbandonedCount": 0,
@@ -810,7 +810,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     # Mark outcome as normal for completed decision segments
     active_segment["Outcome"] = "normal"
     active_segment["Decision"] = decision_id
-    active_segment["DecisionMadeAt"] = datetime.now(timezone.utc).isoformat()
+    active_segment["DecisionMadeAt"] = now_iso()
 
     record_segment_history(character_id, story_id, active_segment_id, active_segment)
 
@@ -844,9 +844,9 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
             # Update character with new active segment
             update_character_active_segment(character_id, next_active_segment_id)
 
-            # Calculate next segment time
-            next_segment_time = int(time.time()) + next_segment_def.get("SegmentDuration", 60)
-            response_data["NextSegmentTime"] = next_segment_time
+            # Calculate next segment time using ISO 8601
+            next_segment_duration = next_segment_def.get("SegmentDuration", 60)
+            response_data["NextSegmentTime"] = future_iso(next_segment_duration)
 
             # Delete prior segment immediately after creating the next to avoid overlap
             delete_active_segment(active_segment_id)
@@ -988,7 +988,7 @@ def complete_story_for_character(character_id: str, story_id: str, final_outcome
             Key={"CharacterID": character_id, "StoryID": story_id},
             UpdateExpression="SET FinishedAt = :finished, FinalOutcome = :outcome",
             ExpressionAttributeValues={
-                ":finished": datetime.now(timezone.utc).isoformat(),
+                ":finished": now_iso(),
                 ":outcome": final_outcome,
             },
         )
@@ -1205,7 +1205,7 @@ def add_segment_to_history(character_id: str, story_id: str, segment_id: str, ou
     try:
         segment_entry = {
             "segmentId": segment_id,
-            "completedAt": datetime.now(timezone.utc).isoformat(),
+            "completedAt": now_iso(),
             "outcome": outcome,
         }
 
@@ -1326,7 +1326,7 @@ def ensure_story_history_exists(character_id: str, story_id: str, story_title: s
                     "CharacterID": character_id,
                     "StoryID": story_id,
                     "StoryTitle": story_title,
-                    "StartedAt": datetime.now(timezone.utc).isoformat(),
+                    "StartedAt": now_iso(),
                     "SegmentCount": 0,
                     "SkillXPAwarded": {},
                     "AttributeXPAwarded": {},

@@ -21,6 +21,7 @@ from eidolon.logger import logger
 from eidolon.mechanics import calculate_heal_time, resolve_opposed_check
 from eidolon.models import ChallengeResultModel, ClientEvent, CombatStateModel, StorySegment
 from eidolon.schema import normalize_segment_definition
+from eidolon.time_utils import now_iso, future_iso, seconds_until
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES: list = ["mechanical", "decision", "rest"]
@@ -961,8 +962,9 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
     segment_type = segment.get("SegmentType", "mechanical")
     duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
 
-    current_time = int(time.time())
-    end_time = current_time + duration
+    # Use ISO 8601 timestamps
+    start_time = now_iso()
+    end_time = future_iso(duration)
 
     # Generate UUIDv7 for time-based ordering
     active_segment_id = str(uuid7())
@@ -975,7 +977,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         "StoryTitle": story_title,
         "SegmentID": segment_id,
         "SegmentType": segment_type,
-        "StartTime": current_time,
+        "StartTime": start_time,
         "EndTime": end_time,
         "Status": "active",
     }
@@ -1128,9 +1130,8 @@ def get_completed_segments(max_segments: int) -> list:
     Raises:
         RuntimeError: If database query fails
     """
-    current_time = int(time.time())
     # Look ahead 30 seconds to catch segments that will complete before next poll
-    lookahead_time = current_time + 30
+    lookahead_time = future_iso(30)
 
     try:
         # Query using the EndTimeIndex GSI

@@ -113,8 +113,7 @@ class _StoryPanelState extends State<StoryPanel> {
 
   String _getHeaderTitle() {
     if (_hasActiveStory()) {
-      final storyTitle = widget.character.storyState?['Story']?['Title'];
-      return storyTitle ?? 'Active Story';
+      return 'Story';
     } else if (_showHistory) {
       return 'Story History';
     } else {
