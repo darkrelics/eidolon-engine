@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/active_segment.dart';
+import '../utils/time_utils.dart';
 
 class RestSegmentDisplay extends StatelessWidget {
   final ActiveSegment activeSegment;
@@ -158,12 +159,9 @@ class RestSegmentDisplay extends StatelessWidget {
   }
 
   Widget _buildProgressIndicator(BuildContext context) {
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final start = activeSegment.startTime;
-    final end = activeSegment.endTime;
-    final total = end - start;
-    final elapsed = now - start;
-    final progress = (elapsed / total).clamp(0.0, 1.0);
+    final total = TimeUtils.durationBetween(activeSegment.startTime, activeSegment.endTime);
+    final elapsed = TimeUtils.secondsSince(activeSegment.startTime);
+    final progress = total > 0 ? (elapsed / total).clamp(0.0, 1.0) : 0.0;
     
     return Column(
       children: [
@@ -207,8 +205,7 @@ class RestSegmentDisplay extends StatelessWidget {
   }
 
   String _formatTimeRemaining() {
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final remaining = activeSegment.endTime - now;
+    final remaining = TimeUtils.secondsUntil(activeSegment.endTime);
     
     if (remaining <= 0) return 'Complete';
     

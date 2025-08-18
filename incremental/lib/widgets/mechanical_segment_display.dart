@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/active_segment.dart';
+import '../utils/time_utils.dart';
 
 /// Widget to display mechanical segment events progressively
 class MechanicalSegmentDisplay extends StatefulWidget {
@@ -57,13 +58,12 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
   }
 
   void _calculateTimeRemaining() {
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final endTime = widget.segment.endTime;
+    final remainingSeconds = TimeUtils.secondsUntil(widget.segment.endTime);
     
-    if (now >= endTime) {
+    if (remainingSeconds <= 0) {
       _timeRemaining = Duration.zero;
     } else {
-      _timeRemaining = Duration(seconds: endTime - now);
+      _timeRemaining = Duration(seconds: remainingSeconds);
     }
   }
 
@@ -92,7 +92,7 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
     }
     
     final totalDuration = Duration(
-      seconds: widget.segment.endTime - widget.segment.startTime,
+      seconds: TimeUtils.durationBetween(widget.segment.startTime, widget.segment.endTime),
     );
     
     // Create a timeline of narrative changes

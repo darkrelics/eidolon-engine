@@ -1,9 +1,7 @@
 /// Time utilities for consistent ISO 8601 timestamp handling.
-/// 
-/// Provides functions for generating and parsing ISO 8601 timestamps,
-/// ensuring consistency between client and server.
-
 class TimeUtils {
+  /// Provides functions for generating and parsing ISO 8601 timestamps,
+  /// ensuring consistency between client and server.
   /// Get current UTC time as ISO 8601 string.
   static String nowIso() {
     return DateTime.now().toUtc().toIso8601String();

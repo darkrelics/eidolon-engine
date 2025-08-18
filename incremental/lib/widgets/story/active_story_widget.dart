@@ -1,8 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/character.dart';
-import '../unified/decision_widget.dart';
-import '../segments/mechanical_progress.dart';
-import '../segments/outcome_display.dart';
 
 /// Widget displaying the active story with segments
 class ActiveStoryWidget extends StatefulWidget {
@@ -26,7 +24,6 @@ class ActiveStoryWidget extends StatefulWidget {
 }
 
 class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
-  bool _showSegmentHistory = false;
   List<Map<String, dynamic>> _segmentHistory = [];
 
   @override
@@ -80,49 +77,33 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
           ),
           const SizedBox(height: 20),
 
-          // Current Segment
+          // Active Segment
           if (segmentData != null) ...[
-            _SectionHeader(
-              title: 'Current Segment',
-              icon: Icons.play_circle_outline,
-            ),
-            const SizedBox(height: 12),
-            _CurrentSegment(
+            _SimpleSegmentCard(
               segment: segmentData,
+              isActive: true,
               onDecisionSelect: widget.onDecisionSelect,
-              onContinue: widget.onContinue,
             ),
             const SizedBox(height: 20),
           ],
 
-          // Segment History
-          _SectionHeader(
-            title: 'Previous Segments',
-            icon: Icons.history,
-            trailing: IconButton(
-              icon: Icon(_showSegmentHistory
-                  ? Icons.expand_less
-                  : Icons.expand_more),
-              onPressed: () {
-                setState(() {
-                  _showSegmentHistory = !_showSegmentHistory;
-                });
-              },
+          // Previous Segments
+          if (_segmentHistory.isNotEmpty) ...[  
+            Text(
+              'Previous Segments',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            child: _showSegmentHistory
-                ? _SegmentHistory(segments: _segmentHistory)
-                : Text(
-                    'Tap to view segment history',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-          ),
+            const SizedBox(height: 12),
+            ..._segmentHistory.map((segment) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _SimpleSegmentCard(
+                segment: segment,
+                isActive: false,
+              ),
+            )),
+          ],
         ],
       ),
     );
@@ -246,13 +227,11 @@ class _TypeBadge extends StatelessWidget {
       case 'one-time':
         return Colors.purple;
       case 'daily':
-        return Colors.blue;
+        return Colors.orange;
       case 'repeatable':
         return Colors.green;
-      case 'main':
-        return Colors.orange;
       default:
-        return Colors.grey;
+        return Colors.blueGrey;
     }
   }
 
@@ -263,11 +242,9 @@ class _TypeBadge extends StatelessWidget {
       case 'daily':
         return Icons.today;
       case 'repeatable':
-        return Icons.all_inclusive;
-      case 'main':
-        return Icons.star;
+        return Icons.replay;
       default:
-        return Icons.help_outline;
+        return Icons.auto_stories;
     }
   }
 }
@@ -361,688 +338,159 @@ class _ActionButtons extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Widget? trailing;
-
-  const _SectionHeader({
-    required this.title,
-    required this.icon,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          const Spacer(),
-          if (trailing != null) trailing!,
-        ],
-      ),
-    );
-  }
-}
-
-class _CurrentSegment extends StatelessWidget {
+// New simplified segment card
+class _SimpleSegmentCard extends StatelessWidget {
   final Map<String, dynamic> segment;
+  final bool isActive;
   final Function(String)? onDecisionSelect;
-  final VoidCallback? onContinue;
 
-  const _CurrentSegment({
+  const _SimpleSegmentCard({
     required this.segment,
+    required this.isActive,
     this.onDecisionSelect,
-    this.onContinue,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final segmentType = segment['SegmentType'] ?? 'unknown';
-    final status = segment['ShortStatus'] ?? 'Processing...';
-    final longStatus = segment['LongStatus'] ?? '';
-    final choices = segment['Choices'] as List?;
-    final outcomeValue = segment['Outcome'];
-    final outcome = outcomeValue is String ? {'Type': outcomeValue} : outcomeValue as Map<String, dynamic>?;
+    final segmentType = segment['SegmentType'] ?? 'mechanical';
+    final shortStatus = segment['ShortStatus'] ?? 'Processing...';
+    final defaultStatus = segment['DefaultStatus'] ?? '';
     final processingStatus = segment['ProcessingStatus'];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Segment Header
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.1),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(11),
-                topRight: Radius.circular(11),
-              ),
-            ),
-            child: Row(
-              children: [
-                _SegmentTypeIcon(type: segmentType),
-                const SizedBox(width: 8),
-                Text(
-                  _formatSegmentType(segmentType),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Spacer(),
-                if (processingStatus != null)
-                  _ProcessingStatusBadge(status: processingStatus),
-              ],
-            ),
-          ),
-          
-          // Segment Content
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  status,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (longStatus.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    longStatus,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-                
-                // Decision Choices
-                if (segmentType == 'decision' && choices != null && choices.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  ...choices.map((choice) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _DecisionButton(
-                      choice: choice,
-                      onSelect: onDecisionSelect,
-                    ),
-                  )),
-                ],
-                
-                // Mechanical Processing
-                if (segmentType == 'mechanical') ...[
-                  const SizedBox(height: 16),
-                  MechanicalSegmentProgress(
-                    status: status,
-                    processingStatus: processingStatus,
-                    estimatedDuration: const Duration(minutes: 1),
-                  ),
-                ],
-                
-                // Outcome Display
-                if (outcome != null) ...[
-                  const SizedBox(height: 16),
-                  AnimatedOutcomeDisplay(
-                    outcome: outcome,
-                    onDismiss: onContinue,
-                  ),
-                ],
-                
-                // Continue Button
-                if (segmentType == 'rest' || 
-                    (segmentType == 'mechanical' && processingStatus == 'processed')) ...[
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: onContinue,
-                    icon: const Icon(Icons.arrow_forward),
-                    label: const Text('Continue'),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatSegmentType(String type) {
-    return type[0].toUpperCase() + type.substring(1);
-  }
-}
-
-class _SegmentTypeIcon extends StatelessWidget {
-  final String type;
-
-  const _SegmentTypeIcon({required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final outcome = segment['Outcome'];
+    final endTime = segment['EndTime'];
+    
+    // Determine card color based on outcome
+    Color cardColor;
     IconData icon;
-    Color color;
-
-    switch (type.toLowerCase()) {
-      case 'decision':
-        icon = Icons.psychology;
-        color = Colors.blue;
-        break;
-      case 'mechanical':
-        icon = Icons.settings;
-        color = Colors.orange;
-        break;
-      case 'rest':
-        icon = Icons.hotel;
-        color = Colors.green;
-        break;
-      case 'narrative':
-        icon = Icons.auto_stories;
-        color = Colors.purple;
-        break;
-      default:
-        icon = Icons.help_outline;
-        color = theme.colorScheme.onSurfaceVariant;
+    Color backgroundColor;
+    
+    // Check outcome for color
+    final outcomeStr = outcome is String ? outcome : outcome?['Type'];
+    if (outcomeStr != null) {
+      switch (outcomeStr.toLowerCase()) {
+        case 'death':
+          cardColor = Colors.black;
+          backgroundColor = Colors.black.withValues(alpha: 0.15);
+          icon = Icons.dangerous;
+          break;
+        case 'failure':
+        case 'failed':
+          cardColor = Colors.red;
+          backgroundColor = Colors.red.withValues(alpha: 0.1);
+          icon = Icons.cancel;
+          break;
+        default:
+          // All other outcomes (exceptional, normal, minimal, etc.) are green
+          cardColor = Colors.green;
+          backgroundColor = Colors.green.withValues(alpha: 0.1);
+          icon = Icons.check_circle;
+      }
+    } else {
+      // No outcome yet - use default theme colors
+      cardColor = theme.colorScheme.primary;
+      backgroundColor = theme.colorScheme.surface;
+      icon = isActive ? Icons.play_circle_outline : Icons.check_circle_outline;
     }
-
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Icon(icon, size: 18, color: color),
-    );
-  }
-}
-
-class _ProcessingStatusBadge extends StatelessWidget {
-  final String status;
-
-  const _ProcessingStatusBadge({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    Color color;
-    IconData icon;
-
-    switch (status.toLowerCase()) {
-      case 'processing':
-        color = Colors.orange;
-        icon = Icons.hourglass_empty;
-        break;
-      case 'processed':
-        color = Colors.green;
-        icon = Icons.check_circle;
-        break;
-      case 'failed':
-        color = Colors.red;
-        icon = Icons.error;
-        break;
-      default:
-        color = theme.colorScheme.onSurfaceVariant;
-        icon = Icons.info;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color, width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(
-            status.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: color,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DecisionButton extends StatelessWidget {
-  final Map<String, dynamic> choice;
-  final Function(String)? onSelect;
-
-  const _DecisionButton({
-    required this.choice,
-    this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final choiceId = choice['ChoiceID'] ?? '';
-    final text = choice['Text'] ?? 'Choose';
-    final description = choice['Description'] ?? '';
-    final difficulty = choice['Difficulty'];
 
     return Card(
-      elevation: 2,
-      child: InkWell(
-        onTap: onSelect != null ? () async {
-          final selectedChoice = await DecisionWidget.showDialog(
-            context: context,
-            choices: {choiceId: choice},
-            title: 'Confirm Your Choice',
-            showDifficulty: true,
-          );
-          if (selectedChoice != null) {
-            onSelect!(selectedChoice);
-          }
-        } : null,
+      elevation: isActive ? 2 : 0,
+      color: backgroundColor,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      text,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (description.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        description,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (difficulty != null) ...[
-                const SizedBox(width: 8),
-                _DifficultyBadge(difficulty: difficulty),
-              ],
-              const SizedBox(width: 8),
-              Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: theme.colorScheme.primary,
-              ),
-            ],
-          ),
+        side: BorderSide(
+          color: isActive ? cardColor.withValues(alpha: 0.3) : Colors.transparent,
+          width: isActive ? 2 : 1,
         ),
       ),
-    );
-  }
-}
-
-class _DifficultyBadge extends StatelessWidget {
-  final dynamic difficulty;
-
-  const _DifficultyBadge({required this.difficulty});
-
-  @override
-  Widget build(BuildContext context) {
-    final level = difficulty is int ? difficulty : 0;
-    final color = _getDifficultyColor(level);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(
-          3,
-          (index) => Icon(
-            Icons.star,
-            size: 12,
-            color: index < level ? color : color.withValues(alpha: 0.3),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Color _getDifficultyColor(int level) {
-    switch (level) {
-      case 1:
-        return Colors.green;
-      case 2:
-        return Colors.orange;
-      case 3:
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-}
-
-class _OutcomeDisplay extends StatelessWidget {
-  final Map<String, dynamic> outcome;
-
-  const _OutcomeDisplay({required this.outcome});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final type = outcome['Type'] ?? 'unknown';
-    final description = outcome['Description'] ?? '';
-    final rewards = outcome['Rewards'] as Map<String, dynamic>?;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _getOutcomeColor(type).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: _getOutcomeColor(type),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(
-                _getOutcomeIcon(type),
-                color: _getOutcomeColor(type),
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _formatOutcomeType(type),
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: _getOutcomeColor(type),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          if (description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              description,
-              style: theme.textTheme.bodyMedium,
-            ),
-          ],
-          if (rewards != null && rewards.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _RewardsDisplay(rewards: rewards),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Color _getOutcomeColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'success':
-      case 'exceptional':
-        return Colors.green;
-      case 'normal':
-        return Colors.blue;
-      case 'minimal':
-        return Colors.orange;
-      case 'failure':
-        return Colors.red;
-      case 'death':
-        return Colors.red.shade900;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  IconData _getOutcomeIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'success':
-      case 'exceptional':
-        return Icons.check_circle;
-      case 'normal':
-        return Icons.check;
-      case 'minimal':
-        return Icons.warning;
-      case 'failure':
-        return Icons.cancel;
-      case 'death':
-        return Icons.dangerous;
-      default:
-        return Icons.help_outline;
-    }
-  }
-
-  String _formatOutcomeType(String type) {
-    return type[0].toUpperCase() + type.substring(1);
-  }
-}
-
-class _RewardsDisplay extends StatelessWidget {
-  final Map<String, dynamic> rewards;
-
-  const _RewardsDisplay({required this.rewards});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      children: rewards.entries.map((entry) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                _getRewardIcon(entry.key),
-                size: 14,
-                color: theme.colorScheme.onPrimaryContainer,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '+${entry.value} ${_formatRewardName(entry.key)}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  IconData _getRewardIcon(String reward) {
-    switch (reward.toLowerCase()) {
-      case 'xp':
-      case 'experience':
-        return Icons.trending_up;
-      case 'gold':
-      case 'coins':
-        return Icons.monetization_on;
-      case 'item':
-      case 'items':
-        return Icons.inventory_2;
-      default:
-        return Icons.card_giftcard;
-    }
-  }
-
-  String _formatRewardName(String name) {
-    return name[0].toUpperCase() + name.substring(1);
-  }
-}
-
-class _SegmentHistory extends StatelessWidget {
-  final List<Map<String, dynamic>> segments;
-
-  const _SegmentHistory({required this.segments});
-
-  @override
-  Widget build(BuildContext context) {
-    if (segments.isEmpty) {
-      return Text(
-        'No previous segments',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-          fontStyle: FontStyle.italic,
-        ),
-      );
-    }
-
-    return Column(
-      children: segments.asMap().entries.map((entry) {
-        final index = entry.key;
-        final segment = entry.value;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: _HistorySegmentCard(
-            segment: segment,
-            index: segments.length - index,
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _HistorySegmentCard extends StatelessWidget {
-  final Map<String, dynamic> segment;
-  final int index;
-
-  const _HistorySegmentCard({
-    required this.segment,
-    required this.index,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final type = segment['SegmentType'] ?? 'unknown';
-    final status = segment['ShortStatus'] ?? '';
-    final outcomeValue = segment['Outcome'];
-    final outcome = outcomeValue is String ? {'Type': outcomeValue} : outcomeValue as Map<String, dynamic>?;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.2),
-        ),
-      ),
-      child: ExpansionTile(
-        leading: CircleAvatar(
-          radius: 16,
-          backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.2),
-          child: Text(
-            '$index',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        title: Row(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SegmentTypeIcon(type: type),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                status,
-                style: theme.textTheme.bodyMedium,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        subtitle: outcome != null
-            ? Text(
-                'Outcome: ${outcome['Type'] ?? 'Unknown'}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: _getOutcomeColor(outcome['Type'] ?? ''),
-                ),
-              )
-            : null,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            // Header row with ShortStatus as title
+            Row(
               children: [
-                if (segment['LongStatus'] != null) ...[
-                  Text(
-                    segment['LongStatus'],
-                    style: theme.textTheme.bodyMedium,
+                Icon(icon, color: isActive ? cardColor : theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    shortStatus,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isActive ? cardColor : null,
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                ],
-                if (outcome != null)
-                  _OutcomeDisplay(outcome: outcome),
+                ),
               ],
             ),
-          ),
-        ],
+            
+            // Show timer and DefaultStatus for active segments
+            if (isActive && endTime != null) ...[
+              const SizedBox(height: 12),
+              _SegmentTimer(
+                endTime: endTime,
+                duration: segment['SegmentDuration'] ?? segment['Duration'],
+              ),
+              if (defaultStatus.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  defaultStatus,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+            
+            // Show outcome for completed segments
+            if (outcome != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.emoji_events,
+                    size: 16,
+                    color: _getOutcomeColor(outcome),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Outcome: ${_formatOutcome(outcome)}',
+                    style: TextStyle(
+                      color: _getOutcomeColor(outcome),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            
+            // Decision options for decision segments
+            if (segmentType == 'decision' && isActive && segment['DecisionOptions'] != null) ...[
+              const SizedBox(height: 12),
+              ...((segment['DecisionOptions'] as Map<String, dynamic>).entries.map(
+                (entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: FilledButton(
+                    onPressed: () => onDecisionSelect?.call(entry.key),
+                    child: Text(entry.key.replaceAll('-', ' ').toUpperCase()),
+                  ),
+                ),
+              )),
+            ],
+          ],
+        ),
       ),
     );
   }
-
-  Color _getOutcomeColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'success':
+  
+  Color _getOutcomeColor(dynamic outcome) {
+    final outcomeStr = outcome is String ? outcome : outcome['Type'] ?? 'normal';
+    switch (outcomeStr.toLowerCase()) {
       case 'exceptional':
-        return Colors.green;
+        return Colors.purple;
       case 'normal':
-        return Colors.blue;
+        return Colors.green;
       case 'minimal':
         return Colors.orange;
       case 'failure':
@@ -1050,5 +498,104 @@ class _HistorySegmentCard extends StatelessWidget {
       default:
         return Colors.grey;
     }
+  }
+  
+  String _formatOutcome(dynamic outcome) {
+    final outcomeStr = outcome is String ? outcome : outcome['Type'] ?? 'normal';
+    return outcomeStr[0].toUpperCase() + outcomeStr.substring(1);
+  }
+}
+
+// Timer widget for active segments
+class _SegmentTimer extends StatefulWidget {
+  final String endTime;
+  final dynamic duration;
+  
+  const _SegmentTimer({
+    required this.endTime,
+    this.duration,
+  });
+  
+  @override
+  State<_SegmentTimer> createState() => _SegmentTimerState();
+}
+
+class _SegmentTimerState extends State<_SegmentTimer> {
+  late Timer _timer;
+  int _remainingSeconds = 0;
+  int _totalDuration = 60;
+  
+  @override
+  void initState() {
+    super.initState();
+    // Get total duration from segment data
+    if (widget.duration != null) {
+      _totalDuration = widget.duration is int ? widget.duration : int.tryParse(widget.duration.toString()) ?? 60;
+    }
+    _updateRemainingTime();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _updateRemainingTime());
+  }
+  
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+  
+  void _updateRemainingTime() {
+    if (!mounted) return;
+    
+    // Parse ISO 8601 timestamp
+    final endDateTime = DateTime.parse(widget.endTime);
+    final now = DateTime.now();
+    final difference = endDateTime.difference(now);
+    
+    setState(() {
+      _remainingSeconds = difference.inSeconds > 0 ? difference.inSeconds : 0;
+    });
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final minutes = _remainingSeconds ~/ 60;
+    final seconds = _remainingSeconds % 60;
+    final progress = _totalDuration > 0 
+        ? (_totalDuration - _remainingSeconds) / _totalDuration 
+        : 0.0;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Progress bar
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: progress.clamp(0.0, 1.0),
+            backgroundColor: theme.colorScheme.surfaceContainerHighest,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              theme.colorScheme.primary,
+            ),
+            minHeight: 6,
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Timer display
+        Row(
+          children: [
+            Icon(Icons.timer, size: 16, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 4),
+            Text(
+              '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+              style: TextStyle(
+                fontFamily: 'monospace',
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
