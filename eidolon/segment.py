@@ -21,7 +21,7 @@ from eidolon.logger import logger
 from eidolon.mechanics import calculate_heal_time, resolve_opposed_check
 from eidolon.models import ChallengeResultModel, ClientEvent, CombatStateModel, StorySegment
 from eidolon.schema import normalize_segment_definition
-from eidolon.time_utils import now_iso, future_iso, seconds_until, now_unix
+from eidolon.time_utils import now_iso, future_iso, seconds_until, now_unix, future_unix
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES: list = ["mechanical", "decision", "rest"]
@@ -962,9 +962,9 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
     segment_type = segment.get("SegmentType", "mechanical")
     duration = int(segment.get("SegmentDuration", 300))  # Default 5 minutes
 
-    # Use ISO 8601 timestamps
-    start_time = now_iso()
-    end_time = future_iso(duration)
+    # Use Unix timestamps for storage (required by DynamoDB indexes)
+    start_time = now_unix()
+    end_time = future_unix(duration)
 
     # Generate UUIDv7 for time-based ordering
     active_segment_id = str(uuid7())
@@ -1058,6 +1058,16 @@ def process_segment_completely(
     except ClientError as err:
         logger.error(f"Failed to get active segment for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get active segment: {err}") from err
+    
+    # Check if segment has already been processed to prevent double XP application
+    if active_segment.get("ProcessingStatus") == "processed":
+        logger.info(f"Segment already processed, skipping reprocessing for {active_segment_id}")
+        return {
+            "outcome": active_segment.get("Outcome", "normal"),
+            "nextSegment": None,
+            "processed": True,
+            "skipped": True
+        }
 
     # Get segment definition
     try:
@@ -1131,7 +1141,7 @@ def get_completed_segments(max_segments: int) -> list:
         RuntimeError: If database query fails
     """
     # Look ahead 30 seconds to catch segments that will complete before next poll
-    lookahead_time = future_iso(30)
+    lookahead_time = future_unix(30)  # Use Unix timestamp for NUMBER comparison
 
     try:
         # Query using the EndTimeIndex GSI

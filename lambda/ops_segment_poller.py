@@ -24,7 +24,7 @@ from eidolon.segment import (
     reset_segment_processing_status,
 )
 from eidolon.sqs import send_message_batch
-from eidolon.time_utils import now_iso, seconds_since
+from eidolon.time_utils import now_iso
 
 
 def poll_and_process_segments_business_logic() -> dict:
@@ -40,6 +40,8 @@ def poll_and_process_segments_business_logic() -> dict:
     Raises:
         RuntimeError: If database or SQS operations fail
     """
+    import time
+    
     # First check SSM parameter state
     poller_state = get_polling_state()
 
@@ -61,9 +63,11 @@ def poll_and_process_segments_business_logic() -> dict:
 
     for segment in completed_segments:
         segment_type = segment.get("SegmentType", "").lower()
-        end_time = segment.get("EndTime", "")
-        start_time = segment.get("StartTime", "")
-        time_since_end = seconds_since(end_time) if end_time else 0
+        end_time = segment.get("EndTime", 0)  # Unix timestamp
+        start_time = segment.get("StartTime", 0)  # Unix timestamp
+        # Calculate time differences using Unix timestamps
+        now = time.time()
+        time_since_end = int(now - end_time) if end_time else 0
         processing_status = segment.get("ProcessingStatus", "")
 
         # Skip segments already processed - they're waiting for advancement
@@ -74,7 +78,7 @@ def poll_and_process_segments_business_logic() -> dict:
         # Only retry if there's at least 15 minutes remaining before end time
         elif is_mechanical_segment(segment_type) and processing_status == "processing":
             # Calculate how long it's been processing
-            time_in_processing = seconds_since(start_time) if start_time else 0
+            time_in_processing = int(now - start_time) if start_time else 0
             time_remaining = -time_since_end  # Negative of time_since_end is time_until
 
             if time_in_processing > 900 and time_remaining > 900:
